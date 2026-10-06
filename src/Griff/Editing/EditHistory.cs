@@ -101,6 +101,40 @@ public sealed class EditHistory
         Changed?.Invoke(this, new EditEventArgs(entry.Edit, EditAction.Redo));
     }
 
+    /// <summary>
+    /// Points recorded edits at rebuilt components after a script reload. Edits that can't be remapped
+    /// (e.g. the property was deleted) are dropped from the history.
+    /// </summary>
+    public void RemapComponents(IReadOnlyDictionary<Scenes.Component, Scenes.Component> replaced, Scenes.Serialization.ComponentRegistry registry)
+    {
+        if (replaced.Count == 0)
+            return;
+
+        RemapStack(_undo);
+        RemapStack(_redo);
+        _sealed = true;
+
+        void RemapStack(List<Entry> stack)
+        {
+            for (var i = stack.Count - 1; i >= 0; i--)
+            {
+                if (Remap(stack[i].Edit) is { } edit)
+                    stack[i] = stack[i] with { Edit = edit };
+                else
+                    stack.RemoveAt(i);
+            }
+        }
+
+        IEdit? Remap(IEdit edit) => edit switch
+        {
+            IComponentEdit component => component.Remap(replaced, registry),
+            CompositeEdit composite => composite.Edits.Select(Remap).OfType<IEdit>().ToList() is { Count: > 0 } edits
+                ? new CompositeEdit(composite.Description, edits)
+                : null,
+            _ => edit,
+        };
+    }
+
     public void MarkSaved()
     {
         _savedEntryId = CurrentEntryId;

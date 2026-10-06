@@ -120,3 +120,38 @@ public class ScriptHostTests
         Assert.Equal(7f, _registry.Find("Mover")!.Properties.Single().GetValue(restored));
     }
 }
+
+public class HistoryRemapTests
+{
+    [Fact]
+    public void UndoAfterScriptReload_TargetsTheRebuiltComponent()
+    {
+        var registry = ComponentRegistry.CreateDefault();
+        var host = new ScriptHost(registry);
+        const string source = "public class Health : Behavior { public int Value { get; set; } = 10; }";
+        host.Reload([new ScriptSource("Health.cs", source)], []);
+
+        var scene = new Scene();
+        var entity = new Entity();
+        scene.Add(entity);
+        var history = new Griff.Editing.EditHistory();
+        history.Execute(new Griff.Editing.AddComponentEdit(entity, registry.Find("Health")!.CreateInstance()));
+        history.Execute(new Griff.Editing.SetPropertyEdit(entity.Components[1], registry.Find("Health")!.Properties.Single(), 99));
+
+        var result = host.Reload([new ScriptSource("Health.cs", source + "\n// edited")], [scene]);
+        history.RemapComponents(result.Replaced, registry);
+
+        var rebuilt = entity.Components[1];
+        var value = registry.Find("Health")!.Properties.Single();
+        Assert.Equal(99, value.GetValue(rebuilt));
+
+        history.Undo();
+        Assert.Equal(10, value.GetValue(rebuilt));
+
+        history.Undo();
+        Assert.Single(entity.Components);
+
+        history.Redo();
+        Assert.Same(rebuilt, entity.Components[1]);
+    }
+}

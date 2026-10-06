@@ -20,6 +20,16 @@ public interface IEdit
     bool TryMerge(IEdit next) => false;
 }
 
+/// <summary>
+/// An edit that holds component references. When components are rebuilt (script reload), the history
+/// asks it for an equivalent edit pointing at the replacements.
+/// </summary>
+public interface IComponentEdit : IEdit
+{
+    /// <returns>The remapped edit, this edit if unaffected, or null if it no longer makes sense.</returns>
+    IEdit? Remap(IReadOnlyDictionary<Scenes.Component, Scenes.Component> replaced, Scenes.Serialization.ComponentRegistry registry);
+}
+
 /// <summary>Several edits that apply and revert as one.</summary>
 public sealed class CompositeEdit(string description, IReadOnlyList<IEdit> edits) : IEdit
 {

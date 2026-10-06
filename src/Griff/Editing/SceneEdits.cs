@@ -4,16 +4,60 @@ using Griff.Scenes.Serialization;
 namespace Griff.Editing;
 
 /// <summary>Sets one component property. Consecutive sets of the same property merge into one step.</summary>
-public sealed class SetPropertyEdit(Component component, PropertyDescriptor property, object? value) : IEdit
+public sealed class SetPropertyEdit : IComponentEdit
 {
-    private readonly object? _oldValue = property.GetValue(component);
-    private object? _newValue = value;
+    private readonly object? _oldValue;
+    private object? _newValue;
 
-    public Component Component { get; } = component;
+    public SetPropertyEdit(Component component, PropertyDescriptor property, object? value)
+        : this(component, property, property.GetValue(component), value)
+    {
+    }
 
-    public PropertyDescriptor Property { get; } = property;
+    private SetPropertyEdit(Component component, PropertyDescriptor property, object? oldValue, object? newValue)
+    {
+        Component = component;
+        Property = property;
+        _oldValue = oldValue;
+        _newValue = newValue;
+    }
+
+    public Component Component { get; }
+
+    public PropertyDescriptor Property { get; }
 
     public string Description => $"Change {Property.Name}";
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry)
+    {
+        if (!replaced.TryGetValue(Component, out var replacement))
+            return this;
+
+        // Find the same property on the new type; values convert across rebuilt enum types by name.
+        if (!registry.IsRegistered(replacement.GetType()) ||
+            registry.Get(replacement.GetType()).Properties.FirstOrDefault(p => p.Name == Property.Name) is not { } property ||
+            !TryConvert(_oldValue, property.Type, out var oldValue) ||
+            !TryConvert(_newValue, property.Type, out var newValue))
+            return null;
+
+        return new SetPropertyEdit(replacement, property, oldValue, newValue);
+    }
+
+    private static bool TryConvert(object? value, Type type, out object? converted)
+    {
+        converted = value;
+        if (value is null)
+            return !type.IsValueType;
+        if (type.IsInstanceOfType(value))
+            return true;
+        if (value is Enum && type.IsEnum && Enum.TryParse(type, value.ToString(), out var parsed))
+        {
+            converted = parsed;
+            return true;
+        }
+
+        return false;
+    }
 
     public void Apply() => Property.SetValue(Component, _newValue);
 
@@ -119,11 +163,14 @@ public sealed class MoveEntityEdit : IEdit
     public void Revert() => _scene.Move(Entity, _oldParent, _oldIndex);
 }
 
-public sealed class AddComponentEdit(Entity entity, Component component, int? index = null) : IEdit
+public sealed class AddComponentEdit(Entity entity, Component component, int? index = null) : IComponentEdit
 {
     public Entity Entity { get; } = entity;
 
     public Component Component { get; } = component;
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry) =>
+        replaced.TryGetValue(Component, out var replacement) ? new AddComponentEdit(Entity, replacement, index) : this;
 
     public string Description => $"Add {Component.GetType().Name}";
 
@@ -132,7 +179,7 @@ public sealed class AddComponentEdit(Entity entity, Component component, int? in
     public void Revert() => Entity.RemoveComponent(Component);
 }
 
-public sealed class RemoveComponentEdit : IEdit
+public sealed class RemoveComponentEdit : IComponentEdit
 {
     private readonly int _index;
 
@@ -142,6 +189,16 @@ public sealed class RemoveComponentEdit : IEdit
         Entity = component.Entity ?? throw new ArgumentException("The component isn't attached to an entity.", nameof(component));
         _index = Entity.Components.ToList().IndexOf(component);
     }
+
+    private RemoveComponentEdit(Entity entity, Component component, int index)
+    {
+        Entity = entity;
+        Component = component;
+        _index = index;
+    }
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry) =>
+        replaced.TryGetValue(Component, out var replacement) ? new RemoveComponentEdit(Entity, replacement, _index) : this;
 
     public Entity Entity { get; }
 

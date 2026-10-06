@@ -67,6 +67,24 @@ public sealed class NewProjectViewModel : ObservableObject
 
     public bool HasError => Error is not null;
 
+    public sealed record TemplateOption(ProjectTemplate Template, string Name, string Description);
+
+    public IReadOnlyList<TemplateOption> Templates { get; } =
+    [
+        new(ProjectTemplate.Platformer, "Platformer", ProjectTemplates.Describe(ProjectTemplate.Platformer)),
+        new(ProjectTemplate.TopDown, "Top-down", ProjectTemplates.Describe(ProjectTemplate.TopDown)),
+        new(ProjectTemplate.Empty, "Empty", ProjectTemplates.Describe(ProjectTemplate.Empty)),
+    ];
+
+    private TemplateOption? _selectedTemplate;
+
+    /// <summary>Starts on Platformer: a jam should begin with something playable.</summary>
+    public TemplateOption SelectedTemplate
+    {
+        get => _selectedTemplate ??= Templates[0];
+        set => SetProperty(ref _selectedTemplate, value);
+    }
+
     public IRelayCommand BrowseCommand { get; }
 
     public IAsyncRelayCommand CreateCommand { get; }
@@ -81,7 +99,7 @@ public sealed class NewProjectViewModel : ObservableObject
     {
         try
         {
-            await _workspace.CreateProjectAsync(Location.Trim(), Name);
+            await _workspace.CreateProjectAsync(Location.Trim(), Name, SelectedTemplate.Template);
             Created?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)

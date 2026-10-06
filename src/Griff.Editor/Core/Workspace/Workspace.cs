@@ -34,7 +34,7 @@ public interface IWorkspace : INotifyPropertyChanged
 
     void ExitPlayMode();
 
-    Task CreateProjectAsync(string location, string name);
+    Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty);
 
     /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
     Task<bool> OpenProjectAsync(string path);
@@ -169,12 +169,12 @@ public sealed class Workspace(
         OnPropertyChanged(nameof(IsPlaying));
     }
 
-    public async Task CreateProjectAsync(string location, string name)
+    public async Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty)
     {
         if (!await ConfirmCloseAsync())
             return;
 
-        var project = await Project.CreateAsync(location, name);
+        var project = await Project.CreateAsync(location, name, template);
         logger.LogInformation("Created project {Name} at {Path}", project.Name, project.RootPath);
         settings.Settings.LastProjectLocation = location;
         await OpenAsync(project);

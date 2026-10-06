@@ -62,7 +62,7 @@ public sealed class Project
     /// Creates a project in a new folder named after it inside <paramref name="parentDirectory"/>.
     /// An existing empty folder is reused; a non-empty one is refused.
     /// </summary>
-    public static async Task<Project> CreateAsync(string parentDirectory, string name, CancellationToken cancellationToken = default)
+    public static async Task<Project> CreateAsync(string parentDirectory, string name, ProjectTemplate template = ProjectTemplate.Empty, CancellationToken cancellationToken = default)
     {
         if (ProjectNames.Validate(name) is { } error)
             throw new ArgumentException(error, nameof(name));
@@ -79,7 +79,7 @@ public sealed class Project
 
             var startScene = $"{AssetsFolderName}/{DefaultSceneName}{SceneExtension}";
             var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow, startScene));
-            await WriteDefaultSceneAsync(project.ResolvePath(startScene), cancellationToken);
+            await WriteTemplateAsync(project, template, startScene, cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "# Griff exports\nBuild/\n", cancellationToken);
             await using (var stream = File.Create(project.ManifestPath))
                 await JsonSerializer.SerializeAsync(stream, project.Manifest, JsonOptions, cancellationToken);
@@ -115,16 +115,18 @@ public sealed class Project
         return new Project(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, manifest);
     }
 
-    // A new project opens to something: a scene with a camera.
-    private static async Task WriteDefaultSceneAsync(string path, CancellationToken cancellationToken)
+    // A new project opens to something: the template's scene and scripts.
+    private static async Task WriteTemplateAsync(Project project, ProjectTemplate template, string startScene, CancellationToken cancellationToken)
     {
-        var scene = new Scene();
-        var camera = new Entity("Main Camera");
-        camera.AddComponent<Camera>();
-        scene.Add(camera);
+        foreach (var (relative, source) in ProjectTemplates.Scripts(template))
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, source.ReplaceLineEndings(), cancellationToken);
+        }
 
-        await using var stream = File.Create(path);
-        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(scene, stream);
+        await using var stream = File.Create(project.ResolvePath(startScene));
+        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.CreateScene(template), stream);
         await stream.FlushAsync(cancellationToken);
     }
 

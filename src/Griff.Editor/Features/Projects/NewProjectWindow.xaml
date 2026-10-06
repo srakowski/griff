@@ -35,6 +35,24 @@
                 <TextBox Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" />
             </DockPanel>
 
+            <TextBlock Margin="0,14,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Template" />
+            <ListBox BorderBrush="{DynamicResource Brush.Border.Default}"
+                     BorderThickness="1"
+                     ItemsSource="{Binding Templates}"
+                     SelectedItem="{Binding SelectedTemplate}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="2,4">
+                            <TextBlock Style="{StaticResource Style.Text.Subtitle}" Text="{Binding Name}" />
+                            <TextBlock Margin="0,2,0,0"
+                                       Style="{StaticResource Style.Text.Secondary}"
+                                       Text="{Binding Description}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
             <!-- Preview of the folder that will be created, or why it can't be. -->
             <Grid Margin="0,12,0,0" MinHeight="34">
                 <StackPanel>

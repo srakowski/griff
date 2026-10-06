@@ -100,6 +100,25 @@ internal static class SnapshotRunner
             var resumed = workspace.Scene!.Scene.Entities.First(e => e.Name == "Player").GetComponent<Body>()!;
             checks.Add($"resume after rewind: {(resumed.IsGrounded && play.TimelineCount < snapshots + 10 ? "ok" : "FAILED")} (timeline {play.TimelineCount})");
             play.Stop();
+
+            // Scene switching: a script loads Level2, and the editor follows the game into it.
+            workspace.Project!.CreateScene("Level2");
+            var switcherPath = Path.Combine(workspace.Project.AssetsPath, "Scripts", "Switcher.cs");
+            File.WriteAllText(switcherPath, """
+                public class Switcher : Behavior
+                {
+                    protected override void Update() => Game.LoadScene("Level2");
+                }
+                """);
+            workspace.ReloadScripts();
+            var trigger = workspace.Scene!.Scene.Roots.First(e => e.Name == "Player");
+            workspace.Scene.Execute(new AddComponentEdit(trigger, workspace.Components.Find("Switcher")!.CreateInstance()));
+            play.Play();
+            await Task.Delay(500);
+            var switched = workspace.Scene!.Scene.Entities.Select(e => e.Name).ToList();
+            checks.Add($"scene switch: {(switched.SequenceEqual(["Main Camera"]) ? "ok" : $"FAILED ({string.Join(", ", switched)})")}");
+            Render(main, Path.Combine(outputDir, "switched.png"));
+            play.Stop();
             File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();

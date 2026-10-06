@@ -1,0 +1,96 @@
+<UserControl x:Class="Griff.Editor.Features.Output.OutputPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:output="clr-namespace:Griff.Editor.Features.Output"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:logging="clr-namespace:Microsoft.Extensions.Logging;assembly=Microsoft.Extensions.Logging.Abstractions"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=output:OutputPanel}"
+             d:DesignHeight="240" d:DesignWidth="800">
+    <DockPanel>
+        <!-- Panel toolbar -->
+        <Border DockPanel.Dock="Top"
+                Padding="4,2"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding ClearCommand}"
+                        Style="{StaticResource Style.Button.Toolbar}"
+                        ToolTip="Clear">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Clear}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <ToggleButton IsChecked="{Binding ShowErrors}" Style="{StaticResource Style.ToggleButton.Toolbar}" ToolTip="Show errors">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Foreground="{DynamicResource Brush.Status.Error}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Error}" />
+                        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding ErrorCount}" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton Margin="2,0" IsChecked="{Binding ShowWarnings}" Style="{StaticResource Style.ToggleButton.Toolbar}" ToolTip="Show warnings">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Warning}" />
+                        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding WarningCount}" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton IsChecked="{Binding ShowMessages}" Style="{StaticResource Style.ToggleButton.Toolbar}" ToolTip="Show messages">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Foreground="{DynamicResource Brush.Status.Info}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Info}" />
+                        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding MessageCount}" />
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+        </Border>
+
+        <ListBox x:Name="EntryList" ItemsSource="{Binding Entries}">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="output:LogEntry">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="22" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LevelIcon"
+                                   VerticalAlignment="Top"
+                                   Margin="0,2,0,0"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Brush.Status.Info}"
+                                   Style="{StaticResource Style.Icon}"
+                                   Text="{x:Static theme:Icons.Info}" />
+                        <TextBlock Grid.Column="1"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource Style.Text.Mono}"
+                                   Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                   Text="{Binding Timestamp, StringFormat=HH:mm:ss.fff}" />
+                        <TextBlock Grid.Column="2"
+                                   Style="{StaticResource Style.Text.Mono}"
+                                   Text="{Binding Message}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Level}" Value="{x:Static logging:LogLevel.Warning}">
+                            <Setter TargetName="LevelIcon" Property="Text" Value="{x:Static theme:Icons.Warning}" />
+                            <Setter TargetName="LevelIcon" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="{x:Static logging:LogLevel.Error}">
+                            <Setter TargetName="LevelIcon" Property="Text" Value="{x:Static theme:Icons.Error}" />
+                            <Setter TargetName="LevelIcon" Property="Foreground" Value="{DynamicResource Brush.Status.Error}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="{x:Static logging:LogLevel.Critical}">
+                            <Setter TargetName="LevelIcon" Property="Text" Value="{x:Static theme:Icons.Error}" />
+                            <Setter TargetName="LevelIcon" Property="Foreground" Value="{DynamicResource Brush.Status.Error}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="{x:Static logging:LogLevel.Debug}">
+                            <Setter TargetName="LevelIcon" Property="Foreground" Value="{DynamicResource Brush.Text.Tertiary}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="{x:Static logging:LogLevel.Trace}">
+                            <Setter TargetName="LevelIcon" Property="Foreground" Value="{DynamicResource Brush.Text.Tertiary}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

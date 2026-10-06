@@ -1,0 +1,15 @@
+<!-- Entry point for the Griff design system. App.xaml merges this file and nothing else. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Foundation.xaml" />
+        <ResourceDictionary Source="Controls/Scrolling.xaml" />
+        <ResourceDictionary Source="Controls/Buttons.xaml" />
+        <ResourceDictionary Source="Controls/Menus.xaml" />
+        <ResourceDictionary Source="Controls/Inputs.xaml" />
+        <ResourceDictionary Source="Controls/Tabs.xaml" />
+        <ResourceDictionary Source="Controls/Lists.xaml" />
+        <ResourceDictionary Source="Controls/Misc.xaml" />
+        <ResourceDictionary Source="Controls/Window.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

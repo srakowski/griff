@@ -1,0 +1,154 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                    xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Foundation.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <Style x:Key="Style.Button.Caption" TargetType="Button">
+        <Setter Property="Width" Value="46" />
+        <Setter Property="Height" Value="{StaticResource Size.TitleBar}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}">
+                        <TextBlock Style="{StaticResource Style.Icon}"
+                                   FontSize="{StaticResource IconSize.Small}"
+                                   Text="{TemplateBinding Content}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Brush.Control.Hover}" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Brush.Control.Pressed}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Style.Button.Caption.Close" TargetType="Button" BasedOn="{StaticResource Style.Button.Caption}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Brush.Caption.CloseHover}" />
+                <Setter Property="Foreground" Value="White" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style TargetType="controls:ChromeWindow">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface.Chrome}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+        <Setter Property="WindowChrome.WindowChrome">
+            <Setter.Value>
+                <WindowChrome CaptionHeight="{StaticResource Size.TitleBar}"
+                              CornerRadius="0"
+                              GlassFrameThickness="0,0,0,1"
+                              ResizeBorderThickness="6"
+                              UseAeroCaptionButtons="False" />
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:ChromeWindow">
+                    <Border x:Name="PART_Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{DynamicResource Brush.Border.Window}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <!-- Matches Size.TitleBar. -->
+                                <RowDefinition Height="32" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Title bar -->
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button x:Name="MinimizeButton"
+                                            Command="{x:Static SystemCommands.MinimizeWindowCommand}"
+                                            Content="{x:Static theme:Icons.ChromeMinimize}"
+                                            Style="{StaticResource Style.Button.Caption}" />
+                                    <Button x:Name="MaximizeButton"
+                                            Command="{x:Static SystemCommands.MaximizeWindowCommand}"
+                                            Content="{x:Static theme:Icons.ChromeMaximize}"
+                                            Style="{StaticResource Style.Button.Caption}" />
+                                    <Button x:Name="RestoreButton"
+                                            Command="{x:Static SystemCommands.RestoreWindowCommand}"
+                                            Content="{x:Static theme:Icons.ChromeRestore}"
+                                            Style="{StaticResource Style.Button.Caption}"
+                                            Visibility="Collapsed" />
+                                    <Button Command="{x:Static SystemCommands.CloseWindowCommand}"
+                                            Content="{x:Static theme:Icons.ChromeClose}"
+                                            Style="{StaticResource Style.Button.Caption.Close}" />
+                                </StackPanel>
+
+                                <!-- App mark -->
+                                <Border Width="18" Height="18"
+                                        Margin="10,0,8,0"
+                                        Background="{DynamicResource Brush.Accent}"
+                                        CornerRadius="{StaticResource Radius.Medium}">
+                                    <TextBlock HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Foreground="{DynamicResource Brush.Text.OnAccent}"
+                                               Text="G" />
+                                </Border>
+
+                                <ContentPresenter VerticalAlignment="Center"
+                                                  Content="{TemplateBinding TitleBarContent}"
+                                                  WindowChrome.IsHitTestVisibleInChrome="True" />
+
+                                <TextBlock x:Name="TitleText"
+                                           Margin="12,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.Text.Secondary}"
+                                           Text="{TemplateBinding Title}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+
+                            <AdornerDecorator Grid.Row="1">
+                                <ContentPresenter />
+                            </AdornerDecorator>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="WindowState" Value="Maximized">
+                            <Setter TargetName="MaximizeButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="RestoreButton" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="PART_Root" Property="BorderThickness" Value="0" />
+                        </Trigger>
+                        <Trigger Property="ResizeMode" Value="CanMinimize">
+                            <Setter TargetName="MaximizeButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="RestoreButton" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="ResizeMode" Value="NoResize">
+                            <Setter TargetName="MinimizeButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="MaximizeButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="RestoreButton" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsActive" Value="False">
+                            <Setter TargetName="TitleText" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

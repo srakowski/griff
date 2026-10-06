@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Griff.Editor/Griff.Editor.csproj" />
     <Project Path="src/Griff/Griff.csproj" />
   </Folder>
 </Solution>

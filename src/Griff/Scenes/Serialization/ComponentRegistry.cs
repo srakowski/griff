@@ -13,6 +13,8 @@ public sealed class ComponentRegistry
         registry.Register<Transform>();
         registry.Register<Camera>();
         registry.Register<Sprite>();
+        registry.Register<BoxCollider>();
+        registry.Register<Body>();
         return registry;
     }
 

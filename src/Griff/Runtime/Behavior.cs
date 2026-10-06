@@ -44,6 +44,21 @@ public abstract class Behavior : Component
     {
     }
 
+    /// <summary>Called when this entity's body bumps into a solid collider, or something bumps into it.</summary>
+    protected virtual void OnCollision(Entity other)
+    {
+    }
+
+    /// <summary>Called when a trigger and another collider start overlapping (on both entities).</summary>
+    protected virtual void OnTriggerEnter(Entity other)
+    {
+    }
+
+    /// <summary>Called when a trigger and another collider stop overlapping (on both entities).</summary>
+    protected virtual void OnTriggerExit(Entity other)
+    {
+    }
+
     /// <summary>Called when the entity is destroyed or the game stops.</summary>
     protected virtual void OnDestroy()
     {
@@ -59,6 +74,16 @@ public abstract class Behavior : Component
     }
 
     internal void RunUpdate() => Update();
+
+    internal void RunCollision(Entity other) => OnCollision(other);
+
+    internal void RunTrigger(Entity other, bool entered)
+    {
+        if (entered)
+            OnTriggerEnter(other);
+        else
+            OnTriggerExit(other);
+    }
 
     internal void RunDestroy()
     {

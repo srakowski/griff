@@ -23,6 +23,8 @@ public sealed class Game
 
     public Time Time { get; } = new();
 
+    public Physics Physics { get; } = new();
+
     /// <summary>Advances the game by <paramref name="seconds"/>: start new behaviors, update all, apply destroys.</summary>
     public void Tick(double seconds)
     {
@@ -41,6 +43,9 @@ public sealed class Game
             if (behavior.Entity?.Scene == Scene)
                 behavior.RunUpdate();
         }
+
+        if (Time.Delta > 0)
+            Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
 
         FlushDestroys();
     }
@@ -70,6 +75,26 @@ public sealed class Game
 
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
+    }
+
+    private void OnCollision(Entity a, Entity b)
+    {
+        Notify(a, behavior => behavior.RunCollision(b));
+        Notify(b, behavior => behavior.RunCollision(a));
+    }
+
+    private void OnTrigger(Entity trigger, Entity other, bool entered)
+    {
+        Notify(trigger, behavior => behavior.RunTrigger(other, entered));
+        Notify(other, behavior => behavior.RunTrigger(trigger, entered));
+    }
+
+    private void Notify(Entity entity, Action<Behavior> action)
+    {
+        if (entity.Scene != Scene)
+            return;
+        foreach (var behavior in entity.GetComponents<Behavior>().Where(b => b.IsStarted).ToList())
+            action(behavior);
     }
 
     private IEnumerable<Behavior> ActiveBehaviors()

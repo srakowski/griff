@@ -106,7 +106,7 @@ dotnet test
 dotnet run --project src/Griff.Editor
 ```
 
-Exported games currently need the .NET 10 Desktop Runtime installed on the player's machine.
+Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
 ## Status
 

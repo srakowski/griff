@@ -17,16 +17,18 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- The player is self-contained; the editor isn't. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
 
   <!-- Ship the game player next to the editor so Build Game can export it. -->
   <ItemGroup>
-    <ProjectReference Include="..\Griff.Player\Griff.Player.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Griff.Player\Griff.Player.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <Target Name="CopyPlayer" AfterTargets="Build">
     <ItemGroup>
-      <PlayerFiles Include="..\Griff.Player\bin\$(Configuration)\$(TargetFramework)\**\*" />
+      <PlayerFiles Include="..\Griff.Player\bin\$(Configuration)\$(TargetFramework)\win-x64\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(PlayerFiles)" DestinationFiles="@(PlayerFiles->'$(OutDir)Player\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>

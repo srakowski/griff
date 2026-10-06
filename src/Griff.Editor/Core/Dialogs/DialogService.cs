@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -7,7 +8,9 @@ public sealed class DialogService : IDialogService
 {
     private const string AppName = "Griff";
 
-    private static Window? Owner => Application.Current.MainWindow;
+    // The active window, so dialogs opened from another dialog stack on top of it.
+    private static Window? Owner =>
+        Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current.MainWindow;
 
     public SaveChangesChoice AskSaveChanges(string documentName)
     {
@@ -33,6 +36,14 @@ public sealed class DialogService : IDialogService
     {
         var dialog = new SaveFileDialog { Filter = filter, FileName = defaultFileName };
         return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
+    }
+
+    public string? ShowFolderDialog(string? initialDirectory)
+    {
+        var dialog = new OpenFolderDialog();
+        if (Directory.Exists(initialDirectory))
+            dialog.InitialDirectory = initialDirectory;
+        return dialog.ShowDialog(Owner) == true ? dialog.FolderName : null;
     }
 
     public void ShowError(string title, string message)

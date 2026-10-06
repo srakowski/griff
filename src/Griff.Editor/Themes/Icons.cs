@@ -11,43 +11,44 @@ namespace Griff.Editor.Themes;
 public static class Icons
 {
     // Files
-    public const string New = "";
-    public const string Open = "";
-    public const string Save = "";
-    public const string SaveAs = "";
-    public const string Folder = "";
-    public const string Exit = "";
+    public const string New = "\uE8A5";
+    public const string Open = "\uE8E5";
+    public const string Save = "\uE74E";
+    public const string SaveAs = "\uE792";
+    public const string Folder = "\uE8B7";
+    public const string NewProject = "\uE8F4";
+    public const string Exit = "\uE7E8";
 
     // Editing
-    public const string Undo = "";
-    public const string Redo = "";
-    public const string Delete = "";
-    public const string Clear = "";
-    public const string Search = "";
+    public const string Undo = "\uE7A7";
+    public const string Redo = "\uE7A6";
+    public const string Delete = "\uE74D";
+    public const string Clear = "\uE894";
+    public const string Search = "\uE721";
 
     // Playback
-    public const string Play = "";
-    public const string Pause = "";
-    public const string Stop = "";
+    public const string Play = "\uE768";
+    public const string Pause = "\uE769";
+    public const string Stop = "\uE71A";
 
     // Tools and panels
-    public const string Settings = "";
-    public const string Palette = "";
-    public const string Console = "";
+    public const string Settings = "\uE713";
+    public const string Palette = "\uE790";
+    public const string Console = "\uE756";
 
     // Status
-    public const string Error = "";
-    public const string Warning = "";
-    public const string Info = "";
+    public const string Error = "\uEA39";
+    public const string Warning = "\uE7BA";
+    public const string Info = "\uE946";
 
     // Glyphs used by control templates
-    public const string CheckMark = "";
-    public const string ChevronDown = "";
-    public const string ChevronRight = "";
-    public const string ChromeMinimize = "";
-    public const string ChromeMaximize = "";
-    public const string ChromeRestore = "";
-    public const string ChromeClose = "";
+    public const string CheckMark = "\uE73E";
+    public const string ChevronDown = "\uE70D";
+    public const string ChevronRight = "\uE76C";
+    public const string ChromeMinimize = "\uE921";
+    public const string ChromeMaximize = "\uE922";
+    public const string ChromeRestore = "\uE923";
+    public const string ChromeClose = "\uE8BB";
 
     /// <summary>Creates an icon element for use as menu, button or tab content.</summary>
     public static TextBlock Create(string glyph, double? size = null)

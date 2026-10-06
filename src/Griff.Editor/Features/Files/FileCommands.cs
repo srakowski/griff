@@ -6,7 +6,7 @@ using Griff.Editor.Themes;
 
 namespace Griff.Editor.Features.Files;
 
-// File menu and toolbar groups: 0 = new/open, 1 = save, 9 = exit.
+// File menu groups: 0 = project (ProjectsModule), 1 = new/open, 2 = save, 9 = exit.
 
 public sealed class NewFileCommand(IDocumentService documents) : EditorCommand
 {
@@ -14,7 +14,7 @@ public sealed class NewFileCommand(IDocumentService documents) : EditorCommand
     public override string Text => "_New";
     public override string? Icon => Icons.New;
     public override KeyGesture? Gesture { get; } = new(Key.N, ModifierKeys.Control);
-    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 0, Order: 0);
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 0, Order: 0);
 
     protected override Task ExecuteCoreAsync() => documents.NewAsync();
@@ -26,7 +26,7 @@ public sealed class OpenFileCommand(IDocumentService documents) : EditorCommand
     public override string Text => "_Open...";
     public override string? Icon => Icons.Open;
     public override KeyGesture? Gesture { get; } = new(Key.O, ModifierKeys.Control);
-    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 0, Order: 1);
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 1);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 0, Order: 1);
 
     protected override Task ExecuteCoreAsync() => documents.OpenAsync();
@@ -38,7 +38,7 @@ public sealed class SaveFileCommand(IDocumentService documents) : EditorCommand
     public override string Text => "_Save";
     public override string? Icon => Icons.Save;
     public override KeyGesture? Gesture { get; } = new(Key.S, ModifierKeys.Control);
-    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 0);
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 1, Order: 0);
 
     protected override Task ExecuteCoreAsync() => documents.SaveAsync();
@@ -50,7 +50,7 @@ public sealed class SaveFileAsCommand(IDocumentService documents) : EditorComman
     public override string Text => "Save _As...";
     public override string? Icon => Icons.SaveAs;
     public override KeyGesture? Gesture { get; } = new(Key.S, ModifierKeys.Control | ModifierKeys.Shift);
-    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 1);
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 2, Order: 1);
 
     protected override Task ExecuteCoreAsync() => documents.SaveAsAsync();
 }

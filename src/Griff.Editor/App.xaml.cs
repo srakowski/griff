@@ -1,13 +1,16 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Documents;
 using Griff.Editor.Core.Modules;
+using Griff.Editor.Core.Projects;
+using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Files;
 using Griff.Editor.Features.Output;
+using Griff.Editor.Features.Projects;
 using Griff.Editor.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,6 +24,7 @@ public partial class App : Application
     // Add new feature modules here.
     private static readonly IEditorModule[] Modules =
     [
+        new ProjectsModule(),
         new FilesModule(),
         new OutputModule(),
         new DesignSystemModule(),
@@ -63,7 +67,9 @@ public partial class App : Application
     private static void ConfigureCoreServices(IServiceCollection services)
     {
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IStatusService, StatusService>();
+        services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<IDocumentService, DocumentService>();
         services.AddSingleton<CommandRegistry>();
 

@@ -18,5 +18,8 @@ public interface IDialogService
     /// <returns>The chosen path, or null if the user cancelled.</returns>
     string? ShowSaveFileDialog(string filter, string defaultFileName);
 
+    /// <returns>The chosen folder, or null if the user cancelled.</returns>
+    string? ShowFolderDialog(string? initialDirectory);
+
     void ShowError(string title, string message);
 }

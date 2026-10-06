@@ -1,0 +1,116 @@
+<UserControl x:Class="Griff.Editor.Features.Hierarchy.HierarchyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:hierarchy="clr-namespace:Griff.Editor.Features.Hierarchy"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=hierarchy:HierarchyPanel}"
+             d:DesignHeight="400" d:DesignWidth="280">
+    <Grid>
+        <DockPanel>
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasScene}" Value="False">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
+
+            <!-- Scene name + create button -->
+            <Border DockPanel.Dock="Top"
+                    Padding="10,2,4,2"
+                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                    BorderThickness="0,0,0,1">
+                <DockPanel>
+                    <Button x:Name="AddButton"
+                            Click="OnAddClicked"
+                            DockPanel.Dock="Right"
+                            Style="{StaticResource Style.Button.Toolbar}"
+                            ToolTip="Create">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                    </Button>
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" Text="{Binding SceneName}" />
+                </DockPanel>
+            </Border>
+
+            <TreeView x:Name="Tree"
+                      AllowDrop="True"
+                      ItemsSource="{Binding Roots}"
+                      DragLeave="OnDragLeave"
+                      DragOver="OnDragOver"
+                      Drop="OnDrop"
+                      PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                      PreviewMouseMove="OnPreviewMouseMove"
+                      PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate DataType="hierarchy:EntityNode" ItemsSource="{Binding Children}">
+                        <Grid>
+                            <!-- Drop indicators -->
+                            <Border x:Name="DropInto"
+                                    Margin="-4,-2"
+                                    BorderBrush="{DynamicResource Brush.Accent}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource Radius.Small}"
+                                    Visibility="Collapsed" />
+                            <Rectangle x:Name="DropBefore" Height="2" Margin="-4,-4,0,0" VerticalAlignment="Top" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+                            <Rectangle x:Name="DropAfter" Height="2" Margin="-4,0,0,-4" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+
+                            <TextBlock x:Name="Label" VerticalAlignment="Center" Text="{Binding Name}" />
+                            <TextBox x:Name="Editor"
+                                     MinHeight="20"
+                                     Padding="2,0"
+                                     IsUndoEnabled="False"
+                                     IsVisibleChanged="OnRenameVisibleChanged"
+                                     KeyDown="OnRenameKeyDown"
+                                     LostKeyboardFocus="OnRenameLostFocus"
+                                     Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="Collapsed" />
+                        </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                <Setter TargetName="Label" Property="Visibility" Value="Hidden" />
+                                <Setter TargetName="Editor" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DropHint}" Value="{x:Static hierarchy:DropPosition.Into}">
+                                <Setter TargetName="DropInto" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DropHint}" Value="{x:Static hierarchy:DropPosition.Before}">
+                                <Setter TargetName="DropBefore" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DropHint}" Value="{x:Static hierarchy:DropPosition.After}">
+                                <Setter TargetName="DropAfter" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </DockPanel>
+
+        <TextBlock HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Style="{StaticResource Style.Text.Caption}"
+                   Text="No scene open">
+            <TextBlock.Visibility>
+                <Binding Path="HasScene">
+                    <Binding.Converter>
+                        <converters:BoolToVisibilityConverter Invert="True" />
+                    </Binding.Converter>
+                </Binding>
+            </TextBlock.Visibility>
+        </TextBlock>
+    </Grid>
+</UserControl>

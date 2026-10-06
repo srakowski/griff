@@ -10,6 +10,7 @@
         <ResourceDictionary Source="Controls/Tabs.xaml" />
         <ResourceDictionary Source="Controls/Lists.xaml" />
         <ResourceDictionary Source="Controls/Misc.xaml" />
+        <ResourceDictionary Source="Controls/Fields.xaml" />
         <ResourceDictionary Source="Controls/Window.xaml" />
     </ResourceDictionary.MergedDictionaries>
 </ResourceDictionary>

@@ -29,8 +29,8 @@ public partial class DesignSystemWindow : ChromeWindow
             .ToList();
 
         ColorList.ItemsSource = resources
-            .Where(r => r.Value is Color)
-            .Select(r => new Swatch((string)r.Key, new SolidColorBrush((Color)r.Value), ((Color)r.Value).ToString()))
+            .Where(r => r.Value is System.Windows.Media.Color)
+            .Select(r => new Swatch((string)r.Key, new SolidColorBrush((System.Windows.Media.Color)r.Value), ((System.Windows.Media.Color)r.Value).ToString()))
             .OrderBy(s => s.Name, StringComparer.Ordinal)
             .ToList();
 

@@ -1,16 +1,21 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
-using Griff.Editor.Core.Documents;
 using Griff.Editor.Core.Modules;
-using Griff.Editor.Core.Projects;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.DesignSystem;
-using Griff.Editor.Features.Files;
+using Griff.Editor.Features.Editing;
+using Griff.Editor.Features.Entities;
+using Griff.Editor.Features.Hierarchy;
+using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Projects;
+using Griff.Editor.Features.Scenes;
+using Griff.Editor.Features.SceneView;
 using Griff.Editor.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,14 +30,18 @@ public partial class App : Application
     private static readonly IEditorModule[] Modules =
     [
         new ProjectsModule(),
-        new FilesModule(),
+        new ScenesModule(),
+        new EditingModule(),
+        new EntitiesModule(),
+        new HierarchyModule(),
+        new InspectorModule(),
         new OutputModule(),
         new DesignSystemModule(),
     ];
 
     private IHost? _host;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -47,10 +56,15 @@ public partial class App : Application
         _host.Start();
 
         MainWindow = _host.Services.GetRequiredService<MainWindow>();
+#if DEBUG
+        if (Diagnostics.SnapshotRunner.TryRun(_host.Services, MainWindow))
+            return;
+#endif
         MainWindow.Show();
 
-        _host.Services.GetRequiredService<ILogger<App>>()
-            .LogInformation("Griff Editor started ({Modules} modules)", Modules.Length);
+        var logger = _host.Services.GetRequiredService<ILogger<App>>();
+        logger.LogInformation("Griff Editor started ({Modules} modules)", Modules.Length);
+        await ReopenLastProjectAsync(logger);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -69,8 +83,8 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IStatusService, StatusService>();
-        services.AddSingleton<IProjectService, ProjectService>();
-        services.AddSingleton<IDocumentService, DocumentService>();
+        services.AddSingleton<IWorkspace, Workspace>();
+        services.AddSingleton<ISelection, Selection>();
         services.AddSingleton<CommandRegistry>();
 
         services.AddMenu(Menus.File, "_File", order: 0);
@@ -81,8 +95,27 @@ public partial class App : Application
         services.AddSingleton<MenuBuilder>();
         services.AddSingleton<ToolbarBuilder>();
         services.AddSingleton<PanelHost>();
+        services.AddSingleton<SceneViewControl>();
+        services.AddSingleton<StartPage>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
+    }
+
+    // Jams are short: pick up exactly where you left off.
+    private async Task ReopenLastProjectAsync(ILogger logger)
+    {
+        var workspace = _host!.Services.GetRequiredService<IWorkspace>();
+        if (workspace.RecentProjects.FirstOrDefault() is not { } last)
+            return;
+
+        try
+        {
+            await workspace.OpenProjectAsync(last);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            logger.LogWarning("Couldn't reopen {Path}: {Message}", last, ex.Message);
+        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

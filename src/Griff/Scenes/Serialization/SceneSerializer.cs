@@ -68,6 +68,20 @@ public sealed class SceneSerializer(ComponentRegistry registry)
     public Scene LoadFromString(string json, ICollection<string>? warnings = null) =>
         Load(new MemoryStream(Encoding.UTF8.GetBytes(json)), warnings);
 
+    /// <summary>
+    /// Deep-copies <paramref name="source"/> and its descendants with new ids, ready to add to a scene.
+    /// Goes through the file format so copies follow exactly the same rules as save and load.
+    /// </summary>
+    public Entity Clone(Entity source)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteEntity(writer, source);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return ReadEntity(document.RootElement, new LoadContext(warnings: null, newIds: true));
+    }
+
     private void WriteEntity(Utf8JsonWriter writer, Entity entity)
     {
         writer.WriteStartObject();
@@ -117,7 +131,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         var name = element.TryGetProperty("name", out var n) ? n.GetString() ?? "Entity" : "Entity";
 
         Guid id;
-        if (!element.TryGetProperty("id", out var idElement) || !idElement.TryGetGuid(out id) || !context.SeenIds.Add(id))
+        if (context.NewIds)
+        {
+            id = Guid.NewGuid();
+        }
+        else if (!element.TryGetProperty("id", out var idElement) || !idElement.TryGetGuid(out id) || !context.SeenIds.Add(id))
         {
             id = Guid.NewGuid();
             context.Warn($"\"{name}\" had a missing or duplicate id; it was given a new one.");
@@ -185,8 +203,10 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             entity.AddComponent(component);
     }
 
-    private sealed class LoadContext(ICollection<string>? warnings)
+    private sealed class LoadContext(ICollection<string>? warnings, bool newIds = false)
     {
+        public bool NewIds { get; } = newIds;
+
         public HashSet<Guid> SeenIds { get; } = [];
 
         public void Warn(string message) => warnings?.Add(message);

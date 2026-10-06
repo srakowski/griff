@@ -43,7 +43,7 @@
             </StackPanel>
         </Border>
 
-        <ListBox x:Name="EntryList" ItemsSource="{Binding Entries}">
+        <ListBox x:Name="EntryList" ItemsSource="{Binding Entries}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="output:LogEntry">
                     <Grid>

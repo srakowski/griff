@@ -5,6 +5,7 @@
                        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                        xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
                        xmlns:shell="clr-namespace:Griff.Editor.Shell"
+                       xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=shell:MainWindowViewModel}"
                        Title="{Binding Title}"
@@ -52,12 +53,13 @@
                     <RowDefinition x:Name="BottomRow" Height="240" />
                 </Grid.RowDefinitions>
 
-                <TabControl Style="{StaticResource Style.TabControl.Document}">
-                    <TabItem Header="{Binding DocumentTitle}">
-                        <TextBox Style="{StaticResource Style.TextBox.Code}"
-                                 Text="{Binding Documents.Active.Text, UpdateSourceTrigger=PropertyChanged}" />
-                    </TabItem>
+                <!-- Scene view in a document tab; populated in code-behind. -->
+                <TabControl Style="{StaticResource Style.TabControl.Document}"
+                            Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <TabItem x:Name="SceneTab" Header="{Binding SceneTitle}" />
                 </TabControl>
+                <ContentControl x:Name="StartHost"
+                                Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
 
                 <GridSplitter x:Name="BottomSplitter"
                               Grid.Row="1"
@@ -82,7 +84,7 @@
             <TextBlock DockPanel.Dock="Right"
                        VerticalAlignment="Center"
                        Style="{StaticResource Style.Text.Caption}"
-                       Text="{Binding DocumentLocation}" />
+                       Text="{Binding SceneLocation}" />
             <TextBlock VerticalAlignment="Center"
                        Style="{StaticResource Style.Text.Caption}"
                        Text="{Binding Status.Message}" />

@@ -75,6 +75,11 @@
     <SolidColorBrush x:Key="Brush.Status.Success" Color="{StaticResource Color.Green.400}" />
     <SolidColorBrush x:Key="Brush.Status.Info" Color="{StaticResource Color.Blue.400}" />
 
+    <!-- Axes: X red, Y green, Z blue, matching the gizmo convention used across 3D tools. -->
+    <SolidColorBrush x:Key="Brush.Axis.X" Color="{StaticResource Color.Red.400}" />
+    <SolidColorBrush x:Key="Brush.Axis.Y" Color="{StaticResource Color.Green.400}" />
+    <SolidColorBrush x:Key="Brush.Axis.Z" Color="{StaticResource Color.Blue.400}" />
+
     <SolidColorBrush x:Key="Brush.Caption.CloseHover" Color="{StaticResource Color.Red.600}" />
 
     <!-- ===== Typography ===== -->

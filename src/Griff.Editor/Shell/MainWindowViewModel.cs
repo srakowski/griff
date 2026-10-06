@@ -1,57 +1,67 @@
 using System.ComponentModel;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Griff.Editor.Core.Documents;
-using Griff.Editor.Core.Projects;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Core.Workspace;
 
 namespace Griff.Editor.Shell;
 
 public sealed class MainWindowViewModel : ObservableObject
 {
-    private TextDocument _observed;
+    private SceneDocument? _scene;
 
-    public MainWindowViewModel(IDocumentService documents, IStatusService status, IProjectService projects)
+    public MainWindowViewModel(IWorkspace workspace, IStatusService status, ISelection selection)
     {
-        Documents = documents;
+        Workspace = workspace;
         Status = status;
-        Projects = projects;
-        projects.PropertyChanged += (_, _) => OnPropertyChanged(nameof(Title));
-        _observed = documents.Active;
-        _observed.PropertyChanged += OnDocumentChanged;
-        documents.PropertyChanged += OnDocumentsChanged;
+        workspace.PropertyChanged += OnWorkspaceChanged;
+        selection.PropertyChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
+        Track(workspace.Scene);
     }
 
-    public IDocumentService Documents { get; }
+    public IWorkspace Workspace { get; }
 
     public IStatusService Status { get; }
 
-    public IProjectService Projects { get; }
+    public bool HasProject => Workspace.Project is not null;
 
-    public string DocumentTitle => $"{Documents.Active.DisplayName}{(Documents.Active.IsDirty ? "*" : "")}";
+    public string SceneTitle => Workspace.Scene is { } scene ? $"{scene.Name}{(scene.IsDirty ? "*" : "")}" : "";
 
-    public string Title => Projects.Current is { } project
-        ? $"{DocumentTitle} - {project.Name} - Griff"
-        : $"{DocumentTitle} - Griff";
+    public string Title => Workspace.Project is { } project
+        ? $"{SceneTitle} - {project.Name} - Griff"
+        : "Griff";
 
-    public string DocumentLocation => Documents.Active.FilePath ?? "Not saved";
+    public string SceneLocation => Workspace.Project is { } project && Workspace.Scene is { } scene
+        ? project.GetRelativePath(scene.FilePath)
+        : "";
 
-    private void OnDocumentsChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnWorkspaceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(IDocumentService.Active))
-            return;
-
-        _observed.PropertyChanged -= OnDocumentChanged;
-        _observed = Documents.Active;
-        _observed.PropertyChanged += OnDocumentChanged;
-        RaiseDocumentProperties();
+        if (e.PropertyName == nameof(IWorkspace.Scene))
+            Track(Workspace.Scene);
+        Raise();
     }
 
-    private void OnDocumentChanged(object? sender, PropertyChangedEventArgs e) => RaiseDocumentProperties();
-
-    private void RaiseDocumentProperties()
+    private void Track(SceneDocument? scene)
     {
-        OnPropertyChanged(nameof(DocumentTitle));
+        if (_scene is not null)
+            _scene.PropertyChanged -= OnSceneChanged;
+        _scene = scene;
+        if (_scene is not null)
+            _scene.PropertyChanged += OnSceneChanged;
+        Raise();
+    }
+
+    private void OnSceneChanged(object? sender, PropertyChangedEventArgs e) => Raise();
+
+    private void Raise()
+    {
+        OnPropertyChanged(nameof(HasProject));
+        OnPropertyChanged(nameof(SceneTitle));
         OnPropertyChanged(nameof(Title));
-        OnPropertyChanged(nameof(DocumentLocation));
+        OnPropertyChanged(nameof(SceneLocation));
+
+        // Command availability depends on the project, scene and history.
+        CommandManager.InvalidateRequerySuggested();
     }
 }

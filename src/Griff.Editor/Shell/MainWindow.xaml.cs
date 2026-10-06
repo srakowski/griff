@@ -3,20 +3,23 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Griff.Editor.Core.Commands;
-using Griff.Editor.Core.Documents;
 using Griff.Editor.Core.Panels;
+using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.SceneView;
 using Griff.Editor.Themes.Controls;
 
 namespace Griff.Editor.Shell;
 
 public partial class MainWindow : ChromeWindow
 {
-    private readonly IDocumentService _documents;
+    private readonly IWorkspace _workspace;
     private bool _closeConfirmed;
 
     public MainWindow(
         MainWindowViewModel viewModel,
-        IDocumentService documents,
+        IWorkspace workspace,
+        SceneViewControl sceneView,
+        StartPage startPage,
         CommandRegistry commands,
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
@@ -24,7 +27,9 @@ public partial class MainWindow : ChromeWindow
     {
         InitializeComponent();
         DataContext = viewModel;
-        _documents = documents;
+        _workspace = workspace;
+        SceneTab.Content = sceneView;
+        StartHost.Content = startPage;
 
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);
@@ -51,7 +56,7 @@ public partial class MainWindow : ChromeWindow
 
         // Closing can't await, so cancel this attempt and close again once the user has answered.
         e.Cancel = true;
-        if (await _documents.ConfirmCloseAsync())
+        if (await _workspace.ConfirmCloseAsync())
         {
             _closeConfirmed = true;
             _ = Dispatcher.InvokeAsync(Close);

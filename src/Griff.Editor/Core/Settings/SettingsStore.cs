@@ -8,6 +8,9 @@ namespace Griff.Editor.Core.Settings;
 public sealed class EditorSettings
 {
     public string? LastProjectLocation { get; set; }
+
+    /// <summary>Most recent first. The first entry is reopened on startup.</summary>
+    public List<string> RecentProjects { get; set; } = [];
 }
 
 public interface ISettingsStore
@@ -22,7 +25,8 @@ public sealed class JsonSettingsStore : ISettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private readonly string _filePath = Path.Combine(
+    // GRIFF_SETTINGS_PATH points the editor at another settings file (tests, portable installs).
+    private readonly string _filePath = Environment.GetEnvironmentVariable("GRIFF_SETTINGS_PATH") ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "settings.json");
 
     private readonly ILogger<JsonSettingsStore> _logger;

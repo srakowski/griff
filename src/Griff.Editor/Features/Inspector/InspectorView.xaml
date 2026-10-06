@@ -1,0 +1,184 @@
+<UserControl x:Class="Griff.Editor.Features.Inspector.InspectorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+             xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=inspector:InspectorPanel}"
+             d:DesignHeight="600" d:DesignWidth="320"
+             controls:NumberField.EditCompleted="OnEditCompleted">
+
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="Visible" />
+        <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
+
+        <!-- Property editors, one per FieldKind -->
+        <DataTemplate x:Key="Field.Bool" DataType="inspector:PropertyField">
+            <CheckBox HorizontalAlignment="Left" IsChecked="{Binding BoolValue}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="Field.Number" DataType="inspector:PropertyField">
+            <controls:NumberField IsInteger="{Binding IsInteger, Mode=OneTime}" Value="{Binding NumberValue}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="Field.Text" DataType="inspector:PropertyField">
+            <controls:CommitTextBox Text="{Binding TextValue}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="Field.Enum" DataType="inspector:PropertyField">
+            <ComboBox ItemsSource="{Binding EnumValues, Mode=OneTime}" SelectedItem="{Binding EnumValue}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="Field.Color" DataType="inspector:PropertyField">
+            <DockPanel>
+                <Border Width="22" Height="22"
+                        Margin="0,0,6,0"
+                        Background="{Binding ColorBrush}"
+                        BorderBrush="{DynamicResource Brush.Border.Default}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource Radius.Small}"
+                        DockPanel.Dock="Left" />
+                <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Text="{Binding ColorHex}" />
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="Field.Vector" DataType="inspector:PropertyField">
+            <ItemsControl ItemsSource="{Binding Axes, Mode=OneTime}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:AxisField">
+                        <controls:NumberField x:Name="Field" Margin="0,0,3,0" Label="{Binding Label, Mode=OneTime}" Value="{Binding Value}" />
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Label}" Value="X">
+                                <Setter TargetName="Field" Property="LabelBrush" Value="{DynamicResource Brush.Axis.X}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Label}" Value="Y">
+                                <Setter TargetName="Field" Property="LabelBrush" Value="{DynamicResource Brush.Axis.Y}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Label}" Value="Z">
+                                <Setter TargetName="Field" Property="LabelBrush" Value="{DynamicResource Brush.Axis.Z}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <inspector:FieldTemplateSelector x:Key="FieldSelector"
+                                         Bool="{StaticResource Field.Bool}"
+                                         Color="{StaticResource Field.Color}"
+                                         Enum="{StaticResource Field.Enum}"
+                                         Number="{StaticResource Field.Number}"
+                                         Text="{StaticResource Field.Text}"
+                                         Vector="{StaticResource Field.Vector}" />
+    </UserControl.Resources>
+
+    <Grid>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      Visibility="{Binding HasEntity, Converter={StaticResource Visible}}">
+            <StackPanel Margin="0,0,0,16">
+
+                <!-- Entity header -->
+                <DockPanel Margin="10,10,10,8" DataContext="{Binding Header}">
+                    <CheckBox Margin="0,0,8,0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding IsEnabled}"
+                              ToolTip="Enabled" />
+                    <controls:CommitTextBox FontSize="{StaticResource FontSize.Subtitle}" Text="{Binding Name}" />
+                </DockPanel>
+
+                <!-- Components -->
+                <ItemsControl ItemsSource="{Binding Components}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="inspector:ComponentSection">
+                            <StackPanel>
+                                <!-- Section header -->
+                                <Border Padding="4,0,4,0"
+                                        Background="{DynamicResource Brush.Surface.PanelHeader}"
+                                        BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                        BorderThickness="0,1">
+                                    <DockPanel Height="28">
+                                        <Button Command="{Binding RemoveCommand}"
+                                                DockPanel.Dock="Right"
+                                                Style="{StaticResource Style.Button.Toolbar}"
+                                                ToolTip="Remove component"
+                                                Visibility="{Binding CanRemove, Converter={StaticResource Visible}}">
+                                            <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChromeClose}" />
+                                        </Button>
+                                        <ToggleButton Width="20"
+                                                      IsChecked="{Binding IsExpanded}"
+                                                      Style="{StaticResource Style.TreeView.Expander}" />
+                                        <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Subtitle}" Text="{Binding Title}" />
+                                    </DockPanel>
+                                </Border>
+
+                                <!-- Missing component notice -->
+                                <DockPanel Margin="12,8" Visibility="{Binding IsMissing, Converter={StaticResource Visible}}">
+                                    <TextBlock Margin="0,1,8,0"
+                                               VerticalAlignment="Top"
+                                               DockPanel.Dock="Left"
+                                               Foreground="{DynamicResource Brush.Status.Warning}"
+                                               Style="{StaticResource Style.Icon}"
+                                               Text="{x:Static theme:Icons.Warning}" />
+                                    <TextBlock Style="{StaticResource Style.Text.Secondary}"
+                                               Text="This component's type couldn't be found. Its data is kept and will be saved unchanged."
+                                               TextWrapping="Wrap" />
+                                </DockPanel>
+
+                                <!-- Properties -->
+                                <ItemsControl Margin="12,6,10,8"
+                                              Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding Properties}"
+                                              Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="inspector:PropertyField">
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="Label" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Margin="0,0,12,0"
+                                                           VerticalAlignment="Center"
+                                                           Style="{StaticResource Style.Text.Secondary}"
+                                                           Text="{Binding Label, Mode=OneTime}" />
+                                                <ContentControl Grid.Column="1"
+                                                                Content="{Binding}"
+                                                                ContentTemplateSelector="{StaticResource FieldSelector}"
+                                                                Focusable="False" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Button x:Name="AddComponentButton"
+                        Margin="10,12,10,0"
+                        HorizontalAlignment="Stretch"
+                        Click="OnAddComponentClicked">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Add}" />
+                        <TextBlock Margin="6,0,0,0" Text="Add Component" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Style="{StaticResource Style.Text.Caption}"
+                   Text="Select an entity to inspect it"
+                   Visibility="{Binding HasEntity, Converter={StaticResource Hidden}}" />
+    </Grid>
+</UserControl>

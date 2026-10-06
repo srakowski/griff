@@ -17,5 +17,6 @@ public static class Menus
     public const string File = "File";
     public const string Edit = "Edit";
     public const string View = "View";
+    public const string Entity = "Entity";
     public const string Help = "Help";
 }

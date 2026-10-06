@@ -2,7 +2,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Editor.Core.Dialogs;
-using Griff.Editor.Core.Projects;
+using Griff.Editor.Core.Workspace;
 using Griff.Editor.Core.Settings;
 using Griff.Projects;
 
@@ -16,15 +16,15 @@ public sealed class NewProjectViewModel : ObservableObject
 {
     private const string DefaultName = "My Project";
 
-    private readonly IProjectService _projects;
+    private readonly IWorkspace _workspace;
     private readonly IDialogService _dialogs;
     private string _name;
     private string _location;
     private string? _error;
 
-    public NewProjectViewModel(IProjectService projects, IDialogService dialogs, ISettingsStore settings)
+    public NewProjectViewModel(IWorkspace workspace, IDialogService dialogs, ISettingsStore settings)
     {
-        _projects = projects;
+        _workspace = workspace;
         _dialogs = dialogs;
         _location = settings.Settings.LastProjectLocation ?? DefaultLocation;
         _name = UniqueName(_location);
@@ -81,7 +81,7 @@ public sealed class NewProjectViewModel : ObservableObject
     {
         try
         {
-            await _projects.CreateAsync(Location.Trim(), Name);
+            await _workspace.CreateProjectAsync(Location.Trim(), Name);
             Created?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)

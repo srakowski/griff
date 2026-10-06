@@ -20,6 +20,8 @@ public static class Icons
     public const string Exit = "\uE7E8";
 
     // Editing
+    public const string Add = "\uE710";
+    public const string Copy = "\uE8C8";
     public const string Undo = "\uE7A7";
     public const string Redo = "\uE7A6";
     public const string Delete = "\uE74D";
@@ -32,6 +34,10 @@ public static class Icons
     public const string Stop = "\uE71A";
 
     // Tools and panels
+    public const string Hierarchy = "\uE8FD";
+    public const string Inspector = "\uE9E9";
+    public const string Image = "\uEB9F";
+    public const string Camera = "\uE722";
     public const string Settings = "\uE713";
     public const string Palette = "\uE790";
     public const string Console = "\uE756";

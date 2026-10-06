@@ -220,6 +220,32 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void Clone_DeepCopiesWithNewIds()
+    {
+        var scene = new Scene();
+        var parent = new Entity("Parent");
+        var child = new Entity("Child");
+        scene.Add(parent);
+        scene.Add(child, parent);
+        parent.Transform.Position = new Vector3(1, 2, 3);
+        parent.AddComponent<TestComponent>().Label = "copy me";
+
+        var clone = _serializer.Clone(parent);
+
+        Assert.NotEqual(parent.Id, clone.Id);
+        Assert.NotEqual(child.Id, clone.Children[0].Id);
+        Assert.Null(clone.Scene);
+        Assert.Null(clone.Parent);
+        Assert.Equal("Child", clone.Children[0].Name);
+        Assert.Equal(new Vector3(1, 2, 3), clone.Transform.Position);
+        Assert.Equal("copy me", clone.GetComponent<TestComponent>()!.Label);
+        Assert.NotSame(parent.GetComponent<TestComponent>(), clone.GetComponent<TestComponent>());
+
+        scene.Add(clone);
+        Assert.Equal(4, scene.Count);
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = $$"""{ "formatVersion": {{SceneSerializer.FormatVersion + 1}}, "entities": [] }""";

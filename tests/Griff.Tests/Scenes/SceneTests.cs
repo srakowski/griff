@@ -113,6 +113,26 @@ public class SceneTests
     }
 
     [Fact]
+    public void Version_ChangesOnStructuralEdits()
+    {
+        var scene = new Scene();
+        var a = new Entity("A");
+        var b = new Entity("B");
+        var versions = new List<long> { scene.Version };
+
+        scene.Add(a);
+        versions.Add(scene.Version);
+        scene.Add(b);
+        versions.Add(scene.Version);
+        scene.Move(b, a);
+        versions.Add(scene.Version);
+        scene.Remove(b);
+        versions.Add(scene.Version);
+
+        Assert.Equal(versions.Count, versions.Distinct().Count());
+    }
+
+    [Fact]
     public void Move_ToEntityInAnotherScene_Throws()
     {
         var scene = new Scene();

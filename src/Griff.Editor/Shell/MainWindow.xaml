@@ -54,9 +54,11 @@
                 </Grid.RowDefinitions>
 
                 <!-- Scene view in a document tab; populated in code-behind. -->
-                <TabControl Style="{StaticResource Style.TabControl.Document}"
+                <TabControl x:Name="DocumentTabs"
+                            Style="{StaticResource Style.TabControl.Document}"
                             Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
                     <TabItem x:Name="SceneTab" Header="{Binding SceneTitle}" />
+                    <TabItem x:Name="GameTab" Header="Game" />
                 </TabControl>
                 <ContentControl x:Name="StartHost"
                                 Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
@@ -79,15 +81,29 @@
             <TabControl x:Name="RightZone" Grid.Column="4" />
         </Grid>
 
-        <!-- Status bar -->
-        <DockPanel Grid.Row="2" Margin="10,0">
-            <TextBlock DockPanel.Dock="Right"
-                       VerticalAlignment="Center"
-                       Style="{StaticResource Style.Text.Caption}"
-                       Text="{Binding SceneLocation}" />
-            <TextBlock VerticalAlignment="Center"
-                       Style="{StaticResource Style.Text.Caption}"
-                       Text="{Binding Status.Message}" />
-        </DockPanel>
+        <!-- Status bar: turns accent while playing so play mode is unmistakable. -->
+        <Border Grid.Row="2" Padding="10,0">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Text.Tertiary}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Brush.Accent}" />
+                            <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right"
+                           VerticalAlignment="Center"
+                           FontSize="{StaticResource FontSize.Caption}"
+                           Text="{Binding SceneLocation}" />
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="{StaticResource FontSize.Caption}"
+                           Text="{Binding Status.Message}" />
+            </DockPanel>
+        </Border>
     </Grid>
 </controls:ChromeWindow>

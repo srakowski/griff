@@ -81,13 +81,26 @@ public sealed class SceneViewControl : FrameworkElement
     private void Track(SceneDocument? document)
     {
         if (_document is not null)
+        {
             _document.Changed -= OnDocumentChanged;
+            _document.RuntimeTicked -= OnRuntimeTicked;
+        }
+
+        // Switching to or from the play-mode copy keeps the camera where the user put it.
+        var samePlace = _document is not null && document is not null && (_document.IsRuntime || document.IsRuntime);
         _document = document;
         if (_document is not null)
+        {
             _document.Changed += OnDocumentChanged;
+            _document.RuntimeTicked += OnRuntimeTicked;
+        }
 
-        _images.Clear();
-        _needsFit = true;
+        if (!samePlace)
+        {
+            _images.Clear();
+            _needsFit = true;
+        }
+
         InvalidateVisual();
     }
 
@@ -111,6 +124,8 @@ public sealed class SceneViewControl : FrameworkElement
     }
 
     private void OnDocumentChanged(object? sender, EditEventArgs e) => InvalidateVisual();
+
+    private void OnRuntimeTicked(object? sender, EventArgs e) => InvalidateVisual();
 
     // ----- Coordinates -----
 

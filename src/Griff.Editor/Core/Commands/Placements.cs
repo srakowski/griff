@@ -18,5 +18,6 @@ public static class Menus
     public const string Edit = "Edit";
     public const string View = "View";
     public const string Entity = "Entity";
+    public const string Game = "Game";
     public const string Help = "Help";
 }

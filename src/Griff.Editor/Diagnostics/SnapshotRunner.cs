@@ -7,6 +7,8 @@ using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.DesignSystem;
+using Griff.Editor.Features.Play;
+using Griff.Rendering;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -41,6 +43,15 @@ internal static class SnapshotRunner
             await workspace.CreateProjectAsync(projectDir, "Snapshot Game");
             BuildSampleScene(workspace, services.GetRequiredService<ISelection>());
             Render(main, Path.Combine(outputDir, "editor.png"));
+
+            // Play: let the GPU render a few frames, then read the game view back.
+            var play = services.GetRequiredService<PlayMode>();
+            play.Play();
+            await Task.Delay(800);
+            Render(main, Path.Combine(outputDir, "playing.png"));
+            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene!.Scene, play.Surface.Aspect)) is var (pixels, width, height))
+                SaveRgba(pixels, width, height, Path.Combine(outputDir, "game.png"));
+            play.Stop();
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();
             Show(gallery);
@@ -86,6 +97,18 @@ internal static class SnapshotRunner
         document.Execute(new AddEntityEdit(scene, spawn));
 
         selection.Select(player);
+    }
+
+    private static void SaveRgba(byte[] rgba, int width, int height, string path)
+    {
+        // WPF wants BGRA.
+        for (var i = 0; i < rgba.Length; i += 4)
+            (rgba[i], rgba[i + 2]) = (rgba[i + 2], rgba[i]);
+        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, rgba, width * 4);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(path);
+        encoder.Save(file);
     }
 
     private static void TryDelete(string directory)

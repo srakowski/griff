@@ -24,6 +24,14 @@ public interface IWorkspace : INotifyPropertyChanged
 
     IReadOnlyList<string> RecentProjects { get; }
 
+    /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
+    bool IsPlaying { get; }
+
+    /// <summary>Shows <paramref name="runtime"/> in place of the edit scene until <see cref="ExitPlayMode"/>.</summary>
+    void EnterPlayMode(SceneDocument runtime);
+
+    void ExitPlayMode();
+
     Task CreateProjectAsync(string location, string name);
 
     /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
@@ -46,6 +54,7 @@ public sealed class Workspace(
 
     private Project? _project;
     private SceneDocument? _scene;
+    private SceneDocument? _editScene;
 
     public Project? Project
     {
@@ -64,6 +73,26 @@ public sealed class Workspace(
     public SceneSerializer Serializer => new(Components);
 
     public IReadOnlyList<string> RecentProjects => settings.Settings.RecentProjects;
+
+    public bool IsPlaying => _editScene is not null;
+
+    public void EnterPlayMode(SceneDocument runtime)
+    {
+        if (IsPlaying)
+            throw new InvalidOperationException("Already playing.");
+        _editScene = Scene;
+        Scene = runtime;
+        OnPropertyChanged(nameof(IsPlaying));
+    }
+
+    public void ExitPlayMode()
+    {
+        if (!IsPlaying)
+            return;
+        Scene = _editScene;
+        _editScene = null;
+        OnPropertyChanged(nameof(IsPlaying));
+    }
 
     public async Task CreateProjectAsync(string location, string name)
     {
@@ -99,7 +128,7 @@ public sealed class Workspace(
 
     public async Task<bool> SaveSceneAsync()
     {
-        if (Scene is not { } document)
+        if (Scene is not { IsRuntime: false } document)
             return false;
 
         try
@@ -125,6 +154,8 @@ public sealed class Workspace(
 
     public async Task<bool> ConfirmCloseAsync()
     {
+        // Leaving play mode discards the runtime copy; the edit scene is what matters.
+        ExitPlayMode();
         if (Scene is not { IsDirty: true } document)
             return true;
 

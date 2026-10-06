@@ -82,6 +82,7 @@ public sealed class HierarchyPanel : ToolPanel
     private readonly Dictionary<Guid, EntityNode> _nodes = [];
     private SceneDocument? _document;
     private bool _syncingSelection;
+    private long _builtVersion;
 
     public HierarchyPanel(IWorkspace workspace, ISelection selection)
     {
@@ -188,12 +189,22 @@ public sealed class HierarchyPanel : ToolPanel
     private void Track(SceneDocument? document)
     {
         if (_document is not null)
+        {
             _document.Changed -= OnDocumentChanged;
+            _document.RuntimeTicked -= OnRuntimeTicked;
+        }
+
+        // Entering or leaving play mode swaps documents but keeps the same entity ids; keep expansion.
+        var keepExpansion = _document is not null && document is not null && (_document.IsRuntime || document.IsRuntime);
         _document = document;
         if (_document is not null)
+        {
             _document.Changed += OnDocumentChanged;
+            _document.RuntimeTicked += OnRuntimeTicked;
+        }
 
-        _expanded.Clear();
+        if (!keepExpansion)
+            _expanded.Clear();
         Rebuild();
         OnPropertyChanged(nameof(SceneName));
         OnPropertyChanged(nameof(HasScene));
@@ -203,6 +214,13 @@ public sealed class HierarchyPanel : ToolPanel
     {
         // Property edits (moving, recoloring, ...) never change what the tree shows.
         if (!IsPropertyOnly(e.Edit))
+            Rebuild();
+    }
+
+    // The running game can spawn and destroy entities; only rebuild when the structure actually changed.
+    private void OnRuntimeTicked(object? sender, EventArgs e)
+    {
+        if (_document is not null && _document.Scene.Version != _builtVersion)
             Rebuild();
     }
 
@@ -220,6 +238,7 @@ public sealed class HierarchyPanel : ToolPanel
         if (_document is null)
             return;
 
+        _builtVersion = _document.Scene.Version;
         foreach (var root in _document.Scene.Roots)
             Roots.Add(CreateNode(root));
         SyncSelectionToTree();

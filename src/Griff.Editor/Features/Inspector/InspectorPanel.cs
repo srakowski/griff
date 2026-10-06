@@ -82,16 +82,33 @@ public sealed partial class InspectorPanel : ToolPanel
     private void Track(SceneDocument? document)
     {
         if (_document is not null)
+        {
             _document.Changed -= OnDocumentChanged;
+            _document.RuntimeTicked -= OnRuntimeTicked;
+        }
+
         _document = document;
         if (_document is not null)
+        {
             _document.Changed += OnDocumentChanged;
+            _document.RuntimeTicked += OnRuntimeTicked;
+        }
+
         Rebuild();
     }
 
     private void OnDocumentChanged(object? sender, EditEventArgs e)
     {
         if (ChangesComponents(e.Edit))
+            Rebuild();
+        else
+            Refresh();
+    }
+
+    // Show live values while the game runs. Components added or removed by gameplay rebuild the sections.
+    private void OnRuntimeTicked(object? sender, EventArgs e)
+    {
+        if (_selection.Entity is { } entity && entity.Components.Count != Components.Count)
             Rebuild();
         else
             Refresh();

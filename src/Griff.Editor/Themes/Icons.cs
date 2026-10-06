@@ -31,6 +31,7 @@ public static class Icons
     // Playback
     public const string Play = "\uE768";
     public const string Pause = "\uE769";
+    public const string Step = "\uE893";
     public const string Stop = "\uE71A";
 
     // Tools and panels

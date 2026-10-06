@@ -13,6 +13,7 @@ using Griff.Editor.Features.Entities;
 using Griff.Editor.Features.Hierarchy;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Output;
+using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Projects;
 using Griff.Editor.Features.Scenes;
 using Griff.Editor.Features.SceneView;
@@ -33,6 +34,7 @@ public partial class App : Application
         new ScenesModule(),
         new EditingModule(),
         new EntitiesModule(),
+        new PlayModule(),
         new HierarchyModule(),
         new InspectorModule(),
         new OutputModule(),

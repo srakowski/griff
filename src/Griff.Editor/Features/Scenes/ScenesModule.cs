@@ -21,7 +21,7 @@ public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 0);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 0, Order: 1);
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null;
+    protected override bool CanExecuteCore() => workspace.Scene is { IsRuntime: false };
 
     protected override Task ExecuteCoreAsync() => workspace.SaveSceneAsync();
 }

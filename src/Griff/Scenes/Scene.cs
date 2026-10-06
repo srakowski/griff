@@ -15,6 +15,9 @@ public sealed class Scene
 
     public int Count => _byId.Count;
 
+    /// <summary>Changes whenever entities are added, removed or moved. Cheap to poll for structural changes.</summary>
+    public long Version { get; private set; }
+
     public Entity? Find(Guid id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
@@ -42,6 +45,8 @@ public sealed class Scene
             e.Scene = this;
             _byId.Add(e.Id, e);
         }
+
+        Version++;
     }
 
     /// <summary>Removes <paramref name="entity"/> and its descendants. They keep their own hierarchy.</summary>
@@ -54,6 +59,8 @@ public sealed class Scene
             e.Scene = null;
             _byId.Remove(e.Id);
         }
+
+        Version++;
     }
 
     /// <summary>Moves <paramref name="entity"/> under a new parent (or to the root) at <paramref name="index"/>.</summary>
@@ -66,6 +73,7 @@ public sealed class Scene
 
         Detach(entity);
         Insert(entity, newParent, index);
+        Version++;
     }
 
     /// <summary>Position of <paramref name="entity"/> among its siblings.</summary>

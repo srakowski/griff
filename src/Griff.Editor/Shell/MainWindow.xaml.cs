@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
 using Griff.Editor.Themes.Controls;
 
@@ -20,6 +21,7 @@ public partial class MainWindow : ChromeWindow
         IWorkspace workspace,
         SceneViewControl sceneView,
         StartPage startPage,
+        PlayMode play,
         CommandRegistry commands,
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
@@ -29,7 +31,10 @@ public partial class MainWindow : ChromeWindow
         DataContext = viewModel;
         _workspace = workspace;
         SceneTab.Content = sceneView;
+        GameTab.Content = play.Surface;
         StartHost.Content = startPage;
+        play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
+        play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;
 
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);

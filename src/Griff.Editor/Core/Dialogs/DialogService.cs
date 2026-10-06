@@ -46,6 +46,12 @@ public sealed class DialogService : IDialogService
         return dialog.ShowDialog(Owner) == true ? dialog.FolderName : null;
     }
 
+    public string? Prompt(string title, string label, string initial, Func<string, string?> validate)
+    {
+        var window = new PromptWindow(title, label, initial, validate) { Owner = Owner };
+        return window.ShowDialog() == true ? window.Value : null;
+    }
+
     public void ShowError(string title, string message)
     {
         if (Owner is { } owner)

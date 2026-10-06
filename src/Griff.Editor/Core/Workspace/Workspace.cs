@@ -7,6 +7,8 @@ using Griff.Editor.Core.Status;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Scripting;
+using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Core.Workspace;
@@ -42,6 +44,12 @@ public interface IWorkspace : INotifyPropertyChanged
 
     /// <summary>Prompts to save unsaved changes. Returns true if it's safe to close the scene.</summary>
     Task<bool> ConfirmCloseAsync();
+
+    /// <summary>Raised after scripts compile and are swapped in. Script components may have been replaced.</summary>
+    event EventHandler<ReloadResult>? ScriptsReloaded;
+
+    /// <summary>Compiles the project's scripts now and swaps them into the open scenes if they build.</summary>
+    ReloadResult? ReloadScripts();
 }
 
 public sealed class Workspace(
@@ -55,6 +63,8 @@ public sealed class Workspace(
     private Project? _project;
     private SceneDocument? _scene;
     private SceneDocument? _editScene;
+    private FileSystemWatcher? _scriptWatcher;
+    private DispatcherTimer? _scriptDebounce;
 
     public Project? Project
     {
@@ -71,6 +81,71 @@ public sealed class Workspace(
     public ComponentRegistry Components { get; } = ComponentRegistry.CreateDefault();
 
     public SceneSerializer Serializer => new(Components);
+
+    public ScriptHost Scripts => _scripts ??= new ScriptHost(Components);
+
+    private ScriptHost? _scripts;
+
+    public event EventHandler<ReloadResult>? ScriptsReloaded;
+
+    public ReloadResult? ReloadScripts()
+    {
+        if (Project is not { } project)
+            return null;
+
+        // Rebuild script components everywhere they're live: the edit scene and, while playing, the game.
+        var documents = new[] { _editScene, Scene }.OfType<SceneDocument>().Distinct().ToList();
+        var result = Scripts.ReloadFolder(project.AssetsPath, documents.Select(d => d.Scene));
+
+        foreach (var diagnostic in result.Diagnostics.Where(d => !d.IsError))
+            logger.LogWarning("{Diagnostic}", diagnostic.ToString());
+
+        if (!result.Success)
+        {
+            foreach (var error in result.Diagnostics.Where(d => d.IsError))
+                logger.LogError("{Diagnostic}", error.ToString());
+            status.Show("Script errors; the previous scripts are still running. See Output.");
+            return result;
+        }
+
+        foreach (var warning in result.Warnings)
+            logger.LogWarning("{Warning}", warning);
+        foreach (var document in documents)
+            document.History.RemapComponents(result.Replaced, Components);
+
+        logger.LogInformation("Scripts compiled: {Count} component(s)", result.ComponentTypes.Count);
+        ScriptsReloaded?.Invoke(this, result);
+        return result;
+    }
+
+    // Saving a .cs file in Assets reloads scripts shortly after, once the editor has finished writing.
+    private void WatchScripts(Project project)
+    {
+        _scriptWatcher?.Dispose();
+        _scriptDebounce ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
+        {
+            _scriptDebounce!.Stop();
+            ReloadScripts();
+        }, Dispatcher.CurrentDispatcher);
+        _scriptDebounce.Stop();
+
+        Directory.CreateDirectory(project.AssetsPath);
+        _scriptWatcher = new FileSystemWatcher(project.AssetsPath, "*.cs")
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
+        };
+        FileSystemEventHandler restart = (_, _) => _scriptDebounce.Dispatcher.InvokeAsync(() =>
+        {
+            _scriptDebounce.Stop();
+            _scriptDebounce.Start();
+        });
+        _scriptWatcher.Changed += restart;
+        _scriptWatcher.Created += restart;
+        _scriptWatcher.Deleted += restart;
+        _scriptWatcher.Renamed += (s, e) => restart(s, e);
+        _scriptWatcher.EnableRaisingEvents = true;
+    }
 
     public IReadOnlyList<string> RecentProjects => settings.Settings.RecentProjects;
 
@@ -172,6 +247,10 @@ public sealed class Workspace(
         Scene = null;
         Project = project;
         RememberRecent(project.RootPath);
+
+        // Scripts first, so the scene's script components load as real components.
+        ReloadScripts();
+        WatchScripts(project);
 
         var scenePath = project.StartScenePath is { } start && File.Exists(start)
             ? start

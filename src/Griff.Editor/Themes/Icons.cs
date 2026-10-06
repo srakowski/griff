@@ -41,6 +41,7 @@ public static class Icons
     public const string Camera = "\uE722";
     public const string Settings = "\uE713";
     public const string Palette = "\uE790";
+    public const string Code = "\uE943";
     public const string Console = "\uE756";
 
     // Status

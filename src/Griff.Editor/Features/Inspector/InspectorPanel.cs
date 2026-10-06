@@ -35,6 +35,7 @@ public sealed partial class InspectorPanel : ToolPanel
             if (e.PropertyName == nameof(IWorkspace.Scene))
                 Track(workspace.Scene);
         };
+        workspace.ScriptsReloaded += (_, _) => Rebuild();
         Track(workspace.Scene);
     }
 

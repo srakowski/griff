@@ -57,6 +57,7 @@ public sealed class SceneViewControl : FrameworkElement
                 Track(workspace.Scene);
         };
         selection.PropertyChanged += (_, _) => InvalidateVisual();
+        workspace.ScriptsReloaded += (_, _) => InvalidateVisual();
         Track(workspace.Scene);
     }
 

@@ -44,14 +44,38 @@ internal static class SnapshotRunner
             BuildSampleScene(workspace, services.GetRequiredService<ISelection>());
             Render(main, Path.Combine(outputDir, "editor.png"));
 
+            // Scripting: add a script and attach it to the player.
+            var checks = new List<string>();
+            var scriptPath = Path.Combine(workspace.Project!.AssetsPath, "Scripts", "Spinner.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+            File.WriteAllText(scriptPath, SpinnerSource(degreesPerSecond: 180));
+            var compiled = workspace.ReloadScripts();
+            checks.Add($"compile: {(compiled?.Success == true ? "ok" : "FAILED " + string.Join("; ", compiled?.Diagnostics ?? []))}");
+            var player = workspace.Scene!.Scene.Roots.Single(e => e.Name == "Player");
+            workspace.Scene.Execute(new AddComponentEdit(player, workspace.Components.Find("Spinner")!.CreateInstance()));
+
             // Play: let the GPU render a few frames, then read the game view back.
             var play = services.GetRequiredService<PlayMode>();
             play.Play();
             await Task.Delay(800);
+            var runtimePlayer = workspace.Scene!.Scene.Find(player.Id)!;
+            var spunForward = runtimePlayer.Transform.Rotation.Z;
+            checks.Add($"spinning while playing: {(spunForward > 10 ? "ok" : "FAILED")} (z = {spunForward:0.0})");
             Render(main, Path.Combine(outputDir, "playing.png"));
-            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene!.Scene, play.Surface.Aspect)) is var (pixels, width, height))
+            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (pixels, width, height))
                 SaveRgba(pixels, width, height, Path.Combine(outputDir, "game.png"));
+            else
+                checks.Add("gpu capture: FAILED (no GL surface)");
+
+            // Hot reload mid-game: reverse the spin and expect the running game to follow.
+            File.WriteAllText(scriptPath, SpinnerSource(degreesPerSecond: -360));
+            workspace.ReloadScripts();
+            await Task.Delay(800);
+            var afterReload = workspace.Scene!.Scene.Find(player.Id)!.Transform.Rotation.Z;
+            checks.Add($"hot reload while playing: {(afterReload < spunForward ? "ok" : "FAILED")} (z {spunForward:0.0} -> {afterReload:0.0})");
             play.Stop();
+            checks.Add($"edit scene untouched after stop: {(player.Transform.Rotation.Z == 0 ? "ok" : "FAILED")}");
+            File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();
             Show(gallery);
@@ -98,6 +122,16 @@ internal static class SnapshotRunner
 
         selection.Select(player);
     }
+
+    private static string SpinnerSource(float degreesPerSecond) => $$"""
+        public class Spinner : Behavior
+        {
+            public float DegreesPerSecond { get; set; } = {{degreesPerSecond}};
+
+            protected override void Update() =>
+                Transform.Rotation += new Vector3(0, 0, {{degreesPerSecond}} * Time.Delta);
+        }
+        """;
 
     private static void SaveRgba(byte[] rgba, int width, int height, string path)
     {

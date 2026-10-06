@@ -21,5 +21,9 @@ public interface IDialogService
     /// <returns>The chosen folder, or null if the user cancelled.</returns>
     string? ShowFolderDialog(string? initialDirectory);
 
+    /// <param name="validate">Returns an error message for invalid input, or null if it's acceptable.</param>
+    /// <returns>The entered text, or null if the user cancelled.</returns>
+    string? Prompt(string title, string label, string initial, Func<string, string?> validate);
+
     void ShowError(string title, string message);
 }

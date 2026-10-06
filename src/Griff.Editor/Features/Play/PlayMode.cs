@@ -183,7 +183,21 @@ public sealed class PlayMode : ObservableObject
         _runner = new GameRunner(scene, Surface, Application.Current.MainWindow!) { IsPaused = paused };
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
+        if (_workspace.Project is { } project)
+            _runner.Game.SceneLoader = name => GameLoader.LoadScene(project, _workspace.Components, name);
+        _runner.Game.SceneChanged += OnGameSceneChanged;
         _runner.Start();
+    }
+
+    // The game switched scenes (Game.LoadScene): show the new one everywhere.
+    private void OnGameSceneChanged(object? sender, Scene scene)
+    {
+        if (_runtime is null)
+            return;
+        _runtime = new SceneDocument(scene, _runtime.FilePath, isRuntime: true);
+        _workspace.ReplacePlayScene(_runtime);
+        _selection.Select(null);
+        _logger.LogInformation("Game loaded another scene");
     }
 
     private void OnTicked(object? sender, EventArgs e)

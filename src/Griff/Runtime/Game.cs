@@ -9,6 +9,7 @@ namespace Griff.Runtime;
 public sealed class Game
 {
     private readonly List<Entity> _pendingDestroy = [];
+    private string? _pendingScene;
     private bool _stopped;
 
     public Game(Scene scene, IInput input)
@@ -17,7 +18,13 @@ public sealed class Game
         Input = input;
     }
 
-    public Scene Scene { get; }
+    public Scene Scene { get; private set; }
+
+    /// <summary>Loads scenes by name for <see cref="LoadScene"/>. Set by the host (editor or player).</summary>
+    public Func<string, Scene>? SceneLoader { get; set; }
+
+    /// <summary>Raised after <see cref="LoadScene"/> switches to a new scene.</summary>
+    public event EventHandler<Scene>? SceneChanged;
 
     public IInput Input { get; }
 
@@ -51,6 +58,18 @@ public sealed class Game
             Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
 
         FlushDestroys();
+        SwitchSceneIfRequested();
+    }
+
+    /// <summary>
+    /// Switches to another scene ("Level2" or "Scenes/Level2.scene") at the end of this frame.
+    /// The current scene's behaviors get OnDestroy; music keeps playing.
+    /// </summary>
+    public void LoadScene(string nameOrPath)
+    {
+        if (SceneLoader is null)
+            throw new InvalidOperationException("This game can't load scenes (no scene loader is set).");
+        _pendingScene = nameOrPath;
     }
 
     /// <summary>Adds <paramref name="entity"/> to the scene. Its behaviors start on the next frame.</summary>
@@ -79,6 +98,21 @@ public sealed class Game
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
         Audio.StopAll();
+    }
+
+    private void SwitchSceneIfRequested()
+    {
+        if (_pendingScene is not { } name)
+            return;
+        _pendingScene = null;
+
+        var next = SceneLoader!(name);
+        foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
+            behavior.RunDestroy();
+        _pendingDestroy.Clear();
+        Physics.Reset();
+        Scene = next;
+        SceneChanged?.Invoke(this, next);
     }
 
     private void OnCollision(Entity a, Entity b)

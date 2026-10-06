@@ -19,7 +19,11 @@ public static class ExportLayout
 }
 
 /// <summary>Everything needed to start a game: project, component types and the start scene.</summary>
-public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, IReadOnlyList<string> Warnings);
+public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, IReadOnlyList<string> Warnings)
+{
+    /// <summary>Loads another scene of this game by name, for <see cref="Game.SceneLoader"/>.</summary>
+    public Scene LoadScene(string nameOrPath) => GameLoader.LoadScene(Project, Components, nameOrPath);
+}
 
 /// <summary>Loads an exported game folder (or a project folder) for the player.</summary>
 public static class GameLoader
@@ -43,6 +47,13 @@ public static class GameLoader
         await using var stream = File.OpenRead(scenePath);
         var scene = new SceneSerializer(components).Load(stream, warnings);
         return new LoadedGame(project, components, scene, warnings);
+    }
+
+    public static Scene LoadScene(Project project, ComponentRegistry components, string nameOrPath)
+    {
+        var path = project.FindScene(nameOrPath) ?? throw new FileNotFoundException($"No scene named \"{nameOrPath}\".");
+        using var stream = File.OpenRead(path);
+        return new SceneSerializer(components).Load(stream);
     }
 
     public static void RegisterComponents(Assembly assembly, ComponentRegistry registry, ICollection<string> warnings)

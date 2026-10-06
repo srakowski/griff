@@ -30,6 +30,9 @@ public sealed class Physics
     /// <summary>World units per second squared. Negative Y is down.</summary>
     public Vector2 Gravity { get; set; } = new(0, -25f);
 
+    /// <summary>Forgets trigger overlaps, e.g. when the scene changes.</summary>
+    public void Reset() => _triggerPairs = [];
+
     /// <summary>World-space box of a collider, from its entity's position and scale.</summary>
     public static Box BoundsOf(BoxCollider collider)
     {

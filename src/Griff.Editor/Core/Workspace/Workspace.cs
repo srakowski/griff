@@ -48,6 +48,14 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Prompts to save unsaved changes. Returns true if it's safe to close the scene.</summary>
     Task<bool> ConfirmCloseAsync();
 
+    /// <summary>Opens another scene from the project. Returns false if the user cancelled.</summary>
+    Task<bool> OpenSceneAsync(string path);
+
+    /// <summary>Creates Assets/Scenes/&lt;name&gt;.scene with a camera and opens it.</summary>
+    Task<bool> CreateSceneAsync(string name);
+
+    Task SetStartSceneAsync(string path);
+
     /// <summary>Raised after scripts compile and are swapped in. Script components may have been replaced.</summary>
     event EventHandler<ReloadResult>? ScriptsReloaded;
 
@@ -260,6 +268,36 @@ public sealed class Workspace(
             default:
                 return false;
         }
+    }
+
+    public async Task<bool> OpenSceneAsync(string path)
+    {
+        if (Project is null || IsPlaying || !await ConfirmCloseAsync())
+            return false;
+
+        Scene = await LoadSceneAsync(path);
+        status.Show($"Opened {Scene.Name}");
+        logger.LogInformation("Opened scene {Scene}", Scene.Name);
+        return true;
+    }
+
+    public async Task<bool> CreateSceneAsync(string name)
+    {
+        if (Project is not { } project || IsPlaying || !await ConfirmCloseAsync())
+            return false;
+
+        var path = project.CreateScene(name);
+        logger.LogInformation("Created {Scene}", project.GetRelativePath(path));
+        return await OpenSceneAsync(path);
+    }
+
+    public async Task SetStartSceneAsync(string path)
+    {
+        if (Project is not { } project)
+            return;
+        await project.SetStartSceneAsync(path);
+        status.Show($"{Path.GetFileNameWithoutExtension(path)} is now the start scene");
+        OnPropertyChanged(nameof(Project));
     }
 
     private async Task OpenAsync(Project project)

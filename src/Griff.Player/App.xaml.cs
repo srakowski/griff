@@ -70,6 +70,7 @@ public partial class App : Application
         window.Show();
 
         _runner = new GameRunner(game.Scene, surface, window);
+        _runner.Game.SceneLoader = game.LoadScene;
         _runner.Faulted += (_, ex) =>
         {
             if (smokeOutput is not null)

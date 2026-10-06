@@ -29,7 +29,43 @@ public sealed class Project
 
     public string RootPath { get; }
 
-    public ProjectManifest Manifest { get; }
+    public ProjectManifest Manifest { get; private set; }
+
+    /// <summary>Makes <paramref name="scenePath"/> the scene the game starts in, and saves the manifest.</summary>
+    public async Task SetStartSceneAsync(string scenePath, CancellationToken cancellationToken = default)
+    {
+        Manifest = Manifest with { StartScene = GetRelativePath(scenePath) };
+        await using var stream = File.Create(ManifestPath);
+        await JsonSerializer.SerializeAsync(stream, Manifest, JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Writes a new scene with a camera at Assets/Scenes/&lt;name&gt;.scene and returns its path.</summary>
+    public string CreateScene(string name)
+    {
+        var path = Path.Combine(AssetsPath, "Scenes", name + SceneExtension);
+        if (File.Exists(path))
+            throw new IOException($"{name}{SceneExtension} already exists.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.CreateScene(ProjectTemplate.Empty), stream);
+        return path;
+    }
+
+    /// <summary>Finds a scene by name ("Level2") or Assets-relative path ("Scenes/Level2.scene").</summary>
+    public string? FindScene(string nameOrPath)
+    {
+        var relative = nameOrPath.Replace('\\', '/');
+        if (!relative.EndsWith(SceneExtension, StringComparison.OrdinalIgnoreCase))
+            relative += SceneExtension;
+
+        var direct = Path.Combine(AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(direct))
+            return direct;
+
+        var fileName = Path.GetFileName(relative);
+        return FindScenes().FirstOrDefault(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase));
+    }
 
     public string Name => Manifest.Name;
 

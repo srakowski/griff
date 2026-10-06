@@ -515,6 +515,26 @@ public sealed class SceneViewControl : FrameworkElement
         {
             FrameSelection();
             e.Handled = true;
+            return;
+        }
+
+        // Arrows nudge the selection: half a unit, or a tenth with Shift. Each press is its own undo step.
+        var direction = e.Key switch
+        {
+            Key.Left => new Vector3(-1, 0, 0),
+            Key.Right => new Vector3(1, 0, 0),
+            Key.Up => new Vector3(0, 1, 0),
+            Key.Down => new Vector3(0, -1, 0),
+            _ => Vector3.Zero,
+        };
+        if (direction != Vector3.Zero && _selection.Entity is { } entity && _document is { } document &&
+            (Keyboard.Modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
+        {
+            var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 0.1f : SnapStep;
+            document.History.Seal();
+            document.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, entity.Transform.Position + direction * step));
+            document.History.Seal();
+            e.Handled = true;
         }
     }
 

@@ -89,6 +89,13 @@ internal static class SnapshotRunner
             if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (pPixels, pWidth, pHeight))
                 SaveRgba(pPixels, pWidth, pHeight, Path.Combine(outputDir, "platformer-game.png"));
 
+            // Keep Play Changes: the landed position is copied back into the edit scene.
+            var selection = services.GetRequiredService<ISelection>();
+            selection.Select(platformPlayer);
+            await services.GetRequiredService<Griff.Editor.Core.Commands.CommandRegistry>().Get("Game.KeepChanges").ExecuteAsync();
+            var editPlayer = workspace.EditScene!.Scene.Find(platformPlayer.Id)!;
+            checks.Add($"keep play changes: {(Math.Abs(editPlayer.Transform.Position.Y - platformPlayer.Transform.Position.Y) < 0.01f ? "ok" : "FAILED")} (edit y = {editPlayer.Transform.Position.Y:0.00})");
+
             // Rewind to the first snapshot: the player is back in the air where it spawned.
             var snapshots = play.TimelineCount;
             play.Seek(0);

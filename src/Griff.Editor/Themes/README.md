@@ -68,7 +68,15 @@ Each control dictionary merges `Foundation.xaml` itself, so `StaticResource` loo
 | `Style.Icon` | `TextBlock` that renders an `Icons` glyph |
 | `Style.Text.*` | `Display`, `Title`, `Subtitle`, `Body`, `Secondary`, `Caption`, `Overline`, `Mono` |
 
+## Editor controls
+
+| Control | Use |
+| --- | --- |
+| `Controls.NumberField` | Number input; drag the label to scrub. Raises `EditCompleted` once per drag or typed value |
+| `Controls.CommitTextBox` | Text input that commits on Enter or focus loss and reverts on Escape |
+| `Controls.ChromeWindow` | Base class for every window |
+
 ## Not yet styled
 
-These still use the default WPF look and need styles before use: `Slider`, `Expander`, `ProgressBar`,
+These still use the default WPF look and need styles before use: `Expander`, `ProgressBar`,
 `RadioButton`, `DataGrid`, `ListView`/`GridView`, and editable `ComboBox`.

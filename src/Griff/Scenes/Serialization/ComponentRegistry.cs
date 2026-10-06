@@ -39,6 +39,17 @@ public sealed class ComponentRegistry
         return descriptor;
     }
 
+    /// <summary>Removes a type, e.g. a script being replaced by a newer build. Built-ins can be removed too, so be careful.</summary>
+    public bool Unregister(Type type)
+    {
+        if (!_byType.Remove(type, out var descriptor))
+            return false;
+        _byName.Remove(descriptor.Name);
+        return true;
+    }
+
+    public bool IsRegistered(Type type) => _byType.ContainsKey(type);
+
     public ComponentDescriptor Get(Type type) =>
         _byType.TryGetValue(type, out var descriptor)
             ? descriptor

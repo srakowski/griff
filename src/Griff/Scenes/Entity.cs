@@ -70,6 +70,23 @@ public sealed class Entity
         return true;
     }
 
+    /// <summary>Swaps <paramref name="existing"/> for <paramref name="replacement"/> at the same position (used by script reload).</summary>
+    public void ReplaceComponent(Component existing, Component replacement)
+    {
+        if (existing is Transform || replacement is Transform)
+            throw new InvalidOperationException("The Transform can't be replaced.");
+        if (replacement.Entity is not null)
+            throw new InvalidOperationException("The replacement is already attached to an entity.");
+
+        var index = _components.IndexOf(existing);
+        if (index < 0)
+            throw new InvalidOperationException("The component isn't attached to this entity.");
+
+        _components[index] = replacement;
+        existing.Entity = null;
+        replacement.Entity = this;
+    }
+
     public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
 
     public IEnumerable<T> GetComponents<T>() where T : Component => _components.OfType<T>();

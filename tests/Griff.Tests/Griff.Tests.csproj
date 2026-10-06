@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Griff\Griff.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />
   </ItemGroup>
 
 </Project>

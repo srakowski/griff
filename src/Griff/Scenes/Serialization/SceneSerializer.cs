@@ -82,6 +82,33 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return ReadEntity(document.RootElement, new LoadContext(warnings: null, newIds: true));
     }
 
+    /// <summary>One component as JSON, exactly as it appears in a scene file.</summary>
+    public JsonElement SerializeComponent(Component component)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteComponent(writer, component);
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Creates a detached component from JSON: the registered type if known, otherwise a
+    /// <see cref="MissingComponent"/> that keeps the data. Transform data isn't accepted here.
+    /// </summary>
+    public Component DeserializeComponent(JsonElement data, ICollection<string>? warnings = null)
+    {
+        var typeName = data.TryGetProperty("type", out var t) ? t.GetString() : null;
+        if (typeName is null || registry.Find(typeName) is not { } descriptor)
+            return new MissingComponent(typeName ?? "", data);
+        if (descriptor.Type == typeof(Transform))
+            throw new ArgumentException("Transforms belong to their entity and can't be created separately.", nameof(data));
+
+        var component = descriptor.CreateInstance();
+        ReadProperties(component, descriptor, data, descriptor.DisplayName, new LoadContext(warnings));
+        return component;
+    }
+
     private void WriteEntity(Utf8JsonWriter writer, Entity entity)
     {
         writer.WriteStartObject();
@@ -184,6 +211,14 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         }
 
         var component = descriptor.Type == typeof(Transform) ? entity.Transform : descriptor.CreateInstance();
+        ReadProperties(component, descriptor, data, $"{entity.Name}.{descriptor.DisplayName}", context);
+
+        if (component != entity.Transform)
+            entity.AddComponent(component);
+    }
+
+    private static void ReadProperties(Component component, ComponentDescriptor descriptor, JsonElement data, string label, LoadContext context)
+    {
         foreach (var property in descriptor.Properties)
         {
             if (!data.TryGetProperty(property.SerializedName, out var value))
@@ -195,12 +230,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             }
             catch (FormatException ex)
             {
-                context.Warn($"{entity.Name}.{descriptor.DisplayName}.{property.Name}: {ex.Message} Kept the default.");
+                context.Warn($"{label}.{property.Name}: {ex.Message} Kept the default.");
             }
         }
-
-        if (component != entity.Transform)
-            entity.AddComponent(component);
     }
 
     private sealed class LoadContext(ICollection<string>? warnings, bool newIds = false)

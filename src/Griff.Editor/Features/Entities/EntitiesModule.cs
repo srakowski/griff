@@ -22,7 +22,10 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateTextCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
-            .AddCommand<DeleteEntityCommand>();
+            .AddCommand<DeleteEntityCommand>()
+            .AddCommand<CopyEntityCommand>()
+            .AddCommand<CutEntityCommand>()
+            .AddCommand<PasteEntityCommand>();
     }
 }
 
@@ -126,6 +129,103 @@ public sealed class DuplicateEntityCommand(IWorkspace workspace, ISelection sele
         var index = document.Scene.IndexOf(original) + 1;
         document.Execute(new AddEntityEdit(document.Scene, copy, original.Parent, index));
         selection.Select(copy);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Entities on the clipboard are scene JSON, so they paste across scenes and even projects.</summary>
+public static class EntityClipboard
+{
+    public const string Format = "Griff.Entity";
+
+    public static void Put(string json)
+    {
+        var data = new System.Windows.DataObject();
+        data.SetData(Format, json);
+        data.SetText(json);
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(data, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Clipboard busy; the copy is lost but nothing else is affected.
+        }
+    }
+
+    // Another app can hold the clipboard open; treat that as "nothing to paste" rather than failing.
+    public static string? Get()
+    {
+        try
+        {
+            return System.Windows.Clipboard.ContainsData(Format) ? System.Windows.Clipboard.GetData(Format) as string : null;
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return null;
+        }
+    }
+}
+
+public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.Copy";
+    public override string Text => "_Copy";
+    public override string? Icon => Icons.Copy;
+    public override KeyGesture? Gesture { get; } = new(Key.C, ModifierKeys.Control);
+    public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 1, Order: 1);
+
+    protected override bool CanExecuteCore() => selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (selection.Entity is { } entity)
+            EntityClipboard.Put(workspace.Serializer.SerializeEntity(entity));
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.Cut";
+    public override string Text => "Cu_t";
+    public override KeyGesture? Gesture { get; } = new(Key.X, ModifierKeys.Control);
+    public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 1, Order: 0);
+
+    protected override bool CanExecuteCore() => selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is { } document && selection.Entity is { } entity)
+        {
+            EntityClipboard.Put(workspace.Serializer.SerializeEntity(entity));
+            document.Execute(new RemoveEntityEdit(document.Scene, entity));
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Pastes after the selected entity (as its sibling), or at the end of the scene.</summary>
+public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.Paste";
+    public override string Text => "_Paste";
+    public override KeyGesture? Gesture { get; } = new(Key.V, ModifierKeys.Control);
+    public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 1, Order: 2);
+
+    protected override bool CanExecuteCore() => workspace.Scene is not null && EntityClipboard.Get() is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is not { } document || EntityClipboard.Get() is not { } json)
+            return Task.CompletedTask;
+
+        var entity = workspace.Serializer.DeserializeEntity(json);
+        var anchor = selection.Entity;
+        var index = anchor is null ? (int?)null : document.Scene.IndexOf(anchor) + 1;
+        document.Execute(new AddEntityEdit(document.Scene, entity, anchor?.Parent, index));
+        selection.Select(entity);
         return Task.CompletedTask;
     }
 }

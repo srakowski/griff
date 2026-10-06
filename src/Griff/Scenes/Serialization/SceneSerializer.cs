@@ -72,14 +72,32 @@ public sealed class SceneSerializer(ComponentRegistry registry)
     /// Deep-copies <paramref name="source"/> and its descendants with new ids, ready to add to a scene.
     /// Goes through the file format so copies follow exactly the same rules as save and load.
     /// </summary>
-    public Entity Clone(Entity source)
+    public Entity Clone(Entity source) => DeserializeEntity(SerializeEntity(source));
+
+    /// <summary>An entity and its descendants as indented JSON (the clipboard format).</summary>
+    public string SerializeEntity(Entity entity)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteEntity(writer, source);
+        using (var writer = new Utf8JsonWriter(stream, WriterOptions))
+            WriteEntity(writer, entity);
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 
-        using var document = JsonDocument.Parse(stream.ToArray());
-        return ReadEntity(document.RootElement, new LoadContext(warnings: null, newIds: true));
+    /// <summary>A detached entity from <see cref="SerializeEntity"/> output, with fresh ids.</summary>
+    /// <exception cref="InvalidDataException">The text isn't an entity.</exception>
+    public Entity DeserializeEntity(string json, ICollection<string>? warnings = null)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("components", out _))
+                throw new InvalidDataException("The text isn't a Griff entity.");
+            return ReadEntity(document.RootElement, new LoadContext(warnings, newIds: true));
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("The text isn't a Griff entity.", ex);
+        }
     }
 
     /// <summary>One component as JSON, exactly as it appears in a scene file.</summary>

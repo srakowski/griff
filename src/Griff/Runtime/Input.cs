@@ -13,6 +13,16 @@ public enum Key
     F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
 }
 
+/// <summary>Buttons of an Xbox-style controller (the first one connected).</summary>
+public enum GamepadButton
+{
+    A, B, X, Y,
+    LeftShoulder, RightShoulder,
+    Start, Back,
+    DPadUp, DPadDown, DPadLeft, DPadRight,
+    LeftStick, RightStick,
+}
+
 public enum MouseButton
 {
     Left,
@@ -33,13 +43,20 @@ public interface IInput
 
     bool WasPressed(MouseButton button);
 
+    bool IsDown(GamepadButton button);
+
+    bool WasPressed(GamepadButton button);
+
+    /// <summary>Left stick, each axis -1..1 with a dead zone applied. Up is positive.</summary>
+    Vector2 LeftStick { get; }
+
     /// <summary>Mouse position in world units.</summary>
     Vector2 MouseWorld { get; }
 
-    /// <summary>-1, 0 or 1 from A/D or the left/right arrows.</summary>
+    /// <summary>-1..1 from A/D, the left/right arrows, the D-pad or the left stick.</summary>
     float Horizontal { get; }
 
-    /// <summary>-1, 0 or 1 from S/W or the down/up arrows (up is positive).</summary>
+    /// <summary>-1..1 from S/W, the down/up arrows, the D-pad or the left stick (up is positive).</summary>
     float Vertical { get; }
 }
 
@@ -54,12 +71,34 @@ public sealed class InputState : IInput
     private readonly HashSet<Key> _released = [];
     private readonly HashSet<MouseButton> _mouseDown = [];
     private readonly HashSet<MouseButton> _mousePressed = [];
+    private readonly HashSet<GamepadButton> _padDown = [];
+    private readonly HashSet<GamepadButton> _padPressed = [];
+
+    /// <summary>Stick movement smaller than this is ignored, so a resting stick doesn't drift.</summary>
+    public const float DeadZone = 0.25f;
 
     public Vector2 MouseWorld { get; set; }
 
-    public float Horizontal => Axis(Key.A, Key.Left, Key.D, Key.Right);
+    public Vector2 LeftStick { get; private set; }
 
-    public float Vertical => Axis(Key.S, Key.Down, Key.W, Key.Up);
+    public float Horizontal => Combine(Axis(Key.A, Key.Left, Key.D, Key.Right), PadAxis(GamepadButton.DPadLeft, GamepadButton.DPadRight), LeftStick.X);
+
+    public float Vertical => Combine(Axis(Key.S, Key.Down, Key.W, Key.Up), PadAxis(GamepadButton.DPadDown, GamepadButton.DPadUp), LeftStick.Y);
+
+    public bool IsDown(GamepadButton button) => _padDown.Contains(button);
+
+    public bool WasPressed(GamepadButton button) => _padPressed.Contains(button);
+
+    /// <summary>Sets the controller state for this frame (called by the platform each tick).</summary>
+    public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick)
+    {
+        var now = down.ToHashSet();
+        foreach (var button in now.Where(b => !_padDown.Contains(b)))
+            _padPressed.Add(button);
+        _padDown.Clear();
+        _padDown.UnionWith(now);
+        LeftStick = new Vector2(ApplyDeadZone(leftStick.X), ApplyDeadZone(leftStick.Y));
+    }
 
     public bool IsDown(Key key) => _down.Contains(key);
 
@@ -103,7 +142,18 @@ public sealed class InputState : IInput
         _pressed.Clear();
         _released.Clear();
         _mousePressed.Clear();
+        _padPressed.Clear();
     }
+
+    private float PadAxis(GamepadButton negative, GamepadButton positive) =>
+        (IsDown(positive) ? 1f : 0f) - (IsDown(negative) ? 1f : 0f);
+
+    // Digital input wins when pressed; otherwise the stick gives analog control.
+    private static float Combine(float keys, float dpad, float stick) =>
+        Math.Clamp(keys != 0 ? keys : dpad != 0 ? dpad : stick, -1f, 1f);
+
+    private static float ApplyDeadZone(float value) =>
+        Math.Abs(value) < DeadZone ? 0 : Math.Sign(value) * (Math.Abs(value) - DeadZone) / (1 - DeadZone);
 
     private float Axis(Key negative, Key negativeAlt, Key positive, Key positiveAlt) =>
         (IsDown(positive) || IsDown(positiveAlt) ? 1f : 0f) - (IsDown(negative) || IsDown(negativeAlt) ? 1f : 0f);

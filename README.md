@@ -70,7 +70,7 @@ public class PlayerController : Behavior
 
 What a behavior can use:
 - **Lifecycle:** `Start`, `Update`, `OnCollision`, `OnTriggerEnter`, `OnTriggerExit`, `OnDestroy`.
-- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `Horizontal`, `Vertical`, `MouseWorld`) and `Audio` (`Play`, `PlayMusic`).
+- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `Horizontal`, `Vertical`, `MouseWorld`; keyboard, mouse and Xbox-style gamepads) and `Audio` (`Play`, `PlayMusic`).
 - **Game:** `Spawn`, `Destroy`, `Find` and `Physics` (`OverlapPoint`, `OverlapBox`).
 
 Built-in components:

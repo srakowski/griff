@@ -99,6 +99,7 @@ public sealed class GameRunner : IDisposable
         try
         {
             UpdateMouseWorld();
+            XInputGamepad.Poll(_input);
             Game.Tick(seconds);
         }
         catch (Exception ex)

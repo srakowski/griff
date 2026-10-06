@@ -169,7 +169,7 @@ public static class ProjectTemplates
     }
 
     private const string PlayerControllerScript = """
-        /// <summary>Run with A/D or the arrow keys; jump with Space, W or Up while on the ground.</summary>
+        /// <summary>Run with A/D, the arrow keys or a gamepad; jump with Space, W, Up or the A button while on the ground.</summary>
         public class PlayerController : Behavior
         {
             public float Speed { get; set; } = 7;
@@ -182,7 +182,8 @@ public static class ProjectTemplates
                 var velocity = body.Velocity;
                 velocity.X = Input.Horizontal * Speed;
 
-                var jump = Input.WasPressed(Key.Space) || Input.WasPressed(Key.W) || Input.WasPressed(Key.Up);
+                var jump = Input.WasPressed(Key.Space) || Input.WasPressed(Key.W) || Input.WasPressed(Key.Up) ||
+                           Input.WasPressed(GamepadButton.A);
                 if (jump && body.IsGrounded)
                     velocity.Y = JumpSpeed;
 

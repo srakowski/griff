@@ -29,6 +29,9 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
     bool IsPlaying { get; }
 
+    /// <summary>The scene being edited: the same as <see cref="Scene"/> unless playing.</summary>
+    SceneDocument? EditScene { get; }
+
     /// <summary>Shows <paramref name="runtime"/> in place of the edit scene until <see cref="ExitPlayMode"/>.</summary>
     void EnterPlayMode(SceneDocument runtime);
 
@@ -164,6 +167,8 @@ public sealed class Workspace(
     public IReadOnlyList<string> RecentProjects => settings.Settings.RecentProjects;
 
     public bool IsPlaying => _editScene is not null;
+
+    public SceneDocument? EditScene => _editScene ?? Scene;
 
     public void EnterPlayMode(SceneDocument runtime)
     {

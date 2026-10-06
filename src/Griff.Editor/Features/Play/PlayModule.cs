@@ -1,5 +1,7 @@
 using System.Windows.Input;
+using Griff.Editing;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
@@ -19,7 +21,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PlayCommand>()
             .AddCommand<PauseCommand>()
             .AddCommand<StepCommand>()
-            .AddCommand<StopCommand>();
+            .AddCommand<StopCommand>()
+            .AddCommand<KeepPlayChangesCommand>();
     }
 }
 
@@ -73,6 +76,43 @@ public sealed class StepCommand(PlayMode play) : EditorCommand
     protected override Task ExecuteCoreAsync()
     {
         play.Step();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Copies the selected entity's live values into the edit scene, so tuning done while playing survives Stop.
+/// One undo step in the edit scene's history.
+/// </summary>
+public sealed class KeepPlayChangesCommand(IWorkspace workspace, ISelection selection, IStatusService status) : EditorCommand
+{
+    public override string Id => "Game.KeepChanges";
+    public override string Text => "_Keep Play Changes";
+    public override string? Icon => Icons.Save;
+    public override KeyGesture? Gesture { get; } = new(Key.K, ModifierKeys.Control);
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 0, Order: 4);
+
+    protected override bool CanExecuteCore() => workspace.IsPlaying && selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (selection.Entity is not { } live || workspace.EditScene is not { } edit)
+            return Task.CompletedTask;
+
+        if (edit.Scene.Find(live.Id) is not { } target)
+        {
+            status.Show($"{live.Name} was created while playing, so there's nothing in the scene to update");
+            return Task.CompletedTask;
+        }
+
+        var changes = CopyValues.Between(live, target, workspace.Components);
+        using (edit.History.BeginGroup($"Keep play changes to {live.Name}"))
+        {
+            foreach (var change in changes)
+                edit.Execute(change);
+        }
+
+        status.Show(changes.Count == 0 ? $"{live.Name} has no play changes" : $"Kept {changes.Count} change(s) to {live.Name}");
         return Task.CompletedTask;
     }
 }

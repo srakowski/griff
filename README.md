@@ -9,7 +9,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 - **The game keeps running while you change it.** Save a C# script and every instance of it is swapped in the *running* game within a moment. Public properties carry over, and the game doesn't restart. A compile error leaves the last good version running and points at the exact line.
 - **Rewind.** While playing, Griff keeps the last 20 seconds. Pause, drag the timeline back to just before the bug, tweak something, and resume from there.
 - **Undo covers everything.** Every change goes through one undo history. That includes the history surviving a script reload: undo still targets the rebuilt components.
-- **Play mode can't hurt your work.** Play runs on a copy of the scene. Inspect and tweak the live game freely; Stop puts everything back.
+- **Play mode can't hurt your work.** Play runs on a copy of the scene. Inspect and tweak the live game freely; Stop puts everything back. Found the perfect jump height while playing? **Keep Play Changes** (Ctrl+K) copies the selected entity's live values into your scene.
 - **A crash costs nothing.** Unsaved scenes are written to a recovery copy every 20 seconds and offered back next time you open them.
 - **Readable files.** Scenes are small, stable JSON (`"position": [1.5, -2, 0]`) that diff and merge cleanly in git. A deleted or renamed script never destroys data; its values are kept and come back with it.
 - **Batteries included.** Sprites and sprite-sheet animation, text, 2D physics with triggers, input, sound and music, a follow camera, and Platformer and Top-down templates that are playable from the first second.

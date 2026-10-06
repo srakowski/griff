@@ -26,6 +26,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 | Create empty entity | Ctrl+Alt+N |
 | Rename, duplicate, delete | F2, Ctrl+D, Delete |
 | Play / pause / step / stop | F5 / F6 / F10 / Shift+F5 |
+| Cut / copy / paste entities | Ctrl+X / Ctrl+C / Ctrl+V |
 | Build game | Ctrl+B |
 
 In the **Scene view**:
@@ -33,8 +34,16 @@ In the **Scene view**:
 - Middle-drag, right-drag or Alt-drag to pan.
 - Click to select; drag to move (hold Ctrl to snap).
 - Press F to frame the selection.
+- Arrow keys nudge the selection by half a unit (Shift for a tenth).
 
 In the **Inspector**, drag any number's label sideways to scrub it (Shift for fine steps, Ctrl for coarse).
+
+In the **Assets** panel:
+- Drag an image into the Scene view to create a sprite.
+- Drag any asset onto an Inspector text field to fill in its path.
+- Double-click a scene to open it; right-click it to make it the start scene.
+
+Games can switch scenes with `Game.LoadScene("Level2")`.
 
 ## Scripting
 
@@ -113,7 +122,6 @@ Exported games are self-contained: they include the .NET runtime and run on any 
 
 Griff is young. Known gaps:
 - No web export yet.
-- Box colliders only; rotation is ignored by physics.
-- One scene per game at runtime.
-- No asset browser panel yet.
+- Physics uses axis-aligned boxes only; rotation is ignored, and there are no slopes or circles yet.
 - Panels are resizable but not dockable.
+- Text uses one built-in font.

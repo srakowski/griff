@@ -37,7 +37,17 @@ public sealed class SceneDocument : ObservableObject
 
     public EditHistory History { get; } = new();
 
-    public bool IsDirty => History.IsDirty;
+    /// <summary>Unsaved changes, including changes restored from a crash-recovery copy.</summary>
+    public bool IsDirty => History.IsDirty || _recovered;
+
+    private bool _recovered;
+
+    /// <summary>Marks content restored from a recovery copy as unsaved until the next save.</summary>
+    internal void MarkRecovered()
+    {
+        _recovered = true;
+        OnPropertyChanged(nameof(IsDirty));
+    }
 
     /// <summary>Applies an edit through the undo history. All scene changes must come through here.</summary>
     public void Execute(IEdit edit) => History.Execute(edit);
@@ -46,6 +56,7 @@ public sealed class SceneDocument : ObservableObject
 
     internal void MarkSaved()
     {
+        _recovered = false;
         History.MarkSaved();
         OnPropertyChanged(nameof(IsDirty));
     }

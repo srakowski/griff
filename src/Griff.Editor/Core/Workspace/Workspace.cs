@@ -65,6 +65,7 @@ public sealed class Workspace(
     private SceneDocument? _editScene;
     private FileSystemWatcher? _scriptWatcher;
     private DispatcherTimer? _scriptDebounce;
+    private DispatcherTimer? _recoveryTimer;
 
     public Project? Project
     {
@@ -222,6 +223,8 @@ public sealed class Workspace(
         }
 
         document.MarkSaved();
+        if (Project is { } saved)
+            TryRecovery(() => RecoveryFiles.Delete(saved, document.FilePath));
         logger.LogInformation("Saved {Scene}", document.Name);
         status.Show($"Saved {document.Name}");
         return true;
@@ -234,12 +237,17 @@ public sealed class Workspace(
         if (Scene is not { IsDirty: true } document)
             return true;
 
-        return dialogs.AskSaveChanges(document.Name) switch
+        switch (dialogs.AskSaveChanges(document.Name))
         {
-            SaveChangesChoice.Save => await SaveSceneAsync(),
-            SaveChangesChoice.Discard => true,
-            _ => false,
-        };
+            case SaveChangesChoice.Save:
+                return await SaveSceneAsync();
+            case SaveChangesChoice.Discard:
+                if (Project is { } project)
+                    TryRecovery(() => RecoveryFiles.Delete(project, document.FilePath));
+                return true;
+            default:
+                return false;
+        }
     }
 
     private async Task OpenAsync(Project project)
@@ -251,6 +259,7 @@ public sealed class Workspace(
         // Scripts first, so the scene's script components load as real components.
         ReloadScripts();
         WatchScripts(project);
+        StartRecoveryTimer();
 
         var scenePath = project.StartScenePath is { } start && File.Exists(start)
             ? start
@@ -263,15 +272,69 @@ public sealed class Workspace(
 
     private async Task<SceneDocument> LoadSceneAsync(string path)
     {
+        // A recovery copy newer than the scene means the editor closed without saving.
+        var source = path;
+        var recovered = false;
+        if (Project is { } project && RecoveryFiles.FindNewer(project, path) is { } recovery)
+        {
+            var when = File.GetLastWriteTime(recovery);
+            if (dialogs.Confirm("Recover unsaved changes?",
+                    $"{Path.GetFileNameWithoutExtension(path)} has unsaved changes from {when:g} that weren't saved before Griff closed.\n\nRecover them?"))
+            {
+                source = recovery;
+                recovered = true;
+            }
+            else
+            {
+                TryRecovery(() => RecoveryFiles.Delete(project, path));
+            }
+        }
+
         var warnings = new List<string>();
         Scene scene;
-        await using (var stream = File.OpenRead(path))
+        await using (var stream = File.OpenRead(source))
             scene = Serializer.Load(stream, warnings);
 
         foreach (var warning in warnings)
             logger.LogWarning("{Scene}: {Warning}", Path.GetFileName(path), warning);
 
-        return new SceneDocument(scene, path);
+        var document = new SceneDocument(scene, path);
+        if (recovered)
+        {
+            document.MarkRecovered();
+            logger.LogInformation("Recovered unsaved changes to {Scene}", document.Name);
+        }
+
+        return document;
+    }
+
+    // Every 20 seconds, write a recovery copy of the edit scene if it has unsaved changes.
+    private void StartRecoveryTimer()
+    {
+        _recoveryTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(20), DispatcherPriority.Background, (_, _) => WriteRecovery(), Dispatcher.CurrentDispatcher);
+        _recoveryTimer.Start();
+    }
+
+    private void WriteRecovery()
+    {
+        var document = _editScene ?? Scene;
+        if (Project is not { } project || document is not { IsDirty: true, IsRuntime: false })
+            return;
+        var json = Serializer.SaveToString(document.Scene);
+        TryRecovery(() => RecoveryFiles.Write(project, document.FilePath, json));
+    }
+
+    // Recovery is a safety net; never let it interrupt work.
+    private void TryRecovery(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("Crash recovery: {Message}", ex.Message);
+        }
     }
 
     // A project with no scenes gets an empty one so there's always something to edit.

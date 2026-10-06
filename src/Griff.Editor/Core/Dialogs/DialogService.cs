@@ -52,6 +52,14 @@ public sealed class DialogService : IDialogService
         return window.ShowDialog() == true ? window.Value : null;
     }
 
+    public bool Confirm(string title, string message)
+    {
+        var result = Owner is { } owner
+            ? MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
+            : MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        return result == MessageBoxResult.Yes;
+    }
+
     public void ShowError(string title, string message)
     {
         if (Owner is { } owner)

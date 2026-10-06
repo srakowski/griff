@@ -25,5 +25,8 @@ public interface IDialogService
     /// <returns>The entered text, or null if the user cancelled.</returns>
     string? Prompt(string title, string label, string initial, Func<string, string?> validate);
 
+    /// <returns>True for Yes.</returns>
+    bool Confirm(string title, string message);
+
     void ShowError(string title, string message);
 }

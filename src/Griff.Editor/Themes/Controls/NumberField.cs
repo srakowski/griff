@@ -204,13 +204,45 @@ public class NumberField : Control
     }
 }
 
-/// <summary>TextBox that pushes its binding on Enter or focus loss and reverts on Escape.</summary>
+/// <summary>
+/// TextBox that pushes its binding on Enter or focus loss and reverts on Escape.
+/// Dropping an asset from the Assets panel fills in its path.
+/// </summary>
 public class CommitTextBox : TextBox
 {
+    /// <summary>Same as AssetNode.DataFormat; kept here so the theme doesn't depend on features.</summary>
+    public const string AssetDataFormat = "Griff.Asset";
+
     public CommitTextBox()
     {
         SetResourceReference(StyleProperty, typeof(TextBox));
         IsUndoEnabled = false;
+        AllowDrop = true;
+    }
+
+    protected override void OnPreviewDragOver(DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(AssetDataFormat))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+            return;
+        }
+
+        base.OnPreviewDragOver(e);
+    }
+
+    protected override void OnPreviewDrop(DragEventArgs e)
+    {
+        if (e.Data.GetData(AssetDataFormat) is string path)
+        {
+            Text = path;
+            GetBindingExpression(TextProperty)?.UpdateSource();
+            e.Handled = true;
+            return;
+        }
+
+        base.OnPreviewDrop(e);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

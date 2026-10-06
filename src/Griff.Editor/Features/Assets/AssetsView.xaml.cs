@@ -1,0 +1,146 @@
+using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using Griff.Editor.Core.Commands;
+using Griff.Editor.Core.Workspace;
+using Griff.Editor.Themes;
+
+namespace Griff.Editor.Features.Assets;
+
+public partial class AssetsView : UserControl
+{
+    private readonly IWorkspace _workspace;
+    private readonly CommandRegistry _commands;
+    private Point _dragStart;
+    private AssetNode? _dragCandidate;
+
+    public AssetsView(IWorkspace workspace, CommandRegistry commands)
+    {
+        InitializeComponent();
+        _workspace = workspace;
+        _commands = commands;
+    }
+
+    private async void OnDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (NodeAt(e.OriginalSource) is not { } node)
+            return;
+
+        if (node.Kind == AssetKind.Scene)
+            await _workspace.OpenSceneAsync(node.FullPath);
+        else if (node.Kind != AssetKind.Folder)
+            OpenExternally(node.FullPath);
+    }
+
+    // ----- Context menu -----
+
+    private void OnPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var node = NodeAt(e.OriginalSource);
+        var menu = new ContextMenu();
+
+        if (node is { Kind: AssetKind.Scene })
+        {
+            Add(menu, "Open Scene", Icons.Open, async () => await _workspace.OpenSceneAsync(node.FullPath));
+            Add(menu, "Set as Start Scene", Icons.Play, async () => await _workspace.SetStartSceneAsync(node.FullPath));
+            menu.Items.Add(new Separator());
+        }
+        else if (node is { Kind: not AssetKind.Folder })
+        {
+            Add(menu, "Open", Icons.Open, () => OpenExternally(node.FullPath));
+            menu.Items.Add(new Separator());
+        }
+
+        AddCommand(menu, "Scene.New");
+        AddCommand(menu, "Script.New");
+        menu.Items.Add(new Separator());
+        var folder = node is null ? _workspace.Project?.AssetsPath
+            : node.Kind == AssetKind.Folder ? node.FullPath
+            : Path.GetDirectoryName(node.FullPath);
+        Add(menu, "Show in Explorer", Icons.Folder, () => ShowInExplorer(node?.FullPath ?? folder));
+
+        menu.PlacementTarget = Tree;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private static void Add(ContextMenu menu, string header, string icon, Action action)
+    {
+        var item = new MenuItem { Header = header, Icon = Icons.Create(icon) };
+        item.Click += (_, _) => action();
+        menu.Items.Add(item);
+    }
+
+    private void AddCommand(ContextMenu menu, string id)
+    {
+        var command = _commands.Get(id);
+        menu.Items.Add(new MenuItem
+        {
+            Header = command.Text,
+            Command = command,
+            Icon = command.Icon is { } icon ? Icons.Create(icon) : null,
+        });
+    }
+
+    // ----- Drag out -----
+
+    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStart = e.GetPosition(Tree);
+        _dragCandidate = NodeAt(e.OriginalSource);
+    }
+
+    private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _dragCandidate is not { Kind: not AssetKind.Folder } node)
+            return;
+
+        var delta = e.GetPosition(Tree) - _dragStart;
+        if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _dragCandidate = null;
+        var data = new DataObject(AssetNode.DataFormat, node.AssetPath);
+        data.SetData(typeof(AssetNode), node);
+        DragDrop.DoDragDrop(Tree, data, DragDropEffects.Copy);
+    }
+
+    // ----- Helpers -----
+
+    private static void OpenExternally(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // No associated program; nothing useful to do.
+        }
+    }
+
+    private static void ShowInExplorer(string? path)
+    {
+        if (path is null)
+            return;
+        var arguments = File.Exists(path) ? $"/select,\"{path}\"" : $"\"{path}\"";
+        Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+    }
+
+    private static AssetNode? NodeAt(object source)
+    {
+        for (var current = source as DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+        {
+            if (current is TreeViewItem { DataContext: AssetNode node })
+                return node;
+            if (current is TreeView)
+                return null;
+        }
+
+        return null;
+    }
+}

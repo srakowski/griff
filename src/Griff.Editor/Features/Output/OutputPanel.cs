@@ -32,6 +32,7 @@ public sealed class OutputPanel : ToolPanel
     public override string Title => "Output";
     public override string? Icon => Icons.Console;
     public override PanelZone Zone => PanelZone.Bottom;
+    public override int Order => 1;
 
     public ICollectionView Entries { get; }
 

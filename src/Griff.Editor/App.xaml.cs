@@ -7,6 +7,7 @@ using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Assets;
 using Griff.Editor.Features.Build;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Editing;
@@ -41,6 +42,7 @@ public partial class App : Application
         new BuildModule(),
         new HierarchyModule(),
         new InspectorModule(),
+        new AssetsModule(),
         new OutputModule(),
         new DesignSystemModule(),
     ];

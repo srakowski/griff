@@ -47,6 +47,7 @@ public sealed class SceneViewControl : FrameworkElement
         _workspace = workspace;
         _selection = selection;
         Focusable = true;
+        AllowDrop = true;
         FocusVisualStyle = null;
         ClipToBounds = true;
         RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
@@ -475,6 +476,38 @@ public sealed class SceneViewControl : FrameworkElement
         if (_drag != DragMode.None)
             EndDrag();
     }
+
+    // Dropping an image from the Assets panel creates a sprite where it lands, sized to the image's aspect.
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        e.Effects = _document is not null && DroppedImage(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    protected override void OnDrop(DragEventArgs e)
+    {
+        e.Handled = true;
+        if (_document is not { } document || DroppedImage(e) is not { } assetPath)
+            return;
+
+        var image = LoadImage(assetPath);
+        var aspect = image is { PixelHeight: > 0 } ? (float)image.PixelWidth / image.PixelHeight : 1f;
+        var entity = new Entity(Path.GetFileNameWithoutExtension(assetPath));
+        entity.Transform.Position = new Vector3(ToWorld(e.GetPosition(this)), 0);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Image = assetPath;
+        sprite.Size = new Vector2(aspect, 1);
+
+        document.Execute(new AddEntityEdit(document.Scene, entity));
+        _selection.Select(entity);
+        Focus();
+    }
+
+    private static string? DroppedImage(DragEventArgs e) =>
+        e.Data.GetData(Griff.Editor.Features.Assets.AssetNode.DataFormat) is string path &&
+        Griff.Editor.Features.Assets.AssetNode.KindOf(path) == Griff.Editor.Features.Assets.AssetKind.Image
+            ? path
+            : null;
 
     protected override void OnKeyDown(KeyEventArgs e)
     {

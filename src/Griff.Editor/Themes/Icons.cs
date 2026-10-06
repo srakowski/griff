@@ -15,6 +15,8 @@ public static class Icons
     public const string Open = "\uE8E5";
     public const string Save = "\uE74E";
     public const string SaveAs = "\uE792";
+    public const string Audio = "\uE8D6";
+    public const string SceneFile = "\uE80A";
     public const string Folder = "\uE8B7";
     public const string NewProject = "\uE8F4";
     public const string Package = "\uE7B8";

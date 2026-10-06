@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
+using Griff.Rendering;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Point = System.Windows.Point;
@@ -279,25 +280,12 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Scene queries -----
 
-    /// <summary>Back to front: Sprite.Order, then Z (higher is closer), then hierarchy order.</summary>
-    private IEnumerable<Entity> DrawOrder() =>
-        _document!.Scene.Entities
-            .Where(IsShown)
-            .Select((entity, index) => (entity, index))
-            .OrderBy(x => x.entity.GetComponent<Sprite>()?.Order ?? 0)
-            .ThenBy(x => x.entity.Transform.WorldPosition.Z)
-            .ThenBy(x => x.index)
-            .Select(x => x.entity);
-
-    private static bool IsShown(Entity entity)
+    /// <summary>Everything drawn, back to front: sprites in render order, then cameras and bare entities on top.</summary>
+    private IEnumerable<Entity> DrawOrder()
     {
-        for (var e = entity; e is not null; e = e.Parent)
-        {
-            if (!e.IsEnabled)
-                return false;
-        }
-
-        return true;
+        var scene = _document!.Scene;
+        return SceneRenderer.DrawOrder(scene)
+            .Concat(scene.Entities.Where(e => e.GetComponent<Sprite>() is null && SceneRenderer.IsActive(e)));
     }
 
     /// <summary>World-space outline of the entity's sprite or camera frame, or null for bare entities.</summary>

@@ -1,0 +1,206 @@
+using System.Numerics;
+using Griff.Editing;
+using Griff.Scenes;
+using Griff.Scenes.Serialization;
+
+namespace Griff.Tests.Editing;
+
+public class EditHistoryTests
+{
+    private readonly ComponentRegistry _registry = ComponentRegistry.CreateDefault();
+    private readonly EditHistory _history = new();
+    private readonly Scene _scene = new();
+
+    private PropertyDescriptor PositionProperty =>
+        _registry.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
+
+    [Fact]
+    public void UndoRedo_RestoresStateExactly()
+    {
+        var entity = new Entity("Player");
+        _history.Execute(new AddEntityEdit(_scene, entity));
+        _history.Execute(new RenameEntityEdit(entity, "Hero"));
+
+        _history.Undo();
+        Assert.Equal("Player", entity.Name);
+        _history.Undo();
+        Assert.Equal(0, _scene.Count);
+
+        _history.Redo();
+        _history.Redo();
+        Assert.Same(entity, _scene.Find(entity.Id));
+        Assert.Equal("Hero", entity.Name);
+    }
+
+    [Fact]
+    public void Execute_ClearsRedo()
+    {
+        var entity = new Entity("A");
+        _history.Execute(new AddEntityEdit(_scene, entity));
+        _history.Undo();
+
+        _history.Execute(new AddEntityEdit(_scene, new Entity("B")));
+
+        Assert.False(_history.CanRedo);
+    }
+
+    [Fact]
+    public void PropertyEdits_MergeIntoOneStep_UntilSealed()
+    {
+        var entity = new Entity();
+        _scene.Add(entity);
+
+        for (var x = 1; x <= 50; x++)
+            _history.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, new Vector3(x, 0, 0)));
+        _history.Seal();
+        _history.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, new Vector3(99, 0, 0)));
+
+        _history.Undo();
+        Assert.Equal(new Vector3(50, 0, 0), entity.Transform.Position);
+        _history.Undo();
+        Assert.Equal(Vector3.Zero, entity.Transform.Position);
+        Assert.False(_history.CanUndo);
+    }
+
+    [Fact]
+    public void PropertyEdits_OnDifferentComponents_DoNotMerge()
+    {
+        var a = new Entity("A");
+        var b = new Entity("B");
+        _scene.Add(a);
+        _scene.Add(b);
+
+        _history.Execute(new SetPropertyEdit(a.Transform, PositionProperty, Vector3.One));
+        _history.Execute(new SetPropertyEdit(b.Transform, PositionProperty, Vector3.One));
+
+        _history.Undo();
+        Assert.Equal(Vector3.One, a.Transform.Position);
+        Assert.Equal(Vector3.Zero, b.Transform.Position);
+    }
+
+    [Fact]
+    public void Group_UndoesAsOneStep()
+    {
+        using (_history.BeginGroup("Create Player"))
+        {
+            var entity = new Entity("Entity");
+            _history.Execute(new AddEntityEdit(_scene, entity));
+            _history.Execute(new RenameEntityEdit(entity, "Player"));
+        }
+
+        Assert.Equal("Create Player", _history.UndoDescription);
+        _history.Undo();
+        Assert.Equal(0, _scene.Count);
+        Assert.False(_history.CanUndo);
+    }
+
+    [Fact]
+    public void IsDirty_FollowsHistory()
+    {
+        var entity = new Entity("A");
+        Assert.False(_history.IsDirty);
+
+        _history.Execute(new AddEntityEdit(_scene, entity));
+        Assert.True(_history.IsDirty);
+
+        _history.MarkSaved();
+        Assert.False(_history.IsDirty);
+
+        _history.Execute(new RenameEntityEdit(entity, "B"));
+        Assert.True(_history.IsDirty);
+
+        _history.Undo();
+        Assert.False(_history.IsDirty);
+
+        _history.Undo();
+        Assert.True(_history.IsDirty);
+    }
+
+    [Fact]
+    public void Edit_AfterSave_DoesNotMergeIntoSavedState()
+    {
+        var entity = new Entity();
+        _scene.Add(entity);
+        _history.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, Vector3.One));
+        _history.MarkSaved();
+
+        _history.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, new Vector3(2, 2, 2)));
+
+        Assert.True(_history.IsDirty);
+        _history.Undo();
+        Assert.Equal(Vector3.One, entity.Transform.Position);
+        Assert.False(_history.IsDirty);
+    }
+
+    [Fact]
+    public void RemoveEntity_Undo_RestoresParentAndPosition()
+    {
+        var parent = new Entity("Parent");
+        var a = new Entity("A");
+        var b = new Entity("B");
+        var c = new Entity("C");
+        _scene.Add(parent);
+        _scene.Add(a, parent);
+        _scene.Add(b, parent);
+        _scene.Add(c, parent);
+
+        _history.Execute(new RemoveEntityEdit(_scene, b));
+        Assert.Equal([a, c], parent.Children);
+
+        _history.Undo();
+        Assert.Equal([a, b, c], parent.Children);
+    }
+
+    [Fact]
+    public void MoveEntity_Undo_RestoresParentAndPosition()
+    {
+        var a = new Entity("A");
+        var b = new Entity("B");
+        var c = new Entity("C");
+        _scene.Add(a);
+        _scene.Add(b);
+        _scene.Add(c);
+
+        _history.Execute(new MoveEntityEdit(_scene, a, c));
+        Assert.Equal([b, c], _scene.Roots);
+
+        _history.Undo();
+        Assert.Equal([a, b, c], _scene.Roots);
+        Assert.Null(a.Parent);
+    }
+
+    [Fact]
+    public void RemoveComponent_Undo_RestoresPosition()
+    {
+        var entity = new Entity();
+        var first = entity.AddComponent<Scenes.TestComponent>();
+        var second = entity.AddComponent<Scenes.RenamedComponent>();
+
+        _history.Execute(new RemoveComponentEdit(first));
+        _history.Undo();
+
+        Assert.Equal<Component>([entity.Transform, first, second], entity.Components);
+    }
+
+    [Fact]
+    public void Changed_ReportsActions()
+    {
+        var actions = new List<EditAction>();
+        _history.Changed += (_, e) => actions.Add(e.Action);
+
+        _history.Execute(new AddEntityEdit(_scene, new Entity()));
+        _history.Undo();
+        _history.Redo();
+
+        Assert.Equal([EditAction.Execute, EditAction.Undo, EditAction.Redo], actions);
+    }
+
+    [Fact]
+    public void Undo_DuringGroup_Throws()
+    {
+        _history.Execute(new AddEntityEdit(_scene, new Entity()));
+
+        using (_history.BeginGroup("Open"))
+            Assert.Throws<InvalidOperationException>(() => _history.Undo());
+    }
+}

@@ -37,12 +37,14 @@ public static class ProjectTemplates
             ["Scripts/PlayerController.cs"] = PlayerControllerScript,
             ["Scripts/Collectible.cs"] = CollectibleScript,
             ["Scripts/CameraFollow.cs"] = CameraFollowScript,
+            ["Scripts/ScoreCounter.cs"] = ScoreCounterScript,
         },
         ProjectTemplate.TopDown => new Dictionary<string, string>
         {
             ["Scripts/TopDownController.cs"] = TopDownControllerScript,
             ["Scripts/Collectible.cs"] = CollectibleScript,
             ["Scripts/CameraFollow.cs"] = CameraFollowScript,
+            ["Scripts/ScoreCounter.cs"] = ScoreCounterScript,
         },
         _ => new Dictionary<string, string>(),
     };
@@ -60,10 +62,7 @@ public static class ProjectTemplates
     {
         var scene = new Scene();
 
-        var camera = new Entity("Main Camera");
-        camera.AddComponent<Camera>().Size = 6;
-        camera.AddComponent(Script("CameraFollow"));
-        scene.Add(camera);
+        AddCameraWithScore(scene);
 
         var player = Box("Player", new Vector2(-6, -2), new Vector2(0.8f, 1), Color.FromBytes(0xF0, 0x8C, 0x2E));
         player.AddComponent<Body>();
@@ -91,10 +90,7 @@ public static class ProjectTemplates
     {
         var scene = new Scene();
 
-        var camera = new Entity("Main Camera");
-        camera.AddComponent<Camera>().Size = 6;
-        camera.AddComponent(Script("CameraFollow"));
-        scene.Add(camera);
+        AddCameraWithScore(scene);
 
         var player = Box("Player", Vector2.Zero, new Vector2(0.8f, 0.8f), Color.FromBytes(0x4C, 0x9A, 0xFF));
         player.AddComponent<Body>().GravityScale = 0;
@@ -117,6 +113,24 @@ public static class ProjectTemplates
             scene.Add(Collectible("Gem", position, Color.FromBytes(0x57, 0xAB, 0x5A)), gems);
 
         return scene;
+    }
+
+    // The score is a child of the camera, so it stays on screen as the camera moves.
+    private static void AddCameraWithScore(Scene scene)
+    {
+        var camera = new Entity("Main Camera");
+        camera.AddComponent<Camera>().Size = 6;
+        camera.AddComponent(Script("CameraFollow"));
+        scene.Add(camera);
+
+        var score = new Entity("Score");
+        score.Transform.Position = new Vector3(0, 5.2f, 1);
+        var text = score.AddComponent<Text>();
+        text.Value = "Score: 0";
+        text.Size = 0.8f;
+        text.Order = 100;
+        score.AddComponent(Script("ScoreCounter"));
+        scene.Add(score, camera);
     }
 
     /// <summary>A solid, visible box: sprite plus matching collider.</summary>
@@ -207,8 +221,26 @@ public static class ProjectTemplates
 
             protected override void OnTriggerEnter(Entity other)
             {
-                if (other.Name == "Player")
-                    Game.Destroy(Entity!);
+                if (other.Name != "Player")
+                    return;
+
+                Game.Find("Score")?.GetComponent<ScoreCounter>()?.Add(1);
+                Game.Destroy(Entity!);
+            }
+        }
+
+        """;
+
+    private const string ScoreCounterScript = """
+        /// <summary>Shows the score in this entity's Text. Other scripts call Add.</summary>
+        public class ScoreCounter : Behavior
+        {
+            public int Score { get; set; }
+
+            public void Add(int points)
+            {
+                Score += points;
+                GetComponent<Text>()!.Value = $"Score: {Score}";
             }
         }
 

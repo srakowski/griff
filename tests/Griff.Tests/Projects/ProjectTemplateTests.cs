@@ -68,6 +68,7 @@ public sealed class ProjectTemplateTests : IDisposable
         input.SetKey(Key.D, true);
         Run(game, input, 3);
         Assert.True(coins.Children.Count < before, "running right should collect a coin");
+        Assert.Equal("Score: 1", game.Find("Score")!.GetComponent<Text>()!.Value);
     }
 
     [Fact]

@@ -169,6 +169,8 @@ public sealed class SceneViewControl : FrameworkElement
                 DrawMarker(dc, entity);
         }
 
+        DrawColliders(dc);
+
         if (_selection.Entity is { } selected && selected.Scene == _document.Scene)
             DrawSelection(dc, selected);
 
@@ -252,6 +254,23 @@ public sealed class SceneViewControl : FrameworkElement
 
         var corner = ToScreen(ToVector2(Vector3.Transform(new Vector3((float)rect.Left, (float)rect.Bottom, 0), entity.Transform.WorldMatrix)));
         dc.DrawText(Text(entity.Name, "Brush.Text.Tertiary"), new Point(corner.X + 4, corner.Y - 18));
+    }
+
+    // Physics shapes in green; triggers dashed.
+    private void DrawColliders(DrawingContext dc)
+    {
+        var solid = new Pen(Brush("Brush.Status.Success"), 1.5);
+        var trigger = new Pen(Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        {
+            foreach (var collider in entity.GetComponents<BoxCollider>())
+            {
+                var box = Griff.Runtime.Physics.BoundsOf(collider);
+                var topLeft = ToScreen(new Vector2(box.Min.X, box.Max.Y));
+                var bottomRight = ToScreen(new Vector2(box.Max.X, box.Min.Y));
+                dc.DrawRectangle(null, collider.IsTrigger ? trigger : solid, new Rect(topLeft, bottomRight));
+            }
+        }
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)

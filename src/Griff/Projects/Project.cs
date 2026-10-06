@@ -13,6 +13,8 @@ public sealed class Project
     public const string ManifestFileName = "project.griff";
     public const string AssetsFolderName = "Assets";
     public const string SceneExtension = ".scene";
+    public const string PrefabExtension = ".prefab";
+    public const string PrefabsFolderName = "Prefabs";
     public const string DefaultSceneName = "Main";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -53,19 +55,13 @@ public sealed class Project
     }
 
     /// <summary>Finds a scene by name ("Level2") or Assets-relative path ("Scenes/Level2.scene").</summary>
-    public string? FindScene(string nameOrPath)
-    {
-        var relative = nameOrPath.Replace('\\', '/');
-        if (!relative.EndsWith(SceneExtension, StringComparison.OrdinalIgnoreCase))
-            relative += SceneExtension;
+    public string? FindScene(string nameOrPath) => FindAsset(nameOrPath, SceneExtension, FindScenes());
 
-        var direct = Path.Combine(AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(direct))
-            return direct;
+    /// <summary>Finds a prefab by name ("Bullet") or Assets-relative path ("Prefabs/Bullet.prefab").</summary>
+    public string? FindPrefab(string nameOrPath) => FindAsset(nameOrPath, PrefabExtension, FindPrefabs());
 
-        var fileName = Path.GetFileName(relative);
-        return FindScenes().FirstOrDefault(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase));
-    }
+    /// <summary>Where Save as Prefab puts a prefab called <paramref name="name"/>.</summary>
+    public string DefaultPrefabPath(string name) => Path.Combine(AssetsPath, PrefabsFolderName, name + PrefabExtension);
 
     public string Name => Manifest.Name;
 
@@ -85,10 +81,10 @@ public sealed class Project
         Path.GetRelativePath(RootPath, absolutePath).Replace(Path.DirectorySeparatorChar, '/');
 
     /// <summary>All scene files in the project, sorted by path.</summary>
-    public IEnumerable<string> FindScenes() =>
-        Directory.Exists(AssetsPath)
-            ? Directory.EnumerateFiles(AssetsPath, "*" + SceneExtension, SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
-            : [];
+    public IEnumerable<string> FindScenes() => FindFiles(SceneExtension);
+
+    /// <summary>All prefab files in the project, sorted by path.</summary>
+    public IEnumerable<string> FindPrefabs() => FindFiles(PrefabExtension);
 
     /// <summary>The folder a project named <paramref name="name"/> would occupy inside <paramref name="parentDirectory"/>.</summary>
     public static string GetProjectPath(string parentDirectory, string name) =>
@@ -151,7 +147,27 @@ public sealed class Project
         return new Project(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, manifest);
     }
 
-    // A new project opens to something: the template's scene and scripts.
+    private IEnumerable<string> FindFiles(string extension) =>
+        Directory.Exists(AssetsPath)
+            ? Directory.EnumerateFiles(AssetsPath, "*" + extension, SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
+            : [];
+
+    // An exact Assets-relative path wins; otherwise the first file with that name anywhere in Assets.
+    private string? FindAsset(string nameOrPath, string extension, IEnumerable<string> candidates)
+    {
+        var relative = nameOrPath.Replace('\\', '/');
+        if (!relative.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            relative += extension;
+
+        var direct = Path.Combine(AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(direct))
+            return direct;
+
+        var fileName = Path.GetFileName(relative);
+        return candidates.FirstOrDefault(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // A new project opens to something: the template's scene, scripts and prefabs.
     private static async Task WriteTemplateAsync(Project project, ProjectTemplate template, string startScene, CancellationToken cancellationToken)
     {
         foreach (var (relative, source) in ProjectTemplates.Scripts(template))
@@ -161,8 +177,23 @@ public sealed class Project
             await File.WriteAllTextAsync(path, source.ReplaceLineEndings(), cancellationToken);
         }
 
+        var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+        foreach (var (relative, prefab) in ProjectTemplates.Prefabs(template))
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, serializer.SavePrefabToString(prefab), cancellationToken);
+        }
+
+        foreach (var (relative, scene) in ProjectTemplates.MoreScenes(template))
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, serializer.SaveToString(scene), cancellationToken);
+        }
+
         await using var stream = File.Create(project.ResolvePath(startScene));
-        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.CreateScene(template), stream);
+        serializer.Save(ProjectTemplates.CreateScene(template), stream);
         await stream.FlushAsync(cancellationToken);
     }
 

@@ -12,7 +12,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 - **Play mode can't hurt your work.** Play runs on a copy of the scene. Inspect and tweak the live game freely; Stop puts everything back. Found the perfect jump height while playing? **Keep Play Changes** (Ctrl+K) copies the selected entity's live values into your scene.
 - **A crash costs nothing.** Unsaved scenes are written to a recovery copy every 20 seconds and offered back next time you open them.
 - **Readable files.** Scenes are small, stable JSON (`"position": [1.5, -2, 0]`) that diff and merge cleanly in git. A deleted or renamed script never destroys data; its values are kept and come back with it.
-- **Batteries included.** Sprites and sprite-sheet animation, text, 2D physics with triggers, input, sound and music, a follow camera, and Platformer and Top-down templates that are playable from the first second.
+- **Batteries included.** Sprites and sprite-sheet animation, tilemaps you paint right in the Scene view, particles, prefabs, timers, coroutines, tweens with easing, text in your own fonts, 2D physics with boxes, circles, bounce, triggers, collision layers, raycasts and moving platforms, camera shake, save data, input, sound and music, a follow camera, menus and HUDs with clickable buttons and screen-pinned text, fades between scenes, and Platformer, Top-down and Arcade templates that are playable from the first second.
 - **One click to ship.** Build Game produces a standalone folder with a `.exe`, ready to zip and upload.
 
 ## Using the editor
@@ -35,6 +35,23 @@ In the **Scene view**:
 - Click to select; drag to move (hold Ctrl to snap).
 - Press F to frame the selection.
 - Arrow keys nudge the selection by half a unit (Shift for a tenth).
+- Drop an image to create a sprite, or a prefab to place a copy of it.
+
+**Tilemaps.** **Entity → Create Tilemap**, then set its **Image** to a tileset and its **Columns** and **Rows** to the tileset's layout. While a tilemap is selected, the Scene view paints:
+- Drag to paint, Shift-drag to erase. Each stroke is one undo step.
+- Pick a tile from the palette at the top left, with `[` and `]`, or Ctrl-click a painted tile.
+- Paint past the left or top edge and the map grows that way.
+- Press Esc (or select something else in the Hierarchy) to stop painting.
+
+The map's tiles are also plain text in the Inspector, one row per line (`.` is empty, `0`–`9`, `a`–`z`, `A`–`Z` are tiles 0–61), so you can type a level out or paste one in. With **Solid** on, tiles are walls and floors, except:
+- **Background Tiles** never collide: grass, windows, signs. List tile numbers and ranges, e.g. `10-15, 20`.
+- **One Way Tiles** are platforms you jump up through and land on.
+
+The Scene view outlines what collides: one-way runs get a dashed outline with a solid top edge.
+
+**Menus and HUDs.** **Entity → Create Button** makes a clickable button: a background sprite, a label and a **Button** component. Set its **Action** and a menu needs no code at all: **LoadScene** (with **Scene**, e.g. `Game`), **RestartScene** or **Quit**, with a **Fade** (in seconds) to fade the screen out and back in around the switch. A **Shortcut** key (Enter for Play, Esc for Back) clicks it too. Add a **ScreenAnchor** to pin anything to an edge or corner of the screen, like a score in the top-left: it stays put whatever the window's shape, while the camera follows the player or shakes. The Scene view outlines buttons' clickable areas in blue. The Arcade template shows all of this: a main menu, a game, and a game over panel with Retry and Menu, fading between them. Its bullets use collision layers to fly out of the ship, and its enemy spawner is a coroutine.
+
+**Prefabs.** Select an entity and choose **Entity → Save as Prefab** to save it (with its children) to `Assets/Prefabs`. Drag a prefab into the Scene view to place it, or spawn it from a script. Save as Prefab works while playing too, to keep a live entity you've tweaked.
 
 In the **Inspector**, drag any number's label sideways to scrub it (Shift for fine steps, Ctrl for coarse).
 
@@ -43,11 +60,11 @@ In the **Assets** panel:
 - Drag any asset onto an Inspector text field to fill in its path.
 - Double-click a scene to open it; right-click it to make it the start scene.
 
-Games can switch scenes with `Game.LoadScene("Level2")`.
+Games can switch scenes with `Game.LoadScene("Level2")`. **Game → Clear Save Data** forgets what the game saved while playing in the editor.
 
 ## Scripting
 
-Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Numerics`, `Griff`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
+Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
 
 ```csharp
 public class PlayerController : Behavior
@@ -77,17 +94,89 @@ public class PlayerController : Behavior
 }
 ```
 
+A few more things scripts often do:
+
+```csharp
+// Spawn a prefab (Assets/Prefabs/Bullet.prefab) where the player is.
+var bullet = Game.Spawn("Bullet", new Vector2(Transform.Position.X, Transform.Position.Y));
+
+// Do something later, or repeatedly. Timers belong to this entity and stop if it's destroyed.
+After(0.5f, () => Game.Destroy(bullet));
+Every(2f, () => Game.Spawn("Enemy", new Vector2(10, 0)));
+
+// Is there ground just below? Ignore our own collider.
+var below = Game.Physics.Raycast(Game.Scene, new Vector2(Transform.Position.X, Transform.Position.Y), -Vector2.UnitY, 0.6f, ignore: Entity);
+
+// Juice: a burst of particles and a camera kick.
+GetComponent<ParticleEmitter>()?.Burst(20);
+Game.ShakeCamera(0.3f, 0.2f);
+
+// Tweens: pop in, glide somewhere, then fade out and disappear.
+Transform.Scale = new Vector3(0, 0, 1);
+ScaleTo(Vector2.One, 0.4f, Ease.OutBack);
+MoveTo(new Vector2(4, 2), 1f).Then(() => FadeTo(0, 0.3f).Then(() => Game.Destroy(Entity!)));
+
+// Find things. Every copy of a prefab shares its name; scripts are found by type.
+foreach (var enemy in Game.FindAll<Enemy>())
+    enemy.Hit();
+Game.Find<ScoreCounter>()?.Add(1);
+
+// Random spawn points, loot rolls and variety.
+if (Rand.Chance(0.25f))
+    Game.Spawn(Rand.Pick(["Coin", "Gem"]), Rand.InsideCircle(3));
+
+// Sequences that take time: a coroutine waits with `yield return` and picks up where it left off.
+StartCoroutine(Waves());
+
+IEnumerator Waves()
+{
+    for (var wave = 1; wave <= 3; wave++)
+    {
+        for (var i = 0; i < wave * 4; i++)
+        {
+            Game.Spawn("Enemy", Rand.InsideCircle(6));
+            yield return Wait(0.3f);
+        }
+        yield return WaitUntil(() => Game.FindAll<Enemy>().Count == 0);
+    }
+    Game.LoadScene("Win", fade: 0.5f);
+}
+
+// Line of sight that sees through other enemies: only walls (the Default layer) and the player block it.
+var seen = Game.Physics.Raycast(Game.Scene, eye, toPlayer, 10, ignore: Entity, layers: "Default, Player");
+
+// Game flow: start over after dying, keep the music playing from scene to scene, quit from a menu.
+Game.ReloadScene(fade: 0.4f);
+Game.KeepBetweenScenes(Entity!);
+Game.Quit();
+
+// Remember things between runs.
+if (Score > Game.SaveData.GetInt("best"))
+    Game.SaveData.Set("best", Score);
+```
+
+`Rand` gives random numbers for gameplay: `Range`, `Chance`, `Pick`, `Sign`, `Direction`, `InsideCircle`, `Color`, and `Seed` to make a run repeatable.
+
 What a behavior can use:
-- **Lifecycle:** `Start`, `Update`, `OnCollision`, `OnTriggerEnter`, `OnTriggerExit`, `OnDestroy`.
-- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `Horizontal`, `Vertical`, `MouseWorld`; keyboard, mouse and Xbox-style gamepads) and `Audio` (`Play`, `PlayMusic`).
-- **Game:** `Spawn`, `Destroy`, `Find` and `Physics` (`OverlapPoint`, `OverlapBox`).
+- **Lifecycle:** `Start`, `Update`, `OnCollision`, `OnTriggerEnter`, `OnTriggerExit`, `OnClick` (the entity's button was clicked), `OnDestroy`.
+- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `WasReleased`, `Horizontal`, `Vertical`, `MouseWorld`; keyboard, mouse and Xbox-style gamepads) and `Audio` (`Play`, `PlayMusic`).
+- **Timers:** `After(seconds, action)` and `Every(seconds, action)` return a timer you can `Cancel()`. They run on game time, so they pause and slow down with it. `Game.After` and `Game.Every` make timers that don't belong to an entity.
+- **Coroutines:** `StartCoroutine(SomeMethod())` runs an `IEnumerator` method straight away up to its first `yield return`, then picks it up again once what it yielded is done: `null` (the next frame), `Wait(seconds)` (or just a number), `WaitUntil(() => ...)`, `WaitWhile(() => ...)`, a tween, a timer, another coroutine, or another `IEnumerator` method (run to the end first, like calling it). They run on game time like timers and return a coroutine you can `Stop()`; `StopCoroutines()` stops all of a behavior's. They stop when the entity is destroyed and when the script is reloaded, and since `Start` then runs again on the new version, a coroutine started in `Start` restarts running your new code. `Game.StartCoroutine` makes one that doesn't belong to a behavior.
+- **Tweens:** `MoveTo`, `ScaleTo`, `RotateTo` and `FadeTo` (sprite, text and tilemap alpha) animate this entity. `Tween(seconds, t => ...)` animates anything. Each takes an optional curve from `Ease` (`Linear`, `InQuad`, `OutQuad` (the default), `InOutQuad`, `InCubic`, `OutCubic`, `InOutCubic`, `InOutSine`, `InBack`, `OutBack`, `OutElastic`, `OutBounce`) and returns a tween you can `Cancel()` or chain with `.Then(...)`. A new `MoveTo` takes over from an unfinished one. Like timers, tweens run on game time and stop if their entity is destroyed; `Game.MoveTo(entity, ...)` and friends work on any entity.
+- **Game:** `Spawn` (an entity, or a prefab by name), `Destroy`, `Find` and `FindAll` (by name, or `Find<T>()` and `FindAll<T>()` by component type), `LoadScene` and `ReloadScene` (optionally with a `fade:` in seconds and a `color:`; fades use real time, so they work from a paused menu, and `IsChangingScene` is true until the switch), `KeepBetweenScenes` (carry an entity into the next scenes, still running; returning to its original scene doesn't duplicate it), `Quit`, `ShakeCamera`, `SaveData` (`GetInt`, `GetFloat`, `GetBool`, `GetString`, `Set`, `Delete`, `Clear`) and `Physics` (`Raycast`, `OverlapPoint`, `OverlapBox`, `OverlapCircle`; each takes `layers:` to only find colliders on those layers).
 
 Built-in components:
-- `Transform`, `Camera`, `Sprite` (single images or sprite sheets) and `Text`;
+- `Transform`, `Camera` (with `Shake`), `Sprite` (single images or sprite sheets) and `Text` (with `Align` and a `Font`: a `.ttf`/`.otf` file in Assets, which ships with the game, or an installed font's name);
 - `Animation`, which plays a range of sprite-sheet frames;
-- `BoxCollider` and `Body`, for physics.
+- `Tilemap`, a painted grid of tiles from one tileset (`GetTile` and `SetTile` from scripts), with background and one-way tiles;
+- `ParticleEmitter`, for continuous effects or one-shot bursts (`Burst`; `BurstOnStart` with `DestroyWhenFinished` makes a self-cleaning effect prefab);
+- `Button`, a clickable area that lightens under the mouse and darkens while held, with a no-code **Action** (and **Fade**), a **Shortcut** key, `OnClick` for behaviors on its entity and a `Clicked` event for anyone else. Put the label `Text` on the button's own entity so it's shaded with it;
+- `ScreenAnchor`, which pins its entity to one of nine points on the screen plus an **Offset**, for HUDs and menus. It's applied while the game runs, so the Scene view shows the entity where its transform puts it;
+- `BoxCollider`, `CircleCollider` and `Body`, for physics. Boxes and circles collide in any combination. `GetComponent<Collider>()` finds either kind. A body's `Bounciness` (0 to 1) makes it bounce off what it hits, settling once the bounces get small. `Ground` is what it's standing on; when that moves (a platform moved by a script or a tween) the body rides along with it. Give colliders a **Layer** (`Player`, `Enemy`, `Bullet`; empty is `Default`) and list what they pass through in **Ignore Layers**, e.g. `Player, Bullet` on a bullet: ignored pairs don't block each other, collide or trigger, and only one side has to list the other. Tilemaps have both too.
 
 Saving a script while the game is playing applies it immediately. Public properties are kept, and `Start` runs again on the new version.
+
+Rewinding restores everything a scene file holds. Things that only exist while running (timers, coroutines, tweens, live particles, camera shake, a scene fade) start fresh from the moment you resume, the same way private fields do.
 
 ## Architecture
 
@@ -122,6 +211,6 @@ Exported games are self-contained: they include the .NET runtime and run on any 
 
 Griff is young. Known gaps:
 - No web export yet.
-- Physics uses axis-aligned boxes only; rotation is ignored, and there are no slopes or circles yet.
+- Physics uses axis-aligned boxes and circles. Rotation is ignored, there are no slopes, and circle bodies slide rather than roll.
+- Tilemaps use one tileset of up to 62 tiles.
 - Panels are resizable but not dockable.
-- Text uses one built-in font.

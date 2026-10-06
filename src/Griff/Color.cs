@@ -17,6 +17,13 @@ public readonly record struct Color(float R, float G, float B, float A = 1f)
     public byte BByte => ToByte(B);
     public byte AByte => ToByte(A);
 
+    /// <summary>The color <paramref name="t"/> of the way from <paramref name="a"/> to <paramref name="b"/> (0 gives a, 1 gives b).</summary>
+    public static Color Lerp(Color a, Color b, float t) => new(
+        a.R + (b.R - a.R) * t,
+        a.G + (b.G - a.G) * t,
+        a.B + (b.B - a.B) * t,
+        a.A + (b.A - a.A) * t);
+
     public string ToHex() => $"#{RByte:X2}{GByte:X2}{BByte:X2}{AByte:X2}";
 
     /// <summary>Parses "#RGB", "#RRGGBB" or "#RRGGBBAA" (the # is optional).</summary>

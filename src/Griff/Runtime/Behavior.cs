@@ -61,12 +61,61 @@ public abstract class Behavior : Component
     {
     }
 
+    /// <summary>Called when this entity's <see cref="Button"/> is clicked (or its shortcut key pressed).</summary>
+    protected virtual void OnClick()
+    {
+    }
+
     /// <summary>Called when the entity is destroyed or the game stops.</summary>
     protected virtual void OnDestroy()
     {
     }
 
     protected T? GetComponent<T>() where T : Component => Entity!.GetComponent<T>();
+
+    /// <summary>Calls <paramref name="action"/> once after <paramref name="seconds"/>, unless this entity is destroyed first.</summary>
+    protected GameTimer After(float seconds, Action action) => Game.After(seconds, action, Entity);
+
+    /// <summary>Calls <paramref name="action"/> every <paramref name="seconds"/> while this entity exists.</summary>
+    protected GameTimer Every(float seconds, Action action) => Game.Every(seconds, action, Entity);
+
+    /// <summary>
+    /// Runs <paramref name="routine"/> over several frames, e.g. <c>StartCoroutine(Waves())</c>; see <see cref="Coroutine"/>.
+    /// It stops if this entity is destroyed, and when the script is reloaded (Start then runs again on the new version).
+    /// </summary>
+    protected Coroutine StartCoroutine(System.Collections.IEnumerator routine) => Game.StartCoroutine(routine, this);
+
+    /// <summary>Stops every coroutine this behavior started.</summary>
+    protected void StopCoroutines() => Game.StopCoroutines(this);
+
+    /// <summary>Yield this from a coroutine to wait <paramref name="seconds"/> of game time.</summary>
+    protected static WaitSeconds Wait(float seconds) => new(seconds);
+
+    /// <summary>Yield this from a coroutine to wait until <paramref name="condition"/> is true (checked every frame).</summary>
+    protected static WaitCondition WaitUntil(Func<bool> condition) => new(condition);
+
+    /// <summary>Yield this from a coroutine to wait as long as <paramref name="condition"/> is true.</summary>
+    protected static WaitCondition WaitWhile(Func<bool> condition) => new(() => !condition());
+
+    /// <summary>Animates a value over <paramref name="seconds"/>; see <see cref="Runtime.Game.Tween"/>. Stops if this entity is destroyed.</summary>
+    protected Tween Tween(float seconds, Action<float> apply, Func<float, float>? ease = null) =>
+        Game.Tween(seconds, apply, ease, Entity);
+
+    /// <summary>Glides this entity to <paramref name="position"/> (in its parent's space).</summary>
+    protected Tween MoveTo(System.Numerics.Vector2 position, float seconds, Func<float, float>? ease = null) =>
+        Game.MoveTo(Entity!, position, seconds, ease);
+
+    /// <summary>Grows or shrinks this entity to <paramref name="scale"/> on X and Y.</summary>
+    protected Tween ScaleTo(System.Numerics.Vector2 scale, float seconds, Func<float, float>? ease = null) =>
+        Game.ScaleTo(Entity!, scale, seconds, ease);
+
+    /// <summary>Turns this entity to <paramref name="degrees"/> around Z.</summary>
+    protected Tween RotateTo(float degrees, float seconds, Func<float, float>? ease = null) =>
+        Game.RotateTo(Entity!, degrees, seconds, ease);
+
+    /// <summary>Fades this entity's sprite, text and tilemap to <paramref name="alpha"/>.</summary>
+    protected Tween FadeTo(float alpha, float seconds, Func<float, float>? ease = null) =>
+        Game.FadeTo(Entity!, alpha, seconds, ease);
 
     internal void RunStart(Game game)
     {
@@ -86,6 +135,8 @@ public abstract class Behavior : Component
         else
             OnTriggerExit(other);
     }
+
+    internal void RunClick() => OnClick();
 
     internal void RunDestroy()
     {

@@ -8,9 +8,60 @@ public sealed class Camera : Component
     public float Size { get; set; } = 5f;
 
     public Color Background { get; set; } = Color.FromBytes(0x1E, 0x22, 0x2B);
+
+    private float _shakeStrength;
+    private float _shakeDuration;
+    private float _shakeLeft;
+
+    /// <summary>How far the view is currently thrown off by <see cref="Shake"/>, in world units.</summary>
+    [DoNotSerialize]
+    public System.Numerics.Vector2 ShakeOffset { get; private set; }
+
+    /// <summary>
+    /// Shakes the view by up to <paramref name="strength"/> world units, fading out over <paramref name="duration"/>
+    /// seconds. A stronger shake replaces a weaker one in progress. Uses real time, so it still plays while
+    /// <see cref="Runtime.Time.Scale"/> is 0 (a hit pause).
+    /// </summary>
+    public void Shake(float strength = 0.3f, float duration = 0.25f)
+    {
+        if (!(duration > 0) || !(strength > 0))
+            return;
+        var remaining = _shakeDuration > 0 ? _shakeStrength * (_shakeLeft / _shakeDuration) : 0;
+        if (strength < remaining)
+            return;
+        (_shakeStrength, _shakeDuration, _shakeLeft) = (strength, duration, duration);
+    }
+
+    /// <summary>Moves the shake on by <paramref name="seconds"/> and picks this frame's offset. Called by the game.</summary>
+    public void AdvanceShake(float seconds)
+    {
+        _shakeLeft = Math.Max(0, _shakeLeft - seconds);
+        if (_shakeLeft <= 0)
+        {
+            ShakeOffset = System.Numerics.Vector2.Zero;
+            return;
+        }
+
+        var amount = _shakeStrength * (_shakeLeft / _shakeDuration);
+        var angle = Random.Shared.NextSingle() * MathF.Tau;
+        ShakeOffset = new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle)) * amount * Random.Shared.NextSingle();
+    }
 }
 
-/// <summary>Draws a line (or lines) of text centered on the entity. Scripts set <see cref="Value"/>.</summary>
+/// <summary>Where text sits relative to its entity's position.</summary>
+public enum TextAlign
+{
+    /// <summary>Centered on the entity.</summary>
+    Center,
+
+    /// <summary>Starts at the entity and runs right; good for scores in a corner.</summary>
+    Left,
+
+    /// <summary>Ends at the entity.</summary>
+    Right,
+}
+
+/// <summary>Draws a line (or lines) of text at the entity. Scripts set <see cref="Value"/>.</summary>
 [ComponentName("Text")]
 public sealed class Text : Component
 {
@@ -23,6 +74,16 @@ public sealed class Text : Component
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; }
+
+    /// <summary>
+    /// A font file relative to Assets (e.g. "Fonts/pixel.ttf"), or the name of an installed font such as "Consolas".
+    /// Empty uses the built-in font. Prefer font files: they ship with the game, and installed fonts may be missing
+    /// on players' PCs.
+    /// </summary>
+    public string? Font { get; set; }
+
+    /// <summary>Where the text sits relative to the entity; lines of several-line text line up the same way.</summary>
+    public TextAlign Align { get; set; }
 }
 
 /// <summary>Draws an image (or a solid rectangle when no image is set) at the entity's transform.</summary>

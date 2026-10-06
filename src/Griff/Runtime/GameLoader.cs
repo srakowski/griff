@@ -21,8 +21,16 @@ public static class ExportLayout
 /// <summary>Everything needed to start a game: project, component types and the start scene.</summary>
 public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, IReadOnlyList<string> Warnings)
 {
+    private PrefabLibrary? _prefabs;
+
+    /// <summary>The start scene's name, for <see cref="Game.SceneName"/>.</summary>
+    public string? SceneName { get; init; }
+
     /// <summary>Loads another scene of this game by name, for <see cref="Game.SceneLoader"/>.</summary>
     public Scene LoadScene(string nameOrPath) => GameLoader.LoadScene(Project, Components, nameOrPath);
+
+    /// <summary>Creates an entity from one of this game's prefabs, for <see cref="Game.PrefabLoader"/>.</summary>
+    public Entity LoadPrefab(string nameOrPath) => (_prefabs ??= new PrefabLibrary(Project, Components)).Instantiate(nameOrPath);
 }
 
 /// <summary>Loads an exported game folder (or a project folder) for the player.</summary>
@@ -46,7 +54,7 @@ public static class GameLoader
 
         await using var stream = File.OpenRead(scenePath);
         var scene = new SceneSerializer(components).Load(stream, warnings);
-        return new LoadedGame(project, components, scene, warnings);
+        return new LoadedGame(project, components, scene, warnings) { SceneName = Path.GetFileNameWithoutExtension(scenePath) };
     }
 
     public static Scene LoadScene(Project project, ComponentRegistry components, string nameOrPath)

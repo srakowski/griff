@@ -63,6 +63,31 @@ public sealed class GameExporterTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportedArcade_KnowsItsStartScene_AndPlaysIntoItsGameScene()
+    {
+        var project = await Project.CreateAsync(_root, "Arcade Export", ProjectTemplate.Arcade);
+
+        var result = GameExporter.Export(project, _player, _output);
+        Assert.True(result.Success, result.Error);
+        var loaded = await GameLoader.LoadAsync(Path.Combine(result.OutputFolder!, ExportLayout.GameFolder));
+        Assert.Empty(loaded.Warnings);
+        Assert.Equal(Project.DefaultSceneName, loaded.SceneName);
+
+        // As the player sets it up: Enter on the menu clicks Play, which loads the game scene.
+        var input = new InputState();
+        var game = new Game(loaded.Scene, input) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = loaded.SceneName };
+        game.Tick(1 / 60.0);
+        input.SetKey(Key.Enter, true);
+        game.Tick(1 / 60.0);
+        input.EndFrame();
+        for (var i = 0; i < 30; i++) // through the button's fade
+            game.Tick(1 / 60.0);
+
+        Assert.Equal("Game", game.SceneName);
+        Assert.NotNull(game.Find("Player"));
+    }
+
+    [Fact]
     public async Task Export_WithScriptErrors_Fails()
     {
         var project = await Project.CreateAsync(_root, "Broken");

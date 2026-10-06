@@ -71,6 +71,11 @@ public partial class App : Application
 
         _runner = new GameRunner(game.Scene, surface, window);
         _runner.Game.SceneLoader = game.LoadScene;
+        _runner.Game.PrefabLoader = game.LoadPrefab;
+        _runner.Game.SceneName = game.SceneName;
+        _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
+        if (smokeOutput is null)
+            _runner.Game.SaveData = new SaveData(SaveData.PlayerPath(game.Project.Name));
         _runner.Faulted += (_, ex) =>
         {
             if (smokeOutput is not null)
@@ -83,7 +88,7 @@ public partial class App : Application
         if (smokeOutput is not null)
         {
             await Task.Delay(1000);
-            var ok = !_runner.IsPaused && SaveFrame(surface, game, smokeOutput);
+            var ok = !_runner.IsPaused && SaveFrame(surface, _runner.Game.Scene, smokeOutput);
             Shutdown(ok ? 0 : 1);
             return;
         }
@@ -91,9 +96,9 @@ public partial class App : Application
         Keyboard.Focus(window);
     }
 
-    private static bool SaveFrame(GameSurface surface, LoadedGame game, string path)
+    private static bool SaveFrame(GameSurface surface, Griff.Scenes.Scene scene, string path)
     {
-        if (surface.Capture(Griff.Rendering.SceneRenderer.Build(game.Scene, surface.Aspect)) is not var (rgba, width, height))
+        if (surface.Capture(Griff.Rendering.SceneRenderer.Build(scene, surface.Aspect)) is not var (rgba, width, height))
             return false;
 
         for (var i = 0; i < rgba.Length; i += 4)

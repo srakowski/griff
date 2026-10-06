@@ -25,6 +25,7 @@ public sealed class PlayMode : ObservableObject
     private SceneDocument? _runtime;
     private Timeline? _timeline;
     private int _position;
+    private string? _sceneName;
 
     public PlayMode(IWorkspace workspace, ISelection selection, IStatusService status, ILogger<PlayMode> logger)
     {
@@ -49,6 +50,9 @@ public sealed class PlayMode : ObservableObject
     public GameSurface Surface { get; } = new();
 
     public bool IsPlaying => _runner is not null;
+
+    /// <summary>The running game, for diagnostics.</summary>
+    internal Game? Game => _runner?.Game;
 
     public bool IsPaused => _runner?.IsPaused == true;
 
@@ -85,6 +89,7 @@ public sealed class PlayMode : ObservableObject
         _timeline = new Timeline(_workspace.Serializer);
         _timeline.Record(copy, 0, force: true);
         _position = 0;
+        _sceneName = edit.Name;
         StartRunner(copy, paused: false);
 
         // Keys should drive the game, not whichever field had focus.
@@ -184,9 +189,29 @@ public sealed class PlayMode : ObservableObject
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
         if (_workspace.Project is { } project)
-            _runner.Game.SceneLoader = name => GameLoader.LoadScene(project, _workspace.Components, name);
+        {
+            _runner.Game.SceneLoader = name => LoadScene(project, name);
+            _runner.Game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
+            _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
+        }
+        _runner.Game.SceneName = _sceneName;
         _runner.Game.SceneChanged += OnGameSceneChanged;
+        _runner.Game.QuitRequested += OnGameQuit;
         _runner.Start();
+    }
+
+    // The scene open in the editor plays as it is there, unsaved changes included (so Retry doesn't lose them);
+    // other scenes load from disk.
+    private Scene LoadScene(Griff.Projects.Project project, string name)
+    {
+        if (_workspace.EditScene is { } edit && project.FindScene(name) is { } path &&
+            string.Equals(System.IO.Path.GetFullPath(path), System.IO.Path.GetFullPath(edit.FilePath), StringComparison.OrdinalIgnoreCase))
+        {
+            var serializer = _workspace.Serializer;
+            return serializer.LoadFromString(serializer.SaveToString(edit.Scene));
+        }
+
+        return GameLoader.LoadScene(project, _workspace.Components, name);
     }
 
     // The game switched scenes (Game.LoadScene): show the new one everywhere.
@@ -195,9 +220,21 @@ public sealed class PlayMode : ObservableObject
         if (_runtime is null)
             return;
         _runtime = new SceneDocument(scene, _runtime.FilePath, isRuntime: true);
+        _sceneName = (sender as Game)?.SceneName ?? _sceneName;
         _workspace.ReplacePlayScene(_runtime);
         _selection.Select(null);
         _logger.LogInformation("Game loaded another scene");
+    }
+
+    // Game.Quit (or a Quit button): stop playing once the current frame is done.
+    private void OnGameQuit(object? sender, EventArgs e)
+    {
+        _logger.LogInformation("Game quit");
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            if (_runner?.Game == sender)
+                Stop();
+        });
     }
 
     private void OnTicked(object? sender, EventArgs e)

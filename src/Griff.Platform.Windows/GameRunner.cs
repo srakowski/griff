@@ -35,7 +35,11 @@ public sealed class GameRunner : IDisposable
         _keySource.PreviewKeyUp += OnKeyUp;
         _keySource.LostKeyboardFocus += OnLostFocus;
         _surface.MouseMoved += OnMouseMoved;
+        _surface.MouseLeft += OnMouseLeft;
         _surface.MouseButtonChanged += OnMouseButton;
+
+        // Until the mouse moves over the game, it isn't pointing at anything (say, a button in the middle).
+        _input.IsMouseInView = false;
     }
 
     /// <summary>Raised after every tick, e.g. so the editor can refresh its panels.</summary>
@@ -73,6 +77,7 @@ public sealed class GameRunner : IDisposable
         _keySource.PreviewKeyUp -= OnKeyUp;
         _keySource.LostKeyboardFocus -= OnLostFocus;
         _surface.MouseMoved -= OnMouseMoved;
+        _surface.MouseLeft -= OnMouseLeft;
         _surface.MouseButtonChanged -= OnMouseButton;
         IsRunning = false;
         Game.Stop();
@@ -100,6 +105,7 @@ public sealed class GameRunner : IDisposable
         {
             UpdateMouseWorld();
             XInputGamepad.Poll(_input);
+            Game.ViewAspect = _surface.Aspect;
             Game.Tick(seconds);
         }
         catch (Exception ex)
@@ -117,7 +123,7 @@ public sealed class GameRunner : IDisposable
 
     private void RenderLatest()
     {
-        _lastFrame = SceneRenderer.Build(Game.Scene, _surface.Aspect);
+        _lastFrame = SceneRenderer.Build(Game, _surface.Aspect);
         _surface.Render(_lastFrame);
     }
 
@@ -150,7 +156,13 @@ public sealed class GameRunner : IDisposable
 
     private void OnLostFocus(object sender, KeyboardFocusChangedEventArgs e) => _input.ReleaseAll();
 
-    private void OnMouseMoved(Point pixel) => _mouseNdc = _surface.ToNdc(pixel);
+    private void OnMouseMoved(Point pixel)
+    {
+        _mouseNdc = _surface.ToNdc(pixel);
+        _input.IsMouseInView = true;
+    }
+
+    private void OnMouseLeft() => _input.IsMouseInView = false;
 
     private void OnMouseButton(Runtime.MouseButton button, bool down) => _input.SetMouseButton(button, down);
 }

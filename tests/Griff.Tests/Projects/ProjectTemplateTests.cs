@@ -23,18 +23,110 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Empty)]
     [InlineData(ProjectTemplate.Platformer)]
     [InlineData(ProjectTemplate.TopDown)]
+    [InlineData(ProjectTemplate.Arcade)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
-        var (_, scene, _) = await CreateAndLoad(template);
+        var (project, scene, _, registry) = await CreateAndLoad(template);
 
         Assert.DoesNotContain(scene.Entities.SelectMany(e => e.Components), c => c is MissingComponent);
+        var serializer = new SceneSerializer(registry);
+        var warnings = new List<string>();
+        var entities = new List<Entity>();
+        foreach (var path in project.FindScenes())
+            entities.AddRange(serializer.LoadFromString(await File.ReadAllTextAsync(path), warnings).Entities);
+        foreach (var path in project.FindPrefabs())
+            entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path), warnings).SelfAndDescendants());
+
+        Assert.Empty(warnings);
+        Assert.DoesNotContain(entities.SelectMany(e => e.Components), c => c is MissingComponent);
+    }
+
+    [Fact]
+    public async Task Arcade_ClickingPlay_StartsTheGame_AndEnemiesArrive()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.1);
+
+        var play = game.Find("Play")!;
+        input.MouseWorld = new Vector2(play.Transform.Position.X, play.Transform.Position.Y);
+        input.SetMouseButton(MouseButton.Left, true);
+        Run(game, input, 0.05);
+        input.SetMouseButton(MouseButton.Left, false);
+        Run(game, input, 0.5); // through the button's fade
+
+        Assert.Equal("Game", game.SceneName);
+        Assert.NotNull(game.Find("Player"));
+        input.MouseWorld = new Vector2(100, 0); // away from the buttons, and don't fire
+        Run(game, input, 3);
+        Assert.NotEmpty(game.FindAll("Enemy"));
+    }
+
+    [Fact]
+    public async Task Arcade_ScoreIsPinnedToTheTopLeftCorner()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
+        game.ViewAspect = 2;
+
+        Run(game, input, 0.05);
+
+        // Camera size 8 at aspect 2: the top-left corner is (-16, 8).
+        var score = game.Find("Score")!.Transform.Position;
+        Assert.Equal(-16 + 0.6f, score.X, 3);
+        Assert.Equal(8 - 0.7f, score.Y, 3);
+    }
+
+    [Fact]
+    public async Task Arcade_ShootingAnEnemy_ScoresAPoint()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
+        game.Find("Spawner")!.IsEnabled = false;
+        Run(game, input, 0.05);
+
+        game.Spawn("Enemy", new Vector2(7, 0));
+        input.MouseWorld = new Vector2(7, 0);
+        input.SetKey(Key.Space, true);
+        Run(game, input, 1.5);
+
+        Assert.Equal("Score: 1", game.Find("Score")!.GetComponent<Text>()!.Value);
+        Assert.Empty(game.FindAll("Enemy"));
+        Assert.NotNull(game.Find("Player"));
+    }
+
+    [Fact]
+    public async Task Arcade_EnemyReachingTheShip_EndsTheGame_AndRetryStartsOver()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
+        game.SceneName = "Game";
+        game.Find("Spawner")!.IsEnabled = false;
+        Run(game, input, 0.05);
+
+        game.Spawn("Enemy", new Vector2(3, 0));
+        input.MouseWorld = new Vector2(-10, 5); // aim away, don't fire
+        Run(game, input, 2.5);
+
+        Assert.Null(game.Find("Player"));
+        var panel = game.Find("Game Over")!;
+        Assert.True(panel.IsEnabled);
+        Assert.Equal("Score: 0   Best: 0", game.Find("Result")!.GetComponent<Text>()!.Value);
+        Assert.True(game.SaveData.Has("best"));
+
+        input.SetKey(Key.Enter, true);
+        Run(game, input, 0.5);
+
+        Assert.NotNull(game.Find("Player"));
+        Assert.False(game.Find("Game Over")!.IsEnabled);
+        Assert.Equal("Game", game.SceneName);
     }
 
     [Fact]
     public async Task Platformer_PlayerLandsRunsJumpsAndCollects()
     {
-        var (_, scene, input) = await CreateAndLoad(ProjectTemplate.Platformer);
-        var game = new Game(scene, input);
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var body = player.GetComponent<Body>()!;
 
@@ -69,13 +161,36 @@ public sealed class ProjectTemplateTests : IDisposable
         Run(game, input, 3);
         Assert.True(coins.Children.Count < before, "running right should collect a coin");
         Assert.Equal("Score: 1", game.Find("Score")!.GetComponent<Text>()!.Value);
+        Assert.Null(game.Find("Sparkle")); // the pickup's sparkle has burst and cleaned itself up
+    }
+
+    [Fact]
+    public async Task Collecting_SpawnsASparkleInTheCollectiblesColor()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var gem = game.Find("Gem")!;
+        var player = game.Find("Player")!;
+
+        player.Transform.Position = gem.Transform.WorldPosition;
+        Run(game, input, 0.05);
+
+        var sparkle = game.Find("Sparkle");
+        Assert.NotNull(sparkle);
+        var sparks = sparkle.GetComponent<ParticleEmitter>()!;
+        Assert.Equal(gem.GetComponent<Sprite>()!.Tint, sparks.StartColor);
+        Assert.NotEmpty(sparks.Particles);
+        Assert.Null(gem.Scene);
+
+        Run(game, input, 1);
+        Assert.Null(sparkle.Scene);
     }
 
     [Fact]
     public async Task TopDown_PlayerMovesAndIsStoppedByWalls()
     {
-        var (_, scene, input) = await CreateAndLoad(ProjectTemplate.TopDown);
-        var game = new Game(scene, input);
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
 
         input.SetKey(Key.Up, true);
@@ -89,8 +204,8 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task CameraFollow_TracksThePlayer()
     {
-        var (_, scene, input) = await CreateAndLoad(ProjectTemplate.TopDown);
-        var game = new Game(scene, input);
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
 
         input.SetKey(Key.Right, true);
         Run(game, input, 1.5);
@@ -100,7 +215,16 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.True(Vector2.Distance(new(camera.X, camera.Y), new(player.X, player.Y)) < 1.5f);
     }
 
-    private async Task<(Project Project, Scene Scene, InputState Input)> CreateAndLoad(ProjectTemplate template)
+    // As the editor and player set it up: prefabs come from the project.
+    private static Game NewGame(Project project, Scene scene, InputState input, ComponentRegistry registry) =>
+        new(scene, input)
+        {
+            PrefabLoader = new PrefabLibrary(project, registry).Instantiate,
+            SceneLoader = name => GameLoader.LoadScene(project, registry, name),
+            SceneName = Project.DefaultSceneName,
+        };
+
+    private async Task<(Project Project, Scene Scene, InputState Input, ComponentRegistry Registry)> CreateAndLoad(ProjectTemplate template)
     {
         var project = await Project.CreateAsync(_root, template.ToString(), template);
         var registry = ComponentRegistry.CreateDefault();
@@ -111,7 +235,7 @@ public sealed class ProjectTemplateTests : IDisposable
         var warnings = new List<string>();
         var scene = new SceneSerializer(registry).Load(stream, warnings);
         Assert.Empty(warnings);
-        return (project, scene, new InputState());
+        return (project, scene, new InputState(), registry);
     }
 
     private static void Run(Game game, InputState input, double seconds)

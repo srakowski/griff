@@ -35,6 +35,27 @@ public class TextAndAudioTests
     }
 
     [Fact]
+    public void Text_PassesItsFontAndAlignmentToTheRenderer()
+    {
+        var scene = new Scene();
+        var styled = new Entity("Styled");
+        var text = styled.AddComponent<Text>();
+        text.Font = "Fonts/pixel.ttf";
+        text.Align = TextAlign.Left;
+        var plain = new Entity("Plain");
+        plain.AddComponent<Text>().Font = "  ";
+        scene.Add(styled);
+        scene.Add(plain);
+
+        var draws = SceneRenderer.Build(scene, 1).Sprites;
+
+        Assert.Equal("Fonts/pixel.ttf", draws[0].Font);
+        Assert.Equal(TextAlign.Left, draws[0].Align);
+        Assert.Null(draws[1].Font);
+        Assert.Equal(TextAlign.Center, draws[1].Align);
+    }
+
+    [Fact]
     public void EmptyText_IsNotDrawn()
     {
         var scene = new Scene();

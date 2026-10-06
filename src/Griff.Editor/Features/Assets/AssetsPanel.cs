@@ -16,6 +16,7 @@ public enum AssetKind
     Audio,
     Script,
     Scene,
+    Prefab,
     File,
 }
 
@@ -43,6 +44,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
         AssetKind.Audio => Icons.Audio,
         AssetKind.Script => Icons.Code,
         AssetKind.Scene => Icons.SceneFile,
+        AssetKind.Prefab => Icons.Package,
         _ => Icons.New,
     };
 
@@ -71,6 +73,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
             ".wav" or ".mp3" or ".wma" => AssetKind.Audio,
             ".cs" => AssetKind.Script,
             Project.SceneExtension => AssetKind.Scene,
+            Project.PrefabExtension => AssetKind.Prefab,
             _ => AssetKind.File,
         };
     }

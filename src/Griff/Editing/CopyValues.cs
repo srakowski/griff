@@ -29,7 +29,7 @@ public static class CopyValues
             foreach (var property in registry.Get(from.GetType()).Properties)
             {
                 var value = property.GetValue(from);
-                if (!Equals(value, property.GetValue(to)))
+                if (!ValueCodec.AreEqual(value, property.GetValue(to)))
                     edits.Add(new SetPropertyEdit(to, property, value));
             }
         }

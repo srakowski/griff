@@ -1,10 +1,14 @@
+using Griff.Scenes;
 using Silk.NET.OpenGL;
 using StbImageSharp;
 
 namespace Griff.Graphics;
 
-/// <summary>Renders a string to straight-alpha RGBA pixels (white glyphs; the sprite tint colors them).</summary>
-public delegate (byte[] Rgba, int Width, int Height) TextRasterizer(string text);
+/// <summary>
+/// Renders a string to straight-alpha RGBA pixels (white glyphs; the sprite tint colors them), in a font (see
+/// <see cref="Text.Font"/>; null for the built-in one), lining up several lines by <paramref name="align"/>.
+/// </summary>
+public delegate (byte[] Rgba, int Width, int Height) TextRasterizer(string text, string? font, TextAlign align);
 
 public sealed class Texture(uint handle, int width, int height)
 {
@@ -26,7 +30,7 @@ internal sealed class TextureCache : IDisposable
     private readonly GL _gl;
     private readonly string _assetRoot;
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (Texture Texture, long LastUsed)> _text = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Text, string? Font, TextAlign Align), (Texture Texture, long LastUsed)> _text = [];
     private readonly TextRasterizer? _rasterizer;
     private long _frame;
     private readonly Texture _white;
@@ -59,18 +63,19 @@ internal sealed class TextureCache : IDisposable
     }
 
     /// <summary>A texture of <paramref name="text"/>, or null if no rasterizer is available.</summary>
-    public Texture? GetText(string text)
+    public Texture? GetText(string text, string? font, TextAlign align)
     {
         if (_rasterizer is null)
             return null;
 
-        if (!_text.TryGetValue(text, out var entry))
+        var key = (text, font, align);
+        if (!_text.TryGetValue(key, out var entry))
         {
-            var (rgba, width, height) = _rasterizer(text);
+            var (rgba, width, height) = _rasterizer(text, font, align);
             entry = (Upload(rgba, width, height, smooth: true), _frame);
         }
 
-        _text[text] = entry with { LastUsed = _frame };
+        _text[key] = entry with { LastUsed = _frame };
         return entry.Texture;
     }
 
@@ -84,10 +89,10 @@ internal sealed class TextureCache : IDisposable
         if (_frame % 60 != 0)
             return;
 
-        foreach (var (text, entry) in _text.Where(t => _frame - t.Value.LastUsed > 120).ToList())
+        foreach (var (key, entry) in _text.Where(t => _frame - t.Value.LastUsed > 120).ToList())
         {
             _gl.DeleteTexture(entry.Texture.Handle);
-            _text.Remove(text);
+            _text.Remove(key);
         }
     }
 

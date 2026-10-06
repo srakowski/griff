@@ -126,6 +126,76 @@ internal static class SnapshotRunner
             checks.Add($"scene switch: {(switched.SequenceEqual(["Main Camera"]) ? "ok" : $"FAILED ({string.Join(", ", switched)})")}");
             Render(main, Path.Combine(outputDir, "switched.png"));
             play.Stop();
+
+            // Circles that bounce, per-tile collision, tweens, fonts and alignment, particle images.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateSceneAsync("Showcase");
+            BuildShowcase(workspace);
+            Render(main, Path.Combine(outputDir, "showcase-editor.png"));
+            play.Play();
+            await Task.Delay(2500);
+            var live = workspace.Scene!.Scene;
+            var ball = live.Entities.First(e => e.Name == "Ball");
+            checks.Add($"bouncy ball rests on the tile floor: {(Math.Abs(ball.Transform.Position.Y - -1.5f) < 0.05f ? "ok" : "FAILED")} (y = {ball.Transform.Position.Y:0.00})");
+            var popper = live.Entities.First(e => e.Name == "Popper");
+            checks.Add($"tween finished: {(Math.Abs(popper.Transform.Scale.X - 2) < 0.01f && Math.Abs(popper.Transform.Position.Y - 2) < 0.01f ? "ok" : "FAILED")} (scale {popper.Transform.Scale.X:0.00}, y {popper.Transform.Position.Y:0.00})");
+            Render(main, Path.Combine(outputDir, "showcase-playing.png"));
+            if (play.Surface.Capture(SceneRenderer.Build(live, play.Surface.Aspect)) is var (sPixels, sWidth, sHeight))
+                SaveRgba(sPixels, sWidth, sHeight, Path.Combine(outputDir, "showcase-game.png"));
+            if (main is Shell.MainWindow shell)
+            {
+                // The Scene view while playing, to see live particles drawn with their image.
+                shell.DocumentTabs.SelectedItem = shell.SceneTab;
+                await Task.Delay(300);
+                Render(main, Path.Combine(outputDir, "showcase-scene-playing.png"));
+            }
+
+            play.Stop();
+
+            // The Arcade template: menu buttons, screen anchors at the real window shape, scene names and Quit.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Arcade", Griff.Projects.ProjectTemplate.Arcade);
+            var arcadeMissing = workspace.Scene!.Scene.Entities.SelectMany(e => e.Components).Count(c => c is MissingComponent);
+            checks.Add($"arcade scripts resolved: {(arcadeMissing == 0 ? "ok" : $"FAILED ({arcadeMissing} missing)")}");
+
+            // An unsaved edit to the open scene, which reloading while playing must keep.
+            var titleText = workspace.Scene!.Scene.Entities.First(e => e.Name == "Title").GetComponent<Text>()!;
+            workspace.Scene.Execute(new SetPropertyEdit(titleText, workspace.Components.Get(typeof(Text)).Properties.Single(p => p.Name == nameof(Text.Value)), "UNSAVED"));
+            play.Play();
+            await Task.Delay(500);
+            var hint = workspace.Scene!.Scene.Entities.First(e => e.Name == "Hint").Transform.Position;
+            checks.Add($"arcade hint pinned to the bottom: {(Math.Abs(hint.Y - (-6 + 0.6f)) < 0.01f && Math.Abs(hint.X) < 0.01f ? "ok" : "FAILED")} (at {hint.X:0.00}, {hint.Y:0.00})");
+            var playButton = workspace.Scene!.Scene.Entities.First(e => e.Name == "Play").GetComponent<Button>()!;
+            checks.Add($"arcade play button not hovered before the mouse arrives: {(!playButton.IsHovered ? "ok" : "FAILED")}");
+            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (mPixels, mWidth, mHeight))
+                SaveRgba(mPixels, mWidth, mHeight, Path.Combine(outputDir, "arcade-menu.png"));
+
+            var arcade = play.Game!;
+            arcade.ReloadScene();
+            await Task.Delay(300);
+            var reloadedTitle = workspace.Scene!.Scene.Entities.First(e => e.Name == "Title").GetComponent<Text>()!.Value;
+            checks.Add($"reload keeps unsaved edits: {(reloadedTitle == "UNSAVED" ? "ok" : "FAILED")} ({reloadedTitle})");
+            arcade.LoadScene("Game");
+            await Task.Delay(500);
+            var aspect = play.Surface.Aspect;
+            var corner = workspace.Scene!.Scene.Entities.First(e => e.Name == "Score").Transform.Position;
+            checks.Add($"arcade score in the top-left at the window's shape: {(Math.Abs(corner.X - (-8 * aspect + 0.6f)) < 0.01f && Math.Abs(corner.Y - 7.3f) < 0.01f ? "ok" : "FAILED")} (at {corner.X:0.00}, {corner.Y:0.00}, aspect {aspect:0.00})");
+            arcade.ReloadScene();
+            await Task.Delay(300);
+            checks.Add($"arcade scene name follows switches: {(arcade.SceneName == "Game" && play.Game == arcade ? "ok" : "FAILED")} ({arcade.SceneName})");
+
+            // The game over panel and its buttons on the GPU.
+            workspace.Scene!.Scene.Entities.First(e => e.Name == "Game Over").IsEnabled = true;
+            await Task.Delay(600);
+            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (gPixels, gWidth, gHeight))
+                SaveRgba(gPixels, gWidth, gHeight, Path.Combine(outputDir, "arcade-game-over.png"));
+
+            arcade.Quit();
+            await Task.Delay(300);
+            checks.Add($"quit stops play mode: {(!play.IsPlaying ? "ok" : "FAILED")}");
+            if (play.IsPlaying)
+                play.Stop();
+
             File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();
@@ -172,6 +242,90 @@ internal static class SnapshotRunner
         document.Execute(new AddEntityEdit(scene, spawn));
 
         selection.Select(player);
+    }
+
+    private static void BuildShowcase(IWorkspace workspace)
+    {
+        var document = workspace.Scene!;
+        var scene = document.Scene;
+        var assets = workspace.Project!.AssetsPath;
+
+        // A 4×4 orange-and-white particle image, and a font file when this PC has Consolas.
+        Directory.CreateDirectory(Path.Combine(assets, "Sprites"));
+        byte[] o = [0x2E, 0x8C, 0xF0, 0xFF], w = [0xFF, 0xFF, 0xFF, 0xFF];
+        var dot = BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, new[] { o, w, w, o, w, o, o, w, w, o, o, w, o, w, w, o }.SelectMany(p => p).ToArray(), 16);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(dot));
+        using (var file = File.Create(Path.Combine(assets, "Sprites", "dot.png")))
+            encoder.Save(file);
+        var consolas = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "consola.ttf");
+        if (File.Exists(consolas))
+        {
+            Directory.CreateDirectory(Path.Combine(assets, "Fonts"));
+            File.Copy(consolas, Path.Combine(assets, "Fonts", "mono.ttf"), overwrite: true);
+        }
+
+        // Floor along y -3..-2, a one-way ledge (tile 2) and a background tile (tile 1) that doesn't collide.
+        var level = new Entity("Level");
+        level.Transform.Position = new Vector3(-7, 0, 0);
+        var map = level.AddComponent<Tilemap>();
+        map.Tiles = ["..............", "..1.....222...", "00000000000000"];
+        map.Tint = Color.FromBytes(0x48, 0x4B, 0x55);
+        map.BackgroundTiles = "1";
+        map.OneWayTiles = "2";
+        document.Execute(new AddEntityEdit(scene, level));
+
+        // Falls past the background tile and bounces to rest on the floor (top at y = -2).
+        var ball = new Entity("Ball");
+        ball.Transform.Position = new Vector3(-4.5f, 3, 0);
+        var ballSprite = ball.AddComponent<Sprite>();
+        ballSprite.Tint = Color.FromBytes(0xE3, 0xB3, 0x41);
+        ball.AddComponent<CircleCollider>();
+        ball.AddComponent<Body>().Bounciness = 0.6f;
+        document.Execute(new AddEntityEdit(scene, ball));
+
+        var left = new Entity("Left Text");
+        left.Transform.Position = new Vector3(-7, 4, 0);
+        var leftText = left.AddComponent<Text>();
+        leftText.Value = "Left\naligned";
+        leftText.Font = "Fonts/mono.ttf";
+        leftText.Align = TextAlign.Left;
+        leftText.Size = 0.7f;
+        document.Execute(new AddEntityEdit(scene, left));
+
+        var right = new Entity("Right Text");
+        right.Transform.Position = new Vector3(7, 4, 0);
+        var rightText = right.AddComponent<Text>();
+        rightText.Value = "Right\naligned";
+        rightText.Font = "Georgia";
+        rightText.Align = TextAlign.Right;
+        rightText.Size = 0.7f;
+        document.Execute(new AddEntityEdit(scene, right));
+
+        var sparks = new Entity("Sparks");
+        sparks.Transform.Position = new Vector3(3, -1, 0);
+        var emitter = sparks.AddComponent<ParticleEmitter>();
+        emitter.Image = "Sprites/dot.png";
+        emitter.StartSize = 0.5f;
+        emitter.EndSize = 0.2f;
+        document.Execute(new AddEntityEdit(scene, sparks));
+
+        // Grows and rises with tweens once the game starts.
+        File.WriteAllText(Path.Combine(assets, "Scripts", "Pop.cs"), """
+            public class Pop : Behavior
+            {
+                protected override void Start()
+                {
+                    ScaleTo(new Vector2(2, 2), 0.5f, Ease.OutBack);
+                    MoveTo(new Vector2(0, 2), 0.5f).Then(() => RotateTo(45, 0.3f));
+                }
+            }
+            """);
+        workspace.ReloadScripts();
+        var popper = new Entity("Popper");
+        popper.AddComponent<Sprite>().Tint = Color.FromBytes(0x57, 0xAB, 0x5A);
+        popper.AddComponent(workspace.Components.Find("Pop")!.CreateInstance());
+        document.Execute(new AddEntityEdit(scene, popper));
     }
 
     private static string SpinnerSource(float degreesPerSecond) => $$"""

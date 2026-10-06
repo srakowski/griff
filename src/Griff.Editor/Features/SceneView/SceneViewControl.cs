@@ -18,6 +18,7 @@ namespace Griff.Editor.Features.SceneView;
 /// <summary>
 /// 2D view of the open scene. Y is up, one world unit is <see cref="_zoom"/> pixels.
 /// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects; drag moves (Ctrl snaps); F frames.
+/// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
 {
@@ -26,10 +27,14 @@ public sealed class SceneViewControl : FrameworkElement
     private const float SnapStep = 0.5f;
     private const double MarkerRadius = 7;
     private const double CameraAspect = 16.0 / 9.0;
+    private const double PaletteCell = 28;
+    private const int PaletteColumns = 8;
 
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
+    private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
     private SceneDocument? _document;
 
     private Vector2 _pan;
@@ -41,6 +46,13 @@ public sealed class SceneViewControl : FrameworkElement
     private Vector2 _dragStartPan;
     private Vector3 _dragStartPosition;
     private Matrix4x4 _dragParentInverse = Matrix4x4.Identity;
+
+    // Tile painting.
+    private int _brushTile;
+    private bool _erasing;
+    private (int X, int Y)? _hoverCell;
+    private (int X, int Y)? _lastPaintCell;
+    private IDisposable? _stroke;
 
     public SceneViewControl(IWorkspace workspace, ISelection selection)
     {
@@ -67,10 +79,20 @@ public sealed class SceneViewControl : FrameworkElement
         None,
         Pan,
         Move,
+        Paint,
     }
 
     private PropertyDescriptor PositionProperty =>
         _workspace.Components.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
+
+    private PropertyDescriptor TilesProperty =>
+        _workspace.Components.Get(typeof(Tilemap)).Properties.Single(p => p.Name == nameof(Tilemap.Tiles));
+
+    /// <summary>The tilemap being painted: the selected entity's, while it's in the shown scene and enabled.</summary>
+    private Tilemap? PaintTarget =>
+        _selection.Entity is { } entity && entity.Scene == _document?.Scene && SceneRenderer.IsActive(entity)
+            ? entity.GetComponent<Tilemap>()
+            : null;
 
     /// <summary>Centers the view on the selection (or the origin).</summary>
     public void FrameSelection()
@@ -100,6 +122,8 @@ public sealed class SceneViewControl : FrameworkElement
         if (!samePlace)
         {
             _images.Clear();
+            _tileImages.Clear();
+            _tintedImages.Clear();
             _needsFit = true;
         }
 
@@ -162,13 +186,20 @@ public sealed class SceneViewControl : FrameworkElement
 
         foreach (var entity in DrawOrder())
         {
+            if (entity.GetComponent<Tilemap>() is { } tilemap)
+                DrawTilemap(dc, entity, tilemap);
             if (entity.GetComponent<Sprite>() is { } sprite)
                 DrawSprite(dc, entity, sprite);
             if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
                 DrawText(dc, entity, text);
             if (entity.GetComponent<Camera>() is { } camera)
                 DrawCameraFrame(dc, entity, camera, entity == _selection.Entity);
-            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Camera>() is null && entity.GetComponent<Text>() is null)
+            if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
+                DrawParticles(dc, entity, emitter);
+
+            // Entities with nothing solid to see (including emitters) get a marker so they can be found and clicked.
+            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null &&
+                entity.GetComponent<Text>() is null && entity.GetComponent<Camera>() is null)
                 DrawMarker(dc, entity);
         }
 
@@ -176,6 +207,9 @@ public sealed class SceneViewControl : FrameworkElement
 
         if (_selection.Entity is { } selected && selected.Scene == _document.Scene)
             DrawSelection(dc, selected);
+
+        if (PaintTarget is { } painting)
+            DrawPaintOverlay(dc, painting);
 
         DrawZoomLabel(dc);
     }
@@ -219,9 +253,9 @@ public sealed class SceneViewControl : FrameworkElement
         dc.PushTransform(new MatrixTransform(flip * matrix));
         dc.PushOpacity(sprite.Tint.A);
 
-        // WPF can't multiply-tint images; the editor view shows images untinted (alpha still applies).
-        if (LoadImage(sprite.Image) is { } image)
+        if (LoadImage(sprite.Image) is { } loaded)
         {
+            var image = Tinted(loaded, sprite.Tint);
             if (sprite.Columns > 1 || sprite.Rows > 1)
             {
                 var source = sprite.FrameRect;
@@ -255,25 +289,78 @@ public sealed class SceneViewControl : FrameworkElement
         dc.Pop();
     }
 
+    private void DrawTilemap(DrawingContext dc, Entity entity, Tilemap tilemap)
+    {
+        var size = tilemap.TileSize;
+        // A hair of overlap hides the anti-aliased seams WPF would draw between neighbouring tiles.
+        var bleed = 0.5 / _zoom;
+        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
+        dc.PushTransform(new MatrixTransform(ScreenMatrix(entity.Transform.WorldMatrix)));
+        dc.PushOpacity(tilemap.Tint.A);
+
+        foreach (var (x, y, tile) in tilemap.Cells())
+        {
+            var center = tilemap.CellCenter(x, y);
+            var rect = new Rect(center.X - size / 2 - bleed, center.Y - size / 2 - bleed, size + bleed * 2, size + bleed * 2);
+            if (TileImage(tilemap, tile) is { } image)
+            {
+                // Images are stored top-down; flip each tile about its own center.
+                dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 2 * center.Y));
+                dc.DrawImage(Tinted(image, tilemap.Tint), rect);
+                dc.Pop();
+            }
+            else
+            {
+                dc.DrawRectangle(fill, null, rect);
+            }
+        }
+
+        dc.Pop();
+        dc.Pop();
+    }
+
+    // Particle images are tinted like sprites; without one, particles are tinted squares.
+    private void DrawParticles(DrawingContext dc, Entity entity, ParticleEmitter emitter)
+    {
+        var image = LoadImage(emitter.Image);
+        foreach (var draw in SceneRenderer.ParticleDraws(entity, emitter))
+        {
+            var center = ToScreen(new Vector2(draw.World.M41, draw.World.M42));
+            var half = draw.World.M11 * _zoom / 2;
+            var rect = new Rect(center.X - half, center.Y - half, half * 2, half * 2);
+            if (image is not null)
+            {
+                dc.PushOpacity(draw.Tint.A);
+                dc.DrawImage(Tinted(image, draw.Tint), rect);
+                dc.Pop();
+            }
+            else
+            {
+                var color = System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte);
+                dc.DrawRectangle(new SolidColorBrush(color), null, rect);
+            }
+        }
+    }
+
     // Same font and line height as the game's text rasterizer, scaled to the text's world size.
     private void DrawText(DrawingContext dc, Entity entity, Text text)
     {
         var lines = text.Value!.Split('\n').Length;
-        var formatted = new FormattedText(text.Value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
-            Griff.Platform.Windows.WpfText.LineHeight * 0.8,
+        var formatted = Griff.Platform.Windows.WpfText.Format(text.Value,
+            Griff.Platform.Windows.WpfText.TypefaceFor(text.Font, _workspace.Project?.AssetsPath), text.Align,
             new SolidColorBrush(System.Windows.Media.Color.FromArgb(text.Color.AByte, text.Color.RByte, text.Color.GByte, text.Color.BByte)),
-            VisualTreeHelper.GetDpi(this).PixelsPerDip)
-        {
-            TextAlignment = TextAlignment.Center,
-            LineHeight = Griff.Platform.Windows.WpfText.LineHeight,
-        };
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+        // Same block width as the rasterized texture, placed like the game places it for the alignment.
+        var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace) + 8;
+        formatted.MaxTextWidth = width;
+        var left = text.Align switch { TextAlign.Left => 0, TextAlign.Right => -width, _ => -width / 2 };
 
         var blockHeight = Griff.Platform.Windows.WpfText.LineHeight * lines;
         var scale = text.Size / Griff.Platform.Windows.WpfText.LineHeight;
         var matrix = new Matrix(scale, 0, 0, -scale, 0, 0) * ScreenMatrix(entity.Transform.WorldMatrix);
         dc.PushTransform(new MatrixTransform(matrix));
-        dc.DrawText(formatted, new Point(0, -blockHeight / 2));
+        dc.DrawText(formatted, new Point(left, -blockHeight / 2));
         dc.Pop();
     }
 
@@ -300,16 +387,93 @@ public sealed class SceneViewControl : FrameworkElement
     {
         var solid = new Pen(Brush("Brush.Status.Success"), 1.5);
         var trigger = new Pen(Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var clickable = new Pen(Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
         foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
         {
+            // Buttons: where they can be clicked.
+            foreach (var button in entity.GetComponents<Griff.Scenes.Button>())
+                DrawBox(Griff.Runtime.Game.AreaOf(button), clickable);
+
             foreach (var collider in entity.GetComponents<BoxCollider>())
             {
-                var box = Griff.Runtime.Physics.BoundsOf(collider);
-                var topLeft = ToScreen(new Vector2(box.Min.X, box.Max.Y));
-                var bottomRight = ToScreen(new Vector2(box.Max.X, box.Min.Y));
-                dc.DrawRectangle(null, collider.IsTrigger ? trigger : solid, new Rect(topLeft, bottomRight));
+                if (collider.OneWay && !collider.IsTrigger)
+                    DrawOneWay(Griff.Runtime.Physics.BoundsOf(collider));
+                else
+                    DrawBox(Griff.Runtime.Physics.BoundsOf(collider), collider.IsTrigger ? trigger : solid);
+            }
+
+            foreach (var collider in entity.GetComponents<CircleCollider>())
+            {
+                var circle = Griff.Runtime.Physics.BoundsOf(collider);
+                var radius = circle.Radius * _zoom;
+                dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, ToScreen(circle.Center), radius, radius);
+            }
+
+            foreach (var tilemap in entity.GetComponents<Tilemap>())
+            {
+                foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
+                {
+                    if (oneWay)
+                        DrawOneWay(box);
+                    else
+                        DrawBox(box, solid);
+                }
             }
         }
+
+        // One-way platforms: a solid top (the side that blocks) over a dashed outline.
+        void DrawOneWay(Griff.Runtime.Box box)
+        {
+            DrawBox(box, trigger);
+            dc.DrawLine(new Pen(solid.Brush, 3), ToScreen(new Vector2(box.Min.X, box.Max.Y)), ToScreen(box.Max));
+        }
+
+        void DrawBox(Griff.Runtime.Box box, Pen pen)
+        {
+            var topLeft = ToScreen(new Vector2(box.Min.X, box.Max.Y));
+            var bottomRight = ToScreen(new Vector2(box.Max.X, box.Min.Y));
+            dc.DrawRectangle(null, pen, new Rect(topLeft, bottomRight));
+        }
+    }
+
+    // While painting: the grid's extent, the cell under the cursor, and a palette of the tileset's tiles.
+    private void DrawPaintOverlay(DrawingContext dc, Tilemap tilemap)
+    {
+        var accent = Brush("Brush.Accent");
+        var size = tilemap.TileSize;
+        dc.PushTransform(new MatrixTransform(ScreenMatrix(tilemap.Entity!.Transform.WorldMatrix)));
+
+        var extent = new Rect(0, -Math.Max(1, tilemap.Height) * size, Math.Max(1, tilemap.Width) * size, Math.Max(1, tilemap.Height) * size);
+        dc.DrawRectangle(null, new Pen(Brush("Brush.Text.Tertiary"), 1 / _zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
+
+        if (_hoverCell is var (hx, hy))
+        {
+            var center = tilemap.CellCenter(hx, hy);
+            var cell = new Rect(center.X - size / 2, center.Y - size / 2, size, size);
+            dc.DrawRectangle(null, new Pen(_erasing || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Brush("Brush.Status.Error") : accent, 2 / _zoom), cell);
+        }
+
+        dc.Pop();
+
+        // Palette, top left.
+        var count = PaletteCount(tilemap);
+        var panel = PaletteBounds(count);
+        dc.DrawRoundedRectangle(Brush("Brush.Surface.Chrome"), new Pen(Brush("Brush.Border.Default"), 1), panel, 4, 4);
+        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
+        for (var tile = 0; tile < count; tile++)
+        {
+            var rect = PaletteCellBounds(tile);
+            rect.Inflate(-2, -2);
+            if (TileImage(tilemap, tile) is { } image)
+                dc.DrawImage(image, rect);
+            else
+                dc.DrawRectangle(fill, null, rect);
+            if (tile == _brushTile)
+                dc.DrawRectangle(null, new Pen(accent, 2), PaletteCellBounds(tile));
+        }
+
+        var hint = Text("Paint: drag · Shift erase · Ctrl pick · [ ] tile · Esc done", "Brush.Text.Secondary");
+        dc.DrawText(hint, new Point(panel.Left + 6, panel.Bottom + 4));
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)
@@ -354,32 +518,37 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Scene queries -----
 
-    /// <summary>Everything drawn, back to front: sprites in render order, then cameras and bare entities on top.</summary>
+    /// <summary>Everything drawn, back to front: drawables in render order, then cameras and bare entities on top.</summary>
     private IEnumerable<Entity> DrawOrder()
     {
         var scene = _document!.Scene;
         return SceneRenderer.DrawOrder(scene)
-            .Concat(scene.Entities.Where(e => e.GetComponent<Sprite>() is null && SceneRenderer.IsActive(e)));
+            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && SceneRenderer.IsActive(e)));
     }
 
-    /// <summary>World-space outline of the entity's sprite or camera frame, or null for bare entities.</summary>
+    /// <summary>World-space outline of the entity's sprite, tilemap or camera frame, or null for bare entities.</summary>
     private static Vector2[]? Bounds(Entity entity)
     {
-        Vector2 half;
+        Vector2 min, max;
         if (entity.GetComponent<Sprite>() is { } sprite)
-            half = sprite.Size / 2;
+            (min, max) = (-sprite.Size / 2, sprite.Size / 2);
+        else if (entity.GetComponent<Tilemap>() is { Height: > 0 } tilemap)
+            (min, max) = (new Vector2(0, -tilemap.Height * tilemap.TileSize), new Vector2(tilemap.Width * tilemap.TileSize, 0));
         else if (entity.GetComponent<Camera>() is { } camera)
-            half = new Vector2((float)(camera.Size * CameraAspect), camera.Size);
+        {
+            max = new Vector2((float)(camera.Size * CameraAspect), camera.Size);
+            min = -max;
+        }
         else
             return null;
 
         var world = entity.Transform.WorldMatrix;
         return
         [
-            ToVector2(Vector3.Transform(new Vector3(-half.X, -half.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(half.X, -half.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(half.X, half.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(-half.X, half.Y, 0), world)),
+            ToVector2(Vector3.Transform(new Vector3(min.X, min.Y, 0), world)),
+            ToVector2(Vector3.Transform(new Vector3(max.X, min.Y, 0), world)),
+            ToVector2(Vector3.Transform(new Vector3(max.X, max.Y, 0), world)),
+            ToVector2(Vector3.Transform(new Vector3(min.X, max.Y, 0), world)),
         ];
     }
 
@@ -396,15 +565,45 @@ public sealed class SceneViewControl : FrameworkElement
             if ((pivot - screen).Length <= MarkerRadius + 3)
                 return entity;
 
-            if (entity.GetComponent<Sprite>() is { } sprite && Matrix4x4.Invert(entity.Transform.WorldMatrix, out var inverse))
-            {
-                var local = Vector3.Transform(new Vector3(world, 0), inverse);
-                if (Math.Abs(local.X) <= sprite.Size.X / 2 && Math.Abs(local.Y) <= sprite.Size.Y / 2)
-                    return entity;
-            }
+            if (!Matrix4x4.Invert(entity.Transform.WorldMatrix, out var inverse))
+                continue;
+            var local = Vector3.Transform(new Vector3(world, 0), inverse);
+            if (entity.GetComponent<Sprite>() is { } sprite && Math.Abs(local.X) <= sprite.Size.X / 2 && Math.Abs(local.Y) <= sprite.Size.Y / 2)
+                return entity;
+
+            // Tilemaps are hit where there's a tile, so the empty parts don't block clicks on what's behind.
+            if (entity.GetComponent<Tilemap>() is { } tilemap && tilemap.CellAt(new Vector2(local.X, local.Y)) is var (x, y) && tilemap.GetTile(x, y) >= 0)
+                return entity;
         }
 
         return null;
+    }
+
+    // ----- Tile palette -----
+
+    private static int PaletteCount(Tilemap tilemap) =>
+        string.IsNullOrEmpty(tilemap.Image) ? 1 : Math.Clamp(Math.Max(1, tilemap.Columns) * Math.Max(1, tilemap.Rows), 1, Tilemap.MaxTiles);
+
+    private static Rect PaletteCellBounds(int tile) =>
+        new(12 + tile % PaletteColumns * PaletteCell, 12 + tile / PaletteColumns * PaletteCell, PaletteCell, PaletteCell);
+
+    private static Rect PaletteBounds(int count)
+    {
+        var columns = Math.Min(count, PaletteColumns);
+        var rows = (count + PaletteColumns - 1) / PaletteColumns;
+        return new Rect(8, 8, columns * PaletteCell + 8, rows * PaletteCell + 8);
+    }
+
+    private int? PaletteTileAt(Tilemap tilemap, Point screen)
+    {
+        var count = PaletteCount(tilemap);
+        for (var tile = 0; tile < count; tile++)
+        {
+            if (PaletteCellBounds(tile).Contains(screen))
+                return tile;
+        }
+
+        return PaletteBounds(count).Contains(screen) ? _brushTile : null;
     }
 
     // ----- Input -----
@@ -434,6 +633,10 @@ public sealed class SceneViewControl : FrameworkElement
         {
             BeginDrag(DragMode.Pan, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && PaintTarget is { } tilemap)
+        {
+            BeginPaint(tilemap, position);
+        }
         else if (e.ChangedButton == MouseButton.Left)
         {
             var hit = HitTest(position);
@@ -453,10 +656,18 @@ public sealed class SceneViewControl : FrameworkElement
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        var position = e.GetPosition(this);
+        if (PaintTarget is { } tilemap && _drag is DragMode.None or DragMode.Paint)
+        {
+            UpdateHoverCell(tilemap, position);
+            if (_drag == DragMode.Paint)
+                PaintTo(tilemap, position);
+            return;
+        }
+
         if (_drag == DragMode.None)
             return;
 
-        var position = e.GetPosition(this);
         if (_drag == DragMode.Pan)
         {
             var delta = position - _dragStartScreen;
@@ -491,37 +702,152 @@ public sealed class SceneViewControl : FrameworkElement
             EndDrag();
     }
 
-    // Dropping an image from the Assets panel creates a sprite where it lands, sized to the image's aspect.
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        if (_hoverCell is not null && _drag != DragMode.Paint)
+        {
+            _hoverCell = null;
+            InvalidateVisual();
+        }
+    }
+
+    // ----- Tile painting -----
+
+    // Click the palette to pick a tile, Ctrl+click the map to pick the tile under the cursor, otherwise paint
+    // (or erase with Shift). One stroke is one undo step.
+    private void BeginPaint(Tilemap tilemap, Point position)
+    {
+        if (PaletteTileAt(tilemap, position) is { } chosen)
+        {
+            _brushTile = chosen;
+            InvalidateVisual();
+            return;
+        }
+
+        var cell = CellUnder(tilemap, position);
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            if (cell is var (x, y) && tilemap.GetTile(x, y) is var picked and >= 0)
+                _brushTile = picked;
+            InvalidateVisual();
+            return;
+        }
+
+        _erasing = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        _lastPaintCell = null;
+        BeginDrag(DragMode.Paint, position);
+        _stroke = _document!.History.BeginGroup(_erasing ? "Erase Tiles" : "Paint Tiles");
+        PaintTo(tilemap, position);
+    }
+
+    // Paints every cell on the line from the previous point, so fast drags don't leave gaps.
+    private void PaintTo(Tilemap tilemap, Point position)
+    {
+        if (CellUnder(tilemap, position) is not var (x, y))
+            return;
+
+        var (fromX, fromY) = _lastPaintCell ?? (x, y);
+        var steps = Math.Max(Math.Abs(x - fromX), Math.Abs(y - fromY));
+        var shiftX = 0;
+        var shiftY = 0;
+        for (var i = 0; i <= steps; i++)
+        {
+            var t = steps == 0 ? 1 : (double)i / steps;
+            var cx = (int)Math.Round(fromX + (x - fromX) * t) + shiftX;
+            var cy = (int)Math.Round(fromY + (y - fromY) * t) + shiftY;
+            var (sx, sy) = PaintCell(tilemap, cx, cy);
+            shiftX += sx;
+            shiftY += sy;
+        }
+
+        _lastPaintCell = (x + shiftX, y + shiftY);
+        _hoverCell = _lastPaintCell;
+        InvalidateVisual();
+    }
+
+    // Sets one cell. Painting left of or above the grid grows it and moves the entity so existing tiles stay put.
+    private (int ShiftX, int ShiftY) PaintCell(Tilemap tilemap, int x, int y)
+    {
+        var tile = _erasing ? -1 : _brushTile;
+        if (_document is not { } document || tilemap.GetTile(x, y) == tile)
+            return (0, 0);
+
+        var (tiles, shiftX, shiftY) = tilemap.Painted(x, y, tile);
+        document.Execute(new SetPropertyEdit(tilemap, TilesProperty, tiles));
+        if (shiftX != 0 || shiftY != 0)
+        {
+            var transform = tilemap.Entity!.Transform;
+            var offset = Vector3.TransformNormal(new Vector3(-shiftX * tilemap.TileSize, shiftY * tilemap.TileSize, 0), transform.LocalMatrix);
+            document.Execute(new SetPropertyEdit(transform, PositionProperty, transform.Position + offset));
+        }
+
+        return (shiftX, shiftY);
+    }
+
+    private (int X, int Y)? CellUnder(Tilemap tilemap, Point position)
+    {
+        if (!Matrix4x4.Invert(tilemap.Entity!.Transform.WorldMatrix, out var inverse))
+            return null;
+        var local = Vector3.Transform(new Vector3(ToWorld(position), 0), inverse);
+        return tilemap.CellAt(new Vector2(local.X, local.Y));
+    }
+
+    private void UpdateHoverCell(Tilemap tilemap, Point position)
+    {
+        var cell = PaletteTileAt(tilemap, position) is null ? CellUnder(tilemap, position) : null;
+        if (cell != _hoverCell)
+        {
+            _hoverCell = cell;
+            InvalidateVisual();
+        }
+    }
+
+    // Dropping an image from the Assets panel creates a sprite where it lands, sized to the image's aspect;
+    // dropping a prefab places a copy of it there.
     protected override void OnDragOver(DragEventArgs e)
     {
-        e.Effects = _document is not null && DroppedImage(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = _document is not null && DroppedAsset(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
     protected override void OnDrop(DragEventArgs e)
     {
         e.Handled = true;
-        if (_document is not { } document || DroppedImage(e) is not { } assetPath)
+        if (_document is not { } document || DroppedAsset(e) is not var (assetPath, kind))
             return;
 
-        var image = LoadImage(assetPath);
-        var aspect = image is { PixelHeight: > 0 } ? (float)image.PixelWidth / image.PixelHeight : 1f;
-        var entity = new Entity(Path.GetFileNameWithoutExtension(assetPath));
-        entity.Transform.Position = new Vector3(ToWorld(e.GetPosition(this)), 0);
-        var sprite = entity.AddComponent<Sprite>();
-        sprite.Image = assetPath;
-        sprite.Size = new Vector2(aspect, 1);
+        var position = ToWorld(e.GetPosition(this));
+        Entity entity;
+        if (kind == Griff.Editor.Features.Assets.AssetKind.Prefab)
+        {
+            if (Griff.Editor.Features.Entities.PrefabFiles.Instantiate(_workspace, assetPath) is not { } instance)
+                return;
+            entity = instance;
+            entity.Transform.Position = new Vector3(position, entity.Transform.Position.Z);
+        }
+        else
+        {
+            var image = LoadImage(assetPath);
+            var aspect = image is { PixelHeight: > 0 } ? (float)image.PixelWidth / image.PixelHeight : 1f;
+            entity = new Entity(Path.GetFileNameWithoutExtension(assetPath));
+            entity.Transform.Position = new Vector3(position, 0);
+            var sprite = entity.AddComponent<Sprite>();
+            sprite.Image = assetPath;
+            sprite.Size = new Vector2(aspect, 1);
+        }
 
         document.Execute(new AddEntityEdit(document.Scene, entity));
         _selection.Select(entity);
         Focus();
     }
 
-    private static string? DroppedImage(DragEventArgs e) =>
-        e.Data.GetData(Griff.Editor.Features.Assets.AssetNode.DataFormat) is string path &&
-        Griff.Editor.Features.Assets.AssetNode.KindOf(path) == Griff.Editor.Features.Assets.AssetKind.Image
-            ? path
-            : null;
+    private static (string Path, Griff.Editor.Features.Assets.AssetKind Kind)? DroppedAsset(DragEventArgs e)
+    {
+        if (e.Data.GetData(Griff.Editor.Features.Assets.AssetNode.DataFormat) is not string path)
+            return null;
+        var kind = Griff.Editor.Features.Assets.AssetNode.KindOf(path);
+        return kind is Griff.Editor.Features.Assets.AssetKind.Image or Griff.Editor.Features.Assets.AssetKind.Prefab ? (path, kind) : null;
+    }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
@@ -530,6 +856,26 @@ public sealed class SceneViewControl : FrameworkElement
             FrameSelection();
             e.Handled = true;
             return;
+        }
+
+        if (PaintTarget is { } tilemap)
+        {
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    _selection.Select(null);
+                    e.Handled = true;
+                    return;
+                case Key.OemOpenBrackets or Key.OemCloseBrackets:
+                    var count = PaletteCount(tilemap);
+                    _brushTile = ((_brushTile + (e.Key == Key.OemCloseBrackets ? 1 : -1)) % count + count) % count;
+                    InvalidateVisual();
+                    e.Handled = true;
+                    return;
+                case Key.LeftShift or Key.RightShift:
+                    InvalidateVisual(); // the hover outline turns red for erasing
+                    break;
+            }
         }
 
         // Arrows nudge the selection: half a unit, or a tenth with Shift. Each press is its own undo step.
@@ -552,6 +898,12 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (e.Key is Key.LeftShift or Key.RightShift && PaintTarget is not null)
+            InvalidateVisual();
+    }
+
     private void BeginDrag(DragMode mode, Point position)
     {
         _drag = mode;
@@ -572,6 +924,14 @@ public sealed class SceneViewControl : FrameworkElement
             ReleaseMouseCapture();
         if (mode == DragMode.Move)
             _document?.History.Seal();
+        if (mode == DragMode.Paint)
+        {
+            _stroke?.Dispose();
+            _stroke = null;
+            _lastPaintCell = null;
+            _erasing = false;
+            InvalidateVisual();
+        }
     }
 
     // ----- Helpers -----
@@ -606,6 +966,59 @@ public sealed class SceneViewControl : FrameworkElement
 
         _images[path] = image;
         return image;
+    }
+
+    /// <summary>
+    /// <paramref name="image"/> multiplied by the tint's color, as the game draws it; alpha is left to the caller. Tints are
+    /// rounded (see <see cref="ImageTint.Quantize"/>) and the cache is emptied when it grows large, so animated colors
+    /// like particles fading through a gradient don't pile up images.
+    /// </summary>
+    private BitmapSource Tinted(BitmapSource image, Griff.Color tint)
+    {
+        if (ImageTint.IsIdentity(tint))
+            return image;
+
+        var key = (image, ImageTint.Quantize(tint));
+        if (_tintedImages.TryGetValue(key, out var cached))
+            return cached;
+        if (_tintedImages.Count >= 256)
+            _tintedImages.Clear();
+
+        var source = image.Format == PixelFormats.Bgra32 ? image : new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
+        var stride = source.PixelWidth * 4;
+        var pixels = new byte[stride * source.PixelHeight];
+        source.CopyPixels(pixels, stride, 0);
+        ImageTint.ApplyBgra(pixels, key.Item2);
+
+        var tinted = BitmapSource.Create(source.PixelWidth, source.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgra32, null, pixels, stride);
+        tinted.Freeze();
+        _tintedImages[key] = tinted;
+        return tinted;
+    }
+
+    /// <summary>One tile of a tilemap's image, cut out for drawing; null when the map has no (loadable) image.</summary>
+    private BitmapSource? TileImage(Tilemap tilemap, int tile)
+    {
+        if (LoadImage(tilemap.Image) is not { } image)
+            return null;
+
+        var key = (tilemap.Image!, tile, tilemap.Columns, tilemap.Rows);
+        if (_tileImages.TryGetValue(key, out var cached))
+            return cached;
+
+        var rect = tilemap.TileRect(tile);
+        var area = new Int32Rect(
+            (int)Math.Round(rect.X * image.PixelWidth), (int)Math.Round(rect.Y * image.PixelHeight),
+            Math.Max(1, (int)Math.Round(rect.Z * image.PixelWidth)), Math.Max(1, (int)Math.Round(rect.W * image.PixelHeight)));
+        BitmapSource? cropped = null;
+        if (area.X + area.Width <= image.PixelWidth && area.Y + area.Height <= image.PixelHeight)
+        {
+            cropped = new CroppedBitmap(image, area);
+            cropped.Freeze();
+        }
+
+        _tileImages[key] = cropped;
+        return cropped;
     }
 
     private static float Snap(float value) => MathF.Round(value / SnapStep) * SnapStep;

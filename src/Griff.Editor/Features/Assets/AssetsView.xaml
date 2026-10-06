@@ -50,6 +50,9 @@
                         <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Scene}">
                             <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
                         </DataTrigger>
+                        <DataTrigger Binding="{Binding Kind}" Value="{x:Static assets:AssetKind.Prefab}">
+                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
+                        </DataTrigger>
                     </DataTemplate.Triggers>
                 </HierarchicalDataTemplate>
             </TreeView.ItemTemplate>

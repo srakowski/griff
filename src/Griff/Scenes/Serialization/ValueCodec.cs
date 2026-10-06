@@ -6,14 +6,20 @@ namespace Griff.Scenes.Serialization;
 
 /// <summary>
 /// Reads and writes component property values. Vectors are compact arrays (<c>[1, 2, 3]</c>)
-/// and enums are written by name, so scene files stay readable and diff cleanly.
+/// and enums are written by name, so scene files stay readable and diff cleanly. Lists of strings
+/// are written one string per line, so line-based data (like tilemap rows) diffs line by line.
 /// </summary>
 internal static class ValueCodec
 {
     public static bool IsSupported(Type type) =>
         type == typeof(bool) || type == typeof(int) || type == typeof(float) || type == typeof(double) ||
         type == typeof(string) || type.IsEnum || type == typeof(Color) ||
-        type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion);
+        type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion) ||
+        type == typeof(IReadOnlyList<string>);
+
+    /// <summary>Value equality for property values: lists compare by their items, everything else by Equals.</summary>
+    public static bool AreEqual(object? a, object? b) =>
+        a is IReadOnlyList<string> x && b is IReadOnlyList<string> y ? x.SequenceEqual(y) : Equals(a, b);
 
     public static void Write(Utf8JsonWriter writer, object? value)
     {
@@ -33,6 +39,12 @@ internal static class ValueCodec
             case Vector3 v: WriteArray(writer, v.X, v.Y, v.Z); break;
             case Vector4 v: WriteArray(writer, v.X, v.Y, v.Z, v.W); break;
             case Quaternion q: WriteArray(writer, q.X, q.Y, q.Z, q.W); break;
+            case IReadOnlyList<string> lines:
+                writer.WriteStartArray();
+                foreach (var line in lines)
+                    writer.WriteStringValue(line);
+                writer.WriteEndArray();
+                break;
             default: throw new NotSupportedException($"Can't write a {value.GetType().Name}.");
         }
     }
@@ -50,6 +62,8 @@ internal static class ValueCodec
             if (type.IsEnum) return Enum.Parse(type, element.GetString()!, ignoreCase: false);
             if (type == typeof(Color))
                 return Color.TryParse(element.GetString(), out var color) ? color : throw new FormatException();
+            if (type == typeof(IReadOnlyList<string>))
+                return element.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
 
             var n = ReadArray(element);
             if (type == typeof(Vector2) && n.Length == 2) return new Vector2(n[0], n[1]);

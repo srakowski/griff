@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Rendering;
+using Griff.Scenes;
 using Silk.NET.OpenGL;
 
 namespace Griff.Graphics;
@@ -154,14 +155,16 @@ public sealed class SpriteRenderer : IDisposable
         Texture texture;
         if (sprite.Text is { } text)
         {
-            if (_textures.GetText(text) is not { } textTexture)
+            if (_textures.GetText(text, sprite.Font, sprite.Align) is not { } textTexture)
                 return;
             texture = textTexture;
 
-            // The draw is one line high; stretch to the rasterized block's line count and aspect.
+            // The draw is one line high; stretch to the rasterized block's line count and aspect,
+            // then slide it so its left or right edge is at the origin for aligned text.
             var lines = text.Count(c => c == '\n') + 1;
-            var aspect = (float)texture.Width / texture.Height;
-            world = Matrix4x4.CreateScale(aspect * lines, lines, 1) * world;
+            var width = (float)texture.Width / texture.Height * lines;
+            var shift = sprite.Align switch { TextAlign.Left => width / 2, TextAlign.Right => -width / 2, _ => 0f };
+            world = Matrix4x4.CreateScale(width, lines, 1) * Matrix4x4.CreateTranslation(shift, 0, 0) * world;
         }
         else
         {

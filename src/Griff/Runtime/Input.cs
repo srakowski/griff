@@ -43,6 +43,8 @@ public interface IInput
 
     bool WasPressed(MouseButton button);
 
+    bool WasReleased(MouseButton button);
+
     bool IsDown(GamepadButton button);
 
     bool WasPressed(GamepadButton button);
@@ -52,6 +54,9 @@ public interface IInput
 
     /// <summary>Mouse position in world units.</summary>
     Vector2 MouseWorld { get; }
+
+    /// <summary>False while the mouse is outside the game's view (or hasn't moved over it yet); buttons ignore it then.</summary>
+    bool IsMouseInView { get; }
 
     /// <summary>-1..1 from A/D, the left/right arrows, the D-pad or the left stick.</summary>
     float Horizontal { get; }
@@ -71,6 +76,7 @@ public sealed class InputState : IInput
     private readonly HashSet<Key> _released = [];
     private readonly HashSet<MouseButton> _mouseDown = [];
     private readonly HashSet<MouseButton> _mousePressed = [];
+    private readonly HashSet<MouseButton> _mouseReleased = [];
     private readonly HashSet<GamepadButton> _padDown = [];
     private readonly HashSet<GamepadButton> _padPressed = [];
 
@@ -78,6 +84,9 @@ public sealed class InputState : IInput
     public const float DeadZone = 0.25f;
 
     public Vector2 MouseWorld { get; set; }
+
+    /// <summary>Set by the platform as the mouse enters and leaves the view. True by default, for tests and headless runs.</summary>
+    public bool IsMouseInView { get; set; } = true;
 
     public Vector2 LeftStick { get; private set; }
 
@@ -110,6 +119,8 @@ public sealed class InputState : IInput
 
     public bool WasPressed(MouseButton button) => _mousePressed.Contains(button);
 
+    public bool WasReleased(MouseButton button) => _mouseReleased.Contains(button);
+
     public void SetKey(Key key, bool down)
     {
         if (key == Key.None)
@@ -125,8 +136,8 @@ public sealed class InputState : IInput
     {
         if (down && _mouseDown.Add(button))
             _mousePressed.Add(button);
-        else if (!down)
-            _mouseDown.Remove(button);
+        else if (!down && _mouseDown.Remove(button))
+            _mouseReleased.Add(button);
     }
 
     /// <summary>Releases everything, e.g. when the game window loses focus.</summary>
@@ -134,6 +145,7 @@ public sealed class InputState : IInput
     {
         foreach (var key in _down.ToList())
             SetKey(key, false);
+        // Silently, so a held button doesn't count as a click on whatever is under the cursor.
         _mouseDown.Clear();
     }
 
@@ -142,6 +154,7 @@ public sealed class InputState : IInput
         _pressed.Clear();
         _released.Clear();
         _mousePressed.Clear();
+        _mouseReleased.Clear();
         _padPressed.Clear();
     }
 

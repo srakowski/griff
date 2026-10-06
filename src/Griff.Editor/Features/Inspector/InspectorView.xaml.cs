@@ -48,6 +48,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Enum { get; set; }
     public DataTemplate? Vector { get; set; }
     public DataTemplate? Color { get; set; }
+    public DataTemplate? Lines { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
@@ -58,6 +59,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Enum => Enum,
             FieldKind.Vector => Vector,
             FieldKind.Color => Color,
+            FieldKind.Lines => Lines,
             _ => null,
         };
 }

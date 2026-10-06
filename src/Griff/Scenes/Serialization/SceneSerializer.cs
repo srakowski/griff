@@ -100,6 +100,45 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         }
     }
 
+    /// <summary>
+    /// <paramref name="entity"/> and its descendants as a prefab file. Ids are left out: every spawn gets
+    /// fresh ones, and re-saving a prefab from an instance doesn't change lines that didn't change.
+    /// </summary>
+    public string SavePrefabToString(Entity entity)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, WriterOptions))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("formatVersion", FormatVersion);
+            writer.WritePropertyName("prefab");
+            WriteEntity(writer, entity, writeIds: false);
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>A new, detached entity from a prefab file, with fresh ids.</summary>
+    /// <exception cref="InvalidDataException">The text isn't a prefab, or is from a newer version.</exception>
+    public Entity LoadPrefabFromString(string json, ICollection<string>? warnings = null)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("prefab", out var prefab) || prefab.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("The file isn't a Griff prefab.");
+            if (root.TryGetProperty("formatVersion", out var v) && v.GetInt32() > FormatVersion)
+                throw new InvalidDataException("The prefab was saved by a newer version of Griff.");
+            return ReadEntity(prefab, new LoadContext(warnings, newIds: true));
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"The prefab file isn't valid JSON: {ex.Message}", ex);
+        }
+    }
+
     /// <summary>One component as JSON, exactly as it appears in a scene file.</summary>
     public JsonElement SerializeComponent(Component component)
     {
@@ -127,10 +166,11 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return component;
     }
 
-    private void WriteEntity(Utf8JsonWriter writer, Entity entity)
+    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true)
     {
         writer.WriteStartObject();
-        writer.WriteString("id", entity.Id);
+        if (writeIds)
+            writer.WriteString("id", entity.Id);
         writer.WriteString("name", entity.Name);
         if (!entity.IsEnabled)
             writer.WriteBoolean("enabled", false);
@@ -144,7 +184,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         {
             writer.WriteStartArray("children");
             foreach (var child in entity.Children)
-                WriteEntity(writer, child);
+                WriteEntity(writer, child, writeIds);
             writer.WriteEndArray();
         }
 

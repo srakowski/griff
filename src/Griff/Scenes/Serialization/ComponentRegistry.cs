@@ -16,7 +16,12 @@ public sealed class ComponentRegistry
         registry.Register<Animation>();
         registry.Register<Text>();
         registry.Register<BoxCollider>();
+        registry.Register<CircleCollider>();
         registry.Register<Body>();
+        registry.Register<Tilemap>();
+        registry.Register<ParticleEmitter>();
+        registry.Register<ScreenAnchor>();
+        registry.Register<Button>();
         return registry;
     }
 

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Griff.Editing;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
@@ -14,14 +15,16 @@ public partial class AssetsView : UserControl
 {
     private readonly IWorkspace _workspace;
     private readonly CommandRegistry _commands;
+    private readonly ISelection _selection;
     private Point _dragStart;
     private AssetNode? _dragCandidate;
 
-    public AssetsView(IWorkspace workspace, CommandRegistry commands)
+    public AssetsView(IWorkspace workspace, CommandRegistry commands, ISelection selection)
     {
         InitializeComponent();
         _workspace = workspace;
         _commands = commands;
+        _selection = selection;
     }
 
     private async void OnDoubleClick(object sender, MouseButtonEventArgs e)
@@ -46,6 +49,12 @@ public partial class AssetsView : UserControl
         {
             Add(menu, "Open Scene", Icons.Open, async () => await _workspace.OpenSceneAsync(node.FullPath));
             Add(menu, "Set as Start Scene", Icons.Play, async () => await _workspace.SetStartSceneAsync(node.FullPath));
+            menu.Items.Add(new Separator());
+        }
+        else if (node is { Kind: AssetKind.Prefab })
+        {
+            Add(menu, "Add to Scene", Icons.Add, () => AddPrefabToScene(node));
+            Add(menu, "Open", Icons.Open, () => OpenExternally(node.FullPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: not AssetKind.Folder })
@@ -110,6 +119,15 @@ public partial class AssetsView : UserControl
     }
 
     // ----- Helpers -----
+
+    // Placed where the prefab was saved from; dragging into the Scene view places it under the cursor instead.
+    private void AddPrefabToScene(AssetNode node)
+    {
+        if (_workspace.Scene is not { } document || Entities.PrefabFiles.Instantiate(_workspace, node.AssetPath) is not { } entity)
+            return;
+        document.Execute(new AddEntityEdit(document.Scene, entity));
+        _selection.Select(entity);
+    }
 
     private static void OpenExternally(string path)
     {

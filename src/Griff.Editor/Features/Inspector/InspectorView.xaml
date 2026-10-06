@@ -29,6 +29,19 @@
             <controls:CommitTextBox Text="{Binding TextValue}" />
         </DataTemplate>
 
+        <!-- Lists of strings, one per line (tilemap rows): monospace so columns line up -->
+        <DataTemplate x:Key="Field.Lines" DataType="inspector:PropertyField">
+            <controls:CommitTextBox MinHeight="44"
+                                    MaxHeight="220"
+                                    AcceptsReturn="True"
+                                    FontFamily="{StaticResource Font.Mono}"
+                                    HorizontalScrollBarVisibility="Auto"
+                                    Text="{Binding LinesValue}"
+                                    TextWrapping="NoWrap"
+                                    VerticalContentAlignment="Top"
+                                    VerticalScrollBarVisibility="Auto" />
+        </DataTemplate>
+
         <DataTemplate x:Key="Field.Enum" DataType="inspector:PropertyField">
             <ComboBox ItemsSource="{Binding EnumValues, Mode=OneTime}" SelectedItem="{Binding EnumValue}" />
         </DataTemplate>
@@ -76,6 +89,7 @@
                                          Bool="{StaticResource Field.Bool}"
                                          Color="{StaticResource Field.Color}"
                                          Enum="{StaticResource Field.Enum}"
+                                         Lines="{StaticResource Field.Lines}"
                                          Number="{StaticResource Field.Number}"
                                          Text="{StaticResource Field.Text}"
                                          Vector="{StaticResource Field.Vector}" />

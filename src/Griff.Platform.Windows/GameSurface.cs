@@ -27,15 +27,21 @@ public sealed class GameSurface : HwndHost
     private const int WmRButtonUp = 0x0205;
     private const int WmMButtonDown = 0x0207;
     private const int WmMButtonUp = 0x0208;
+    private const int WmMouseLeave = 0x02A3;
+    private const uint TmeLeave = 0x00000002;
 
     private IntPtr _hwnd;
     private WglContext? _context;
     private GL? _gl;
     private SpriteRenderer? _renderer;
     private string? _assetRoot;
+    private bool _trackingLeave;
 
     /// <summary>Raised with the cursor position in pixels from the top-left of the surface.</summary>
     public event Action<Point>? MouseMoved;
+
+    /// <summary>Raised when the cursor leaves the surface.</summary>
+    public event Action? MouseLeft;
 
     /// <summary>Raised when a mouse button goes down (true) or up (false) over the surface.</summary>
     public event Action<Runtime.MouseButton, bool>? MouseButtonChanged;
@@ -85,7 +91,7 @@ public sealed class GameSurface : HwndHost
             return;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.Rasterize);
+        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.For(AssetRoot));
         _renderer.Render(frame, width, height);
         _context.SwapBuffers();
     }
@@ -101,7 +107,7 @@ public sealed class GameSurface : HwndHost
             return null;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.Rasterize);
+        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.For(AssetRoot));
         _renderer.Render(frame, width, height);
         return (_renderer.Capture(width, height), width, height);
     }
@@ -143,7 +149,18 @@ public sealed class GameSurface : HwndHost
         switch (msg)
         {
             case WmMouseMove:
+                // Ask Windows to tell us when the cursor leaves, once per visit.
+                if (!_trackingLeave)
+                {
+                    var track = new TrackMouseEventInfo { Size = (uint)Marshal.SizeOf<TrackMouseEventInfo>(), Flags = TmeLeave, Window = hwnd };
+                    _trackingLeave = TrackMouseEvent(ref track);
+                }
+
                 MouseMoved?.Invoke(PointFrom(lParam));
+                break;
+            case WmMouseLeave:
+                _trackingLeave = false;
+                MouseLeft?.Invoke();
                 break;
             case WmLButtonDown or WmRButtonDown or WmMButtonDown:
                 // Keep keyboard focus in WPF so key events keep flowing to the game.
@@ -186,4 +203,16 @@ public sealed class GameSurface : HwndHost
 
     [DllImport("user32.dll")]
     private static extern bool GetClientRect(IntPtr hwnd, out Rect rect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TrackMouseEventInfo
+    {
+        public uint Size;
+        public uint Flags;
+        public IntPtr Window;
+        public uint HoverTime;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool TrackMouseEvent(ref TrackMouseEventInfo info);
 }

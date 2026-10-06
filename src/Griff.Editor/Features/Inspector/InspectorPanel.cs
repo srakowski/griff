@@ -237,6 +237,7 @@ public enum FieldKind
     Enum,
     Vector,
     Color,
+    Lines,
 }
 
 /// <summary>One editable property. Exposes typed accessors for each editor template.</summary>
@@ -261,6 +262,7 @@ public sealed class PropertyField : ObservableObject
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
+            : type == typeof(IReadOnlyList<string>) ? FieldKind.Lines
             : FieldKind.Vector;
 
         if (Kind == FieldKind.Enum)
@@ -314,6 +316,19 @@ public sealed class PropertyField : ObservableObject
         set
         {
             Value = string.IsNullOrEmpty(value) ? null : value;
+            _owner.Seal();
+        }
+    }
+
+    /// <summary>A list of strings as text, one per line.</summary>
+    public string LinesValue
+    {
+        get => Value is IReadOnlyList<string> lines ? string.Join(Environment.NewLine, lines) : "";
+        set
+        {
+            var lines = value.ReplaceLineEndings("\n").Split('\n');
+            if (Value is not IReadOnlyList<string> current || !current.SequenceEqual(lines))
+                Value = lines;
             _owner.Seal();
         }
     }

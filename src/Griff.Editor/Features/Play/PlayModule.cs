@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using Griff.Editing;
 using Griff.Editor.Core.Commands;
@@ -22,7 +23,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PauseCommand>()
             .AddCommand<StepCommand>()
             .AddCommand<StopCommand>()
-            .AddCommand<KeepPlayChangesCommand>();
+            .AddCommand<KeepPlayChangesCommand>()
+            .AddCommand<ClearSaveDataCommand>();
     }
 }
 
@@ -131,6 +133,36 @@ public sealed class StopCommand(PlayMode play) : EditorCommand
     protected override Task ExecuteCoreAsync()
     {
         play.Stop();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Deletes what the game saved with Game.SaveData while playing in the editor, to test a first run again.</summary>
+public sealed class ClearSaveDataCommand(IWorkspace workspace, IStatusService status) : EditorCommand
+{
+    public override string Id => "Game.ClearSaveData";
+    public override string Text => "_Clear Save Data";
+    public override string? Icon => Icons.Clear;
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 0);
+
+    protected override bool CanExecuteCore() => workspace.Project is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Project is not { } project)
+            return Task.CompletedTask;
+
+        var path = Griff.Runtime.SaveData.EditorPath(project.RootPath);
+        try
+        {
+            File.Delete(path);
+            status.Show(workspace.IsPlaying ? "Cleared save data; the running game keeps its values until you play again" : "Cleared save data");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            status.Show($"Couldn't clear save data: {ex.Message}");
+        }
+
         return Task.CompletedTask;
     }
 }

@@ -1,7 +1,10 @@
+using System.IO;
 using System.Windows.Input;
 using Griff.Editing;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
+using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Griff.Scenes;
@@ -20,12 +23,16 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateSpriteCommand>()
             .AddCommand<CreateCameraCommand>()
             .AddCommand<CreateTextCommand>()
+            .AddCommand<CreateTilemapCommand>()
+            .AddCommand<CreateParticlesCommand>()
+            .AddCommand<CreateButtonCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
             .AddCommand<DeleteEntityCommand>()
             .AddCommand<CopyEntityCommand>()
             .AddCommand<CutEntityCommand>()
-            .AddCommand<PasteEntityCommand>();
+            .AddCommand<PasteEntityCommand>()
+            .AddCommand<SaveAsPrefabCommand>();
     }
 }
 
@@ -91,6 +98,50 @@ public sealed class CreateTextCommand(IWorkspace workspace, ISelection selection
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Text";
     protected override void Configure(Entity entity) => entity.AddComponent<Griff.Scenes.Text>();
+}
+
+/// <summary>Creates an empty tilemap; selecting it puts the Scene view into tile painting.</summary>
+public sealed class CreateTilemapCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateTilemap";
+    public override string Text => "Create Tile_map";
+    public override string? Icon => Icons.Palette;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
+    protected override string EntityName => "Tilemap";
+    protected override void Configure(Entity entity) => entity.AddComponent<Tilemap>().Tint = Griff.Color.FromBytes(0x48, 0x4B, 0x55);
+}
+
+public sealed class CreateParticlesCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateParticles";
+    public override string Text => "Create Pa_rticles";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 5);
+    protected override string EntityName => "Particles";
+    protected override void Configure(Entity entity) => entity.AddComponent<ParticleEmitter>();
+}
+
+/// <summary>Creates a clickable button: a background sprite, a label and a Button set to do nothing until configured.</summary>
+public sealed class CreateButtonCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateButton";
+    public override string Text => "Create _Button";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 6);
+    protected override string EntityName => "Button";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(3, 1);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x3A, 0x3F, 0x4B);
+        sprite.Order = 100;
+        var label = entity.AddComponent<Griff.Scenes.Text>();
+        label.Value = "Button";
+        label.Size = 0.5f;
+        entity.AddComponent<Griff.Scenes.Button>().Size = size;
+    }
 }
 
 public sealed class RenameEntityCommand(ISelection selection) : EditorCommand
@@ -245,5 +296,73 @@ public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selecti
         if (workspace.Scene is { } document && selection.Entity is { } entity)
             document.Execute(new RemoveEntityEdit(document.Scene, entity));
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Prefab files as the editor uses them: saved from a selection, instantiated by drag-and-drop.</summary>
+public static class PrefabFiles
+{
+    /// <summary>A file name made from an entity name: invalid characters become underscores.</summary>
+    public static string SafeName(string entityName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var name = new string(entityName.Trim().Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim('.', ' ');
+        return name.Length == 0 ? "Prefab" : name;
+    }
+
+    /// <summary>A new entity from the prefab at <paramref name="assetPath"/> (relative to Assets), or null if it can't be read.</summary>
+    public static Entity? Instantiate(IWorkspace workspace, string assetPath, ICollection<string>? warnings = null)
+    {
+        if (workspace.Project is not { } project)
+            return null;
+
+        var path = Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar));
+        try
+        {
+            return workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            warnings?.Add(ex.Message);
+            return null;
+        }
+    }
+}
+
+/// <summary>
+/// Saves the selected entity and its children as Assets/Prefabs/&lt;name&gt;.prefab, ready for
+/// <c>Game.Spawn("name")</c> or dragging into a scene. Works in play mode too, to keep a tweaked live entity.
+/// </summary>
+public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand
+{
+    public override string Id => "Entity.SaveAsPrefab";
+    public override string Text => "Save as _Prefab";
+    public override string? Icon => Icons.Package;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 3);
+
+    protected override bool CanExecuteCore() => selection.Entity is not null && workspace.Project is not null;
+
+    protected override async Task ExecuteCoreAsync()
+    {
+        if (selection.Entity is not { } entity || workspace.Project is not { } project)
+            return;
+
+        var name = PrefabFiles.SafeName(entity.Name);
+        var path = project.DefaultPrefabPath(name);
+        if (File.Exists(path) && !dialogs.Confirm("Replace Prefab", $"{name}{Griff.Projects.Project.PrefabExtension} already exists. Replace it with \"{entity.Name}\"?"))
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, workspace.Serializer.SavePrefabToString(entity));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            dialogs.ShowError("Couldn't save the prefab", ex.Message);
+            return;
+        }
+
+        status.Show($"Saved {project.GetRelativePath(path)}. Spawn it with Game.Spawn(\"{name}\").");
     }
 }

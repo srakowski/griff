@@ -85,7 +85,7 @@ public sealed class GameSurface : HwndHost
             return;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot);
+        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.Rasterize);
         _renderer.Render(frame, width, height);
         _context.SwapBuffers();
     }
@@ -101,7 +101,7 @@ public sealed class GameSurface : HwndHost
             return null;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot);
+        _renderer ??= new SpriteRenderer(_gl, AssetRoot, WpfText.Rasterize);
         _renderer.Render(frame, width, height);
         return (_renderer.Capture(width, height), width, height);
     }

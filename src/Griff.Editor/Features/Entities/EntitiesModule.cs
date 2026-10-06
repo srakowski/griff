@@ -19,6 +19,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateEmptyCommand>()
             .AddCommand<CreateSpriteCommand>()
             .AddCommand<CreateCameraCommand>()
+            .AddCommand<CreateTextCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
             .AddCommand<DeleteEntityCommand>();
@@ -77,6 +78,16 @@ public sealed class CreateCameraCommand(IWorkspace workspace, ISelection selecti
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Camera";
     protected override void Configure(Entity entity) => entity.AddComponent<Camera>();
+}
+
+public sealed class CreateTextCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateText";
+    public override string Text => "Create _Text";
+    public override string? Icon => Icons.Font;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
+    protected override string EntityName => "Text";
+    protected override void Configure(Entity entity) => entity.AddComponent<Griff.Scenes.Text>();
 }
 
 public sealed class RenameEntityCommand(ISelection selection) : EditorCommand

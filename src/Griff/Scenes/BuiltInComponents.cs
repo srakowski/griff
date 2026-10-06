@@ -10,6 +10,21 @@ public sealed class Camera : Component
     public Color Background { get; set; } = Color.FromBytes(0x1E, 0x22, 0x2B);
 }
 
+/// <summary>Draws a line (or lines) of text centered on the entity. Scripts set <see cref="Value"/>.</summary>
+[ComponentName("Text")]
+public sealed class Text : Component
+{
+    public string? Value { get; set; } = "Text";
+
+    /// <summary>Height of one line in world units, before the transform's scale.</summary>
+    public float Size { get; set; } = 1f;
+
+    public Color Color { get; set; } = Color.White;
+
+    /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
+    public int Order { get; set; }
+}
+
 /// <summary>Draws an image (or a solid rectangle when no image is set) at the entity's transform.</summary>
 [ComponentName("Sprite")]
 public sealed class Sprite : Component

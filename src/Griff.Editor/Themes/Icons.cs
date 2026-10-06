@@ -39,6 +39,7 @@ public static class Icons
     public const string Hierarchy = "\uE8FD";
     public const string Inspector = "\uE9E9";
     public const string Image = "\uEB9F";
+    public const string Font = "\uE8D2";
     public const string Camera = "\uE722";
     public const string Settings = "\uE713";
     public const string Palette = "\uE790";

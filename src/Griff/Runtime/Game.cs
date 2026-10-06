@@ -25,6 +25,9 @@ public sealed class Game
 
     public Physics Physics { get; } = new();
 
+    /// <summary>Set by the platform; silent by default (tests, headless).</summary>
+    public IAudio Audio { get; set; } = SilentAudio.Instance;
+
     /// <summary>Advances the game by <paramref name="seconds"/>: start new behaviors, update all, apply destroys.</summary>
     public void Tick(double seconds)
     {
@@ -75,6 +78,7 @@ public sealed class Game
 
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
+        Audio.StopAll();
     }
 
     private void OnCollision(Entity a, Entity b)

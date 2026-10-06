@@ -163,9 +163,11 @@ public sealed class SceneViewControl : FrameworkElement
         {
             if (entity.GetComponent<Sprite>() is { } sprite)
                 DrawSprite(dc, entity, sprite);
+            if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
+                DrawText(dc, entity, text);
             if (entity.GetComponent<Camera>() is { } camera)
                 DrawCameraFrame(dc, entity, camera, entity == _selection.Entity);
-            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Camera>() is null)
+            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Camera>() is null && entity.GetComponent<Text>() is null)
                 DrawMarker(dc, entity);
         }
 
@@ -235,6 +237,28 @@ public sealed class SceneViewControl : FrameworkElement
         }
 
         dc.Pop();
+        dc.Pop();
+    }
+
+    // Same font and line height as the game's text rasterizer, scaled to the text's world size.
+    private void DrawText(DrawingContext dc, Entity entity, Text text)
+    {
+        var lines = text.Value!.Split('\n').Length;
+        var formatted = new FormattedText(text.Value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+            Griff.Platform.Windows.WpfText.LineHeight * 0.8,
+            new SolidColorBrush(System.Windows.Media.Color.FromArgb(text.Color.AByte, text.Color.RByte, text.Color.GByte, text.Color.BByte)),
+            VisualTreeHelper.GetDpi(this).PixelsPerDip)
+        {
+            TextAlignment = TextAlignment.Center,
+            LineHeight = Griff.Platform.Windows.WpfText.LineHeight,
+        };
+
+        var blockHeight = Griff.Platform.Windows.WpfText.LineHeight * lines;
+        var scale = text.Size / Griff.Platform.Windows.WpfText.LineHeight;
+        var matrix = new Matrix(scale, 0, 0, -scale, 0, 0) * ScreenMatrix(entity.Transform.WorldMatrix);
+        dc.PushTransform(new MatrixTransform(matrix));
+        dc.DrawText(formatted, new Point(0, -blockHeight / 2));
         dc.Pop();
     }
 

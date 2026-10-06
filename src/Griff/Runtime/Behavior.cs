@@ -32,6 +32,8 @@ public abstract class Behavior : Component
 
     protected IInput Input => Game.Input;
 
+    protected IAudio Audio => Game.Audio;
+
     internal bool IsStarted { get; private set; }
 
     /// <summary>Called once, before the first <see cref="Update"/>, after every behavior in the scene exists.</summary>

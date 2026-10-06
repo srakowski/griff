@@ -10,7 +10,7 @@ namespace Griff.Editor.Features.Hierarchy;
 
 public partial class HierarchyView : UserControl
 {
-    private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateCamera"];
+    private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"];
     private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete"];
 
     private readonly CommandRegistry _commands;

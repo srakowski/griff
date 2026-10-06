@@ -59,10 +59,10 @@ public sealed class SpriteRenderer : IDisposable
     private int _quadCount;
     private Texture? _batchTexture;
 
-    public SpriteRenderer(GL gl, string assetRoot)
+    public SpriteRenderer(GL gl, string assetRoot, TextRasterizer? textRasterizer = null)
     {
         _gl = gl;
-        _textures = new TextureCache(gl, assetRoot);
+        _textures = new TextureCache(gl, assetRoot, textRasterizer);
         _program = CreateProgram();
 
         _vao = gl.GenVertexArray();
@@ -120,6 +120,7 @@ public sealed class SpriteRenderer : IDisposable
         foreach (var sprite in frame.Sprites)
             Add(sprite, frame.ViewProjection);
         Flush();
+        _textures.EndFrame();
 
         _gl.BindVertexArray(0);
     }
@@ -149,7 +150,24 @@ public sealed class SpriteRenderer : IDisposable
 
     private void Add(SpriteDraw sprite, Matrix4x4 viewProjection)
     {
-        var texture = _textures.Get(sprite.Image);
+        var world = sprite.World;
+        Texture texture;
+        if (sprite.Text is { } text)
+        {
+            if (_textures.GetText(text) is not { } textTexture)
+                return;
+            texture = textTexture;
+
+            // The draw is one line high; stretch to the rasterized block's line count and aspect.
+            var lines = text.Count(c => c == '\n') + 1;
+            var aspect = (float)texture.Width / texture.Height;
+            world = Matrix4x4.CreateScale(aspect * lines, lines, 1) * world;
+        }
+        else
+        {
+            texture = _textures.Get(sprite.Image);
+        }
+
         if (_batchTexture is not null && texture != _batchTexture)
             Flush();
         if (_quadCount == MaxQuads)
@@ -157,7 +175,7 @@ public sealed class SpriteRenderer : IDisposable
         _batchTexture = texture;
 
         var tint = sprite.Tint;
-        var toClip = sprite.World * viewProjection;
+        var toClip = world * viewProjection;
         var offset = _quadCount * 4 * FloatsPerVertex;
         foreach (var (position, uv) in Corners)
         {

@@ -4,10 +4,11 @@ using Griff.Scenes;
 namespace Griff.Rendering;
 
 /// <summary>
-/// One sprite to draw: a unit quad (-0.5..0.5) placed in the world by <see cref="World"/>,
-/// which already includes the sprite's size and flips.
+/// One quad to draw: a unit quad (-0.5..0.5) placed in the world by <see cref="World"/>, which already
+/// includes the sprite's size and flips. For text, <see cref="Text"/> is set, the quad is one line high,
+/// and the renderer widens it to the rasterized text's aspect ratio.
 /// </summary>
-public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color Tint, Entity Entity);
+public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color Tint, Entity Entity, string? Text = null);
 
 /// <summary>Everything a renderer needs for one frame, in draw order (back to front).</summary>
 public sealed class RenderFrame
@@ -40,10 +41,7 @@ public static class SceneRenderer
         {
             Background = component?.Background ?? DefaultBackground,
             ViewProjection = ViewProjection(camera, component?.Size ?? DefaultCameraSize, aspect),
-            Sprites = DrawOrder(scene)
-                .Select(e => (Entity: e, Sprite: e.GetComponent<Sprite>()!))
-                .Select(x => new SpriteDraw(QuadMatrix(x.Entity, x.Sprite), x.Sprite.Image, x.Sprite.Tint, x.Entity))
-                .ToList(),
+            Sprites = DrawOrder(scene).SelectMany(Draws).ToList(),
             Camera = camera,
         };
     }
@@ -71,15 +69,28 @@ public static class SceneRenderer
         return view * projection;
     }
 
-    /// <summary>Sprites back to front: Order, then Z (higher is closer), then hierarchy order.</summary>
+    /// <summary>Drawable entities back to front: Order, then Z (higher is closer), then hierarchy order.</summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene) =>
         scene.Entities
-            .Where(e => e.GetComponent<Sprite>() is not null && IsActive(e))
+            .Where(e => (e.GetComponent<Sprite>() is not null || e.GetComponent<Text>() is not null) && IsActive(e))
             .Select((entity, index) => (entity, index))
-            .OrderBy(x => x.entity.GetComponent<Sprite>()!.Order)
+            .OrderBy(x => x.entity.GetComponent<Sprite>()?.Order ?? x.entity.GetComponent<Text>()!.Order)
             .ThenBy(x => x.entity.Transform.WorldPosition.Z)
             .ThenBy(x => x.index)
             .Select(x => x.entity);
+
+    // An entity with both draws its sprite, then its text on top.
+    private static IEnumerable<SpriteDraw> Draws(Entity entity)
+    {
+        if (entity.GetComponent<Sprite>() is { } sprite)
+            yield return new SpriteDraw(QuadMatrix(entity, sprite), sprite.Image, sprite.Tint, entity);
+
+        if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
+        {
+            var world = Matrix4x4.CreateScale(text.Size, text.Size, 1) * entity.Transform.WorldMatrix;
+            yield return new SpriteDraw(world, null, text.Color, entity, text.Value);
+        }
+    }
 
     /// <summary>True if the entity and all its ancestors are enabled.</summary>
     public static bool IsActive(Entity entity)

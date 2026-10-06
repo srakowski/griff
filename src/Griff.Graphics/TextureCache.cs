@@ -3,6 +3,9 @@ using StbImageSharp;
 
 namespace Griff.Graphics;
 
+/// <summary>Renders a string to straight-alpha RGBA pixels (white glyphs; the sprite tint colors them).</summary>
+public delegate (byte[] Rgba, int Width, int Height) TextRasterizer(string text);
+
 public sealed class Texture(uint handle, int width, int height)
 {
     public uint Handle { get; } = handle;
@@ -23,14 +26,18 @@ internal sealed class TextureCache : IDisposable
     private readonly GL _gl;
     private readonly string _assetRoot;
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (Texture Texture, long LastUsed)> _text = new(StringComparer.Ordinal);
+    private readonly TextRasterizer? _rasterizer;
+    private long _frame;
     private readonly Texture _white;
     private readonly Texture _missing;
     private DateTime _lastRefresh = DateTime.UtcNow;
 
-    public TextureCache(GL gl, string assetRoot)
+    public TextureCache(GL gl, string assetRoot, TextRasterizer? rasterizer)
     {
         _gl = gl;
         _assetRoot = assetRoot;
+        _rasterizer = rasterizer;
         _white = Upload([255, 255, 255, 255], 1, 1);
         _missing = Upload(Checker(), 2, 2);
     }
@@ -49,6 +56,39 @@ internal sealed class TextureCache : IDisposable
         }
 
         return entry.Texture ?? _missing;
+    }
+
+    /// <summary>A texture of <paramref name="text"/>, or null if no rasterizer is available.</summary>
+    public Texture? GetText(string text)
+    {
+        if (_rasterizer is null)
+            return null;
+
+        if (!_text.TryGetValue(text, out var entry))
+        {
+            var (rgba, width, height) = _rasterizer(text);
+            entry = (Upload(rgba, width, height, smooth: true), _frame);
+        }
+
+        _text[text] = entry with { LastUsed = _frame };
+        return entry.Texture;
+    }
+
+    /// <summary>
+    /// Called once per frame. Frees text textures unused for a few seconds, so text that changes every
+    /// frame (scores, timers) doesn't pile up.
+    /// </summary>
+    public void EndFrame()
+    {
+        _frame++;
+        if (_frame % 60 != 0)
+            return;
+
+        foreach (var (text, entry) in _text.Where(t => _frame - t.Value.LastUsed > 120).ToList())
+        {
+            _gl.DeleteTexture(entry.Texture.Handle);
+            _text.Remove(text);
+        }
     }
 
     /// <summary>Reloads images whose files changed. Checks at most once a second.</summary>
@@ -73,6 +113,8 @@ internal sealed class TextureCache : IDisposable
     {
         foreach (var entry in _entries.Values.Where(e => e.Texture is not null))
             _gl.DeleteTexture(entry.Texture!.Handle);
+        foreach (var entry in _text.Values)
+            _gl.DeleteTexture(entry.Texture.Handle);
         _gl.DeleteTexture(_white.Handle);
         _gl.DeleteTexture(_missing.Handle);
     }
@@ -96,15 +138,16 @@ internal sealed class TextureCache : IDisposable
         }
     }
 
-    // Pixel art is the common jam style, so sample with nearest-neighbour filtering.
-    private Texture Upload(byte[] rgba, int width, int height)
+    // Pixel art is the common jam style, so images sample with nearest-neighbour filtering; text is smoothed.
+    private Texture Upload(byte[] rgba, int width, int height, bool smooth = false)
     {
         var handle = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2D, handle);
         _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
         _gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, rgba);
-        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        var filter = smooth ? (int)TextureMinFilter.Linear : (int)TextureMinFilter.Nearest;
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, filter);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, filter);
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
         return new Texture(handle, width, height);

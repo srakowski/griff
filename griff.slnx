@@ -3,4 +3,7 @@
     <Project Path="src/Griff.Editor/Griff.Editor.csproj" />
     <Project Path="src/Griff/Griff.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Griff.Tests/Griff.Tests.csproj" />
+  </Folder>
 </Solution>

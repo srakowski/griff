@@ -80,6 +80,7 @@ public sealed class Project
             var startScene = $"{AssetsFolderName}/{DefaultSceneName}{SceneExtension}";
             var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow, startScene));
             await WriteDefaultSceneAsync(project.ResolvePath(startScene), cancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "# Griff exports\nBuild/\n", cancellationToken);
             await using (var stream = File.Create(project.ManifestPath))
                 await JsonSerializer.SerializeAsync(stream, project.Manifest, JsonOptions, cancellationToken);
 

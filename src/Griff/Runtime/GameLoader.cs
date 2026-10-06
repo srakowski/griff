@@ -1,0 +1,62 @@
+using System.Reflection;
+using Griff.Projects;
+using Griff.Scenes;
+using Griff.Scenes.Serialization;
+
+namespace Griff.Runtime;
+
+/// <summary>Layout of an exported game: the player executable sits next to a <c>game</c> folder.</summary>
+public static class ExportLayout
+{
+    /// <summary>Folder next to the player holding project.griff and Assets.</summary>
+    public const string GameFolder = "game";
+
+    /// <summary>Precompiled scripts, inside the game folder.</summary>
+    public const string ScriptsAssembly = "Scripts.dll";
+
+    /// <summary>Marks a folder as created by export, so re-exporting may safely replace it.</summary>
+    public const string Marker = ".griff-build";
+}
+
+/// <summary>Everything needed to start a game: project, component types and the start scene.</summary>
+public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, IReadOnlyList<string> Warnings);
+
+/// <summary>Loads an exported game folder (or a project folder) for the player.</summary>
+public static class GameLoader
+{
+    public static async Task<LoadedGame> LoadAsync(string gameFolder)
+    {
+        var project = await Project.LoadAsync(gameFolder);
+        var components = ComponentRegistry.CreateDefault();
+        var warnings = new List<string>();
+
+        var scripts = Path.Combine(project.RootPath, ExportLayout.ScriptsAssembly);
+        // Loaded from bytes so the file isn't locked while the game runs.
+        if (File.Exists(scripts))
+            RegisterComponents(Assembly.Load(await File.ReadAllBytesAsync(scripts)), components, warnings);
+
+        var scenePath = project.StartScenePath is { } start && File.Exists(start)
+            ? start
+            : project.FindScenes().FirstOrDefault()
+              ?? throw new FileNotFoundException("The game has no scenes.");
+
+        await using var stream = File.OpenRead(scenePath);
+        var scene = new SceneSerializer(components).Load(stream, warnings);
+        return new LoadedGame(project, components, scene, warnings);
+    }
+
+    public static void RegisterComponents(Assembly assembly, ComponentRegistry registry, ICollection<string> warnings)
+    {
+        foreach (var type in assembly.GetTypes().Where(t => t.IsSubclassOf(typeof(Component)) && !t.IsAbstract))
+        {
+            try
+            {
+                registry.Register(type);
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                warnings.Add($"{type.Name}: {ex.Message}");
+            }
+        }
+    }
+}

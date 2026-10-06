@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Griff\Griff.csproj" />
@@ -18,5 +18,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
+
+  <!-- Ship the game player next to the editor so Build Game can export it. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Griff.Player\Griff.Player.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyPlayer" AfterTargets="Build">
+    <ItemGroup>
+      <PlayerFiles Include="..\Griff.Player\bin\$(Configuration)\$(TargetFramework)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PlayerFiles)" DestinationFiles="@(PlayerFiles->'$(OutDir)Player\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

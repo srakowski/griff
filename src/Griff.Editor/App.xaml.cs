@@ -7,6 +7,7 @@ using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Build;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Editing;
 using Griff.Editor.Features.Entities;
@@ -37,6 +38,7 @@ public partial class App : Application
         new EntitiesModule(),
         new PlayModule(),
         new ScriptsModule(),
+        new BuildModule(),
         new HierarchyModule(),
         new InspectorModule(),
         new OutputModule(),

@@ -23,6 +23,7 @@ public sealed class ProjectTests : IDisposable
         Assert.True(File.Exists(project.ManifestPath));
         Assert.True(Directory.Exists(project.AssetsPath));
         Assert.Equal("My Game", project.Name);
+        Assert.Contains("Build/", File.ReadAllText(Path.Combine(project.RootPath, ".gitignore")));
     }
 
     [Fact]

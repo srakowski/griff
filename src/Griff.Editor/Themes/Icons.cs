@@ -17,6 +17,7 @@ public static class Icons
     public const string SaveAs = "\uE792";
     public const string Folder = "\uE8B7";
     public const string NewProject = "\uE8F4";
+    public const string Package = "\uE7B8";
     public const string Exit = "\uE7E8";
 
     // Editing

@@ -1,0 +1,94 @@
+using Griff.Projects;
+using Griff.Runtime;
+using Griff.Scripting;
+
+namespace Griff.Tests.Scripting;
+
+public sealed class GameExporterTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-export-" + Guid.NewGuid().ToString("N"));
+    private readonly string _player;
+    private readonly string _output;
+
+    public GameExporterTests()
+    {
+        _player = Path.Combine(_root, "player");
+        _output = Path.Combine(_root, "out");
+        Directory.CreateDirectory(Path.Combine(_player, "runtimes"));
+        File.WriteAllText(Path.Combine(_player, "Griff.Player.exe"), "exe");
+        File.WriteAllText(Path.Combine(_player, "Griff.dll"), "dll");
+        File.WriteAllText(Path.Combine(_player, "runtimes", "native.dll"), "native");
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root))
+            Directory.Delete(_root, recursive: true);
+    }
+
+    [Fact]
+    public async Task Export_LaysOutPlayerContentAndScripts()
+    {
+        var project = await Project.CreateAsync(_root, "Space Hop");
+        Directory.CreateDirectory(Path.Combine(project.AssetsPath, "Scripts"));
+        File.WriteAllText(Path.Combine(project.AssetsPath, "Scripts", "Jumper.cs"), "public class Jumper : Behavior { public float Height { get; set; } = 2; }");
+        File.WriteAllText(Path.Combine(project.AssetsPath, "hero.png"), "png");
+
+        var result = GameExporter.Export(project, _player, _output);
+
+        Assert.True(result.Success, result.Error);
+        var game = Path.Combine(result.OutputFolder!, ExportLayout.GameFolder);
+        Assert.True(File.Exists(Path.Combine(result.OutputFolder!, "Space Hop.exe")));
+        Assert.False(File.Exists(Path.Combine(result.OutputFolder!, "Griff.Player.exe")));
+        Assert.True(File.Exists(Path.Combine(result.OutputFolder!, "runtimes", "native.dll")));
+        Assert.True(File.Exists(Path.Combine(game, "project.griff")));
+        Assert.True(File.Exists(Path.Combine(game, "Assets", "Main.scene")));
+        Assert.True(File.Exists(Path.Combine(game, "Assets", "hero.png")));
+        Assert.False(File.Exists(Path.Combine(game, "Assets", "Scripts", "Jumper.cs")));
+        Assert.True(File.Exists(Path.Combine(game, ExportLayout.ScriptsAssembly)));
+    }
+
+    [Fact]
+    public async Task ExportedGame_LoadsWithItsScripts()
+    {
+        var project = await Project.CreateAsync(_root, "Loader Test");
+        File.WriteAllText(Path.Combine(project.AssetsPath, "Bouncer.cs"), "public class Bouncer : Behavior { public float Height { get; set; } = 2; }");
+
+        var result = GameExporter.Export(project, _player, _output);
+        var loaded = await GameLoader.LoadAsync(Path.Combine(result.OutputFolder!, ExportLayout.GameFolder));
+
+        Assert.Equal("Loader Test", loaded.Project.Name);
+        Assert.NotNull(loaded.Components.Find("Bouncer"));
+        Assert.Equal("Main Camera", Assert.Single(loaded.Scene.Roots).Name);
+    }
+
+    [Fact]
+    public async Task Export_WithScriptErrors_Fails()
+    {
+        var project = await Project.CreateAsync(_root, "Broken");
+        File.WriteAllText(Path.Combine(project.AssetsPath, "Bad.cs"), "public class Bad : Behavior {");
+
+        var result = GameExporter.Export(project, _player, _output);
+
+        Assert.False(result.Success);
+        Assert.NotEmpty(result.Diagnostics);
+        Assert.False(Directory.Exists(Path.Combine(_output, "Broken")));
+    }
+
+    [Fact]
+    public async Task Export_ReplacesItsOwnOutput_ButNotOtherFolders()
+    {
+        var project = await Project.CreateAsync(_root, "Again");
+        Assert.True(GameExporter.Export(project, _player, _output).Success);
+        Assert.True(GameExporter.Export(project, _player, _output).Success);
+
+        var foreign = await Project.CreateAsync(_root, "Foreign");
+        Directory.CreateDirectory(Path.Combine(_output, "Foreign"));
+        File.WriteAllText(Path.Combine(_output, "Foreign", "keep.txt"), "mine");
+
+        var result = GameExporter.Export(foreign, _player, _output);
+
+        Assert.False(result.Success);
+        Assert.True(File.Exists(Path.Combine(_output, "Foreign", "keep.txt")));
+    }
+}

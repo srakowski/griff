@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Platform.Windows;
+using Griff.Runtime;
+using Griff.Scenes;
 using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Features.Play;
@@ -21,6 +23,8 @@ public sealed class PlayMode : ObservableObject
     private readonly ILogger<PlayMode> _logger;
     private GameRunner? _runner;
     private SceneDocument? _runtime;
+    private Timeline? _timeline;
+    private int _position;
 
     public PlayMode(IWorkspace workspace, ISelection selection, IStatusService status, ILogger<PlayMode> logger)
     {
@@ -48,6 +52,19 @@ public sealed class PlayMode : ObservableObject
 
     public bool IsPaused => _runner?.IsPaused == true;
 
+    /// <summary>Number of rewind snapshots kept (about the last 20 seconds).</summary>
+    public int TimelineCount => _timeline?.Count ?? 0;
+
+    /// <summary>The snapshot being shown. Equal to <see cref="TimelineCount"/> - 1 when live.</summary>
+    public int TimelinePosition
+    {
+        get => _position;
+        set => Seek(value);
+    }
+
+    /// <summary>Seconds behind the newest snapshot, for the timeline label.</summary>
+    public double SecondsBehind => _timeline is { Count: > 0 } t ? t.TimeAt(t.Count - 1) - t.TimeAt(Math.Clamp(_position, 0, t.Count - 1)) : 0;
+
     public void Play()
     {
         if (IsPlaying || _workspace.Scene is not { } edit || _workspace.Project is not { } project)
@@ -65,16 +82,16 @@ public sealed class PlayMode : ObservableObject
             _selection.Select(copy.Find(id));
 
         Surface.AssetRoot = project.AssetsPath;
-        _runner = new GameRunner(copy, Surface, Application.Current.MainWindow!);
-        _runner.Ticked += OnTicked;
-        _runner.Faulted += OnFaulted;
+        _timeline = new Timeline(_workspace.Serializer);
+        _timeline.Record(copy, 0, force: true);
+        _position = 0;
+        StartRunner(copy, paused: false);
 
         // Keys should drive the game, not whichever field had focus.
         Keyboard.ClearFocus();
         Application.Current.MainWindow?.Focus();
 
         Started?.Invoke(this, EventArgs.Empty);
-        _runner.Start();
         _status.Show("Playing");
         _logger.LogInformation("Play {Scene}", edit.Name);
         Raise();
@@ -100,6 +117,8 @@ public sealed class PlayMode : ObservableObject
         var selectedId = _selection.Entity?.Id;
         _workspace.ExitPlayMode();
         _runtime = null;
+        _timeline = null;
+        _position = 0;
         if (selectedId is { } id && _workspace.Scene?.Scene.Find(id) is { } original)
             _selection.Select(original);
 
@@ -112,6 +131,11 @@ public sealed class PlayMode : ObservableObject
     {
         if (_runner is null)
             return;
+
+        // Resuming from a rewound moment starts a new future from there.
+        if (_runner.IsPaused && _timeline is not null)
+            _timeline.TruncateAfter(_position);
+
         _runner.IsPaused = !_runner.IsPaused;
         _status.Show(_runner.IsPaused ? "Paused" : "Playing");
         Raise();
@@ -127,10 +151,54 @@ public sealed class PlayMode : ObservableObject
         Raise();
     }
 
+    /// <summary>Pauses and jumps the game to snapshot <paramref name="index"/>.</summary>
+    public void Seek(int index)
+    {
+        if (_runner is null || _timeline is not { Count: > 0 } timeline || _workspace.Project is null)
+            return;
+
+        index = Math.Clamp(index, 0, timeline.Count - 1);
+        if (index == _position && _runner.IsPaused)
+            return;
+
+        var selectedId = _selection.Entity?.Id;
+        var old = _runner;
+        old.Ticked -= OnTicked;
+        old.Faulted -= OnFaulted;
+        old.Dispose();
+
+        var scene = timeline.Restore(index);
+        _runtime = new SceneDocument(scene, _runtime!.FilePath, isRuntime: true);
+        _workspace.ReplacePlayScene(_runtime);
+        _selection.Select(selectedId is { } id ? scene.Find(id) : null);
+
+        _position = index;
+        StartRunner(scene, paused: true);
+        _status.Show($"Rewound {SecondsBehind:0.0}s. Resume to continue from here.");
+        Raise();
+    }
+
+    private void StartRunner(Scene scene, bool paused)
+    {
+        _runner = new GameRunner(scene, Surface, Application.Current.MainWindow!) { IsPaused = paused };
+        _runner.Ticked += OnTicked;
+        _runner.Faulted += OnFaulted;
+        _runner.Start();
+    }
+
     private void OnTicked(object? sender, EventArgs e)
     {
         if (_runtime is null)
             return;
+
+        if (_runner is { IsPaused: false } runner && _timeline is { } timeline)
+        {
+            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
+            _position = timeline.Count - 1;
+            OnPropertyChanged(nameof(TimelineCount));
+            OnPropertyChanged(nameof(TimelinePosition));
+            OnPropertyChanged(nameof(SecondsBehind));
+        }
 
         // A destroyed selection would leave the inspector showing a ghost.
         if (_selection.Entity is { } selected && selected.Scene != _runtime.Scene)
@@ -150,6 +218,9 @@ public sealed class PlayMode : ObservableObject
     {
         OnPropertyChanged(nameof(IsPlaying));
         OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(TimelineCount));
+        OnPropertyChanged(nameof(TimelinePosition));
+        OnPropertyChanged(nameof(SecondsBehind));
         CommandManager.InvalidateRequerySuggested();
     }
 }

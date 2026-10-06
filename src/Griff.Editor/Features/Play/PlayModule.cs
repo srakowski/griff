@@ -13,6 +13,7 @@ public sealed class PlayModule : IEditorModule
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<PlayMode>();
+        services.AddSingleton<TimelineBar>();
         services.AddMenu(Menus.Game, "_Game", order: 4);
         services
             .AddCommand<PlayCommand>()

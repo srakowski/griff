@@ -88,6 +88,17 @@ internal static class SnapshotRunner
             checks.Add($"platformer player landed: {(platformPlayer.GetComponent<Body>()?.IsGrounded == true ? "ok" : "FAILED")}");
             if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (pPixels, pWidth, pHeight))
                 SaveRgba(pPixels, pWidth, pHeight, Path.Combine(outputDir, "platformer-game.png"));
+
+            // Rewind to the first snapshot: the player is back in the air where it spawned.
+            var snapshots = play.TimelineCount;
+            play.Seek(0);
+            var rewound = workspace.Scene!.Scene.Entities.First(e => e.Name == "Player").Transform.Position;
+            checks.Add($"rewind to start: {(snapshots > 5 && play.IsPaused && rewound.Y > -2.1f ? "ok" : "FAILED")} ({snapshots} snapshots, player y = {rewound.Y:0.00})");
+            Render(main, Path.Combine(outputDir, "rewound.png"));
+            play.TogglePause();
+            await Task.Delay(800);
+            var resumed = workspace.Scene!.Scene.Entities.First(e => e.Name == "Player").GetComponent<Body>()!;
+            checks.Add($"resume after rewind: {(resumed.IsGrounded && play.TimelineCount < snapshots + 10 ? "ok" : "FAILED")} (timeline {play.TimelineCount})");
             play.Stop();
             File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 

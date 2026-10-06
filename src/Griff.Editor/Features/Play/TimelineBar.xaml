@@ -1,0 +1,28 @@
+<UserControl x:Class="Griff.Editor.Features.Play.TimelineBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes">
+    <Border Padding="10,4"
+            Background="{DynamicResource Brush.Surface.PanelHeader}"
+            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+            BorderThickness="0,0,0,1">
+        <DockPanel>
+            <TextBlock Margin="0,0,10,0"
+                       VerticalAlignment="Center"
+                       DockPanel.Dock="Left"
+                       Style="{StaticResource Style.Text.Overline}"
+                       Text="REWIND" />
+            <TextBlock x:Name="Label"
+                       MinWidth="150"
+                       Margin="10,0,0,0"
+                       VerticalAlignment="Center"
+                       DockPanel.Dock="Right"
+                       Style="{StaticResource Style.Text.Caption}" />
+            <Slider x:Name="Scrubber"
+                    LargeChange="5"
+                    Minimum="0"
+                    SmallChange="1"
+                    ValueChanged="OnScrub" />
+        </DockPanel>
+    </Border>
+</UserControl>

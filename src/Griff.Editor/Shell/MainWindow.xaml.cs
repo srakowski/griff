@@ -22,6 +22,7 @@ public partial class MainWindow : ChromeWindow
         SceneViewControl sceneView,
         StartPage startPage,
         PlayMode play,
+        TimelineBar timeline,
         CommandRegistry commands,
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
@@ -31,7 +32,11 @@ public partial class MainWindow : ChromeWindow
         DataContext = viewModel;
         _workspace = workspace;
         SceneTab.Content = sceneView;
-        GameTab.Content = play.Surface;
+        var gameView = new DockPanel();
+        DockPanel.SetDock(timeline, Dock.Top);
+        gameView.Children.Add(timeline);
+        gameView.Children.Add(play.Surface);
+        GameTab.Content = gameView;
         StartHost.Content = startPage;
         play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
         play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;

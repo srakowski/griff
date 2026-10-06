@@ -34,6 +34,9 @@ public interface IWorkspace : INotifyPropertyChanged
 
     void ExitPlayMode();
 
+    /// <summary>Replaces the play-mode copy (e.g. after rewinding) without leaving play mode.</summary>
+    void ReplacePlayScene(SceneDocument runtime);
+
     Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty);
 
     /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
@@ -161,6 +164,13 @@ public sealed class Workspace(
         _editScene = Scene;
         Scene = runtime;
         OnPropertyChanged(nameof(IsPlaying));
+    }
+
+    public void ReplacePlayScene(SceneDocument runtime)
+    {
+        if (!IsPlaying)
+            throw new InvalidOperationException("Not playing.");
+        Scene = runtime;
     }
 
     public void ExitPlayMode()

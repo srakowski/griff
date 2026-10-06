@@ -107,6 +107,31 @@ public class PhysicsTests
     }
 
     [Fact]
+    public void OneWayPlatform_LetsBodiesJumpThrough_AndCatchesThemFromAbove()
+    {
+        var platform = AddBox("Platform", new Vector2(0, 2), new Vector2(6, 0.5f));
+        platform.GetComponent<BoxCollider>()!.OneWay = true;
+        var player = AddBox("Player", Vector2.Zero, Vector2.One, body: true);
+        var body = player.GetComponent<Body>()!;
+        body.Velocity = new Vector2(0, 14);
+
+        // Rises through the platform from below...
+        var peak = 0f;
+        for (var t = 0f; t < 0.6f; t += Step)
+        {
+            _game.Tick(Step);
+            peak = Math.Max(peak, player.Transform.Position.Y);
+        }
+
+        Assert.True(peak > 2.75f, $"should pass through (peak {peak})");
+
+        // ...then lands on top of it.
+        Run(1.5f);
+        Assert.Equal(2.75f, player.Transform.Position.Y, 2);
+        Assert.True(body.IsGrounded);
+    }
+
+    [Fact]
     public void Overlap_Queries()
     {
         var crate = AddBox("Crate", new Vector2(5, 5), new Vector2(2, 2));

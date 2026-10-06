@@ -86,6 +86,7 @@ public sealed class Physics
             return;
 
         var entity = body.Entity!;
+        var bottomBefore = BoundsOf(collider).Min.Y;
         Translate(entity, delta);
         var box = BoundsOf(collider);
 
@@ -96,6 +97,10 @@ public sealed class Physics
 
             var other = BoundsOf(solid);
             if (!box.Overlaps(other))
+                continue;
+
+            // One-way: only catch bodies falling onto the top that started above it.
+            if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Max.Y - 0.001f))
                 continue;
 
             // Push back out along the axis we moved, then stop that component of velocity.

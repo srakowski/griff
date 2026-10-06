@@ -73,8 +73,8 @@ public static class ProjectTemplates
         scene.Add(level);
         var gray = Color.FromBytes(0x48, 0x4B, 0x55);
         scene.Add(Box("Ground", new Vector2(0, -4.5f), new Vector2(30, 1), gray), level);
-        scene.Add(Box("Platform", new Vector2(-1, -1.5f), new Vector2(4, 0.5f), gray), level);
-        scene.Add(Box("Platform", new Vector2(4.5f, 0.5f), new Vector2(3, 0.5f), gray), level);
+        scene.Add(Platform(new Vector2(-1, -1.5f), new Vector2(4, 0.5f), gray), level);
+        scene.Add(Platform(new Vector2(4.5f, 0.5f), new Vector2(3, 0.5f), gray), level);
         scene.Add(Box("Wall", new Vector2(-15.5f, 0), new Vector2(1, 10), gray), level);
         scene.Add(Box("Wall", new Vector2(15.5f, 0), new Vector2(1, 10), gray), level);
 
@@ -142,6 +142,14 @@ public static class ProjectTemplates
         sprite.Size = size;
         sprite.Tint = color;
         entity.AddComponent<BoxCollider>().Size = size;
+        return entity;
+    }
+
+    /// <summary>A one-way platform: jump up through it, land on top.</summary>
+    private static Entity Platform(Vector2 position, Vector2 size, Color color)
+    {
+        var entity = Box("Platform", position, size, color);
+        entity.GetComponent<BoxCollider>()!.OneWay = true;
         return entity;
     }
 

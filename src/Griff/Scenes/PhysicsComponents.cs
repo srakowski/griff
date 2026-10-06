@@ -15,6 +15,9 @@ public sealed class BoxCollider : Component
 
     /// <summary>Triggers don't block movement; they report OnTriggerEnter/Exit instead.</summary>
     public bool IsTrigger { get; set; }
+
+    /// <summary>Only blocks bodies landing on top: jump up through it from below, stand on it from above.</summary>
+    public bool OneWay { get; set; }
 }
 
 /// <summary>Makes an entity with a <see cref="BoxCollider"/> move under velocity and gravity and collide with solids.</summary>

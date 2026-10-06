@@ -8,7 +8,11 @@ namespace Griff.Rendering;
 /// includes the sprite's size and flips. For text, <see cref="Text"/> is set, the quad is one line high,
 /// and the renderer widens it to the rasterized text's aspect ratio.
 /// </summary>
-public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color Tint, Entity Entity, string? Text = null);
+public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color Tint, Entity Entity, string? Text = null)
+{
+    /// <summary>Part of the image to draw, (u, v, width, height) in 0–1 image space. The whole image by default.</summary>
+    public Vector4 Source { get; init; } = new(0, 0, 1, 1);
+}
 
 /// <summary>Everything a renderer needs for one frame, in draw order (back to front).</summary>
 public sealed class RenderFrame
@@ -83,7 +87,7 @@ public static class SceneRenderer
     private static IEnumerable<SpriteDraw> Draws(Entity entity)
     {
         if (entity.GetComponent<Sprite>() is { } sprite)
-            yield return new SpriteDraw(QuadMatrix(entity, sprite), sprite.Image, sprite.Tint, entity);
+            yield return new SpriteDraw(QuadMatrix(entity, sprite), sprite.Image, sprite.Tint, entity) { Source = sprite.FrameRect };
 
         if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
         {

@@ -54,6 +54,9 @@ public sealed class Game
                 behavior.RunUpdate();
         }
 
+        foreach (var animation in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Animation>()).ToList())
+            animation.Advance(Time.Delta);
+
         if (Time.Delta > 0)
             Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
 

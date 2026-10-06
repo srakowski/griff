@@ -222,7 +222,21 @@ public sealed class SceneViewControl : FrameworkElement
         // WPF can't multiply-tint images; the editor view shows images untinted (alpha still applies).
         if (LoadImage(sprite.Image) is { } image)
         {
-            dc.DrawImage(image, rect);
+            if (sprite.Columns > 1 || sprite.Rows > 1)
+            {
+                var source = sprite.FrameRect;
+                var brush = new ImageBrush(image)
+                {
+                    Viewbox = new Rect(source.X, source.Y, source.Z, source.W),
+                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+                };
+                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+                dc.DrawRectangle(brush, null, rect);
+            }
+            else
+            {
+                dc.DrawImage(image, rect);
+            }
         }
         else
         {

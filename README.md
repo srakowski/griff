@@ -12,7 +12,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 - **Play mode can't hurt your work.** Play runs on a copy of the scene. Inspect and tweak the live game freely; Stop puts everything back.
 - **A crash costs nothing.** Unsaved scenes are written to a recovery copy every 20 seconds and offered back next time you open them.
 - **Readable files.** Scenes are small, stable JSON (`"position": [1.5, -2, 0]`) that diff and merge cleanly in git. A deleted or renamed script never destroys data; its values are kept and come back with it.
-- **Batteries included.** Sprites, text, 2D physics with triggers, input, sound and music, a follow camera, and Platformer and Top-down templates that are playable from the first second.
+- **Batteries included.** Sprites and sprite-sheet animation, text, 2D physics with triggers, input, sound and music, a follow camera, and Platformer and Top-down templates that are playable from the first second.
 - **One click to ship.** Build Game produces a standalone folder with a `.exe`, ready to zip and upload.
 
 ## Using the editor
@@ -74,7 +74,8 @@ What a behavior can use:
 - **Game:** `Spawn`, `Destroy`, `Find` and `Physics` (`OverlapPoint`, `OverlapBox`).
 
 Built-in components:
-- `Transform`, `Camera`, `Sprite` and `Text`;
+- `Transform`, `Camera`, `Sprite` (single images or sprite sheets) and `Text`;
+- `Animation`, which plays a range of sprite-sheet frames;
 - `BoxCollider` and `Body`, for physics.
 
 Saving a script while the game is playing applies it immediately. Public properties are kept, and `Start` runs again on the new version.

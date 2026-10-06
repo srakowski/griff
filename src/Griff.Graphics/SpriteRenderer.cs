@@ -175,6 +175,7 @@ public sealed class SpriteRenderer : IDisposable
         _batchTexture = texture;
 
         var tint = sprite.Tint;
+        var source = sprite.Source;
         var toClip = world * viewProjection;
         var offset = _quadCount * 4 * FloatsPerVertex;
         foreach (var (position, uv) in Corners)
@@ -182,8 +183,8 @@ public sealed class SpriteRenderer : IDisposable
             var clip = Vector4.Transform(new Vector4(position, 0, 1), toClip);
             _vertices[offset++] = clip.X / clip.W;
             _vertices[offset++] = clip.Y / clip.W;
-            _vertices[offset++] = uv.X;
-            _vertices[offset++] = uv.Y;
+            _vertices[offset++] = source.X + uv.X * source.Z;
+            _vertices[offset++] = source.Y + uv.Y * source.W;
             _vertices[offset++] = tint.R;
             _vertices[offset++] = tint.G;
             _vertices[offset++] = tint.B;

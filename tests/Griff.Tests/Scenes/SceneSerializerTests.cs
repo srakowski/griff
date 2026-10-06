@@ -198,6 +198,28 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void BuiltInComponents_RoundTrip_WithReadableColors()
+    {
+        var scene = new Scene();
+        var entity = new Entity("Hero");
+        scene.Add(entity);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Image = "Sprites/hero.png";
+        sprite.Tint = Color.FromBytes(0xF0, 0x8C, 0x2E);
+        sprite.Order = 3;
+        entity.AddComponent<Camera>().Size = 8;
+
+        var json = _serializer.SaveToString(scene);
+        var loaded = _serializer.LoadFromString(json).Roots[0];
+
+        Assert.Contains("\"tint\": \"#F08C2EFF\"", json);
+        Assert.Equal(sprite.Tint, loaded.GetComponent<Sprite>()!.Tint);
+        Assert.Equal("Sprites/hero.png", loaded.GetComponent<Sprite>()!.Image);
+        Assert.Equal(3, loaded.GetComponent<Sprite>()!.Order);
+        Assert.Equal(8, loaded.GetComponent<Camera>()!.Size);
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = $$"""{ "formatVersion": {{SceneSerializer.FormatVersion + 1}}, "entities": [] }""";

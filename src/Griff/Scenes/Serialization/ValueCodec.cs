@@ -12,7 +12,7 @@ internal static class ValueCodec
 {
     public static bool IsSupported(Type type) =>
         type == typeof(bool) || type == typeof(int) || type == typeof(float) || type == typeof(double) ||
-        type == typeof(string) || type.IsEnum ||
+        type == typeof(string) || type.IsEnum || type == typeof(Color) ||
         type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion);
 
     public static void Write(Utf8JsonWriter writer, object? value)
@@ -28,6 +28,7 @@ internal static class ValueCodec
             case double d: writer.WriteNumberValue(d); break;
             case string s: writer.WriteStringValue(s); break;
             case Enum e: writer.WriteStringValue(e.ToString()); break;
+            case Color c: writer.WriteStringValue(c.ToHex()); break;
             case Vector2 v: WriteArray(writer, v.X, v.Y); break;
             case Vector3 v: WriteArray(writer, v.X, v.Y, v.Z); break;
             case Vector4 v: WriteArray(writer, v.X, v.Y, v.Z, v.W); break;
@@ -47,6 +48,8 @@ internal static class ValueCodec
             if (type == typeof(double)) return element.GetDouble();
             if (type == typeof(string)) return element.ValueKind == JsonValueKind.Null ? null : element.GetString();
             if (type.IsEnum) return Enum.Parse(type, element.GetString()!, ignoreCase: false);
+            if (type == typeof(Color))
+                return Color.TryParse(element.GetString(), out var color) ? color : throw new FormatException();
 
             var n = ReadArray(element);
             if (type == typeof(Vector2) && n.Length == 2) return new Vector2(n[0], n[1]);

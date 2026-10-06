@@ -1,4 +1,6 @@
 using Griff.Projects;
+using Griff.Scenes;
+using Griff.Scenes.Serialization;
 
 namespace Griff.Tests.Projects;
 
@@ -21,6 +23,31 @@ public sealed class ProjectTests : IDisposable
         Assert.True(File.Exists(project.ManifestPath));
         Assert.True(Directory.Exists(project.AssetsPath));
         Assert.Equal("My Game", project.Name);
+    }
+
+    [Fact]
+    public async Task Create_WritesStartSceneWithCamera()
+    {
+        var project = await Project.CreateAsync(_root, "My Game");
+
+        Assert.Equal("Assets/Main.scene", project.Manifest.StartScene);
+        Assert.Equal([project.StartScenePath], project.FindScenes());
+
+        await using var stream = File.OpenRead(project.StartScenePath!);
+        var scene = new SceneSerializer(ComponentRegistry.CreateDefault()).Load(stream);
+        var camera = Assert.Single(scene.Roots);
+        Assert.Equal("Main Camera", camera.Name);
+        Assert.NotNull(camera.GetComponent<Camera>());
+    }
+
+    [Fact]
+    public async Task Paths_ConvertBetweenRelativeAndAbsolute()
+    {
+        var project = await Project.CreateAsync(_root, "My Game");
+        var absolute = project.ResolvePath("Assets/Sprites/hero.png");
+
+        Assert.Equal(Path.Combine(project.RootPath, "Assets", "Sprites", "hero.png"), absolute);
+        Assert.Equal("Assets/Sprites/hero.png", project.GetRelativePath(absolute));
     }
 
     [Fact]

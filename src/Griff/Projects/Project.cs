@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Griff.Scenes;
+using Griff.Scenes.Serialization;
 
 namespace Griff.Projects;
 
@@ -10,6 +12,8 @@ public sealed class Project
 {
     public const string ManifestFileName = "project.griff";
     public const string AssetsFolderName = "Assets";
+    public const string SceneExtension = ".scene";
+    public const string DefaultSceneName = "Main";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,6 +36,23 @@ public sealed class Project
     public string ManifestPath => Path.Combine(RootPath, ManifestFileName);
 
     public string AssetsPath => Path.Combine(RootPath, AssetsFolderName);
+
+    /// <summary>Absolute path of the start scene, or null if none is set.</summary>
+    public string? StartScenePath => Manifest.StartScene is { } relative ? ResolvePath(relative) : null;
+
+    /// <summary>Converts a project-relative path (forward slashes) to an absolute one.</summary>
+    public string ResolvePath(string relativePath) =>
+        Path.GetFullPath(Path.Combine(RootPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    /// <summary>Converts an absolute path inside the project to a project-relative one with forward slashes.</summary>
+    public string GetRelativePath(string absolutePath) =>
+        Path.GetRelativePath(RootPath, absolutePath).Replace(Path.DirectorySeparatorChar, '/');
+
+    /// <summary>All scene files in the project, sorted by path.</summary>
+    public IEnumerable<string> FindScenes() =>
+        Directory.Exists(AssetsPath)
+            ? Directory.EnumerateFiles(AssetsPath, "*" + SceneExtension, SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
+            : [];
 
     /// <summary>The folder a project named <paramref name="name"/> would occupy inside <paramref name="parentDirectory"/>.</summary>
     public static string GetProjectPath(string parentDirectory, string name) =>
@@ -56,7 +77,9 @@ public sealed class Project
             Directory.CreateDirectory(root);
             Directory.CreateDirectory(Path.Combine(root, AssetsFolderName));
 
-            var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow));
+            var startScene = $"{AssetsFolderName}/{DefaultSceneName}{SceneExtension}";
+            var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow, startScene));
+            await WriteDefaultSceneAsync(project.ResolvePath(startScene), cancellationToken);
             await using (var stream = File.Create(project.ManifestPath))
                 await JsonSerializer.SerializeAsync(stream, project.Manifest, JsonOptions, cancellationToken);
 
@@ -89,6 +112,19 @@ public sealed class Project
             throw new InvalidDataException($"\"{manifest.Name}\" was saved by a newer version of Griff.");
 
         return new Project(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, manifest);
+    }
+
+    // A new project opens to something: a scene with a camera.
+    private static async Task WriteDefaultSceneAsync(string path, CancellationToken cancellationToken)
+    {
+        var scene = new Scene();
+        var camera = new Entity("Main Camera");
+        camera.AddComponent<Camera>();
+        scene.Add(camera);
+
+        await using var stream = File.Create(path);
+        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(scene, stream);
+        await stream.FlushAsync(cancellationToken);
     }
 
     private static void TryDeleteDirectory(string path)

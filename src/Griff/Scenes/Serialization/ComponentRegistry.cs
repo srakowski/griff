@@ -11,6 +11,8 @@ public sealed class ComponentRegistry
     {
         var registry = new ComponentRegistry();
         registry.Register<Transform>();
+        registry.Register<Camera>();
+        registry.Register<Sprite>();
         return registry;
     }
 

@@ -17,6 +17,9 @@ public sealed class ReloadResult
     public IReadOnlyDictionary<Component, Component> Replaced { get; init; } = new Dictionary<Component, Component>();
 
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>True if the sources matched the loaded scripts, so nothing was rebuilt.</summary>
+    public bool Unchanged { get; init; }
 }
 
 /// <summary>
@@ -28,6 +31,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
 {
     private AssemblyLoadContext? _context;
     private List<Type> _types = [];
+    private string? _loadedSources;
 
     /// <summary>Component types from the currently loaded scripts.</summary>
     public IReadOnlyList<Type> ComponentTypes => _types;
@@ -35,11 +39,24 @@ public sealed class ScriptHost(ComponentRegistry registry)
     /// <summary>Raised after scripts are swapped, with the result (also returned by <see cref="Reload"/>).</summary>
     public event EventHandler<ReloadResult>? Reloaded;
 
-    public ReloadResult Reload(IReadOnlyList<ScriptSource> sources, IEnumerable<Scene> liveScenes) =>
-        Apply(ScriptCompiler.Compile(sources), liveScenes);
+    /// <summary>
+    /// Compiles and swaps in <paramref name="sources"/>. If they're identical to what's loaded, nothing is
+    /// rebuilt: running scripts keep their state (editors often save a file several times in a row).
+    /// </summary>
+    public ReloadResult Reload(IReadOnlyList<ScriptSource> sources, IEnumerable<Scene> liveScenes)
+    {
+        var fingerprint = string.Join("\0", sources.Select(s => s.Path + "\0" + s.Text));
+        if (fingerprint == _loadedSources)
+            return new ReloadResult { Success = true, Diagnostics = [], ComponentTypes = _types, Unchanged = true };
+
+        var result = Apply(ScriptCompiler.Compile(sources), liveScenes);
+        if (result.Success)
+            _loadedSources = fingerprint;
+        return result;
+    }
 
     public ReloadResult ReloadFolder(string folder, IEnumerable<Scene> liveScenes) =>
-        Apply(ScriptCompiler.CompileFolder(folder), liveScenes);
+        Reload(ScriptCompiler.ReadFolder(folder), liveScenes);
 
     /// <summary>Unregisters script types and turns their components into MissingComponents (data kept).</summary>
     public void Unload(IEnumerable<Scene> liveScenes)
@@ -48,6 +65,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
         var snapshot = ComponentMigrator.Capture(liveScenes.ToList(), serializer, IsFromScripts);
         UnregisterCurrent();
         ComponentMigrator.Restore(snapshot, serializer);
+        _loadedSources = null;
     }
 
     private ReloadResult Apply(CompileResult compiled, IEnumerable<Scene> liveScenes)

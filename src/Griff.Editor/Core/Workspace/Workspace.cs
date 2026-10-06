@@ -97,6 +97,8 @@ public sealed class Workspace(
         // Rebuild script components everywhere they're live: the edit scene and, while playing, the game.
         var documents = new[] { _editScene, Scene }.OfType<SceneDocument>().Distinct().ToList();
         var result = Scripts.ReloadFolder(project.AssetsPath, documents.Select(d => d.Scene));
+        if (result.Unchanged)
+            return result;
 
         foreach (var diagnostic in result.Diagnostics.Where(d => !d.IsError))
             logger.LogWarning("{Diagnostic}", diagnostic.ToString());

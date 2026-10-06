@@ -155,3 +155,25 @@ public class HistoryRemapTests
         Assert.Same(rebuilt, entity.Components[1]);
     }
 }
+
+public class UnchangedReloadTests
+{
+    [Fact]
+    public void ReloadingIdenticalSources_KeepsRunningInstances()
+    {
+        var registry = ComponentRegistry.CreateDefault();
+        var host = new ScriptHost(registry);
+        var sources = new[] { new ScriptSource("A.cs", "public class A : Behavior { public int N { get; set; } }") };
+        host.Reload(sources, []);
+        var scene = new Scene();
+        var entity = new Entity();
+        scene.Add(entity);
+        var instance = entity.AddComponent(registry.Find("A")!.CreateInstance());
+
+        var result = host.Reload(sources, [scene]);
+
+        Assert.True(result.Unchanged);
+        Assert.Same(instance, entity.Components[1]);
+        Assert.False(host.Reload([new ScriptSource("A.cs", sources[0].Text + " ")], [scene]).Unchanged);
+    }
+}

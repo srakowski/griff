@@ -50,16 +50,16 @@ public static class ScriptCompiler
     private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
 
     /// <summary>Reads and compiles every *.cs file under <paramref name="folder"/>.</summary>
-    public static CompileResult CompileFolder(string folder)
-    {
-        var sources = Directory.Exists(folder)
+    public static CompileResult CompileFolder(string folder) => Compile(ReadFolder(folder));
+
+    /// <summary>Every *.cs file under <paramref name="folder"/>, in a stable order.</summary>
+    public static IReadOnlyList<ScriptSource> ReadFolder(string folder) =>
+        Directory.Exists(folder)
             ? Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .Select(path => new ScriptSource(path, ReadShared(path)))
                 .ToList()
             : [];
-        return Compile(sources);
-    }
 
     public static CompileResult Compile(IReadOnlyList<ScriptSource> sources)
     {

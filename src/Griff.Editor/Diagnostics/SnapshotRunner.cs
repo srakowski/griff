@@ -75,6 +75,20 @@ internal static class SnapshotRunner
             checks.Add($"hot reload while playing: {(afterReload < spunForward ? "ok" : "FAILED")} (z {spunForward:0.0} -> {afterReload:0.0})");
             play.Stop();
             checks.Add($"edit scene untouched after stop: {(player.Transform.Rotation.Z == 0 ? "ok" : "FAILED")}");
+
+            // A Platformer project: template scripts compile on open, text renders on the GPU.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Platformer", Griff.Projects.ProjectTemplate.Platformer);
+            var missing = workspace.Scene!.Scene.Entities.SelectMany(e => e.Components).Count(c => c is MissingComponent);
+            checks.Add($"platformer scripts resolved: {(missing == 0 ? "ok" : $"FAILED ({missing} missing)")}");
+            Render(main, Path.Combine(outputDir, "platformer-editor.png"));
+            play.Play();
+            await Task.Delay(1200);
+            var platformPlayer = workspace.Scene!.Scene.Entities.First(e => e.Name == "Player");
+            checks.Add($"platformer player landed: {(platformPlayer.GetComponent<Body>()?.IsGrounded == true ? "ok" : "FAILED")}");
+            if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (pPixels, pWidth, pHeight))
+                SaveRgba(pPixels, pWidth, pHeight, Path.Combine(outputDir, "platformer-game.png"));
+            play.Stop();
             File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();

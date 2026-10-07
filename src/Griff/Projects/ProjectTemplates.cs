@@ -19,7 +19,7 @@ public static class ProjectTemplates
     {
         ProjectTemplate.Platformer => "Run and jump across platforms collecting coins. Arrow keys or WASD, Space to jump.",
         ProjectTemplate.TopDown => "Move in eight directions around a walled room collecting gems. Arrow keys or WASD.",
-        ProjectTemplate.Arcade => "Blast waves of enemies in an arena, with a menu, game over and high score. WASD to fly, mouse to aim, click to fire.",
+        ProjectTemplate.Arcade => "Blast waves of enemies in an arena, with three hearts, a menu, game over and high score. WASD to fly, mouse to aim, click to fire.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -245,6 +245,9 @@ public static class ProjectTemplates
         ship.GetComponent<BoxCollider>()!.Size = new Vector2(0.8f, 0.8f);
         ship.GetComponent<BoxCollider>()!.Layer = "Player";
         ship.AddComponent<Body>().GravityScale = 0;
+        var shipHealth = ship.AddComponent<Health>();
+        shipHealth.Max = 3;
+        shipHealth.InvincibleTime = 1.2f;
         ship.AddComponent(Script("Ship"));
         scene.Add(ship);
         var nose = new Entity("Nose");
@@ -265,6 +268,15 @@ public static class ProjectTemplates
         corner.Offset = new Vector2(0.6f, -0.7f);
         score.AddComponent(Script("ScoreCounter"));
         scene.Add(score);
+
+        // The ship's hit points, kept up to date by the Ship script.
+        var hearts = Label("Hearts", Vector2.Zero, "♥♥♥", 0.8f, Color.FromBytes(0xE5, 0x53, 0x4B));
+        hearts.Transform.Position = new Vector3(0, 0, 1);
+        hearts.GetComponent<Text>()!.Align = TextAlign.Right;
+        var topRight = hearts.AddComponent<ScreenAnchor>();
+        topRight.Anchor = Anchor.TopRight;
+        topRight.Offset = new Vector2(-0.6f, -0.7f);
+        scene.Add(hearts);
 
         // Shown by the ship when it's destroyed. Its buttons only work once it's visible.
         var panel = new Entity("Game Over") { IsEnabled = false };
@@ -302,6 +314,10 @@ public static class ProjectTemplates
         collider.Layer = "Bullet";
         collider.IgnoreLayers = "Player, Bullet";
         entity.AddComponent<Body>().GravityScale = 0;
+        var damage = entity.AddComponent<DamageOnTouch>();
+        damage.Layers = "Enemy";
+        damage.DestroyOnHit = true;
+        entity.AddComponent<Lifetime>().Seconds = 1.5f;
         entity.AddComponent(Script("Bullet"));
         return entity;
     }
@@ -317,6 +333,10 @@ public static class ProjectTemplates
         collider.IsTrigger = true;
         collider.Layer = "Enemy";
         entity.AddComponent<Body>().GravityScale = 0;
+        var health = entity.AddComponent<Health>();
+        health.Max = 1;
+        health.InvincibleTime = 0;
+        entity.AddComponent<DamageOnTouch>().Layers = "Player";
         entity.AddComponent(Script("Enemy"));
         return entity;
     }
@@ -406,15 +426,16 @@ public static class ProjectTemplates
 
             public float JumpSpeed { get; set; } = 13;
 
+            // Jump is a built-in action (Space or the A button); W and Up jump too in this game.
+            protected override void Start() => Input.Bind("Jump", Key.Space, Key.W, Key.Up, GamepadButton.A);
+
             protected override void Update()
             {
                 var body = GetComponent<Body>()!;
                 var velocity = body.Velocity;
                 velocity.X = Input.Horizontal * Speed;
 
-                var jump = Input.WasPressed(Key.Space) || Input.WasPressed(Key.W) || Input.WasPressed(Key.Up) ||
-                           Input.WasPressed(GamepadButton.A);
-                if (jump && body.IsGrounded)
+                if (Input.WasPressed("Jump") && body.IsGrounded)
                     velocity.Y = JumpSpeed;
 
                 body.Velocity = velocity;
@@ -494,7 +515,10 @@ public static class ProjectTemplates
         """;
 
     private const string ShipScript = """
-        /// <summary>Fly with WASD, the arrow keys or a gamepad. Aim with the mouse; hold the left button or Space to fire.</summary>
+        /// <summary>
+        /// Fly with WASD, the arrow keys or a gamepad. Aim with the mouse; hold the left button or Space to fire. Its Health
+        /// takes the hits: each one costs a heart.
+        /// </summary>
         public class Ship : Behavior
         {
             public float Speed { get; set; } = 8;
@@ -505,6 +529,13 @@ public static class ProjectTemplates
             public float BulletSpeed { get; set; } = 18;
 
             private float _cooldown;
+
+            protected override void Start()
+            {
+                // Fire is a built-in action (left mouse, J, gamepad X); here Space fires too.
+                Input.Bind("Fire", MouseButton.Left, Key.Space, Key.J, GamepadButton.X, GamepadButton.RightShoulder);
+                ShowHearts();
+            }
 
             protected override void Update()
             {
@@ -520,8 +551,7 @@ public static class ProjectTemplates
                     Transform.Rotation = Transform.Rotation with { Z = MathF.Atan2(aim.Y, aim.X) * 180 / MathF.PI };
 
                 _cooldown -= Time.Delta;
-                var firing = Input.IsDown(MouseButton.Left) || Input.IsDown(Key.Space) || Input.IsDown(GamepadButton.RightShoulder);
-                if (firing && _cooldown <= 0 && aim != Vector2.Zero)
+                if (Input.IsDown("Fire") && _cooldown <= 0 && aim != Vector2.Zero)
                 {
                     _cooldown = 1 / FireRate;
                     var bullet = Game.Spawn("Bullet", position);
@@ -529,13 +559,16 @@ public static class ProjectTemplates
                 }
             }
 
-            protected override void OnTriggerEnter(Entity other)
+            // Health flashes and blinks the ship by itself; a freeze and a kick make the hit land.
+            protected override void OnDamage(float amount, Entity? source)
             {
-                if (other.GetComponent<Enemy>() is not null)
-                    Explode();
+                ShowHearts();
+                Game.HitStop(0.08f);
+                Game.ShakeCamera(0.35f, 0.3f);
             }
 
-            private void Explode()
+            // Health destroys the ship once this returns.
+            protected override void OnDeath()
             {
                 var position = Transform.WorldPosition;
                 var burst = Game.Spawn("Sparkle", new Vector2(position.X, position.Y));
@@ -548,57 +581,40 @@ public static class ProjectTemplates
 
                 Game.ShakeCamera(0.5f, 0.4f);
                 Game.Find<GameOver>()?.Show();
-                Game.Destroy(Entity!);
+            }
+
+            private void ShowHearts()
+            {
+                if (Game.Find("Hearts")?.GetComponent<Text>() is { } hearts)
+                    hearts.Value = new string('♥', (int)MathF.Ceiling(GetComponent<Health>()!.Current));
             }
         }
 
         """;
 
     private const string BulletScript = """
-        /// <summary>Flies until it hits an enemy or a wall, or runs out of time.</summary>
+        /// <summary>Stops at walls. Its DamageOnTouch hurts enemies, and its Lifetime clears it away if it misses.</summary>
         public class Bullet : Behavior
         {
-            public float Lifetime { get; set; } = 1.5f;
-
-            private bool _spent;
-
-            protected override void Start() => After(Lifetime, () => Game.Destroy(Entity!));
-
             protected override void OnTriggerEnter(Entity other)
             {
-                if (_spent)
-                    return;
-
-                if (other.GetComponent<Enemy>() is { } enemy)
-                {
-                    enemy.Hit();
-                    Spend();
-                }
-                else if (other.Name == "Wall")
-                    Spend();
-            }
-
-            private void Spend()
-            {
-                _spent = true;
-                Game.Destroy(Entity!);
+                if (other.Name == "Wall")
+                    Game.Destroy(Entity!);
             }
         }
 
         """;
 
     private const string EnemyScript = """
-        /// <summary>Chases the ship. One hit destroys it, for a point.</summary>
+        /// <summary>Chases the ship, hurting it on contact (DamageOnTouch). One hit destroys it, for a point.</summary>
         public class Enemy : Behavior
         {
             public float Speed { get; set; } = 2.5f;
 
             private Entity? _target;
-            private bool _alive;
 
             protected override void Start()
             {
-                _alive = true;
                 _target = Game.Find("Player");
                 Speed *= Rand.Range(0.8f, 1.4f);
 
@@ -619,12 +635,9 @@ public static class ProjectTemplates
                     GetComponent<Body>()!.Velocity = Vector2.Normalize(direction) * Speed;
             }
 
-            public void Hit()
+            // Health destroys it once this returns.
+            protected override void OnDeath()
             {
-                if (!_alive)
-                    return;
-                _alive = false;
-
                 Game.Send("Score", 1);
                 var position = Transform.WorldPosition;
                 var burst = Game.Spawn("Sparkle", new Vector2(position.X, position.Y));
@@ -635,7 +648,6 @@ public static class ProjectTemplates
                 }
 
                 Game.ShakeCamera(0.15f, 0.12f);
-                Game.Destroy(Entity!);
             }
         }
 

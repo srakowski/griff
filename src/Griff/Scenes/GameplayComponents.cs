@@ -1,0 +1,370 @@
+using System.Numerics;
+using Griff.Runtime;
+
+namespace Griff.Scenes;
+
+/// <summary>
+/// Hit points. Scripts call <see cref="Damage"/> (or a <see cref="DamageOnTouch"/> does it with no code); after a hit the
+/// entity can't be hurt again for <see cref="InvincibleTime"/>, flashing and blinking to show it. At zero it dies: its
+/// behaviors hear <c>OnDeath</c>, the <see cref="DeathMessage"/> is sent, and it's destroyed.
+/// </summary>
+[ComponentName("Griff.Health")]
+public sealed class Health : Component
+{
+    private float _max = 3;
+    private float _invincibleLeft;
+    private bool _deathPending;
+
+    /// <summary>Most hit points it can have. Changing it while at full health keeps it at full health.</summary>
+    public float Max
+    {
+        get => _max;
+        set
+        {
+            if (Current == _max)
+                Current = value;
+            _max = value;
+        }
+    }
+
+    /// <summary>Hit points now. Normally starts at <see cref="Max"/>.</summary>
+    public float Current { get; set; } = 3;
+
+    /// <summary>Seconds after a hit during which further damage is ignored. 0 lets every hit land.</summary>
+    public float InvincibleTime { get; set; } = 0.5f;
+
+    /// <summary>Flash the entity's sprites white when hit.</summary>
+    public bool FlashOnHit { get; set; } = true;
+
+    /// <summary>Blink the entity's sprites while it can't be hurt.</summary>
+    public bool BlinkWhileInvincible { get; set; } = true;
+
+    /// <summary>Destroy the entity when it dies. Turn off to play a death animation first, and destroy it from a script.</summary>
+    public bool DestroyOnDeath { get; set; } = true;
+
+    /// <summary>A message sent with <c>Game.Send</c> when it dies, with the entity as its data, e.g. "PlayerDied" or "EnemyDied".</summary>
+    public string? DeathMessage { get; set; }
+
+    public bool IsDead => Current <= 0;
+
+    /// <summary>True for <see cref="InvincibleTime"/> after a hit.</summary>
+    public bool IsInvincible => _invincibleLeft > 0;
+
+    /// <summary>Raised when damage lands, with the amount and what dealt it (if known).</summary>
+    public event Action<float, Entity?>? Damaged;
+
+    /// <summary>Raised once, when <see cref="Current"/> reaches zero.</summary>
+    public event Action? Died;
+
+    /// <summary>
+    /// Takes <paramref name="amount"/> hit points away, unless it's already dead or still invincible from the last hit.
+    /// Returns whether the damage landed. <paramref name="source"/> is passed on to <c>OnDamage</c>.
+    /// </summary>
+    public bool Damage(float amount, Entity? source = null)
+    {
+        if (!(amount > 0) || IsDead || IsInvincible)
+            return false;
+
+        Current = Math.Max(0, Current - amount);
+        var sprites = Sprites().ToList();
+        if (FlashOnHit)
+        {
+            foreach (var sprite in sprites)
+                sprite.Flash();
+        }
+
+        if (Current > 0 && InvincibleTime > 0)
+        {
+            _invincibleLeft = InvincibleTime;
+            if (BlinkWhileInvincible)
+            {
+                foreach (var sprite in sprites)
+                    sprite.Blink(InvincibleTime);
+            }
+        }
+
+        Notify(behavior => behavior.RunDamage(amount, source));
+        Damaged?.Invoke(amount, source);
+        if (IsDead)
+            Die();
+        return true;
+    }
+
+    /// <summary>Gives back up to <paramref name="amount"/> hit points, never past <see cref="Max"/>. Returns how many it got.</summary>
+    public float Heal(float amount)
+    {
+        if (!(amount > 0) || IsDead)
+            return 0;
+        var before = Current;
+        Current = Math.Min(Max, Current + amount);
+        return Current - before;
+    }
+
+    /// <summary>Dies straight away, invincible or not: falling out of the world, a reset button.</summary>
+    public void Kill()
+    {
+        if (IsDead)
+            return;
+        Current = 0;
+        Die();
+    }
+
+    /// <summary>Counts down invincibility. Called by the game.</summary>
+    public void Advance(float seconds) => _invincibleLeft = Math.Max(0, _invincibleLeft - seconds);
+
+    /// <summary>True once after each death, for the game to send the message and destroy the entity.</summary>
+    internal bool TakeDeath()
+    {
+        var pending = _deathPending;
+        _deathPending = false;
+        return pending;
+    }
+
+    private void Die()
+    {
+        _deathPending = true;
+        _invincibleLeft = 0;
+        foreach (var sprite in Sprites())
+            sprite.Blink(0);
+        Notify(behavior => behavior.RunDeath());
+        Died?.Invoke();
+    }
+
+    // The entity's sprites and its children's: a ship and its nose flash together.
+    private IEnumerable<Sprite> Sprites() =>
+        Entity is null ? [] : Entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Sprite>());
+
+    private void Notify(Action<Behavior> action)
+    {
+        if (Entity is null)
+            return;
+        foreach (var behavior in Entity.GetComponents<Behavior>().Where(b => b.IsStarted).ToList())
+            action(behavior);
+    }
+
+    /// <summary>The health that counts for <paramref name="entity"/>: its own, or its nearest ancestor's (a hitbox child's owner).</summary>
+    public static Health? Of(Entity entity)
+    {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<Health>() is { } health)
+                return health;
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Hurts whatever with <see cref="Health"/> it touches, with no code: spikes, lava, enemies, bullets. Works on solid
+/// collisions and triggers, and keeps hurting while they stay touching (each hit still waits out the target's
+/// <see cref="Health.InvincibleTime"/>). Needs a collider on the same entity.
+/// </summary>
+[ComponentName("Griff.DamageOnTouch")]
+public sealed class DamageOnTouch : Component
+{
+    public float Amount { get; set; } = 1;
+
+    /// <summary>
+    /// The collision layers it hurts, e.g. "Player" on spikes and enemies, "Enemy" on the player's bullets. Empty hurts
+    /// anything with health.
+    /// </summary>
+    public string? Layers { get; set; }
+
+    /// <summary>How hard a hit pushes the target's body away, in units per second. 0 doesn't push.</summary>
+    public float Knockback { get; set; }
+
+    /// <summary>Destroy this entity when it touches something it can hurt, like a bullet or a one-hit kamikaze enemy.</summary>
+    public bool DestroyOnHit { get; set; }
+
+    /// <summary>True if it hurts things on collision layer <paramref name="layer"/>.</summary>
+    public bool Hurts(string? layer)
+    {
+        var layers = CollisionLayers.Parse(Layers);
+        return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
+    }
+}
+
+/// <summary>Destroys its entity after <see cref="Seconds"/> of game time, optionally fading it out first: bullets, effects, popups.</summary>
+[ComponentName("Griff.Lifetime")]
+public sealed class Lifetime : Component
+{
+    public float Seconds { get; set; } = 2;
+
+    /// <summary>Seconds at the end of its life spent fading out (see <c>FadeTo</c>). 0 just disappears.</summary>
+    public float FadeOut { get; set; }
+
+    /// <summary>Seconds it has been alive.</summary>
+    [DoNotSerialize]
+    public float Age { get; set; }
+
+    internal bool IsFading { get; set; }
+}
+
+/// <summary>
+/// Spawns copies of a prefab every <see cref="Interval"/> seconds at its position, with no code: enemy waves, falling
+/// rocks, collectibles that come back. Limit it with <see cref="Count"/> and <see cref="MaxAlive"/>.
+/// </summary>
+[ComponentName("Griff.Spawner")]
+public sealed class Spawner : Component
+{
+    private readonly List<Entity> _alive = [];
+
+    /// <summary>The prefab to spawn, e.g. "Enemy" (Assets/Prefabs/Enemy.prefab).</summary>
+    public string? Prefab { get; set; }
+
+    /// <summary>Seconds between spawns.</summary>
+    public float Interval { get; set; } = 2;
+
+    /// <summary>Seconds before the first spawn.</summary>
+    public float Delay { get; set; }
+
+    /// <summary>How many to spawn in all; 0 keeps going forever.</summary>
+    public int Count { get; set; }
+
+    /// <summary>
+    /// How many of its spawns may be around at once; 0 is no limit. When one is destroyed it makes room, and the next
+    /// spawns as soon as it's due.
+    /// </summary>
+    public int MaxAlive { get; set; }
+
+    /// <summary>Spawns land at a random spot up to this far from the spawner.</summary>
+    public float Radius { get; set; }
+
+    /// <summary>How many it has spawned.</summary>
+    [DoNotSerialize]
+    public int Spawned { get; private set; }
+
+    /// <summary>Its spawns still in the scene.</summary>
+    public IReadOnlyList<Entity> Alive => _alive;
+
+    /// <summary>True once it has spawned <see cref="Count"/>.</summary>
+    public bool IsFinished => Count > 0 && Spawned >= Count;
+
+    /// <summary>Raised with each new spawn, e.g. to give it a speed or a target.</summary>
+    public event Action<Entity>? EntitySpawned;
+
+    private float _untilNext = float.NaN;
+
+    /// <summary>Counts down and spawns when due. Called by the game.</summary>
+    internal void Advance(float seconds, Game game)
+    {
+        _alive.RemoveAll(e => e.Scene != game.Scene);
+        if (float.IsNaN(_untilNext))
+            _untilNext = Delay;
+        if (IsFinished || string.IsNullOrWhiteSpace(Prefab))
+            return;
+
+        _untilNext -= seconds;
+        if (_untilNext > 0)
+            return;
+
+        // Full: wait for room, then spawn straight away (but just the one, not a burst for all the time spent waiting).
+        if (MaxAlive > 0 && _alive.Count >= MaxAlive)
+        {
+            _untilNext = 0;
+            return;
+        }
+
+        var position = Entity!.Transform.WorldPosition;
+        var entity = game.Spawn(Prefab, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
+        _alive.Add(entity);
+        Spawned++;
+        _untilNext = Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
+        EntitySpawned?.Invoke(entity);
+    }
+}
+
+/// <summary>
+/// Types out its entity's <see cref="Text"/> a letter at a time, for dialogue and story cards. Whenever a script sets the
+/// text's Value, the new text types out from the start. Runs on real time, so it works in a paused game.
+/// </summary>
+[ComponentName("Griff.Typewriter")]
+public sealed class Typewriter : Component
+{
+    private string? _typing;
+    private int _shown;
+    private float _time;
+    private bool _running;
+
+    /// <summary>Letters per second; 0 shows everything at once.</summary>
+    public float Speed { get; set; } = 30;
+
+    /// <summary>Extra seconds to wait after a full stop, question or exclamation mark (half that after a comma).</summary>
+    public float PunctuationPause { get; set; } = 0.2f;
+
+    /// <summary>A sound played as letters appear, e.g. "Sounds/blip.wav". Empty is silent.</summary>
+    public string? Sound { get; set; }
+
+    /// <summary>Play <see cref="Sound"/> every this many letters.</summary>
+    public int SoundEvery { get; set; } = 2;
+
+    /// <summary>How many letters are showing.</summary>
+    public int Shown => _running ? _shown : (_typing?.Length ?? 0);
+
+    /// <summary>True once the whole text is showing (and always outside a running game).</summary>
+    public bool IsDone => !_running || _typing is null || _shown >= _typing.Length;
+
+    /// <summary>Raised when the text has finished typing out.</summary>
+    public event Action? Finished;
+
+    /// <summary>Shows the rest of the text straight away, e.g. when the player presses a key mid-line.</summary>
+    public void Skip()
+    {
+        if (_typing is null || IsDone)
+            return;
+        _shown = _typing.Length;
+        Finished?.Invoke();
+    }
+
+    /// <summary>Types the text out again from the start.</summary>
+    public void Restart() => (_shown, _time) = (0, 0);
+
+    /// <summary>The part of <paramref name="text"/> to draw now.</summary>
+    public string? Visible(string? text) =>
+        !_running || text is null || text != _typing ? text : text[..Math.Min(_shown, text.Length)];
+
+    /// <summary>Reveals letters for <paramref name="seconds"/>; returns true if <see cref="Sound"/> should play. Called by the game.</summary>
+    internal bool Advance(float seconds)
+    {
+        var value = Entity?.GetComponent<Text>()?.Value;
+        if (!_running || value != _typing)
+        {
+            _running = true;
+            _typing = value;
+            Restart();
+        }
+
+        if (_typing is null || _shown >= _typing.Length)
+            return false;
+        if (!(Speed > 0))
+        {
+            Skip();
+            return false;
+        }
+
+        var blip = false;
+        _time += seconds;
+        while (_shown < _typing.Length)
+        {
+            var cost = 1 / Speed + (_shown > 0 ? PauseAfter(_typing[_shown - 1]) : 0);
+            if (_time < cost)
+                break;
+            _time -= cost;
+            _shown++;
+            if (!char.IsWhiteSpace(_typing[_shown - 1]) && _shown % Math.Max(1, SoundEvery) == 0)
+                blip = true;
+        }
+
+        if (_shown >= _typing.Length)
+            Finished?.Invoke();
+        return blip && !string.IsNullOrWhiteSpace(Sound);
+    }
+
+    private float PauseAfter(char c) => c switch
+    {
+        '.' or '!' or '?' => PunctuationPause,
+        ',' or ';' or ':' => PunctuationPause / 2,
+        _ => 0,
+    };
+}

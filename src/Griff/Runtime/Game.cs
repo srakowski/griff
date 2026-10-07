@@ -15,6 +15,7 @@ public sealed class Game
     private readonly List<Coroutine> _coroutines = [];
     private readonly List<Entity> _kept = [];
     private readonly MessageBoard _messages = new();
+    private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
     private string? _pendingScene;
     private (string Scene, float Seconds)? _fadingOut;
     private float _fadeInSeconds;
@@ -81,7 +82,7 @@ public sealed class Game
     public SaveData SaveData { get; set; } = new();
 
     /// <summary>Set by the platform; silent by default (tests, headless).</summary>
-    public IAudio Audio { get; set; } = SilentAudio.Instance;
+    public IAudio Audio { get; set; } = new SilentAudio();
 
     /// <summary>Advances the game by <paramref name="seconds"/>: start new behaviors, update all, apply destroys.</summary>
     public void Tick(double seconds)
@@ -108,6 +109,8 @@ public sealed class Game
         RunTimers();
         RunCoroutines();
         RunTweens();
+        RunLifetimes();
+        RunSpawners();
 
         foreach (var animation in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Animation>()).ToList())
             animation.Advance(Time.Delta);
@@ -122,9 +125,23 @@ public sealed class Game
         foreach (var camera in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Camera>()))
             camera.AdvanceShake(Time.UnscaledDelta);
 
-        if (Time.Delta > 0)
-            Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
+        foreach (var sprite in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Sprite>()))
+            sprite.AdvanceEffects(Time.Delta);
 
+        RunTypewriters();
+
+        if (Time.Delta > 0)
+        {
+            Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
+            foreach (var (trigger, other) in Physics.TriggerPairs)
+            {
+                _touches.Add((trigger, other));
+                _touches.Add((other, trigger));
+            }
+        }
+
+        RunTouchDamage();
+        RunHealth();
         AdvanceFade();
         FlushDestroys();
         SwitchSceneIfRequested();
@@ -353,6 +370,26 @@ public sealed class Game
 
     /// <summary>Every component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.FindAll&lt;Enemy&gt;()</c>.</summary>
     public IReadOnlyList<T> FindAll<T>() where T : Component => Scene.Entities.SelectMany(e => e.GetComponents<T>()).ToList();
+
+    /// <summary>
+    /// Freezes the game for <paramref name="seconds"/> of real time (a tenth of a second or less is plenty) so a big hit
+    /// lands with a thud. Everything on game time stops; camera shake, fades and the screen keep going.
+    /// </summary>
+    public void HitStop(float seconds = 0.08f)
+    {
+        if (seconds > 0)
+            Time.Freeze(seconds);
+    }
+
+    /// <summary>
+    /// Paints <paramref name="entity"/>'s sprites and its children's <paramref name="color"/> (white by default) for
+    /// <paramref name="seconds"/>; see <see cref="Sprite.Flash"/>.
+    /// </summary>
+    public void Flash(Entity entity, Color? color = null, float seconds = 0.1f)
+    {
+        foreach (var sprite in entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Sprite>()))
+            sprite.Flash(color, seconds);
+    }
 
     /// <summary>Shakes the camera the game is viewed through, if there is one. See <see cref="Camera.Shake"/>.</summary>
     public void ShakeCamera(float strength = 0.3f, float duration = 0.25f) =>
@@ -589,6 +626,8 @@ public sealed class Game
 
     private void OnCollision(Entity a, Entity b)
     {
+        _touches.Add((a, b));
+        _touches.Add((b, a));
         Notify(a, behavior => behavior.RunCollision(b));
         Notify(b, behavior => behavior.RunCollision(a));
     }
@@ -597,6 +636,82 @@ public sealed class Game
     {
         Notify(trigger, behavior => behavior.RunTrigger(other, entered));
         Notify(other, behavior => behavior.RunTrigger(trigger, entered));
+    }
+
+    // Lifetimes run on game time; the fade out is an ordinary FadeTo, so it shows on sprites, text and tilemaps alike.
+    private void RunLifetimes()
+    {
+        foreach (var lifetime in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
+        {
+            lifetime.Age += Time.Delta;
+            if (!lifetime.IsFading && lifetime.FadeOut > 0 && lifetime.Age >= lifetime.Seconds - lifetime.FadeOut)
+            {
+                lifetime.IsFading = true;
+                FadeTo(lifetime.Entity!, 0, Math.Max(0, lifetime.Seconds - lifetime.Age));
+            }
+
+            if (lifetime.Age >= lifetime.Seconds)
+                Destroy(lifetime.Entity!);
+        }
+    }
+
+    private void RunSpawners()
+    {
+        foreach (var spawner in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Spawner>()).ToList())
+            spawner.Advance(Time.Delta, this);
+    }
+
+    // Typewriters run on real time, so dialogue still types out while the game is paused.
+    private void RunTypewriters()
+    {
+        foreach (var typewriter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Typewriter>()).ToList())
+        {
+            if (typewriter.Advance(Time.UnscaledDelta))
+                Audio.Play(typewriter.Sound!);
+        }
+    }
+
+    // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.
+    private void RunTouchDamage()
+    {
+        foreach (var (source, target) in _touches)
+        {
+            if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<DamageOnTouch>() is not { } touch)
+                continue;
+            if (Health.Of(target) is not { } health || health == Health.Of(source) || !touch.Hurts(LayerOf(target)))
+                continue;
+
+            var hurt = health.Entity!;
+            if (health.Damage(touch.Amount, source) && touch.Knockback > 0 && hurt.GetComponent<Body>() is { } body)
+            {
+                var away = hurt.Transform.WorldPosition - source.Transform.WorldPosition;
+                var direction = new Vector2(away.X, away.Y);
+                body.Velocity = (direction.LengthSquared() > 1e-8f ? Vector2.Normalize(direction) : Vector2.UnitY) * touch.Knockback;
+            }
+
+            if (touch.DestroyOnHit)
+                Destroy(source);
+        }
+
+        _touches.Clear();
+    }
+
+    private static string? LayerOf(Entity entity) =>
+        entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;
+
+    // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.
+    private void RunHealth()
+    {
+        foreach (var health in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Health>()).ToList())
+        {
+            health.Advance(Time.Delta);
+            if (!health.TakeDeath())
+                continue;
+            if (!string.IsNullOrWhiteSpace(health.DeathMessage))
+                Send(health.DeathMessage, health.Entity);
+            if (health.DestroyOnDeath)
+                Destroy(health.Entity!);
+        }
     }
 
     private void Notify(Entity entity, Action<Behavior> action)

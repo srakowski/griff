@@ -12,19 +12,22 @@ namespace Griff.Graphics;
 public sealed class SpriteRenderer : IDisposable
 {
     private const int MaxQuads = 4096;
-    private const int FloatsPerVertex = 8; // clip x, y, u, v, r, g, b, a
+    private const int FloatsPerVertex = 12; // clip x, y, u, v, tint r, g, b, a, flash r, g, b, amount
 
     private const string VertexShader = """
         #version 330 core
         layout(location = 0) in vec2 aPosition;
         layout(location = 1) in vec2 aUv;
         layout(location = 2) in vec4 aColor;
+        layout(location = 3) in vec4 aFlash;
         out vec2 vUv;
         out vec4 vColor;
+        out vec4 vFlash;
         void main()
         {
             vUv = aUv;
             vColor = aColor;
+            vFlash = aFlash;
             gl_Position = vec4(aPosition, 0.0, 1.0);
         }
         """;
@@ -33,11 +36,13 @@ public sealed class SpriteRenderer : IDisposable
         #version 330 core
         in vec2 vUv;
         in vec4 vColor;
+        in vec4 vFlash;
         uniform sampler2D uTexture;
         out vec4 fragColor;
         void main()
         {
-            fragColor = texture(uTexture, vUv) * vColor;
+            vec4 color = texture(uTexture, vUv) * vColor;
+            fragColor = vec4(mix(color.rgb, vFlash.rgb, vFlash.a), color.a);
         }
         """;
 
@@ -94,6 +99,8 @@ public sealed class SpriteRenderer : IDisposable
             gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, (void*)(2 * sizeof(float)));
             gl.EnableVertexAttribArray(2);
             gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, stride, (void*)(4 * sizeof(float)));
+            gl.EnableVertexAttribArray(3);
+            gl.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, stride, (void*)(8 * sizeof(float)));
         }
 
         gl.BindVertexArray(0);
@@ -178,6 +185,7 @@ public sealed class SpriteRenderer : IDisposable
         _batchTexture = texture;
 
         var tint = sprite.Tint;
+        var flash = sprite.Flash;
         var source = sprite.Source;
         var toClip = world * viewProjection;
         var offset = _quadCount * 4 * FloatsPerVertex;
@@ -192,6 +200,10 @@ public sealed class SpriteRenderer : IDisposable
             _vertices[offset++] = tint.G;
             _vertices[offset++] = tint.B;
             _vertices[offset++] = tint.A;
+            _vertices[offset++] = flash.R;
+            _vertices[offset++] = flash.G;
+            _vertices[offset++] = flash.B;
+            _vertices[offset++] = flash.A;
         }
 
         _quadCount++;

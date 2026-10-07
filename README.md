@@ -12,7 +12,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 - **Play mode can't hurt your work.** Play runs on a copy of the scene. Inspect and tweak the live game freely; Stop puts everything back. Found the perfect jump height while playing? **Keep Play Changes** (Ctrl+K) copies the selected entity's live values into your scene.
 - **A crash costs nothing.** Unsaved scenes are written to a recovery copy every 20 seconds and offered back next time you open them.
 - **Readable files.** Scenes are small, stable JSON (`"position": [1.5, -2, 0]`) that diff and merge cleanly in git. A deleted or renamed script never destroys data; its values are kept and come back with it.
-- **Batteries included.** Sprites and sprite-sheet animation with named clips, tilemaps you paint right in the Scene view, pathfinding around their walls, particles, prefabs, timers, coroutines, tweens with easing, messages between scripts, text in your own fonts, 2D physics with boxes, circles, bounce, triggers, collision layers, raycasts and moving platforms, a follow camera that stays inside the level, parallax backgrounds, top-down depth sorting, camera shake, debug drawing, save data, input, sound and music, menus and HUDs with clickable buttons and screen-pinned text, fades between scenes, and Platformer, Top-down and Arcade templates that are playable from the first second.
+- **Batteries included.** Sprites and sprite-sheet animation with named clips, tilemaps you paint right in the Scene view, pathfinding around their walls, particles, prefabs, timers, coroutines, tweens with easing, messages between scripts, text in your own fonts, 2D physics with boxes, circles, bounce, triggers, collision layers, raycasts and moving platforms, a follow camera that stays inside the level, parallax backgrounds, top-down depth sorting, camera shake, health with hit flashes and invincibility, damage on touch, hit stop, spawners and lifetimes, typewriter dialogue text, debug drawing, save data, input with named actions you can rebind, sound and music with volume settings, menus and HUDs with clickable buttons and screen-pinned text, fades between scenes, and Platformer, Top-down and Arcade templates that are playable from the first second.
 - **One click to ship.** Build Game produces a standalone folder with a `.exe`, ready to zip and upload.
 
 ## Using the editor
@@ -54,6 +54,12 @@ The Scene view outlines what collides: one-way runs get a dashed outline with a 
 **Cameras.** Add a **Follow** to the camera and set its **Target** (`Player`) and it follows with no code. **Smoothing** sets how quickly it catches up (0 sticks exactly), **Offset** shifts the view (say `0, 2` to see more above the hero), **Dead Zone** is a box the target can move about in without the camera moving (a tall one keeps a platformer's camera still through jumps), and **Look Ahead** leads the way the target is moving. Set **Stay Inside** to the name of the level's tilemap, a big box collider or a backdrop sprite, and the camera never shows past its edges. Follow works on anything, not just cameras: a pet that trails its owner. For top-down games, tick the camera's **Sort By Y** so whatever is lower on screen draws in front.
 
 **Parallax.** Add a **Parallax** to a background entity and set its **Factor**: 1 moves like the rest of the world, 0 stays stuck to the camera like a distant sky, and in between is in between (far hills 0.2, near trees 0.7). It shifts everything the entity and its children draw. **Repeat X** and **Repeat Y** repeat its sprite to fill the view, so a short strip of hills never runs out. It's applied as the game is drawn, so the layer is exactly where its transform puts it when the camera is at the origin, and the Scene view shows it there.
+
+**Health and hazards.** Add a **Health** to anything that can be hurt and set its **Max**. After a hit it flashes white and blinks, and can't be hurt again for its **Invincible Time**; at zero it dies, sends its **Death Message** (say `PlayerDied`) and is destroyed (untick **Destroy On Death** to play a death animation first). Add a **DamageOnTouch** to whatever hurts: spikes and lava (it keeps hurting while you stand in it), enemies, bullets. Its **Layers** says who it hurts (`Player` on spikes, `Enemy` on the player's bullets; empty hurts anything with health), **Knockback** pushes the target away, and **Destroy On Hit** spends a bullet. A collider on a child entity counts for the nearest Health above it, so a sword or a hurtbox can be its own child, and it never hurts its owner. The Arcade template's ship has three hearts, and its enemies and bullets use both.
+
+**Spawners and lifetimes.** A **Spawner** spawns its **Prefab** every **Interval** seconds where it stands, after a **Delay**, within a **Radius**, up to **Count** in all and **Max Alive** at once. A **Lifetime** destroys its entity after **Seconds**, fading it out over the last **Fade Out** seconds: bullets, effects, score popups.
+
+**Dialogue.** Add a **Typewriter** next to a **Text** and the text types itself out, **Speed** letters a second, pausing briefly at punctuation, with an optional blip **Sound**. Whenever a script changes the text, the new line types out from the start. It runs on real time, so it works in a paused game.
 
 **Prefabs.** Select an entity and choose **Entity → Save as Prefab** to save it (with its children) to `Assets/Prefabs`. Drag a prefab into the Scene view to place it, or spawn it from a script. Save as Prefab works while playing too, to keep a live entity you've tweaked.
 
@@ -173,6 +179,29 @@ Game.ReloadScene(fade: 0.4f);
 Game.KeepBetweenScenes(Entity!);
 Game.Quit();
 
+// Named input actions: Jump, Fire, Dash, Interact and Pause work on keyboard, mouse and gamepad from the start.
+if (Input.WasPressed("Jump") && body.IsGrounded)
+    velocity.Y = JumpSpeed;
+Input.Bind("Dash", Key.LeftShift, Key.K, GamepadButton.B);   // change one, or add your own
+
+// Hurt things, and make hits feel like hits.
+Game.Find("Boss")!.GetComponent<Health>()!.Damage(2, source: Entity);
+Flash(Color.Red);        // this entity's sprites, for a moment
+Game.HitStop(0.08f);     // freeze the game for a split second
+
+// Dialogue: change the text and the Typewriter types it out. A key press finishes the line, then moves on.
+if (Input.WasPressed("Interact"))
+{
+    if (!typewriter.IsDone)
+        typewriter.Skip();
+    else
+        text.Value = lines[++line];
+}
+
+// An options menu.
+Audio.MusicVolume = 0.5f;
+Audio.Muted = !Audio.Muted;
+
 // Remember things between runs.
 if (Score > Game.SaveData.GetInt("best"))
     Game.SaveData.Set("best", Score);
@@ -181,13 +210,13 @@ if (Score > Game.SaveData.GetInt("best"))
 `Rand` gives random numbers for gameplay: `Range`, `Chance`, `Pick`, `Sign`, `Direction`, `InsideCircle`, `Color`, and `Seed` to make a run repeatable.
 
 What a behavior can use:
-- **Lifecycle:** `Start`, `Update`, `OnCollision`, `OnTriggerEnter`, `OnTriggerExit`, `OnClick` (the entity's button was clicked), `OnDestroy`.
-- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `WasReleased`, `Horizontal`, `Vertical`, `MouseWorld`; keyboard, mouse and Xbox-style gamepads), `Audio` (`Play`, `PlayMusic`) and `Debug` (`Line`, `Ray`, `Box`, `Circle`, `Point`, `Path`, `Text`: drawn over the game for one frame, or for `seconds:`, with lines the same thickness however far the camera zooms; `Debug.Enabled = false` hides them all).
+- **Lifecycle:** `Start`, `Update`, `OnCollision`, `OnTriggerEnter`, `OnTriggerExit`, `OnClick` (the entity's button was clicked), `OnDamage` (its Health was hurt: how much, and by what), `OnDeath` (its Health reached zero, just before it's destroyed), `OnDestroy`.
+- **Services:** `Transform`, `Time` (`Delta`, `Total`, `Scale`), `Input` (`IsDown`, `WasPressed`, `WasReleased`, `Horizontal`, `Vertical`, `MouseWorld`; keyboard, mouse and Xbox-style gamepads; and named actions: `IsDown("Fire")`, `WasPressed("Jump")`, `WasReleased`, with `Bind` to set an action's keys and buttons or add a new one, and `BindingsOf` to show them. Actions are case-insensitive; a misspelled one says which exist), `Audio` (`Play`, `PlayMusic`, `StopMusic`, and `Volume`, `MusicVolume`, `SoundVolume` and `Muted` for an options menu; the same sound started several times in one frame plays once) and `Debug` (`Line`, `Ray`, `Box`, `Circle`, `Point`, `Path`, `Text`: drawn over the game for one frame, or for `seconds:`, with lines the same thickness however far the camera zooms; `Debug.Enabled = false` hides them all).
 - **Messages:** `Game.Send("Name")` or `Game.Send("Name", data)` reaches every listener straight away and returns how many heard it. `On("Name", () => ...)` and `On<int>("Name", value => ...)` listen until the entity is destroyed or the script is reloaded (like coroutines, so listen in `Start`); they return a listener you can `Cancel()`, and `StopListening()` stops all of a behavior's. Listeners in a scene you leave stop too, unless their entity is kept with `KeepBetweenScenes`. `Game.On` makes one that doesn't belong to a behavior.
 - **Timers:** `After(seconds, action)` and `Every(seconds, action)` return a timer you can `Cancel()`. They run on game time, so they pause and slow down with it. `Game.After` and `Game.Every` make timers that don't belong to an entity.
 - **Coroutines:** `StartCoroutine(SomeMethod())` runs an `IEnumerator` method straight away up to its first `yield return`, then picks it up again once what it yielded is done: `null` (the next frame), `Wait(seconds)` (or just a number), `WaitUntil(() => ...)`, `WaitWhile(() => ...)`, a tween, a timer, another coroutine, or another `IEnumerator` method (run to the end first, like calling it). They run on game time like timers and return a coroutine you can `Stop()`; `StopCoroutines()` stops all of a behavior's. They stop when the entity is destroyed and when the script is reloaded, and since `Start` then runs again on the new version, a coroutine started in `Start` restarts running your new code. `Game.StartCoroutine` makes one that doesn't belong to a behavior.
 - **Tweens:** `MoveTo`, `ScaleTo`, `RotateTo` and `FadeTo` (sprite, text and tilemap alpha) animate this entity. `Tween(seconds, t => ...)` animates anything. Each takes an optional curve from `Ease` (`Linear`, `InQuad`, `OutQuad` (the default), `InOutQuad`, `InCubic`, `OutCubic`, `InOutCubic`, `InOutSine`, `InBack`, `OutBack`, `OutElastic`, `OutBounce`) and returns a tween you can `Cancel()` or chain with `.Then(...)`. A new `MoveTo` takes over from an unfinished one. Like timers, tweens run on game time and stop if their entity is destroyed; `Game.MoveTo(entity, ...)` and friends work on any entity.
-- **Game:** `Spawn` (an entity, or a prefab by name), `Destroy`, `Find` and `FindAll` (by name, or `Find<T>()` and `FindAll<T>()` by component type), `LoadScene` and `ReloadScene` (optionally with a `fade:` in seconds and a `color:`; fades use real time, so they work from a paused menu, and `IsChangingScene` is true until the switch), `KeepBetweenScenes` (carry an entity into the next scenes, still running; returning to its original scene doesn't duplicate it), `Quit`, `ShakeCamera`, `SaveData` (`GetInt`, `GetFloat`, `GetBool`, `GetString`, `Set`, `Delete`, `Clear`) and `Physics` (`Raycast`, `OverlapPoint`, `OverlapBox`, `OverlapCircle`; each takes `layers:` to only find colliders on those layers).
+- **Game:** `Spawn` (an entity, or a prefab by name), `Destroy`, `Find` and `FindAll` (by name, or `Find<T>()` and `FindAll<T>()` by component type), `LoadScene` and `ReloadScene` (optionally with a `fade:` in seconds and a `color:`; fades use real time, so they work from a paused menu, and `IsChangingScene` is true until the switch), `KeepBetweenScenes` (carry an entity into the next scenes, still running; returning to its original scene doesn't duplicate it), `Quit`, `ShakeCamera`, `HitStop` (freeze game time for a moment of real time; `Time.IsFrozen` is true meanwhile), `Flash` (an entity's sprites and its children's), `SaveData` (`GetInt`, `GetFloat`, `GetBool`, `GetString`, `Set`, `Delete`, `Clear`) and `Physics` (`Raycast`, `OverlapPoint`, `OverlapBox`, `OverlapCircle`; each takes `layers:` to only find colliders on those layers).
 
 Built-in components:
 - `Transform`, `Camera` (with `Shake`), `Sprite` (single images or sprite sheets) and `Text` (with `Align` and a `Font`: a `.ttf`/`.otf` file in Assets, which ships with the game, or an installed font's name);
@@ -198,11 +227,14 @@ Built-in components:
 - `Follow`, which moves its entity after a **Target**, smoothly, with an offset, dead zone, look-ahead and an area to **Stay Inside** (see Cameras above). Scripts can set `TargetEntity` to follow something directly. `Camera` has **Sort By Y** for top-down games;
 - `Parallax`, which scrolls a background layer at a fraction of the world's speed and can repeat its sprite across the view;
 - `ScreenAnchor`, which pins its entity to one of nine points on the screen plus an **Offset**, for HUDs and menus. It's applied while the game runs, so the Scene view shows the entity where its transform puts it;
+- `Health` (`Damage`, `Heal`, `Kill`, `IsDead`, `IsInvincible`, and `Damaged` and `Died` events) and `DamageOnTouch`; see Health and hazards above. `Sprite` has `Flash` and `Blink` for scripts to use themselves;
+- `Spawner` (with an `EntitySpawned` event, `Spawned` and `Alive`) and `Lifetime`;
+- `Typewriter` (`IsDone`, `Skip`, `Restart` and a `Finished` event);
 - `BoxCollider`, `CircleCollider` and `Body`, for physics. Boxes and circles collide in any combination. `GetComponent<Collider>()` finds either kind. A body's `Bounciness` (0 to 1) makes it bounce off what it hits, settling once the bounces get small. `Ground` is what it's standing on; when that moves (a platform moved by a script or a tween) the body rides along with it. Give colliders a **Layer** (`Player`, `Enemy`, `Bullet`; empty is `Default`) and list what they pass through in **Ignore Layers**, e.g. `Player, Bullet` on a bullet: ignored pairs don't block each other, collide or trigger, and only one side has to list the other. Tilemaps have both too.
 
 Saving a script while the game is playing applies it immediately. Public properties are kept, and `Start` runs again on the new version.
 
-Rewinding restores everything a scene file holds. Things that only exist while running (timers, coroutines, message listeners, tweens, live particles, camera shake, a scene fade, debug shapes) start fresh from the moment you resume, the same way private fields do.
+Rewinding restores everything a scene file holds. Things that only exist while running (timers, coroutines, message listeners, tweens, live particles, camera shake, a scene fade, debug shapes, hit flashes, invincibility, hit stop, a typewriter's progress, spawner and lifetime clocks) start fresh from the moment you resume, the same way private fields do.
 
 ## Architecture
 

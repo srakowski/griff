@@ -106,8 +106,15 @@ public sealed class ProjectTemplateTests : IDisposable
 
         game.Spawn("Enemy", new Vector2(3, 0));
         input.MouseWorld = new Vector2(-10, 5); // aim away, don't fire
-        Run(game, input, 2.5);
+        Run(game, input, 2);
 
+        // The first touch costs a heart; the ship can't be hurt again for a moment.
+        var hearts = game.Find("Hearts")!.GetComponent<Text>()!;
+        Assert.InRange(hearts.Value!.Length, 1, 2);
+        Assert.NotNull(game.Find("Player"));
+
+        // The enemy stays on the ship, so the hits keep coming until it's gone.
+        Run(game, input, 3.5);
         Assert.Null(game.Find("Player"));
         var panel = game.Find("Game Over")!;
         Assert.True(panel.IsEnabled);

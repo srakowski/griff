@@ -24,6 +24,11 @@ public sealed class ComponentRegistry
         registry.Register<Button>();
         registry.Register<Follow>();
         registry.Register<Parallax>();
+        registry.Register<Health>();
+        registry.Register<DamageOnTouch>();
+        registry.Register<Lifetime>();
+        registry.Register<Spawner>();
+        registry.Register<Typewriter>();
         return registry;
     }
 

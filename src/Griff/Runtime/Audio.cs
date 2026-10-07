@@ -16,12 +16,30 @@ public interface IAudio
 
     /// <summary>Stops everything (when the game stops).</summary>
     void StopAll();
+
+    /// <summary>Overall volume, 0 to 1, for an options menu. Changes apply to the music straight away.</summary>
+    float Volume { get; set; }
+
+    /// <summary>Music volume, 0 to 1, on top of <see cref="Volume"/>.</summary>
+    float MusicVolume { get; set; }
+
+    /// <summary>Sound effect volume, 0 to 1, on top of <see cref="Volume"/>.</summary>
+    float SoundVolume { get; set; }
+
+    /// <summary>Silences everything without forgetting the volumes.</summary>
+    bool Muted { get; set; }
 }
 
-/// <summary>Audio that does nothing: for tests and headless runs.</summary>
+/// <summary>Audio that does nothing: for tests and headless runs. It remembers its volume settings.</summary>
 public sealed class SilentAudio : IAudio
 {
-    public static readonly SilentAudio Instance = new();
+    public float Volume { get; set; } = 1;
+
+    public float MusicVolume { get; set; } = 1;
+
+    public float SoundVolume { get; set; } = 1;
+
+    public bool Muted { get; set; }
 
     public void Play(string sound, float volume = 1f)
     {

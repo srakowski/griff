@@ -60,6 +60,9 @@ public sealed class Physics
     // Where each grounded body's ground was at the end of the last step, so riders follow it when it moves.
     private Dictionary<Body, (Entity Ground, Vector2 Position)> _grounds = [];
 
+    /// <summary>Each trigger and the collider overlapping it, as of the last step.</summary>
+    internal IReadOnlyCollection<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
+
     /// <summary>World units per second squared. Negative Y is down.</summary>
     public Vector2 Gravity { get; set; } = new(0, -25f);
 

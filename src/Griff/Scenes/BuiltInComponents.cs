@@ -132,6 +132,52 @@ public sealed class Sprite : Component
             return new System.Numerics.Vector4((float)(frame % columns) / columns, (float)(frame / columns) / rows, 1f / columns, 1f / rows);
         }
     }
+
+    private Color _flashColor;
+    private float _flashSeconds;
+    private float _flashLeft;
+    private float _blinkLeft;
+    private float _blinkRate;
+    private float _blinkTime;
+
+    /// <summary>
+    /// The color painted over the sprite right now by <see cref="Flash"/>, with its alpha saying how much (0 none, 1 all
+    /// of it). The image's shape and transparency are kept.
+    /// </summary>
+    public Color FlashOverlay => _flashLeft > 0 ? _flashColor with { A = _flashColor.A * Math.Min(1, 2 * _flashLeft / _flashSeconds) } : Color.Transparent;
+
+    /// <summary>True while <see cref="Blink"/> has the sprite in its hidden half.</summary>
+    public bool IsBlinkedOut => _blinkLeft > 0 && (int)(_blinkTime * _blinkRate * 2) % 2 == 0;
+
+    /// <summary>
+    /// Paints the sprite <paramref name="color"/> (white by default) for <paramref name="seconds"/>, fading out over the
+    /// second half: the classic flash when something is hit. A new flash replaces one in progress.
+    /// </summary>
+    public void Flash(Color? color = null, float seconds = 0.1f)
+    {
+        if (!(seconds > 0))
+            return;
+        (_flashColor, _flashSeconds, _flashLeft) = (color ?? Color.White, seconds, seconds);
+    }
+
+    /// <summary>
+    /// Hides and shows the sprite <paramref name="rate"/> times a second for <paramref name="seconds"/>, like a hero
+    /// who can't be hurt again just yet. Starts hidden; 0 seconds stops blinking.
+    /// </summary>
+    public void Blink(float seconds, float rate = 12)
+    {
+        _blinkLeft = Math.Max(0, seconds);
+        _blinkRate = Math.Max(0.1f, rate);
+        _blinkTime = 0;
+    }
+
+    /// <summary>Moves <see cref="Flash"/> and <see cref="Blink"/> on by <paramref name="seconds"/>. Called by the game.</summary>
+    public void AdvanceEffects(float seconds)
+    {
+        _flashLeft = Math.Max(0, _flashLeft - seconds);
+        _blinkLeft = Math.Max(0, _blinkLeft - seconds);
+        _blinkTime += seconds;
+    }
 }
 
 /// <summary>One named animation of an <see cref="Animation"/>'s <see cref="Animation.Clips"/>.</summary>

@@ -102,5 +102,13 @@ public class TextAndAudioTests
         public void StopMusic() => Calls.Add("stop music");
 
         public void StopAll() => Calls.Add("stop all");
+
+        public float Volume { get; set; } = 1;
+
+        public float MusicVolume { get; set; } = 1;
+
+        public float SoundVolume { get; set; } = 1;
+
+        public bool Muted { get; set; }
     }
 }

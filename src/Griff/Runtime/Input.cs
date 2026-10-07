@@ -30,9 +30,54 @@ public enum MouseButton
     Middle,
 }
 
+/// <summary>
+/// A key, mouse button or gamepad button that triggers an action (see <see cref="IInput.Bind"/>). Any of the three
+/// converts to one, so a list of bindings reads <c>Key.Space, GamepadButton.A</c>.
+/// </summary>
+public readonly record struct InputBinding
+{
+    public Key? Key { get; private init; }
+
+    public MouseButton? Mouse { get; private init; }
+
+    public GamepadButton? Gamepad { get; private init; }
+
+    public static implicit operator InputBinding(Key key) => new() { Key = key };
+
+    public static implicit operator InputBinding(MouseButton button) => new() { Mouse = button };
+
+    public static implicit operator InputBinding(GamepadButton button) => new() { Gamepad = button };
+
+    public override string ToString() =>
+        Key is { } key ? key.ToString() : Mouse is { } mouse ? $"Mouse {mouse}" : $"Gamepad {Gamepad}";
+}
+
 /// <summary>What gameplay code reads. "Pressed" and "released" are true for exactly one frame.</summary>
 public interface IInput
 {
+    /// <summary>
+    /// True while any of the action's keys or buttons is held, e.g. <c>IsDown("Fire")</c>. Games start with Jump, Fire,
+    /// Dash, Interact and Pause; <see cref="Bind"/> changes them or adds more.
+    /// </summary>
+    bool IsDown(string action);
+
+    /// <summary>True on the frame any of the action's keys or buttons goes down, e.g. <c>WasPressed("Jump")</c>.</summary>
+    bool WasPressed(string action);
+
+    /// <summary>True on the frame the action stops being held (the last of its keys and buttons is let go).</summary>
+    bool WasReleased(string action);
+
+    /// <summary>
+    /// Sets the keys and buttons that trigger <paramref name="action"/>, replacing any it had, e.g.
+    /// <c>Bind("Dash", Key.LeftShift, Key.K, GamepadButton.B)</c>. A new name makes a new action. Lasts until the game stops.
+    /// </summary>
+    void Bind(string action, params InputBinding[] bindings);
+
+    /// <summary>The keys and buttons that trigger <paramref name="action"/>, e.g. to show them in a controls screen.</summary>
+    IReadOnlyList<InputBinding> BindingsOf(string action);
+
+    bool WasReleased(GamepadButton button);
+
     bool IsDown(Key key);
 
     bool WasPressed(Key key);
@@ -79,6 +124,15 @@ public sealed class InputState : IInput
     private readonly HashSet<MouseButton> _mouseReleased = [];
     private readonly HashSet<GamepadButton> _padDown = [];
     private readonly HashSet<GamepadButton> _padPressed = [];
+    private readonly HashSet<GamepadButton> _padReleased = [];
+    private readonly Dictionary<string, InputBinding[]> _actions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Jump"] = [Key.Space, GamepadButton.A],
+        ["Fire"] = [MouseButton.Left, Key.J, GamepadButton.X, GamepadButton.RightShoulder],
+        ["Dash"] = [Key.LeftShift, Key.K, GamepadButton.B],
+        ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
+        ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
+    };
 
     /// <summary>Stick movement smaller than this is ignored, so a resting stick doesn't drift.</summary>
     public const float DeadZone = 0.25f;
@@ -98,12 +152,57 @@ public sealed class InputState : IInput
 
     public bool WasPressed(GamepadButton button) => _padPressed.Contains(button);
 
+    public bool WasReleased(GamepadButton button) => _padReleased.Contains(button);
+
+    public bool IsDown(string action) => Bindings(action).Any(IsDown);
+
+    public bool WasPressed(string action)
+    {
+        var bindings = Bindings(action);
+        return bindings.Any(WasPressed) && !bindings.Any(b => IsDown(b) && !WasPressed(b));
+    }
+
+    public bool WasReleased(string action)
+    {
+        var bindings = Bindings(action);
+        return bindings.Any(WasReleased) && !bindings.Any(IsDown);
+    }
+
+    public void Bind(string action, params InputBinding[] bindings)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+        _actions[action.Trim()] = [.. bindings];
+    }
+
+    public IReadOnlyList<InputBinding> BindingsOf(string action) => Bindings(action);
+
+    /// <summary>The names of every action, built in or bound.</summary>
+    public IReadOnlyCollection<string> Actions => _actions.Keys;
+
+    private InputBinding[] Bindings(string action) =>
+        _actions.TryGetValue(action, out var bindings)
+            ? bindings
+            : throw new ArgumentException(
+                $"There's no input action called \"{action}\"; there are {string.Join(", ", _actions.Keys)}. Add one with Input.Bind(\"{action}\", ...).",
+                nameof(action));
+
+    private bool IsDown(InputBinding binding) =>
+        binding.Key is { } key ? IsDown(key) : binding.Mouse is { } mouse ? IsDown(mouse) : binding.Gamepad is { } pad && IsDown(pad);
+
+    private bool WasPressed(InputBinding binding) =>
+        binding.Key is { } key ? WasPressed(key) : binding.Mouse is { } mouse ? WasPressed(mouse) : binding.Gamepad is { } pad && WasPressed(pad);
+
+    private bool WasReleased(InputBinding binding) =>
+        binding.Key is { } key ? WasReleased(key) : binding.Mouse is { } mouse ? WasReleased(mouse) : binding.Gamepad is { } pad && WasReleased(pad);
+
     /// <summary>Sets the controller state for this frame (called by the platform each tick).</summary>
     public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick)
     {
         var now = down.ToHashSet();
         foreach (var button in now.Where(b => !_padDown.Contains(b)))
             _padPressed.Add(button);
+        foreach (var button in _padDown.Where(b => !now.Contains(b)))
+            _padReleased.Add(button);
         _padDown.Clear();
         _padDown.UnionWith(now);
         LeftStick = new Vector2(ApplyDeadZone(leftStick.X), ApplyDeadZone(leftStick.Y));
@@ -156,6 +255,7 @@ public sealed class InputState : IInput
         _mousePressed.Clear();
         _mouseReleased.Clear();
         _padPressed.Clear();
+        _padReleased.Clear();
     }
 
     private float PadAxis(GamepadButton negative, GamepadButton positive) =>

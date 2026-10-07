@@ -18,6 +18,9 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
 
     /// <summary>For text: where the quad sits relative to the origin. The renderer shifts it once it knows the width.</summary>
     public TextAlign Align { get; init; }
+
+    /// <summary>A color painted over the quad (keeping its shape), with alpha saying how much; see <see cref="Sprite.Flash"/>.</summary>
+    public Color Flash { get; init; } = Color.Transparent;
 }
 
 /// <summary>Everything a renderer needs for one frame, in draw order (back to front).</summary>
@@ -186,7 +189,7 @@ public static class SceneRenderer
 
         var shift = parallax.OffsetFor(view.Center);
         var draws = Draws(entity).Select(d => d with { World = d.World * Matrix4x4.CreateTranslation(shift.X, shift.Y, 0) });
-        if (parallax.Entity != entity || parallax is { RepeatX: false, RepeatY: false } || entity.GetComponent<Sprite>() is null)
+        if (parallax.Entity != entity || parallax is { RepeatX: false, RepeatY: false } || entity.GetComponent<Sprite>() is null or { IsBlinkedOut: true })
             return draws;
 
         // Only the sprite repeats; the entity's text and particles are drawn once.
@@ -242,13 +245,23 @@ public static class SceneRenderer
                 yield return draw;
         }
 
-        if (entity.GetComponent<Sprite>() is { } sprite)
-            yield return new SpriteDraw(QuadMatrix(entity, sprite), sprite.Image, button?.Shade(sprite.Tint) ?? sprite.Tint, entity) { Source = sprite.FrameRect };
+        // Blinked out, it draws nothing this frame.
+        if (entity.GetComponent<Sprite>() is { IsBlinkedOut: false } sprite)
+        {
+            yield return new SpriteDraw(QuadMatrix(entity, sprite), sprite.Image, button?.Shade(sprite.Tint) ?? sprite.Tint, entity)
+            {
+                Source = sprite.FrameRect,
+                Flash = sprite.FlashOverlay,
+            };
+        }
 
-        if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
+        var value = entity.GetComponent<Text>() is { } shown && entity.GetComponent<Typewriter>() is { } typewriter
+            ? typewriter.Visible(shown.Value)
+            : entity.GetComponent<Text>()?.Value;
+        if (entity.GetComponent<Text>() is { } text && !string.IsNullOrEmpty(value))
         {
             var world = Matrix4x4.CreateScale(text.Size, text.Size, 1) * entity.Transform.WorldMatrix;
-            yield return new SpriteDraw(world, null, button?.Shade(text.Color) ?? text.Color, entity, text.Value)
+            yield return new SpriteDraw(world, null, button?.Shade(text.Color) ?? text.Color, entity, value)
             {
                 Font = string.IsNullOrWhiteSpace(text.Font) ? null : text.Font,
                 Align = text.Align,

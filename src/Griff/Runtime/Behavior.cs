@@ -69,6 +69,19 @@ public abstract class Behavior : Component
     {
     }
 
+    /// <summary>
+    /// Called when this entity's <see cref="Health"/> takes damage, with how much and what dealt it (null if a script
+    /// didn't say).
+    /// </summary>
+    protected virtual void OnDamage(float amount, Entity? source)
+    {
+    }
+
+    /// <summary>Called once when this entity's <see cref="Health"/> reaches zero, before it's destroyed.</summary>
+    protected virtual void OnDeath()
+    {
+    }
+
     /// <summary>Called when the entity is destroyed or the game stops.</summary>
     protected virtual void OnDestroy()
     {
@@ -137,6 +150,9 @@ public abstract class Behavior : Component
     protected Tween RotateTo(float degrees, float seconds, Func<float, float>? ease = null) =>
         Game.RotateTo(Entity!, degrees, seconds, ease);
 
+    /// <summary>Paints this entity's sprites (and its children's) <paramref name="color"/>, white by default, for a moment.</summary>
+    protected void Flash(Color? color = null, float seconds = 0.1f) => Game.Flash(Entity!, color, seconds);
+
     /// <summary>Fades this entity's sprite, text and tilemap to <paramref name="alpha"/>.</summary>
     protected Tween FadeTo(float alpha, float seconds, Func<float, float>? ease = null) =>
         Game.FadeTo(Entity!, alpha, seconds, ease);
@@ -161,6 +177,10 @@ public abstract class Behavior : Component
     }
 
     internal void RunClick() => OnClick();
+
+    internal void RunDamage(float amount, Entity? source) => OnDamage(amount, source);
+
+    internal void RunDeath() => OnDeath();
 
     internal void RunDestroy()
     {

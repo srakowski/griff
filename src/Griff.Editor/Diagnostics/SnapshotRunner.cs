@@ -214,6 +214,19 @@ internal static class SnapshotRunner
             await Task.Delay(300);
             checks.Add($"arcade scene name follows switches: {(arcade.SceneName == "Game" && play.Game == arcade ? "ok" : "FAILED")} ({arcade.SceneName})");
 
+            // A hit flash goes through the sprite shader: the ship, in the middle of the view, turns white.
+            var ship = arcade.Find("Player")!;
+            var before = CenterPixel(play, arcade);
+            arcade.Flash(ship, Color.White, 5);
+            var flashed = CenterPixel(play, arcade);
+            var blue = before is { } b && b.B > b.R + 60;
+            var white = flashed is { } f && f.R > 240 && f.G > 240 && f.B > 240;
+            checks.Add($"hit flash paints the ship white on the GPU: {(blue && white ? "ok" : "FAILED")} (before {before}, flashed {flashed})");
+            ship.GetComponent<Health>()!.Damage(1);
+            await Task.Delay(300);
+            var hearts = arcade.Find("Hearts")?.GetComponent<Text>()?.Value;
+            checks.Add($"arcade ship loses a heart: {(hearts?.Length == 2 ? "ok" : "FAILED")} ({hearts})");
+
             // The game over panel and its buttons on the GPU.
             workspace.Scene!.Scene.Entities.First(e => e.Name == "Game Over").IsEnabled = true;
             await Task.Delay(600);
@@ -466,6 +479,15 @@ internal static class SnapshotRunner
                 Transform.Rotation += new Vector3(0, 0, {{degreesPerSecond}} * Time.Delta);
         }
         """;
+
+    // The game's middle pixel as the GPU draws it right now, or null without a GL surface.
+    private static (byte R, byte G, byte B)? CenterPixel(PlayMode play, Griff.Runtime.Game game)
+    {
+        if (play.Surface.Capture(SceneRenderer.Build(game, play.Surface.Aspect)) is not var (pixels, width, height))
+            return null;
+        var i = ((height / 2) * width + width / 2) * 4;
+        return (pixels[i], pixels[i + 1], pixels[i + 2]);
+    }
 
     private static void SaveRgba(byte[] rgba, int width, int height, string path)
     {

@@ -49,14 +49,12 @@ public static class ProjectTemplates
         {
             ["Scripts/PlayerController.cs"] = PlayerControllerScript,
             ["Scripts/Collectible.cs"] = CollectibleScript,
-            ["Scripts/CameraFollow.cs"] = CameraFollowScript,
             ["Scripts/ScoreCounter.cs"] = ScoreCounterScript,
         },
         ProjectTemplate.TopDown => new Dictionary<string, string>
         {
             ["Scripts/TopDownController.cs"] = TopDownControllerScript,
             ["Scripts/Collectible.cs"] = CollectibleScript,
-            ["Scripts/CameraFollow.cs"] = CameraFollowScript,
             ["Scripts/ScoreCounter.cs"] = ScoreCounterScript,
         },
         ProjectTemplate.Arcade => new Dictionary<string, string>
@@ -119,7 +117,16 @@ public static class ProjectTemplates
     {
         var scene = new Scene();
 
-        AddCameraWithScore(scene);
+        // A vertical dead zone keeps the camera still through a jump; it never shows past the backdrop.
+        var follow = AddCameraWithScore(scene);
+        follow.DeadZone = new Vector2(0, 3);
+        follow.LookAhead = 0.15f;
+        follow.StayInside = "Backdrop";
+
+        var backdrop = Box("Backdrop", new Vector2(0, 2), new Vector2(32, 14), Color.FromBytes(0x26, 0x2B, 0x36));
+        backdrop.RemoveComponent(backdrop.GetComponent<BoxCollider>()!);
+        backdrop.GetComponent<Sprite>()!.Order = -10;
+        scene.Add(backdrop);
 
         var player = Box("Player", new Vector2(-6, -2), new Vector2(0.8f, 1), Color.FromBytes(0xF0, 0x8C, 0x2E));
         player.AddComponent<Body>();
@@ -147,7 +154,8 @@ public static class ProjectTemplates
     {
         var scene = new Scene();
 
-        AddCameraWithScore(scene);
+        var follow = AddCameraWithScore(scene);
+        follow.Entity!.GetComponent<Camera>()!.SortByY = true;
 
         var player = Box("Player", Vector2.Zero, new Vector2(0.8f, 0.8f), Color.FromBytes(0x4C, 0x9A, 0xFF));
         player.AddComponent<Body>().GravityScale = 0;
@@ -172,12 +180,13 @@ public static class ProjectTemplates
         return scene;
     }
 
-    // The score is a child of the camera, so it stays on screen as the camera moves.
-    private static void AddCameraWithScore(Scene scene)
+    // The camera follows the player; the score is a child of the camera, so it stays on screen as the camera moves.
+    private static Follow AddCameraWithScore(Scene scene)
     {
         var camera = new Entity("Main Camera");
         camera.AddComponent<Camera>().Size = 6;
-        camera.AddComponent(Script("CameraFollow"));
+        var follow = camera.AddComponent<Follow>();
+        follow.Target = "Player";
         scene.Add(camera);
 
         var score = new Entity("Score");
@@ -188,6 +197,7 @@ public static class ProjectTemplates
         text.Order = 100;
         score.AddComponent(Script("ScoreCounter"));
         scene.Add(score, camera);
+        return follow;
     }
 
     // The Arcade menu: a title, the best score, and buttons that need no code (Play loads Game, Quit quits).
@@ -445,7 +455,7 @@ public static class ProjectTemplates
                 if (other.Name != "Player")
                     return;
 
-                Game.Find("Score")?.GetComponent<ScoreCounter>()?.Add(1);
+                Game.Send("Score", 1);
 
                 // A burst of sparkles in this collectible's color (Prefabs/Sparkle) and a little camera kick.
                 var position = Transform.WorldPosition;
@@ -464,10 +474,12 @@ public static class ProjectTemplates
         """;
 
     private const string ScoreCounterScript = """
-        /// <summary>Shows the score in this entity's Text, with a little pop when it goes up. Other scripts call Add.</summary>
+        /// <summary>Shows the score in this entity's Text, with a little pop when it goes up. Send it points with Game.Send("Score", 1).</summary>
         public class ScoreCounter : Behavior
         {
             public int Score { get; set; }
+
+            protected override void Start() => On<int>("Score", Add);
 
             public void Add(int points)
             {
@@ -613,7 +625,7 @@ public static class ProjectTemplates
                     return;
                 _alive = false;
 
-                Game.Find<ScoreCounter>()?.Add(1);
+                Game.Send("Score", 1);
                 var position = Transform.WorldPosition;
                 var burst = Game.Spawn("Sparkle", new Vector2(position.X, position.Y));
                 if (burst.GetComponent<ParticleEmitter>() is { } sparks && GetComponent<Sprite>() is { } sprite)
@@ -705,31 +717,6 @@ public static class ProjectTemplates
         public class BestScore : Behavior
         {
             protected override void Start() => GetComponent<Text>()!.Value = $"Best: {Game.SaveData.GetInt("best")}";
-        }
-
-        """;
-
-    private const string CameraFollowScript = """
-        /// <summary>Smoothly follows the entity named Target.</summary>
-        public class CameraFollow : Behavior
-        {
-            public string Target { get; set; } = "Player";
-
-            /// <summary>Higher is snappier.</summary>
-            public float Smoothing { get; set; } = 6;
-
-            private Entity? _target;
-
-            protected override void Start() => _target = Game.Find(Target);
-
-            protected override void Update()
-            {
-                if (_target is null)
-                    return;
-
-                var goal = _target.Transform.WorldPosition with { Z = Transform.Position.Z };
-                Transform.Position = Vector3.Lerp(Transform.Position, goal, 1 - MathF.Exp(-Smoothing * Time.Delta));
-            }
         }
 
         """;

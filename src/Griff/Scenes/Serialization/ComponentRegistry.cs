@@ -22,6 +22,8 @@ public sealed class ComponentRegistry
         registry.Register<ParticleEmitter>();
         registry.Register<ScreenAnchor>();
         registry.Register<Button>();
+        registry.Register<Follow>();
+        registry.Register<Parallax>();
         return registry;
     }
 

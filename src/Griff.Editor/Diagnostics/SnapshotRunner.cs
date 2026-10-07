@@ -152,6 +152,36 @@ internal static class SnapshotRunner
 
             play.Stop();
 
+            // A walker that pathfinds through a maze, animated with clips, followed by a camera that stays in the level,
+            // in front of repeating parallax hills, sending messages and drawing its path with debug shapes.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateSceneAsync("Tier");
+            BuildTier(workspace);
+            play.Play();
+            await Task.Delay(2500);
+            var tier = workspace.Scene!.Scene;
+            var tierGame = play.Game!;
+            var walker = tier.Entities.First(e => e.Name == "Walker");
+            var walkerAt = walker.Transform.Position;
+            checks.Add($"walker pathfound to the goal: {(Vector2.Distance(new(walkerAt.X, walkerAt.Y), new(10.5f, -1.5f)) < 0.3f ? "ok" : "FAILED")} (at {walkerAt.X:0.00}, {walkerAt.Y:0.00})");
+            var steps = tier.Entities.First(e => e.Name == "Steps").GetComponent<Text>()!.Value;
+            checks.Add($"messages counted steps: {(steps is not "0" and not null ? "ok" : "FAILED")} ({steps})");
+            var frame = walker.GetComponent<Sprite>()!.Frame;
+            checks.Add($"walker shows its idle clip at the goal: {(frame is >= 4 and <= 5 ? "ok" : "FAILED")} (frame {frame})");
+            var view = tier.Entities.First(e => e.Name == "Main Camera").Transform.Position;
+            // The level spans x 0..12, y -8..0; a view bigger than that is centered on it.
+            static bool Inside(float at, float half, float min, float max) =>
+                2 * half >= max - min ? Math.Abs(at - (min + max) / 2) < 0.01f : at - half >= min - 0.01f && at + half <= max + 0.01f;
+            var inside = Inside(view.X, 3 * play.Surface.Aspect, 0, 12) && Inside(view.Y, 3, -8, 0);
+            checks.Add($"camera stays inside the level: {(inside ? "ok" : "FAILED")} (at {view.X:0.00}, {view.Y:0.00}, aspect {play.Surface.Aspect:0.00})");
+            var tierFrame = SceneRenderer.Build(tierGame, play.Surface.Aspect);
+            var hills = tierFrame.Sprites.Count(d => d.Entity.Name == "Hills");
+            checks.Add($"parallax hills repeat across the view: {(hills >= 2 ? "ok" : "FAILED")} ({hills} copies)");
+            checks.Add($"debug path drawn: {(tierGame.Debug.Shapes.Any() ? "ok" : "FAILED")}");
+            if (play.Surface.Capture(tierFrame) is var (tPixels, tWidth, tHeight))
+                SaveRgba(tPixels, tWidth, tHeight, Path.Combine(outputDir, "tier-game.png"));
+            play.Stop();
+
             // The Arcade template: menu buttons, screen anchors at the real window shape, scene names and Quit.
             await workspace.SaveSceneAsync();
             await workspace.CreateProjectAsync(projectDir, "Snapshot Arcade", Griff.Projects.ProjectTemplate.Arcade);
@@ -326,6 +356,105 @@ internal static class SnapshotRunner
         popper.AddComponent<Sprite>().Tint = Color.FromBytes(0x57, 0xAB, 0x5A);
         popper.AddComponent(workspace.Components.Find("Pop")!.CreateInstance());
         document.Execute(new AddEntityEdit(scene, popper));
+    }
+
+    private static void BuildTier(IWorkspace workspace)
+    {
+        var document = workspace.Scene!;
+        var scene = document.Scene;
+        var assets = workspace.Project!.AssetsPath;
+
+        // A 12×8 maze from (0, 0) to (12, -8): the walker starts top left and has to wind round to the bottom right.
+        var level = new Entity("Level");
+        var map = level.AddComponent<Tilemap>();
+        map.Tiles =
+        [
+            "000000000000",
+            "0.....0....0",
+            "0.000.0.00.0",
+            "0...0...0..0",
+            "000.0000.0.0",
+            "0.........00",
+            "0.000000...0",
+            "000000000000",
+        ];
+        map.Tint = Color.FromBytes(0x48, 0x4B, 0x55);
+        map.Order = 1;
+        document.Execute(new AddEntityEdit(scene, level));
+
+        var hills = new Entity("Hills");
+        hills.Transform.Position = new Vector3(0, -6, 0);
+        var hillsSprite = hills.AddComponent<Sprite>();
+        hillsSprite.Size = new Vector2(3, 2);
+        hillsSprite.Tint = Color.FromBytes(0x2B, 0x4A, 0x3A);
+        hillsSprite.Order = -5;
+        var parallax = hills.AddComponent<Parallax>();
+        parallax.Factor = new Vector2(0.3f, 1);
+        parallax.RepeatX = true;
+        document.Execute(new AddEntityEdit(scene, hills));
+
+        File.WriteAllText(Path.Combine(assets, "Scripts", "Walker.cs"), """
+            public class Walker : Behavior
+            {
+                public float Speed { get; set; } = 9;
+
+                protected override void Update()
+                {
+                    var level = Game.Find("Level")!.GetComponent<Tilemap>()!;
+                    var here = new Vector2(Transform.Position.X, Transform.Position.Y);
+                    var path = level.FindPath(here, new Vector2(10.5f, -1.5f));
+                    Debug.Path(new[] { here }.Concat(path), Color.Yellow);
+                    Debug.Circle(here, 0.6f, Color.Cyan);
+
+                    var animation = GetComponent<Animation>()!;
+                    if (path.Count == 0 || Vector2.Distance(here, path[^1]) < 0.05f)
+                    {
+                        animation.Play("Idle");
+                        return;
+                    }
+
+                    var toNext = path[0] - here;
+                    var step = MathF.Min(Speed * Time.Delta, toNext.Length());
+                    Transform.Position += new Vector3(Vector2.Normalize(toNext) * step, 0);
+                    animation.Play("Walk");
+                    Game.Send("Step", 1);
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(assets, "Scripts", "StepCounter.cs"), """
+            public class StepCounter : Behavior
+            {
+                public int Steps { get; set; }
+
+                protected override void Start() => On<int>("Step", n => GetComponent<Text>()!.Value = (Steps += n).ToString());
+            }
+            """);
+        workspace.ReloadScripts();
+
+        var walker = new Entity("Walker");
+        walker.Transform.Position = new Vector3(1.5f, -1.5f, 0);
+        var walkerSprite = walker.AddComponent<Sprite>();
+        walkerSprite.Size = new Vector2(0.8f, 0.8f);
+        walkerSprite.Tint = Color.FromBytes(0xF0, 0x8C, 0x2E);
+        walkerSprite.Columns = 4;
+        walkerSprite.Rows = 2;
+        walkerSprite.Order = 2;
+        walker.AddComponent<Animation>().Clips = "Walk 0-3 @12, Idle 4-5 @2";
+        walker.AddComponent(workspace.Components.Find("Walker")!.CreateInstance());
+        document.Execute(new AddEntityEdit(scene, walker));
+
+        var camera = scene.Entities.First(e => e.GetComponent<Camera>() is not null);
+        camera.GetComponent<Camera>()!.Size = 3;
+        var follow = new Follow { Target = "Walker", StayInside = "Level", Smoothing = 8 };
+        document.Execute(new AddComponentEdit(camera, follow));
+
+        var counter = new Entity("Steps");
+        var counterText = counter.AddComponent<Text>();
+        counterText.Value = "0";
+        counterText.Order = 10;
+        counter.AddComponent<ScreenAnchor>().Offset = new Vector2(0.8f, -0.6f);
+        counter.AddComponent(workspace.Components.Find("StepCounter")!.CreateInstance());
+        document.Execute(new AddEntityEdit(scene, counter));
     }
 
     private static string SpinnerSource(float degreesPerSecond) => $$"""

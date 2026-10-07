@@ -195,6 +195,146 @@ public sealed class Tilemap : Component
         _collisionRuns ??= FindRuns(_tiles, c => CollisionOf(TileOf(c)))
             .Select(r => (r.X, r.Y, r.Length, r.Kind == 1)).ToList();
 
+    /// <summary>
+    /// True if cell (<paramref name="x"/>, <paramref name="y"/>) is a wall for <see cref="FindPath"/>: a solid tile on a
+    /// <see cref="Solid"/> map. Empty, background and one-way tiles can be walked through.
+    /// </summary>
+    public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && !IsBackground(tile) && !IsOneWay(tile);
+
+    /// <summary>
+    /// The shortest way from <paramref name="from"/> to <paramref name="to"/> (world positions) that doesn't go through
+    /// walls, as world positions to head for one after another, ending at the center of <paramref name="to"/>'s cell.
+    /// Straight stretches are one waypoint. Empty if there's no way there, or either end is inside a wall. Moves
+    /// diagonally unless <paramref name="diagonal"/> is false, but never cuts a wall's corner. The search stays within
+    /// the map, plus one cell all round so paths can go around its outside.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var path = level.FindPath(Transform.WorldPosition, player.Transform.WorldPosition);
+    /// if (path.Count > 0)
+    ///     body.Velocity = Vector2.Normalize(path[0] - here) * Speed;
+    /// </code>
+    /// </example>
+    public IReadOnlyList<Vector2> FindPath(Vector2 from, Vector2 to, bool diagonal = true)
+    {
+        var world = Entity?.Transform.WorldMatrix ?? Matrix4x4.Identity;
+        if (!Matrix4x4.Invert(world, out var toLocal))
+            return [];
+
+        var start = CellAt(Vector2.Transform(from, toLocal));
+        var goal = CellAt(Vector2.Transform(to, toLocal));
+        var cells = FindCellPath(start, goal, diagonal);
+        return cells.Select(c => Vector2.Transform(CellCenter(c.X, c.Y), world)).ToList();
+    }
+
+    /// <summary>A world position, given as a <see cref="Vector3"/>; its Z is ignored.</summary>
+    public IReadOnlyList<Vector2> FindPath(Vector3 from, Vector3 to, bool diagonal = true) =>
+        FindPath(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y), diagonal);
+
+    /// <summary>
+    /// A* over cells: the cells to step through after <paramref name="start"/>, up to <paramref name="goal"/>, keeping only
+    /// the cells where the direction changes (and the goal). Empty if unreachable; just the goal if already there.
+    /// </summary>
+    public IReadOnlyList<(int X, int Y)> FindCellPath((int X, int Y) start, (int X, int Y) goal, bool diagonal = true)
+    {
+        if (IsBlocked(start.X, start.Y) || IsBlocked(goal.X, goal.Y))
+            return [];
+        if (start == goal)
+            return [goal];
+
+        // The searched area: the grid plus a margin of one cell, widened to take in both ends.
+        var minX = Math.Min(-1, Math.Min(start.X, goal.X));
+        var minY = Math.Min(-1, Math.Min(start.Y, goal.Y));
+        var maxX = Math.Max(Width, Math.Max(start.X, goal.X));
+        var maxY = Math.Max(Height, Math.Max(start.Y, goal.Y));
+        var width = maxX - minX + 1;
+        var cellCount = width * (maxY - minY + 1);
+        if (cellCount > 250_000)
+            return [];
+
+        // A state is a cell plus the way the last step went into it (9 ways, the middle one meaning "just started"), so
+        // that of equally short ways the search can prefer the one that turns least: fewer waypoints, no zig-zags.
+        const int startHeading = 4;
+        int StateOf((int X, int Y) c, int heading) => ((c.Y - minY) * width + (c.X - minX)) * 9 + heading;
+        (int X, int Y) CellOf(int state) => (state / 9 % width + minX, state / 9 / width + minY);
+
+        const float straight = 1f;
+        const float turnCost = 1e-3f;
+        var diagonalCost = MathF.Sqrt(2);
+        float Estimate((int X, int Y) c)
+        {
+            var dx = Math.Abs(c.X - goal.X);
+            var dy = Math.Abs(c.Y - goal.Y);
+            return diagonal ? straight * Math.Abs(dx - dy) + diagonalCost * Math.Min(dx, dy) : straight * (dx + dy);
+        }
+
+        var cost = new float[cellCount * 9];
+        Array.Fill(cost, float.PositiveInfinity);
+        var cameFrom = new int[cellCount * 9];
+        var open = new PriorityQueue<int, float>();
+        var startState = StateOf(start, startHeading);
+        cost[startState] = 0;
+        open.Enqueue(startState, Estimate(start));
+
+        while (open.TryDequeue(out var current, out var priority))
+        {
+            var cell = CellOf(current);
+            if (cell == goal)
+                return Waypoints(cameFrom, startState, current, CellOf);
+            if (priority > cost[current] + Estimate(cell) + 1e-5f)
+                continue; // A stale entry: this state was reached more cheaply since.
+
+            var heading = current % 9;
+            for (var dy = -1; dy <= 1; dy++)
+            {
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if ((dx == 0 && dy == 0) || (!diagonal && dx != 0 && dy != 0))
+                        continue;
+                    var next = (X: cell.X + dx, Y: cell.Y + dy);
+                    if (next.X < minX || next.X > maxX || next.Y < minY || next.Y > maxY || IsBlocked(next.X, next.Y))
+                        continue;
+                    if (dx != 0 && dy != 0 && (IsBlocked(cell.X + dx, cell.Y) || IsBlocked(cell.X, cell.Y + dy)))
+                        continue;
+
+                    var nextHeading = (dy + 1) * 3 + dx + 1;
+                    var nextState = StateOf(next, nextHeading);
+                    var turned = heading != startHeading && heading != nextHeading;
+                    var nextCost = cost[current] + (dx != 0 && dy != 0 ? diagonalCost : straight) + (turned ? turnCost : 0);
+                    if (nextCost >= cost[nextState])
+                        continue;
+                    cost[nextState] = nextCost;
+                    cameFrom[nextState] = current;
+                    open.Enqueue(nextState, nextCost + Estimate(next));
+                }
+            }
+        }
+
+        return [];
+    }
+
+    // Walks back from the goal, keeping the corners: a cell where the next step goes a different way from the last.
+    private static List<(int X, int Y)> Waypoints(int[] cameFrom, int start, int goal, Func<int, (int X, int Y)> cellOf)
+    {
+        var cells = new List<(int X, int Y)>();
+        for (var state = goal; state != start; state = cameFrom[state])
+            cells.Add(cellOf(state));
+        cells.Reverse();
+
+        var waypoints = new List<(int X, int Y)>();
+        var previous = cellOf(start);
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            var isLast = i == cells.Count - 1;
+            if (isLast || (cells[i + 1].X - cell.X, cells[i + 1].Y - cell.Y) != (cell.X - previous.X, cell.Y - previous.Y))
+                waypoints.Add(cell);
+            previous = cell;
+        }
+
+        return waypoints;
+    }
+
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="BackgroundTiles"/>.</summary>
     public bool IsBackground(int tile) => tile is >= 0 and < MaxTiles && _background[tile];
 

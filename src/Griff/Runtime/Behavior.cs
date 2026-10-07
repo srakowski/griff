@@ -34,6 +34,9 @@ public abstract class Behavior : Component
 
     protected IAudio Audio => Game.Audio;
 
+    /// <summary>Draws lines, boxes, circles and text over the game for a frame; see <see cref="DebugDraw"/>.</summary>
+    protected DebugDraw Debug => Game.Debug;
+
     internal bool IsStarted { get; private set; }
 
     /// <summary>Called once, before the first <see cref="Update"/>, after every behavior in the scene exists.</summary>
@@ -87,6 +90,27 @@ public abstract class Behavior : Component
 
     /// <summary>Stops every coroutine this behavior started.</summary>
     protected void StopCoroutines() => Game.StopCoroutines(this);
+
+    /// <summary>
+    /// Calls <paramref name="action"/> whenever someone sends <paramref name="message"/> with <c>Game.Send</c>, until this
+    /// entity is destroyed or the script is reloaded (Start then runs again on the new version, so listen in Start).
+    /// </summary>
+    /// <example><code>protected override void Start() => On("PlayerDied", () => Game.ReloadScene(fade: 0.5f));</code></example>
+    protected MessageListener On(string message, Action action) => Game.On(message, _ => action(), this);
+
+    /// <summary>
+    /// Like <see cref="On(string, Action)"/>, with the data sent along, e.g. <c>On&lt;int&gt;("ScoreChanged", score =&gt; ...)</c>.
+    /// </summary>
+    protected MessageListener On<T>(string message, Action<T> action) => Game.On(message, data => action(data switch
+    {
+        T value => value,
+        null when default(T) is null => default!,
+        _ => throw new InvalidOperationException(
+            $"\"{message}\" was sent with {(data is null ? "no data" : $"a {data.GetType().Name}")}, but {GetType().Name} listens for a {typeof(T).Name}."),
+    }), this);
+
+    /// <summary>Stops every message listener this behavior started.</summary>
+    protected void StopListening() => Game.StopListening(this);
 
     /// <summary>Yield this from a coroutine to wait <paramref name="seconds"/> of game time.</summary>
     protected static WaitSeconds Wait(float seconds) => new(seconds);

@@ -9,6 +9,13 @@ public sealed class Camera : Component
 
     public Color Background { get; set; } = Color.FromBytes(0x1E, 0x22, 0x2B);
 
+    /// <summary>
+    /// For top-down games: among things with the same Order and Z, whatever is lower down draws in front, so the player
+    /// walks behind a tree's top and in front of its trunk. Compares entities' positions, so put a tall sprite's pivot
+    /// at its feet (offset it within a child entity).
+    /// </summary>
+    public bool SortByY { get; set; }
+
     private float _shakeStrength;
     private float _shakeDuration;
     private float _shakeLeft;
@@ -127,13 +134,21 @@ public sealed class Sprite : Component
     }
 }
 
+/// <summary>One named animation of an <see cref="Animation"/>'s <see cref="Animation.Clips"/>.</summary>
+/// <param name="FramesPerSecond">The clip's own speed, or null to use the animation's.</param>
+/// <param name="Loop">Whether the clip loops, or null to use the animation's <see cref="Animation.Loop"/>.</param>
+public readonly record struct AnimationClip(string Name, int FirstFrame, int FrameCount, float? FramesPerSecond = null, bool? Loop = null);
+
 /// <summary>
 /// Plays frames of the entity's sprite sheet: <see cref="FrameCount"/> frames starting at <see cref="FirstFrame"/>.
-/// Swap animations from a script by changing these (e.g. idle vs run rows).
+/// For several animations on one sheet, name them in <see cref="Clips"/> and switch with <see cref="Play"/>.
 /// </summary>
 [ComponentName("Animation")]
 public sealed class Animation : Component
 {
+    private string? _clips;
+    private IReadOnlyList<AnimationClip> _parsed = [];
+
     public int FirstFrame { get; set; }
 
     public int FrameCount { get; set; } = 4;
@@ -144,25 +159,138 @@ public sealed class Animation : Component
 
     public bool Playing { get; set; } = true;
 
+    /// <summary>
+    /// Named animations on the sprite sheet, separated by commas: a name, a frame or range of frames, and optionally
+    /// a speed and whether it plays once, e.g. <c>Idle 0-3, Run 4-9 @12, Jump 10, Die 11-15 @8 once</c>.
+    /// </summary>
+    public string? Clips
+    {
+        get => _clips;
+        set
+        {
+            _clips = value;
+            _parsed = ParseClips(value);
+        }
+    }
+
+    /// <summary>
+    /// The clip playing, by name, e.g. "Idle". While it names one of <see cref="Clips"/>, its frames are shown instead of
+    /// <see cref="FirstFrame"/> and <see cref="FrameCount"/>. Set it in the Inspector to pick the clip the game starts with.
+    /// </summary>
+    public string? Clip { get; set; }
+
     /// <summary>Seconds into the current animation; restart by setting to 0.</summary>
     [DoNotSerialize]
     public float Time { get; set; }
 
+    /// <summary>The parsed <see cref="Clips"/>.</summary>
+    [DoNotSerialize]
+    public IReadOnlyList<AnimationClip> ClipList => _parsed;
+
     /// <summary>True once a non-looping animation has shown its last frame.</summary>
     [DoNotSerialize]
-    public bool Finished => !Loop && FramesPerSecond > 0 && Time * FramesPerSecond >= FrameCount;
+    public bool Finished
+    {
+        get
+        {
+            var (_, count, fps, loop) = Current();
+            return !loop && fps > 0 && Time * fps >= count;
+        }
+    }
+
+    /// <summary>
+    /// Switches to the clip called <paramref name="clip"/> from the start, and plays it. Playing the clip that's already
+    /// playing carries on (so it's safe to call every frame) unless <paramref name="restart"/> is set.
+    /// </summary>
+    /// <example><code>animation.Play(body.IsGrounded ? (moving ? "Run" : "Idle") : "Jump");</code></example>
+    public void Play(string clip, bool restart = false)
+    {
+        if (!_parsed.Any(c => string.Equals(c.Name, clip, StringComparison.OrdinalIgnoreCase)))
+        {
+            var known = _parsed.Count == 0 ? "it has no clips" : $"its clips are {string.Join(", ", _parsed.Select(c => c.Name))}";
+            throw new ArgumentException($"The animation on \"{Entity?.Name}\" has no clip called \"{clip}\"; {known}.", nameof(clip));
+        }
+
+        if (restart || !string.Equals(Clip, clip, StringComparison.OrdinalIgnoreCase))
+            Time = 0;
+        Clip = clip;
+        Playing = true;
+    }
 
     /// <summary>Advances time and sets the sprite's frame. Called by the game every frame.</summary>
     public void Advance(float seconds)
     {
-        if (Entity?.GetComponent<Sprite>() is not { } sprite || FrameCount <= 0)
+        var (first, count, fps, loop) = Current();
+        if (Entity?.GetComponent<Sprite>() is not { } sprite || count <= 0)
             return;
 
         if (Playing)
             Time += seconds;
 
-        var index = (int)(Time * FramesPerSecond);
-        index = Loop ? index % FrameCount : Math.Min(index, FrameCount - 1);
-        sprite.Frame = FirstFrame + Math.Max(0, index);
+        var index = (int)(Time * fps);
+        index = loop ? index % count : Math.Min(index, count - 1);
+        sprite.Frame = first + Math.Max(0, index);
+    }
+
+    /// <summary>
+    /// Reads clips written like <see cref="Clips"/>. Entries that don't make sense (no name, or no frames) are skipped,
+    /// so a half-typed list still plays what it can.
+    /// </summary>
+    public static IReadOnlyList<AnimationClip> ParseClips(string? text)
+    {
+        var clips = new List<AnimationClip>();
+        foreach (var entry in (text ?? "").Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var words = entry.Split([' ', '\t', ':'], StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length < 2 || !TryParseRange(words[1], out var first, out var count))
+                continue;
+
+            float? fps = null;
+            bool? loop = null;
+            foreach (var word in words.Skip(2))
+            {
+                if (word.StartsWith('@') && float.TryParse(word[1..].TrimEnd('f', 'p', 's'), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var speed))
+                    fps = speed;
+                else if (word.Equals("once", StringComparison.OrdinalIgnoreCase))
+                    loop = false;
+                else if (word.Equals("loop", StringComparison.OrdinalIgnoreCase))
+                    loop = true;
+            }
+
+            clips.Add(new AnimationClip(words[0], first, count, fps, loop));
+        }
+
+        return clips;
+    }
+
+    // "4" is one frame; "4-9" is six, and so is "9-4".
+    private static bool TryParseRange(string text, out int first, out int count)
+    {
+        var dash = text.IndexOf('-', 1);
+        var (from, to) = dash < 0 ? (text, text) : (text[..dash], text[(dash + 1)..]);
+        if (!int.TryParse(from, out var a) || !int.TryParse(to, out var b) || a < 0 || b < 0)
+        {
+            (first, count) = (0, 0);
+            return false;
+        }
+
+        (first, count) = (Math.Min(a, b), Math.Abs(b - a) + 1);
+        return true;
+    }
+
+    // The frames, speed and looping in effect: the current clip's, or the animation's own.
+    private (int First, int Count, float Fps, bool Loop) Current()
+    {
+        if (!string.IsNullOrEmpty(Clip))
+        {
+            foreach (var clip in _parsed)
+            {
+                if (string.Equals(clip.Name, Clip, StringComparison.OrdinalIgnoreCase))
+                    return (clip.FirstFrame, clip.FrameCount, clip.FramesPerSecond ?? FramesPerSecond, clip.Loop ?? Loop);
+            }
+        }
+
+        return (FirstFrame, FrameCount, FramesPerSecond, Loop);
     }
 }

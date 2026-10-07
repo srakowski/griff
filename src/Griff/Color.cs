@@ -8,6 +8,14 @@ public readonly record struct Color(float R, float G, float B, float A = 1f)
     public static Color White => new(1, 1, 1);
     public static Color Black => new(0, 0, 0);
     public static Color Transparent => new(0, 0, 0, 0);
+    public static Color Gray => new(0.5f, 0.5f, 0.5f);
+    public static Color Red => new(1, 0, 0);
+    public static Color Green => new(0, 1, 0);
+    public static Color Blue => new(0, 0, 1);
+    public static Color Yellow => new(1, 1, 0);
+    public static Color Cyan => new(0, 1, 1);
+    public static Color Magenta => new(1, 0, 1);
+    public static Color Orange => new(1, 0.5f, 0);
 
     public static Color FromBytes(byte r, byte g, byte b, byte a = 255) =>
         new(r / 255f, g / 255f, b / 255f, a / 255f);

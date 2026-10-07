@@ -14,6 +14,7 @@ public sealed class Game
     private readonly List<Tween> _tweens = [];
     private readonly List<Coroutine> _coroutines = [];
     private readonly List<Entity> _kept = [];
+    private readonly MessageBoard _messages = new();
     private string? _pendingScene;
     private (string Scene, float Seconds)? _fadingOut;
     private float _fadeInSeconds;
@@ -26,6 +27,7 @@ public sealed class Game
     {
         Scene = scene;
         Input = input;
+        Debug = new DebugDraw(Time);
     }
 
     public Scene Scene { get; private set; }
@@ -72,6 +74,9 @@ public sealed class Game
 
     public Physics Physics { get; } = new();
 
+    /// <summary>Lines, boxes, circles and text drawn over the game for a frame, to see what code is doing.</summary>
+    public DebugDraw Debug { get; }
+
     /// <summary>Values kept between runs (high scores, progress). Set by the host; in memory only by default.</summary>
     public SaveData SaveData { get; set; } = new();
 
@@ -85,6 +90,7 @@ public sealed class Game
             throw new InvalidOperationException("The game has stopped.");
 
         Time.Advance(seconds);
+        Debug.BeginFrame();
 
         // Snapshot first: behaviors may spawn or destroy while we iterate.
         var behaviors = ActiveBehaviors().ToList();
@@ -122,6 +128,7 @@ public sealed class Game
         AdvanceFade();
         FlushDestroys();
         SwitchSceneIfRequested();
+        RunFollowers();
         LayOutScreen();
     }
 
@@ -276,6 +283,30 @@ public sealed class Game
                 tilemap.Tint = tilemap.Tint with { A = tilemapFrom + (alpha - tilemapFrom) * t };
         }, ease, entity, (entity, nameof(FadeTo))));
     }
+
+    /// <summary>
+    /// Tells everyone listening for <paramref name="message"/> (with <c>On</c>) straight away, passing along
+    /// <paramref name="data"/>. Returns how many listeners heard it; nobody listening is fine.
+    /// </summary>
+    /// <example><code>Game.Send("PlayerDied"); Game.Send("ScoreChanged", 10);</code></example>
+    public int Send(string message, object? data = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        return _messages.Send(message, data, Scene);
+    }
+
+    /// <summary>
+    /// Calls <paramref name="action"/> with the data of every <paramref name="message"/> sent from now on, until cancelled.
+    /// With an <paramref name="owner"/>, it stops if that entity leaves the scene.
+    /// </summary>
+    public MessageListener On(string message, Action<object?> action, Entity? owner = null) =>
+        _messages.Add(new MessageListener(message, action, owner, null));
+
+    internal MessageListener On(string message, Action<object?> action, Behavior owner) =>
+        _messages.Add(new MessageListener(message, action, null, owner));
+
+    /// <summary>Stops every message listener <paramref name="owner"/> started.</summary>
+    internal void StopListening(Behavior owner) => _messages.StopAll(owner);
 
     /// <summary>Adds <paramref name="entity"/> to the scene. Its behaviors start on the next frame.</summary>
     public Entity Spawn(Entity entity, Entity? parent = null)
@@ -448,6 +479,7 @@ public sealed class Game
 
         Scene = next;
         SceneName = SceneNameOf(name);
+        _messages.Prune(next);
         SceneChanged?.Invoke(this, next);
     }
 
@@ -520,6 +552,13 @@ public sealed class Game
         var world = button.Entity!.Transform.WorldMatrix;
         var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
         return new Box(new Vector2(world.M41, world.M42), button.Size * scale / 2);
+    }
+
+    // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
+    private void RunFollowers()
+    {
+        foreach (var follow in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
+            follow.Advance(Time.Delta, ViewAspect);
     }
 
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.

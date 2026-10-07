@@ -215,6 +215,40 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.True(Vector2.Distance(new(camera.X, camera.Y), new(player.X, player.Y)) < 1.5f);
     }
 
+    [Fact]
+    public async Task Platformer_CameraNeverShowsPastTheBackdrop()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var camera = game.Find("Main Camera")!;
+        var size = camera.GetComponent<Camera>()!.Size;
+        var area = Follow.AreaOf(game.Find("Backdrop")!)!.Value;
+
+        void AssertInside()
+        {
+            var at = camera.Transform.Position;
+            var half = new Vector2(size * game.ViewAspect, size);
+            Assert.InRange(at.X - half.X, area.Min.X - 1e-3f, area.Max.X);
+            Assert.InRange(at.X + half.X, area.Min.X, area.Max.X + 1e-3f);
+            Assert.InRange(at.Y - half.Y, area.Min.Y - 1e-3f, area.Max.Y);
+            Assert.InRange(at.Y + half.Y, area.Min.Y, area.Max.Y + 1e-3f);
+        }
+
+        game.Tick(Frame);
+        AssertInside();
+
+        // Run all the way right, into the wall at the end of the level.
+        input.SetKey(Key.D, true);
+        for (var t = 0.0; t < 6; t += Frame)
+        {
+            game.Tick(Frame);
+            input.EndFrame();
+            AssertInside();
+        }
+
+        Assert.True(game.Find("Player")!.Transform.Position.X > 12, "the player should reach the right end");
+    }
+
     // As the editor and player set it up: prefabs come from the project.
     private static Game NewGame(Project project, Scene scene, InputState input, ComponentRegistry registry) =>
         new(scene, input)

@@ -72,6 +72,46 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void RoundTrip_KeepsClipsFollowParallaxAndSortByY()
+    {
+        var scene = new Scene();
+        var camera = new Entity("Camera");
+        camera.AddComponent<Camera>().SortByY = true;
+        var follow = camera.AddComponent<Follow>();
+        follow.Target = "Hero";
+        follow.Smoothing = 3;
+        follow.Offset = new Vector2(0, 2);
+        follow.DeadZone = new Vector2(1, 2);
+        follow.LookAhead = 0.2f;
+        follow.StayInside = "Level";
+        scene.Add(camera);
+
+        var hero = new Entity("Hero");
+        hero.AddComponent<Sprite>();
+        var animation = hero.AddComponent<Animation>();
+        animation.Clips = "Idle 0-3, Run 4-9 @12";
+        animation.Clip = "Run";
+        var parallax = hero.AddComponent<Parallax>();
+        parallax.Factor = new Vector2(0.3f, 1);
+        parallax.RepeatX = true;
+        scene.Add(hero);
+
+        var loaded = _serializer.LoadFromString(_serializer.SaveToString(scene));
+
+        var loadedCamera = loaded.Entities.Single(e => e.Name == "Camera");
+        Assert.True(loadedCamera.GetComponent<Camera>()!.SortByY);
+        var loadedFollow = loadedCamera.GetComponent<Follow>()!;
+        Assert.Equal(("Hero", 3f, new Vector2(0, 2), new Vector2(1, 2), 0.2f, "Level"),
+            (loadedFollow.Target, loadedFollow.Smoothing, loadedFollow.Offset, loadedFollow.DeadZone, loadedFollow.LookAhead, loadedFollow.StayInside));
+        var loadedHero = loaded.Entities.Single(e => e.Name == "Hero");
+        var loadedAnimation = loadedHero.GetComponent<Animation>()!;
+        Assert.Equal("Run", loadedAnimation.Clip);
+        Assert.Equal(2, loadedAnimation.ClipList.Count);
+        Assert.Equal(new Vector2(0.3f, 1), loadedHero.GetComponent<Parallax>()!.Factor);
+        Assert.True(loadedHero.GetComponent<Parallax>()!.RepeatX);
+    }
+
+    [Fact]
     public void Save_IsDeterministic()
     {
         var scene = new Scene();

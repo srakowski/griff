@@ -36,6 +36,42 @@ public class ScriptHostTests
     }
 
     [Fact]
+    public void Scripts_CanUseClipsMessagesPathsFollowAndDebugDrawing()
+    {
+        const string source = """
+            public class Guard : Behavior
+            {
+                public int Alarms { get; set; }
+
+                protected override void Start()
+                {
+                    On("Alarm", () => Alarms++);
+                    On<int>("Noise", volume => Alarms += volume);
+                    GetComponent<Animation>()?.Play("Walk");
+                    if (Game.Find("Main Camera")?.GetComponent<Follow>() is { } follow)
+                        follow.TargetEntity = Entity;
+                }
+
+                protected override void Update()
+                {
+                    var here = Transform.WorldPosition;
+                    var level = Game.Find<Tilemap>();
+                    var path = level?.FindPath(here, Vector3.Zero) ?? [];
+                    Debug.Path(path, Color.Yellow);
+                    Debug.Circle(here, 3, Color.Red);
+                    Debug.Text(here + new Vector3(0, 1, 0), Alarms);
+                    if (Input.WasPressed(Key.Space))
+                        Game.Send("Alarm");
+                }
+            }
+            """;
+
+        var result = _host.Reload([new ScriptSource("Guard.cs", source)], []);
+
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+    }
+
+    [Fact]
     public void Compile_ReportsErrorsWithFileAndLine()
     {
         var result = ScriptCompiler.Compile([new ScriptSource("Broken.cs", "public class Broken : Behavior\n{\n    int x = ;\n}")]);

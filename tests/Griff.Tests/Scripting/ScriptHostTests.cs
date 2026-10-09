@@ -72,6 +72,40 @@ public class ScriptHostTests
     }
 
     [Fact]
+    public void Scripts_CanUseSwitchesInventoriesAndTrails()
+    {
+        // The README's puzzle examples, as a script would write them.
+        const string source = """
+            public class Vault : Behavior
+            {
+                protected override void Start()
+                {
+                    GetComponent<Switch>()!.Changed += on => Game.ShakeCamera(on ? 0.2f : 0.1f);
+                }
+
+                protected override void Update()
+                {
+                    var player = Game.Find("Player")!;
+                    if (player.GetComponent<Inventory>()?.Has("Key") == true)
+                    {
+                        Game.Find("Gate Lever")!.GetComponent<Switch>()!.IsOn = true;
+                        Debug.Text(Transform.Position, "I have the key");
+                    }
+
+                    Game.Power(Game.Find("Fan")!, on: false);
+                    if (GetComponent<Trail>() is { } trail)
+                        trail.Emitting = Input.IsDown("Dash");
+                    var tile = Game.Find<Tilemap>()?.ShownTile(16);
+                }
+            }
+            """;
+
+        var result = _host.Reload([new ScriptSource("Vault.cs", source)], []);
+
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+    }
+
+    [Fact]
     public void Compile_ReportsErrorsWithFileAndLine()
     {
         var result = ScriptCompiler.Compile([new ScriptSource("Broken.cs", "public class Broken : Behavior\n{\n    int x = ;\n}")]);

@@ -16,6 +16,9 @@ public sealed class Follow : Component
     private Vector2? _lastTargetPosition;
     private Vector2 _lead;
 
+    // A slide over to a new room: where it set off from, how long it's been going, and how long it takes (real seconds).
+    private (Vector2 From, float Elapsed, float Seconds)? _slide;
+
     /// <summary>The name of the entity to follow, e.g. "Player".</summary>
     public string? Target { get; set; } = "Player";
 
@@ -53,15 +56,58 @@ public sealed class Follow : Component
         }
     }
 
+    /// <summary>
+    /// Jumps straight to the target next time instead of gliding over, e.g. after a teleport or a respawn (doors and
+    /// checkpoints do this by themselves).
+    /// </summary>
+    public void Snap()
+    {
+        _placed = false;
+        _slide = null;
+    }
+
+    /// <summary>
+    /// The <see cref="Room"/> a camera is keeping to, in place of <see cref="StayInside"/>; set by the game as the target
+    /// moves from room to room.
+    /// </summary>
+    [DoNotSerialize]
+    public Room? CurrentRoom { get; internal set; }
+
+    /// <summary>True while the camera is sliding over to a new room.</summary>
+    public bool IsChangingRoom => _slide is not null;
+
+    /// <summary>The entity it's following, looked up by <see cref="Target"/> if the one it had has gone.</summary>
+    internal Entity? FindTarget()
+    {
+        var scene = Entity?.Scene;
+        if (scene is not null && _target?.Scene != scene)
+            TargetEntity = string.IsNullOrWhiteSpace(Target) ? null : scene.Entities.FirstOrDefault(e => e.Name == Target);
+        return _target;
+    }
+
+    /// <summary>
+    /// Glides over to where it should be in <paramref name="seconds"/> of real time, rather than following smoothly: into a
+    /// new room. Before it has been placed, or with no time, it jumps straight there.
+    /// </summary>
+    internal void SlideOver(float seconds)
+    {
+        if (_placed && seconds > 0 && Entity is not null)
+            _slide = (Flat(Entity.Transform.WorldPosition), 0, seconds);
+        else
+            Snap();
+    }
+
     /// <summary>Moves toward the target by <paramref name="seconds"/> of smoothing. Called by the game after physics.</summary>
     /// <param name="viewAspect">The view's width over its height, for keeping a camera's view inside <see cref="StayInside"/>.</param>
-    public void Advance(float seconds, float viewAspect)
+    /// <param name="realSeconds">
+    /// Real time passed, for sliding between rooms while the game is held still; <paramref name="seconds"/> if not given.
+    /// </param>
+    public void Advance(float seconds, float viewAspect, float? realSeconds = null)
     {
         var scene = Entity?.Scene;
         if (scene is null)
             return;
-        if (_target?.Scene != scene)
-            TargetEntity = string.IsNullOrWhiteSpace(Target) ? null : scene.Entities.FirstOrDefault(e => e.Name == Target);
+        FindTarget();
 
         var transform = Entity!.Transform;
         var current = Flat(transform.WorldPosition);
@@ -78,8 +124,18 @@ public sealed class Follow : Component
                 goal = ApplyDeadZone(current, goal);
         }
 
-        if (Bounds(scene) is { } bounds)
-            goal = Clamp(goal, bounds, ViewHalfSize(viewAspect));
+        var bounds = CurrentRoom?.Entity?.Scene == scene ? CurrentRoom!.Area : Bounds(scene);
+        if (bounds is { } area)
+            goal = Clamp(goal, area, ViewHalfSize(viewAspect));
+
+        if (_slide is { } slide && _placed)
+        {
+            var elapsed = slide.Elapsed + (realSeconds ?? seconds);
+            var t = Math.Clamp(elapsed / slide.Seconds, 0, 1);
+            SetWorld(transform, Vector2.Lerp(slide.From, goal, t * t * (3 - 2 * t)));
+            _slide = t >= 1 ? null : slide with { Elapsed = elapsed };
+            return;
+        }
 
         var next = !_placed || Smoothing <= 0 ? goal : Vector2.Lerp(current, goal, 1 - MathF.Exp(-Smoothing * seconds));
         if (_target is not null)

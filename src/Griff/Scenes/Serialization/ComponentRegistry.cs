@@ -29,6 +29,33 @@ public sealed class ComponentRegistry
         registry.Register<Lifetime>();
         registry.Register<Spawner>();
         registry.Register<Typewriter>();
+        registry.Register<Pickup>();
+        registry.Register<Counter>();
+        registry.Register<Bar>();
+        registry.Register<Slider>();
+        registry.Register<Toggle>();
+        registry.Register<Mover>();
+        registry.Register<Patrol>();
+        registry.Register<Chase>();
+        registry.Register<Shooter>();
+        registry.Register<Checkpoint>();
+        registry.Register<Door>();
+        registry.Register<Dialogue>();
+        registry.Register<Switch>();
+        registry.Register<Inventory>();
+        registry.Register<Trail>();
+        registry.Register<Panel>();
+        registry.Register<Choice>();
+        registry.Register<PlatformerMovement>();
+        registry.Register<TopDownMovement>();
+        registry.Register<Ladder>();
+        registry.Register<Pushable>();
+        registry.Register<Bouncer>();
+        registry.Register<Crumble>();
+        registry.Register<Light>();
+        registry.Register<Room>();
+        registry.Register<Attack>();
+        registry.Register<SoundSource>();
         return registry;
     }
 

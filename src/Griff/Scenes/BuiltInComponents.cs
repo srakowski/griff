@@ -16,6 +16,47 @@ public sealed class Camera : Component
     /// </summary>
     public bool SortByY { get; set; }
 
+    /// <summary>
+    /// The light that reaches everything no <see cref="Light"/> lights. White (the default) is daylight, where lights
+    /// make no difference; a dark color makes a cave or a night (dark blue), and black is pitch dark. The HUD and menus
+    /// are never darkened: anything pinned with a <see cref="ScreenAnchor"/>, and anything inside the camera.
+    /// </summary>
+    public Color Ambient { get; set; } = Color.White;
+
+    /// <summary>How the screen covers up and uncovers a scene change in this scene: a fade, a wipe or an iris.</summary>
+    public SceneTransition Transition { get; set; }
+
+    /// <summary>True if the ambient light right now (<see cref="CurrentAmbient"/>) is darker than daylight, so lights show.</summary>
+    public bool IsDark => CurrentAmbient is var ambient && (ambient.R < 1 || ambient.G < 1 || ambient.B < 1);
+
+    /// <summary>
+    /// The ambient light right now: <see cref="Ambient"/>, or the <see cref="Room.Ambient"/> of the room the camera is in,
+    /// fading from one to the other as it moves between rooms.
+    /// </summary>
+    public Color CurrentAmbient
+    {
+        get
+        {
+            var target = _roomAmbient ?? Ambient;
+            return _ambientFadeLeft > 0 ? Color.Lerp(_ambientFrom, target, 1 - _ambientFadeLeft / _ambientFadeSeconds) : target;
+        }
+    }
+
+    private Color? _roomAmbient;
+    private Color _ambientFrom;
+    private float _ambientFadeSeconds;
+    private float _ambientFadeLeft;
+
+    /// <summary>Fades to a room's ambient light (or back to the camera's own, with null) over real seconds.</summary>
+    internal void FadeAmbient(Color? ambient, float seconds)
+    {
+        _ambientFrom = CurrentAmbient;
+        _roomAmbient = ambient;
+        (_ambientFadeSeconds, _ambientFadeLeft) = seconds > 0 ? (seconds, seconds) : (0, 0);
+    }
+
+    internal void AdvanceAmbient(float seconds) => _ambientFadeLeft = Math.Max(0, _ambientFadeLeft - seconds);
+
     private float _shakeStrength;
     private float _shakeDuration;
     private float _shakeLeft;
@@ -91,6 +132,18 @@ public sealed class Text : Component
 
     /// <summary>Where the text sits relative to the entity; lines of several-line text line up the same way.</summary>
     public TextAlign Align { get; set; }
+
+    private (string? From, string? To) _shown;
+
+    /// <summary>
+    /// What's drawn: <see cref="Value"/>, with input prompts filled in while the game runs. An action's name in braces
+    /// becomes the key or button that does it on the device being played with, so "Press {Interact}" reads "Press E" on
+    /// the keyboard and "Press Y" on a gamepad, and follows the player's own bindings.
+    /// </summary>
+    public string? Shown => _shown.From is not null && _shown.From == Value ? _shown.To : Value;
+
+    /// <summary>Sets what <see cref="Shown"/> is for the current <see cref="Value"/>. Called by the game.</summary>
+    internal void SetShown(string? shown) => _shown = (Value, shown);
 }
 
 /// <summary>Draws an image (or a solid rectangle when no image is set) at the entity's transform.</summary>
@@ -120,6 +173,16 @@ public sealed class Sprite : Component
 
     /// <summary>Which frame to show, counting left to right, top to bottom from 0.</summary>
     public int Frame { get; set; }
+
+    /// <summary>
+    /// For panels and buttons that stretch (nine-slice): how much of the image, from 0 to 0.5 of its width and height,
+    /// is border at each edge. Corners then keep their shape at any <see cref="Size"/>, edges stretch one way and the
+    /// middle fills the rest. 0 stretches the whole image.
+    /// </summary>
+    public float Slice { get; set; }
+
+    /// <summary>With <see cref="Slice"/>: how big the border is drawn, in world units (never more than half the sprite).</summary>
+    public float SliceSize { get; set; } = 0.25f;
 
     /// <summary>The part of the image to show for <see cref="Frame"/>: (u, v, width, height) in 0–1 image space.</summary>
     public System.Numerics.Vector4 FrameRect
@@ -244,6 +307,9 @@ public sealed class Animation : Component
         }
     }
 
+    /// <summary>True if <see cref="Clips"/> has one called <paramref name="clip"/> (names ignore case).</summary>
+    public bool HasClip(string clip) => _parsed.Any(c => string.Equals(c.Name, clip, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
     /// Switches to the clip called <paramref name="clip"/> from the start, and plays it. Playing the clip that's already
     /// playing carries on (so it's safe to call every frame) unless <paramref name="restart"/> is set.
@@ -251,7 +317,7 @@ public sealed class Animation : Component
     /// <example><code>animation.Play(body.IsGrounded ? (moving ? "Run" : "Idle") : "Jump");</code></example>
     public void Play(string clip, bool restart = false)
     {
-        if (!_parsed.Any(c => string.Equals(c.Name, clip, StringComparison.OrdinalIgnoreCase)))
+        if (!HasClip(clip))
         {
             var known = _parsed.Count == 0 ? "it has no clips" : $"its clips are {string.Join(", ", _parsed.Select(c => c.Name))}";
             throw new ArgumentException($"The animation on \"{Entity?.Name}\" has no clip called \"{clip}\"; {known}.", nameof(clip));

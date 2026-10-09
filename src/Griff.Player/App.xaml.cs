@@ -9,7 +9,8 @@ namespace Griff.Player;
 
 /// <summary>
 /// Runs an exported Griff game: loads the <c>game</c> folder next to the executable (or a project folder
-/// passed on the command line) and plays its start scene. F11 toggles fullscreen.
+/// passed on the command line) and plays its start scene. F11 toggles fullscreen, as does the game itself
+/// (<see cref="Game.Fullscreen"/>), and the choice is remembered.
 /// </summary>
 public partial class App : Application
 {
@@ -52,8 +53,8 @@ public partial class App : Application
 
         window.KeyDown += (_, args) =>
         {
-            if (args.Key == System.Windows.Input.Key.F11)
-                ToggleFullscreen(window);
+            if (args.Key == System.Windows.Input.Key.F11 && _runner is not null)
+                _runner.Game.Fullscreen = !_runner.Game.Fullscreen;
         };
         window.Closed += (_, _) => _runner?.Dispose();
 
@@ -74,6 +75,7 @@ public partial class App : Application
         _runner.Game.PrefabLoader = game.LoadPrefab;
         _runner.Game.SceneName = game.SceneName;
         _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
+        _runner.Game.FullscreenChanged += (_, _) => SetFullscreen(window, _runner.Game.Fullscreen);
         if (smokeOutput is null)
             _runner.Game.SaveData = new SaveData(SaveData.PlayerPath(game.Project.Name));
         _runner.Faulted += (_, ex) =>
@@ -111,9 +113,12 @@ public partial class App : Application
         return true;
     }
 
-    private void ToggleFullscreen(Window window)
+    private void SetFullscreen(Window window, bool fullscreen)
     {
-        if (window.WindowStyle == WindowStyle.None)
+        if (fullscreen == (window.WindowStyle == WindowStyle.None))
+            return;
+
+        if (!fullscreen)
         {
             window.WindowStyle = WindowStyle.SingleBorderWindow;
             window.WindowState = _windowedState;

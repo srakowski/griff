@@ -6,7 +6,8 @@ using Silk.NET.OpenGL;
 namespace Griff.Graphics;
 
 /// <summary>
-/// Draws a <see cref="RenderFrame"/> with OpenGL 3.3: textured, tinted quads batched by texture.
+/// Draws a <see cref="RenderFrame"/> with OpenGL 3.3: textured, tinted quads batched by texture. In a dark scene, lights
+/// are added up in a light map the size of the screen, which then darkens the world drawn before it.
 /// Must be created and used on the thread that owns the GL context.
 /// </summary>
 public sealed class SpriteRenderer : IDisposable
@@ -46,6 +47,34 @@ public sealed class SpriteRenderer : IDisposable
         }
         """;
 
+    // Shapes with no image, drawn from the quad's own coordinates (UVs 0..1 across it). Mode 0 is a light: its color,
+    // fading out to the rim as Light.Falloff does, by the softness in the flash slot's first channel. Mode 1 is a hole:
+    // the color everywhere outside a circle of that radius (a fraction of the quad's half-width), for an iris.
+    private const string ShapeFragmentShader = """
+        #version 330 core
+        in vec2 vUv;
+        in vec4 vColor;
+        in vec4 vFlash;
+        uniform int uMode;
+        out vec4 fragColor;
+        void main()
+        {
+            float d = length(vUv * 2.0 - 1.0);
+            if (uMode == 0)
+            {
+                float inner = 1.0 - clamp(vFlash.x, 0.0, 1.0);
+                float x = clamp((d - inner) / max(1.0 - inner, 1e-4), 0.0, 1.0);
+                float amount = d >= 1.0 ? 0.0 : 1.0 - x * x * (3.0 - 2.0 * x);
+                fragColor = vec4(vColor.rgb * amount, 1.0);
+            }
+            else
+            {
+                float edge = fwidth(d);
+                fragColor = vec4(vColor.rgb, vColor.a * smoothstep(vFlash.x - edge, vFlash.x, d));
+            }
+        }
+        """;
+
     // Unit quad corners with their UVs. Image row 0 is the top, so the quad's top maps to v = 0.
     private static readonly (Vector2 Position, Vector2 Uv)[] Corners =
     [
@@ -58,6 +87,8 @@ public sealed class SpriteRenderer : IDisposable
     private readonly GL _gl;
     private readonly TextureCache _textures;
     private readonly uint _program;
+    private readonly uint _shapeProgram;
+    private readonly int _shapeMode;
     private readonly uint _vao;
     private readonly uint _vbo;
     private readonly uint _ebo;
@@ -65,11 +96,19 @@ public sealed class SpriteRenderer : IDisposable
     private int _quadCount;
     private Texture? _batchTexture;
 
+    // The light map: a texture the size of the screen that lights add up in, and the framebuffer that draws into it.
+    private uint _lightFramebuffer;
+    private uint _lightTexture;
+    private (int Width, int Height) _lightSize;
+
     public SpriteRenderer(GL gl, string assetRoot, TextRasterizer? textRasterizer = null)
     {
         _gl = gl;
         _textures = new TextureCache(gl, assetRoot, textRasterizer);
-        _program = CreateProgram();
+        _program = CreateProgram(FragmentShader);
+        _gl.Uniform1(_gl.GetUniformLocation(_program, "uTexture"), 0);
+        _shapeProgram = CreateProgram(ShapeFragmentShader);
+        _shapeMode = _gl.GetUniformLocation(_shapeProgram, "uMode");
 
         _vao = gl.GenVertexArray();
         gl.BindVertexArray(_vao);
@@ -125,8 +164,17 @@ public sealed class SpriteRenderer : IDisposable
         _gl.BindVertexArray(_vao);
         _gl.ActiveTexture(TextureUnit.Texture0);
 
-        foreach (var sprite in frame.Sprites)
-            Add(sprite, frame.ViewProjection);
+        // In the dark, everything up to LitCount is darkened and lit before the rest (the HUD) goes over it.
+        var sprites = frame.Sprites;
+        for (var i = 0; i < sprites.Count; i++)
+        {
+            if (i == frame.LitCount && frame.IsDark)
+                ApplyLighting(frame, width, height);
+            Add(sprites[i], frame.ViewProjection);
+        }
+
+        if (frame.IsDark && frame.LitCount >= sprites.Count)
+            ApplyLighting(frame, width, height);
         Flush();
         _textures.EndFrame();
 
@@ -149,15 +197,24 @@ public sealed class SpriteRenderer : IDisposable
 
     public void Dispose()
     {
+        DeleteLightTarget();
         _textures.Dispose();
         _gl.DeleteBuffer(_vbo);
         _gl.DeleteBuffer(_ebo);
         _gl.DeleteVertexArray(_vao);
         _gl.DeleteProgram(_program);
+        _gl.DeleteProgram(_shapeProgram);
     }
 
     private void Add(SpriteDraw sprite, Matrix4x4 viewProjection)
     {
+        if (sprite.HoleRadius > 0)
+        {
+            Flush();
+            DrawShapes(1, [(sprite.World * viewProjection, sprite.Tint, sprite.HoleRadius)]);
+            return;
+        }
+
         var world = sprite.World;
         Texture texture;
         if (sprite.Text is { } text)
@@ -183,11 +240,12 @@ public sealed class SpriteRenderer : IDisposable
         if (_quadCount == MaxQuads)
             Flush();
         _batchTexture = texture;
+        WriteQuad(world * viewProjection, sprite.Source, sprite.Tint, sprite.Flash);
+    }
 
-        var tint = sprite.Tint;
-        var flash = sprite.Flash;
-        var source = sprite.Source;
-        var toClip = world * viewProjection;
+    // One quad's four vertices into the batch: its corners taken to clip space, the part of the image, tint and flash.
+    private void WriteQuad(Matrix4x4 toClip, Vector4 source, Color tint, Color flash)
+    {
         var offset = _quadCount * 4 * FloatsPerVertex;
         foreach (var (position, uv) in Corners)
         {
@@ -209,25 +267,108 @@ public sealed class SpriteRenderer : IDisposable
         _quadCount++;
     }
 
-    private unsafe void Flush()
+    // Adds the lights up in the light map, starting from the ambient light, then multiplies what's been drawn by it.
+    private void ApplyLighting(RenderFrame frame, int width, int height)
+    {
+        Flush();
+        EnsureLightTarget(width, height);
+        _gl.GetInteger(GetPName.DrawFramebufferBinding, out var screen);
+
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _lightFramebuffer);
+        _gl.Viewport(0, 0, (uint)width, (uint)height);
+        _gl.ClearColor(frame.Ambient.R, frame.Ambient.G, frame.Ambient.B, 1f);
+        _gl.Clear(ClearBufferMask.ColorBufferBit);
+        _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
+        DrawShapes(0, frame.Lights.Select(l =>
+            (Matrix4x4.CreateScale(l.Radius * 2, l.Radius * 2, 1) * Matrix4x4.CreateTranslation(l.Center.X, l.Center.Y, 0) * frame.ViewProjection,
+             l.Color, l.Softness)));
+
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
+        _gl.Viewport(0, 0, (uint)width, (uint)height);
+        _gl.BlendFunc(BlendingFactor.DstColor, BlendingFactor.Zero);
+
+        // The light map over the whole screen, the right way up (a texture drawn into starts at the bottom).
+        _gl.BindTexture(TextureTarget.Texture2D, _lightTexture);
+        WriteQuad(Matrix4x4.CreateScale(2, 2, 1), new Vector4(0, 1, 1, -1), Color.White, Color.Transparent);
+        DrawBatch();
+
+        _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+    }
+
+    // Lights (mode 0) or holes (mode 1) with the shape program, each quad already in clip space; the sprite program is
+    // back on afterwards.
+    private void DrawShapes(int mode, IEnumerable<(Matrix4x4 ToClip, Color Color, float Parameter)> quads)
+    {
+        _gl.UseProgram(_shapeProgram);
+        _gl.Uniform1(_shapeMode, mode);
+        foreach (var (toClip, color, parameter) in quads)
+        {
+            WriteQuad(toClip, new Vector4(0, 0, 1, 1), color, new Color(parameter, 0, 0, 0));
+            if (_quadCount == MaxQuads)
+                DrawBatch();
+        }
+
+        DrawBatch();
+        _gl.UseProgram(_program);
+    }
+
+    // Draws the quads written so far with whatever program and texture are bound.
+    private unsafe void DrawBatch()
+    {
+        if (_quadCount == 0)
+            return;
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
+        _gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, new ReadOnlySpan<float>(_vertices, 0, _quadCount * 4 * FloatsPerVertex));
+        _gl.DrawElements(PrimitiveType.Triangles, (uint)(_quadCount * 6), DrawElementsType.UnsignedInt, (void*)0);
+        LastDrawCalls++;
+        _quadCount = 0;
+    }
+
+    private void Flush()
     {
         if (_quadCount == 0 || _batchTexture is null)
             return;
 
         _gl.BindTexture(TextureTarget.Texture2D, _batchTexture.Handle);
-        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-        _gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, new ReadOnlySpan<float>(_vertices, 0, _quadCount * 4 * FloatsPerVertex));
-        _gl.DrawElements(PrimitiveType.Triangles, (uint)(_quadCount * 6), DrawElementsType.UnsignedInt, (void*)0);
-
-        LastDrawCalls++;
-        _quadCount = 0;
+        DrawBatch();
         _batchTexture = null;
     }
 
-    private uint CreateProgram()
+    private unsafe void EnsureLightTarget(int width, int height)
+    {
+        if (_lightFramebuffer != 0 && _lightSize == (width, height))
+            return;
+        DeleteLightTarget();
+
+        _lightTexture = _gl.GenTexture();
+        _gl.BindTexture(TextureTarget.Texture2D, _lightTexture);
+        _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        _gl.GetInteger(GetPName.DrawFramebufferBinding, out var screen);
+        _lightFramebuffer = _gl.GenFramebuffer();
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _lightFramebuffer);
+        _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _lightTexture, 0);
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
+        _lightSize = (width, height);
+    }
+
+    private void DeleteLightTarget()
+    {
+        if (_lightFramebuffer != 0)
+            _gl.DeleteFramebuffer(_lightFramebuffer);
+        if (_lightTexture != 0)
+            _gl.DeleteTexture(_lightTexture);
+        (_lightFramebuffer, _lightTexture, _lightSize) = (0, 0, (0, 0));
+    }
+
+    private uint CreateProgram(string fragmentSource)
     {
         var vertex = Compile(ShaderType.VertexShader, VertexShader);
-        var fragment = Compile(ShaderType.FragmentShader, FragmentShader);
+        var fragment = Compile(ShaderType.FragmentShader, fragmentSource);
         var program = _gl.CreateProgram();
         _gl.AttachShader(program, vertex);
         _gl.AttachShader(program, fragment);
@@ -239,7 +380,6 @@ public sealed class SpriteRenderer : IDisposable
         _gl.DeleteShader(vertex);
         _gl.DeleteShader(fragment);
         _gl.UseProgram(program);
-        _gl.Uniform1(_gl.GetUniformLocation(program, "uTexture"), 0);
         return program;
     }
 

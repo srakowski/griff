@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Rendering;
@@ -37,6 +38,8 @@ public sealed class GameRunner : IDisposable
         _surface.MouseMoved += OnMouseMoved;
         _surface.MouseLeft += OnMouseLeft;
         _surface.MouseButtonChanged += OnMouseButton;
+        _surface.MouseWheelTurned += OnMouseWheel;
+        _surface.PreviewMouseWheel += OnWpfMouseWheel;
 
         // Until the mouse moves over the game, it isn't pointing at anything (say, a button in the middle).
         _input.IsMouseInView = false;
@@ -79,7 +82,11 @@ public sealed class GameRunner : IDisposable
         _surface.MouseMoved -= OnMouseMoved;
         _surface.MouseLeft -= OnMouseLeft;
         _surface.MouseButtonChanged -= OnMouseButton;
+        _surface.MouseWheelTurned -= OnMouseWheel;
+        _surface.PreviewMouseWheel -= OnWpfMouseWheel;
         IsRunning = false;
+        _input.StopRumble();
+        XInputGamepad.StopRumble();
         Game.Stop();
     }
 
@@ -95,7 +102,16 @@ public sealed class GameRunner : IDisposable
         _clock.Restart();
 
         if (!IsPaused)
+        {
             TickSafely(seconds);
+        }
+        else if (_input.RumbleStrength > 0)
+        {
+            // A paused game doesn't shake the controller.
+            _input.StopRumble();
+            XInputGamepad.StopRumble();
+        }
+
         RenderLatest();
     }
 
@@ -138,10 +154,23 @@ public sealed class GameRunner : IDisposable
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        var key = KeyMap.ToGriff(e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key);
+        // Typing into a text field (say, the editor's Inspector while playing) isn't playing the game.
+        if (Keyboard.FocusedElement is TextBoxBase)
+            return;
+
+        var wpfKey = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
+        var key = KeyMap.ToGriff(wpfKey);
+
+        // Typed text comes from here rather than WPF's TextInput, which handling the key would stop.
+        if (key == Runtime.Key.Backspace)
+            _input.TypeBackspace();
+        else if (TypedText.Of(wpfKey) is { Length: > 0 } text)
+            _input.AddText(text);
+
         if (key == Runtime.Key.None)
             return;
-        _input.SetKey(key, true);
+        if (!e.IsRepeat)
+            _input.SetKey(key, true);
         e.Handled = true;
     }
 
@@ -150,19 +179,38 @@ public sealed class GameRunner : IDisposable
         var key = KeyMap.ToGriff(e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key);
         if (key == Runtime.Key.None)
             return;
+        // Always, so a key let go after focus moves to a text field doesn't stay held in the game.
         _input.SetKey(key, false);
-        e.Handled = true;
+        if (Keyboard.FocusedElement is not TextBoxBase)
+            e.Handled = true;
     }
 
     private void OnLostFocus(object sender, KeyboardFocusChangedEventArgs e) => _input.ReleaseAll();
 
     private void OnMouseMoved(Point pixel)
     {
-        _mouseNdc = _surface.ToNdc(pixel);
+        var ndc = _surface.ToNdc(pixel);
+        if (ndc != _mouseNdc)
+            _input.MouseMoved();
+        _mouseNdc = ndc;
         _input.IsMouseInView = true;
+    }
+
+    private void OnMouseWheel(float notches) => _input.AddScroll(notches);
+
+    private void OnWpfMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        _input.AddScroll(e.Delta / 120f);
+        e.Handled = true;
     }
 
     private void OnMouseLeft() => _input.IsMouseInView = false;
 
-    private void OnMouseButton(Runtime.MouseButton button, bool down) => _input.SetMouseButton(button, down);
+    private void OnMouseButton(Runtime.MouseButton button, bool down)
+    {
+        // Clicking the game takes the keyboard back from a text field (which commits what was typed there).
+        if (down && Keyboard.FocusedElement is TextBoxBase && !_keySource.Focus())
+            Keyboard.ClearFocus();
+        _input.SetMouseButton(button, down);
+    }
 }

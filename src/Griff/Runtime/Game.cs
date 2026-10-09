@@ -7,7 +7,7 @@ namespace Griff.Runtime;
 /// Runs a scene: starts and updates behaviors each <see cref="Tick"/>. Spawning and destroying during a
 /// frame are safe; destroys take effect at the end of the frame.
 /// </summary>
-public sealed class Game
+public sealed partial class Game
 {
     private readonly List<Entity> _pendingDestroy = [];
     private readonly List<GameTimer> _timers = [];
@@ -17,7 +17,8 @@ public sealed class Game
     private readonly MessageBoard _messages = new();
     private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
     private string? _pendingScene;
-    private (string Scene, float Seconds)? _fadingOut;
+    // A fade out on its way to a scene, or to a call (FadeThrough) with no scene change.
+    private (string? Scene, Action? Then, float Seconds)? _fadingOut;
     private float _fadeInSeconds;
 
     // How close to fully covered (or clear) a fade has to get to count as there.
@@ -29,6 +30,9 @@ public sealed class Game
         Scene = scene;
         Input = input;
         Debug = new DebugDraw(Time);
+        (input as InputState)?.UseSaveData(_saveData);
+        LoadSettings();
+        SyncPanels();
     }
 
     public Scene Scene { get; private set; }
@@ -63,8 +67,11 @@ public sealed class Game
     /// <summary>The color the screen fades through between scenes.</summary>
     public Color FadeColor { get; private set; } = Color.Black;
 
+    /// <summary>True while a fade is clearing to show the new scene (or the screen after <see cref="FadeThrough"/>).</summary>
+    public bool IsUncovering => _fadingOut is null && FadeAmount > 0;
+
     /// <summary>True from <see cref="LoadScene"/> until the scene has switched (including the fade out).</summary>
-    public bool IsChangingScene => _fadingOut is not null || _pendingScene is not null;
+    public bool IsChangingScene => _fadingOut is { Scene: not null } || _pendingScene is not null;
 
     /// <summary>True once <see cref="Quit"/> has been called.</summary>
     public bool IsQuitting { get; private set; }
@@ -79,10 +86,35 @@ public sealed class Game
     public DebugDraw Debug { get; }
 
     /// <summary>Values kept between runs (high scores, progress). Set by the host; in memory only by default.</summary>
-    public SaveData SaveData { get; set; } = new();
+    /// <remarks>
+    /// Players' own input bindings (<see cref="IInput.Rebind"/>) and settings (volumes, sound on or off, fullscreen) are
+    /// kept here too, and come back when it's set.
+    /// </remarks>
+    public SaveData SaveData
+    {
+        get => _saveData;
+        set
+        {
+            _saveData = value;
+            (Input as InputState)?.UseSaveData(value);
+            LoadSettings();
+        }
+    }
 
-    /// <summary>Set by the platform; silent by default (tests, headless).</summary>
-    public IAudio Audio { get; set; } = new SilentAudio();
+    private SaveData _saveData = new();
+
+    /// <summary>Set by the platform; silent by default (tests, headless). The player's saved volumes are applied to it.</summary>
+    public IAudio Audio
+    {
+        get => _audio;
+        set
+        {
+            _audio = value;
+            LoadSettings();
+        }
+    }
+
+    private IAudio _audio = new SilentAudio();
 
     /// <summary>Advances the game by <paramref name="seconds"/>: start new behaviors, update all, apply destroys.</summary>
     public void Tick(double seconds)
@@ -90,7 +122,11 @@ public sealed class Game
         if (_stopped)
             throw new InvalidOperationException("The game has stopped.");
 
+        // Panels shown or hidden since last frame open or close first, so a pause starts straight away.
+        SyncPanels();
+        _pausedAtStart = Time.IsPaused;
         Time.Advance(seconds);
+        (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
         Debug.BeginFrame();
 
         // Snapshot first: behaviors may spawn or destroy while we iterate.
@@ -98,22 +134,32 @@ public sealed class Game
         foreach (var behavior in behaviors.Where(b => !b.IsStarted))
             behavior.RunStart(this);
 
-        UpdateButtons();
+        UpdateMenus();
+        ApplySwitches();
 
+        // No-code enemies and players go before scripts, so a script can still take over a body this frame.
+        RunEnemies();
+        RunMovement();
+
+        // While a panel pauses the game, only the scripts on open panels run.
         foreach (var behavior in behaviors)
         {
-            if (behavior.Entity?.Scene == Scene)
+            if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
                 behavior.RunUpdate();
         }
 
+        RunAttacks();
         RunTimers();
         RunCoroutines();
         RunTweens();
         RunLifetimes();
         RunSpawners();
+        RunShooters();
+        RunMovers();
 
         foreach (var animation in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Animation>()).ToList())
             animation.Advance(Time.Delta);
+        RunAnimatedTiles();
 
         foreach (var emitter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<ParticleEmitter>()).ToList())
         {
@@ -123,12 +169,17 @@ public sealed class Game
         }
 
         foreach (var camera in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Camera>()))
+        {
             camera.AdvanceShake(Time.UnscaledDelta);
+            camera.AdvanceAmbient(Time.UnscaledDelta);
+        }
 
         foreach (var sprite in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Sprite>()))
             sprite.AdvanceEffects(Time.Delta);
 
+        FillPrompts();
         RunTypewriters();
+        RunPickupSpin();
 
         if (Time.Delta > 0)
         {
@@ -140,13 +191,31 @@ public sealed class Game
             }
         }
 
+        RunPickups();
+        RunCheckpoints();
+        RunDoors();
+        RunDialogues();
+        RunSwitches();
+        RunBouncers();
+        RunCrumbles();
         RunTouchDamage();
         RunHealth();
+        RunRespawns();
+        RunBars();
+        RunCounters();
         AdvanceFade();
+        _screenFlashLeft = Math.Max(0, _screenFlashLeft - Time.UnscaledDelta);
         FlushDestroys();
         SwitchSceneIfRequested();
+        RunRooms();
         RunFollowers();
         LayOutScreen();
+        RunTrails();
+        RunLights();
+        FillPrompts();
+        RunSoundSources();
+        Audio.Advance(Time.UnscaledDelta);
+        SaveSettings();
     }
 
     /// <summary>
@@ -167,7 +236,7 @@ public sealed class Game
 
         if (fade > 0)
         {
-            _fadingOut = (nameOrPath, fade);
+            _fadingOut = (nameOrPath, null, fade);
             _fadeInSeconds = 0;
             FadeColor = color ?? Color.Black;
             return;
@@ -309,8 +378,23 @@ public sealed class Game
     public int Send(string message, object? data = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
-        return _messages.Send(message, data, Scene);
+        var heard = _messages.Send(message, data, Scene);
+
+        // Counters add up their message with no listener of their own: the number sent, or 1.
+        var counters = Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Counter>())
+            .Where(c => c.Message?.Trim() == message).ToList();
+        foreach (var counter in counters)
+            counter.Add(CountOf(data));
+        return heard + counters.Count;
     }
+
+    private static int CountOf(object? data) => data switch
+    {
+        null => 1,
+        int value => value,
+        float or double or decimal or long or short or byte => (int)Math.Round(Convert.ToDouble(data, System.Globalization.CultureInfo.InvariantCulture)),
+        _ => 1,
+    };
 
     /// <summary>
     /// Calls <paramref name="action"/> with the data of every <paramref name="message"/> sent from now on, until cancelled.
@@ -382,6 +466,37 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Slows the game to <paramref name="scale"/> (0.3 is a third of normal speed) for <paramref name="seconds"/> of real
+    /// time, easing back to full speed at the end: the last enemy falling, a near miss. It works on top of
+    /// <see cref="Time.Scale"/>; see <see cref="Time.SlowMotionScale"/>.
+    /// </summary>
+    public void SlowMotion(float scale = 0.3f, float seconds = 0.6f)
+    {
+        if (seconds > 0 && float.IsFinite(scale))
+            Time.SlowDown(Math.Clamp(scale, 0, 1), seconds);
+    }
+
+    /// <summary>
+    /// Covers the whole screen in <paramref name="color"/> (white by default), fading away over <paramref name="seconds"/>
+    /// of real time: a flash of light, red for getting hurt. Give the color some transparency for a gentler flash,
+    /// e.g. <c>Color.Red with { A = 0.3f }</c>. A new flash replaces one in progress.
+    /// </summary>
+    public void FlashScreen(Color? color = null, float seconds = 0.15f)
+    {
+        if (seconds > 0)
+            (_screenFlash, _screenFlashSeconds, _screenFlashLeft) = (color ?? Color.White, seconds, seconds);
+    }
+
+    /// <summary>The color <see cref="FlashScreen"/> is covering the screen with right now; transparent when there's no flash.</summary>
+    public Color ScreenFlash => _screenFlashLeft > 0
+        ? _screenFlash with { A = _screenFlash.A * (_screenFlashLeft / _screenFlashSeconds) }
+        : Color.Transparent;
+
+    private Color _screenFlash;
+    private float _screenFlashSeconds;
+    private float _screenFlashLeft;
+
+    /// <summary>
     /// Paints <paramref name="entity"/>'s sprites and its children's <paramref name="color"/> (white by default) for
     /// <paramref name="seconds"/>; see <see cref="Sprite.Flash"/>.
     /// </summary>
@@ -404,6 +519,8 @@ public sealed class Game
 
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
+        SaveSettings();
+        StopSoundSources();
         Audio.StopAll();
     }
 
@@ -472,6 +589,7 @@ public sealed class Game
             _fadingOut = null;
             _pendingScene = fading.Scene;
             _fadeInSeconds = fading.Seconds;
+            fading.Then?.Invoke();
         }
         else if (_fadeInSeconds > 0 && _pendingScene is null)
         {
@@ -517,6 +635,13 @@ public sealed class Game
         Scene = next;
         SceneName = SceneNameOf(name);
         _messages.Prune(next);
+        _controlsSeen.RemoveWhere(c => c.Entity?.Scene != next);
+        ForgetLevelState();
+        ForgetPuzzleState();
+        ForgetPanelState();
+        StopSoundSources();
+        _focus = null;
+        SyncPanels();
         SceneChanged?.Invoke(this, next);
     }
 
@@ -527,75 +652,11 @@ public sealed class Game
         return name.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) ? name[..^".scene".Length] : name;
     }
 
-    // Clicks, hovering and shortcuts for buttons. Runs after Start and before Update, using the mouse as last drawn.
-    private void UpdateButtons()
-    {
-        var buttons = Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Button>()).ToList();
-        if (buttons.Count == 0)
-            return;
-
-        // Only the topmost button under the mouse is hovered: highest draw order, then latest in the hierarchy.
-        Button? top = null;
-        foreach (var button in buttons.Where(b => Input.IsMouseInView && AreaOf(b).Contains(Input.MouseWorld)))
-        {
-            if (top is null || (Rendering.SceneRenderer.OrderOf(button.Entity!) ?? 0) >= (Rendering.SceneRenderer.OrderOf(top.Entity!) ?? 0))
-                top = button;
-        }
-
-        var pressed = Input.WasPressed(MouseButton.Left);
-        var released = Input.WasReleased(MouseButton.Left);
-        var clicked = new List<Button>();
-        foreach (var button in buttons)
-        {
-            button.IsHovered = button == top;
-            if (button.IsHovered && pressed)
-                button.IsPressed = true;
-            if (released && button.IsPressed && button.IsHovered)
-                clicked.Add(button);
-            if (released || !Input.IsDown(MouseButton.Left))
-                button.IsPressed = false;
-            if (button.Shortcut != Key.None && Input.WasPressed(button.Shortcut) && !clicked.Contains(button))
-                clicked.Add(button);
-        }
-
-        foreach (var button in clicked)
-            Click(button);
-    }
-
-    private void Click(Button button)
-    {
-        switch (button.Action)
-        {
-            case ButtonAction.LoadScene when string.IsNullOrWhiteSpace(button.Scene):
-                throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" loads a scene, but its Scene isn't set.");
-            case ButtonAction.LoadScene:
-                LoadScene(button.Scene!, button.Fade);
-                break;
-            case ButtonAction.RestartScene:
-                ReloadScene(button.Fade);
-                break;
-            case ButtonAction.Quit:
-                Quit();
-                break;
-        }
-
-        Notify(button.Entity!, behavior => behavior.RunClick());
-        button.RaiseClicked();
-    }
-
-    /// <summary>The world-space box a button can be clicked in.</summary>
-    public static Box AreaOf(Button button)
-    {
-        var world = button.Entity!.Transform.WorldMatrix;
-        var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
-        return new Box(new Vector2(world.M41, world.M42), button.Size * scale / 2);
-    }
-
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     private void RunFollowers()
     {
         foreach (var follow in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
-            follow.Advance(Time.Delta, ViewAspect);
+            follow.Advance(Time.Delta, ViewAspect, Time.UnscaledDelta);
     }
 
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.
@@ -671,6 +732,110 @@ public sealed class Game
         }
     }
 
+    private void RunPickupSpin()
+    {
+        foreach (var pickup in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Pickup>()))
+        {
+            if (pickup.Spin != 0)
+                pickup.Entity!.Transform.Rotation += new Vector3(0, 0, pickup.Spin * Time.Delta);
+        }
+    }
+
+    // Touches from this frame's physics; each pickup goes to the first thing that reaches it.
+    private void RunPickups()
+    {
+        foreach (var (source, target) in _touches.ToList())
+        {
+            if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
+                continue;
+            if (BodyOwner(target) is { } collector && pickup.AcceptsLayer(LayerOf(target)) && !source.IsSelfOrDescendantOf(collector))
+                Collect(pickup, collector);
+        }
+    }
+
+    private void Collect(Pickup pickup, Entity collector)
+    {
+        pickup.IsCollected = true;
+        var entity = pickup.Entity!;
+        var position = entity.Transform.WorldPosition;
+        if (!string.IsNullOrWhiteSpace(pickup.Sound))
+            Audio.Play(pickup.Sound);
+
+        if (!string.IsNullOrWhiteSpace(pickup.Effect))
+        {
+            var effect = Spawn(pickup.Effect.Trim(), new Vector2(position.X, position.Y));
+            if (pickup.TintEffect && entity.GetComponent<Sprite>() is { } sprite)
+            {
+                foreach (var emitter in effect.SelfAndDescendants().SelectMany(e => e.GetComponents<ParticleEmitter>()))
+                {
+                    emitter.StartColor = sprite.Tint;
+                    emitter.EndColor = sprite.Tint with { A = 0 };
+                }
+            }
+        }
+
+        GiveItem(pickup, collector);
+        Notify(collector, behavior => behavior.RunPickup(entity));
+        pickup.RaiseCollected(collector);
+        if (!string.IsNullOrWhiteSpace(pickup.Message))
+            Send(pickup.Message.Trim(), pickup.Amount);
+        Destroy(entity);
+    }
+
+    // What collects for a collider: its own entity's body, or the nearest ancestor's (a player's hitbox child).
+    private static Entity? BodyOwner(Entity entity)
+    {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<Body>() is not null)
+                return e;
+        }
+
+        return null;
+    }
+
+    private void RunBars()
+    {
+        foreach (var bar in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Bar>()).ToList())
+            bar.Advance(Time.Delta, Scene);
+    }
+
+    // Counters show their count, keep their best, and pop when the count changes.
+    private void RunCounters()
+    {
+        foreach (var counter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Counter>()).ToList())
+        {
+            var transform = counter.Entity!.Transform;
+            var key = counter.SaveBestAs?.Trim();
+            if (!string.IsNullOrWhiteSpace(counter.Item))
+                counter.Add(ItemCount(counter.Item) - counter.Value);
+
+            if (counter.Shown is null)
+            {
+                counter.RestingScale = transform.Scale;
+                counter.Best = string.IsNullOrEmpty(key) ? counter.Value : SaveData.GetInt(key);
+            }
+
+            if (counter.Value > counter.Best)
+            {
+                counter.Best = counter.Value;
+                if (!string.IsNullOrEmpty(key))
+                    SaveData.Set(key, counter.Best);
+            }
+
+            if (counter.Entity.GetComponent<Text>() is { } text && counter.Display() is var display && text.Value != display)
+                text.Value = display;
+
+            if (counter.Shown is { } shown && shown != counter.Value && counter.Pop > 0 && counter.Pop != 1 && counter.RestingScale is { } rest)
+            {
+                transform.Scale = new Vector3(rest.X * counter.Pop, rest.Y * counter.Pop, rest.Z);
+                ScaleTo(counter.Entity, new Vector2(rest.X, rest.Y), 0.3f, Ease.OutBack);
+            }
+
+            counter.Shown = counter.Value;
+        }
+    }
+
     // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.
     private void RunTouchDamage()
     {
@@ -682,18 +847,29 @@ public sealed class Game
                 continue;
 
             var hurt = health.Entity!;
-            if (health.Damage(touch.Amount, source) && touch.Knockback > 0 && hurt.GetComponent<Body>() is { } body)
+            if (AlreadyStruck(source, hurt, out var swing))
+                continue;
+            var landed = touch.Kill ? !health.IsDead && KillNow(health) : health.Damage(touch.Amount, source);
+            if (landed && touch.Knockback > 0 && hurt.GetComponent<Body>() is { } body)
             {
                 var away = hurt.Transform.WorldPosition - source.Transform.WorldPosition;
                 var direction = new Vector2(away.X, away.Y);
                 body.Velocity = (direction.LengthSquared() > 1e-8f ? Vector2.Normalize(direction) : Vector2.UnitY) * touch.Knockback;
             }
 
+            if (landed && swing is not null)
+                Landed(swing, hurt);
             if (touch.DestroyOnHit)
                 Destroy(source);
         }
 
         _touches.Clear();
+
+        static bool KillNow(Health health)
+        {
+            health.Kill();
+            return true;
+        }
     }
 
     private static string? LayerOf(Entity entity) =>
@@ -704,12 +880,15 @@ public sealed class Game
     {
         foreach (var health in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Health>()).ToList())
         {
+            health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);
             if (!health.TakeDeath())
                 continue;
             if (!string.IsNullOrWhiteSpace(health.DeathMessage))
                 Send(health.DeathMessage, health.Entity);
-            if (health.DestroyOnDeath)
+            if (health.Respawn)
+                health.Entity!.IsEnabled = false;
+            else if (health.DestroyOnDeath)
                 Destroy(health.Entity!);
         }
     }

@@ -28,6 +28,7 @@ public sealed class GameSurface : HwndHost
     private const int WmMButtonDown = 0x0207;
     private const int WmMButtonUp = 0x0208;
     private const int WmMouseLeave = 0x02A3;
+    private const int WmMouseWheel = 0x020A;
     private const uint TmeLeave = 0x00000002;
 
     private IntPtr _hwnd;
@@ -45,6 +46,9 @@ public sealed class GameSurface : HwndHost
 
     /// <summary>Raised when a mouse button goes down (true) or up (false) over the surface.</summary>
     public event Action<Runtime.MouseButton, bool>? MouseButtonChanged;
+
+    /// <summary>Raised when the mouse wheel turns over the surface, in notches (positive is away from the user).</summary>
+    public event Action<float>? MouseWheelTurned;
 
     /// <summary>Folder that sprite image paths are relative to (the project's Assets folder).</summary>
     public string? AssetRoot
@@ -170,6 +174,11 @@ public sealed class GameSurface : HwndHost
             case WmLButtonUp or WmRButtonUp or WmMButtonUp:
                 MouseButtonChanged?.Invoke(ButtonFor(msg), false);
                 break;
+            case WmMouseWheel:
+                MouseWheelTurned?.Invoke((short)((wParam.ToInt64() >> 16) & 0xFFFF) / 120f);
+                // Handled here, so it isn't passed up to the window and counted twice.
+                handled = true;
+                return IntPtr.Zero;
         }
 
         return base.WndProc(hwnd, msg, wParam, lParam, ref handled);

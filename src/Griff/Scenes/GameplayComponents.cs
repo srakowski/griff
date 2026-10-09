@@ -45,6 +45,15 @@ public sealed class Health : Component
     /// <summary>A message sent with <c>Game.Send</c> when it dies, with the entity as its data, e.g. "PlayerDied" or "EnemyDied".</summary>
     public string? DeathMessage { get; set; }
 
+    /// <summary>
+    /// Come back after dying instead of being destroyed: hidden for <see cref="RespawnDelay"/>, then back at full health at
+    /// the active <see cref="Checkpoint"/> (or where it started), briefly invincible. For the player in a platformer.
+    /// </summary>
+    public bool Respawn { get; set; }
+
+    /// <summary>Seconds it stays gone before it comes back (see <see cref="Respawn"/>).</summary>
+    public float RespawnDelay { get; set; } = 1;
+
     public bool IsDead => Current <= 0;
 
     /// <summary>True for <see cref="InvincibleTime"/> after a hit.</summary>
@@ -55,6 +64,32 @@ public sealed class Health : Component
 
     /// <summary>Raised once, when <see cref="Current"/> reaches zero.</summary>
     public event Action? Died;
+
+    /// <summary>Raised when it comes back after dying (see <see cref="Respawn"/>).</summary>
+    public event Action? Respawned;
+
+    // Where it was when the game first saw it, to respawn at without a checkpoint; and how long until it comes back.
+    internal Vector2? Home { get; set; }
+
+    internal float RespawnLeft { get; set; } = float.NaN;
+
+    /// <summary>Back to full health, invincible (and blinking) for <see cref="InvincibleTime"/>. Called by the game.</summary>
+    internal void Revive()
+    {
+        Current = Max;
+        RespawnLeft = float.NaN;
+        if (InvincibleTime > 0)
+        {
+            _invincibleLeft = InvincibleTime;
+            if (BlinkWhileInvincible)
+            {
+                foreach (var sprite in Sprites())
+                    sprite.Blink(InvincibleTime);
+            }
+        }
+
+        Respawned?.Invoke();
+    }
 
     /// <summary>
     /// Takes <paramref name="amount"/> hit points away, unless it's already dead or still invincible from the last hit.
@@ -177,12 +212,139 @@ public sealed class DamageOnTouch : Component
     /// <summary>Destroy this entity when it touches something it can hurt, like a bullet or a one-hit kamikaze enemy.</summary>
     public bool DestroyOnHit { get; set; }
 
+    /// <summary>Kill outright, invincible or not, whatever the <see cref="Amount"/>: bottomless pits, lava, crushers.</summary>
+    public bool Kill { get; set; }
+
     /// <summary>True if it hurts things on collision layer <paramref name="layer"/>.</summary>
     public bool Hurts(string? layer)
     {
         var layers = CollisionLayers.Parse(Layers);
         return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
     }
+}
+
+/// <summary>
+/// Something to collect, with no code: coins, gems, hearts, keys. When something it accepts touches it (see
+/// <see cref="Layers"/>), it sends its <see cref="Message"/> with its <see cref="Amount"/> (a <see cref="Counter"/> adds it
+/// up), plays its <see cref="Sound"/>, spawns its <see cref="Effect"/> and disappears. Needs a collider on the same entity,
+/// usually a trigger.
+/// </summary>
+[ComponentName("Griff.Pickup")]
+public sealed class Pickup : Component
+{
+    /// <summary>The collision layers that can collect it, e.g. "Player". Empty lets anything with a <see cref="Body"/> collect it.</summary>
+    public string? Layers { get; set; }
+
+    /// <summary>The message sent when it's collected, with <see cref="Amount"/> as its data. Empty sends nothing.</summary>
+    public string? Message { get; set; } = "Score";
+
+    /// <summary>How much it's worth: the data sent with its <see cref="Message"/>, and how many of its <see cref="Item"/>.</summary>
+    public int Amount { get; set; } = 1;
+
+    /// <summary>
+    /// An item it puts in the collector's <see cref="Inventory"/> (one is added if it has none), e.g. "Key". Empty puts
+    /// nothing there.
+    /// </summary>
+    public string? Item { get; set; }
+
+    /// <summary>A sound played when it's collected, e.g. "Sounds/coin.wav".</summary>
+    public string? Sound { get; set; }
+
+    /// <summary>A prefab spawned where it was, e.g. "Sparkle": a burst of particles, a score popup.</summary>
+    public string? Effect { get; set; }
+
+    /// <summary>Gives the <see cref="Effect"/>'s particles this entity's sprite color, so one sparkle suits every pickup.</summary>
+    public bool TintEffect { get; set; } = true;
+
+    /// <summary>Degrees per second it turns while waiting to be collected. 0 keeps it still.</summary>
+    public float Spin { get; set; }
+
+    /// <summary>True once it has been collected (it disappears at the end of that frame).</summary>
+    [DoNotSerialize]
+    public bool IsCollected { get; internal set; }
+
+    /// <summary>Raised when it's collected, with whatever collected it.</summary>
+    public event Action<Entity>? Collected;
+
+    /// <summary>True if something on collision layer <paramref name="layer"/> can collect it.</summary>
+    public bool AcceptsLayer(string? layer)
+    {
+        var layers = CollisionLayers.Parse(Layers);
+        return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
+    }
+
+    internal void RaiseCollected(Entity by) => Collected?.Invoke(by);
+}
+
+/// <summary>
+/// Keeps count and shows it in its entity's <see cref="Text"/>: a score, coins, kills. Every <see cref="Message"/> sent
+/// adds to it (the number sent along, or 1), so it adds up <see cref="Pickup"/>s with no code; scripts can call
+/// <see cref="Add"/>. With <see cref="SaveBestAs"/> it remembers the highest count ever, between runs.
+/// </summary>
+[ComponentName("Griff.Counter")]
+public sealed class Counter : Component
+{
+    /// <summary>The message that adds to it, e.g. "Score" for <c>Game.Send("Score", 10)</c>. Empty only counts <see cref="Add"/>.</summary>
+    public string? Message { get; set; } = "Score";
+
+    public int Value { get; set; }
+
+    /// <summary>
+    /// How the text reads: <c>{0}</c> is the count and <c>{1}</c> the best, e.g. "Score: {0}", "Best: {1}" or
+    /// "{0:000000}". Empty shows just the number.
+    /// </summary>
+    public string? Format { get; set; } = "Score: {0}";
+
+    /// <summary>
+    /// A name to keep the best count under in <c>Game.SaveData</c>, e.g. "best". Whenever the count beats it, it's saved,
+    /// so another counter (on a menu, with Format "Best: {1}") can show it.
+    /// </summary>
+    public string? SaveBestAs { get; set; }
+
+    /// <summary>How big the text pops when the count changes, springing back: 1.3 is a little pop, 1 none.</summary>
+    public float Pop { get; set; } = 1.3f;
+
+    /// <summary>
+    /// An item to count instead of a message, e.g. "Key": it shows how many the first <see cref="Inventory"/> in the scene
+    /// (usually the player's) holds.
+    /// </summary>
+    public string? Item { get; set; }
+
+    /// <summary>The best count, from <see cref="SaveBestAs"/> (or this run's, without it).</summary>
+    [DoNotSerialize]
+    public int Best { get; internal set; }
+
+    /// <summary>Raised when the count changes.</summary>
+    public event Action<Counter>? Changed;
+
+    /// <summary>Adds <paramref name="amount"/> (take some away with a negative amount).</summary>
+    public void Add(int amount = 1)
+    {
+        if (amount == 0)
+            return;
+        Value += amount;
+        Changed?.Invoke(this);
+    }
+
+    /// <summary>The text to show: <see cref="Format"/> filled in, or just the number if it can't be.</summary>
+    public string Display()
+    {
+        if (string.IsNullOrEmpty(Format))
+            return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best);
+        }
+        catch (FormatException)
+        {
+            return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+
+    // What the game last showed, and the entity's own scale (so a pop springs back to it).
+    internal int? Shown { get; set; }
+
+    internal Vector3? RestingScale { get; set; }
 }
 
 /// <summary>Destroys its entity after <see cref="Seconds"/> of game time, optionally fading it out first: bullets, effects, popups.</summary>
@@ -231,6 +393,9 @@ public sealed class Spawner : Component
     /// <summary>Spawns land at a random spot up to this far from the spawner.</summary>
     public float Radius { get; set; }
 
+    /// <summary>Untick it to stop spawning for now. <see cref="Switch"/>es tick and untick it.</summary>
+    public bool Running { get; set; } = true;
+
     /// <summary>How many it has spawned.</summary>
     [DoNotSerialize]
     public int Spawned { get; private set; }
@@ -252,7 +417,7 @@ public sealed class Spawner : Component
         _alive.RemoveAll(e => e.Scene != game.Scene);
         if (float.IsNaN(_untilNext))
             _untilNext = Delay;
-        if (IsFinished || string.IsNullOrWhiteSpace(Prefab))
+        if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab))
             return;
 
         _untilNext -= seconds;
@@ -327,7 +492,7 @@ public sealed class Typewriter : Component
     /// <summary>Reveals letters for <paramref name="seconds"/>; returns true if <see cref="Sound"/> should play. Called by the game.</summary>
     internal bool Advance(float seconds)
     {
-        var value = Entity?.GetComponent<Text>()?.Value;
+        var value = Entity?.GetComponent<Text>()?.Shown;
         if (!_running || value != _typing)
         {
             _running = true;

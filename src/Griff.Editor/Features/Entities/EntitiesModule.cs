@@ -26,6 +26,21 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateTilemapCommand>()
             .AddCommand<CreateParticlesCommand>()
             .AddCommand<CreateButtonCommand>()
+            .AddCommand<CreateSliderCommand>()
+            .AddCommand<CreateToggleCommand>()
+            .AddCommand<CreateBarCommand>()
+            .AddCommand<CreateDialogueBoxCommand>()
+            .AddCommand<CreateSwitchCommand>()
+            .AddCommand<CreatePanelCommand>()
+            .AddCommand<CreateChoiceCommand>()
+            .AddCommand<CreatePlatformerPlayerCommand>()
+            .AddCommand<CreateTopDownPlayerCommand>()
+            .AddCommand<CreateLadderCommand>()
+            .AddCommand<CreateSpringCommand>()
+            .AddCommand<CreateCrateCommand>()
+            .AddCommand<CreateLightCommand>()
+            .AddCommand<CreateRoomCommand>()
+            .AddCommand<CreateHitboxCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
             .AddCommand<DeleteEntityCommand>()
@@ -43,6 +58,21 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
 
     protected virtual void Configure(Entity entity)
     {
+    }
+
+    /// <summary>
+    /// A draw order for a menu control: at least <paramref name="order"/>, and above anything drawn by the entity it's
+    /// created inside (a button made on a panel draws over the panel's backdrop).
+    /// </summary>
+    protected int OrderAbove(int order)
+    {
+        for (var e = selection.Entity; e is not null; e = e.Parent)
+        {
+            if (Griff.Rendering.SceneRenderer.OrderOf(e) is { } under)
+                order = Math.Max(order, under + 10);
+        }
+
+        return order;
     }
 
     protected override bool CanExecuteCore() => workspace.Scene is not null;
@@ -97,7 +127,7 @@ public sealed class CreateTextCommand(IWorkspace workspace, ISelection selection
     public override string? Icon => Icons.Font;
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Text";
-    protected override void Configure(Entity entity) => entity.AddComponent<Griff.Scenes.Text>();
+    protected override void Configure(Entity entity) => entity.AddComponent<Griff.Scenes.Text>().Order = OrderAbove(0);
 }
 
 /// <summary>Creates an empty tilemap; selecting it puts the Scene view into tile painting.</summary>
@@ -136,11 +166,341 @@ public sealed class CreateButtonCommand(IWorkspace workspace, ISelection selecti
         var sprite = entity.AddComponent<Sprite>();
         sprite.Size = size;
         sprite.Tint = Griff.Color.FromBytes(0x3A, 0x3F, 0x4B);
-        sprite.Order = 100;
+        sprite.Order = OrderAbove(100);
         var label = entity.AddComponent<Griff.Scenes.Text>();
         label.Value = "Button";
         label.Size = 0.5f;
         entity.AddComponent<Griff.Scenes.Button>().Size = size;
+    }
+}
+
+/// <summary>Creates a slider for an options menu; set its Setting to a volume and it needs no code.</summary>
+public sealed class CreateSliderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateSlider";
+    public override string Text => "Create Sl_ider";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 7);
+    protected override string EntityName => "Slider";
+    protected override void Configure(Entity entity) => entity.AddComponent<Slider>().Order = OrderAbove(100);
+}
+
+/// <summary>Creates an on/off switch: a button whose label says which way it's set.</summary>
+public sealed class CreateToggleCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateToggle";
+    public override string Text => "Create T_oggle";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 8);
+    protected override string EntityName => "Toggle";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(4, 1);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x3A, 0x3F, 0x4B);
+        sprite.Order = OrderAbove(100);
+        var label = entity.AddComponent<Griff.Scenes.Text>();
+        label.Value = "Option: On";
+        label.Size = 0.5f;
+        entity.AddComponent<Griff.Scenes.Button>().Size = size;
+        var toggle = entity.AddComponent<Toggle>();
+        toggle.OnText = "Option: On";
+        toggle.OffText = "Option: Off";
+    }
+}
+
+/// <summary>Creates a bar for a HUD; set its Track to show an entity's health.</summary>
+public sealed class CreateBarCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateBar";
+    public override string Text => "Create B_ar";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 9);
+    protected override string EntityName => "Bar";
+    protected override void Configure(Entity entity) => entity.AddComponent<Bar>();
+}
+
+/// <summary>
+/// Creates the box a <see cref="Dialogue"/> talks in: a panel pinned to the bottom of the screen whose text types itself
+/// out. It's hidden while the game runs until someone talks.
+/// </summary>
+public sealed class CreateDialogueBoxCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateDialogueBox";
+    public override string Text => "Create _Dialogue Box";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 10);
+    protected override string EntityName => "Dialogue Box";
+
+    protected override void Configure(Entity entity)
+    {
+        var anchor = entity.AddComponent<ScreenAnchor>();
+        anchor.Anchor = Anchor.Bottom;
+        anchor.Offset = new System.Numerics.Vector2(0, 1.4f);
+        var panel = entity.AddComponent<Sprite>();
+        panel.Size = new System.Numerics.Vector2(14, 2.2f);
+        panel.Tint = Griff.Color.FromBytes(0x16, 0x19, 0x20) with { A = 0.9f };
+        panel.Order = 200;
+        var text = entity.AddComponent<Griff.Scenes.Text>();
+        text.Value = "...";
+        text.Size = 0.5f;
+        text.Order = 201;
+        entity.AddComponent<Typewriter>();
+    }
+}
+
+/// <summary>
+/// Creates a lever: a small sprite with a trigger around it and a <see cref="Switch"/>. Name what it opens in its Targets
+/// (or Hides), or set its Mode to make it a pressure plate or a button.
+/// </summary>
+public sealed class CreateSwitchCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateSwitch";
+    public override string Text => "Create S_witch";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 11);
+    protected override string EntityName => "Switch";
+
+    protected override void Configure(Entity entity)
+    {
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = new System.Numerics.Vector2(0.3f, 0.8f);
+        sprite.Tint = Griff.Color.FromBytes(0xC2, 0x4E, 0x4E);
+        var collider = entity.AddComponent<BoxCollider>();
+        collider.Size = new System.Numerics.Vector2(1.2f, 1.2f);
+        collider.IsTrigger = true;
+        entity.AddComponent<Switch>();
+    }
+}
+
+/// <summary>
+/// Creates a panel: a backdrop pinned to the middle of the screen with a <see cref="Panel"/>, hidden while the game runs
+/// until it's opened. Select it and create buttons to put them on it; set its Open On to "Pause" for a pause menu.
+/// </summary>
+public sealed class CreatePanelCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreatePanel";
+    public override string Text => "Create Pa_nel";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 12);
+    protected override string EntityName => "Panel";
+
+    protected override void Configure(Entity entity)
+    {
+        entity.Transform.Position = new System.Numerics.Vector3(0, 0, 3);
+        entity.AddComponent<ScreenAnchor>().Anchor = Anchor.Center;
+        var backdrop = entity.AddComponent<Sprite>();
+        backdrop.Size = new System.Numerics.Vector2(7, 5);
+        backdrop.Tint = Griff.Color.FromBytes(0x16, 0x19, 0x20) with { A = 0.92f };
+        backdrop.Order = 300;
+        entity.AddComponent<Panel>();
+    }
+}
+
+/// <summary>Creates a button that picks one of several options, changed with left and right: "Difficulty: Normal".</summary>
+public sealed class CreateChoiceCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateChoice";
+    public override string Text => "Create C_hoice";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 13);
+    protected override string EntityName => "Choice";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(4, 1);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x3A, 0x3F, 0x4B);
+        sprite.Order = OrderAbove(100);
+        var label = entity.AddComponent<Griff.Scenes.Text>();
+        label.Value = "< Normal >";
+        label.Size = 0.5f;
+        entity.AddComponent<Griff.Scenes.Button>().Size = size;
+        entity.AddComponent<Choice>().Format = "< {0} >";
+    }
+}
+
+/// <summary>
+/// Creates a platformer's player that runs and jumps with no code: a box sprite with a collider on the Player layer, a
+/// <see cref="Body"/> and a <see cref="PlatformerMovement"/>. Its Inspector tunes how it moves.
+/// </summary>
+public sealed class CreatePlatformerPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreatePlatformerPlayer";
+    public override string Text => "Create _Platformer Player";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 14);
+    protected override string EntityName => "Player";
+
+    protected override void Configure(Entity entity)
+    {
+        AddPlayerShape(entity, new System.Numerics.Vector2(0.8f, 1));
+        entity.AddComponent<Body>();
+        entity.AddComponent<PlatformerMovement>();
+    }
+
+    internal static void AddPlayerShape(Entity entity, System.Numerics.Vector2 size)
+    {
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0xF0, 0x8C, 0x2E);
+        var collider = entity.AddComponent<BoxCollider>();
+        collider.Size = size;
+        collider.Layer = "Player";
+    }
+}
+
+/// <summary>Creates a top-down player that moves in eight directions with no code, ignoring gravity.</summary>
+public sealed class CreateTopDownPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateTopDownPlayer";
+    public override string Text => "Create Top-down Pla_yer";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 15);
+    protected override string EntityName => "Player";
+
+    protected override void Configure(Entity entity)
+    {
+        CreatePlatformerPlayerCommand.AddPlayerShape(entity, new System.Numerics.Vector2(0.8f, 0.8f));
+        entity.AddComponent<Body>().GravityScale = 0;
+        entity.AddComponent<TopDownMovement>();
+    }
+}
+
+/// <summary>Creates a ladder: a tall thin sprite behind things, with a trigger to climb. Stretch it with its Scale.</summary>
+public sealed class CreateLadderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateLadder";
+    public override string Text => "Create _Ladder";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    protected override string EntityName => "Ladder";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(0.8f, 4);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x9C, 0x6B, 0x3C);
+        sprite.Order = -1;
+        var collider = entity.AddComponent<BoxCollider>();
+        collider.Size = size;
+        collider.IsTrigger = true;
+        entity.AddComponent<Ladder>();
+    }
+}
+
+/// <summary>Creates a spring: a low solid block with a <see cref="Bouncer"/> that sends whatever lands on it flying.</summary>
+public sealed class CreateSpringCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateSpring";
+    public override string Text => "Create Sprin_g";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 17);
+    protected override string EntityName => "Spring";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(1.2f, 0.5f);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x4C, 0x9A, 0xFF);
+        entity.AddComponent<BoxCollider>().Size = size;
+        entity.AddComponent<Bouncer>();
+    }
+}
+
+/// <summary>Creates a crate the player pushes along: a solid box with a <see cref="Body"/> and <see cref="Pushable"/>, on the Crate layer.</summary>
+public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateCrate";
+    public override string Text => "Create Cr_ate";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 18);
+    protected override string EntityName => "Crate";
+
+    protected override void Configure(Entity entity)
+    {
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Tint = Griff.Color.FromBytes(0x9C, 0x6B, 0x3C);
+        var collider = entity.AddComponent<BoxCollider>();
+        collider.Layer = "Crate";
+        entity.AddComponent<Body>();
+        entity.AddComponent<Pushable>();
+    }
+}
+
+/// <summary>Creates a light: an entity with a warm <see cref="Light"/>. It shows once the camera's Ambient is dark.</summary>
+public sealed class CreateLightCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateLight";
+    public override string Text => "Create Lig_ht";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    protected override string EntityName => "Light";
+    protected override void Configure(Entity entity) => entity.AddComponent<Light>();
+}
+
+/// <summary>Creates a room one camera view big, for a camera with a Follow to keep to and slide between.</summary>
+public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    private readonly IWorkspace _workspace = workspace;
+
+    public override string Id => "Entity.CreateRoom";
+    public override string Text => "Create Roo_m";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 20);
+    protected override string EntityName => "Room";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = _workspace.Scene?.Scene.Entities.Select(e => e.GetComponent<Camera>()).OfType<Camera>().FirstOrDefault()?.Size
+                   ?? Griff.Rendering.SceneRenderer.DefaultCameraSize;
+        entity.AddComponent<Room>().Size = new System.Numerics.Vector2(MathF.Ceiling(size * 2 * 16 / 9), size * 2);
+    }
+}
+
+/// <summary>
+/// Gives the selected entity a sword: a "Hitbox" child to its right (a trigger on the Attack layer with a
+/// <see cref="DamageOnTouch"/> that hurts enemies) and an <see cref="Attack"/> that swings it out with the Attack action.
+/// One undo step.
+/// </summary>
+public sealed class CreateHitboxCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.CreateHitbox";
+    public override string Text => "Add Atta_ck";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
+
+    protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } owner)
+            return Task.CompletedTask;
+
+        var hitbox = new Entity("Hitbox");
+        hitbox.Transform.Position = new System.Numerics.Vector3(0.9f, 0, 0);
+        var collider = hitbox.AddComponent<BoxCollider>();
+        collider.Size = new System.Numerics.Vector2(1, 0.8f);
+        collider.IsTrigger = true;
+        collider.Layer = "Attack";
+        var damage = hitbox.AddComponent<DamageOnTouch>();
+        damage.Layers = "Enemy";
+        damage.Knockback = 6;
+
+        using (document.History.BeginGroup($"Add Attack to {owner.Name}"))
+        {
+            document.Execute(new AddEntityEdit(document.Scene, hitbox, owner));
+            if (owner.GetComponent<Attack>() is null)
+                document.Execute(new AddComponentEdit(owner, new Attack()));
+        }
+
+        selection.Select(hitbox);
+        return Task.CompletedTask;
     }
 }
 

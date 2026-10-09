@@ -119,7 +119,6 @@ public sealed class ProjectTemplateTests : IDisposable
         var panel = game.Find("Game Over")!;
         Assert.True(panel.IsEnabled);
         Assert.Equal("Score: 0   Best: 0", game.Find("Result")!.GetComponent<Text>()!.Value);
-        Assert.True(game.SaveData.Has("best"));
 
         input.SetKey(Key.Enter, true);
         Run(game, input, 0.5);
@@ -127,6 +126,67 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.NotNull(game.Find("Player"));
         Assert.False(game.Find("Game Over")!.IsEnabled);
         Assert.Equal("Game", game.SceneName);
+    }
+
+    [Fact]
+    public async Task Arcade_KillsSaveTheBest_WhichTheMenuShows()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
+        game.Find("Spawner")!.IsEnabled = false;
+        Run(game, input, 0.05);
+
+        game.Send("Score", 3);
+        Run(game, input, 0.05);
+        Assert.Equal(3, game.SaveData.GetInt("best"));
+
+        game.LoadScene("Main");
+        Run(game, input, 0.05);
+        Assert.Equal("Best: 3", game.Find("Best")!.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
+    public async Task Arcade_Options_WorkFromTheKeyboard_AndAreRemembered()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.1);
+
+        void Press(Key key)
+        {
+            input.SetKey(key, true);
+            Run(game, input, 0.05);
+            input.SetKey(key, false);
+            Run(game, input, 0.05);
+        }
+
+        // Down to Play, down to Options, and in.
+        Press(Key.Down);
+        Press(Key.Down);
+        Assert.Equal("Options", game.Focused!.Entity!.Name);
+        Press(Key.Enter);
+        Run(game, input, 0.5); // through the fade
+        Assert.Equal("Options", game.SceneName);
+
+        // The music slider is first: turn it down a notch.
+        Press(Key.Down);
+        Assert.Equal("Music Volume", game.Focused!.Entity!.Name);
+        Press(Key.Left);
+        Assert.Equal(0.9f, game.Audio.MusicVolume, 3);
+
+        // Down past the sounds slider to the sound toggle, and switch it off.
+        Press(Key.Down);
+        Press(Key.Down);
+        Press(Key.Enter);
+        Assert.True(game.Audio.Muted);
+        Assert.Equal("Sound: Off", game.Find("Sound")!.GetComponent<Text>()!.Value);
+        Assert.True(game.SaveData.GetBool(Game.MutedSaveKey));
+        Assert.Equal(0.9f, game.SaveData.GetFloat(Game.MusicVolumeSaveKey), 3);
+
+        // Esc goes back to the menu.
+        Press(Key.Escape);
+        Run(game, input, 0.5);
+        Assert.Equal(Project.DefaultSceneName, game.SceneName);
     }
 
     [Fact]
@@ -254,6 +314,416 @@ public sealed class ProjectTemplateTests : IDisposable
         }
 
         Assert.True(game.Find("Player")!.Transform.Position.X > 12, "the player should reach the right end");
+    }
+
+    [Fact]
+    public async Task Platformer_LiftCarriesThePlayerUpToTheSlimesLedge_WhereTheSlimeStays()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var lift = game.Find("Lift")!;
+        var slime = game.Find("Slime")!;
+
+        // Stand on the lift at the bottom and ride it up.
+        player.Transform.Position = new Vector3(-13, -3, 0);
+        Run(game, input, 5);
+
+        Assert.True(player.GetComponent<Body>()!.IsGrounded);
+        Assert.True(lift.Transform.Position.Y > 1.5f, "the lift should have gone up");
+        Assert.Equal(lift.Transform.Position.Y + 0.75f, player.Transform.Position.Y, 1);
+
+        // The slime walks back and forth on its ledge without falling off.
+        Run(game, input, 10);
+        Assert.InRange(slime.Transform.Position.X, -11, -6);
+        Assert.True(slime.Transform.Position.Y > 2);
+    }
+
+    [Fact]
+    public async Task Platformer_TwoSwordSwings_DefeatTheSlime()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var slime = game.Find("Slime")!;
+        Run(game, input, 0.2);
+        Assert.False(game.Find("Hitbox")!.IsEnabled, "the sword is put away until it swings");
+
+        for (var swing = 0; swing < 2; swing++)
+        {
+            // Stand just left of the slime, facing it, and swing.
+            player.Transform.Position = slime.Transform.Position + new Vector3(-1.2f, 0.2f, 0);
+            player.GetComponent<PlatformerMovement>()!.Facing = 1;
+            input.SetKey(Key.X, true);
+            Run(game, input, Frame);
+            input.SetKey(Key.X, false);
+            Run(game, input, 0.6);
+        }
+
+        Assert.Null(game.Find("Slime"));
+        Assert.True(player.IsEnabled);
+    }
+
+    [Fact]
+    public async Task Platformer_LosingAllHearts_RespawnsAtTheCheckpoint()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var flag = game.Find("Checkpoint")!;
+
+        player.Transform.Position = flag.Transform.Position;
+        Run(game, input, 0.5);
+        Assert.True(flag.GetComponent<Checkpoint>()!.Active);
+
+        player.Transform.Position = new Vector3(10, -3, 0);
+        Run(game, input, 0.5);
+        player.GetComponent<Health>()!.Kill();
+        Run(game, input, 0.5);
+        Assert.False(player.IsEnabled);
+
+        Run(game, input, 1);
+        Assert.True(player.IsEnabled);
+        Assert.Equal(3, player.GetComponent<Health>()!.Current);
+        Assert.Equal(flag.Transform.Position.X, player.Transform.Position.X, 1);
+    }
+
+    [Fact]
+    public async Task Platformer_SignReadsItselfOut_WhenThePlayerPressesInteract()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var box = game.Find("Dialogue Box")!;
+        var hint = game.Find("Sign")!.Children.Single();
+
+        Run(game, input, 0.2);
+        Assert.False(box.IsEnabled);
+
+        player.Transform.Position = game.Find("Sign")!.Transform.Position;
+        Run(game, input, 0.2);
+        Assert.True(hint.IsEnabled, "the E hint shows beside the sign");
+
+        input.SetKey(Key.E, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.E, false);
+        Run(game, input, 3);
+
+        Assert.True(box.IsEnabled);
+        Assert.Equal("Arrow keys or WASD to run, Space to jump, Shift to dash.", box.GetComponent<Text>()!.Value);
+        Assert.Equal(0, game.Time.Scale);
+    }
+
+    [Fact]
+    public async Task Platformer_SpringLaunchesThePlayerUpToALedge_ThatGivesWay()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var spring = game.Find("Spring")!;
+        var ledge = game.FindAll("Crumbling Ledge").OrderByDescending(l => l.Transform.Position.X).First();
+
+        // Dropped onto the spring, it goes up past the ledge; once above it, steer left onto it.
+        player.Transform.Position = spring.Transform.Position + new Vector3(0, 1, 0);
+        var body = player.GetComponent<Body>()!;
+        var peak = float.NegativeInfinity;
+        for (var t = 0.0; t < 2.5 && body.Ground != ledge; t += Frame)
+        {
+            var above = player.Transform.Position.Y > ledge.Transform.Position.Y + 0.5f;
+            input.SetKey(Key.A, above && player.Transform.Position.X > ledge.Transform.Position.X + 0.3f);
+            Run(game, input, Frame);
+            peak = Math.Max(peak, player.Transform.Position.Y);
+        }
+
+        input.SetKey(Key.A, false);
+        Assert.True(peak > ledge.Transform.Position.Y + 1.5f, $"the spring should launch the player well above the ledge (peak {peak:0.00})");
+        Assert.Equal(ledge, player.GetComponent<Body>()!.Ground);
+        Assert.True(game.FindAll("Coin").Count(c => c.IsSelfOrDescendantOf(ledge)) == 0, $"the ledge's coin is collected on landing (player at {player.Transform.Position}, coins at {string.Join(";", game.FindAll("Coin").Select(c => c.Transform.WorldPosition))})");
+
+        // A moment later it gives way under the player.
+        Run(game, input, 1);
+        Assert.True(ledge.GetComponent<Crumble>()!.Crumbled);
+        Assert.True(player.Transform.Position.Y < ledge.Transform.Position.Y);
+    }
+
+    [Fact]
+    public async Task Platformer_PlayerDashes()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        Run(game, input, 1);
+
+        var x = player.Transform.Position.X;
+        input.SetKey(Key.LeftShift, true);
+        Run(game, input, 0.15);
+        input.SetKey(Key.LeftShift, false);
+        Assert.True(player.Transform.Position.X - x > 2, "a dash covers ground fast");
+        Assert.NotEmpty(player.GetComponent<Trail>()!.Copies);
+    }
+
+    [Fact]
+    public async Task TopDown_PushingTheCrateOntoThePlate_BringsOutTheBonusGem()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var crate = game.Find("Crate")!;
+        var bonus = game.Find("Bonus Gem")!;
+        Run(game, input, 0.2);
+        Assert.False(bonus.IsEnabled, "the bonus gem isn't there until the plate is pressed");
+
+        // Walking over the plate does nothing; only the crate presses it.
+        player.Transform.Position = game.Find("Plate")!.Transform.Position;
+        Run(game, input, 0.2);
+        Assert.False(bonus.IsEnabled);
+
+        // From above the crate, push it down onto the plate.
+        player.Transform.Position = crate.Transform.Position + new Vector3(0, 1.5f, 0);
+        input.SetKey(Key.S, true);
+        for (var t = 0.0; t < 3 && !bonus.IsEnabled; t += Frame)
+            Run(game, input, Frame);
+        input.SetKey(Key.S, false);
+
+        Assert.True(bonus.IsEnabled);
+        Assert.Equal(game.Find("Plate")!.Transform.Position.Y, crate.Transform.Position.Y, 0.9);
+    }
+
+    [Fact]
+    public async Task TopDown_IsADimDungeon_LitByTorchesAndTheLantern_WithTheHudUndarkened()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.2);
+
+        var frame = Griff.Rendering.SceneRenderer.Build(game, 16f / 9);
+        Assert.True(frame.IsDark);
+        Assert.True(frame.Lights.Count >= 1, "the lantern lights up around the player");
+        Assert.Equal(4, game.FindAll("Torch").Count);
+
+        // Next to the player it's bright; in a far corner away from the torches it's dim.
+        Assert.True(game.LightAt(game.Find("Player")!) > 0.9f);
+        Assert.True(game.LightAt(new Vector2(0, -6.5f)) < 0.6f);
+
+        // The score rides inside the camera, so it's drawn after the darkness.
+        var score = frame.Sprites.Select((d, i) => (d, i)).First(x => x.d.Entity.Name == "Score").i;
+        Assert.True(score >= frame.LitCount);
+    }
+
+    [Fact]
+    public async Task TopDown_PortalsTakeThePlayerAcrossTheRoom()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+
+        player.Transform.Position = game.Find("Portal A")!.Transform.Position;
+        Run(game, input, 0.6);
+
+        var exit = game.Find("Portal B")!.Transform.Position;
+        Assert.Equal(new Vector2(exit.X, exit.Y), new Vector2(player.Transform.Position.X, player.Transform.Position.Y));
+    }
+
+    [Fact]
+    public async Task TopDown_BatChasesThePlayer_OnceItSeesThem()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var bat = game.Find("Bat")!;
+
+        Run(game, input, 0.5);
+        Assert.False(bat.GetComponent<Chase>()!.IsChasing);
+
+        player.Transform.Position = new Vector3(-7, -5, 0);
+        var health = player.GetComponent<Health>()!;
+        Run(game, input, 1.5);
+
+        Assert.True(bat.GetComponent<Chase>()!.IsChasing);
+        Assert.True(health.Current < health.Max, "the bat should catch and bite the player");
+    }
+
+    [Fact]
+    public async Task Platformer_LeverOnTheLedge_BringsOutTheBridge()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var bridge = game.Find("Bridge")!;
+        var lever = game.Find("Lever")!;
+
+        Run(game, input, 0.2);
+        Assert.False(bridge.IsEnabled, "the bridge isn't there until the lever is pulled");
+
+        // Standing on the ledge beside it.
+        player.Transform.Position = lever.Transform.Position + new Vector3(0, 0.4f, 0);
+        Run(game, input, 0.2);
+        Assert.True(lever.Children.Single().IsEnabled, "the E hint shows beside the lever");
+        input.SetKey(Key.E, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.E, false);
+        Run(game, input, 0.1);
+
+        Assert.True(lever.GetComponent<Switch>()!.IsOn);
+        Assert.True(bridge.IsEnabled);
+        Assert.Equal(2, bridge.Children.Count(c => c.GetComponent<Pickup>() is not null));
+
+        // Its coins sit on top of it.
+        Assert.All(bridge.Children, coin =>
+        {
+            Assert.Equal(bridge.Transform.Position.Y + 0.75f, coin.Transform.WorldPosition.Y, 3);
+            Assert.InRange(coin.Transform.WorldPosition.X, bridge.Transform.Position.X - 2.5f, bridge.Transform.Position.X + 2.5f);
+        });
+    }
+
+    [Fact]
+    public async Task TopDown_KeyOpensTheVault()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var door = game.Find("Vault Door")!;
+        var keys = game.Find("Keys")!.GetComponent<Text>()!;
+
+        // Without the key, walking up into the vault door doesn't get you in.
+        player.Transform.Position = new Vector3(5.75f, 2.5f, 0);
+        input.SetKey(Key.W, true);
+        Run(game, input, 1);
+        Assert.True(door.IsEnabled);
+        Assert.True(player.Transform.Position.Y < 4);
+
+        input.SetKey(Key.W, false);
+        player.Transform.Position = game.Find("Key")!.Transform.Position;
+        Run(game, input, 0.1);
+        Assert.Equal("Keys: 1", keys.Value);
+
+        player.Transform.Position = new Vector3(5.75f, 2.5f, 0);
+        input.SetKey(Key.W, true);
+        Run(game, input, 1.5);
+
+        Assert.False(door.IsEnabled);
+        Assert.Equal("Keys: 0", keys.Value);
+        Assert.Null(game.Find("Treasure"));
+        Assert.Equal("Score: 5", game.Find("Score")!.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
+    public async Task Arcade_BulletsLeaveATrail()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, scene, input, registry);
+
+        var bullet = game.Spawn("Bullet", Vector2.Zero);
+        bullet.GetComponent<Body>()!.Velocity = new Vector2(12, 0);
+        Run(game, input, 0.1);
+
+        Assert.NotEmpty(bullet.GetComponent<Trail>()!.Copies);
+    }
+
+    [Theory]
+    [InlineData(ProjectTemplate.Platformer)]
+    [InlineData(ProjectTemplate.TopDown)]
+    [InlineData(ProjectTemplate.Arcade)]
+    public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(ProjectTemplate template)
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(template);
+        if (template == ProjectTemplate.Arcade)
+            scene = GameLoader.LoadScene(project, registry, "Game");
+        var game = NewGame(project, scene, input, registry);
+        input.MouseWorld = new Vector2(100, 0);
+        Run(game, input, 0.5);
+        var paused = game.Find("Paused")!;
+        Assert.False(paused.IsEnabled);
+
+        input.SetKey(Key.Escape, true);
+        Run(game, input, 0.05);
+        input.SetKey(Key.Escape, false);
+        Assert.True(paused.IsEnabled);
+        Assert.True(game.IsPaused);
+        Assert.Equal("Resume", game.Focused!.Entity!.Name);
+        Assert.Equal("Esc to resume", paused.Children.Single(c => c.Name == "Hint").GetComponent<Text>()!.Shown);
+
+        // Nothing moves while it's up, however hard the player pushes.
+        var player = game.Find("Player")!;
+        var before = player.Transform.Position;
+        input.SetKey(Key.D, true);
+        Run(game, input, 0.5);
+        input.SetKey(Key.D, false);
+        Assert.Equal(before, player.Transform.Position);
+
+        // Enter clicks Resume.
+        input.SetKey(Key.Enter, true);
+        Run(game, input, 0.05);
+        input.SetKey(Key.Enter, false);
+        Assert.False(paused.IsEnabled);
+        Assert.False(game.IsPaused);
+    }
+
+    [Fact]
+    public async Task Arcade_PauseMenu_DoesntOpenOverTheGameOverPanel()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
+        game.Find("Spawner")!.IsEnabled = false;
+        Run(game, input, 0.05);
+
+        game.Find("Player")!.GetComponent<Health>()!.Kill();
+        Run(game, input, 0.2);
+        Assert.Equal("Game Over", game.TopPanel?.Entity!.Name);
+
+        input.SetKey(Key.P, true);
+        Run(game, input, 0.05);
+        Assert.False(game.Find("Paused")!.IsEnabled);
+    }
+
+    [Fact]
+    public async Task Arcade_Options_PickADifficulty_AndRebindFire()
+    {
+        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Options"), input, registry);
+        Run(game, input, 0.1);
+
+        void Press(Key key)
+        {
+            input.SetKey(key, true);
+            Run(game, input, 0.05);
+            input.SetKey(key, false);
+            Run(game, input, 0.05);
+        }
+
+        Assert.Equal("Fire: Left Click", game.Find("Fire")!.GetComponent<Text>()!.Shown);
+
+        // Music, Sounds, Sound, Fullscreen, then Difficulty.
+        for (var i = 0; i < 5; i++)
+            Press(Key.Down);
+        Assert.Equal("Difficulty", game.Focused!.Entity!.Name);
+        Press(Key.Right);
+        Assert.Equal("< Hard >", game.Find("Difficulty")!.GetComponent<Text>()!.Value);
+        Assert.Equal("Hard", game.SaveData.GetString("difficulty"));
+
+        Press(Key.Down);
+        Press(Key.Enter);
+        Assert.Equal("Fire: ...", game.Find("Fire")!.GetComponent<Text>()!.Shown);
+        Press(Key.L);
+        Assert.Equal("Fire: L", game.Find("Fire")!.GetComponent<Text>()!.Shown);
+        Assert.Contains((InputBinding)Key.L, input.BindingsOf("Fire"));
+    }
+
+    [Fact]
+    public async Task Platformer_InteractHints_ShowTheKeyOrTheButton()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var game = NewGame(project, scene, input, registry);
+        var sign = game.Find("Sign")!;
+        game.Find("Player")!.Transform.Position = sign.Transform.WorldPosition;
+        Run(game, input, 0.05);
+        var hint = sign.Children.Single(c => c.Name == "Hint");
+        Assert.True(hint.IsEnabled);
+        Assert.Equal("E", hint.GetComponent<Text>()!.Shown);
+
+        input.SetGamepad([GamepadButton.X], Vector2.Zero);
+        Run(game, input, 0.05);
+        Assert.Equal("Y", hint.GetComponent<Text>()!.Shown);
     }
 
     // As the editor and player set it up: prefabs come from the project.

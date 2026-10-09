@@ -30,6 +30,17 @@ public sealed class Tilemap : Component
     private string? _oneWayTiles;
     private bool[] _background = new bool[MaxTiles];
     private bool[] _oneWay = new bool[MaxTiles];
+    private string? _animatedTiles;
+    private IReadOnlyList<TileAnimation> _animations = [];
+    private string? _ladderTiles;
+    private bool[] _ladder = new bool[MaxTiles];
+    private string? _autoTiles;
+    private string? _slopeUpTiles;
+    private bool[] _slopeUp = new bool[MaxTiles];
+    private string? _slopeDownTiles;
+    private bool[] _slopeDown = new bool[MaxTiles];
+    private IReadOnlyList<(int X, int Y, bool Rising)>? _slopes;
+    private IReadOnlyList<int> _autoGroups = [];
 
     /// <summary>Tileset image relative to Assets. Without one, tiles draw as solid squares of <see cref="Tint"/>.</summary>
     public string? Image { get; set; }
@@ -80,6 +91,94 @@ public sealed class Tilemap : Component
         }
     }
 
+    /// <summary>
+    /// Tiles that animate while the game runs, as runs of frames side by side in the tileset with an optional speed in
+    /// frames a second: "16-19 @6" turns tiles 16, 17, 18 and 19 into water that ripples through all four. Separate runs
+    /// with commas: "16-19 @6, 30-31 @2". A cell painted with a later frame starts the run from there, so neighbors
+    /// needn't move in step.
+    /// </summary>
+    public string? AnimatedTiles
+    {
+        get => _animatedTiles;
+        set
+        {
+            _animatedTiles = value;
+            _animations = ParseAnimations(value);
+        }
+    }
+
+    /// <summary>
+    /// Tiles that are ladders: they never collide, and a <see cref="PlatformerMovement"/> climbs them with up and down.
+    /// Tile numbers and ranges, e.g. "12, 13".
+    /// </summary>
+    public string? LadderTiles
+    {
+        get => _ladderTiles;
+        set
+        {
+            _ladderTiles = value;
+            _ladder = ParseTileSet(value);
+            _collisionRuns = null;
+        }
+    }
+
+    /// <summary>
+    /// Tiles that are slopes rising to the right, like "/": solid below the line from their bottom-left corner to their
+    /// top-right one, so bodies walk up and down them. Tile numbers and ranges, e.g. "20".
+    /// </summary>
+    public string? SlopeUpTiles
+    {
+        get => _slopeUpTiles;
+        set
+        {
+            _slopeUpTiles = value;
+            _slopeUp = ParseTileSet(value);
+            _collisionRuns = null;
+            _slopes = null;
+        }
+    }
+
+    /// <summary>Tiles that are slopes falling to the right, like "\": solid below the line from their top-left corner to their bottom-right one.</summary>
+    public string? SlopeDownTiles
+    {
+        get => _slopeDownTiles;
+        set
+        {
+            _slopeDownTiles = value;
+            _slopeDown = ParseTileSet(value);
+            _collisionRuns = null;
+            _slopes = null;
+        }
+    }
+
+    /// <summary>1 for a tile that's a slope rising to the right, -1 for one falling to the right, 0 for anything else.</summary>
+    public int SlopeOf(int tile) =>
+        tile is < 0 or >= MaxTiles || _background[tile] ? 0 : _slopeUp[tile] ? 1 : _slopeDown[tile] ? -1 : 0;
+
+    /// <summary>The cells painted with slope tiles and which way each rises. Cached until the tiles or tile settings change.</summary>
+    public IReadOnlyList<(int X, int Y, bool Rising)> SlopeCells() =>
+        _slopes ??= Cells().Where(c => SlopeOf(c.Tile) != 0).Select(c => (c.X, c.Y, SlopeOf(c.Tile) > 0)).ToList();
+
+    /// <summary>
+    /// Runs of 16 tiles in the tileset that fit themselves to their neighbors: paint with any tile of a run and each cell
+    /// shows the piece that joins up with the cells around it painted from the same run. "16-31" (or just "16"), several
+    /// separated by commas. A run's tiles go in order of which sides join, counting up 1, right 2, down 4 and left 8: the
+    /// first is a lone block, the second joins only above, the last joins on every side.
+    /// </summary>
+    public string? AutoTiles
+    {
+        get => _autoTiles;
+        set
+        {
+            _autoTiles = value;
+            _autoGroups = ParseAutoTiles(value);
+        }
+    }
+
+    /// <summary>Seconds its <see cref="AnimatedTiles"/> have been playing. Advanced by the game.</summary>
+    [DoNotSerialize]
+    public float AnimationTime { get; set; }
+
     /// <summary>The collision layer of the map's tiles, like <see cref="Collider.Layer"/>. Empty is "Default".</summary>
     public string? Layer { get; set; }
 
@@ -95,6 +194,7 @@ public sealed class Tilemap : Component
             // Copied so nobody else holds the array; the map only ever replaces it, which keeps undo snapshots intact.
             _tiles = value?.ToArray() ?? [];
             _runs = null;
+            _slopes = null;
             _collisionRuns = null;
         }
     }
@@ -169,6 +269,72 @@ public sealed class Tilemap : Component
         return new Vector4((float)(tile % columns) / columns, (float)(tile / columns) / rows, 1f / columns, 1f / rows);
     }
 
+    /// <summary>
+    /// The tile to draw for a cell painted with <paramref name="tile"/> at <see cref="AnimationTime"/>: itself, or the
+    /// frame its <see cref="AnimatedTiles"/> run has reached.
+    /// </summary>
+    public int ShownTile(int tile)
+    {
+        foreach (var animation in _animations)
+        {
+            if (tile < animation.First || tile > animation.Last)
+                continue;
+            var length = animation.Last - animation.First + 1;
+            var step = (long)MathF.Floor(Math.Max(0, AnimationTime) * animation.FramesPerSecond);
+            return animation.First + (int)((tile - animation.First + step) % length);
+        }
+
+        return tile;
+    }
+
+    /// <summary>
+    /// The tile to draw for cell (<paramref name="x"/>, <paramref name="y"/>) painted with <paramref name="tile"/>: the
+    /// piece of its <see cref="AutoTiles"/> run that joins its neighbors, then animated by <see cref="ShownTile(int)"/>.
+    /// </summary>
+    public int ShownTile(int x, int y, int tile)
+    {
+        var group = AutoGroupOf(tile);
+        if (group >= 0)
+        {
+            var mask = (Joins(x, y - 1) ? 1 : 0) | (Joins(x + 1, y) ? 2 : 0) | (Joins(x, y + 1) ? 4 : 0) | (Joins(x - 1, y) ? 8 : 0);
+            tile = _autoGroups[group] + mask;
+        }
+
+        return ShownTile(tile);
+
+        bool Joins(int cx, int cy) => AutoGroupOf(GetTile(cx, cy)) == group;
+    }
+
+    // Which AutoTiles run a tile belongs to, or -1.
+    private int AutoGroupOf(int tile)
+    {
+        if (tile < 0)
+            return -1;
+        for (var i = 0; i < _autoGroups.Count; i++)
+        {
+            if (tile >= _autoGroups[i] && tile < _autoGroups[i] + 16)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>True if <paramref name="tile"/> is listed in <see cref="LadderTiles"/>.</summary>
+    public bool IsLadder(int tile) => tile is >= 0 and < MaxTiles && _ladder[tile];
+
+    /// <summary>
+    /// The ladder cell containing <paramref name="world"/>, a world position, as the world X of its middle; null if there's
+    /// no ladder tile there.
+    /// </summary>
+    public float? LadderAt(Vector2 world)
+    {
+        var matrix = Entity?.Transform.WorldMatrix ?? Matrix4x4.Identity;
+        if (!Matrix4x4.Invert(matrix, out var toLocal))
+            return null;
+        var (x, y) = CellAt(Vector2.Transform(world, toLocal));
+        return IsLadder(GetTile(x, y)) ? Vector2.Transform(CellCenter(x, y), matrix).X : null;
+    }
+
     /// <summary>Every non-empty cell and its tile, row by row.</summary>
     public IEnumerable<(int X, int Y, int Tile)> Cells()
     {
@@ -197,9 +363,9 @@ public sealed class Tilemap : Component
 
     /// <summary>
     /// True if cell (<paramref name="x"/>, <paramref name="y"/>) is a wall for <see cref="FindPath"/>: a solid tile on a
-    /// <see cref="Solid"/> map. Empty, background and one-way tiles can be walked through.
+    /// <see cref="Solid"/> map. Empty, background, ladder and one-way tiles can be walked through.
     /// </summary>
-    public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && !IsBackground(tile) && !IsOneWay(tile);
+    public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && CollisionOf(tile) == 0;
 
     /// <summary>
     /// The shortest way from <paramref name="from"/> to <paramref name="to"/> (world positions) that doesn't go through
@@ -363,14 +529,59 @@ public sealed class Tilemap : Component
         return set;
     }
 
+    /// <summary>Reads <see cref="AnimatedTiles"/>: "first-last @fps" runs separated by commas. Anything else is skipped.</summary>
+    public static IReadOnlyList<TileAnimation> ParseAnimations(string? text)
+    {
+        var runs = new List<TileAnimation>();
+        foreach (var part in (text ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var at = part.IndexOf('@');
+            var range = (at >= 0 ? part[..at] : part).Trim();
+            var fps = 4f;
+            if (at >= 0 && !(float.TryParse(part[(at + 1)..].Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out fps) && fps > 0))
+                continue;
+            var dash = range.IndexOf('-');
+            if (dash <= 0 || !int.TryParse(range[..dash].Trim(), out var first) || !int.TryParse(range[(dash + 1)..].Trim(), out var last))
+                continue;
+            if (first > last)
+                (first, last) = (last, first);
+            if (first >= 0 && last < MaxTiles && last > first)
+                runs.Add(new TileAnimation(first, last, fps));
+        }
+
+        return runs;
+    }
+
+    /// <summary>
+    /// Reads <see cref="AutoTiles"/>: the first tile of each run of 16, as "16-31" or "16", separated by commas. Runs that
+    /// aren't 16 long or don't fit in the tileset's 62 tiles are skipped.
+    /// </summary>
+    public static IReadOnlyList<int> ParseAutoTiles(string? text)
+    {
+        var firsts = new List<int>();
+        foreach (var part in (text ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var dash = part.IndexOf('-', 1);
+            if (!int.TryParse(dash < 0 ? part : part[..dash].Trim(), out var first))
+                continue;
+            if (dash >= 0 && !(int.TryParse(part[(dash + 1)..].Trim(), out var last) && last == first + 15))
+                continue;
+            if (first >= 0 && first + 15 < MaxTiles && !firsts.Contains(first))
+                firsts.Add(first);
+        }
+
+        return firsts;
+    }
+
     /// <summary>The tile a character stands for, or -1 for empty (and anything unrecognized).</summary>
     public static int TileOf(char c) => TileChars.IndexOf(c);
 
     /// <summary>The character for <paramref name="tile"/>; -1 gives <see cref="Empty"/>.</summary>
     public static char CharOf(int tile) => tile >= 0 && tile < MaxTiles ? TileChars[tile] : Empty;
 
-    // 0 = solid, 1 = one-way, -1 = doesn't collide (empty or background).
-    private int CollisionOf(int tile) => tile < 0 || IsBackground(tile) ? -1 : IsOneWay(tile) ? 1 : 0;
+    // 0 = solid, 1 = one-way, -1 = not a box (empty, background, a ladder, or a slope, which collides by its own shape).
+    private int CollisionOf(int tile) => tile < 0 || IsBackground(tile) || IsLadder(tile) || SlopeOf(tile) != 0 ? -1 : IsOneWay(tile) ? 1 : 0;
 
     // Runs of cells with the same non-negative kind; a change of kind ends a run.
     private static List<(int X, int Y, int Length, int Kind)> FindRuns(string[] tiles, Func<char, int> kindOf)
@@ -404,3 +615,6 @@ public sealed class Tilemap : Component
         return rows.ToArray();
     }
 }
+
+/// <summary>A run of tiles that animate one after another; see <see cref="Tilemap.AnimatedTiles"/>.</summary>
+public readonly record struct TileAnimation(int First, int Last, float FramesPerSecond);

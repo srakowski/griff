@@ -106,11 +106,50 @@ internal static class SnapshotRunner
             await Task.Delay(800);
             var resumed = workspace.Scene!.Scene.Entities.First(e => e.Name == "Player").GetComponent<Body>()!;
             checks.Add($"resume after rewind: {(resumed.IsGrounded && play.TimelineCount < snapshots + 10 ? "ok" : "FAILED")} (timeline {play.TimelineCount})");
+
+            // The lift picks its path up again after the rewind: straight up and down from where it was placed.
+            var lift = workspace.Scene!.Scene.Entities.First(e => e.Name == "Lift").Transform.Position;
+            checks.Add($"lift keeps to its path after rewind: {(Math.Abs(lift.X - -13) < 0.01f && lift.Y is >= -3.76f and <= 2.26f ? "ok" : "FAILED")} (at {lift.X:0.00}, {lift.Y:0.00})");
+
+            // Reading the sign: the dialogue box shows at the bottom of the screen, typing out its first line.
+            var platformGame = play.Game!;
+            platformGame.StartDialogue(workspace.Scene!.Scene.Entities.First(e => e.Name == "Sign").GetComponent<Dialogue>()!);
+            await Task.Delay(1500);
+            if (play.Surface.Capture(SceneRenderer.Build(platformGame, play.Surface.Aspect)) is var (dPixels, dWidth, dHeight))
+            {
+                SaveRgba(dPixels.ToArray(), dWidth, dHeight, Path.Combine(outputDir, "platformer-dialogue.png"));
+
+                // Rows come top first; the box's middle is 1.4 units up from the bottom of a view 12 units high. Along that
+                // row: mostly its dark panel, with some light letters.
+                var row = dHeight - 1 - (int)(dHeight * 1.4f / 12);
+                var (dark, light) = (0, 0);
+                for (var x = dWidth / 4; x < dWidth * 3 / 4; x++)
+                {
+                    var i = (row * dWidth + x) * 4;
+                    if (dPixels[i] < 0x22 && dPixels[i + 1] < 0x22 && dPixels[i + 2] < 0x28)
+                        dark++;
+                    else if (dPixels[i] > 0xC0 && dPixels[i + 1] > 0xC0 && dPixels[i + 2] > 0xC0)
+                        light++;
+                }
+
+                checks.Add($"dialogue box drawn with its text on the GPU: {(dark > dWidth / 4 && light > 0 ? "ok" : "FAILED")} ({dark} dark, {light} light)");
+            }
+
+            checks.Add($"dialogue pauses the game: {(platformGame.Talking is not null && platformGame.Time.Scale == 0 ? "ok" : "FAILED")}");
+
+            // Pulling the lever on the ledge (as a script would) brings out the bridge, even with the game paused.
+            var bridge = platformGame.Find("Bridge")!;
+            var bridgeHidden = !bridge.IsEnabled;
+            platformGame.Find("Lever")!.GetComponent<Switch>()!.IsOn = true;
+            await Task.Delay(300);
+            var bridgeDrawn = SceneRenderer.Build(platformGame, play.Surface.Aspect).Sprites.Count(d => d.Entity.IsSelfOrDescendantOf(bridge));
+            checks.Add($"lever brings out the bridge: {(bridgeHidden && bridge.IsEnabled && bridgeDrawn == 3 ? "ok" : "FAILED")} (hidden at first {bridgeHidden}, {bridgeDrawn} draws)");
             play.Stop();
 
             // Scene switching: a script loads Level2, and the editor follows the game into it.
             workspace.Project!.CreateScene("Level2");
             var switcherPath = Path.Combine(workspace.Project.AssetsPath, "Scripts", "Switcher.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(switcherPath)!); // the template's player needs no script, so no folder yet
             File.WriteAllText(switcherPath, """
                 public class Switcher : Behavior
                 {
@@ -182,6 +221,50 @@ internal static class SnapshotRunner
                 SaveRgba(tPixels, tWidth, tHeight, Path.Combine(outputDir, "tier-game.png"));
             play.Stop();
 
+            // Dressing: water tiles that ripple through their frames on the GPU, and a comet that leaves a trail.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateSceneAsync("Puzzles");
+            BuildPuzzles(workspace);
+            play.Play();
+            await Task.Delay(500);
+            var puzzleGame = play.Game!;
+            var water = puzzleGame.Find("Water")!.GetComponent<Tilemap>()!;
+            var (matched, seen) = (0, new HashSet<int>());
+            for (var i = 0; i < 8; i++)
+            {
+                // Tile 0 of the tileset is red and tile 1 blue; the middle of the view is the map's one cell.
+                var shown = water.ShownTile(0);
+                if (CenterPixel(play, puzzleGame) is { } pixel && (shown == 0 ? pixel.R > 200 && pixel.B < 60 : pixel.B > 200 && pixel.R < 60))
+                    matched++;
+                seen.Add(shown);
+                await Task.Delay(300);
+            }
+
+            checks.Add($"animated water tiles ripple on the GPU: {(matched == 8 && seen.Count == 2 ? "ok" : "FAILED")} ({matched}/8 matched, {seen.Count} frames seen)");
+            var comet = puzzleGame.Find("Comet")!;
+            var cometDraws = SceneRenderer.Build(puzzleGame, play.Surface.Aspect).Sprites.Count(d => d.Entity == comet);
+            checks.Add($"comet leaves a trail: {(cometDraws > 3 ? "ok" : "FAILED")} ({cometDraws} draws)");
+            if (play.Surface.Capture(SceneRenderer.Build(puzzleGame, play.Surface.Aspect)) is var (zPixels, zWidth, zHeight))
+                SaveRgba(zPixels, zWidth, zHeight, Path.Combine(outputDir, "puzzles-game.png"));
+            play.Stop();
+
+            // Movement: a no-code player lands on an autotiled floor; the Scene view shows how far it jumps.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateSceneAsync("Movement");
+            var mover = BuildMovement(workspace);
+            services.GetRequiredService<ISelection>().Select(mover);
+            Render(main, Path.Combine(outputDir, "movement-editor.png"));
+            play.Play();
+            await Task.Delay(1200);
+            var movementGame = play.Game!;
+            var hero = movementGame.Find("Hero")!;
+            checks.Add($"platformer player lands on the autotiled floor: {(hero.GetComponent<Body>()!.IsGrounded && Math.Abs(hero.Transform.Position.Y - 1.5f) < 0.01f ? "ok" : "FAILED")} (y = {hero.Transform.Position.Y:0.00})");
+            var joined = CenterPixel(play, movementGame);
+            checks.Add($"autotiles show the piece joining both sides on the GPU: {(joined is { G: > 200, R: < 60 } ? "ok" : "FAILED")} ({joined})");
+            if (play.Surface.Capture(SceneRenderer.Build(movementGame, play.Surface.Aspect)) is var (uPixels, uWidth, uHeight))
+                SaveRgba(uPixels, uWidth, uHeight, Path.Combine(outputDir, "movement-game.png"));
+            play.Stop();
+
             // The Arcade template: menu buttons, screen anchors at the real window shape, scene names and Quit.
             await workspace.SaveSceneAsync();
             await workspace.CreateProjectAsync(projectDir, "Snapshot Arcade", Griff.Projects.ProjectTemplate.Arcade);
@@ -227,11 +310,52 @@ internal static class SnapshotRunner
             var hearts = arcade.Find("Hearts")?.GetComponent<Text>()?.Value;
             checks.Add($"arcade ship loses a heart: {(hearts?.Length == 2 ? "ok" : "FAILED")} ({hearts})");
 
+            // A screen flash covers everything, the ship included.
+            arcade.FlashScreen(Color.FromBytes(0xFF, 0x00, 0x00), 5);
+            var reddened = CenterPixel(play, arcade);
+            checks.Add($"screen flash covers the view on the GPU: {(reddened is { R: > 200, G: < 60, B: < 60 } ? "ok" : "FAILED")} ({reddened})");
+            arcade.FlashScreen(Color.Transparent, 0.01f);
+
+            // The pause menu: a panel that stops the game, with prompts that name the key.
+            arcade.OpenPanel("Paused");
+            await Task.Delay(300);
+            var resumeHint = arcade.Find("Paused")?.Children.FirstOrDefault(c => c.Name == "Hint")?.GetComponent<Text>()?.Shown;
+            checks.Add($"arcade pause menu pauses, picks Resume and names the key: {(arcade.IsPaused && arcade.Focused?.Entity?.Name == "Resume" && resumeHint == "Esc to resume" ? "ok" : "FAILED")} ({arcade.IsPaused}, {arcade.Focused?.Entity?.Name}, {resumeHint})");
+            if (play.Surface.Capture(SceneRenderer.Build(arcade, play.Surface.Aspect)) is var (pPausePixels, pPauseWidth, pPauseHeight))
+                SaveRgba(pPausePixels, pPauseWidth, pPauseHeight, Path.Combine(outputDir, "arcade-paused.png"));
+            arcade.ClosePanel();
+            await Task.Delay(100);
+
+            // The game scene's camera closes an iris on the ship: halfway through, the ship shows through the hole and
+            // the edges of the screen are covered.
+            arcade.ReloadScene(fade: 4);
+            await Task.Delay(2000);
+            if (play.Surface.Capture(SceneRenderer.Build(arcade, play.Surface.Aspect)) is var (iPixels, iWidth, iHeight))
+            {
+                SaveRgba(iPixels.ToArray(), iWidth, iHeight, Path.Combine(outputDir, "arcade-iris.png"));
+                var middle = PixelOf(iPixels, iWidth, iWidth / 2, iHeight / 2);
+                var edge = PixelOf(iPixels, iWidth, 4, iHeight / 2);
+                checks.Add($"iris transition closes on the ship on the GPU: {(middle.B > 150 && edge is { R: < 10, G: < 10, B: < 10 } ? "ok" : "FAILED")} (middle {middle}, edge {edge})");
+            }
+
+            arcade.LoadScene("Game");
+            await Task.Delay(300);
+
             // The game over panel and its buttons on the GPU.
             workspace.Scene!.Scene.Entities.First(e => e.Name == "Game Over").IsEnabled = true;
             await Task.Delay(600);
             if (play.Surface.Capture(SceneRenderer.Build(workspace.Scene.Scene, play.Surface.Aspect)) is var (gPixels, gWidth, gHeight))
                 SaveRgba(gPixels, gWidth, gHeight, Path.Combine(outputDir, "arcade-game-over.png"));
+
+            // The options menu: sliders and toggles bound to settings, picked with the keyboard.
+            arcade.LoadScene("Options");
+            await Task.Delay(500);
+            var musicSlider = arcade.Find("Music Volume")?.GetComponent<Slider>();
+            arcade.Focus(musicSlider);
+            await Task.Delay(200);
+            checks.Add($"arcade options slider shows the music volume: {(musicSlider is not null && Math.Abs(musicSlider.Value - arcade.Audio.MusicVolume) < 1e-4f ? "ok" : "FAILED")} ({musicSlider?.Value})");
+            if (play.Surface.Capture(SceneRenderer.Build(arcade, play.Surface.Aspect)) is var (oPixels, oWidth, oHeight))
+                SaveRgba(oPixels, oWidth, oHeight, Path.Combine(outputDir, "arcade-options.png"));
 
             arcade.Quit();
             await Task.Delay(300);
@@ -239,6 +363,24 @@ internal static class SnapshotRunner
             if (play.IsPlaying)
                 play.Stop();
 
+            // The Top-down template is a dim dungeon: bright around the player's lantern and the torches, dark elsewhere.
+            await workspace.SaveSceneAsync();
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Dungeon", Griff.Projects.ProjectTemplate.TopDown);
+            play.Play();
+            await Task.Delay(800);
+            var dungeon = play.Game!;
+            if (play.Surface.Capture(SceneRenderer.Build(dungeon, play.Surface.Aspect)) is var (darkPixels, darkWidth, darkHeight))
+            {
+                SaveRgba(darkPixels.ToArray(), darkWidth, darkHeight, Path.Combine(outputDir, "topdown-dark.png"));
+                var darkFrame = SceneRenderer.Build(dungeon, play.Surface.Aspect);
+                var lit = PixelAtWorld(darkPixels, darkWidth, darkHeight, darkFrame, new System.Numerics.Vector2(1.5f, 1));
+                var dim = PixelAtWorld(darkPixels, darkWidth, darkHeight, darkFrame, new System.Numerics.Vector2(0, -5));
+                var playerColor = PixelAtWorld(darkPixels, darkWidth, darkHeight, darkFrame, System.Numerics.Vector2.Zero);
+                var brighter = lit.R + lit.G + lit.B > 2 * (dim.R + dim.G + dim.B) + 10;
+                checks.Add($"darkness and lights on the GPU: {(brighter && playerColor.B > 200 ? "ok" : "FAILED")} (by the lantern {lit}, away {dim}, player {playerColor})");
+            }
+
+            play.Stop();
             File.WriteAllLines(Path.Combine(outputDir, "checks.txt"), checks);
 
             var gallery = services.GetRequiredService<DesignSystemWindow>();
@@ -344,6 +486,38 @@ internal static class SnapshotRunner
         rightText.Align = TextAlign.Right;
         rightText.Size = 0.7f;
         document.Execute(new AddEntityEdit(scene, right));
+
+        // A panel stretched from an 8×8 frame image (a two-pixel white border around dark blue): its corners stay crisp.
+        byte[] edge = [0xFF, 0xFF, 0xFF, 0xFF], fill = [0x4B, 0x3F, 0x3A, 0xFF];
+        var framePixels = Enumerable.Range(0, 64).SelectMany(i => i % 8 is < 2 or > 5 || i / 8 is < 2 or > 5 ? edge : fill).ToArray();
+        var frameImage = BitmapSource.Create(8, 8, 96, 96, PixelFormats.Bgra32, null, framePixels, 32);
+        var frameEncoder = new PngBitmapEncoder();
+        frameEncoder.Frames.Add(BitmapFrame.Create(frameImage));
+        using (var file = File.Create(Path.Combine(assets, "Sprites", "frame.png")))
+            frameEncoder.Save(file);
+        var panel = new Entity("Panel");
+        panel.Transform.Position = new Vector3(4.5f, 1.5f, 0);
+        var panelSprite = panel.AddComponent<Sprite>();
+        panelSprite.Image = "Sprites/frame.png";
+        panelSprite.Size = new Vector2(4, 2);
+        panelSprite.Slice = 0.25f;
+        panelSprite.SliceSize = 0.2f;
+        panelSprite.Order = 5;
+        document.Execute(new AddEntityEdit(scene, panel));
+
+        // A bar two-thirds full, and a slider at a quarter, drawn the same in the editor and the game.
+        var bar = new Entity("Health Bar");
+        bar.Transform.Position = new Vector3(4.5f, 2, 0);
+        var barComponent = bar.AddComponent<Bar>();
+        barComponent.Max = 3;
+        barComponent.Value = 2;
+        document.Execute(new AddEntityEdit(scene, bar));
+        var slider = new Entity("Volume Slider");
+        slider.Transform.Position = new Vector3(4.5f, 1, 0);
+        var sliderComponent = slider.AddComponent<Slider>();
+        sliderComponent.Size = new Vector2(3, 0.3f);
+        sliderComponent.Value = 0.25f;
+        document.Execute(new AddEntityEdit(scene, slider));
 
         var sparks = new Entity("Sparks");
         sparks.Transform.Position = new Vector3(3, -1, 0);
@@ -470,6 +644,84 @@ internal static class SnapshotRunner
         document.Execute(new AddEntityEdit(scene, counter));
     }
 
+    private static void BuildPuzzles(IWorkspace workspace)
+    {
+        var document = workspace.Scene!;
+        var scene = document.Scene;
+        var assets = workspace.Project!.AssetsPath;
+
+        // A two-tile tileset, red then blue (pixels are blue, green, red, alpha).
+        Directory.CreateDirectory(Path.Combine(assets, "Sprites"));
+        byte[] red = [0x00, 0x00, 0xFF, 0xFF], blue = [0xFF, 0x00, 0x00, 0xFF];
+        var tiles = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, red.Concat(blue).ToArray(), 8);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(tiles));
+        using (var file = File.Create(Path.Combine(assets, "Sprites", "water.png")))
+            encoder.Save(file);
+
+        // One big cell over the middle of the view, flipping between the two tiles once a second.
+        var water = new Entity("Water");
+        water.Transform.Position = new Vector3(-2, 2, 0);
+        var map = water.AddComponent<Tilemap>();
+        map.Image = "Sprites/water.png";
+        map.Columns = 2;
+        map.TileSize = 4;
+        map.Solid = false;
+        map.Tiles = ["0"];
+        map.AnimatedTiles = "0-1 @1";
+        document.Execute(new AddEntityEdit(scene, water));
+
+        var comet = new Entity("Comet");
+        comet.Transform.Position = new Vector3(-6, 3.5f, 0);
+        var sprite = comet.AddComponent<Sprite>();
+        sprite.Size = new Vector2(0.5f, 0.5f);
+        sprite.Order = 5;
+        comet.AddComponent<Body>().GravityScale = 0;
+        comet.AddComponent<CircleCollider>().IsTrigger = true;
+        comet.AddComponent<Trail>().Color = Color.Cyan;
+        document.Execute(new AddEntityEdit(scene, comet));
+        comet.GetComponent<Body>()!.Velocity = new Vector2(3, 0);
+    }
+
+    // A floor of three autotiled cells (only the piece joining left and right, tile 10, is green) and a platformer player
+    // above it. Returns the player.
+    private static Entity BuildMovement(IWorkspace workspace)
+    {
+        var document = workspace.Scene!;
+        var scene = document.Scene;
+        var assets = workspace.Project!.AssetsPath;
+
+        Directory.CreateDirectory(Path.Combine(assets, "Sprites"));
+        byte[] red = [0x00, 0x00, 0xFF, 0xFF], green = [0x00, 0xFF, 0x00, 0xFF];
+        var pixels = Enumerable.Range(0, 16).SelectMany(i => i == 10 ? green : red).ToArray();
+        var tiles = BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, pixels, 16);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(tiles));
+        using (var file = File.Create(Path.Combine(assets, "Sprites", "ground.png")))
+            encoder.Save(file);
+
+        // The middle cell is the middle of the view.
+        var floor = new Entity("Floor");
+        floor.Transform.Position = new Vector3(-3, 1, 0);
+        var map = floor.AddComponent<Tilemap>();
+        map.Image = "Sprites/ground.png";
+        map.Columns = 4;
+        map.Rows = 4;
+        map.TileSize = 2;
+        map.AutoTiles = "0-15";
+        map.Tiles = ["000"];
+        document.Execute(new AddEntityEdit(scene, floor));
+
+        var hero = new Entity("Hero");
+        hero.Transform.Position = new Vector3(0, 4, 0);
+        hero.AddComponent<Sprite>().Order = 5;
+        hero.AddComponent<BoxCollider>();
+        hero.AddComponent<Body>();
+        hero.AddComponent<PlatformerMovement>();
+        document.Execute(new AddEntityEdit(scene, hero));
+        return hero;
+    }
+
     private static string SpinnerSource(float degreesPerSecond) => $$"""
         public class Spinner : Behavior
         {
@@ -487,6 +739,21 @@ internal static class SnapshotRunner
             return null;
         var i = ((height / 2) * width + width / 2) * 4;
         return (pixels[i], pixels[i + 1], pixels[i + 2]);
+    }
+
+    private static (byte R, byte G, byte B) PixelOf(byte[] pixels, int width, int x, int y)
+    {
+        var i = (y * width + x) * 4;
+        return (pixels[i], pixels[i + 1], pixels[i + 2]);
+    }
+
+    // The pixel a world position is drawn at in a captured frame (rows top first).
+    private static (byte R, byte G, byte B) PixelAtWorld(byte[] pixels, int width, int height, RenderFrame frame, System.Numerics.Vector2 world)
+    {
+        var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(world, 0, 1), frame.ViewProjection);
+        var x = Math.Clamp((int)((clip.X + 1) / 2 * width), 0, width - 1);
+        var y = Math.Clamp((int)((1 - clip.Y) / 2 * height), 0, height - 1);
+        return PixelOf(pixels, width, x, y);
     }
 
     private static void SaveRgba(byte[] rgba, int width, int height, string path)

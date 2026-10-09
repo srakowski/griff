@@ -52,19 +52,29 @@ public sealed class Physics
     // Bounces slower than this (world units per second) settle to a stop, so resting bodies don't jitter.
     private const float SettleSpeed = 1f;
 
-    // Circles touching this little are treated as just touching, so they slide over seams instead of snagging.
+    // Shapes touching this little are treated as just touching, so circles slide over seams instead of snagging and boxes
+    // resting at a rounded-off height don't catch on the floor they stand on.
     private const float CircleSkin = 1e-4f;
+
+    // A crate can push a crate that pushes a crate, and no further.
+    private const int MaxPushChain = 4;
 
     private HashSet<(Entity Trigger, Entity Other)> _triggerPairs = [];
 
     // Where each grounded body's ground was at the end of the last step, so riders follow it when it moves.
     private Dictionary<Body, (Entity Ground, Vector2 Position)> _grounds = [];
 
+    // The slope tiles bodies walk on during a step.
+    private List<Slope> _slopes = [];
+
     /// <summary>Each trigger and the collider overlapping it, as of the last step.</summary>
     internal IReadOnlyCollection<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
 
+    /// <summary>The <see cref="Gravity"/> a game starts with: 25 units per second squared, down.</summary>
+    public static readonly Vector2 DefaultGravity = new(0, -25f);
+
     /// <summary>World units per second squared. Negative Y is down.</summary>
-    public Vector2 Gravity { get; set; } = new(0, -25f);
+    public Vector2 Gravity { get; set; } = DefaultGravity;
 
     /// <summary>Forgets trigger overlaps, e.g. when the scene changes.</summary>
     public void Reset()
@@ -91,6 +101,14 @@ public sealed class Physics
         return new Circle(center, collider.Radius * Math.Max(scale.X, scale.Y));
     }
 
+    /// <summary>The world-space box around either kind of collider.</summary>
+    public static Box BoundsOf(Collider collider) => collider switch
+    {
+        BoxCollider box => BoundsOf(box),
+        CircleCollider circle => BoundsOf(circle).Bounds,
+        _ => throw new NotSupportedException($"Unknown collider {collider.GetType().Name}."),
+    };
+
     /// <summary>
     /// World-space boxes covering a tilemap's colliding tiles, one per horizontal run. Like colliders, they follow the
     /// entity's position and scale but ignore its rotation.
@@ -114,6 +132,26 @@ public sealed class Physics
         {
             var center = new Vector2((x + length / 2f) * size, -(y + 0.5f) * size);
             yield return (new Box(origin + center * scale, new Vector2(length * size, size) * scale / 2), oneWay);
+        }
+    }
+
+    /// <summary>
+    /// World-space cells of a tilemap's slope tiles and which way each rises (see <see cref="Tilemap.SlopeUpTiles"/>);
+    /// each is solid below the line across it. Empty unless the map is <see cref="Tilemap.Solid"/>.
+    /// </summary>
+    public static IEnumerable<(Box Cell, bool Rising)> SlopeShapes(Tilemap tilemap)
+    {
+        if (!tilemap.Solid)
+            yield break;
+
+        var world = tilemap.Entity!.Transform.WorldMatrix;
+        var scale = ScaleOf(world);
+        var origin = new Vector2(world.M41, world.M42);
+        var size = tilemap.TileSize;
+        foreach (var (x, y, rising) in tilemap.SlopeCells())
+        {
+            var center = new Vector2((x + 0.5f) * size, -(y + 0.5f) * size);
+            yield return (new Box(origin + center * scale, new Vector2(size) * scale / 2), rising);
         }
     }
 
@@ -162,6 +200,16 @@ public sealed class Physics
                 best = new RaycastHit(shape.Entity, origin + direction * distance, normal, distance);
         }
 
+        foreach (var slope in Slopes(scene, layers))
+        {
+            if (ignore is not null && slope.Entity.IsSelfOrDescendantOf(ignore))
+                continue;
+            if (slope.Intersect(origin, direction) is not var (distance, normal) || distance > maxDistance)
+                continue;
+            if (best is null || distance < best.Value.Distance)
+                best = new RaycastHit(slope.Entity, origin + direction * distance, normal, distance);
+        }
+
         return best;
     }
 
@@ -169,17 +217,22 @@ public sealed class Physics
     {
         var colliders = ActiveColliders(scene).ToList();
         var solids = Shapes(scene, includeTriggers: false).ToList();
+        _slopes = Slopes(scene).ToList();
 
         foreach (var body in scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
         {
             var collider = body.Entity!.GetComponent<Collider>();
-            body.Velocity += Gravity * body.GravityScale * dt;
+            if (!body.FloatThisStep)
+                body.Velocity += Gravity * body.GravityScale * dt;
+            var wasGrounded = body.IsGrounded;
             body.IsGrounded = false;
             body.Ground = null;
+            body.WallSide = 0;
 
             if (collider is null || collider.IsTrigger)
             {
                 Translate(body.Entity, body.Velocity * dt);
+                EndStep(body, dt);
                 continue;
             }
 
@@ -193,11 +246,45 @@ public sealed class Physics
 
             MoveAxis(body, collider, solids, new Vector2(body.Velocity.X * dt, 0), onCollision);
             MoveAxis(body, collider, solids, new Vector2(0, body.Velocity.Y * dt), onCollision);
+
+            // Walking down a slope, keep to it rather than skipping off into the air a little each step.
+            if (wasGrounded && !body.IsGrounded && body.Velocity.Y <= 0 && _slopes.Count > 0)
+            {
+                var reach = MathF.Abs(body.Velocity.X * dt) * 1.05f + 0.05f;
+                if (SlopeBelow(collider, reach))
+                    MoveAxis(body, collider, solids, new Vector2(0, -reach), onCollision);
+            }
+
+            EndStep(body, dt);
         }
 
         _grounds = scene.Entities.Select(e => e.GetComponent<Body>()).OfType<Body>().Where(b => b.Ground is not null)
             .ToDictionary(b => b, b => (b.Ground!, PositionOf(b.Ground!)));
         UpdateTriggers(colliders, onTrigger);
+    }
+
+    // Movement's requests last one step; dropping through platforms lasts its time.
+    private static void EndStep(Body body, float dt)
+    {
+        TrackAirTime(body, dt);
+        body.FloatThisStep = false;
+        body.PassOneWayThisStep = false;
+        body.DropThroughLeft = Math.Max(0, body.DropThroughLeft - dt);
+    }
+
+    // For Body.WasGrounded: how long since it stood on something, and whether it has gone up (jumped) since.
+    private static void TrackAirTime(Body body, float dt)
+    {
+        if (body.IsGrounded)
+        {
+            body.AirTime = 0;
+            body.RoseSinceGrounded = false;
+            return;
+        }
+
+        body.AirTime += dt;
+        if (body.Velocity.Y > 0)
+            body.RoseSinceGrounded = true;
     }
 
     private static Vector2 PositionOf(Entity entity)
@@ -210,8 +297,12 @@ public sealed class Physics
     /// When set, the body is being carried by this entity: it doesn't collide with it, and hitting something else
     /// just stops the carry without touching the body's velocity or reporting a collision.
     /// </param>
-    private static void MoveAxis(Body body, Collider collider, List<Shape> solids, Vector2 delta, Action<Entity, Entity> onCollision,
-        Entity? carrier = null)
+    /// <param name="pusher">
+    /// When set, the body is being shoved out of the way by this entity (see <see cref="Pushable"/>): it doesn't collide
+    /// with it, and its layer is <paramref name="pusherLayer"/>'s for any crates it pushes in turn.
+    /// </param>
+    private void MoveAxis(Body body, Collider collider, List<Shape> solids, Vector2 delta, Action<Entity, Entity> onCollision,
+        Entity? carrier = null, Entity? pusher = null, string? pusherLayer = null, int depth = 0)
     {
         if (delta == Vector2.Zero)
             return;
@@ -221,36 +312,60 @@ public sealed class Physics
         var sign = MathF.Sign(axis == 0 ? delta.X : delta.Y);
         var bottomBefore = Area.Of(collider).Bounds.Min.Y;
         var filter = LayerFilter.Of(collider);
+        pusherLayer ??= collider.Layer;
         Translate(entity, delta);
+        var hit = _slopes.Count > 0 && (axis == 0 || sign < 0 || delta.Y > 0) && MoveOnSlopes(body, collider, delta, filter, carrier);
         var area = Area.Of(collider);
-        var hit = false;
 
         foreach (var solid in solids)
         {
             if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || solid.Entity == carrier ||
-                filter.IgnoresEachOther(solid.Filter))
+                solid.Entity == pusher || filter.IgnoresEachOther(solid.Filter))
                 continue;
 
             var other = solid.Area;
             if (!area.Overlaps(other, CircleSkin))
                 continue;
 
-            // One-way: only catch bodies falling onto the top that started above it.
-            if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f))
+            // One-way: only catch bodies falling onto the top that started above it, and not while dropping through.
+            if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f || body.IsDroppingThrough))
                 continue;
+
+            // A crate in the way is shoved along first, by its share of the move; whatever's left of the overlap blocks as
+            // usual, but a crate that gave way doesn't stop the pusher dead (it keeps leaning into it at its own speed).
+            var gaveWay = false;
+            if (carrier is null && depth < MaxPushChain && CanPush(solid, axis, pusherLayer) is var (pushed, crate, pushable))
+            {
+                var before = Component(other.Center, axis);
+                var overlap = Component(area.Center, axis) + sign * area.ContactDistance(other, axis) - before;
+                var shove = overlap * Math.Clamp(pushable.Speed, 0, 1);
+                MoveAxis(pushed, crate, solids, axis == 0 ? new Vector2(shove, 0) : new Vector2(0, shove), onCollision,
+                    pusher: entity, pusherLayer: pusherLayer, depth: depth + 1);
+                other = solid.Area;
+                gaveWay = MathF.Abs(Component(other.Center, axis) - before) > 1e-5f;
+                if (!area.Overlaps(other, CircleSkin))
+                {
+                    onCollision(entity, solid.Entity);
+                    continue;
+                }
+            }
 
             // Push back along the axis we moved, to where the two shapes just touch.
             var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis);
             var push = target - Component(area.Center, axis);
             Translate(entity, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
             area = Area.Of(collider);
-            hit = true;
+            hit |= !gaveWay;
             if (carrier is not null)
                 continue;
             if (axis == 1 && sign < 0)
             {
                 body.IsGrounded = true;
                 body.Ground = solid.Entity;
+            }
+            else if (axis == 0 && !gaveWay)
+            {
+                body.WallSide = sign;
             }
 
             onCollision(entity, solid.Entity);
@@ -265,6 +380,221 @@ public sealed class Physics
                 speed = 0;
             body.Velocity = axis == 0 ? velocity with { X = speed } : velocity with { Y = speed };
         }
+    }
+
+    // Slopes under (or beside) a body that has just moved: it's lifted onto one it walked or fell into (a little at a time:
+    // no more than it moved, as on a 45 degree slope), and blocked by one it walked into the tall side of or jumped into
+    // from below. True if it landed on one or was stopped by one, for the caller to stop its velocity along the axis.
+    private bool MoveOnSlopes(Body body, Collider collider, Vector2 delta, LayerFilter filter, Entity? carrier)
+    {
+        var entity = body.Entity!;
+        var bounds = Area.Of(collider).Bounds;
+        var lift = 0f;
+        Entity? ground = null;
+        var stopped = false;
+        foreach (var slope in _slopes)
+        {
+            if (filter.IgnoresEachOther(slope.Filter) || slope.Entity.IsSelfOrDescendantOf(entity) || slope.Entity == carrier)
+                continue;
+            var cell = slope.Cell;
+            if (!(bounds.Min.X < cell.Max.X && bounds.Max.X > cell.Min.X && bounds.Min.Y < cell.Max.Y && bounds.Max.Y > cell.Min.Y))
+                continue;
+
+            if (delta.Y > 0)
+            {
+                // Jumping up into it from underneath: its flat bottom is a ceiling.
+                if (bounds.Min.Y < cell.Min.Y)
+                {
+                    Translate(entity, new Vector2(0, cell.Min.Y - bounds.Max.Y));
+                    bounds = Area.Of(collider).Bounds;
+                    stopped = true;
+                }
+
+                continue;
+            }
+
+            var surface = slope.SurfaceUnder(bounds);
+            var depth = surface - bounds.Min.Y;
+            if (depth <= 0)
+                continue;
+            var step = delta.X != 0 ? MathF.Abs(delta.X) * cell.HalfSize.Y / cell.HalfSize.X + 0.02f : MathF.Abs(delta.Y) + 0.02f;
+            if (depth <= step)
+            {
+                if (depth > lift)
+                    (lift, ground) = (depth, slope.Entity);
+            }
+            else if (delta.X != 0)
+            {
+                // The tall side of the slope, walked into: a wall.
+                var push = delta.X > 0 ? cell.Min.X - bounds.Max.X : cell.Max.X - bounds.Min.X;
+                Translate(entity, new Vector2(push, 0));
+                bounds = Area.Of(collider).Bounds;
+                if (carrier is null)
+                    body.WallSide = MathF.Sign(delta.X);
+                stopped = true;
+            }
+        }
+
+        if (ground is null)
+            return stopped;
+        Translate(entity, new Vector2(0, lift));
+        if (carrier is null)
+        {
+            body.IsGrounded = true;
+            body.Ground = ground;
+        }
+
+        return stopped || delta.Y < 0;
+    }
+
+    /// <summary>True if <paramref name="collider"/> is standing on (or touching) a slope tile.</summary>
+    public bool IsOnSlope(Scene scene, Collider collider)
+    {
+        var bounds = Area.Of(collider).Bounds;
+        var feet = new Box(bounds.Center - new Vector2(0, 0.05f), bounds.HalfSize);
+        var filter = LayerFilter.Of(collider);
+        return Slopes(scene).Any(s => !filter.IgnoresEachOther(s.Filter) && !s.Entity.IsSelfOrDescendantOf(collider.Entity!) && s.Cell.Overlaps(feet));
+    }
+
+    // True if a slope's surface is within `reach` below the collider's bottom.
+    private bool SlopeBelow(Collider collider, float reach)
+    {
+        var bounds = Area.Of(collider).Bounds;
+        var filter = LayerFilter.Of(collider);
+        foreach (var slope in _slopes)
+        {
+            var cell = slope.Cell;
+            if (filter.IgnoresEachOther(slope.Filter) || slope.Entity.IsSelfOrDescendantOf(collider.Entity!) ||
+                bounds.Min.X >= cell.Max.X || bounds.Max.X <= cell.Min.X)
+                continue;
+            var gap = bounds.Min.Y - slope.SurfaceUnder(bounds);
+            if (gap >= -0.001f && gap <= reach)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<Slope> Slopes(Scene scene, string? layers = null)
+    {
+        var only = layers is null ? null : CollisionLayers.Parse(layers);
+        foreach (var tilemap in scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
+        {
+            if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
+                continue;
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
+            foreach (var (cell, rising) in SlopeShapes(tilemap))
+                yield return new Slope(tilemap.Entity!, cell, rising, filter);
+        }
+    }
+
+    // A slope tile: solid below the line across its cell, rising to the right or falling.
+    private readonly record struct Slope(Entity Entity, Box Cell, bool Rising, LayerFilter Filter)
+    {
+        /// <summary>The surface's height at <paramref name="x"/> (clamped to the cell).</summary>
+        public float SurfaceAt(float x)
+        {
+            var t = Math.Clamp((x - Cell.Min.X) / (Cell.HalfSize.X * 2), 0, 1);
+            return Cell.Min.Y + (Rising ? t : 1 - t) * Cell.HalfSize.Y * 2;
+        }
+
+        /// <summary>The highest point of the surface under a box: at its corner furthest up the slope.</summary>
+        public float SurfaceUnder(Box box) => SurfaceAt(Rising ? Math.Min(box.Max.X, Cell.Max.X) : Math.Max(box.Min.X, Cell.Min.X));
+
+        /// <summary>Where a ray first enters the solid triangle, and the face's normal; null on a miss or starting inside.</summary>
+        public (float Distance, Vector2 Normal)? Intersect(Vector2 origin, Vector2 direction)
+        {
+            var (min, max) = (Cell.Min, Cell.Max);
+            var (low, high) = Rising ? (new Vector2(min.X, min.Y), new Vector2(max.X, max.Y)) : (new Vector2(min.X, max.Y), new Vector2(max.X, min.Y));
+            var tall = Rising ? new Vector2(max.X, min.Y) : new Vector2(min.X, min.Y);
+            if (Inside(origin))
+                return null;
+
+            (float, Vector2)? best = null;
+            var slopeNormal = Vector2.Normalize(Rising ? new Vector2(-1, 1) : new Vector2(1, 1));
+            Edge(low, high, slopeNormal);
+            Edge(new Vector2(min.X, min.Y), new Vector2(max.X, min.Y), -Vector2.UnitY);
+            Edge(tall, Rising ? high : low, Rising ? Vector2.UnitX : -Vector2.UnitX);
+            return best;
+
+            void Edge(Vector2 a, Vector2 b, Vector2 normal)
+            {
+                if (Vector2.Dot(direction, normal) >= 0)
+                    return;
+                var edge = b - a;
+                var denominator = direction.X * edge.Y - direction.Y * edge.X;
+                if (MathF.Abs(denominator) < 1e-8f)
+                    return;
+                var offset = a - origin;
+                var t = (offset.X * edge.Y - offset.Y * edge.X) / denominator;
+                var u = (offset.X * direction.Y - offset.Y * direction.X) / denominator;
+                if (t < 0 || u < -1e-5f || u > 1 + 1e-5f)
+                    return;
+                if (best is null || t < best.Value.Item1)
+                    best = (t, normal);
+            }
+        }
+
+        private bool Inside(Vector2 point) =>
+            point.X > Cell.Min.X && point.X < Cell.Max.X && point.Y > Cell.Min.Y && point.Y < SurfaceAt(point.X);
+    }
+
+    // A pushable crate's body and collider, if the solid is one that something on this layer can shove along this axis:
+    // sideways always, up and down only where it doesn't fall (top-down), so landing on a crate doesn't drive it into the floor.
+    private (Body Body, Collider Collider, Pushable Pushable)? CanPush(Shape solid, int axis, string? layer)
+    {
+        if (solid.Collider is not { } collider || solid.Entity.GetComponent<Pushable>() is not { } pushable ||
+            solid.Entity.GetComponent<Body>() is not { } body || !pushable.AcceptsLayer(layer))
+            return null;
+        if (axis == 1 && body.GravityScale != 0 && Gravity != Vector2.Zero)
+            return null;
+        return (body, collider, pushable);
+    }
+
+    /// <summary>
+    /// True if what <paramref name="body"/> stands on is only one-way platforms, so dropping through them would fall:
+    /// for drop-through on down and Jump.
+    /// </summary>
+    public bool OnlyOneWayBelow(Scene scene, Body body) => OneWayFloorBottom(scene, body) is not null;
+
+    /// <summary>
+    /// When <paramref name="body"/> stands only on one-way platforms, the lowest of their bottoms (what's under the floor
+    /// it's on, for climbing down a ladder below it); otherwise null.
+    /// </summary>
+    internal float? OneWayFloorBottom(Scene scene, Body body)
+    {
+        if (!body.IsGrounded || body.Entity?.GetComponent<Collider>() is not { } collider)
+            return null;
+        var bounds = BoundsOf(collider);
+        var feet = new Box(new Vector2(bounds.Center.X, bounds.Min.Y - 0.02f), new Vector2(Math.Max(0, bounds.HalfSize.X - 0.01f), 0.03f));
+        float? bottom = null;
+        foreach (var shape in ShapesTouching(scene, collider, feet))
+        {
+            if (!shape.OneWay)
+                return null;
+            bottom = Math.Min(bottom ?? float.PositiveInfinity, shape.Area.Bounds.Min.Y);
+        }
+
+        return bottom;
+    }
+
+    /// <summary>True if the bottom edge of <paramref name="body"/>'s collider is inside a one-way platform (climbing up through it).</summary>
+    internal bool FeetInOneWay(Scene scene, Body body)
+    {
+        if (body.Entity?.GetComponent<Collider>() is not { } collider)
+            return false;
+        var bounds = BoundsOf(collider);
+        var feet = new Box(new Vector2(bounds.Center.X, bounds.Min.Y + 0.02f), new Vector2(Math.Max(0, bounds.HalfSize.X - 0.01f), 0.01f));
+        return ShapesTouching(scene, collider, feet).Any(s => s.OneWay);
+    }
+
+    // Solid shapes overlapping a box, other than the collider's own entity (and its children) and layers it passes through.
+    private static IEnumerable<Shape> ShapesTouching(Scene scene, Collider collider, Box box)
+    {
+        var filter = LayerFilter.Of(collider);
+        var area = Area.Of(box);
+        return Shapes(scene, includeTriggers: false).Where(s =>
+            !s.Entity.IsSelfOrDescendantOf(collider.Entity!) && !filter.IgnoresEachOther(s.Filter) && s.Area.Overlaps(area));
     }
 
     private void UpdateTriggers(List<Collider> colliders, Action<Entity, Entity, bool> onTrigger)
@@ -372,8 +702,9 @@ public sealed class Physics
         /// <param name="skin">Overlaps shallower than this don't count, for shapes involving a circle.</param>
         public bool Overlaps(Area other, float skin = 0)
         {
+            // Boxes get the skin too: a box resting at y = 0.39999998 on a floor whose top is at 0 is touching, not inside it.
             if (!IsCircle && !other.IsCircle)
-                return Bounds.Overlaps(other.Bounds);
+                return new Box(Center, Vector2.Max(Bounds.HalfSize - new Vector2(skin), Vector2.Zero)).Overlaps(other.Bounds);
             if (IsCircle && other.IsCircle)
                 return new Circle(Center, Radius - skin).Overlaps(other.Circle);
             var (box, circle) = IsCircle ? (other.Bounds, Circle) : (Bounds, other.Circle);

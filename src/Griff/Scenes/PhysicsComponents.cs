@@ -120,4 +120,42 @@ public sealed class Body : Component
     /// </summary>
     [DoNotSerialize]
     public Entity? Ground { get; internal set; }
+
+    /// <summary>
+    /// -1 if a wall stopped the body moving left during the last physics step, 1 if one stopped it moving right, else 0:
+    /// for wall jumps and slides, or turning round.
+    /// </summary>
+    [DoNotSerialize]
+    public int WallSide { get; internal set; }
+
+    /// <summary>Seconds since the body last stood on something: 0 while it's grounded.</summary>
+    [DoNotSerialize]
+    public float AirTime { get; internal set; } = float.PositiveInfinity;
+
+    /// <summary>True once the body has moved upwards since it was last grounded: it jumped, or was knocked up.</summary>
+    internal bool RoseSinceGrounded { get; set; }
+
+    /// <summary>True while the body falls through one-way platforms (see <see cref="DropThrough"/>).</summary>
+    public bool IsDroppingThrough => DropThroughLeft > 0 || PassOneWayThisStep;
+
+    // Seconds left falling through one-way platforms.
+    internal float DropThroughLeft { get; set; }
+
+    // Set by movement components each frame for the next physics step only: no gravity (climbing, dashing, top-down), and
+    // passing through one-way platforms (climbing a ladder through one).
+    internal bool FloatThisStep { get; set; }
+
+    internal bool PassOneWayThisStep { get; set; }
+
+    /// <summary>
+    /// Falls through the one-way platforms it's standing on (and any it meets) for <paramref name="seconds"/>: down and Jump
+    /// on a platform. <c>if (Input.Vertical &lt; -0.5f &amp;&amp; Input.WasPressed("Jump")) body.DropThrough();</c>
+    /// </summary>
+    public void DropThrough(float seconds = 0.25f) => DropThroughLeft = Math.Max(DropThroughLeft, seconds);
+
+    /// <summary>
+    /// True while grounded, and for <paramref name="seconds"/> after walking off an edge (but not after jumping): coyote
+    /// time, so a jump pressed a moment too late still happens. <c>if (body.WasGrounded(0.1f) &amp;&amp; Input.WasPressed("Jump"))</c>
+    /// </summary>
+    public bool WasGrounded(float seconds) => IsGrounded || (!RoseSinceGrounded && AirTime <= seconds);
 }

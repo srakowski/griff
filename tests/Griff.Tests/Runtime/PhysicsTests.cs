@@ -49,6 +49,22 @@ public class PhysicsTests
     }
 
     [Fact]
+    public void BodyRestingAtARoundedOffHeight_WalksAlongTheFloor_RatherThanBeingPushedOffIt()
+    {
+        // 0.4 can't be stored exactly, so this box rests at y = 0.39999998, a hair into the floor whose top is at 0.
+        AddBox("Floor", new Vector2(0, -0.5f), new Vector2(6, 1));
+        var walker = AddBox("Walker", new Vector2(0, 0.4f), new Vector2(0.8f, 0.8f), body: true);
+        var body = walker.GetComponent<Body>()!;
+        Run(0.1f);
+
+        body.Velocity = body.Velocity with { X = 3 };
+        _game.Tick(Step);
+
+        Assert.Equal(0.05f, walker.Transform.Position.X, 3);
+        Assert.Equal(0, body.WallSide);
+    }
+
+    [Fact]
     public void Wall_StopsHorizontalMovement()
     {
         AddBox("Wall", new Vector2(3, 0), new Vector2(1, 10));

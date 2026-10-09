@@ -82,6 +82,14 @@ public abstract class Behavior : Component
     {
     }
 
+    /// <summary>
+    /// Called when this entity collects a <see cref="Pickup"/>, e.g. to heal on a heart: <c>if (pickup.Name == "Heart")</c>.
+    /// The pickup disappears at the end of the frame.
+    /// </summary>
+    protected virtual void OnPickup(Entity pickup)
+    {
+    }
+
     /// <summary>Called when the entity is destroyed or the game stops.</summary>
     protected virtual void OnDestroy()
     {
@@ -181,6 +189,8 @@ public abstract class Behavior : Component
     internal void RunDamage(float amount, Entity? source) => OnDamage(amount, source);
 
     internal void RunDeath() => OnDeath();
+
+    internal void RunPickup(Entity pickup) => OnPickup(pickup);
 
     internal void RunDestroy()
     {

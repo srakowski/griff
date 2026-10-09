@@ -203,7 +203,10 @@ public sealed class SceneViewControl : FrameworkElement
                 DrawMarker(dc, entity);
         }
 
+        DrawLights(dc);
         DrawColliders(dc);
+        DrawRooms(dc);
+        DrawLevelGuides(dc);
 
         if (_selection.Entity is { } selected && selected.Scene == _document.Scene)
             DrawSelection(dc, selected);
@@ -302,7 +305,8 @@ public sealed class SceneViewControl : FrameworkElement
         {
             var center = tilemap.CellCenter(x, y);
             var rect = new Rect(center.X - size / 2 - bleed, center.Y - size / 2 - bleed, size + bleed * 2, size + bleed * 2);
-            if (TileImage(tilemap, tile) is { } image)
+            // Autotiles show the piece that joins their neighbors, as in the game.
+            if (TileImage(tilemap, tilemap.ShownTile(x, y, tile)) is { } image)
             {
                 // Images are stored top-down; flip each tile about its own center.
                 dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 2 * center.Y));
@@ -382,6 +386,38 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawText(Text(entity.Name, "Brush.Text.Tertiary"), new Point(corner.X + 4, corner.Y - 18));
     }
 
+    // The Scene view isn't lit, so each light shows as a soft glow of its color out to its radius.
+    private void DrawLights(DrawingContext dc)
+    {
+        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        {
+            foreach (var light in entity.GetComponents<Light>().Where(l => l.Radius > 0))
+            {
+                var color = System.Windows.Media.Color.FromRgb(light.Color.RByte, light.Color.GByte, light.Color.BByte);
+                var glow = new RadialGradientBrush(System.Windows.Media.Color.FromArgb(90, color.R, color.G, color.B),
+                    System.Windows.Media.Color.FromArgb(0, color.R, color.G, color.B));
+                var radius = light.Radius * _zoom;
+                dc.DrawEllipse(glow, null, ToScreen(light.WorldCenter), radius, radius);
+            }
+        }
+    }
+
+    // Rooms: long-dashed outlines with their names, so a level's screens can be laid out.
+    private void DrawRooms(DrawingContext dc)
+    {
+        var pen = new Pen(Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([10, 5], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        {
+            foreach (var room in entity.GetComponents<Room>())
+            {
+                var area = room.Area;
+                var topLeft = ToScreen(new Vector2(area.Min.X, area.Max.Y));
+                dc.DrawRectangle(null, pen, new Rect(topLeft, ToScreen(new Vector2(area.Max.X, area.Min.Y))));
+                dc.DrawText(Text(entity.Name, "Brush.Status.Info"), new Point(topLeft.X + 4, topLeft.Y + 2));
+            }
+        }
+    }
+
     // Physics shapes in green; triggers dashed.
     private void DrawColliders(DrawingContext dc)
     {
@@ -390,9 +426,11 @@ public sealed class SceneViewControl : FrameworkElement
         var clickable = new Pen(Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
         foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
         {
-            // Buttons: where they can be clicked.
+            // Buttons and sliders: where they can be clicked and dragged.
             foreach (var button in entity.GetComponents<Griff.Scenes.Button>())
                 DrawBox(Griff.Runtime.Game.AreaOf(button), clickable);
+            foreach (var slider in entity.GetComponents<Griff.Scenes.Slider>())
+                DrawBox(Griff.Runtime.Game.AreaOf(slider), clickable);
 
             foreach (var collider in entity.GetComponents<BoxCollider>())
             {
@@ -418,6 +456,33 @@ public sealed class SceneViewControl : FrameworkElement
                     else
                         DrawBox(box, solid);
                 }
+
+                foreach (var (cell, rising) in Griff.Runtime.Physics.SlopeShapes(tilemap))
+                {
+                    var (low, high) = rising
+                        ? (new Vector2(cell.Min.X, cell.Min.Y), new Vector2(cell.Max.X, cell.Max.Y))
+                        : (new Vector2(cell.Max.X, cell.Min.Y), new Vector2(cell.Min.X, cell.Max.Y));
+                    var triangle = new StreamGeometry();
+                    using (var context = triangle.Open())
+                    {
+                        context.BeginFigure(ToScreen(low), false, true);
+                        context.LineTo(ToScreen(high), true, false);
+                        context.LineTo(ToScreen(new Vector2(high.X, low.Y)), true, false);
+                    }
+
+                    dc.DrawGeometry(null, solid, triangle);
+                }
+
+                // Ladder tiles don't collide; they're climbed, like a trigger.
+                var world = entity.Transform.WorldMatrix;
+                foreach (var (x, y, tile) in tilemap.Cells().Where(c => tilemap.IsLadder(c.Tile)))
+                {
+                    var half = new Vector2(tilemap.TileSize / 2);
+                    var center = tilemap.CellCenter(x, y);
+                    var min = Vector2.Transform(center - half, world);
+                    var max = Vector2.Transform(center + half, world);
+                    DrawBox(new Griff.Runtime.Box((min + max) / 2, Vector2.Abs(max - min) / 2), trigger);
+                }
             }
         }
 
@@ -434,6 +499,103 @@ public sealed class SceneViewControl : FrameworkElement
             var bottomRight = ToScreen(new Vector2(box.Max.X, box.Min.Y));
             dc.DrawRectangle(null, pen, new Rect(topLeft, bottomRight));
         }
+    }
+
+    // Where movers go, always; for the selection, how far a chaser notices and a shooter reaches, where a door leads, and
+    // what a switch turns on (dashed) or hides (dotted).
+    private void DrawLevelGuides(DrawingContext dc)
+    {
+        var guide = Brush("Brush.Status.Warning");
+        var dashed = new Pen(guide, 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        {
+            foreach (var mover in entity.GetComponents<Mover>())
+            {
+                // The path starts where the mover would be at the start of its trip.
+                var parent = entity.Parent?.Transform.WorldMatrix ?? Matrix4x4.Identity;
+                var start = new Vector2(entity.Transform.Position.X, entity.Transform.Position.Y) - mover.OffsetAt(mover.Time);
+                var points = mover.Path.Select(p => ToScreen(Vector2.Transform(start + p, parent))).ToList();
+                for (var i = 1; i < points.Count; i++)
+                    dc.DrawLine(dashed, points[i - 1], points[i]);
+                if (mover.Mode == MoverMode.Loop && points.Count > 2)
+                    dc.DrawLine(dashed, points[^1], points[0]);
+                foreach (var point in points)
+                    dc.DrawEllipse(guide, null, point, 3, 3);
+            }
+        }
+
+        if (_selection.Entity is not { } selected || selected.Scene != _document.Scene)
+            return;
+        var here = ToVector2(selected.Transform.WorldPosition);
+        foreach (var chase in selected.GetComponents<Chase>().Where(c => c.Range > 0))
+            dc.DrawEllipse(null, dashed, ToScreen(here), chase.Range * _zoom, chase.Range * _zoom);
+        foreach (var shooter in selected.GetComponents<Shooter>())
+        {
+            if (!string.IsNullOrWhiteSpace(shooter.Target) && shooter.Range > 0)
+                dc.DrawEllipse(null, dashed, ToScreen(here), shooter.Range * _zoom, shooter.Range * _zoom);
+            else if (string.IsNullOrWhiteSpace(shooter.Target) && shooter.Direction != Vector2.Zero)
+                dc.DrawLine(dashed, ToScreen(here + shooter.Offset), ToScreen(here + shooter.Offset + Vector2.Normalize(shooter.Direction) * 2));
+        }
+
+        foreach (var source in selected.GetComponents<SoundSource>().Where(s => s.Range > 0))
+            dc.DrawEllipse(null, dashed, ToScreen(here), source.Range * _zoom, source.Range * _zoom);
+        foreach (var attack in selected.GetComponents<Attack>().Where(a => string.IsNullOrWhiteSpace(a.Action) && a.Range > 0))
+            dc.DrawEllipse(null, dashed, ToScreen(here), attack.Range * _zoom, attack.Range * _zoom);
+        foreach (var light in selected.GetComponents<Light>().Where(l => l.Radius > 0))
+            dc.DrawEllipse(null, dashed, ToScreen(light.WorldCenter), light.Radius * _zoom, light.Radius * _zoom);
+
+        foreach (var door in selected.GetComponents<Door>().Where(d => string.IsNullOrWhiteSpace(d.Scene) && !string.IsNullOrWhiteSpace(d.Target)))
+        {
+            if (_document.Scene.Entities.FirstOrDefault(e => e.Name == door.Target!.Trim()) is { } target)
+                dc.DrawLine(dashed, ToScreen(here), ToScreen(ToVector2(target.Transform.WorldPosition)));
+        }
+
+        // How far a player jumps, each way, and where a bouncer sends things: under the default gravity.
+        foreach (var movement in selected.GetComponents<PlatformerMovement>())
+        {
+            var gravity = -Griff.Runtime.Physics.DefaultGravity.Y * (selected.GetComponent<Body>()?.GravityScale ?? 1);
+            var jump = movement.JumpSpeedFor(gravity);
+            foreach (var side in new[] { -1, 1 })
+                DrawArc(dc, here, new Vector2(side * movement.Speed, jump), gravity, movement.FallMultiplier, movement.MaxFallSpeed);
+            dc.DrawLine(dashed, ToScreen(here + new Vector2(-0.6f, movement.JumpHeight)), ToScreen(here + new Vector2(0.6f, movement.JumpHeight)));
+        }
+
+        foreach (var bouncer in selected.GetComponents<Bouncer>())
+            DrawArc(dc, here, bouncer.Way * bouncer.Strength, -Griff.Runtime.Physics.DefaultGravity.Y, 1, 0);
+
+        var dotted = new Pen(guide, 1.5) { DashStyle = new DashStyle([1, 3], 0) };
+        foreach (var @switch in selected.GetComponents<Switch>())
+        {
+            foreach (var target in Switch.Named(selected, @switch.Targets).Where(e => e != selected))
+                dc.DrawLine(dashed, ToScreen(here), ToScreen(ToVector2(target.Transform.WorldPosition)));
+            foreach (var hidden in Switch.Named(selected, @switch.Hides).Where(e => e != selected))
+                dc.DrawLine(dotted, ToScreen(here), ToScreen(ToVector2(hidden.Transform.WorldPosition)));
+        }
+    }
+
+    // A dashed arc: where something leaving `from` at `velocity` goes under `gravity` (heavier on the way down), for 1.5 seconds
+    // or until it has fallen well below where it started.
+    private void DrawArc(DrawingContext dc, Vector2 from, Vector2 velocity, float gravity, float fallMultiplier, float maxFall)
+    {
+        var pen = new Pen(Brush("Brush.Status.Warning"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(ToScreen(from), false, false);
+            var (position, v) = (from, velocity);
+            const float dt = 1 / 30f;
+            for (var t = 0f; t < 1.5f && position.Y > from.Y - 4; t += dt)
+            {
+                v.Y -= gravity * (v.Y < 0 ? Math.Max(1, fallMultiplier) : 1) * dt;
+                if (maxFall > 0)
+                    v.Y = Math.Max(v.Y, -maxFall);
+                position += v * dt;
+                context.LineTo(ToScreen(position), true, false);
+            }
+        }
+
+        geometry.Freeze();
+        dc.DrawGeometry(null, pen, geometry);
     }
 
     // While painting: the grid's extent, the cell under the cursor, and a palette of the tileset's tiles.
@@ -569,6 +731,9 @@ public sealed class SceneViewControl : FrameworkElement
                 continue;
             var local = Vector3.Transform(new Vector3(world, 0), inverse);
             if (entity.GetComponent<Sprite>() is { } sprite && Math.Abs(local.X) <= sprite.Size.X / 2 && Math.Abs(local.Y) <= sprite.Size.Y / 2)
+                return entity;
+            if ((entity.GetComponent<Bar>()?.Size ?? entity.GetComponent<Griff.Scenes.Slider>()?.Size) is { } bar &&
+                Math.Abs(local.X) <= Math.Abs(bar.X) / 2 && Math.Abs(local.Y) <= Math.Abs(bar.Y) / 2)
                 return entity;
 
             // Tilemaps are hit where there's a tile, so the empty parts don't block clicks on what's behind.

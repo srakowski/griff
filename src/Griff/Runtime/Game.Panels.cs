@@ -162,7 +162,8 @@ public sealed partial class Game
             return;
         }
 
-        if (clicked.Count > 0 || TopPanel is not null)
+        // In a strategy game, Esc cancels placing a building or picking a target before it opens a pause menu.
+        if (clicked.Count > 0 || TopPanel is not null || Rts.Placing is not null || Rts.Targeting is not null)
             return;
         foreach (var panel in Scene.Entities.SelectMany(e => e.GetComponents<Panel>()).ToList())
         {

@@ -230,6 +230,9 @@ public sealed class DamageOnTouch : Component
     /// <summary>Kill outright, invincible or not, whatever the <see cref="Amount"/>: bottomless pits, lava, crushers.</summary>
     public bool Kill { get; set; }
 
+    /// <summary>Destroy this entity when it runs into a wall or anything else solid it can't hurt: bullets, fireballs, arrows.</summary>
+    public bool DestroyOnWall { get; set; }
+
     /// <summary>True if it hurts things on collision layer <paramref name="layer"/>.</summary>
     public bool Hurts(string? layer)
     {
@@ -267,6 +270,12 @@ public sealed class Pickup : Component
 
     /// <summary>A sound played when it's collected, e.g. "Sounds/coin.wav".</summary>
     public string? Sound { get; set; }
+
+    /// <summary>
+    /// Hit points it gives back to whoever collects it: a heart, a medkit. One that only heals (with no
+    /// <see cref="Item"/>) is left where it is while their health is full.
+    /// </summary>
+    public float Heal { get; set; }
 
     /// <summary>A prefab spawned where it was, e.g. "Sparkle": a burst of particles, a score popup.</summary>
     public string? Effect { get; set; }

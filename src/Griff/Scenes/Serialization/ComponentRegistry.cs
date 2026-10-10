@@ -60,6 +60,21 @@ public sealed class ComponentRegistry
         registry.Register<SoundPlayer>();
         registry.Register<ScreenEffects>();
         registry.Register<Weather>();
+        registry.Register<Faction>();
+        registry.Register<Unit>();
+        registry.Register<Building>();
+        registry.Register<Producer>();
+        registry.Register<Worker>();
+        registry.Register<Resource>();
+        registry.Register<Fighter>();
+        registry.Register<Commander>();
+        registry.Register<FogOfWar>();
+        registry.Register<Opponent>();
+        registry.Register<FirstPersonView>();
+        registry.Register<FirstPersonMovement>();
+        registry.Register<Weapon>();
+        registry.Register<Billboard>();
+        registry.Register<Block>();
         return registry;
     }
 

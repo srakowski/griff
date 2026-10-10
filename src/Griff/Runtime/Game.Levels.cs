@@ -225,6 +225,7 @@ public sealed partial class Game
                 {
                     aim = Flat(target.Transform.WorldPosition) - here;
                     wantsToFire &= shooter.Range <= 0 || aim.Length() <= shooter.Range;
+                    wantsToFire &= !shooter.NeedsSight || CanSee(entity, target);
                 }
             }
             else

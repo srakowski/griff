@@ -206,7 +206,7 @@ public sealed class Project
             await File.WriteAllTextAsync(path, source.ReplaceLineEndings(), cancellationToken);
         }
 
-        foreach (var (relative, bytes) in ProjectTemplates.Sounds(template))
+        foreach (var (relative, bytes) in ProjectTemplates.Sounds(template).Concat(ProjectTemplates.Images(template)))
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

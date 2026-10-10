@@ -1,0 +1,70 @@
+﻿title: First-person shooter
+intro: A first-person view, movement with mouse look, weapons, billboards and sliding doors, all as components, and a Shooter template to play.
+project: Shooter | Dark Base
+
+chapter: Paint it flat, play it standing up | The Shooter template
+say: The new Shooter template is a first-person shooter, made only of components, with no code.
+say: The level is an ordinary tilemap, painted top-down like any other. Enemies, pickups and lamps are ordinary sprites on the map.
+select: Main Camera
+explain: component:FirstPersonView | First Person View | The First Person View on the camera stands the map up around the player. Solid tiles become textured walls, and sprites stand on the floor, always facing you.
+explain: field:FirstPersonView.Fog | Fog | Fog fades the far end of a corridor into the dark, and the scene's lights light the walls near them.
+select: Player
+explain: component:FirstPersonMovement | First Person Movement | First Person Movement walks and strafes with W A S D, and turns with the arrow keys, or the mouse.
+explain: component:Weapon | Weapon | A Weapon shoots where you look. Its ammo comes from the player's inventory, so pickups and counters work with no code.
+select: Hall Door
+explain: component:Block | Block | A Block is drawn as a box of wall. With a Mover and a Switch, it's a door that slides open as you walk up to it.
+
+chapter: Walk, look and shoot | Play mode
+play
+wait: 1
+say: In play mode we see through the player's eyes, with the pistol in hand, a crosshair, health and ammo, and a minimap in the corner.
+hold: W 1.6
+say: Walking up to the door slides it open into the wall.
+hold: W 1.2
+hold: Left 0.35
+hold: Right 0.7
+say: The arrow keys turn,
+mouselook: 260 0.8
+mouselook: -260 0.8
+say: and once the game is clicked, it holds the mouse, so the mouse turns the view.
+say: The grunts have seen us.
+tap: J
+wait: 0.3
+tap: J
+wait: 0.3
+tap: J
+wait: 0.3
+tap: J
+say: Each shot hits the first thing in its way. Enemies flash when they're hit, and sparks fly off the walls.
+tap: J
+wait: 0.3
+tap: J
+wait: 0.3
+tap: J
+wait: 1
+tap: Escape
+say: Escape gives the mouse back, and pauses.
+tap: Escape
+wait: 0.5
+stop
+
+chapter: A shotgun in the armory | Weapons you pick up
+select: Player
+set: Transform.Position = 5.5, -8.5, 0
+set: Transform.Rotation.Z = 0
+say: Let's start in the armory this time, facing the shotgun on the floor.
+play
+wait: 1
+hold: W 1
+say: Picking it up takes it out straight away.
+tap: J
+wait: 1
+tap: J
+say: Seven pellets a shot, and every one that hits lands as one big blow.
+tap: D1
+wait: 0.8
+tap: D2
+say: The number keys switch weapons, each with its own ammo.
+wait: 1.5
+stop
+say: That's a first-person shooter in Griff: paint the level, add the components, and play.

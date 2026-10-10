@@ -24,6 +24,8 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Platformer)]
     [InlineData(ProjectTemplate.TopDown)]
     [InlineData(ProjectTemplate.Arcade)]
+    [InlineData(ProjectTemplate.Strategy)]
+    [InlineData(ProjectTemplate.Shooter)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -45,6 +47,8 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Platformer)]
     [InlineData(ProjectTemplate.TopDown)]
     [InlineData(ProjectTemplate.Arcade)]
+    [InlineData(ProjectTemplate.Strategy)]
+    [InlineData(ProjectTemplate.Shooter)]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -766,7 +770,227 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.Equal("Y", hint.GetComponent<Text>()!.Shown);
     }
 
+    [Fact]
+    public async Task Strategy_TheComputerPlaysRed_GatheringBuildingAndTraining()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var game = NewGame(project, scene, input, registry);
+        input.MouseWorld = new Vector2(0, 0);
+        input.IsMouseInView = false;
+
+        Run(game, input, 60);
+
+        var red = game.FactionOf("Enemy")!;
+        var units = game.FindAll<Unit>().Where(u => u.Team == "Enemy").ToList();
+        Assert.True(units.Count(u => u.Entity!.GetComponent<Worker>() is not null) >= 5, "red didn't train workers");
+        Assert.Contains(units, u => u.Order is UnitOrder.Gather or UnitOrder.Return);
+        Assert.True(game.FindAll<Building>().Count(b => b.Team == "Enemy") >= 4, "red didn't put up any buildings");
+        Assert.True(units.Count(u => u.Entity!.GetComponent<Fighter>() is not null) > 3, "red didn't train an army");
+        Assert.False(red.IsDefeated);
+    }
+
+    [Fact]
+    public async Task Strategy_WorkersGatherGold_AndTheTownHallTrainsMore()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var game = NewGame(project, scene, input, registry);
+        input.IsMouseInView = false;
+        Run(game, input, 0.1);
+        var blue = game.FactionOf("Player")!;
+        var gold = blue.Amount("Gold");
+
+        var workers = game.FindAll<Worker>().Where(w => w.Entity!.GetComponent<Unit>()!.Team == "Player").Select(w => w.Entity!).ToList();
+        game.Select(workers);
+        var mine = game.FindAll("Gold Mine").OrderBy(m => m.Transform.Position.X).First();
+        input.IsMouseInView = true;
+        input.MouseWorld = new Vector2(mine.Transform.Position.X, mine.Transform.Position.Y);
+        input.SetMouseButton(MouseButton.Right, true);
+        Run(game, input, Frame);
+        input.SetMouseButton(MouseButton.Right, false);
+        input.IsMouseInView = false;
+        Run(game, input, 20);
+        Assert.True(blue.Amount("Gold") > gold + 40, $"gold went from {gold} to {blue.Amount("Gold")}");
+
+        var hall = game.FindAll("Town Hall").First(h => h.GetComponent<Building>()!.Team == "Player");
+        game.Select([hall]);
+        input.SetKey(Key.W, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.W, false);
+        Assert.Equal(["Worker"], hall.GetComponent<Producer>()!.Queue);
+        Run(game, input, 5);
+        Assert.Equal(6, game.FindAll<Worker>().Count(w => w.Entity!.GetComponent<Unit>()!.Team == "Player"));
+    }
+
+    [Fact]
+    public async Task Strategy_EscCancelsPlacingFirst_ThenPauses()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var game = NewGame(project, scene, input, registry);
+        input.IsMouseInView = false;
+        Run(game, input, 0.1);
+        game.Select([game.FindAll<Worker>().First(w => w.Entity!.GetComponent<Unit>()!.Team == "Player").Entity!]);
+        Run(game, input, Frame);
+
+        foreach (var key in new[] { Key.B, Key.Escape })
+        {
+            input.SetKey(key, true);
+            Run(game, input, Frame);
+            input.SetKey(key, false);
+            Run(game, input, Frame);
+        }
+
+        Assert.False(game.IsPaused);
+        input.SetKey(Key.Escape, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.Escape, false);
+        Assert.True(game.IsPaused);
+    }
+
     // As the editor and player set it up: prefabs come from the project.
+    [Fact]
+    public async Task Shooter_ComesWithItsPictures_AsPngs_ThatEverythingUses()
+    {
+        var (project, scene, _, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var serializer = new SceneSerializer(registry);
+        var entities = scene.Entities.ToList();
+        foreach (var path in project.FindPrefabs())
+            entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants());
+
+        var images = entities.SelectMany(e => e.Components)
+            .SelectMany(c => c.GetType().GetProperties().Where(p => p.PropertyType == typeof(string) && p.Name.EndsWith("Image")).Select(p => p.GetValue(c) as string))
+            .Where(i => !string.IsNullOrEmpty(i))
+            .Distinct()
+            .ToList();
+        Assert.Contains("Textures/walls.png", images);
+        Assert.Contains("Textures/pistol-view.png", images);
+        Assert.All(images, image =>
+        {
+            var bytes = File.ReadAllBytes(Asset(project, image!));
+            var (width, height, pixels) = DecodePng(bytes);
+            Assert.True(width > 0 && height > 0 && pixels.Any(p => p != 0), image);
+        });
+    }
+
+    [Fact]
+    public async Task Shooter_IsSeenInFirstPerson_WithWallsTheGunAndTheHud()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.5);
+
+        var frame = Griff.Rendering.SceneRenderer.Build(game, 16f / 9f);
+
+        Assert.Equal(game.Find("Player"), game.FirstPersonViewer);
+        Assert.Contains(frame.Sprites, d => d.Image == "Textures/walls.png");
+        Assert.Contains(frame.Sprites, d => d.Image == "Textures/pistol-view.png");
+        Assert.Contains(frame.Sprites, d => d.Text == "Bullets  24");
+        Assert.Contains(frame.Sprites, d => d.Text == "Kills  0 / " + 10);
+        Assert.Equal(10, game.FindAll<Chase>().Count);
+    }
+
+    [Fact]
+    public async Task Shooter_WalkingUpToTheHallDoor_SlidesItOpen()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var door = game.Find("Hall Door")!;
+        Run(game, input, 0.1);
+
+        input.SetKey(Key.W, true);
+        Run(game, input, 3.5);
+        input.SetKey(Key.W, false);
+
+        Assert.True(door.Transform.Position.Y > -2.7f, $"door at {door.Transform.Position}");
+        Assert.True(player.Transform.Position.X > 8.5f, $"player at {player.Transform.Position}");
+    }
+
+    [Fact]
+    public async Task Shooter_ThePistol_KillsAGrunt_UsingBullets_AndTheKillCounts()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var grunt = game.FindAll("Grunt").First();
+        grunt.Transform.Position = new Vector3(5.5f, -3.5f, 0);
+        grunt.GetComponent<Chase>()!.Speed = 0;
+        Run(game, input, 0.1);
+
+        for (var shot = 0; shot < 4; shot++)
+        {
+            input.SetMouseButton(MouseButton.Left, true);
+            Run(game, input, Frame);
+            input.SetMouseButton(MouseButton.Left, false);
+            Run(game, input, 0.4);
+        }
+
+        Assert.Null(grunt.Scene);
+        Assert.InRange(player.GetComponent<Inventory>()!.Count("Bullets"), 18, 21);
+        Assert.Equal("Kills  1 / " + 10, game.Find("Kills")!.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
+    public async Task Shooter_PickingUpTheShotgun_TakesItOut()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        Run(game, input, 0.1);
+        Assert.Equal("Pistol", game.CurrentWeapon?.Name);
+
+        player.Transform.Position = game.Find("Shotgun")!.Transform.Position;
+        Run(game, input, 0.1);
+
+        Assert.Equal("Shotgun", game.CurrentWeapon?.Name);
+    }
+
+    [Fact]
+    public async Task Shooter_TheBlueDoor_OnlyOpensWithTheKey_AndTheExitWins()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var game = NewGame(project, scene, input, registry);
+        var player = game.Find("Player")!;
+        var door = game.Find("Blue Door")!;
+        foreach (var enemy in game.FindAll<Chase>().Select(c => c.Entity!).ToList())
+            game.Destroy(enemy);
+        Run(game, input, 0.1);
+
+        player.Transform.Position = new Vector3(18.5f, -12.3f, 0);
+        Run(game, input, 1.5);
+        Assert.Equal(18.5f, door.Transform.Position.X, 2);
+
+        player.Transform.Position = game.Find("Blue Key")!.Transform.Position;
+        Run(game, input, 0.1);
+        player.Transform.Position = new Vector3(18.5f, -12.3f, 0);
+        Run(game, input, 1.5);
+        Assert.True(door.Transform.Position.X > 19.2f, $"door at {door.Transform.Position}");
+
+        player.Transform.Position = new Vector3(18.5f, -16.3f, 0);
+        Run(game, input, 0.2);
+        Assert.True(game.Find("Victory")!.IsEnabled);
+    }
+
+    // Just enough PNG to check one: the size from its header, and its pixel rows inflated from its data.
+    private static (int Width, int Height, byte[] Rows) DecodePng(byte[] png)
+    {
+        Assert.Equal([0x89, 0x50, 0x4E, 0x47], png[..4]);
+        int Int(int at) => (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
+        var (width, height) = (Int(16), Int(20));
+        using var data = new MemoryStream();
+        for (var at = 8; at < png.Length; at += Int(at) + 12)
+        {
+            if (System.Text.Encoding.ASCII.GetString(png, at + 4, 4) == "IDAT")
+                data.Write(png, at + 8, Int(at));
+        }
+
+        data.Position = 0;
+        using var inflate = new System.IO.Compression.ZLibStream(data, System.IO.Compression.CompressionMode.Decompress);
+        using var rows = new MemoryStream();
+        inflate.CopyTo(rows);
+        Assert.Equal(height * (width * 4 + 1), rows.Length);
+        return (width, height, rows.ToArray());
+    }
+
     private static Game NewGame(Project project, Scene scene, InputState input, ComponentRegistry registry) =>
         new(scene, input)
         {

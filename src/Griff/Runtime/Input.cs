@@ -186,6 +186,22 @@ public interface IInput
     /// <summary>How far the mouse wheel turned this frame, in notches: positive away from the player (scrolling up).</summary>
     float Scroll { get; }
 
+    /// <summary>
+    /// How far the mouse moved this frame, in pixels (right and up are positive), for turning a first-person view. It keeps
+    /// counting while the game has the mouse (<see cref="IsMouseLocked"/>), however far it goes.
+    /// </summary>
+    Vector2 MouseDelta { get; }
+
+    /// <summary>
+    /// Set it to ask for the mouse, as a first-person game does: once the player clicks the game, the cursor is hidden and
+    /// kept inside it so <see cref="MouseDelta"/> never runs out, until Esc (or switching away) gives it back.
+    /// <see cref="Scenes.FirstPersonMovement"/> asks for it by itself.
+    /// </summary>
+    bool WantsMouseLock { get; set; }
+
+    /// <summary>True while the game has the mouse (see <see cref="WantsMouseLock"/>).</summary>
+    bool IsMouseLocked { get; }
+
     /// <summary>-1..1 from A/D, the left/right arrows, the D-pad or the left stick.</summary>
     float Horizontal { get; }
 
@@ -279,6 +295,13 @@ public sealed class InputState : IInput
     public bool IsMouseInView { get; set; } = true;
 
     public float Scroll { get; private set; }
+
+    public Vector2 MouseDelta { get; private set; }
+
+    public bool WantsMouseLock { get; set; }
+
+    /// <summary>Set by the platform while it holds the mouse for the game (see <see cref="WantsMouseLock"/>).</summary>
+    public bool IsMouseLocked { get; set; }
 
     public Vector2 LeftStick { get; private set; }
 
@@ -568,6 +591,14 @@ public sealed class InputState : IInput
     /// <summary>Called by the platform when the mouse moves over the game: the player has switched to the mouse.</summary>
     public void MouseMoved() => UsingGamepad = false;
 
+    /// <summary>Adds mouse movement, in pixels (right and up are positive), for <see cref="MouseDelta"/>.</summary>
+    public void AddMouseDelta(Vector2 pixels)
+    {
+        MouseDelta += pixels;
+        if (pixels != Vector2.Zero)
+            UsingGamepad = false;
+    }
+
     /// <summary>Adds mouse wheel movement, in notches (positive is scrolling up).</summary>
     public void AddScroll(float notches) => Scroll += notches;
 
@@ -638,6 +669,7 @@ public sealed class InputState : IInput
         _padReleased.Clear();
         _typed.Clear();
         Scroll = 0;
+        MouseDelta = Vector2.Zero;
     }
 
     private float PadAxis(GamepadButton negative, GamepadButton positive) =>

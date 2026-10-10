@@ -1,0 +1,109 @@
+title: Real-time strategy
+intro: Units, workers, buildings, fog of war and a computer opponent, all as components, and a Strategy template that's a whole game to play.
+project: Strategy | Ironvale
+
+chapter: A strategy game from components | The Strategy template
+say: The new Strategy template is a complete real-time strategy game, made only of components, with no code.
+select: Main Camera
+explain: component:Commander | Commander | The Commander on the camera is the player's controls. Click or drag to select, right-click to send units, a command card with hotkeys, and a minimap.
+explain: component:FogOfWar | Fog of War | Fog of War hides whatever your units can't see.
+select: Enemy Team
+explain: component:Faction | Faction | Each side is a Faction, with its color and the gold and wood it has to spend.
+explain: component:Opponent | Opponent | An Opponent lets the computer play a side. It gathers, builds, trains an army, and attacks.
+set: Opponent.TrainEvery = 25
+explain: field:Opponent.TrainEvery | Train Every | Train Every sets how hard it plays. For this demo, an easy game: a new soldier every twenty five seconds.
+browse: Worker
+explain: catalog:docs | Strategy components | Units, workers, buildings, producers, resources and fighters are components too, ready for your own games.
+click: catalog:close
+
+chapter: Gather and build | Select, right-click, hotkeys
+play
+wait: 1.5
+say: Our base is in the bottom left. Red is out there somewhere, in the dark.
+gamedrag: -19.4, -4.2, -14.2, -5.8
+say: Drag a box round the five workers to select them,
+gameorder: -21, -3.5
+say: then right-click the gold mine. They carry gold back to the town hall, load after load.
+explain: hud:resources | Resources | Gold goes up with every load. Supply says how many units we can field.
+explain: hud:card | Command card | The command card shows what the selection can do, each with its hotkey.
+tap: B
+gameclick: -13, -2
+say: B, and a click, puts up a barracks. The nearest worker goes off to build it.
+tap: F
+gameclick: -11, -9
+say: F adds a farm, for more supply.
+gameclick: -16, -8
+tap: W
+tap: W
+say: Click the town hall and press W twice to train two more workers.
+wait: 2
+
+chapter: Train an army | Barracks, control groups, rally point, minimap
+ready: Barracks | 40
+gameclick: -13, -2
+tap: S
+tap: S
+tap: S
+tap: S
+tap: S
+say: The barracks is up. Select it, and press S to train soldiers, as many as we can pay for.
+tap: LeftControl+D2
+say: Control 2 keeps it as group two, to pick it again from anywhere.
+gameorder: -9, -4
+say: A right-click sets the rally point, where new soldiers gather.
+explain: hud:selection | Training | They train one after another, paid for up front.
+say: While they train, click the minimap to look around. Red's base is up in the top right, hidden by the fog.
+minimap: 6, 4
+wait: 2
+minimap: -10, -6
+afford: 180 Gold | 60
+tap: D2
+tap: S
+tap: S
+tap: S
+say: Press 2 for the barracks, and S for more soldiers as the gold comes in.
+afford: 180 Gold | 60
+tap: D2
+tap: S
+tap: S
+tap: S
+afford: 180 Gold | 60
+tap: D2
+tap: S
+tap: S
+tap: S
+say: An army needs time. Let's wait for a dozen soldiers.
+have: 12 Soldier | 150
+
+chapter: Attack | Attack-move, reinforcements, victory
+gamedrag: -14, -1.5, -4, -8
+say: Drag round the army,
+tap: LeftControl+D1
+say: and Control 1 keeps them as group one.
+tap: A
+minimap: 15, 8
+say: A, then a click on the minimap, sends them across the map to fight their way into red's base.
+tap: D2
+minimaporder: 13, 6
+say: Back at the barracks, a right-click on the minimap sends new soldiers straight to the front.
+afford: 120 Gold | 30
+tap: S
+tap: S
+tap: D1
+tap: D1
+say: Pressing 1 twice brings the camera to the army.
+wait: 8
+tap: D1
+tap: D1
+say: Red fights back, and its tower fires arrows. Anything that's hurt shows its health.
+wait: 10
+tap: D1
+tap: D1
+wait: 10
+tap: D1
+tap: D1
+say: Red rebuilds what it loses, so we keep pushing until its last building falls.
+waitfor: Victory | 240
+say: Victory. The Commander opens the Victory panel by itself, and Play Again starts over.
+wait: 2
+stop

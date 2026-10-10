@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -22,7 +23,10 @@ public sealed class GameRunner : IDisposable
     private readonly Stopwatch _clock = new();
     private RenderFrame? _lastFrame;
     private Vector2 _mouseNdc;
+    private Point? _mousePixel;
     private TimeSpan _lastRenderTime;
+    // While the game has the mouse (see IInput.WantsMouseLock): the screen point the cursor is held at.
+    private (int X, int Y)? _lockCenter;
 
     public GameRunner(Scene scene, GameSurface surface, UIElement keySource)
     {
@@ -76,6 +80,7 @@ public sealed class GameRunner : IDisposable
     public void Dispose()
     {
         CompositionTarget.Rendering -= OnRendering;
+        ReleaseMouse();
         _keySource.PreviewKeyDown -= OnKeyDown;
         _keySource.PreviewKeyUp -= OnKeyUp;
         _keySource.LostKeyboardFocus -= OnLostFocus;
@@ -105,6 +110,11 @@ public sealed class GameRunner : IDisposable
         {
             TickSafely(seconds);
         }
+        else if (_lockCenter is not null)
+        {
+            // A paused game gives the mouse back, so the editor can be used.
+            ReleaseMouse();
+        }
         else if (_input.RumbleStrength > 0)
         {
             // A paused game doesn't shake the controller.
@@ -120,6 +130,7 @@ public sealed class GameRunner : IDisposable
         try
         {
             UpdateMouseWorld();
+            UpdateMouseLock();
             XInputGamepad.Poll(_input);
             Game.ViewAspect = _surface.Aspect;
             Game.Tick(seconds);
@@ -152,8 +163,53 @@ public sealed class GameRunner : IDisposable
         }
     }
 
+    // The mouse held for a first-person game: how far it moved since last frame, then back to the middle of the view.
+    private void UpdateMouseLock()
+    {
+        if (_lockCenter is not { } center)
+            return;
+        if (!_input.WantsMouseLock || Window.GetWindow(_surface) is not { IsActive: true })
+        {
+            ReleaseMouse();
+            return;
+        }
+
+        if (GetCursorPos(out var cursor))
+            _input.AddMouseDelta(new Vector2(cursor.X - center.X, center.Y - cursor.Y));
+        SetCursorPos(center.X, center.Y);
+    }
+
+    private void LockMouse()
+    {
+        var (width, height) = _surface.PixelSize;
+        if (width == 0 || height == 0 || PresentationSource.FromVisual(_surface) is null)
+            return;
+        var topLeft = _surface.PointToScreen(new Point(0, 0));
+        var bottomRight = _surface.PointToScreen(new Point(_surface.ActualWidth, _surface.ActualHeight));
+        var clip = new NativeRect { Left = (int)topLeft.X, Top = (int)topLeft.Y, Right = (int)bottomRight.X, Bottom = (int)bottomRight.Y };
+        _lockCenter = ((clip.Left + clip.Right) / 2, (clip.Top + clip.Bottom) / 2);
+        ClipCursor(ref clip);
+        SetCursorPos(_lockCenter.Value.X, _lockCenter.Value.Y);
+        ShowCursor(false);
+        _input.IsMouseLocked = true;
+    }
+
+    private void ReleaseMouse()
+    {
+        if (_lockCenter is null)
+            return;
+        _lockCenter = null;
+        ClipCursor(IntPtr.Zero);
+        ShowCursor(true);
+        _input.IsMouseLocked = false;
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        // Esc gives back the mouse a first-person game is holding (and still reaches the game, to pause it).
+        if (e.Key == System.Windows.Input.Key.Escape)
+            ReleaseMouse();
+
         // Typing into a text field (say, the editor's Inspector while playing) isn't playing the game.
         if (Keyboard.FocusedElement is TextBoxBase)
             return;
@@ -185,10 +241,18 @@ public sealed class GameRunner : IDisposable
             e.Handled = true;
     }
 
-    private void OnLostFocus(object sender, KeyboardFocusChangedEventArgs e) => _input.ReleaseAll();
+    private void OnLostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        _input.ReleaseAll();
+        ReleaseMouse();
+    }
 
     private void OnMouseMoved(Point pixel)
     {
+        // Held, the mouse's movement is measured each frame from the middle of the view instead.
+        if (_lockCenter is null && _mousePixel is { } last)
+            _input.AddMouseDelta(new Vector2((float)(pixel.X - last.X), (float)(last.Y - pixel.Y)));
+        _mousePixel = pixel;
         var ndc = _surface.ToNdc(pixel);
         if (ndc != _mouseNdc)
             _input.MouseMoved();
@@ -204,13 +268,53 @@ public sealed class GameRunner : IDisposable
         e.Handled = true;
     }
 
-    private void OnMouseLeft() => _input.IsMouseInView = false;
+    private void OnMouseLeft()
+    {
+        _input.IsMouseInView = false;
+        _mousePixel = null;
+    }
 
     private void OnMouseButton(Runtime.MouseButton button, bool down)
     {
+        // A first-person game takes the mouse when it's clicked; that click only takes it, it doesn't fire.
+        if (down && _lockCenter is null && _input.WantsMouseLock && !IsPaused)
+        {
+            _keySource.Focus();
+            LockMouse();
+            if (_lockCenter is not null)
+                return;
+        }
+
         // Clicking the game takes the keyboard back from a text field (which commits what was typed there).
         if (down && Keyboard.FocusedElement is TextBoxBase && !_keySource.Focus())
             Keyboard.ClearFocus();
         _input.SetMouseButton(button, down);
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X, Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClipCursor(ref NativeRect rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClipCursor(IntPtr rect);
+
+    [DllImport("user32.dll")]
+    private static extern int ShowCursor(bool show);
 }

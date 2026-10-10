@@ -298,6 +298,9 @@ public sealed class Shooter : Component
     /// <summary>With a <see cref="Target"/>, only fire when it's this close. 0 fires at any distance.</summary>
     public float Range { get; set; } = 10;
 
+    /// <summary>With a <see cref="Target"/>, only fire when nothing solid is in the way: no shooting through walls.</summary>
+    public bool NeedsSight { get; set; }
+
     /// <summary>Shots in each volley, fanned out across <see cref="Spread"/>.</summary>
     public int Count { get; set; } = 1;
 

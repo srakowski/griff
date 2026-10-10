@@ -12,7 +12,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed class DemoInput(DemoOverlay overlay, double speed)
 {
     private const int InputMouse = 0, InputKeyboard = 1;
-    private const uint LeftDown = 0x0002, LeftUp = 0x0004, RightDown = 0x0008, RightUp = 0x0010, Wheel = 0x0800;
+    private const uint Move = 0x0001, LeftDown = 0x0002, LeftUp = 0x0004, RightDown = 0x0008, RightUp = 0x0010, Wheel = 0x0800;
     private const uint KeyRelease = 0x0002, Unicode = 0x0004, Extended = 0x0001;
 
     /// <summary>Extra speed for sped-up stretches of the script.</summary>
@@ -104,6 +104,33 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         await Task.Delay(60);
         Mouse(LeftUp);
         await Pause(150);
+    }
+
+    /// <summary>
+    /// Moves the mouse <paramref name="dx"/>, <paramref name="dy"/> pixels (screen pixels, down is positive) over
+    /// <paramref name="ms"/>, as relative movement the way a hand moves it: for turning a first-person game that holds the mouse.
+    /// </summary>
+    public async Task Nudge(double dx, double dy, double ms)
+    {
+        var duration = Math.Max(1, ms / Speed);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (sentX, sentY) = (0, 0);
+        while (true)
+        {
+            await Gate();
+            var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / duration);
+            var eased = t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
+            var (x, y) = ((int)Math.Round(dx * eased), (int)Math.Round(dy * eased));
+            if (x != sentX || y != sentY)
+            {
+                Send(new INPUT { type = InputMouse, u = new InputUnion { mi = new MOUSEINPUT { dx = x - sentX, dy = y - sentY, dwFlags = Move } } });
+                (sentX, sentY) = (x, y);
+            }
+
+            if (t >= 1)
+                break;
+            await Task.Delay(8);
+        }
     }
 
     public async Task Scroll(int notches)

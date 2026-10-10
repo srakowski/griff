@@ -4,7 +4,7 @@ using Griff.Scenes;
 namespace Griff.Projects;
 
 /// <summary>
-/// The sounds and music the Platformer, Top-down and Arcade templates come with, made by the Sound Maker's synths
+/// The sounds and music the Platformer, Top-down, Arcade, Strategy and Shooter templates come with, made by the Sound Maker's synths
 /// (so they open in it to tweak), and hooked up to everything in the template that makes a noise.
 /// </summary>
 internal static class TemplateSounds
@@ -62,6 +62,8 @@ internal static class TemplateSounds
     {
         ProjectTemplate.TopDown => MusicRecipe.ForMood(MusicMood.Chill, seed: 4) with { Volume = 0.7f },
         ProjectTemplate.Arcade => MusicRecipe.ForMood(MusicMood.Tense, seed: 2) with { Volume = 0.7f },
+        ProjectTemplate.Strategy => MusicRecipe.ForMood(MusicMood.Heroic, seed: 5) with { Volume = 0.6f },
+        ProjectTemplate.Shooter => MusicRecipe.ForMood(MusicMood.Tense, seed: 8) with { Volume = 0.5f },
         _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
     };
 
@@ -122,6 +124,10 @@ internal static class TemplateSounds
                 case Shooter s:
                     Set(s.Sound, v => s.Sound = v, Shoot);
                     break;
+                case Weapon w:
+                    Set(w.Sound, s => w.Sound = s, Shoot);
+                    Set(w.EmptySound, s => w.EmptySound = s, Select);
+                    break;
                 case Checkpoint c:
                     Set(c.Sound, s => c.Sound = s, PowerUp);
                     break;
@@ -139,6 +145,13 @@ internal static class TemplateSounds
                     break;
                 case Slider sl:
                     Set(sl.Sound, s => sl.Sound = s, Select);
+                    break;
+                case Fighter f:
+                    Set(f.Sound, s => f.Sound = s, string.IsNullOrWhiteSpace(f.Projectile) ? Swing : Shoot);
+                    break;
+                case Commander c:
+                    Set(c.OrderSound, s => c.OrderSound = s, Select);
+                    Set(c.ReadySound, s => c.ReadySound = s, PowerUp);
                     break;
                 case Choice ch:
                     Set(ch.Sound, s => ch.Sound = s, Select);

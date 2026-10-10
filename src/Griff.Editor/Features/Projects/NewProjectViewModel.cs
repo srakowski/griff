@@ -74,6 +74,8 @@ public sealed class NewProjectViewModel : ObservableObject
         new(ProjectTemplate.Platformer, "Platformer", ProjectTemplates.Describe(ProjectTemplate.Platformer)),
         new(ProjectTemplate.TopDown, "Top-down", ProjectTemplates.Describe(ProjectTemplate.TopDown)),
         new(ProjectTemplate.Arcade, "Arcade", ProjectTemplates.Describe(ProjectTemplate.Arcade)),
+        new(ProjectTemplate.Strategy, "Strategy", ProjectTemplates.Describe(ProjectTemplate.Strategy)),
+        new(ProjectTemplate.Shooter, "Shooter", ProjectTemplates.Describe(ProjectTemplate.Shooter)),
         new(ProjectTemplate.Empty, "Empty", ProjectTemplates.Describe(ProjectTemplate.Empty)),
     ];
 

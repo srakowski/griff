@@ -201,6 +201,57 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (name, seconds) = Split2(a, ' ');
                 await GameKey(name, double.Parse(seconds, CultureInfo.InvariantCulture));
                 break;
+            case "gameclick":
+                await Input.Click(await GamePoint(Vector(a)));
+                LogGame(line);
+                break;
+            case "mouselook":
+                await MouseLook(a);
+                break;
+            case "gameorder":
+                await Input.Click(await GamePoint(Vector(a)), right: true);
+                LogGame(line);
+                break;
+            case "gamedrag":
+                var dragBox = Numbers(a, 4);
+                var dragFrom = await GamePoint(new System.Numerics.Vector2((float)dragBox[0], (float)dragBox[1]));
+                CheckOnField(new System.Numerics.Vector2((float)dragBox[2], (float)dragBox[3]));
+                var dragTo = GameScreenPoint(new System.Numerics.Vector2((float)dragBox[2], (float)dragBox[3]));
+                await Input.Drag(dragFrom, [dragTo], 700);
+                LogGame(line);
+                break;
+            case "minimap":
+                await Input.Click(MinimapPoint(Vector(a)));
+                LogGame(line);
+                await DemoUi.Settle(150);
+                break;
+            case "minimaporder":
+                await Input.Click(MinimapPoint(Vector(a)), right: true);
+                LogGame(line);
+                await DemoUi.Settle(150);
+                break;
+            case "waitfor":
+                var (waitName, waitSeconds) = Split2(a);
+                await WaitInGame($"{waitName} showing", Seconds(waitSeconds),
+                    game => game.Scene.Entities.Any(e => e.Name == waitName && Griff.Rendering.SceneRenderer.IsActive(e)));
+                break;
+            case "ready":
+                var (readyName, readySeconds) = Split2(a);
+                await WaitInGame($"{readyName} ready", Seconds(readySeconds), game => PlayersOwn(game, readyName).Any());
+                break;
+            case "afford":
+                // "afford: 180 Gold | 60": the player can pay for it.
+                var (cost, affordSeconds) = Split2(a);
+                await WaitInGame($"{cost} to spend", Seconds(affordSeconds),
+                    game => game.FactionOf(game.Find<Griff.Scenes.Commander>()?.Team)?.CanAfford(cost) == true);
+                break;
+            case "have":
+                // "have: 9 Soldier | 90": the player has at least that many.
+                var (haveWhat, haveSeconds) = Split2(a);
+                var (haveCount, haveName) = Split2(haveWhat, ' ');
+                var wanted = int.Parse(haveCount, CultureInfo.InvariantCulture);
+                await WaitInGame($"{wanted} {haveName}", Seconds(haveSeconds), game => PlayersOwn(game, haveName).Count() >= wanted);
+                break;
             case "type":
                 // Quotes keep spaces at the ends: type: " * 2"
                 var typed = a.Length >= 2 && a[0] == '"' && a[^1] == '"' ? a[1..^1] : a;
@@ -458,6 +509,168 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         }
     }
 
+    // "mouselook: 400 1.5" moves the mouse 400 pixels right over a second and a half; "mouselook: -300, 80 1" left and up.
+    // A first-person game turns with it once it holds the mouse, so the game is clicked first to give it the mouse.
+    private async Task MouseLook(string argument)
+    {
+        if (play.Game?.Input is not Griff.Runtime.InputState input)
+            throw new InvalidOperationException("The game isn't playing.");
+        var space = argument.LastIndexOf(' ');
+        if (space < 0)
+            throw new FormatException("mouselook: <x>[, <y>] <seconds>");
+        var amounts = argument[..space].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(n => double.Parse(n, CultureInfo.InvariantCulture)).ToList();
+        var (x, y) = (amounts[0], amounts.Count > 1 ? amounts[1] : 0);
+        var seconds = double.Parse(argument[(space + 1)..], CultureInfo.InvariantCulture);
+
+        if (!input.IsMouseLocked)
+        {
+            var rect = DemoUi.ScreenRect(play.Surface);
+            await Input.Click(new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
+            await Task.Delay(150);
+        }
+
+        Overlay.ShowKeys("Mouse");
+        if (input.IsMouseLocked)
+        {
+            await Input.Nudge(x, -y, seconds * 1000);
+            return;
+        }
+
+        // The game didn't take the mouse (say the window isn't active): turn the viewer as the mouse would have.
+        options.Log("FORCED mouselook: the game didn't take the mouse");
+        if (RunningGame.FirstPersonViewer is { } viewer && viewer.GetComponent<Griff.Scenes.FirstPersonMovement>() is { } movement)
+            viewer.Transform.Rotation -= new System.Numerics.Vector3(0, 0, (float)(x * movement.MouseSensitivity));
+        await options.Control.Delay(seconds * 1000);
+    }
+
+    // ----- Pointing at the running game -----
+
+    // What the game made of a click: the mouse as it saw it, what's selected, the player's resources.
+    private void LogGame(Line line)
+    {
+        if (play.Game is not { } game)
+            return;
+        var mouse = game.Input.MouseWorld;
+        var team = game.Find<Griff.Scenes.Commander>()?.Team;
+        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}");
+    }
+
+    private Griff.Runtime.Game RunningGame => play.Game ?? throw new InvalidOperationException("The game isn't playing.");
+
+    /// <summary>Where a world point is on screen in the Game view, as the game's camera sees it right now.</summary>
+    private Point GameScreenPoint(System.Numerics.Vector2 world)
+    {
+        var game = RunningGame;
+        var rect = DemoUi.ScreenRect(play.Surface);
+        var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene);
+        var size = camera?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Rendering.SceneRenderer.DefaultCameraSize;
+        var aspect = rect.Height > 0 ? (float)(rect.Width / rect.Height) : 1;
+        var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(world, 0, 1), Griff.Rendering.SceneRenderer.ViewProjection(camera, size, aspect));
+        return new Point(rect.X + (clip.X / clip.W + 1) / 2 * rect.Width, rect.Y + (1 - clip.Y / clip.W) / 2 * rect.Height);
+    }
+
+    /// <summary>
+    /// Glides the mouse to a point on the battlefield and gives back exactly where it is now: the camera can move on the way
+    /// (resting at the screen's edge pans a strategy game). Fails if it's off screen or under the HUD.
+    /// </summary>
+    private async Task<Point> GamePoint(System.Numerics.Vector2 world)
+    {
+        CheckOnField(world);
+        await Input.MoveTo(GameScreenPoint(world));
+        await Task.Delay(40);
+        CheckOnField(world);
+        return GameScreenPoint(world);
+    }
+
+    private void CheckOnField(System.Numerics.Vector2 world)
+    {
+        var rect = DemoUi.ScreenRect(play.Surface);
+        var at = GameScreenPoint(world);
+        if (!rect.Contains(at))
+            throw new InvalidOperationException($"{world.X}, {world.Y} is off screen; move the camera there first (minimap:).");
+        if (RunningGame.StrategyHud?.Covers(world) == true)
+            throw new InvalidOperationException($"{world.X}, {world.Y} is under the HUD; move the camera first (minimap:).");
+    }
+
+    /// <summary>Where the minimap shows a world point, on screen.</summary>
+    private Point MinimapPoint(System.Numerics.Vector2 world)
+    {
+        var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander) showing a minimap.");
+        return GameScreenPoint(hud.WorldToMinimap(world));
+    }
+
+    /// <summary>The screen box of a part of the strategy HUD: minimap, card, selection or resources.</summary>
+    private Rect HudRect(string part)
+    {
+        var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander).");
+        var area = part.ToLowerInvariant() switch
+        {
+            "minimap" => hud.Minimap,
+            "card" => hud.Card,
+            "selection" => hud.Info,
+            "resources" => hud.TopBar,
+            _ => throw new FormatException($"Unknown HUD part \"{part}\" (minimap, card, selection, resources)."),
+        };
+        return new Rect(GameScreenPoint(new System.Numerics.Vector2(area.X, area.Top)), GameScreenPoint(new System.Numerics.Vector2(area.Right, area.Y)));
+    }
+
+    // Waits (real time, as the game plays) until the running game is as asked, noting how the sides stand every few
+    // seconds so a slow or lost battle can be seen in the log.
+    private async Task WaitInGame(string what, double seconds, Func<Griff.Runtime.Game, bool> done)
+    {
+        var clock = Stopwatch.StartNew();
+        var noted = 0.0;
+        while (clock.Elapsed.TotalSeconds < seconds)
+        {
+            await options.Control.Gate();
+            if (play.Game is { } game && done(game))
+            {
+                options.Log($"{what} after {clock.Elapsed.TotalSeconds:0.0}s");
+                return;
+            }
+
+            if (clock.Elapsed.TotalSeconds - noted >= 10 && play.Game is { } running)
+            {
+                noted = clock.Elapsed.TotalSeconds;
+                options.Log($"  waiting for {what}: {Standings(running)}");
+            }
+
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException($"No {what} within {seconds:0} seconds. {(play.Game is { } state ? Standings(state) : "")}");
+    }
+
+    // Each team's fighters, workers and buildings.
+    private static string Standings(Griff.Runtime.Game game) =>
+        string.Join("; ", game.FindAll<Griff.Scenes.Faction>().Select(f =>
+        {
+            var units = game.FindAll<Griff.Scenes.Unit>().Where(u => Mine(u.Team, f.Team)).ToList();
+            var buildings = game.FindAll<Griff.Scenes.Building>().Count(b => Mine(b.Team, f.Team));
+            return $"{f.Team}: {units.Count(u => u.Entity!.GetComponent<Griff.Scenes.Fighter>() is not null)} fighters, " +
+                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Scenes.Worker>() is not null)} workers, {buildings} buildings, {f.Resources}";
+        }));
+
+    private static bool Mine(string? team, string? player) => string.Equals(team?.Trim(), player?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // The player's own: whoever the Commander commands.
+    private static IEnumerable<Griff.Scenes.Entity> PlayersOwn(Griff.Runtime.Game game, string name)
+    {
+        var team = game.Find<Griff.Scenes.Commander>()?.Team;
+        return game.Scene.Entities.Where(e => e.Name == name && Griff.Rendering.SceneRenderer.IsActive(e) &&
+            (e.GetComponent<Griff.Scenes.Unit>() is { } unit ? Mine(unit.Team, team) :
+             e.GetComponent<Griff.Scenes.Building>() is { IsBuilt: true } building && Mine(building.Team, team)));
+    }
+
+    private static double Seconds(string text) => text.Length > 0 ? double.Parse(text, CultureInfo.InvariantCulture) : 60;
+
+    private static System.Numerics.Vector2 Vector(string text)
+    {
+        var v = Numbers(text, 2);
+        return new System.Numerics.Vector2((float)v[0], (float)v[1]);
+    }
+
     private async Task<bool> Until(Func<bool> condition, int ms = 1500)
     {
         var clock = Stopwatch.StartNew();
@@ -541,7 +754,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:, gameworld:, hud:)."),
         };
     }
 
@@ -551,6 +764,15 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         if (target.StartsWith("code:", StringComparison.OrdinalIgnoreCase))
             return ui.CodeRect(target[5..]);
         var (kind, name) = Split2(target, ':');
+        if (kind.Equals("hud", StringComparison.OrdinalIgnoreCase))
+            return HudRect(name);
+        if (kind.Equals("gameworld", StringComparison.OrdinalIgnoreCase))
+        {
+            var box = Numbers(name, 4);
+            return new Rect(GameScreenPoint(new System.Numerics.Vector2((float)box[0], (float)box[1])),
+                GameScreenPoint(new System.Numerics.Vector2((float)box[2], (float)box[3])));
+        }
+
         if (!kind.Equals("world", StringComparison.OrdinalIgnoreCase))
             return DemoUi.ScreenRect(Target(target));
         var v = Numbers(name, 4);

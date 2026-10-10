@@ -29,6 +29,8 @@ public sealed class GameSurface : HwndHost
     private const int WmMButtonUp = 0x0208;
     private const int WmMouseLeave = 0x02A3;
     private const int WmMouseWheel = 0x020A;
+    private const int WmNcHitTest = 0x0084;
+    private const int HtClient = 1;
     private const uint TmeLeave = 0x00000002;
 
     private IntPtr _hwnd;
@@ -152,6 +154,10 @@ public sealed class GameSurface : HwndHost
     {
         switch (msg)
         {
+            case WmNcHitTest:
+                // A "static" window lets the mouse fall through to the window behind it; the game wants it.
+                handled = true;
+                return new IntPtr(HtClient);
             case WmMouseMove:
                 // Ask Windows to tell us when the cursor leaves, once per visit.
                 if (!_trackingLeave)

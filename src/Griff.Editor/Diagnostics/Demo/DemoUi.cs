@@ -293,11 +293,37 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// <summary>Picks an entity in the Hierarchy by clicking its row.</summary>
     public async Task Select(string name, int nth = 0)
     {
+        await ExpandTo(name);
         var item = await WaitFor(() => Descendants<TreeViewItem>(PanelContent("Hierarchy"))
             .Where(i => i.DataContext is EntityNode n && n.Name == name && i.IsVisible).Skip(nth).FirstOrDefault(), $"hierarchy item {name}");
         // Click the label, not the whole row (which includes children).
         var label = Descendants<TextBlock>(item).First(t => t.Name == "Label");
         await Click(label);
+    }
+
+    // Opens the groups an entity is tucked inside in the Hierarchy (say, a door inside "Doors"), clicking their arrows
+    // the way a person would, so it can be picked.
+    private async Task ExpandTo(string name)
+    {
+        for (var depth = 0; depth < 8; depth++)
+        {
+            var rows = Descendants<TreeViewItem>(PanelContent("Hierarchy")).Where(i => i.IsVisible).ToList();
+            if (rows.Any(i => i.DataContext is EntityNode n && n.Name == name))
+                return;
+            var closed = rows.FirstOrDefault(i => i.DataContext is EntityNode { IsExpanded: false } n &&
+                                                  n.Entity.SelfAndDescendants().Skip(1).Any(e => e.Name == name));
+            if (closed is null)
+                return;
+            if (Descendants<System.Windows.Controls.Primitives.ToggleButton>(closed).FirstOrDefault(t => t.IsVisible) is { } arrow)
+                await Click(arrow);
+            if (closed.DataContext is EntityNode { IsExpanded: false } still)
+            {
+                still.IsExpanded = true;
+                Log?.Invoke($"FORCED expand {still.Name}");
+            }
+
+            await Settle(150);
+        }
     }
 
     /// <summary>Where the demo notes anything that needed a second try.</summary>

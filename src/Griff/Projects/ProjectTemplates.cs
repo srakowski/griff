@@ -10,16 +10,20 @@ public enum ProjectTemplate
     Platformer,
     TopDown,
     Arcade,
+    Strategy,
+    Shooter,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
-public static class ProjectTemplates
+public static partial class ProjectTemplates
 {
     public static string Describe(ProjectTemplate template) => template switch
     {
         ProjectTemplate.Platformer => "Run, jump and dash across platforms collecting coins, ride a lift, bounce off a spring, fight a slime with your sword, and come back at the last checkpoint. Arrow keys or WASD, Space to jump, Shift to dash, X to swing, E to read signs.",
         ProjectTemplate.TopDown => "Explore a dim, torch-lit dungeon in eight directions collecting gems, with a bat that chases you on sight, a sword to fight it with, portals, a crate to push and someone to talk to. Arrow keys or WASD, Shift to dash, X to swing, E to talk.",
         ProjectTemplate.Arcade => "Blast waves of enemies in an arena, with three hearts, a menu, options, game over and high score. WASD to fly, mouse to aim, click to fire.",
+        ProjectTemplate.Strategy => "Command an army in real time against the computer: gather gold and wood with workers, put up farms, barracks and towers, train soldiers and archers, and destroy the red base. Click or drag to select, right-click to send, hotkeys on the command card, arrow keys or the minimap to look around.",
+        ProjectTemplate.Shooter => "Fight your way out of a dark base in first person: grunts that charge, robots that throw fireballs, sliding doors, a blue key for the way out and a shotgun in the armory. The level is a tilemap you paint top-down. WASD to move, the mouse or arrows to turn, click to fire, 1 and 2 to change weapon.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -28,6 +32,9 @@ public static class ProjectTemplates
 
     /// <summary>Sound and music files (relative to Assets) for a template, as WAV bytes.</summary>
     internal static IReadOnlyDictionary<string, byte[]> Sounds(ProjectTemplate template) => TemplateSounds.Files(template);
+
+    /// <summary>Image files (relative to Assets) for a template, as PNG bytes.</summary>
+    internal static IReadOnlyDictionary<string, byte[]> Images(ProjectTemplate template) => TemplateArt.Files(template);
 
     // Templates that come with sounds have them hooked up to everything that makes a noise, and music playing.
     private static Scene WithSounds(ProjectTemplate template, Scene scene)
@@ -45,6 +52,8 @@ public static class ProjectTemplates
         ProjectTemplate.Platformer => Platformer(),
         ProjectTemplate.TopDown => TopDown(),
         ProjectTemplate.Arcade => ArcadeMenu(),
+        ProjectTemplate.Strategy => Strategy(),
+        ProjectTemplate.Shooter => Shooter(),
         _ => Empty(),
     };
 
@@ -94,6 +103,8 @@ public static class ProjectTemplates
             ["Prefabs/Bullet.prefab"] = ArcadeBullet(),
             ["Prefabs/Enemy.prefab"] = ArcadeEnemy(),
         },
+        ProjectTemplate.Strategy => StrategyPrefabs(),
+        ProjectTemplate.Shooter => ShooterPrefabs(),
         _ => new Dictionary<string, Entity>(),
     };
 

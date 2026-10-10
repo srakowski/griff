@@ -140,6 +140,7 @@ public sealed partial class Game
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
         RunEnemies();
         RunMovement();
+        RunFirstPerson();
 
         // While a panel pauses the game, only the scripts on open panels run.
         foreach (var behavior in behaviors)
@@ -148,6 +149,7 @@ public sealed partial class Game
                 behavior.RunUpdate();
         }
 
+        RunStrategy();
         RunAttacks();
         RunTimers();
         RunCoroutines();
@@ -647,6 +649,8 @@ public sealed partial class Game
         ForgetLevelState();
         ForgetPuzzleState();
         ForgetPanelState();
+        Rts = new StrategyState();
+        Fps = new FirstPersonState();
         StopSoundSources();
         _focus = null;
         SyncPanels();
@@ -756,8 +760,11 @@ public sealed partial class Game
         {
             if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
                 continue;
-            if (BodyOwner(target) is { } collector && pickup.AcceptsLayer(LayerOf(target)) && !source.IsSelfOrDescendantOf(collector))
-                Collect(pickup, collector);
+            if (BodyOwner(target) is not { } collector || !pickup.AcceptsLayer(LayerOf(target)) || source.IsSelfOrDescendantOf(collector))
+                continue;
+            if (pickup.Heal > 0 && string.IsNullOrWhiteSpace(pickup.Item) && Health.Of(collector) is { } health && health.Current >= health.Max)
+                continue;
+            Collect(pickup, collector);
         }
     }
 
@@ -783,6 +790,8 @@ public sealed partial class Game
         }
 
         GiveItem(pickup, collector);
+        if (pickup.Heal > 0)
+            Health.Of(collector)?.Heal(pickup.Heal);
         Notify(collector, behavior => behavior.RunPickup(entity));
         pickup.RaiseCollected(collector);
         if (!string.IsNullOrWhiteSpace(pickup.Message))
@@ -851,6 +860,12 @@ public sealed partial class Game
         {
             if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<DamageOnTouch>() is not { } touch)
                 continue;
+            if (touch.DestroyOnWall && IsWall(target) && !(Health.Of(target) is { } struck && struck != Health.Of(source) && touch.Hurts(LayerOf(target))))
+            {
+                Destroy(source);
+                continue;
+            }
+
             if (Health.Of(target) is not { } health || health == Health.Of(source) || !touch.Hurts(LayerOf(target)))
                 continue;
 
@@ -879,6 +894,10 @@ public sealed partial class Game
             return true;
         }
     }
+
+    // Something solid to run into: a solid tilemap, or a collider that isn't a trigger.
+    private static bool IsWall(Entity entity) =>
+        entity.GetComponent<Tilemap>() is { Solid: true } || entity.GetComponents<Collider>().Any(c => !c.IsTrigger);
 
     private static string? LayerOf(Entity entity) =>
         entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;

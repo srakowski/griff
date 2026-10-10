@@ -52,6 +52,22 @@ internal static partial class SnapshotRunner
                 return;
             }
 
+            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "shooter")
+            {
+                await workspace.SaveSceneAsync();
+                await ShooterSnapshots(services, main, workspace, projectDir, outputDir);
+                TryDelete(projectDir);
+                return;
+            }
+
+            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "strategy")
+            {
+                await workspace.SaveSceneAsync();
+                await StrategySnapshots(services, workspace, projectDir, outputDir);
+                TryDelete(projectDir);
+                return;
+            }
+
 
             // Scripting: add a script and attach it to the player.
             var checks = new List<string>();

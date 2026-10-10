@@ -145,6 +145,8 @@ public sealed partial class Game
     // view. With a range, it fades out to nothing that far away; without, it's full on screen and fades over a screen's width.
     private (float Loudness, float Pan) Hearing(Vector2 position, float range)
     {
+        if (FirstPersonHearing(position, range) is { } heard)
+            return heard;
         var camera = SceneRenderer.FindCamera(Scene);
         var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
         var half = new Vector2(size * (ViewAspect > 0 ? ViewAspect : 1), size);

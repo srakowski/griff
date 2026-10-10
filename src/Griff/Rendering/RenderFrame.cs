@@ -96,7 +96,7 @@ public sealed class RenderFrame
 }
 
 /// <summary>Builds <see cref="RenderFrame"/>s from scenes. Shared by the editor and the game so they always agree.</summary>
-public static class SceneRenderer
+public static partial class SceneRenderer
 {
     public const float DefaultCameraSize = 5f;
 
@@ -122,11 +122,31 @@ public static class SceneRenderer
         var size = component?.Size ?? DefaultCameraSize;
         var viewProjection = ViewProjection(camera, size, aspect);
         var view = new View(ViewCenter(camera), new Vector2(size * aspect, size));
-        var sprites = DrawOrder(scene).SelectMany(e => Draws(e, view)).ToList();
+
+        // In first person the world is seen through the viewer's eyes, lit by itself, and the camera's view (unturned and
+        // unshaken) only places the HUD.
+        var firstPerson = game?.FirstPersonView is { } fp && game.ViewerOf(fp) is { } viewer ? (View: fp, Viewer: viewer) : default;
+        List<SpriteDraw> sprites;
+        if (firstPerson.View is not null)
+        {
+            var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
+            view = new View(center, view.Half);
+            viewProjection = Matrix4x4.CreateTranslation(-center.X, -center.Y, 0) * Matrix4x4.CreateOrthographic(size * 2 * aspect, size * 2, -1000f, 1000f);
+            sprites = FirstPersonDraws(game!, firstPerson.View, firstPerson.Viewer, camera, view, aspect);
+            sprites.AddRange(DrawOrder(scene).Where(e => IsOnScreen(e, camera)).SelectMany(e => Draws(e, view)));
+        }
+        else
+        {
+            sprites = DrawOrder(scene).SelectMany(e => Draws(e, view)).ToList();
+        }
+
+        var strategy = game is not null && game.Rts.IsActive;
+        if (strategy)
+            sprites = WithStrategy(game!, sprites, camera, view.Center, view.Half, size);
 
         // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched.
         var ambient = component?.CurrentAmbient ?? Color.White;
-        var dark = component?.IsDark == true;
+        var dark = component?.IsDark == true && firstPerson.View is null;
         var litCount = sprites.Count;
         if (dark)
         {

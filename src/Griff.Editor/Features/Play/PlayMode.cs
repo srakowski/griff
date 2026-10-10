@@ -193,6 +193,7 @@ public sealed class PlayMode : ObservableObject
             _runner.Game.SceneLoader = name => LoadScene(project, name);
             _runner.Game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
             _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
+            (_runner.Game.Input as InputState)?.UseControls(project.Controls);
         }
         _runner.Game.SceneName = _sceneName;
         _runner.Game.SceneChanged += OnGameSceneChanged;

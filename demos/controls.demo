@@ -1,0 +1,67 @@
+title: Controls
+intro: Every input action in one window: press a key to bind it, see clashes, and try it in the running game.
+project: Platformer | Controls Tour
+
+chapter: One place for the controls | Game > Controls...
+say: Until now, changing a game's controls meant writing code. Now there's a window for it.
+menu: Game > Controls...
+controls
+explain: controls:actions | Actions | On the left is every action the game has, with the keys and buttons that do it.
+explain: controls:builtin | Built in | These six come with Griff, because its components use them.
+explain: controls:usedby | Used by | Each one says what uses it. Platformer Movement jumps with Jump, so changing Jump changes how the player jumps.
+explain: controls:keys | Keyboard and mouse | Its keys and mouse buttons are here.
+explain: controls:pads | Gamepad | And its controller buttons are here.
+explain: controls:move | Moving | Moving around always uses WASD, the arrow keys, the D-pad and the left stick.
+
+chapter: Bind by pressing | Press a Key, then the key
+action: Jump
+say: Lots of players like to jump with W. To add it, click Press a Key, then press W.
+bind: W
+explain: controls:chip:W | Added | W now jumps, alongside Space.
+explain: controls:action:Jump | Changed | The list marks Jump as changed, and Reset to Default puts it back.
+bind: X
+explain: controls:chip:X | A clash | Here's X too. The window warns that X already does Attack, so pressing it would jump and swing at once.
+click: controls:remove:X
+say: The cross takes it off again.
+bindpad: LB
+explain: controls:chip:LB | Gamepad | Controller buttons are picked from a list, so no controller is needed. Now the left bumper jumps too.
+expectcontrol: Jump = W
+explain: controls:status | Saved as you go | There's no save button. Every change goes into the project file straight away, and exported games use it.
+click: controls:close
+
+chapter: Try it in the running game | No restart needed
+play
+wait: 1
+tap: W
+wait: 1
+say: W jumps.
+menu: Game > Controls...
+controls
+action: Jump
+say: The window works while the game runs. Let's take Space off Jump.
+click: controls:remove:Space
+explain: controls:status | Live | The running game picks the change up at once.
+click: controls:close
+tap: Space
+wait: 1
+say: Space does nothing now.
+tap: W
+wait: 1
+say: And W still jumps.
+stop
+
+chapter: Your own actions | Add Action
+menu: Game > Controls...
+controls
+click: controls:addaction
+say: A game can have actions of its own. Let's add a shield.
+actionname: Shield
+bind: Q
+bindpad: RB
+expectcontrol: Shield = Q
+explain: controls:usedby | Prompts too | Button prompts and Rebind buttons on a controls screen work with it, just like Griff's own actions.
+explain: controls:code | In scripts | And this is the line a script uses to read it. You can copy it straight from here.
+click: controls:close
+code: project.griff | project.griff
+say: It's all kept in the project file, in plain words that read well in git. Only what you changed is written down.
+hidecode

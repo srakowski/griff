@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -37,6 +38,34 @@ public sealed class Project
     public async Task SetStartSceneAsync(string scenePath, CancellationToken cancellationToken = default)
     {
         Manifest = Manifest with { StartScene = GetRelativePath(scenePath) };
+        await SaveManifestAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The game's input actions that differ from the built-in ones (<see cref="InputState.BuiltInActions"/>), as set in
+    /// the Controls window. Names that don't read as a key or button are skipped rather than losing the rest.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> Controls =>
+        (Manifest.Controls ?? []).Where(p => !string.IsNullOrWhiteSpace(p.Key)).ToDictionary(
+            p => p.Key.Trim(),
+            p => (IReadOnlyList<InputBinding>)[.. (p.Value ?? []).Select(n => InputBinding.TryParse(n, out var b) ? b : (InputBinding?)null).OfType<InputBinding>()],
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Sets the game's input actions and saves the manifest. Built-in actions left as they were aren't written, so the
+    /// file only lists what this game changed or added.
+    /// </summary>
+    public async Task SetControlsAsync(IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> controls, CancellationToken cancellationToken = default)
+    {
+        var changed = controls
+            .Where(p => !(InputState.BuiltInActions.TryGetValue(p.Key, out var builtIn) && builtIn.SequenceEqual(p.Value)))
+            .ToDictionary(p => p.Key.Trim(), p => p.Value.Select(b => b.ToString()).ToArray());
+        Manifest = Manifest with { Controls = changed.Count > 0 ? changed : null };
+        await SaveManifestAsync(cancellationToken);
+    }
+
+    private async Task SaveManifestAsync(CancellationToken cancellationToken)
+    {
         await using var stream = File.Create(ManifestPath);
         await JsonSerializer.SerializeAsync(stream, Manifest, JsonOptions, cancellationToken);
     }

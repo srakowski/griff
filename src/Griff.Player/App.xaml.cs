@@ -81,6 +81,7 @@ public partial class App : Application
         _runner.Game.SceneLoader = game.LoadScene;
         _runner.Game.PrefabLoader = game.LoadPrefab;
         _runner.Game.SceneName = game.SceneName;
+        (_runner.Game.Input as InputState)?.UseControls(game.Project.Controls);
         _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
         _runner.Game.FullscreenChanged += (_, _) => SetFullscreen(window, _runner.Game.Fullscreen);
         if (smokeOutput is null)

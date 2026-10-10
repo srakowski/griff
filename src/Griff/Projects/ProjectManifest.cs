@@ -1,8 +1,19 @@
+using System.Text.Json.Serialization;
+
 namespace Griff.Projects;
 
 /// <summary>Contents of a project's <c>project.griff</c> file.</summary>
 /// <param name="StartScene">Scene opened first and run when the game starts, relative to the project folder.</param>
-public sealed record ProjectManifest(string Name, int FormatVersion, DateTimeOffset CreatedAt, string? StartScene = null)
+/// <param name="Controls">
+/// The game's own input actions, set in the editor's Controls window: each action's keys and buttons by name, e.g.
+/// <c>"Jump": ["Space", "W", "Gamepad A"]</c>. Only actions that differ from Griff's built-in ones are listed.
+/// </param>
+public sealed record ProjectManifest(
+    string Name,
+    int FormatVersion,
+    DateTimeOffset CreatedAt,
+    string? StartScene = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string[]>? Controls = null)
 {
     public const int CurrentFormatVersion = 1;
 }

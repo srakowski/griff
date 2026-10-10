@@ -68,6 +68,12 @@ build: standalone
 | `name: <text>` | Type the Sound Maker's file name (Save puts it in `Sounds/` or `Music/`). |
 | `pick: <Component>.<Field> = <sound>` | Choose a sound from a sound field's list of the project's sounds, e.g. `pick: Health.HurtSound = Sounds/hit.wav`. |
 | `expectfile: <path>` | Fail unless the file (relative to Assets) exists: checks a Save really saved. |
+| `controls` | Wait for the Controls window to open (after `menu: Game > Controls...`). |
+| `action: <name>` | Pick an action in the Controls window, e.g. `action: Jump`. |
+| `bind: <key>` | Click Press a Key and press it, e.g. `bind: W`, `bind: LeftShift`, `bind: Mouse Right`. |
+| `bindpad: <button>` | Add a gamepad button from Add Button's list, e.g. `bindpad: LB`, `bindpad: A`. |
+| `actionname: <text>` | Type a new name for the selected action (the game's own actions only). |
+| `expectcontrol: <action> = <binding>` | Fail unless project.griff gives the action that binding, e.g. `expectcontrol: Jump = W`. |
 
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
@@ -82,6 +88,12 @@ In the Sound Maker: `maker` (the window), `maker:preset:Coin`, `maker:wave:Squar
 `maker:play`, `maker:stop`, `maker:save`, `maker:close`, `maker:name`, `maker:waveform`, `maker:presets`,
 `maker:waves`, `maker:settings`, `maker:moods`, `maker:music`, `maker:parts` and `maker:tempo`. A sound field's
 buttons in the Inspector: `sound:Health.HurtSound:play`, `sound:...:choose` and `sound:...:make`.
+
+In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),
+`controls:addaction`, `controls:move`, `controls:name`, `controls:builtin`, `controls:usedby`, `controls:keys`,
+`controls:pads`, `controls:chip:W` (a key or button on the selected action), `controls:remove:W` (its ×),
+`controls:listenkey`, `controls:addpad`, `controls:listenpad`, `controls:playerchoice`, `controls:code`,
+`controls:reset`, `controls:delete`, `controls:status` and `controls:close`.
 
 In the script editor (the script tab showing): `edit:Ship` (a component's Edit Script button in the Inspector),
 `tab:Ship.cs` (a document tab, by its title), `code:editor`, `code:panel` (the component panel), `code:property:Speed` (a

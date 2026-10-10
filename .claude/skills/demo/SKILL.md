@@ -46,8 +46,8 @@ closed. Building is fine.
    output shows where; the full log is `%TEMP%\griff-demos\demo.log`. Fix the demo, or the bug the demo found, and
    check again. Lines with `FORCED` in the log mean a click missed and a fallback did it instead: fine for a check,
    but look for the cause if they pile up.
-2. If the change touched features other demos show, run them all: `tools\demo.ps1 -All -Check`. Every demo must
-   pass before the change is committed.
+2. Only check and play the demo(s) for what's new or changed. Don't run `tools\demo.ps1 -All -Check` as part of
+   /demo: the user only wants to see the new features. Run it only if the user asks (e.g. before a commit).
 3. Play it for the user: `tools\demo.ps1 demos\<topic>.demo -NoBuild`. It returns at once; watch progress with a
    Monitor on `%TEMP%\griff-demos\demo.log` (`tail -F`, grep for `chapter|failed|finished|exited|FORCED`).
 4. Tell the user it's playing and how to drive it: move the mouse to pause and take over; the bar at the top, or

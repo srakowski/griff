@@ -242,16 +242,26 @@ public sealed class InputState : IInput
     private readonly HashSet<GamepadButton> _padDown = [];
     private readonly HashSet<GamepadButton> _padPressed = [];
     private readonly HashSet<GamepadButton> _padReleased = [];
-    private readonly Dictionary<string, InputBinding[]> _actions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Jump"] = [Key.Space, GamepadButton.A],
-        ["Fire"] = [MouseButton.Left, Key.J, GamepadButton.X, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
-        ["Dash"] = [Key.LeftShift, Key.K, GamepadButton.B],
-        ["Attack"] = [Key.X, Key.L, MouseButton.Right, GamepadButton.X],
-        ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
-        ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
-    };
+    /// <summary>
+    /// The actions every game starts with, and their keys and buttons. Griff's own components use them (Platformer
+    /// Movement jumps with Jump, doors and levers wait for Interact), so a game can change their bindings but not
+    /// remove them.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> BuiltInActions { get; } =
+        new Dictionary<string, IReadOnlyList<InputBinding>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Jump"] = [Key.Space, GamepadButton.A],
+            ["Fire"] = [MouseButton.Left, Key.J, GamepadButton.X, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
+            ["Dash"] = [Key.LeftShift, Key.K, GamepadButton.B],
+            ["Attack"] = [Key.X, Key.L, MouseButton.Right, GamepadButton.X],
+            ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
+            ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
+        };
+
+    private readonly Dictionary<string, InputBinding[]> _actions =
+        BuiltInActions.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, InputBinding[]> _rebound = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _projectActions = new(StringComparer.OrdinalIgnoreCase);
 
     // Buffered presses: when each binding was last pressed, and the latest press each action has already reported.
     private readonly Dictionary<InputBinding, double> _pressedAt = [];
@@ -377,6 +387,32 @@ public sealed class InputState : IInput
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         _actions[action.Trim()] = [.. bindings];
+    }
+
+    /// <summary>
+    /// Uses the project's controls (from the editor's Controls window) as the game's own: each action in
+    /// <paramref name="controls"/> gets those bindings, like <see cref="Bind"/>. Calling it again with a changed set
+    /// (the controls edited while the game runs) puts back built-in actions it no longer changes and drops actions it
+    /// no longer has, leaving anything scripts bound alone.
+    /// </summary>
+    public void UseControls(IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> controls)
+    {
+        foreach (var gone in _projectActions.Where(a => !controls.ContainsKey(a)).ToList())
+        {
+            if (BuiltInActions.TryGetValue(gone, out var builtIn))
+                _actions[gone] = [.. builtIn];
+            else
+                _actions.Remove(gone);
+        }
+
+        _projectActions.Clear();
+        foreach (var (action, bindings) in controls)
+        {
+            if (string.IsNullOrWhiteSpace(action))
+                continue;
+            _actions[action.Trim()] = [.. bindings];
+            _projectActions.Add(action.Trim());
+        }
     }
 
     public void Rebind(string action, params InputBinding[] bindings)

@@ -292,6 +292,27 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => File.Exists(Path.Combine(workspace.Project!.AssetsPath, a)), 3000))
                     throw new InvalidOperationException($"{a} wasn't saved.");
                 break;
+            case "controls":
+                await ui.WaitForControls();
+                break;
+            case "action":
+                await ui.PickAction(a);
+                break;
+            case "bind":
+                await ui.BindKey(a);
+                break;
+            case "bindpad":
+                await ui.BindPad(a);
+                break;
+            case "actionname":
+                await ui.EditBox((TextBox)DemoUi.ControlsPart("name"), a);
+                break;
+            case "expectcontrol":
+                // Checks the project file really has the binding: "Jump = W" or "Shield = Gamepad LeftShoulder".
+                var (controlAction, controlBinding) = Split2(a, '=');
+                if (!await Until(() => workspace.Project!.Controls.TryGetValue(controlAction, out var saved) && saved.Any(b => b.ToString().Equals(controlBinding, StringComparison.OrdinalIgnoreCase)), 3000))
+                    throw new InvalidOperationException($"project.griff doesn't give {controlAction} {controlBinding}.");
+                break;
             default:
                 throw new FormatException($"Unknown command \"{line.Command}\".");
         }
@@ -514,12 +535,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),
             "maker" => DemoUi.MakerPart(name),
+            "controls" => DemoUi.ControlsPart(name),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, sound:, world:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:)."),
         };
     }
 

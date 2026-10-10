@@ -51,6 +51,7 @@ public static class Icons
     public const string Palette = "\uE790";
     public const string Code = "\uE943";
     public const string Console = "\uE756";
+    public const string Gamepad = "\uE7FC";
 
     // Status
     public const string Error = "\uEA39";

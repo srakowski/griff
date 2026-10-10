@@ -38,7 +38,8 @@ public static class ScriptCompiler
 {
     public const string ImplicitUsingsPath = "<griff implicit usings>";
 
-    private const string ImplicitUsings = """
+    /// <summary>The usings every script gets without writing them.</summary>
+    public const string ImplicitUsings = """
         global using System;
         global using System.Collections;
         global using System.Collections.Generic;
@@ -51,7 +52,17 @@ public static class ScriptCompiler
 
     private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
 
-    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
+    public static CSharpParseOptions ParseOptions { get; } = new(LanguageVersion.Latest);
+
+    /// <summary>What scripts compile against: the runtime's System assemblies and Griff.</summary>
+    public static ImmutableArray<MetadataReference> MetadataReferences => References.Value;
+
+    public static CSharpCompilationOptions CompilationOptions { get; } = new(
+        OutputKind.DynamicallyLinkedLibrary,
+        nullableContextOptions: NullableContextOptions.Enable,
+        optimizationLevel: OptimizationLevel.Debug,
+        // Documentation is optional in scripts; don't nag about public members without it.
+        specificDiagnosticOptions: [new("CS1591", ReportDiagnostic.Suppress)]);
 
     /// <summary>Reads and compiles every *.cs file under <paramref name="folder"/>.</summary>
     public static CompileResult CompileFolder(string folder) => Compile(ReadFolder(folder));
@@ -76,12 +87,7 @@ public static class ScriptCompiler
             $"GriffScripts_{Guid.NewGuid():N}",
             trees,
             References.Value,
-            new CSharpCompilationOptions(
-                OutputKind.DynamicallyLinkedLibrary,
-                nullableContextOptions: NullableContextOptions.Enable,
-                optimizationLevel: OptimizationLevel.Debug,
-                // Documentation is optional in scripts; don't nag about public members without it.
-                specificDiagnosticOptions: [new("CS1591", ReportDiagnostic.Suppress)]));
+            CompilationOptions);
 
         using var assembly = new MemoryStream();
         using var symbols = new MemoryStream();
@@ -115,7 +121,8 @@ public static class ScriptCompiler
             diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
-    // The editor's own runtime assemblies (the "trusted platform assemblies") plus Griff itself.
+    // The editor's own runtime assemblies (the "trusted platform assemblies") plus Griff itself. Each carries its XML
+    // documentation when there is some, for the script editor's tooltips; compiling ignores it.
     private static ImmutableArray<MetadataReference> LoadReferences()
     {
         var paths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "")
@@ -125,7 +132,7 @@ public static class ScriptCompiler
             .Append(typeof(Component).Assembly.Location)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-        return [.. paths.Select(p => MetadataReference.CreateFromFile(p))];
+        return [.. paths.Select(p => MetadataReference.CreateFromFile(p, documentation: ScriptDocumentation.For(p)))];
     }
 
     // Editors may hold the file open while saving; read without locking it.

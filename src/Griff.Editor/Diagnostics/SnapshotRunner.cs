@@ -20,7 +20,7 @@ namespace Griff.Editor.Diagnostics;
 /// folder, renders its windows to PNGs off-screen (nothing is shown or focused), and exits.
 /// Pair with GRIFF_SETTINGS_PATH so the run doesn't touch real settings.
 /// </summary>
-internal static class SnapshotRunner
+internal static partial class SnapshotRunner
 {
     public static bool TryRun(IServiceProvider services, Window main)
     {
@@ -44,6 +44,14 @@ internal static class SnapshotRunner
             await workspace.CreateProjectAsync(projectDir, "Snapshot Game");
             BuildSampleScene(workspace, services.GetRequiredService<ISelection>());
             Render(main, Path.Combine(outputDir, "editor.png"));
+            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "scripts")
+            {
+                await ScriptEditorSnapshots(services, main, workspace, outputDir);
+                await workspace.SaveSceneAsync();
+                TryDelete(projectDir);
+                return;
+            }
+
 
             // Scripting: add a script and attach it to the player.
             var checks = new List<string>();
@@ -415,6 +423,7 @@ internal static class SnapshotRunner
             catalogModel.Search = "nothing like this";
             Render(catalog, Path.Combine(outputDir, "catalog-empty.png"));
             catalog.Close();
+            await ScriptEditorSnapshots(services, main, workspace, outputDir);
 
             // Save so shutdown doesn't stop at the unsaved-changes prompt, then remove the sample project.
             await workspace.SaveSceneAsync();

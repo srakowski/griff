@@ -18,17 +18,19 @@ namespace Griff.Editor.Features.Inspector;
 /// Shows and edits the selected entity. Component sections are generated from component
 /// descriptors, so any component (including user scripts) gets an inspector for free.
 /// </summary>
-public sealed partial class InspectorPanel : ToolPanel
+public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 {
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
+    private readonly Scripts.ScriptEditors _scripts;
     private SceneDocument? _document;
     private EntityHeader? _header;
 
-    public InspectorPanel(IWorkspace workspace, ISelection selection)
+    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts)
     {
         _workspace = workspace;
         _selection = selection;
+        _scripts = scripts;
         selection.PropertyChanged += (_, _) => Rebuild();
         workspace.PropertyChanged += (_, e) =>
         {
@@ -82,12 +84,15 @@ public sealed partial class InspectorPanel : ToolPanel
             _document.Execute(Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, descriptor, entity));
     }
 
+    /// <summary>Opens the script a component comes from in the script editor, at its class.</summary>
+    public void EditScript(Type type) => _ = _scripts.OpenComponentAsync(type);
+
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     public void Seal() => _document?.History.Seal();
 
     internal void Execute(IEdit edit) => _document?.Execute(edit);
 
-    internal void SetValue(Component component, PropertyDescriptor property, object? value)
+    public void SetValue(Component component, PropertyDescriptor property, object? value)
     {
         if (!Equals(property.GetValue(component), value))
             Execute(new SetPropertyEdit(component, property, value));
@@ -197,6 +202,7 @@ public sealed class ComponentSection : ObservableObject
         _owner = owner;
         Component = component;
         RemoveCommand = new RelayCommand(Remove, () => CanRemove);
+        EditScriptCommand = new RelayCommand(() => owner.EditScript(component.GetType()));
 
         if (component is MissingComponent missing)
         {
@@ -218,6 +224,11 @@ public sealed class ComponentSection : ObservableObject
     public bool IsMissing { get; }
 
     public bool CanRemove => Component is not Transform;
+
+    /// <summary>True for components from the project's scripts, which can be opened in the script editor.</summary>
+    public bool IsScript => Component is not MissingComponent && Component.GetType().Assembly != typeof(Component).Assembly;
+
+    public IRelayCommand EditScriptCommand { get; }
 
     public IReadOnlyList<PropertyField> Properties { get; }
 
@@ -260,9 +271,9 @@ public sealed class PropertyField : ObservableObject
 
     private readonly Component _component;
     private readonly PropertyDescriptor _property;
-    private readonly InspectorPanel _owner;
+    private readonly IPropertyHost _owner;
 
-    public PropertyField(Component component, PropertyDescriptor property, InspectorPanel owner)
+    public PropertyField(Component component, PropertyDescriptor property, IPropertyHost owner)
     {
         _component = component;
         _property = property;
@@ -428,4 +439,13 @@ public sealed class AxisField(PropertyField owner, int index, string label) : Ob
     }
 
     public void Refresh() => OnPropertyChanged(nameof(Value));
+}
+
+/// <summary>What a <see cref="PropertyField"/> edits through: it applies changes as undoable edits and ends undo steps.</summary>
+public interface IPropertyHost
+{
+    void SetValue(Component component, PropertyDescriptor property, object? value);
+
+    /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
+    void Seal();
 }

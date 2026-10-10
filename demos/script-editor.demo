@@ -1,0 +1,69 @@
+title: The Script Editor
+intro: Write C# right inside Griff: real IntelliSense, live errors, and your component's settings beside the code.
+project: Arcade | Script Editor
+scene: Game
+
+chapter: Code, right where the game is | Edit Script from the Inspector
+select: Player
+say: The player's ship is driven by a C# script called Ship.
+explain: edit:Ship | Edit Script | Script components now have an Edit Script button. It opens the code right here in Griff, no other program needed.
+edit: Ship
+explain: code:editor | Your code | This is Griff's own code editor. Every name is colored by what it really is, not just by pattern: properties, methods, types and parameters each get their own color. It's set in JetBrains Mono, a typeface made for reading code, and it ships with Griff.
+explain: code:panel | The component, beside the code | Beside the code is the component itself. What it does, what it needs, and every property, with its kind, starting value and description.
+explain: code:instances | Live values | And it shows the values on the player in the scene, so you can see how the code you're reading is actually set up.
+click: code:name:FireRate
+explain: code:text:FireRate { get; set; } | Jump to it | Click a property's name and you're at its line in the code.
+caret: public float Speed
+explain: code:property:Speed | Where you are | Put the caret in a property, and its row lights up beside it.
+
+chapter: IntelliSense | Completion, signatures and docs
+say: Let's give the ship a boost while Shift is held. The new code goes on the line that sets its speed.
+caret: Input.Move * Speed
+type: " * (Input."
+wait: 0.6
+explain: code:completion | Completion | Completion knows the whole engine. Type a dot and every member of Input is right there, each marked with what kind of thing it is.
+type: IsDown(
+wait: 0.4
+explain: code:signature | Signature help | Open a call and its parameters appear, with the one you're on in bold, and what it means.
+type: Key.LeftShift) ? Boost : 1
+expect: GetComponent<Body>()!.Velocity = Input.Move * Speed * (Input.IsDown(Key.LeftShift) ? Boost : 1);
+wait: 0.9
+explain: code:problems | Live errors | Errors show up as you type, not when you save. Boost doesn't exist yet, so it's underlined in red and counted here.
+hover: Boost : 1
+explain: code:quickinfo | Hover for details | Hover over anything for what the compiler says, or for its documentation.
+say: Let's add the property it needs. Snippets help: prop, then Tab.
+caret: public float Speed { get; set; } = 8;
+type: \n\nprop
+wait: 0.5
+codekey: Tab
+type: Boost
+expect: public float Boost { get; set; } = 1;
+wait: 0.9
+explain: code:property:Boost | Not compiled yet | The red line is gone. The panel already lists Boost, and says it needs a save to be compiled.
+
+chapter: Save, and it's live | Ctrl+S compiles and swaps it in
+save
+explain: code:status | Saved and compiled | Saving compiles the scripts and swaps them into the scene. If there were errors, the last good version would keep running.
+explain: code:property:Boost | A new setting | Boost is now a real setting, with a value on the player. Let's make it count.
+tune: Boost = 2.5
+say: That changed the player in the scene, just like the Inspector would, and it's one undo step.
+play
+wait: 0.4
+hold: Right 0.5
+hold: Left 0.5
+say: That's normal speed. Now with Shift held.
+hold: LeftShift+Right 0.5
+hold: LeftShift+Left 0.5
+say: Two and a half times as fast.
+stop
+
+chapter: All the usual tools | Find, format, rename and more
+click: tab:Ship.cs
+codekey: Ctrl+F
+type: Speed
+wait: 0.4
+explain: code:find | Find and replace | Control F finds, with case, whole word and pattern options. Control H replaces.
+codekey: Escape
+codekey: Shift+Alt+F
+explain: code:editor | And the rest | Shift Alt F formats the file. F12 goes to a definition, Shift F12 finds every use, F2 renames something everywhere, Control slash comments lines, Control D duplicates them, Alt and the arrows move them, and Control with the mouse wheel zooms.
+say: Your code, your component and your game, all in one place.

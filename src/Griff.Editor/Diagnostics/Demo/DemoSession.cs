@@ -96,6 +96,7 @@ internal sealed class DemoSession(DemoUi ui, IWorkspace workspace, ISelection se
         var folder = SnapshotFolder(chapter);
         var root = File.ReadAllText(Path.Combine(folder, ".demo-root"));
         workspace.Scene?.MarkSaved();
+        ui.Scripts?.DiscardAll();
         if (play.IsPlaying)
             play.Stop();
 
@@ -127,6 +128,7 @@ internal sealed class DemoSession(DemoUi ui, IWorkspace workspace, ISelection se
     public async Task Recover()
     {
         OnRecover?.Invoke();
+        ui.ScriptTabs?.ClosePopups();
         ui.StopSpeaking();
         ui.Overlay.Reset();
         ui.Input.Boost = 1;

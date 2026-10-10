@@ -16,12 +16,14 @@ public partial class AssetsView : UserControl
     private readonly IWorkspace _workspace;
     private readonly CommandRegistry _commands;
     private readonly ISelection _selection;
+    private readonly Scripts.ScriptEditors _scripts;
     private Point _dragStart;
     private AssetNode? _dragCandidate;
 
-    public AssetsView(IWorkspace workspace, CommandRegistry commands, ISelection selection)
+    public AssetsView(IWorkspace workspace, CommandRegistry commands, ISelection selection, Scripts.ScriptEditors scripts)
     {
         InitializeComponent();
+        _scripts = scripts;
         _workspace = workspace;
         _commands = commands;
         _selection = selection;
@@ -34,6 +36,8 @@ public partial class AssetsView : UserControl
 
         if (node.Kind == AssetKind.Scene)
             await _workspace.OpenSceneAsync(node.FullPath);
+        else if (node.Kind == AssetKind.Script)
+            _scripts.Open(node.FullPath);
         else if (node.Kind != AssetKind.Folder)
             OpenExternally(node.FullPath);
     }
@@ -55,6 +59,12 @@ public partial class AssetsView : UserControl
         {
             Add(menu, "Add to Scene", Icons.Add, () => AddPrefabToScene(node));
             Add(menu, "Open", Icons.Open, () => OpenExternally(node.FullPath));
+            menu.Items.Add(new Separator());
+        }
+        else if (node is { Kind: AssetKind.Script })
+        {
+            Add(menu, "Edit Script", Icons.Code, () => _scripts.Open(node.FullPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => OpenExternally(node.FullPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: not AssetKind.Folder })

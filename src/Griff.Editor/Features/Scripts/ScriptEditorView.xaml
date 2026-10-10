@@ -1,0 +1,409 @@
+<UserControl x:Class="Griff.Editor.Features.Scripts.ScriptEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:scripts="clr-namespace:Griff.Editor.Features.Scripts"
+             xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+             xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:editor="clr-namespace:Griff.Editor.Features.Scripts.Editor"
+             xmlns:scripting="clr-namespace:Griff.Scripting;assembly=Griff.Scripting"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=scripts:ScriptDocument}"
+             d:DesignHeight="700" d:DesignWidth="1100"
+             controls:NumberField.EditCompleted="OnEditCompleted">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Inspector/FieldTemplates.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <converters:BoolToVisibilityConverter x:Key="Visible" />
+            <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
+
+            <SolidColorBrush x:Key="Code.Bar" Color="#FF17181D" />
+            <SolidColorBrush x:Key="Code.Line" Color="#FF24262D" />
+
+            <!-- A flat text button: property names in the component panel jump to their code. -->
+            <Style x:Key="Style.Button.Link" TargetType="Button">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent.Hover}" />
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Cursor" Value="Arrow" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Small toggles in the find bar: Aa, ab, .* -->
+            <Style x:Key="Style.ToggleButton.Find" TargetType="ToggleButton" BasedOn="{StaticResource Style.ToggleButton.Toolbar}">
+                <Setter Property="Height" Value="22" />
+                <Setter Property="MinWidth" Value="24" />
+                <Setter Property="Padding" Value="4,0" />
+                <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Focusable" Value="False" />
+                <Style.Triggers>
+                    <Trigger Property="IsChecked" Value="True">
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="Style.Button.Find" TargetType="Button" BasedOn="{StaticResource Style.Button.Toolbar}">
+                <Setter Property="Width" Value="24" />
+                <Setter Property="Height" Value="22" />
+                <Setter Property="Focusable" Value="False" />
+            </Style>
+
+            <Style x:Key="Style.TextBox.Find" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Width" Value="230" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root" Background="{x:Static editor:CodeTheme.Background}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="320" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="PaneColumn" Width="340" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== Code ===== -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="34" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="24" />
+            </Grid.RowDefinitions>
+
+            <!-- Header: where you are, and the editor's switches -->
+            <Border Background="{StaticResource Code.Bar}" BorderBrush="{StaticResource Code.Line}" BorderThickness="0,0,0,1">
+                <DockPanel Margin="12,0,6,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ProblemsButton"
+                                Width="Auto"
+                                Padding="8,0"
+                                Click="OnProblemsClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Errors and warnings in this script (click to list them)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="ErrorIcon" FontSize="12" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Error}" />
+                                <TextBlock x:Name="ErrorCountText" Margin="5,0,10,0" VerticalAlignment="Center" Text="{Binding ErrorCount}" />
+                                <TextBlock x:Name="WarningIcon" FontSize="12" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Warning}" />
+                                <TextBlock x:Name="WarningCountText" Margin="5,0,0,0" VerticalAlignment="Center" Text="{Binding WarningCount}" />
+                            </StackPanel>
+                        </Button>
+                        <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                        <Button x:Name="FormatButton"
+                                Click="OnFormatClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Format Document (Shift+Alt+F)">
+                            <TextBlock FontSize="13" Style="{StaticResource Style.Icon}" Text="&#xE8E4;" />
+                        </Button>
+                        <Button x:Name="FindButton"
+                                Click="OnFindClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Find and Replace (Ctrl+F, Ctrl+H)">
+                            <TextBlock FontSize="13" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Search}" />
+                        </Button>
+                        <ToggleButton x:Name="ComponentToggle"
+                                      Margin="4,0,0,0"
+                                      Padding="8,0"
+                                      Checked="OnComponentToggled"
+                                      Style="{StaticResource Style.ToggleButton.Toolbar}"
+                                      ToolTip="Show the component beside the code: its properties and their values in the scene"
+                                      Unchecked="OnComponentToggled">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="12" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Inspector}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Component" />
+                            </StackPanel>
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <!-- Breadcrumb: Assets / Scripts / Ship.cs › Ship › Update() -->
+                    <DockPanel x:Name="Breadcrumb" VerticalAlignment="Center">
+                        <TextBlock DockPanel.Dock="Left" Margin="0,0,8,0" FontSize="13" Foreground="{DynamicResource Brush.Accent}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Code}" />
+                        <TextBlock x:Name="FolderText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" />
+                        <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding FileName}" />
+                        <TextBlock x:Name="DirtyMark" DockPanel.Dock="Left" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}" Text="●" ToolTip="Unsaved changes (Ctrl+S saves and reloads)"
+                                   Visibility="{Binding IsDirty, Converter={StaticResource Visible}}" />
+                        <TextBlock x:Name="MemberText" Margin="10,0,0,0" VerticalAlignment="Center" FontFamily="{StaticResource Font.Mono}" FontSize="12" Foreground="{DynamicResource Brush.Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- The editor, with the find bar floating over its top right -->
+            <ContentControl x:Name="EditorHost" Grid.Row="1" Focusable="False" />
+            <Border x:Name="FindBar"
+                    Grid.Row="1"
+                    Margin="0,0,22,0"
+                    Padding="6,5"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Background="{x:Static editor:CodeTheme.Popup}"
+                    BorderBrush="{x:Static editor:CodeTheme.PopupBorder}"
+                    BorderThickness="1,0,1,1"
+                    CornerRadius="0,0,4,4"
+                    Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="14" Opacity="0.4" ShadowDepth="2" />
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ToggleButton x:Name="ReplaceToggle"
+                                  Grid.RowSpan="2"
+                                  Width="18"
+                                  MinWidth="0"
+                                  Margin="0,0,4,0"
+                                  VerticalAlignment="Stretch"
+                                  Checked="OnReplaceToggled"
+                                  Style="{StaticResource Style.ToggleButton.Find}"
+                                  ToolTip="Replace"
+                                  Unchecked="OnReplaceToggled">
+                        <TextBlock x:Name="ReplaceChevron" FontSize="9" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronRight}" />
+                    </ToggleButton>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBox x:Name="FindBox" Style="{StaticResource Style.TextBox.Find}" TextChanged="OnFindTextChanged" PreviewKeyDown="OnFindKeyDown" />
+                        <ToggleButton x:Name="MatchCaseToggle" Margin="4,0,0,0" Content="Aa" Click="OnFindOptionChanged" Style="{StaticResource Style.ToggleButton.Find}" ToolTip="Match case" />
+                        <ToggleButton x:Name="WholeWordToggle" Content="ab" Click="OnFindOptionChanged" Style="{StaticResource Style.ToggleButton.Find}" ToolTip="Whole words" />
+                        <ToggleButton x:Name="RegexToggle" Content=".*" Click="OnFindOptionChanged" Style="{StaticResource Style.ToggleButton.Find}" ToolTip="Regular expression" />
+                        <TextBlock x:Name="MatchCountText" MinWidth="70" Margin="8,0" VerticalAlignment="Center" FontSize="11.5" Foreground="{DynamicResource Brush.Text.Tertiary}" />
+                        <Button Click="OnFindPrevious" Style="{StaticResource Style.Button.Find}" ToolTip="Previous (Shift+F3)">
+                            <TextBlock FontSize="10" Style="{StaticResource Style.Icon}" Text="&#xE70E;" />
+                        </Button>
+                        <Button Click="OnFindNext" Style="{StaticResource Style.Button.Find}" ToolTip="Next (F3)">
+                            <TextBlock FontSize="10" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
+                        </Button>
+                        <Button Click="OnFindClose" Style="{StaticResource Style.Button.Find}" ToolTip="Close (Esc)">
+                            <TextBlock FontSize="9" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChromeClose}" />
+                        </Button>
+                    </StackPanel>
+                    <StackPanel x:Name="ReplaceRow" Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Orientation="Horizontal" Visibility="Collapsed">
+                        <TextBox x:Name="ReplaceBox" Style="{StaticResource Style.TextBox.Find}" PreviewKeyDown="OnReplaceKeyDown" />
+                        <Button Margin="4,0,0,0" Padding="8,0" MinHeight="22" Click="OnReplace" Content="Replace" Focusable="False" ToolTip="Replace this match (Enter)" />
+                        <Button Margin="4,0,0,0" Padding="8,0" MinHeight="22" Click="OnReplaceAll" Content="All" Focusable="False" ToolTip="Replace every match (Ctrl+Alt+Enter)" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Problems and references -->
+            <Border x:Name="BottomPanel"
+                    Grid.Row="2"
+                    MaxHeight="200"
+                    Background="{StaticResource Code.Bar}"
+                    BorderBrush="{StaticResource Code.Line}"
+                    BorderThickness="0,1,0,0"
+                    Visibility="Collapsed">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Height="28" Margin="10,0,4,0">
+                        <Button DockPanel.Dock="Right" Click="OnBottomClose" Style="{StaticResource Style.Button.Find}" ToolTip="Close">
+                            <TextBlock FontSize="9" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChromeClose}" />
+                        </Button>
+                        <TextBlock x:Name="BottomTitle" VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" />
+                    </DockPanel>
+                    <ListBox x:Name="BottomList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             MouseDoubleClick="OnBottomItemOpened"
+                             KeyDown="OnBottomListKeyDown"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             SelectionChanged="OnBottomItemSelected">
+                        <ListBox.Resources>
+                            <DataTemplate DataType="{x:Type scripting:ScriptProblem}">
+                                <DockPanel Margin="2,1">
+                                    <TextBlock x:Name="Icon" Margin="0,1,8,0" VerticalAlignment="Top" DockPanel.Dock="Left" FontSize="12"
+                                               Foreground="{x:Static editor:CodeTheme.Warning}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Warning}" />
+                                    <TextBlock Margin="12,0,0,0" DockPanel.Dock="Right" FontFamily="{StaticResource Font.Mono}" FontSize="11" Foreground="{DynamicResource Brush.Text.Tertiary}">
+                                        <Run Text="{Binding Id, Mode=OneWay}" /><Run Text="  ln " /><Run Text="{Binding Line, Mode=OneWay}" /><Run Text=", col " /><Run Text="{Binding Column, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Message}" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsError}" Value="True">
+                                        <Setter TargetName="Icon" Property="Text" Value="{x:Static theme:Icons.Error}" />
+                                        <Setter TargetName="Icon" Property="Foreground" Value="{x:Static editor:CodeTheme.Error}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type scripting:ScriptLocation}">
+                                <DockPanel Margin="2,1">
+                                    <TextBlock Width="150" DockPanel.Dock="Left" FontFamily="{StaticResource Font.Mono}" FontSize="11.5" Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                               Text="{Binding Converter={x:Static scripts:LocationText.Default}}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock FontFamily="{StaticResource Font.Mono}" FontSize="12" Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding LineText}" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.Resources>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Status: what the last save did, and where the caret is -->
+            <Border Grid.Row="3" Background="{StaticResource Code.Bar}" BorderBrush="{StaticResource Code.Line}" BorderThickness="0,1,0,0">
+                <DockPanel Margin="10,0">
+                    <TextBlock x:Name="CaretText" DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource Style.Text.Caption}" />
+                    <TextBlock x:Name="BuildIcon" Margin="0,0,7,0" VerticalAlignment="Center" FontSize="11" Style="{StaticResource Style.Icon}" />
+                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" Style="{StaticResource Style.Text.Caption}" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <GridSplitter x:Name="PaneSplitter"
+                      Grid.Column="1"
+                      Width="4"
+                      HorizontalAlignment="Stretch"
+                      ResizeBehavior="PreviousAndNext"
+                      ResizeDirection="Columns" />
+
+        <!-- ===== The component beside the code ===== -->
+        <Border x:Name="ComponentPane" Grid.Column="2" Background="{DynamicResource Brush.Surface.Panel}" d:DataContext="{d:DesignInstance Type=scripts:ComponentPanel}">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="14,12,12,16">
+                    <TextBlock Style="{StaticResource Style.Text.Overline}" Text="Component" />
+                    <DockPanel Margin="0,2,0,0">
+                        <Border DockPanel.Dock="Right"
+                                Padding="7,1"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource Brush.Control.Background}"
+                                CornerRadius="8"
+                                Visibility="{Binding IsComponent, Converter={StaticResource Visible}}">
+                            <TextBlock FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Category}" />
+                        </Border>
+                        <TextBlock x:Name="ComponentTitle" Style="{StaticResource Style.Text.Title}" FontSize="17" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+
+                    <inspector:DocView x:Name="ComponentSummary"
+                                       Margin="0,8,0,0"
+                                       Doc="{Binding Summary}"
+                                       TextElement.FontSize="{StaticResource FontSize.Body}"
+                                       TextElement.Foreground="{DynamicResource Brush.Text.Secondary}" />
+
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource Style.Text.Caption}" TextWrapping="Wrap" Visibility="{Binding HasRequires, Converter={StaticResource Visible}}">
+                        <Run Text="Needs " /><Run Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Requires, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Style="{StaticResource Style.Text.Caption}" TextWrapping="Wrap" Visibility="{Binding HasWorksWith, Converter={StaticResource Visible}}">
+                        <Run Text="Works well with " /><Run Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding WorksWith, Mode=OneWay}" />
+                    </TextBlock>
+
+                    <Border x:Name="NoticeBox"
+                            Margin="0,12,0,0"
+                            Padding="10,7"
+                            Background="#1FE3B341"
+                            BorderBrush="#55E3B341"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Medium}"
+                            Visibility="{Binding HasNotice, Converter={StaticResource Visible}}">
+                        <DockPanel>
+                            <TextBlock Margin="0,1,8,0" VerticalAlignment="Top" FontSize="12" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Info}" />
+                            <TextBlock Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Notice}" TextWrapping="Wrap" />
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Which entity's values are shown -->
+                    <StackPanel x:Name="InstancesSection" Margin="0,16,0,0" Visibility="{Binding IsComponent, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Style.Text.Overline}" Text="In the scene" />
+                        <TextBlock Margin="0,3,0,6" Style="{StaticResource Style.Text.Secondary}" Text="{Binding InstancesText}" TextWrapping="Wrap" />
+                        <DockPanel Visibility="{Binding HasInstances, Converter={StaticResource Visible}}">
+                            <Button DockPanel.Dock="Right" Margin="6,0,0,0" Command="{Binding SelectInstanceCommand}" Style="{StaticResource Style.Button.Toolbar}" Height="24" Width="26"
+                                    ToolTip="Select it in the Hierarchy">
+                                <TextBlock FontSize="12" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Hierarchy}" />
+                            </Button>
+                            <ComboBox x:Name="InstancePicker" DisplayMemberPath="Name" ItemsSource="{Binding Instances}" SelectedItem="{Binding Instance}" />
+                        </DockPanel>
+                        <Button x:Name="AddToSelectedButton"
+                                Margin="0,8,0,0"
+                                HorizontalAlignment="Left"
+                                Command="{Binding AddToSelectedCommand}"
+                                Visibility="{Binding CanAddToSelected, Converter={StaticResource Visible}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                                <TextBlock Margin="6,0,0,0" Text="{Binding AddToSelectedText}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Properties: name (jumps to the code), live value, kind and default, description -->
+                    <DockPanel Margin="0,18,0,6" Visibility="{Binding IsComponent, Converter={StaticResource Visible}}">
+                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Style.Text.Caption}" Text="{Binding InstanceLabel}" />
+                        <TextBlock Style="{StaticResource Style.Text.Overline}" Text="Properties" />
+                    </DockPanel>
+                    <ItemsControl x:Name="PropertyRows" Grid.IsSharedSizeScope="True" ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type scripts:ConfigRow}">
+                                <Grid Margin="-6,1,0,1">
+                                    <Border x:Name="Card" Padding="10,7,8,8" Background="Transparent" CornerRadius="{StaticResource Radius.Medium}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="86" SharedSizeGroup="Name" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Button x:Name="NameButton"
+                                                        Margin="0,0,12,0"
+                                                        Command="{Binding DataContext.JumpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        IsEnabled="{Binding CanJump}"
+                                                        Style="{StaticResource Style.Button.Link}"
+                                                        ToolTip="Go to it in the code">
+                                                    <TextBlock FontFamily="{StaticResource Font.Mono}" FontSize="12.5" Text="{Binding Name}" />
+                                                </Button>
+                                                <ContentControl Grid.Column="1"
+                                                                Content="{Binding Field}"
+                                                                ContentTemplateSelector="{StaticResource FieldSelector}"
+                                                                Focusable="False"
+                                                                Visibility="{Binding HasField, Converter={StaticResource Visible}}" />
+                                            </Grid>
+                                            <TextBlock x:Name="DetailsText" Margin="0,3,0,0" Style="{StaticResource Style.Text.Caption}" Text="{Binding Details}" />
+                                            <inspector:DocView Margin="0,3,0,0"
+                                                               Doc="{Binding Doc}"
+                                                               ParagraphSpacing="4"
+                                                               TextElement.FontSize="{StaticResource FontSize.Body}"
+                                                               TextElement.Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                               Visibility="{Binding HasDoc, Converter={StaticResource Visible}}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Rectangle x:Name="ActiveBar" Width="2" Margin="0,6" HorizontalAlignment="Left" Fill="{DynamicResource Brush.Accent}" RadiusX="1" RadiusY="1" Visibility="Collapsed" />
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter TargetName="Card" Property="Background" Value="{DynamicResource Brush.Item.Hover}" />
+                                        <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsNew}" Value="True">
+                                        <Setter TargetName="DetailsText" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

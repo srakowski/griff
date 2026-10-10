@@ -7,8 +7,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- JetBrains Mono, the code font (SIL Open Font License 1.1: free to embed and ship; see Themes/Fonts/JetBrainsMono-OFL.txt). -->
+  <ItemGroup>
+    <Resource Include="Themes\Fonts\*.ttf" />
+    <None Include="Themes\Fonts\JetBrainsMono-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -32,12 +39,8 @@
     Each publishes from its own output folders so the two don't trip over each other.
   -->
   <Target Name="PublishPlayers" AfterTargets="Build">
-    <MSBuild Projects="..\Griff.Player\Griff.Player.csproj"
-             Targets="Publish"
-             Properties="Configuration=$(Configuration);PlayerKind=Standalone;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Standalone\;IntermediateOutputPath=obj\$(Configuration)\Standalone\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Standalone\" />
-    <MSBuild Projects="..\Griff.Player\Griff.Player.csproj"
-             Targets="Publish"
-             Properties="Configuration=$(Configuration);PlayerKind=Small;SelfContained=false;PublishSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Small\;IntermediateOutputPath=obj\$(Configuration)\Small\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Small\" />
+    <MSBuild Projects="..\Griff.Player\Griff.Player.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PlayerKind=Standalone;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Standalone\;IntermediateOutputPath=obj\$(Configuration)\Standalone\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Standalone\" />
+    <MSBuild Projects="..\Griff.Player\Griff.Player.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PlayerKind=Small;SelfContained=false;PublishSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Small\;IntermediateOutputPath=obj\$(Configuration)\Small\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Small\" />
   </Target>
 
 </Project>

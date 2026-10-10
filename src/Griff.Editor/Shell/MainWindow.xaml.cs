@@ -26,7 +26,8 @@ public partial class MainWindow : ChromeWindow
         CommandRegistry commands,
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
-        PanelHost panelHost)
+        PanelHost panelHost,
+        Features.Scripts.ScriptTabs scriptTabs)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -40,6 +41,7 @@ public partial class MainWindow : ChromeWindow
         StartHost.Content = startPage;
         play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
         play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;
+        scriptTabs.Attach(DocumentTabs);
 
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);
@@ -66,7 +68,7 @@ public partial class MainWindow : ChromeWindow
 
         // Closing can't await, so cancel this attempt and close again once the user has answered.
         e.Cancel = true;
-        if (await _workspace.ConfirmCloseAsync())
+        if (await _workspace.ConfirmCloseProjectAsync())
         {
             _closeConfirmed = true;
             _ = Dispatcher.InvokeAsync(Close);

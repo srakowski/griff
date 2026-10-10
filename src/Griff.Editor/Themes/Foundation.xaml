@@ -84,7 +84,8 @@
 
     <!-- ===== Typography ===== -->
     <FontFamily x:Key="Font.UI">Segoe UI</FontFamily>
-    <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas</FontFamily>
+    <!-- JetBrains Mono ships inside the editor (Themes/Fonts, SIL Open Font License). -->
+    <FontFamily x:Key="Font.Mono">pack://application:,,,/Griff.Editor;component/Themes/Fonts/#JetBrains Mono, Cascadia Mono, Consolas</FontFamily>
     <FontFamily x:Key="Font.Icon">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
     <sys:Double x:Key="FontSize.Caption">11</sys:Double>

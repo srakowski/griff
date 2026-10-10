@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using Griff.Editing;
@@ -14,17 +13,23 @@ namespace Griff.Editor.Features.Scripts;
 
 public sealed partial class ScriptsModule : IEditorModule
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddCommand<NewScriptCommand>();
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ScriptEditors>();
+        services.AddSingleton<ScriptTabs>();
+        services.AddCommand<NewScriptCommand>();
+    }
 }
 
 /// <summary>
 /// Creates a behavior script in Assets/Scripts, attaches it to the selected entity,
-/// and opens it in the system's editor for .cs files.
+/// and opens it in the script editor.
 /// </summary>
 public sealed partial class NewScriptCommand(
     IWorkspace workspace,
     ISelection selection,
     IDialogService dialogs,
+    ScriptEditors editors,
     ILogger<NewScriptCommand> logger) : EditorCommand
 {
     private const string Template = """
@@ -77,20 +82,8 @@ public sealed partial class NewScriptCommand(
             document.Execute(new AddComponentEdit(entity, descriptor.CreateInstance()));
         }
 
-        Open(path);
+        editors.Open(path)?.NavigateToLine(12, 9);
         return Task.CompletedTask;
-    }
-
-    private void Open(string path)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            logger.LogWarning("Couldn't open {Path} in an editor: {Message}", path, ex.Message);
-        }
     }
 
     private string? Validate(string name, string folder)

@@ -100,6 +100,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             }
             catch (Exception ex)
             {
+                // What the script being edited looked like helps make sense of a failure in the code editor.
+                if (ui.Scripts?.Active is { } script)
+                    options.Log($"{script.FileName} when it failed:\n{script.Text.Text}");
                 throw new InvalidOperationException($"{Path.GetFileName(path)} line {line.Number} ({line.Command}: {line.Argument}): {ex.Message}", ex);
             }
         }
@@ -199,7 +202,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await GameKey(name, double.Parse(seconds, CultureInfo.InvariantCulture));
                 break;
             case "type":
-                await Input.Type(a.Replace("\\n", "\n"));
+                // Quotes keep spaces at the ends: type: " * 2"
+                var typed = a.Length >= 2 && a[0] == '"' && a[^1] == '"' ? a[1..^1] : a;
+                await Input.Type(typed.Replace("\\n", "\n"));
                 break;
             case "click":
                 if (a.StartsWith("world:", StringComparison.OrdinalIgnoreCase))
@@ -221,8 +226,44 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 Overlay.HideCode();
                 break;
             case "save":
-                await ui.FocusEditor();
-                await ui.Shortcut(Key.S, ModifierKeys.Control);
+                // In a script tab Ctrl+S saves the script (and reloads it); anywhere else, the scene.
+                if (ui.Scripts?.Active is not null)
+                {
+                    await ui.CodeKey(Key.S, ModifierKeys.Control);
+                    await DemoUi.Settle(400);
+                }
+                else
+                {
+                    await ui.FocusEditor();
+                    await ui.Shortcut(Key.S, ModifierKeys.Control);
+                }
+                break;
+            case "edit":
+                await ui.EditScript(a);
+                break;
+            case "caret":
+                var (caretText, where) = Split2(a);
+                await ui.Caret(caretText, where.Equals("before", StringComparison.OrdinalIgnoreCase));
+                break;
+            case "hover":
+                await ui.HoverCode(a);
+                break;
+            case "expect":
+                // Checks the code ended up as narrated: completion, auto-closed brackets and snippets did what they should.
+                await DemoUi.Settle(100);
+                var code = ui.Code.Document.Text;
+                if (!code.Contains(a, StringComparison.Ordinal))
+                    throw new InvalidOperationException($"{ui.Code.Script.FileName} doesn't contain \"{a}\".");
+                break;
+            case "codekey":
+                var (codeKey, codeModifiers) = ParseKey(a);
+                await ui.CodeKey(codeKey, codeModifiers);
+                break;
+            case "tune":
+                var tuneAt = a.IndexOf('=');
+                if (tuneAt < 0)
+                    throw new FormatException("tune: <Property> = <value>");
+                await ui.Tune(a[..tuneAt].Trim(), a[(tuneAt + 1)..].Trim());
                 break;
             case "build":
                 await Build(a.Equals("small", StringComparison.OrdinalIgnoreCase));
@@ -353,9 +394,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     {
         if (play.Game?.Input is not Griff.Runtime.InputState input)
             throw new InvalidOperationException("The game isn't playing.");
-        var key = Enum.Parse<Griff.Runtime.Key>(name, ignoreCase: true);
+        // "LeftShift+Right" holds both.
+        var keys = name.Split('+', StringSplitOptions.TrimEntries).Select(k => Enum.Parse<Griff.Runtime.Key>(k, ignoreCase: true)).ToList();
         Overlay.ShowKeys(name);
-        input.SetKey(key, true);
+        foreach (var key in keys)
+            input.SetKey(key, true);
         try
         {
             await options.Control.Delay(seconds * 1000);
@@ -363,7 +406,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         finally
         {
             if (play.Game?.Input is Griff.Runtime.InputState still)
-                still.SetKey(key, false);
+            {
+                foreach (var key in keys)
+                    still.SetKey(key, false);
+            }
         }
     }
 
@@ -443,6 +489,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),
+            "code" => ui.CodePart(name),
+            "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
+            "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, world:)."),
         };
     }
@@ -450,12 +499,16 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     /// <summary>Where a target is on screen; world:left,top,right,bottom is a box in the Scene view.</summary>
     private Rect TargetRect(string target)
     {
+        if (target.StartsWith("code:", StringComparison.OrdinalIgnoreCase))
+            return ui.CodeRect(target[5..]);
         var (kind, name) = Split2(target, ':');
         if (!kind.Equals("world", StringComparison.OrdinalIgnoreCase))
             return DemoUi.ScreenRect(Target(target));
         var v = Numbers(name, 4);
         return ui.WorldRect((float)v[0], (float)v[1], (float)v[2], (float)v[3]);
     }
+
+    private static string TabText(TabItem tab) => tab.Header as string ?? string.Join("", DemoUi.Descendants<TextBlock>((DependencyObject)tab.Header).Select(t => t.Text));
 
     private Rect CodeCardRect()
     {

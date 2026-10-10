@@ -112,6 +112,8 @@ internal static class DemoRunner
             var input = new DemoInput(overlay, fast ? 4 : 1);
             narrator = new DemoNarrator(overlay, speak: !fast, voiceName: Environment.GetEnvironmentVariable("GRIFF_DEMO_VOICE") ?? "Microsoft Zira Desktop", rate: 1, silentSpeed: fast ? 6 : 1);
             var ui = new DemoUi(main, services.GetRequiredService<SceneViewControl>(), input, overlay, narrator);
+            ui.Scripts = services.GetRequiredService<Features.Scripts.ScriptEditors>();
+            ui.ScriptTabs = services.GetRequiredService<Features.Scripts.ScriptTabs>();
             var options = new DemoOptions(fast, Log, control);
             var workspace = services.GetRequiredService<IWorkspace>();
             var selection = services.GetRequiredService<ISelection>();
@@ -147,6 +149,7 @@ internal static class DemoRunner
         // Checking demos (GRIFF_DEMO_EXIT=1): close the editor when done, with an exit code that says how it went.
         if (Environment.GetEnvironmentVariable("GRIFF_DEMO_EXIT") == "1" && !restart)
         {
+            services.GetRequiredService<Features.Scripts.ScriptEditors>().DiscardAll();
             services.GetRequiredService<IWorkspace>().Scene?.MarkSaved();
             Environment.Exit(failed ? 1 : 0);
         }
@@ -154,6 +157,7 @@ internal static class DemoRunner
         // Back to before the project existed: a fresh editor runs the demo from the top.
         if (restart && Environment.ProcessPath is { } exe)
         {
+            services.GetRequiredService<Features.Scripts.ScriptEditors>().DiscardAll();
             services.GetRequiredService<IWorkspace>().Scene?.MarkSaved();
             Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
             Environment.Exit(0);

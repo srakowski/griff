@@ -51,6 +51,12 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Prompts to save unsaved changes. Returns true if it's safe to close the scene.</summary>
     Task<bool> ConfirmCloseAsync();
 
+    /// <summary>Prompts to save everything unsaved in the project: open scripts (see <see cref="AddCloseGuard"/>) and the scene.</summary>
+    Task<bool> ConfirmCloseProjectAsync();
+
+    /// <summary>Adds a check that runs before the project closes; it returns false to keep the project open.</summary>
+    void AddCloseGuard(Func<Task<bool>> guard);
+
     /// <summary>Opens another scene from the project. Returns false if the user cancelled.</summary>
     Task<bool> OpenSceneAsync(string path);
 
@@ -80,6 +86,7 @@ public sealed class Workspace(
     private FileSystemWatcher? _scriptWatcher;
     private DispatcherTimer? _scriptDebounce;
     private DispatcherTimer? _recoveryTimer;
+    private readonly List<Func<Task<bool>>> _closeGuards = [];
 
     public Project? Project
     {
@@ -197,7 +204,7 @@ public sealed class Workspace(
 
     public async Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty)
     {
-        if (!await ConfirmCloseAsync())
+        if (!await ConfirmCloseProjectAsync())
             return;
 
         var project = await Project.CreateAsync(location, name, template);
@@ -208,7 +215,7 @@ public sealed class Workspace(
 
     public async Task<bool> OpenProjectAsync(string path)
     {
-        if (!await ConfirmCloseAsync())
+        if (!await ConfirmCloseProjectAsync())
             return false;
 
         Project project;
@@ -254,6 +261,19 @@ public sealed class Workspace(
         status.Show($"Saved {document.Name}");
         return true;
     }
+
+    public async Task<bool> ConfirmCloseProjectAsync()
+    {
+        foreach (var guard in _closeGuards)
+        {
+            if (!await guard())
+                return false;
+        }
+
+        return await ConfirmCloseAsync();
+    }
+
+    public void AddCloseGuard(Func<Task<bool>> guard) => _closeGuards.Add(guard);
 
     public async Task<bool> ConfirmCloseAsync()
     {

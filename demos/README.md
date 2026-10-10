@@ -51,11 +51,17 @@ build: standalone
 | `click: <target>` | Click something. |
 | `look: <x>, <y>, <half height>` | Glide the Scene view to show a part of the world. |
 | `play` / `stop` / `pause` | Play mode (F5, Shift+F5, F6). |
-| `tap: <Key>` / `hold: <Key> <seconds>` | Press a key in the running game, e.g. `hold: Right 1.5`, `tap: Space`. |
-| `type: <text>` | Type into whatever has focus. |
+| `tap: <Key>` / `hold: <Key> <seconds>` | Press a key in the running game, e.g. `hold: Right 1.5`, `tap: Space`. `hold: LeftShift+Right 1` holds both. |
+| `type: <text>` | Type into whatever has focus (`\n` presses Enter). Quotes keep spaces at the ends: `type: " * 2"`. |
 | `wait: <seconds>` | Pause the demo. |
 | `code: <file> [\| <title>]` / `hidecode` | Type a file (relative to the project) out in the code card. |
-| `save` | Ctrl+S. |
+| `save` | Ctrl+S: saves the script in a script tab (and recompiles), the scene anywhere else. |
+| `edit: <Component>` | Click a script component's Edit Script button in the Inspector, opening it in the script editor. |
+| `caret: <code> [\| before]` | Click in the script to put the caret just after (or before) the first match of `<code>`. |
+| `hover: <code>` | Rest the mouse on `<code>` until its hover info shows. |
+| `codekey: <shortcut>` | Press a shortcut in the script editor, e.g. `codekey: Ctrl+F`, `codekey: Tab`. |
+| `tune: <Property> = <value>` | Type a value into a property in the script editor's component panel. |
+| `expect: <code>` | Fail unless the script contains `<code>`: checks that what was typed came out as narrated. |
 | `build: standalone` / `build: small` | Game > Build Game (or Build Small Game) and wait for the exe. |
 
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
@@ -65,5 +71,12 @@ Inspector's Catalog button), `catalog` (the window), `catalog:search`, `catalog:
 `catalog:requires`, `catalog:workswith`, `catalog:neededby`, `catalog:properties`, `catalog:plan`, `catalog:add`,
 `catalog:close`, `catalog:item:Body` (a row in the list), `catalog:link:Body` (a link in the details) and
 `catalog:property:Jump Height`.
+
+In the script editor (the script tab showing): `edit:Ship` (a component's Edit Script button in the Inspector),
+`tab:Ship.cs` (a document tab, by its title), `code:editor`, `code:panel` (the component panel), `code:property:Speed` (a
+property's row in it), `code:name:Speed` (its name, which jumps to the code), `code:instances`, `code:notice`,
+`code:problems` (the error counts), `code:list` (the problems or references list), `code:find`, `code:status`,
+`code:breadcrumb`, `code:toggle` (the Component button), `code:format`, `code:tab`, `code:text:Speed * Time` (some
+code), `code:line:12`, and while they show, `code:completion`, `code:signature` and `code:quickinfo`.
 
 Keep a demo to a few minutes: show the change working, the way someone would use it, and say why it matters.

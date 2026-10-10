@@ -136,6 +136,18 @@ Games can switch scenes with `Game.LoadScene("Level2")`. **Game → Clear Save D
 
 Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
 
+**The script editor.** Scripts open in Griff's own code editor, as tabs next to Scene and Game: from New Script, by double-clicking a `.cs` file in Assets, with the code button on a script component's header in the Inspector (**Edit Script**), or by double-clicking a script error in Output. It's C# with the compiler behind it, so it knows Griff's whole API and your other scripts, unsaved changes included:
+
+- Colors by meaning: properties, methods, types, parameters and fields each have their own color. Code is set in JetBrains Mono, which ships with Griff (SIL Open Font License; see `Themes/Fonts`).
+- Completion as you type, with each item's signature and documentation; signature help inside calls (Up and Down pick an overload); hover anything for its documentation, or for the compiler's message.
+- Errors and warnings as you type: underlined where they are, counted in the header (click for the list), and in red in the line numbers.
+- **Ctrl+S** saves, compiles and swaps the change into the scene, and into the game if it's playing. Playing saves open scripts first.
+- **The component panel** beside the code (the **Component** button) shows the component the script declares: what it does, what it needs, and each property with its kind, starting value and description, plus its value on an entity in the scene that uses it (live while playing), editable right there. Click a property's name to go to it in the code; the property the caret is in lights up. New properties show up as soon as you type them, waiting for a save.
+- F12 or Ctrl+click goes to a definition, Shift+F12 lists every use, F2 renames across all scripts, Shift+Alt+F formats, Ctrl+F finds and Ctrl+H replaces (with case, whole-word and regular-expression options), Ctrl+G goes to a line, Ctrl+/ comments lines, Ctrl+D duplicates them, Ctrl+Shift+L deletes them, Alt+Up and Alt+Down move them, and Ctrl+wheel zooms. Brackets and quotes close themselves, `}` lines up with its `{`, uses of the name at the caret are highlighted, blocks fold, and indent guides follow the nesting.
+- Snippets: `prop` (a property for the Inspector), `update`, `start`, `trigger` and `coroutine` in a class; `if`, `for`, `foreach` and `while` in a method. Type the name and press Tab.
+
+Scripts can still be edited in any other editor; Griff picks up the saved file either way.
+
 ```csharp
 public class PlayerController : Behavior
 {

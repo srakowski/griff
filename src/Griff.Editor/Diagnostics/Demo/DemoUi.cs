@@ -18,7 +18,7 @@ using Point = System.Windows.Point;
 namespace Griff.Editor.Diagnostics.Demo;
 
 /// <summary>Finds the editor's controls on screen and works them with real input, narrating as it goes.</summary>
-internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoInput input, DemoOverlay overlay, DemoNarrator narrator)
+internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView, DemoInput input, DemoOverlay overlay, DemoNarrator narrator)
 {
     public DemoInput Input => input;
     public DemoOverlay Overlay => overlay;

@@ -1,0 +1,22 @@
+title: Typed numbers stick
+intro: Typing into a number field in the Inspector now changes the component.
+project: Platformer | Number Fields
+
+chapter: Typing a number | The Inspector's number fields
+select: Player
+say: Typing into the Inspector's plain number fields used to look like it worked, then quietly change nothing. Watch the jump height.
+explain: field:PlatformerMovement.JumpHeight | Jump Height | Here's the player's jump height.
+set: PlatformerMovement.JumpHeight = 6
+say: Six, and this time it's really six. Let's prove it in the game.
+play
+wait: 0.5
+tap: Space
+wait: 1.5
+say: That's a much bigger jump than the template's.
+stop
+
+chapter: Every kind of number | Whole numbers and decimals
+say: Whole numbers work the same way. One air jump gives the player a double jump.
+set: PlatformerMovement.AirJumps = 1
+explain: field:PlatformerMovement.AirJumps | Air Jumps | Air Jumps is a whole number, and it sticks too.
+say: Vectors, like Position, always worked. Now every number in the Inspector does.

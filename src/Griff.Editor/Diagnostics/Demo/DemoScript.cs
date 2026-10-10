@@ -34,17 +34,32 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
 
     private DemoControl Control => options.Control;
 
-    // Where each chapter's starting state is kept, so the viewer can rewind to it.
-    private static readonly string SnapshotRoot = Path.Combine(Path.GetTempPath(), "griff-demo-snapshots");
-
     private Process? _shippedGame;
 
-    /// <summary>Runs the chapters in order, handling the viewer's jumps between them, until the end or Exit.</summary>
+    /// <summary>Runs the tour's chapters, handling the viewer's jumps between them, until the end or Exit.</summary>
     /// <returns>True if the viewer asked to start over from the very beginning (which needs a fresh editor).</returns>
-    public async Task<bool> Run()
+    public Task<bool> Run()
     {
         ui.Log = Log;
-        (string Title, Func<Task> Run)[] chapters =
+        var session = new DemoSession(ui, workspace, selection, play, Control, Log)
+        {
+            OnRecover = () =>
+            {
+                _pilot?.Dispose();
+                _pilot = null;
+                try
+                {
+                    if (_shippedGame is { HasExited: false })
+                        _shippedGame.Kill();
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            },
+        };
+
+        // From the tour on there's a project to snapshot.
+        return session.Run(
         [
             ("Intro", Intro),
             ("A new project", CreateProject),
@@ -63,155 +78,8 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             ("Play it through", PlayThrough),
             ("Ship it", Ship),
             ("Outro", Outro),
-        ];
-        Control.Chapters = chapters.Select(c => c.Title).ToList();
-        if (options.StartAt == 0 && Directory.Exists(SnapshotRoot))
-            Directory.Delete(SnapshotRoot, recursive: true);
-        Control.Snapshots.UnionWith(Directory.Exists(SnapshotRoot)
-            ? Directory.EnumerateDirectories(SnapshotRoot).Select(d => int.TryParse(Path.GetFileName(d), out var n) ? n : -1).Where(n => n >= 0)
-            : []);
-
-        var i = options.StartAt;
-        int? restore = i > 0 ? i : null;
-        while (i < chapters.Length)
-        {
-            try
-            {
-                // A jump lands here; another jump while restoring just restores again.
-                if (restore is { } target)
-                {
-                    restore = null;
-                    i = target;
-                    await Restore(target);
-                }
-
-                Control.Enter(i);
-                // From the tour on there's a project to snapshot.
-                if (i >= 2 && !Control.Snapshots.Contains(i))
-                    await Snapshot(i);
-                await chapters[i].Run();
-                i++;
-            }
-            catch (OperationCanceledException) when (Control.ExitRequested)
-            {
-                Log("viewer exited");
-                await Recover();
-                return false;
-            }
-            catch (OperationCanceledException) when (Control.RewindTo is { } target)
-            {
-                Log($"jump to chapter {target} from {i}");
-                Control.Rearm();
-                await Recover();
-                if (target < 2)
-                    return true; // before the project existed: start again in a fresh editor
-                restore = target;
-            }
-        }
-
-        return false;
+        ], firstSnapshot: 2);
     }
-
-    /// <summary>Saves the open scene and copies the project, so this chapter can be gone back to.</summary>
-    private async Task Snapshot(int chapter)
-    {
-        if (workspace.Project is not { } project || workspace.Scene is not { } scene || play.IsPlaying)
-            return;
-        if (scene.IsDirty)
-            await workspace.SaveSceneAsync();
-
-        var folder = Path.Combine(SnapshotRoot, chapter.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (Directory.Exists(folder))
-            Directory.Delete(folder, recursive: true);
-        CopyProject(project.RootPath, folder);
-        File.WriteAllText(Path.Combine(folder, ".demo-scene"), project.GetRelativePath(scene.FilePath));
-        Control.Snapshots.Add(chapter);
-        Log($"snapshot {chapter}");
-    }
-
-    /// <summary>Puts the project back as it was when <paramref name="chapter"/> began, and reopens it.</summary>
-    private async Task Restore(int chapter)
-    {
-        var folder = Path.Combine(SnapshotRoot, chapter.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        var root = workspace.Project?.RootPath ?? DemoRunner.ProjectFolder;
-        workspace.Scene?.MarkSaved();
-        if (play.IsPlaying)
-            play.Stop();
-
-        // Everything but the builds goes back to how the snapshot has it.
-        foreach (var entry in Directory.Exists(root) ? Directory.EnumerateFileSystemEntries(root) : [])
-        {
-            if (Path.GetFileName(entry) == "Build")
-                continue;
-            if (Directory.Exists(entry))
-                Directory.Delete(entry, recursive: true);
-            else
-                File.Delete(entry);
-        }
-
-        CopyProject(folder, root);
-        var scene = File.ReadAllText(Path.Combine(folder, ".demo-scene"));
-        File.Delete(Path.Combine(root, ".demo-scene"));
-        await workspace.OpenProjectAsync(root);
-        var scenePath = Path.Combine(root, scene);
-        if (workspace.Scene?.FilePath is { } open && !string.Equals(Path.GetFullPath(open), Path.GetFullPath(scenePath), StringComparison.OrdinalIgnoreCase))
-            await workspace.OpenSceneAsync(scenePath);
-        selection.Select(null);
-        await DemoUi.Settle(300);
-        Log($"restored {chapter}");
-    }
-
-    /// <summary>Undoes whatever a chapter cut short was in the middle of: menus, dialogs, play mode, held keys.</summary>
-    private async Task Recover()
-    {
-        _pilot?.Dispose();
-        _pilot = null;
-        ui.StopSpeaking();
-        Overlay.Reset();
-        Input.Boost = 1;
-        Input.ReleaseAll();
-
-        foreach (var item in DemoUi.Descendants<MenuItem>(ui.Main.MainMenu))
-            item.IsSubmenuOpen = false;
-        foreach (var menu in DemoUi.Roots().SelectMany(DemoUi.Descendants<ContextMenu>).ToList())
-            menu.IsOpen = false;
-        foreach (var combo in DemoUi.Descendants<ComboBox>(ui.Main))
-            combo.IsDropDownOpen = false;
-        foreach (var window in Application.Current.Windows.OfType<Window>().Where(w => w != ui.Main && w is not DemoOverlay and not DemoControlBar).ToList())
-            window.Close();
-
-        if (play.IsPlaying)
-            play.Stop();
-        try
-        {
-            if (_shippedGame is { HasExited: false })
-                _shippedGame.Kill();
-        }
-        catch (InvalidOperationException)
-        {
-        }
-
-        Keyboard.ClearFocus();
-        ui.Main.Activate();
-        // Not DemoUi.Settle: after an exit, waits that check the control would stop straight away.
-        await Task.Delay(200);
-    }
-
-    private static void CopyProject(string from, string to)
-    {
-        Directory.CreateDirectory(to);
-        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(from, file);
-            var top = relative.Split(Path.DirectorySeparatorChar)[0];
-            if (top is "Build" or ".griff")
-                continue;
-            var target = Path.Combine(to, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(file, target, overwrite: true);
-        }
-    }
-
     // ===== 0. Intro =====
 
     private async Task Intro()
@@ -1207,7 +1075,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         Log($"wait {(condition() ? "met" : "TIMED OUT")} after {clock.ElapsedMilliseconds} ms; player at {_pilot?.PlayerPosition}");
     }
 
-    private void Log(string message) => options.Log?.Invoke(message);
+    private void Log(string message) => options.Log(message);
 
     private static async Task<IntPtr> WaitForWindow(Process process, int timeoutMs)
     {
@@ -1264,5 +1132,5 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private static extern bool SetForegroundWindow(IntPtr hwnd);
 }
 
-internal sealed record DemoOptions(bool Fast, Action<string>? Log, DemoControl Control, int StartAt = 0);
+internal sealed record DemoOptions(bool Fast, Action<string> Log, DemoControl Control);
 #endif

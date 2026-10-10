@@ -32,11 +32,14 @@ internal static class DemoRunner
         if (string.IsNullOrEmpty(mode) || main is not MainWindow shell)
             return false;
 
-        _ = RunAsync(services, shell, fast: mode.Equals("fast", StringComparison.OrdinalIgnoreCase));
+        // GRIFF_DEMO=path\to\change.demo plays a demo script; GRIFF_DEMO=1 (or fast) the guided tour.
+        var script = mode.EndsWith(".demo", StringComparison.OrdinalIgnoreCase) ? Path.GetFullPath(mode) : null;
+        var fast = mode.Equals("fast", StringComparison.OrdinalIgnoreCase) || Environment.GetEnvironmentVariable("GRIFF_DEMO_FAST") == "1";
+        _ = RunAsync(services, shell, fast, script);
         return true;
     }
 
-    private static async Task RunAsync(IServiceProvider services, MainWindow main, bool fast)
+    private static async Task RunAsync(IServiceProvider services, MainWindow main, bool fast, string? scriptPath)
     {
         var logPath = Environment.GetEnvironmentVariable("GRIFF_DEMO_LOG");
         var clock = Stopwatch.StartNew();
@@ -60,6 +63,7 @@ internal static class DemoRunner
         overlay.Above.Add(bar);
         var play = services.GetRequiredService<PlayMode>();
         var restart = false;
+        var failed = false;
 
         // Reaching for the mouse pauses the demo, so the viewer can use the bar (or anything else).
         var takeover = new DemoTakeover(control);
@@ -108,20 +112,26 @@ internal static class DemoRunner
             var input = new DemoInput(overlay, fast ? 4 : 1);
             narrator = new DemoNarrator(overlay, speak: !fast, voiceName: Environment.GetEnvironmentVariable("GRIFF_DEMO_VOICE") ?? "Microsoft Zira Desktop", rate: 1, silentSpeed: fast ? 6 : 1);
             var ui = new DemoUi(main, services.GetRequiredService<SceneViewControl>(), input, overlay, narrator);
-            var script = new DemoScript(ui, services.GetRequiredService<IWorkspace>(), services.GetRequiredService<ISelection>(),
-                play, services.GetRequiredService<SceneViewControl>(), new DemoOptions(fast, Log, control));
+            var options = new DemoOptions(fast, Log, control);
+            var workspace = services.GetRequiredService<IWorkspace>();
+            var selection = services.GetRequiredService<ISelection>();
+            var sceneView = services.GetRequiredService<SceneViewControl>();
 
-            Log("demo started");
-            restart = await script.Run();
+            Log("demo started" + (scriptPath is null ? "" : ": " + scriptPath));
+            restart = scriptPath is null
+                ? await new DemoScript(ui, workspace, selection, play, sceneView, options).Run()
+                : await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options).Run();
             Log(restart ? "starting over" : "demo finished");
         }
         catch (Exception ex)
         {
+            failed = true;
             Log("demo failed: " + ex);
             narrator?.Stop();
             overlay.ClearSpotlight();
             overlay.Caption("The demo stopped early: " + ex.Message);
-            await Task.Delay(6000);
+            if (Environment.GetEnvironmentVariable("GRIFF_DEMO_EXIT") != "1")
+                await Task.Delay(6000);
         }
         finally
         {
@@ -132,6 +142,13 @@ internal static class DemoRunner
             await Task.Delay(300);
             bar.Close();
             overlay.Close();
+        }
+
+        // Checking demos (GRIFF_DEMO_EXIT=1): close the editor when done, with an exit code that says how it went.
+        if (Environment.GetEnvironmentVariable("GRIFF_DEMO_EXIT") == "1" && !restart)
+        {
+            services.GetRequiredService<IWorkspace>().Scene?.MarkSaved();
+            Environment.Exit(failed ? 1 : 0);
         }
 
         // Back to before the project existed: a fresh editor runs the demo from the top.

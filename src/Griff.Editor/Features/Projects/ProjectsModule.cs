@@ -23,6 +23,7 @@ public sealed class ProjectsModule : IEditorModule
     }
 }
 
+/// <summary>Opens the New Project window: a name, a folder and a template (Empty, Platformer, Top-down, Arcade, Strategy, Shooter, Sandbox, Contraption or Multiplayer) to start from.</summary>
 public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
 {
     public override string Id => "Project.New";
@@ -40,6 +41,7 @@ public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
     }
 }
 
+/// <summary>Opens a project: its folder or its project.griff file.</summary>
 public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
 {
     public const string ProjectFilter = "Griff project (project.griff)|project.griff";
@@ -58,6 +60,7 @@ public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dial
     }
 }
 
+/// <summary>Closes the editor (asking to save unsaved changes first).</summary>
 public sealed class ExitCommand : EditorCommand
 {
     public override string Id => "App.Exit";

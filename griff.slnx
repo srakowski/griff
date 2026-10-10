@@ -8,6 +8,7 @@
     <Project Path="src/Griff/Griff.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Griff.Editor.Tests/Griff.Editor.Tests.csproj" />
     <Project Path="tests/Griff.Tests/Griff.Tests.csproj" />
   </Folder>
 </Solution>

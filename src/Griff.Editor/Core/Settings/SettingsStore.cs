@@ -11,6 +11,9 @@ public sealed class EditorSettings
 
     /// <summary>Most recent first. The first entry is reopened on startup.</summary>
     public List<string> RecentProjects { get; set; } = [];
+
+    /// <summary>Whether the MCP server (for agents like Claude Code) runs while the editor is open.</summary>
+    public bool AgentServer { get; set; } = true;
 }
 
 public interface ISettingsStore

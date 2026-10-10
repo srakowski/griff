@@ -91,6 +91,7 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     }
 }
 
+/// <summary>Creates an empty entity (just a transform) inside the selected entity, or at the top level, and selects it.</summary>
 public sealed class CreateEmptyCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateEmpty";
@@ -101,6 +102,7 @@ public sealed class CreateEmptyCommand(IWorkspace workspace, ISelection selectio
     protected override string EntityName => "Entity";
 }
 
+/// <summary>Creates an entity with a Sprite (a white box until it's given an Image) and selects it.</summary>
 public sealed class CreateSpriteCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateSprite";
@@ -111,6 +113,7 @@ public sealed class CreateSpriteCommand(IWorkspace workspace, ISelection selecti
     protected override void Configure(Entity entity) => entity.AddComponent<Sprite>();
 }
 
+/// <summary>Creates a camera: what the game is seen through.</summary>
 public sealed class CreateCameraCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateCamera";
@@ -121,6 +124,7 @@ public sealed class CreateCameraCommand(IWorkspace workspace, ISelection selecti
     protected override void Configure(Entity entity) => entity.AddComponent<Camera>();
 }
 
+/// <summary>Creates an entity with a Text: words in the world, or on the HUD with a ScreenAnchor.</summary>
 public sealed class CreateTextCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateText";
@@ -142,6 +146,7 @@ public sealed class CreateTilemapCommand(IWorkspace workspace, ISelection select
     protected override void Configure(Entity entity) => entity.AddComponent<Tilemap>().Tint = Griff.Color.FromBytes(0x48, 0x4B, 0x55);
 }
 
+/// <summary>Creates a particle emitter: sparks, smoke, dust, magic.</summary>
 public sealed class CreateParticlesCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateParticles";
@@ -516,6 +521,7 @@ public sealed class CreateHitboxCommand(IWorkspace workspace, ISelection selecti
     }
 }
 
+/// <summary>Starts renaming the selected entity in the Hierarchy (agents: set its name with entity_update instead).</summary>
 public sealed class RenameEntityCommand(ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Rename";
@@ -590,6 +596,7 @@ public static class EntityClipboard
     }
 }
 
+/// <summary>Copies the selected entity (and its children) to the clipboard.</summary>
 public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Copy";
@@ -608,6 +615,7 @@ public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection
     }
 }
 
+/// <summary>Copies the selected entity (and its children) to the clipboard and deletes it.</summary>
 public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Cut";
@@ -653,6 +661,7 @@ public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selectio
     }
 }
 
+/// <summary>Deletes the selected entity and everything inside it.</summary>
 public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Delete";

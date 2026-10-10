@@ -14,9 +14,12 @@ public sealed class ScenesModule : IEditorModule
 {
     public void ConfigureServices(IServiceCollection services) => services
         .AddCommand<SaveSceneCommand>()
-        .AddCommand<NewSceneCommand>();
+        .AddCommand<NewSceneCommand>()
+        .AddCommand<OpenSceneCommand>()
+        .AddCommand<SetStartSceneCommand>();
 }
 
+/// <summary>Creates a new scene with a camera in Assets/Scenes and opens it.</summary>
 public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "Scene.New";
@@ -43,6 +46,7 @@ public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService
     private static partial Regex SceneName();
 }
 
+/// <summary>Saves the open scene to its file.</summary>
 public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Scene.Save";
@@ -55,4 +59,47 @@ public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
     protected override bool CanExecuteCore() => workspace.Scene is { IsRuntime: false };
 
     protected override Task ExecuteCoreAsync() => workspace.SaveSceneAsync();
+}
+
+/// <summary>Opens another of the project's scenes (asking to save the open one first if it has changes).</summary>
+public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialogs) : EditorCommand
+{
+    public override string Id => "Scene.Open";
+    public override string Text => "Open Scene...";
+    public override string? Icon => Icons.Open;
+    public override KeyGesture? Gesture { get; } = new(Key.O, ModifierKeys.Control | ModifierKeys.Shift);
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 2);
+
+    protected override bool CanExecuteCore() => workspace.Project is not null && !workspace.IsPlaying;
+
+    protected override async Task ExecuteCoreAsync()
+    {
+        if (workspace.Project is not { } project || dialogs.ShowOpenFileDialog("Griff scenes (*.scene)|*.scene") is not { } chosen)
+            return;
+
+        // A scene's name or its path in Assets will do, as well as a full path.
+        var path = Path.IsPathRooted(chosen) && File.Exists(chosen) ? chosen : project.FindScene(chosen);
+        if (path is null)
+        {
+            dialogs.ShowError("Open Scene", $"The project has no scene \"{chosen}\".");
+            return;
+        }
+
+        await workspace.OpenSceneAsync(path);
+    }
+}
+
+/// <summary>Makes the open scene the one the game starts in (when played from a menu or built).</summary>
+public sealed class SetStartSceneCommand(IWorkspace workspace) : EditorCommand
+{
+    public override string Id => "Scene.SetStart";
+    public override string Text => "Set as S_tart Scene";
+    public override string? Icon => Icons.Play;
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 3);
+
+    protected override bool CanExecuteCore() => workspace.EditScene is { } scene && workspace.Project is { } project
+        && !string.Equals(project.StartScenePath, scene.FilePath, StringComparison.OrdinalIgnoreCase);
+
+    protected override Task ExecuteCoreAsync() =>
+        workspace.EditScene is { } scene ? workspace.SetStartSceneAsync(scene.FilePath) : Task.CompletedTask;
 }

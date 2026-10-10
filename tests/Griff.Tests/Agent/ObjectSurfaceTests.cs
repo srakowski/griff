@@ -1,0 +1,167 @@
+using System.Numerics;
+using System.Text.Json;
+using System.Windows.Input;
+using Griff.Agent;
+
+namespace Griff.Tests.Agent;
+
+public class ObjectSurfaceTests
+{
+    public enum Mood { Bright, Spooky }
+
+    public sealed class Command(Action run) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
+
+        public bool Enabled { get; set; } = true;
+
+        public bool CanExecute(object? parameter) => Enabled;
+
+        public void Execute(object? parameter) => run();
+    }
+
+    public sealed class Preset(string label, Action apply)
+    {
+        public string Label { get; } = label;
+
+        public Command Command { get; } = new(apply);
+    }
+
+    /// <summary>Something like a window's view model.</summary>
+    public sealed class Maker
+    {
+        public Maker()
+        {
+            Presets = [new Preset("Coin", () => Applied = "coin"), new Preset("Jump", () => Applied = "jump")];
+            SaveCommand = new Command(() => Saved++);
+        }
+
+        public string Name { get; set; } = "";
+
+        public double Tempo { get; set; } = 120;
+
+        public Mood Mood { get; set; }
+
+        public Color Tint { get; set; } = Color.White;
+
+        public Vector2 Size { get; set; }
+
+        public string? Applied { get; private set; }
+
+        public int Saved { get; private set; }
+
+        public IReadOnlyList<Preset> Presets { get; }
+
+        public Preset? Picked { get; set; }
+
+        public Command SaveCommand { get; }
+
+        public string Paint(int x, int y, string color = "#000000") => $"{x},{y} {color}";
+
+        public async Task<int> CountLaterAsync(int n)
+        {
+            await Task.Yield();
+            return n * 2;
+        }
+    }
+
+    private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement;
+
+    [Fact]
+    public void Describe_ShowsValuesCommandsMethodsAndWhatCanBeSet()
+    {
+        var description = ObjectSurface.Describe(new Maker(), null).ToJsonString(ToolResult.Compact);
+
+        Assert.Contains("\"Tempo\":{\"value\":120,\"settable\":\"a number\"}", description);
+        Assert.Contains("\"Mood\":{\"value\":\"Bright\",\"settable\":\"one of Bright, Spooky\"}", description);
+        Assert.Contains("\"Presets\":\"[2 items]\"", description);
+        Assert.Contains("\"SaveCommand\":\"available\"", description);
+        Assert.Contains("Paint(x: a whole number, y: a whole number, color: text (optional)) -> text", description);
+    }
+
+    [Fact]
+    public void Describe_AListShowsItsItems()
+    {
+        var items = ObjectSurface.Describe(new Maker(), "Presets")["items"]!.AsArray().Select(i => (string?)i).ToList();
+
+        Assert.Equal(["[0] Preset \"Coin\"", "[1] Preset \"Jump\""], items);
+    }
+
+    [Fact]
+    public void Set_ConvertsToThePropertysType()
+    {
+        var maker = new Maker();
+
+        ObjectSurface.Set(maker, "Tempo", Json("140"));
+        ObjectSurface.Set(maker, "mood", Json("\"spooky\""));
+        ObjectSurface.Set(maker, "Tint", Json("\"#00FF00\""));
+        ObjectSurface.Set(maker, "Size", Json("{\"x\": 2, \"y\": 3}"));
+
+        Assert.Equal(140, maker.Tempo);
+        Assert.Equal(Mood.Spooky, maker.Mood);
+        Assert.Equal(Color.Green, maker.Tint);
+        Assert.Equal(new Vector2(2, 3), maker.Size);
+        Assert.Throws<AgentException>(() => ObjectSurface.Set(maker, "Applied", Json("\"x\"")));
+        Assert.Throws<AgentException>(() => ObjectSurface.Set(maker, "Nope", Json("1")));
+    }
+
+    [Fact]
+    public void Set_AnItemProperty_PicksFromTheObjectsListsByLabel()
+    {
+        var maker = new Maker();
+
+        ObjectSurface.Set(maker, "Picked", Json("\"Jump\""));
+        Assert.Same(maker.Presets[1], maker.Picked);
+        ObjectSurface.Set(maker, "Picked", Json("0"));
+        Assert.Same(maker.Presets[0], maker.Picked);
+    }
+
+    [Fact]
+    public async Task Invoke_PressesCommandsByPathAndLabel()
+    {
+        var maker = new Maker();
+
+        await ObjectSurface.InvokeAsync(maker, "SaveCommand", null);
+        await ObjectSurface.InvokeAsync(maker, "Presets[Jump].Command", null);
+
+        Assert.Equal(1, maker.Saved);
+        Assert.Equal("jump", maker.Applied);
+    }
+
+    [Fact]
+    public async Task Invoke_CallsMethodsWithArguments_AndAwaitsThem()
+    {
+        var maker = new Maker();
+
+        Assert.Equal("1,2 #000000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("[1, 2]")))!.GetValue<string>());
+        Assert.Equal("3,4 #FF0000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("{\"x\": 3, \"y\": 4, \"color\": \"#FF0000\"}")))!.GetValue<string>());
+        Assert.Equal(10, (await ObjectSurface.InvokeAsync(maker, "CountLaterAsync", Json("[5]")))!.GetValue<int>());
+        await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(maker, "Paint", Json("[\"a\", 2]")));
+    }
+
+    [Fact]
+    public async Task Invoke_OnAPlainProperty_SaysWhatItHolds()
+    {
+        Assert.Equal(120, (await ObjectSurface.InvokeAsync(new Maker(), "Tempo", null))!.GetValue<double>());
+    }
+
+    [Fact]
+    public async Task Invoke_ACommandThatCantRunNow_Says()
+    {
+        var maker = new Maker();
+        maker.SaveCommand.Enabled = false;
+
+        var error = await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(maker, "SaveCommand", null));
+        Assert.Contains("can't be used right now", error.Message);
+    }
+
+    [Fact]
+    public void Values_AreForgivingOnTheWayIn()
+    {
+        Assert.Equal(new Vector3(1, 2, 0), AgentValues.FromJson(Json("[1, 2]"), typeof(Vector3)));
+        Assert.Equal(new Vector2(1, 2), AgentValues.FromJson(Json("\"1, 2\""), typeof(Vector2)));
+        Assert.Equal(new[] { "a", "b" }, (string[])AgentValues.FromJson(Json("\"a\\nb\""), typeof(IReadOnlyList<string>))!);
+        Assert.Equal(3, AgentValues.FromJson(Json("\"3\""), typeof(int)));
+        Assert.Null(AgentValues.FromJson(Json("null"), typeof(int?)));
+    }
+}

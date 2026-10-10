@@ -199,6 +199,18 @@ In the **Assets** panel:
 
 Games can switch scenes with `Game.LoadScene("Level2")`. **Game → Clear Save Data** forgets what the game saved while playing in the editor.
 
+## Agents (MCP)
+
+While the editor is open it runs a [Model Context Protocol](https://modelcontextprotocol.io) server on this computer, so an agent like Claude Code can build games with it: `claude mcp add --transport http griff http://127.0.0.1:7650/mcp` (or **Help → Copy MCP Setup Command**; **Help → MCP Server** turns it off; `GRIFF_MCP_PORT` picks another port). The server lists no features of its own. Its tools are read from what the editor already has, so everything the editor can do is there, and anything added later shows up by itself:
+
+- **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity`; a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
+- **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
+- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`.
+- **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
+- **Checking work**: `editor_screenshot` shows the game or the editor, `game_input` plays the running game with keys (and can pause it between moves), `editor_state` and `output_read` say what's going on.
+
+It listens on the loopback address only and refuses requests from web pages.
+
 ## Scripting
 
 Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.

@@ -3,7 +3,7 @@
 A game engine and editor for game jams, in C# (.NET 10, WPF editor). See README.md for what it does.
 
 - Build: `dotnet build src/Griff.Editor/Griff.Editor.csproj` (also publishes the game players). Tests:
-  `dotnet test tests/Griff.Tests`.
+  `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`.
 - `src/Griff.Editor/Diagnostics/` holds Debug-only tools: the snapshot runner (`GRIFF_SNAPSHOT_DIR`) and the demo
   player (`Diagnostics/Demo`).
 
@@ -18,3 +18,19 @@ Every user-visible change gets a narrated demo, and the demos stay current:
   (`-All -Check`, the tour) unless asked, including before a commit.
 - The guided tour (`tools\demo.ps1 -Tour`, `Diagnostics/Demo/DemoScript.cs`) builds a whole game; keep it working
   when the features it uses change.
+
+## Agents (MCP)
+
+The editor serves MCP at `http://127.0.0.1:7650/mcp` while it's open (`src/Griff.Editor/Features/Agent`; the protocol,
+scene tools and reflection live in `src/Griff/Agent`). It has no list of features: its tools are projections of what
+the editor already registers, so new capabilities reach agents by themselves. Keep it that way by putting each
+capability where a projection sees it:
+
+- A user action is an `EditorCommand` (it becomes a tool named by its id) with a `///` summary, which describes the
+  tool; `tests/Griff.Editor.Tests` fails for a command without one.
+- Game data is a component's public property (any component, scripts too, is created and set by the scene tools).
+- Questions to the user go through `IDialogService` (agents answer them with `answers`).
+- Window and panel state and actions live in their view model; editor services are DI singletons (both reached by
+  `ui_inspect`/`ui_set`/`ui_invoke`).
+- Not in code-behind event handlers: a capability that only exists in a click handler is invisible to agents. Make it
+  a command (as Open Scene and Set as Start Scene are) and let the UI call that.

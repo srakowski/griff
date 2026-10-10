@@ -15,6 +15,7 @@ public sealed class DesignSystemModule : IEditorModule
     }
 }
 
+/// <summary>Shows the editor's design system: its colors, type and controls (for people working on Griff itself).</summary>
 public sealed class ShowDesignSystemCommand(IServiceProvider services) : EditorCommand
 {
     private DesignSystemWindow? _window;

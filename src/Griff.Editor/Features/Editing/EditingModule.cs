@@ -14,6 +14,7 @@ public sealed class EditingModule : IEditorModule
         .AddCommand<RedoCommand>();
 }
 
+/// <summary>Undoes the last change to the scene.</summary>
 public sealed class UndoCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Edit.Undo";
@@ -32,6 +33,7 @@ public sealed class UndoCommand(IWorkspace workspace) : EditorCommand
     }
 }
 
+/// <summary>Redoes the last change that was undone.</summary>
 public sealed class RedoCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Edit.Redo";

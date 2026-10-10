@@ -7,6 +7,7 @@ using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Assets;
 using Griff.Editor.Features.Audio;
@@ -34,7 +35,7 @@ namespace Griff.Editor;
 public partial class App : Application
 {
     // Add new feature modules here.
-    private static readonly IEditorModule[] Modules =
+    internal static readonly IEditorModule[] Modules =
     [
         new ProjectsModule(),
         new ScenesModule(),
@@ -51,6 +52,7 @@ public partial class App : Application
         new ControlsModule(),
         new OutputModule(),
         new DesignSystemModule(),
+        new AgentModule(),
     ];
 
     private IHost? _host;
@@ -94,7 +96,7 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    private static void ConfigureCoreServices(IServiceCollection services)
+    internal static void ConfigureCoreServices(IServiceCollection services)
     {
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();

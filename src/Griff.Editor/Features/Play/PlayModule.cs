@@ -32,6 +32,7 @@ public sealed class PlayModule : IEditorModule
     }
 }
 
+/// <summary>Plays the open scene in the Game tab, on a copy: Stop puts everything back as it was.</summary>
 public sealed class PlayCommand(PlayMode play, IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Game.Play";
@@ -50,6 +51,7 @@ public sealed class PlayCommand(PlayMode play, IWorkspace workspace) : EditorCom
     }
 }
 
+/// <summary>Pauses the running game, or resumes it. While paused, the timeline rewinds up to the last 20 seconds.</summary>
 public sealed class PauseCommand(PlayMode play) : EditorCommand
 {
     public override string Id => "Game.Pause";
@@ -68,6 +70,7 @@ public sealed class PauseCommand(PlayMode play) : EditorCommand
     }
 }
 
+/// <summary>Advances the paused game by one frame.</summary>
 public sealed class StepCommand(PlayMode play) : EditorCommand
 {
     public override string Id => "Game.Step";
@@ -123,6 +126,7 @@ public sealed class KeepPlayChangesCommand(IWorkspace workspace, ISelection sele
     }
 }
 
+/// <summary>Stops the game and goes back to the scene as it was before Play.</summary>
 public sealed class StopCommand(PlayMode play) : EditorCommand
 {
     public override string Id => "Game.Stop";
@@ -161,13 +165,16 @@ public abstract class PlayWithPlayersCommand(PlayMode play, IWorkspace workspace
     }
 }
 
+/// <summary>Plays as two players at once: the Game tab hosts a network game and player 2 gets a window of their own.</summary>
 public sealed class PlayWithTwoCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 2)
 {
     public override KeyGesture? Gesture { get; } = new(Key.F5, ModifierKeys.Control);
 }
 
+/// <summary>Plays as three players at once: the Game tab hosts and players 2 and 3 get windows of their own.</summary>
 public sealed class PlayWithThreeCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 3);
 
+/// <summary>Plays as four players at once: the Game tab hosts and players 2 to 4 get windows of their own.</summary>
 public sealed class PlayWithFourCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 4);
 
 /// <summary>Pretends the players of Play with Players are on a slow connection, to feel what lag does. Again turns it off.</summary>

@@ -20,7 +20,7 @@ public class SceneToolsTests
 
         public EditHistory History { get; } = new();
 
-        public Entity? Selected { get; set; }
+        public IReadOnlyList<Entity> Selection { get; set; } = [];
 
         public void Execute(IEdit edit) => History.Execute(edit);
 
@@ -79,7 +79,7 @@ public class SceneToolsTests
         var lantern = Assert.Single(hero.Children);
         Assert.Equal(6, lantern.GetComponent<Light>()!.Radius);
         Assert.Equal(new Vector3(0.5f, 1, 0), lantern.Transform.Position);
-        Assert.Same(hero, _host.Selected);
+        Assert.Same(hero, Assert.Single(_host.Selection));
 
         _host.History.Undo();
         Assert.Equal(0, _host.Scene!.Count);
@@ -166,6 +166,27 @@ public class SceneToolsTests
         Assert.Contains("\"Hello\"", json);
         Assert.Contains("\"position\": [", json);
         Assert.DoesNotContain("\"scale\"", json); // unchanged from the default
+    }
+
+    [Fact]
+    public void Select_PicksSeveral_AddsToThem_AndClears()
+    {
+        Run("entity_create", """{"entities": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}""");
+
+        var result = Run("select", """{"entities": ["C", "A"]}""");
+        Assert.Equal(["C", "A"], _host.Selection.Select(e => e.Name));
+        Assert.Contains("Selected 2 entities", result.Text);
+        Assert.Contains("selected: C #", Run("scene_tree", "{}").Text);
+
+        Run("select", """{"entity": "B", "add": true}""");
+        Assert.Equal(["C", "A", "B"], _host.Selection.Select(e => e.Name));
+        // Adding one that's already selected makes it the primary one.
+        Run("select", """{"entity": "C", "add": true}""");
+        Assert.Equal(["A", "B", "C"], _host.Selection.Select(e => e.Name));
+
+        Assert.Contains("Nothing is selected", Run("select", "{}").Text);
+        Assert.Empty(_host.Selection);
+        Assert.True(Run("select", """{"entities": ["Nope"]}""").IsError);
     }
 
     [Fact]

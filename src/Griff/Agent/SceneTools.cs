@@ -29,7 +29,8 @@ public interface IAgentScene
     /// <summary>Makes every edit until the scope is disposed one undo step.</summary>
     IDisposable BeginGroup(string description);
 
-    Entity? Selected { get; set; }
+    /// <summary>The selected entities; the last is the primary one, which the Inspector shows.</summary>
+    IReadOnlyList<Entity> Selection { get; set; }
 
     /// <summary>A new entity from the project's prefab called <paramref name="name"/>, or null if there's none.</summary>
     Entity? InstantiatePrefab(string name);
@@ -155,8 +156,14 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             Name = "select",
             Title = "Select",
-            Description = "Selects an entity in the editor (or nothing). Editor commands that act on the selection use it.",
-            InputSchema = Schema.Object([("entity", Schema.String("The entity to select; leave out to select nothing."))]),
+            Description = "Selects entities in the editor (or nothing), as Ctrl-clicking them in the Hierarchy would. Editor commands " +
+                "act on the selection: Entity_Delete, Entity_Duplicate, Entity_Cut and Entity_Copy on every selected entity (one undo step), " +
+                "the Inspector and Entity_Rename on the primary one (the last).",
+            InputSchema = Schema.Object([
+                ("entity", Schema.String("The entity to select.")),
+                ("entities", Schema.Array(Schema.String("name, id or path"), "Several entities to select; the last is the primary one.")),
+                ("add", Schema.Bool("Add to what's already selected instead of replacing it. Default false.")),
+            ]),
             Invoke = args => Task.FromResult(Select(args)),
         };
 
@@ -195,8 +202,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var depth = args.Int("depth", int.MaxValue);
         var text = new StringBuilder();
         text.Append($"Scene {host.ScenePath ?? "(unsaved)"}: {scene.Count} entities{(host.IsPlaying ? ", PLAYING (live game; changes are lost on Stop)" : "")}");
-        if (host.Selected is { } selected)
-            text.Append($", selected: {selected.Name} #{AgentValues.ShortId(selected.Id)}");
+        if (host.Selection.Count > 0)
+            text.Append($", selected: {string.Join(", ", host.Selection.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}");
         text.AppendLine();
 
         IEnumerable<Entity> roots = args.OptionalString("under") is { } under ? [Resolve(scene, under)] : scene.Roots;
@@ -326,7 +333,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         }
 
         if (args.Bool("select", true))
-            host.Selected = built[^1];
+            host.Selection = [built[^1]];
 
         var text = new StringBuilder();
         foreach (var entity in built)
@@ -546,9 +553,15 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
     private ToolResult Select(ToolArgs args)
     {
-        var entity = args.OptionalString("entity") is { } reference ? Resolve(RequireScene(), reference) : null;
-        host.Selected = entity;
-        return ToolResult.Ok(entity is null ? "Nothing is selected." : $"Selected {Line(entity)}.");
+        IEnumerable<string> references = args.Strings("entities");
+        if (args.OptionalString("entity") is { } one)
+            references = references.Prepend(one);
+        var picked = references.Select(r => Resolve(RequireScene(), r)).Distinct().ToList();
+        var selection = args.Bool("add", false) ? host.Selection.Where(e => !picked.Contains(e)).Concat(picked).ToList() : picked;
+        host.Selection = selection;
+        return ToolResult.Ok(selection.Count == 0 ? "Nothing is selected."
+            : selection.Count == 1 ? $"Selected {Line(selection[0])}."
+            : $"Selected {selection.Count} entities (the primary one last):\n{string.Join("\n", selection.Select(e => "- " + Line(e)))}");
     }
 
     // --- Components ---

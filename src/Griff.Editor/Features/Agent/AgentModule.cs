@@ -24,7 +24,13 @@ public sealed class AgentModule : IEditorModule
         services.AddSingleton<IAgentProject, EditorAgentProject>();
 
         services.AddSingleton<IAgentToolSource, EditorTools>();
-        services.AddSingleton<IAgentToolSource>(sp => new SceneTools(sp.GetRequiredService<IAgentScene>()));
+        services.AddSingleton<IAgentToolSource>(sp =>
+        {
+            var scene = sp.GetRequiredService<IAgentScene>();
+            // ui_invoke and ui_set name entities the way the scene tools do (a name, id or path in the open scene).
+            AgentValues.EntityResolver = reference => scene.Scene is { } open ? SceneTools.Resolve(open, reference) : null;
+            return new SceneTools(scene);
+        });
         services.AddSingleton<IAgentToolSource>(sp => new AssetTools(sp.GetRequiredService<IAgentProject>()));
         services.AddSingleton<IAgentToolSource, CommandTools>();
         services.AddSingleton<IAgentToolSource, SurfaceTools>();

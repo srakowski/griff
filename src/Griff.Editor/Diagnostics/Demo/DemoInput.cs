@@ -91,6 +91,32 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         await Pause(160);
     }
 
+    /// <summary>Clicks with modifier keys held (a Ctrl-click, a Shift-click), showing them on screen like a key press.</summary>
+    public async Task ClickWith(Point at, ModifierKeys modifiers)
+    {
+        if (modifiers == ModifierKeys.None)
+        {
+            await Click(at);
+            return;
+        }
+
+        await MoveTo(at);
+        await Gate();
+        overlay.ShowKeys(string.Join("+", Modifiers(modifiers).Select(m => m.ToString().Replace("Left", ""))) + "+Click");
+        var held = Modifiers(modifiers).ToList();
+        foreach (var m in held)
+            Send(VirtualKey(m, down: true));
+        try
+        {
+            await Click(at, glide: false);
+        }
+        finally
+        {
+            foreach (var m in Enumerable.Reverse(held))
+                Send(VirtualKey(m, down: false));
+        }
+    }
+
     /// <summary>Presses a mouse button where the cursor is (with a ripple there) and keeps it down until <see cref="Release"/>.</summary>
     public void Press(Point at, bool right = false)
     {

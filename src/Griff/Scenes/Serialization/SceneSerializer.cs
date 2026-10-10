@@ -83,6 +83,49 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// Several entities (each with its descendants) for the clipboard: one entity's JSON for one, a JSON array of
+    /// them for more. <see cref="DeserializeEntities"/> reads either.
+    /// </summary>
+    public string SerializeEntities(IReadOnlyList<Entity> entities)
+    {
+        if (entities.Count == 1)
+            return SerializeEntity(entities[0]);
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, WriterOptions))
+        {
+            writer.WriteStartArray();
+            foreach (var entity in entities)
+                WriteEntity(writer, entity);
+            writer.WriteEndArray();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>Detached entities from <see cref="SerializeEntities"/> (or <see cref="SerializeEntity"/>) output, with fresh ids.</summary>
+    /// <exception cref="InvalidDataException">The text isn't entities.</exception>
+    public IReadOnlyList<Entity> DeserializeEntities(string json, ICollection<string>? warnings = null)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+                return [DeserializeEntity(json, warnings)];
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0 ||
+                root.EnumerateArray().Any(e => e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("components", out _)))
+                throw new InvalidDataException("The text isn't Griff entities.");
+            var context = new LoadContext(warnings, newIds: true);
+            return root.EnumerateArray().Select(e => ReadEntity(e, context)).ToList();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("The text isn't Griff entities.", ex);
+        }
+    }
+
     /// <summary>A detached entity from <see cref="SerializeEntity"/> output, with fresh ids.</summary>
     /// <exception cref="InvalidDataException">The text isn't an entity.</exception>
     public Entity DeserializeEntity(string json, ICollection<string>? warnings = null)

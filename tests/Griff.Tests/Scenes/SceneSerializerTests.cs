@@ -286,6 +286,33 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void SerializeEntities_RoundTripsSeveral_AndReadsOne()
+    {
+        var a = new Entity("A");
+        a.AddComponent<TestComponent>().Label = "first";
+        var b = new Entity("B");
+        var scene = new Scene();
+        scene.Add(a);
+        scene.Add(b);
+        scene.Add(new Entity("B1"), b);
+
+        var copies = _serializer.DeserializeEntities(_serializer.SerializeEntities([a, b]));
+
+        Assert.Equal(["A", "B"], copies.Select(e => e.Name));
+        Assert.Equal("first", copies[0].GetComponent<TestComponent>()!.Label);
+        Assert.Equal("B1", Assert.Single(copies[1].Children).Name);
+        Assert.DoesNotContain(copies, c => c.Id == a.Id || c.Id == b.Id);
+
+        // One entity is plain entity JSON, as the clipboard has always held.
+        var one = _serializer.SerializeEntities([a]);
+        Assert.Equal(_serializer.SerializeEntity(a), one);
+        Assert.Equal("A", Assert.Single(_serializer.DeserializeEntities(one)).Name);
+
+        Assert.Throws<InvalidDataException>(() => _serializer.DeserializeEntities("[1, 2]"));
+        Assert.Throws<InvalidDataException>(() => _serializer.DeserializeEntities("[]"));
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = $$"""{ "formatVersion": {{SceneSerializer.FormatVersion + 1}}, "entities": [] }""";

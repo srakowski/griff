@@ -4,12 +4,29 @@ using Griff.Scenes;
 
 namespace Griff.Editor.Core.Workspace;
 
-/// <summary>The selected entity, shared by the hierarchy, inspector and scene view.</summary>
+/// <summary>
+/// The selected entities, shared by the hierarchy, inspector and scene view. <see cref="Entity"/> is the primary one
+/// (the last picked), which the inspector and the scene view's handles work on; Delete, Duplicate, Cut, Copy and Paste
+/// act on all of <see cref="Entities"/>.
+/// </summary>
 public interface ISelection : INotifyPropertyChanged
 {
+    /// <summary>The primary selected entity: the last one picked.</summary>
     Entity? Entity { get; }
 
+    /// <summary>Every selected entity, in the order they were picked; the primary one is last.</summary>
+    IReadOnlyList<Entity> Entities { get; }
+
+    /// <summary>Selects just this entity, or nothing.</summary>
     void Select(Entity? entity);
+
+    /// <summary>Selects these entities; the last one becomes the primary one.</summary>
+    void SelectEntities(IEnumerable<Entity> entities);
+
+    /// <summary>Adds the entity to the selection (as the primary one), or takes it out if it's already selected.</summary>
+    void Toggle(Entity entity);
+
+    bool IsSelected(Entity entity);
 
     /// <summary>Asks the hierarchy to start renaming the selected entity in place.</summary>
     event EventHandler? RenameRequested;
@@ -17,11 +34,29 @@ public interface ISelection : INotifyPropertyChanged
     void RequestRename();
 }
 
+public static class SelectionExtensions
+{
+    /// <summary>
+    /// The selected entities in the order the hierarchy shows them, leaving out any inside another selected one (they
+    /// go along with it): what Copy, Duplicate and Delete act on.
+    /// </summary>
+    public static IReadOnlyList<Entity> TopLevel(this ISelection selection)
+    {
+        var selected = selection.Entities;
+        if (selected.Count == 0 || selected[0].Scene is not { } scene)
+            return [];
+        var set = selected.ToHashSet();
+        return scene.Entities
+            .Where(e => set.Contains(e) && !set.Any(other => other != e && e.IsSelfOrDescendantOf(other)))
+            .ToList();
+    }
+}
+
 public sealed class Selection : ObservableObject, ISelection
 {
     private readonly IWorkspace _workspace;
     private SceneDocument? _document;
-    private Entity? _entity;
+    private IReadOnlyList<Entity> _entities = [];
 
     public Selection(IWorkspace workspace)
     {
@@ -36,23 +71,52 @@ public sealed class Selection : ObservableObject, ISelection
 
     public event EventHandler? RenameRequested;
 
-    public Entity? Entity
+    public Entity? Entity => _entities.Count > 0 ? _entities[^1] : null;
+
+    public IReadOnlyList<Entity> Entities => _entities;
+
+    public void Select(Entity? entity) => SelectEntities(entity is null ? [] : [entity]);
+
+    public void SelectEntities(IEnumerable<Entity> entities)
     {
-        get => _entity;
-        private set => SetProperty(ref _entity, value);
+        var list = new List<Entity>();
+        foreach (var entity in entities)
+        {
+            if (entity.Scene != _workspace.Scene?.Scene)
+                throw new ArgumentException($"{entity.Name} isn't in the open scene.", nameof(entities));
+            // Picking one again moves it to the end, making it the primary one.
+            list.Remove(entity);
+            list.Add(entity);
+        }
+
+        Set(list);
     }
 
-    public void Select(Entity? entity)
+    public void Toggle(Entity entity)
     {
-        if (entity is not null && entity.Scene != _workspace.Scene?.Scene)
-            throw new ArgumentException("The entity isn't in the open scene.", nameof(entity));
-        Entity = entity;
+        if (_entities.Contains(entity))
+            Set(_entities.Where(e => e != entity).ToList());
+        else
+            SelectEntities(_entities.Append(entity));
     }
+
+    public bool IsSelected(Entity entity) => _entities.Contains(entity);
 
     public void RequestRename()
     {
         if (Entity is not null)
             RenameRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Set(List<Entity> entities)
+    {
+        if (entities.SequenceEqual(_entities))
+            return;
+        var primary = Entity;
+        _entities = entities;
+        if (Entity != primary)
+            OnPropertyChanged(nameof(Entity));
+        OnPropertyChanged(nameof(Entities));
     }
 
     private void Track(SceneDocument? document)
@@ -62,13 +126,13 @@ public sealed class Selection : ObservableObject, ISelection
         _document = document;
         if (_document is not null)
             _document.Changed += OnDocumentChanged;
-        Entity = null;
+        Set([]);
     }
 
-    // Deleting (or undoing the creation of) the selected entity clears the selection.
+    // Deleting (or undoing the creation of) selected entities takes them out of the selection.
     private void OnDocumentChanged(object? sender, EventArgs e)
     {
-        if (Entity is not null && Entity.Scene != _document?.Scene)
-            Entity = null;
+        if (_entities.Any(entity => entity.Scene != _document?.Scene))
+            Set(_entities.Where(entity => entity.Scene == _document?.Scene).ToList());
     }
 }

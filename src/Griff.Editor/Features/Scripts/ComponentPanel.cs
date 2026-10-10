@@ -61,7 +61,11 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
             if (e.PropertyName is nameof(IWorkspace.Scene) or nameof(IWorkspace.IsPlaying))
                 Track(workspace.Scene);
         };
-        selection.PropertyChanged += (_, _) => FollowSelection();
+        selection.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ISelection.Entity))
+                FollowSelection();
+        };
         script.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ScriptDocument.IsDirty) or nameof(ScriptDocument.ErrorCount))

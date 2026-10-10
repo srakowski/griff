@@ -63,8 +63,27 @@ public partial class HierarchyView : UserControl
 
     private void OnPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Right-click acts on the row under the mouse; on empty space it targets the scene root.
-        Panel.Select(FindItem(e.OriginalSource)?.DataContext as EntityNode);
+        // Right-click acts on the row under the mouse (on all of the selection, if it's one of them); on empty space
+        // it targets the scene root.
+        var node = FindItem(e.OriginalSource)?.DataContext as EntityNode;
+        if (node is not { IsSelected: true })
+            Panel.Select(node);
+    }
+
+    // Clicks on a row go to the panel, which knows Ctrl and Shift; the tree itself only selects one row.
+    private bool SelectOnClick(MouseButtonEventArgs e)
+    {
+        if (FindItem(e.OriginalSource) is not { DataContext: EntityNode { IsEditing: false } node } item || IsInside<ToggleButton>(e.OriginalSource))
+            return false;
+
+        var modifiers = Keyboard.Modifiers;
+        Panel.Click(node, modifiers.HasFlag(ModifierKeys.Control), modifiers.HasFlag(ModifierKeys.Shift));
+        // Focusing a row selects it in the tree, so only focus the primary one.
+        if (node.IsPrimary)
+            item.Focus();
+        else
+            Tree.Focus();
+        return true;
     }
 
     // ----- Drag and drop -----
@@ -73,6 +92,8 @@ public partial class HierarchyView : UserControl
     {
         _dragStart = e.GetPosition(Tree);
         _dragCandidate = FindItem(e.OriginalSource)?.DataContext as EntityNode;
+        if (SelectOnClick(e))
+            e.Handled = true;
     }
 
     private void OnPreviewMouseMove(object sender, MouseEventArgs e)
@@ -187,9 +208,23 @@ public partial class HierarchyView : UserControl
             Panel.CommitRename(node);
     }
 
+    private static bool IsInside<T>(object source) where T : DependencyObject
+    {
+        for (var current = source as DependencyObject; current is not null and not TreeViewItem; current = VisualParent(current))
+        {
+            if (current is T)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? VisualParent(DependencyObject d) =>
+        d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+
     private static TreeViewItem? FindItem(object source)
     {
-        for (var current = source as DependencyObject; current is not null; current = Parent(current))
+        for (var current = source as DependencyObject; current is not null; current = VisualParent(current))
         {
             if (current is TreeViewItem item)
                 return item;
@@ -198,8 +233,5 @@ public partial class HierarchyView : UserControl
         }
 
         return null;
-
-        static DependencyObject? Parent(DependencyObject d) =>
-            d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
     }
 }

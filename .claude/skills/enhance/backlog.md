@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Editor: selection and handles
 
-- [ ] Add multi-select in the Hierarchy: Shift/Ctrl-click, with delete, duplicate, cut, copy and paste working on all of them as one undo step.
 - [ ] Add multi-select in the Scene view: Shift/Ctrl-click and box selection, with dragging moving them all.
 - [ ] Edit several selected entities in the Inspector at once: the components and fields they share, with mixed values shown as mixed.
 - [ ] Add a rotate handle to the Scene view.
@@ -161,3 +160,5 @@ grows. The headings only group items; build order is top to bottom.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+
+- [x] Add multi-select in the Hierarchy: Shift/Ctrl-click, with delete, duplicate, cut, copy and paste working on all of them as one undo step. (2026-10-10) Dragging rows in the Hierarchy still moves one at a time; the Inspector shows the last one picked (multi-editing is its own item).

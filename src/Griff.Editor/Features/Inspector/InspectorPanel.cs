@@ -36,7 +36,11 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         _scripts = scripts;
         // A picture saved over the one a field shows: show the new one.
         art.ImageSaved += (_, _) => Refresh();
-        selection.PropertyChanged += (_, _) => Rebuild();
+        selection.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ISelection.Entity))
+                Rebuild();
+        };
         workspace.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(IWorkspace.Scene))

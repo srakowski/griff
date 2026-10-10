@@ -107,7 +107,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         }
 
         text.AppendLine($"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
-        text.AppendLine($"Selected: {(selection.Entity is { } e ? $"{e.Name} #{AgentValues.ShortId(e.Id)}" : "nothing")}");
+        text.AppendLine($"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
         var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();
         if (windows.Count > 0)
             text.AppendLine($"Open windows: {string.Join(", ", windows)}");

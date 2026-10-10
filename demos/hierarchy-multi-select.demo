@@ -1,0 +1,54 @@
+title: Select several at once
+intro: Ctrl and Shift pick several entities in the Hierarchy, and delete, duplicate, cut, copy and paste work on all of them.
+project: Platformer | Multi Select
+
+chapter: Picking several | Ctrl and Shift in the Hierarchy
+say: Until now the Hierarchy picked one entity at a time. Now it picks as many as you like.
+select: Slime
+select: Ctrl+Checkpoint
+select: Ctrl+Sign
+expectselected: Slime, Checkpoint, Sign
+explain: panel:Hierarchy | Ctrl-click | Control click adds a row to the selection. The slime, the checkpoint and the sign are all picked.
+explain: scene | All outlined | The Scene view outlines every one of them. The last one picked gets the move handle.
+explain: panel:Inspector | The last one picked | The Inspector shows the sign, the last one picked.
+select: Ctrl+Checkpoint
+expectselected: Slime, Sign
+say: Control click on a picked row takes it out again.
+select: Lever
+select: Shift+Sign
+expectselected: Lever, Checkpoint, Sign
+explain: panel:Hierarchy | Shift-click | Shift click picks every row from the last one clicked, here the lever down to the sign.
+
+chapter: Acting on all of them | One undo step each
+select: Slime
+select: Ctrl+Coins
+say: Control D duplicates everything picked. Each copy goes right after its original, and the copies end up selected.
+key: Ctrl+D
+expectcount: Slime = 2
+expectcount: Coin = 12
+explain: panel:Hierarchy | Copies | A second slime, and a second row of coins.
+say: However many there were, it's one step to undo.
+key: Ctrl+Z
+expectcount: Slime = 1
+expectcount: Coin = 8
+select: Slime
+select: Ctrl+Lever
+say: Delete removes them all at once.
+key: Delete
+expectcount: Slime = 0
+expectcount: Lever = 0
+key: Ctrl+Z
+expectcount: Lever = 1
+say: And undo brings them all back, each where it was.
+
+chapter: Cut and paste | Moving several together
+select: Slime
+select: Ctrl+Sign
+say: Cut and paste move several together. Cut the slime and the sign, pick the music, and paste.
+key: Ctrl+X
+expectcount: Slime = 0
+select: Music
+key: Ctrl+V
+expectselected: Slime, Sign
+explain: panel:Hierarchy | Pasted | They land after the music, in their order, still selected and ready for the next thing.
+say: Copy works the same way, and what's copied pastes into another scene too.

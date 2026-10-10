@@ -6,7 +6,6 @@ using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Features.Agent;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Tests;
 
@@ -17,33 +16,7 @@ namespace Griff.Editor.Tests;
 /// </summary>
 public class AgentSurfaceTests
 {
-    // WPF objects (the scene view, the game surface) need a single-threaded apartment.
-    private static void OnUiThread(Action<IServiceProvider> test)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                var services = new ServiceCollection();
-                services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
-                App.ConfigureCoreServices(services);
-                foreach (var module in App.Modules)
-                    module.ConfigureServices(services);
-                using var provider = services.BuildServiceProvider();
-                test(provider);
-            }
-            catch (Exception ex)
-            {
-                failure = ex;
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (failure is not null)
-            throw new Exception(failure.Message, failure);
-    }
+    private static void OnUiThread(Action<IServiceProvider> test) => EditorHost.Run(test);
 
     [Fact]
     public void EveryCommand_IsATool_DescribedByItsDocs() => OnUiThread(services =>

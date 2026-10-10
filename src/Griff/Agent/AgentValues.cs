@@ -56,6 +56,13 @@ public static class AgentValues
                 return type == typeof(List<string>) ? lines.ToList() : lines;
             }
 
+            if (IsEntityList(type))
+            {
+                var items = element.ValueKind == JsonValueKind.Array ? element.EnumerateArray().ToList() : [element];
+                var list = items.Select(e => ResolveEntity(e, entities) ?? throw new AgentException("A list of entities can't hold null.")).ToList();
+                return type.IsArray ? list.ToArray() : list;
+            }
+
             if (ValueCodec.IsSupported(type))
                 return ValueCodec.Read(element, type);
             if (typeof(Entity).IsAssignableFrom(type))
@@ -136,6 +143,7 @@ public static class AgentValues
             : type == typeof(Vector4) ? "[x, y, z, w]"
             : type == typeof(Quaternion) ? "[x, y, z, w] (a rotation)"
             : type == typeof(IReadOnlyList<string>) || type == typeof(string[]) || type == typeof(List<string>) ? "lines of text: an array of strings, or one string with line breaks"
+            : IsEntityList(type) ? "entities: an array of their names, ids or paths"
             : typeof(Entity).IsAssignableFrom(type) ? "an entity: its name, id or path"
             : typeof(Component).IsAssignableFrom(type) ? $"an entity with a {type.Name}: its name, id or path"
             : type.Name;
@@ -192,6 +200,11 @@ public static class AgentValues
         || type == typeof(short) || type == typeof(byte) || type == typeof(decimal) || type == typeof(ulong) || type == typeof(ushort);
 
     private static int Count(IEnumerable items) => items is ICollection c ? c.Count : items.Cast<object?>().Count();
+
+    // Entity[], List<Entity>, IEnumerable<Entity>, IReadOnlyList<Entity> and the like: what a List<Entity> can be passed as.
+    private static bool IsEntityList(Type type) =>
+        type == typeof(Entity[]) || (type.IsGenericType && type.GetGenericArguments() is [var item] && item == typeof(Entity)
+            && type.IsAssignableFrom(typeof(List<Entity>)));
 
     private static Entity? ResolveEntity(JsonElement element, Func<string, Entity?>? entities)
     {

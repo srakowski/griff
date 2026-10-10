@@ -22,6 +22,7 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
 {
     private bool _isExpanded;
     private bool _isSelected;
+    private bool _isPrimary;
     private bool _isEditing;
     private string _editName = "";
     private DropPosition _dropHint;
@@ -44,12 +45,23 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
         }
     }
 
+    /// <summary>Whether the entity is one of the selected ones (highlighted).</summary>
     public bool IsSelected
     {
         get => _isSelected;
+        internal set => SetProperty(ref _isSelected, value);
+    }
+
+    /// <summary>
+    /// Whether the entity is the primary selection. Bound to the tree's own single selection, so keyboard navigation
+    /// (which moves it) selects just the row it lands on.
+    /// </summary>
+    public bool IsPrimary
+    {
+        get => _isPrimary;
         set
         {
-            if (SetProperty(ref _isSelected, value) && value)
+            if (SetProperty(ref _isPrimary, value) && value)
                 owner.OnNodeSelected(this);
         }
     }
@@ -83,6 +95,7 @@ public sealed class HierarchyPanel : ToolPanel
     private SceneDocument? _document;
     private bool _syncingSelection;
     private long _builtVersion;
+    private Entity? _anchor;
 
     public HierarchyPanel(IWorkspace workspace, ISelection selection)
     {
@@ -105,7 +118,39 @@ public sealed class HierarchyPanel : ToolPanel
 
     public bool HasScene => _document is not null;
 
-    public void Select(EntityNode? node) => _selection.Select(node?.Entity);
+    public void Select(EntityNode? node)
+    {
+        _anchor = node?.Entity;
+        _selection.Select(node?.Entity);
+    }
+
+    /// <summary>
+    /// A click on a row: a plain click selects just it, Ctrl adds or removes it, Shift selects every row from the last
+    /// clicked one to it as the tree shows them (Ctrl+Shift adds that range to the selection).
+    /// </summary>
+    public void Click(EntityNode node, bool control, bool shift)
+    {
+        var entity = node.Entity;
+        // The range starts at the last row clicked, or at the primary selection if that was picked somewhere else.
+        var anchor = _anchor is { } a && _selection.IsSelected(a) ? a : _selection.Entity;
+        var visible = VisibleEntities().ToList();
+        if (shift && anchor is not null && visible.IndexOf(anchor) is var from and >= 0 && visible.IndexOf(entity) is var to and >= 0)
+        {
+            var range = visible[Math.Min(from, to)..(Math.Max(from, to) + 1)];
+            // The clicked row ends up last, the primary one.
+            if (from > to)
+                range.Reverse();
+            _anchor = anchor;
+            _selection.SelectEntities(control ? _selection.Entities.Concat(range) : range);
+            return;
+        }
+
+        _anchor = entity;
+        if (control)
+            _selection.Toggle(entity);
+        else
+            _selection.Select(entity);
+    }
 
     public void CommitRename(EntityNode node)
     {
@@ -166,10 +211,20 @@ public sealed class HierarchyPanel : ToolPanel
         document.Execute(new MoveEntityEdit(scene, entity, parent, index));
     }
 
+    // The tree's own selection moved here (arrow keys, or a click the view didn't take): select just this row.
     internal void OnNodeSelected(EntityNode node)
     {
-        if (!_syncingSelection)
-            _selection.Select(node.Entity);
+        if (!_syncingSelection && _selection.Entity != node.Entity)
+            Select(node);
+    }
+
+    /// <summary>The entities whose rows can be seen (every ancestor expanded), top to bottom.</summary>
+    private IEnumerable<Entity> VisibleEntities()
+    {
+        return Roots.SelectMany(Visible);
+
+        static IEnumerable<Entity> Visible(EntityNode node) =>
+            node.IsExpanded ? node.Children.SelectMany(Visible).Prepend(node.Entity) : [node.Entity];
     }
 
     internal void OnExpandedChanged(EntityNode node)
@@ -259,15 +314,21 @@ public sealed class HierarchyPanel : ToolPanel
         _syncingSelection = true;
         try
         {
-            var selected = _selection.Entity;
+            var primary = _selection.Entity;
             foreach (var node in _nodes.Values)
-                node.IsSelected = node.Entity == selected;
+            {
+                node.IsSelected = _selection.IsSelected(node.Entity);
+                node.IsPrimary = node.Entity == primary;
+            }
 
             // Reveal the selection.
-            for (var parent = selected?.Parent; parent is not null; parent = parent.Parent)
+            foreach (var selected in _selection.Entities)
             {
-                if (_nodes.TryGetValue(parent.Id, out var node))
-                    node.IsExpanded = true;
+                for (var parent = selected.Parent; parent is not null; parent = parent.Parent)
+                {
+                    if (_nodes.TryGetValue(parent.Id, out var node))
+                        node.IsExpanded = true;
+                }
             }
         }
         finally

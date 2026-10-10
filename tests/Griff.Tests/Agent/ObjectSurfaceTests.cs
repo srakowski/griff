@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Windows.Input;
 using Griff.Agent;
+using Griff.Scenes;
 
 namespace Griff.Tests.Agent;
 
@@ -163,5 +164,17 @@ public class ObjectSurfaceTests
         Assert.Equal(new[] { "a", "b" }, (string[])AgentValues.FromJson(Json("\"a\\nb\""), typeof(IReadOnlyList<string>))!);
         Assert.Equal(3, AgentValues.FromJson(Json("\"3\""), typeof(int)));
         Assert.Null(AgentValues.FromJson(Json("null"), typeof(int?)));
+    }
+
+    [Fact]
+    public void EntityLists_AreReadFromNames()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        Entity? Find(string name) => name == "A" ? a : name == "B" ? b : null;
+
+        Assert.Equal([b, a], (IEnumerable<Entity>)AgentValues.FromJson(Json("""["B", "A"]"""), typeof(IEnumerable<Entity>), Find)!);
+        Assert.Equal([a], (Entity[])AgentValues.FromJson(Json("\"A\""), typeof(Entity[]), Find)!);
+        Assert.Equal("entities: an array of their names, ids or paths", AgentValues.Describe(typeof(IReadOnlyList<Entity>)));
+        Assert.Throws<AgentException>(() => AgentValues.FromJson(Json("""["C"]"""), typeof(List<Entity>), Find));
     }
 }

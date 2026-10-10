@@ -108,8 +108,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         var after = workspace.Scene?.History.UndoDescription;
         if (after is not null && after != before)
             text.Append($" Undo: \"{after}\".");
-        if (selection.Entity is { } selected)
-            text.Append($" Selected: {selected.Name} #{AgentValues.ShortId(selected.Id)}.");
+        if (selection.Entities.Count > 0)
+            text.Append($" Selected: {string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}.");
         var newWindows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList();
         if (newWindows.Count > 0)
             text.Append($" Open windows: {string.Join(", ", newWindows.Select(w => $"\"{w.Title}\""))} (see ui_roots).");

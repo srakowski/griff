@@ -40,6 +40,12 @@ In the **Scene view**:
 - Arrow keys nudge the selection by half a unit (Shift for a tenth).
 - Drop an image to create a sprite, or a prefab to place a copy of it.
 
+In the **Hierarchy**:
+- Click to select; Ctrl-click adds or takes one away, Shift-click selects every row from the last one clicked (Ctrl+Shift-click adds them).
+- Delete, duplicate, cut, copy and paste work on everything selected, as one undo step. Duplicates go right after their originals, pastes after the selected entity, and the copies end up selected.
+- Drag a row onto another to put it inside, or above or below it.
+- The Inspector shows the last one picked, and the Scene view outlines them all.
+
 **Tilemaps.** **Entity → Create Tilemap**, then set its **Image** to a tileset and its **Columns** and **Rows** to the tileset's layout. While a tilemap is selected, the Scene view paints:
 - Drag to paint, Shift-drag to erase. Each stroke is one undo step.
 - Pick a tile from the palette at the top left, with `[` and `]`, or Ctrl-click a painted tile.
@@ -205,7 +211,7 @@ Games can switch scenes with `Game.LoadScene("Level2")`. **Game → Clear Save D
 
 While the editor is open it runs a [Model Context Protocol](https://modelcontextprotocol.io) server on this computer, so an agent like Claude Code can build games with it: `claude mcp add --transport http griff http://127.0.0.1:7650/mcp` (or **Help → Copy MCP Setup Command**; **Help → MCP Server** turns it off; `GRIFF_MCP_PORT` picks another port). The server lists no features of its own. Its tools are read from what the editor already has, so everything the editor can do is there, and anything added later shows up by itself:
 
-- **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity`; a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
+- **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity` (or `select` several first: Delete, Duplicate, Cut and Copy act on all of them); a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
 - **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
 - **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`.
 - **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
@@ -542,6 +548,7 @@ Griff is young. Known gaps:
 - Shadows are hard-edged, and come from colliders and tiles rather than sprites' shapes.
 - Tilemaps use one tileset of up to 62 tiles.
 - Panels are resizable but not dockable.
+- Several entities can be selected in the Hierarchy, but the Scene view still picks and drags one at a time, and the Inspector edits the last one picked.
 - Strategy games' units only walk (no flying or water), and the fog of war is drawn in squares.
 - Multiplayer connects directly: to play over the internet, the host forwards their port (7777 by default) on their router; there's no matchmaking, relay or lobby server yet. Players' own machines move their own characters, which suits friends better than strangers (pick **Host** movement where cheating matters), and shots are judged where the host sees things, without rewinding for lag. Rewinding in the editor works with one player, and a network game can't hit-stop or slow down (it's everyone's).
 - Block worlds are side-on (Terraria style); in first person, digging works on the flat map's walls. Water and lava don't flow, and light from glowing blocks casts no shadows.

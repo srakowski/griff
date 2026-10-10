@@ -142,7 +142,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.Shortcut(key, modifiers);
                 break;
             case "select":
-                await ui.Select(a);
+                // "Ctrl+Sign" or "Shift+Coins" Ctrl- or Shift-clicks the row, adding to the selection.
+                var (selectName, selectModifiers) = ParseModifiedName(a);
+                await ui.Select(selectName, modifiers: selectModifiers);
                 break;
             case "deselect":
                 selection.Select(null);
@@ -369,6 +371,19 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (pickTarget.Length != 2)
                     throw new FormatException("pick: <Component>.<Field> = <sound>");
                 await ui.PickSound(pickTarget[0], Label(pickTarget[1]), a[(pickAt + 1)..].Trim());
+                break;
+            case "expectselected":
+                // "expectselected: Slime, Sign": exactly these are selected, in the order they were picked.
+                var wantSelected = a.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (!await Until(() => selection.Entities.Select(e => e.Name).SequenceEqual(wantSelected), 3000))
+                    throw new InvalidOperationException($"Expected {a} selected, but it's {string.Join(", ", selection.Entities.Select(e => e.Name))}.");
+                break;
+            case "expectcount":
+                // "expectcount: Coin = 6": that many entities with that name in the open scene.
+                var (countName, countText) = Split2(a, '=');
+                var wantCount = int.Parse(countText, System.Globalization.CultureInfo.InvariantCulture);
+                if (!await Until(() => workspace.Scene?.Scene.Entities.Count(e => e.Name == countName) == wantCount, 3000))
+                    throw new InvalidOperationException($"Expected {wantCount} {countName}, but there are {workspace.Scene?.Scene.Entities.Count(e => e.Name == countName)}.");
                 break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.
@@ -1011,6 +1026,21 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         if (numbers.Length != count)
             throw new FormatException($"Expected {count} numbers, got \"{text}\".");
         return numbers;
+    }
+
+    // Leading "Ctrl+" and "Shift+" (any order, any case) before a name.
+    private static (string Name, ModifierKeys Modifiers) ParseModifiedName(string text)
+    {
+        var modifiers = ModifierKeys.None;
+        while (true)
+        {
+            if (text.StartsWith("Ctrl+", StringComparison.OrdinalIgnoreCase))
+                (modifiers, text) = (modifiers | ModifierKeys.Control, text[5..].TrimStart());
+            else if (text.StartsWith("Shift+", StringComparison.OrdinalIgnoreCase))
+                (modifiers, text) = (modifiers | ModifierKeys.Shift, text[6..].TrimStart());
+            else
+                return (text, modifiers);
+        }
     }
 
     private static (Key Key, ModifierKeys Modifiers) ParseKey(string text)

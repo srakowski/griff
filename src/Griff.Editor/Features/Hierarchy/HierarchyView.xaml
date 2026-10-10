@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:hierarchy="clr-namespace:Griff.Editor.Features.Hierarchy"
              xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
              xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=hierarchy:HierarchyPanel}"
@@ -50,7 +51,9 @@
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                        <!-- The tree's own selection is the primary entity; every selected row is highlighted. -->
+                        <Setter Property="IsSelected" Value="{Binding IsPrimary, Mode=TwoWay}" />
+                        <Setter Property="controls:TreeSelection.IsSelected" Value="{Binding IsSelected}" />
                     </Style>
                 </TreeView.ItemContainerStyle>
                 <TreeView.ItemTemplate>

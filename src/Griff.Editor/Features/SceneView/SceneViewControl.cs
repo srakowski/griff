@@ -208,8 +208,11 @@ public sealed class SceneViewControl : FrameworkElement
         DrawRooms(dc);
         DrawLevelGuides(dc);
 
-        if (_selection.Entity is { } selected && selected.Scene == _document.Scene)
-            DrawSelection(dc, selected);
+        foreach (var selected in _selection.Entities)
+        {
+            if (selected.Scene == _document.Scene)
+                DrawSelection(dc, selected, primary: selected == _selection.Entity);
+        }
 
         if (PaintTarget is { } painting)
             DrawPaintOverlay(dc, painting);
@@ -647,7 +650,8 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawLine(pen, new Point(center.X, center.Y - 3), new Point(center.X, center.Y + 3));
     }
 
-    private void DrawSelection(DrawingContext dc, Entity entity)
+    /// <summary>Outlines a selected entity; the primary one also gets its pivot handle.</summary>
+    private void DrawSelection(DrawingContext dc, Entity entity, bool primary)
     {
         var accent = Brush("Brush.Accent");
         if (Bounds(entity) is { } bounds)
@@ -664,6 +668,9 @@ public sealed class SceneViewControl : FrameworkElement
             dc.DrawGeometry(null, new Pen(Brush("Brush.Surface.Chrome"), 4), geometry);
             dc.DrawGeometry(null, new Pen(accent, 2), geometry);
         }
+
+        if (!primary)
+            return;
 
         // Pivot handle with axis arms.
         var pivot = ToScreen(ToVector2(entity.Transform.WorldPosition));

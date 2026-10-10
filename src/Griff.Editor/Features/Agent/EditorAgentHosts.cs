@@ -24,10 +24,10 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
 
     public IDisposable BeginGroup(string description) => Document.History.BeginGroup(description);
 
-    public Entity? Selected
+    public IReadOnlyList<Entity> Selection
     {
-        get => selection.Entity;
-        set => selection.Select(value);
+        get => selection.Entities;
+        set => selection.SelectEntities(value);
     }
 
     public Entity? InstantiatePrefab(string name)

@@ -538,7 +538,10 @@ public sealed class RenameEntityCommand(ISelection selection) : EditorCommand
     }
 }
 
-/// <summary>Copies the selected entity (and its children) right after the original, and selects the copy.</summary>
+/// <summary>
+/// Copies the selected entities (and their children), each right after its original, and selects the copies. Several
+/// selected entities are duplicated as one undo step.
+/// </summary>
 public sealed class DuplicateEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Duplicate";
@@ -551,15 +554,33 @@ public sealed class DuplicateEntityCommand(IWorkspace workspace, ISelection sele
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } original)
+        var originals = selection.TopLevel();
+        if (workspace.Scene is not { } document || originals.Count == 0)
             return Task.CompletedTask;
 
-        var copy = workspace.Serializer.Clone(original);
-        var index = document.Scene.IndexOf(original) + 1;
-        document.Execute(new AddEntityEdit(document.Scene, copy, original.Parent, index));
-        selection.Select(copy);
+        var scene = document.Scene;
+        var copies = originals.Select(workspace.Serializer.Clone).ToList();
+        // Insert from the bottom up, so each copy's index is still right when it goes in.
+        var edits = originals.Select((original, i) => (Original: original, Copy: copies[i], Index: scene.IndexOf(original) + 1))
+            .Reverse()
+            .Select(x => (IEdit)new AddEntityEdit(scene, x.Copy, x.Original.Parent, x.Index))
+            .ToList();
+        document.Execute(EntityEdits.Group(edits, "Duplicate", originals));
+        selection.SelectEntities(copies);
         return Task.CompletedTask;
     }
+}
+
+/// <summary>Edits to several selected entities at once, as one undo step.</summary>
+internal static class EntityEdits
+{
+    /// <summary>One entity's edit as it is; several as one step named like "Delete 3 entities".</summary>
+    public static IEdit Group(IReadOnlyList<IEdit> edits, string verb, IReadOnlyList<Entity> entities) =>
+        edits.Count == 1 ? edits[0] : new CompositeEdit($"{verb} {entities.Count} entities", edits);
+
+    /// <summary>Removes entities (in scene order) from the bottom up, so each one's place is still right on undo.</summary>
+    public static IEdit Remove(Scene scene, IReadOnlyList<Entity> entities, string verb) =>
+        Group(entities.Reverse().Select(e => (IEdit)new RemoveEntityEdit(scene, e)).ToList(), verb, entities);
 }
 
 /// <summary>Entities on the clipboard are scene JSON, so they paste across scenes and even projects.</summary>
@@ -596,7 +617,7 @@ public static class EntityClipboard
     }
 }
 
-/// <summary>Copies the selected entity (and its children) to the clipboard.</summary>
+/// <summary>Copies the selected entities (and their children) to the clipboard.</summary>
 public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Copy";
@@ -609,13 +630,13 @@ public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection
 
     protected override Task ExecuteCoreAsync()
     {
-        if (selection.Entity is { } entity)
-            EntityClipboard.Put(workspace.Serializer.SerializeEntity(entity));
+        if (selection.TopLevel() is { Count: > 0 } entities)
+            EntityClipboard.Put(workspace.Serializer.SerializeEntities(entities));
         return Task.CompletedTask;
     }
 }
 
-/// <summary>Copies the selected entity (and its children) to the clipboard and deletes it.</summary>
+/// <summary>Copies the selected entities (and their children) to the clipboard and deletes them, as one undo step.</summary>
 public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Cut";
@@ -627,17 +648,20 @@ public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection)
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is { } document && selection.Entity is { } entity)
+        if (workspace.Scene is { } document && selection.TopLevel() is { Count: > 0 } entities)
         {
-            EntityClipboard.Put(workspace.Serializer.SerializeEntity(entity));
-            document.Execute(new RemoveEntityEdit(document.Scene, entity));
+            EntityClipboard.Put(workspace.Serializer.SerializeEntities(entities));
+            document.Execute(EntityEdits.Remove(document.Scene, entities, "Cut"));
         }
 
         return Task.CompletedTask;
     }
 }
 
-/// <summary>Pastes after the selected entity (as its sibling), or at the end of the scene.</summary>
+/// <summary>
+/// Pastes what's on the clipboard after the selected entity (as its siblings), or at the end of the scene, and selects
+/// it. Several entities paste in their order, as one undo step.
+/// </summary>
 public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Paste";
@@ -652,16 +676,17 @@ public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selectio
         if (workspace.Scene is not { } document || EntityClipboard.Get() is not { } json)
             return Task.CompletedTask;
 
-        var entity = workspace.Serializer.DeserializeEntity(json);
+        var entities = workspace.Serializer.DeserializeEntities(json);
         var anchor = selection.Entity;
         var index = anchor is null ? (int?)null : document.Scene.IndexOf(anchor) + 1;
-        document.Execute(new AddEntityEdit(document.Scene, entity, anchor?.Parent, index));
-        selection.Select(entity);
+        var edits = entities.Select((e, i) => (IEdit)new AddEntityEdit(document.Scene, e, anchor?.Parent, index + i)).ToList();
+        document.Execute(EntityEdits.Group(edits, "Paste", entities));
+        selection.SelectEntities(entities);
         return Task.CompletedTask;
     }
 }
 
-/// <summary>Deletes the selected entity and everything inside it.</summary>
+/// <summary>Deletes the selected entities and everything inside them, as one undo step.</summary>
 public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Delete";
@@ -674,8 +699,8 @@ public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selecti
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is { } document && selection.Entity is { } entity)
-            document.Execute(new RemoveEntityEdit(document.Scene, entity));
+        if (workspace.Scene is { } document && selection.TopLevel() is { Count: > 0 } entities)
+            document.Execute(EntityEdits.Remove(document.Scene, entities, "Delete"));
         return Task.CompletedTask;
     }
 }

@@ -40,7 +40,9 @@ build: standalone
 | `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Game > Build Game`. |
 | `create: <thing>` | Shorthand for `menu: Entity > Create <thing>`, e.g. `create: Platformer Player`. |
 | `key: <shortcut>` | Press a shortcut, e.g. `key: Ctrl+Shift+B`, `key: F5`. |
-| `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. |
+| `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. `select: Ctrl+Sign` Ctrl-clicks its row (adding it to the selection, or taking it out), `select: Shift+Coins` Shift-clicks it (selecting every row from the last one clicked). |
+| `expectselected: <entity>, <entity>...` | Fail unless exactly these are selected, in the order they were picked. |
+| `expectcount: <entity> = <n>` | Fail unless the open scene has that many entities with that name. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |
 | `catalog` | Open the component catalog with the Inspector's Catalog button. |

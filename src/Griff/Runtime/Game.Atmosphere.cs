@@ -87,11 +87,58 @@ public sealed partial class Game
     /// right of the middle of the screen, and quieter the further it is off screen, out to a screen's width beyond the
     /// edge (where it can't be heard at all).
     /// </summary>
-    public void PlaySoundAt(string sound, Vector2 position, float volume = 1)
+    public void PlaySoundAt(string sound, Vector2 position, float volume = 1, float pitch = 1)
     {
         var (loudness, pan) = Hearing(position, range: 0);
-        if (loudness > 0)
+        if (loudness <= 0)
+            return;
+        if (pitch == 1)
             Audio.Play(sound, volume * loudness, pan);
+        else
+            Audio.Play(sound, volume * loudness, pan, pitch);
+    }
+
+    // Sound players that have just appeared play their sound if they're set to; scenes' music starts.
+    private void RunSoundPlayers()
+    {
+        foreach (var player in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>()))
+        {
+            if (player.Started)
+                continue;
+            player.Started = true;
+            if (player.OnStart)
+                Play(player);
+        }
+
+        foreach (var music in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<BackgroundMusic>()))
+        {
+            if (_startedMusic.Contains(music) || string.IsNullOrWhiteSpace(music.Music))
+                continue;
+            _startedMusic.Add(music);
+            _roomMusic = null;
+            Audio.CrossfadeMusic(music.Music.Trim(), Math.Max(0, music.Fade), Math.Clamp(music.Volume, 0, 1), music.Loop);
+        }
+    }
+
+    private readonly HashSet<BackgroundMusic> _startedMusic = [];
+
+    // One play of a sound player, at its pitch give or take its variation.
+    private void Play(SoundPlayer player)
+    {
+        if (string.IsNullOrWhiteSpace(player.Sound))
+            return;
+        var sound = player.Sound.Trim();
+        var pitch = Math.Max(0.05f, player.Pitch + (Random.Shared.NextSingle() * 2 - 1) * Math.Max(0, player.PitchVariation));
+        var volume = Math.Clamp(player.Volume, 0, 1);
+        if (player.Positional)
+        {
+            var at = player.Entity!.Transform.WorldPosition;
+            PlaySoundAt(sound, new Vector2(at.X, at.Y), volume, pitch);
+        }
+        else if (pitch == 1)
+            Audio.Play(sound, volume);
+        else
+            Audio.Play(sound, volume, 0, pitch);
     }
 
     // How loud something at a position sounds (0 to 1) and which side it's on (-1 to 1), heard from the middle of the
@@ -144,6 +191,7 @@ public sealed partial class Game
 
             loop.Volume = Math.Clamp(source.Volume, 0, 1) * loudness;
             loop.Pan = source.Range > 0 ? pan : 0;
+            loop.Pitch = Math.Clamp(source.Pitch, 0.05f, 8);
             source.Loudness = loop.Volume;
         }
 

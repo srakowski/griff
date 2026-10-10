@@ -1,0 +1,81 @@
+title: Sound and music
+intro: Griff now makes, previews and hooks up its own sound effects and music, so a game is never silent.
+project: Platformer | Sound Check
+
+chapter: Templates that make noise | Sounds and a theme tune from the start
+say: A new Platformer project now comes with its own sound effects and a theme tune, all made by Griff.
+explain: panel:Assets | Sounds and Music | They're in the Sounds and Music folders: jumps, coins, swings, hits, explosions, springs, menu clicks, and a looping theme.
+select: Player
+explain: field:PlatformerMovement.JumpSound | Already hooked up | And everything in the template that makes a noise is already hooked up. Here's the player's jump.
+click: sound:PlatformerMovement.JumpSound:play
+explain: sound:PlatformerMovement.JumpSound:play | Play | Every sound field has a play button, so you can hear it without leaving the Inspector.
+explain: field:Health.HurtSound | Hurt and death sounds | Health has hurt and death sounds now too, and buttons have click sounds.
+say: Let's hear it all in the game: the music starts with the scene.
+play
+wait: 1
+hold: Right 2.2
+tap: Space
+wait: 1.2
+stop
+
+chapter: The Sound Maker | Audio, New Sound
+say: To make a sound of your own, open the new Audio menu.
+menu: Audio > New Sound...
+maker
+explain: maker:presets | Start from | Pick the kind of sound you want, and it makes a fresh one and plays it straight away.
+click: maker:preset:Coin
+wait: 0.6
+say: Click again for another one.
+click: maker:preset:Coin
+wait: 0.6
+click: maker:preset:Power Up
+wait: 0.8
+explain: maker:waveform | What it sounds like | The waveform shows its shape: this one climbs, then fades.
+click: maker:mutate
+say: Mutate nudges every setting a little, for like that, but different.
+explain: maker:settings | Shape it | Then shape it by hand. Every change plays it again, so tweaking is just listening.
+slide: Slide = 0.45
+wait: 0.6
+slide: Vibrato Depth = 0.3
+wait: 0.6
+click: maker:wave:Triangle
+wait: 0.6
+name: magic
+explain: maker:save | Save | Save puts it in the project's Sounds folder, as an ordinary WAV file.
+click: maker:save
+expectfile: Sounds/magic.wav
+
+chapter: Music | Pick a mood, get a tune
+click: maker:mode:Music
+explain: maker:moods | Mood | Music works the same way. Pick a mood, and it writes a looping tune: each mood has its own scale, chords, beat and accompaniment.
+click: maker:mood:Spooky
+wait: 4
+click: maker:newtune
+say: New Tune writes another one in the same mood.
+wait: 4
+explain: maker:music | The tune | Then set its tempo, length and lead sound, and which parts play. Its end runs straight into its start, so it can loop under a level forever.
+slide: Tempo = 104
+wait: 3
+name: crypt
+click: maker:save
+expectfile: Music/crypt.wav
+click: maker:close
+
+chapter: Hooking it up | Pick a sound, play it on a message
+select: Music
+explain: component:BackgroundMusic | Background Music | The template's music comes from this new Background Music component. It starts with the scene, and crossfades from whatever was playing.
+pick: BackgroundMusic.Music = Music/crypt.wav
+say: Its list has every sound in the project, so the new tune is one click away.
+select: Player
+add: SoundPlayer
+explain: component:SoundPlayer | Sound Player | A Sound Player plays its sound whenever a message is sent. Coins send Score, so this plays with every coin.
+set: SoundPlayer.Message = Score
+pick: SoundPlayer.Sound = Sounds/magic.wav
+set: SoundPlayer.PitchVariation = 0.15
+explain: field:SoundPlayer.PitchVariation | Pitch Variation | And sounds can play at any pitch now. A little variation keeps a sound heard over and over from getting tiring.
+play
+wait: 1.5
+hold: Right 2.2
+wait: 2
+stop
+say: Sound effects, music, and the components to play them, all without leaving Griff.

@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -262,6 +265,9 @@ public enum FieldKind
     Vector,
     Color,
     Lines,
+
+    /// <summary>A sound or music file: text, with buttons to play it, pick one from the project, or make one.</summary>
+    Sound,
 }
 
 /// <summary>One editable property. Exposes typed accessors for each editor template.</summary>
@@ -283,6 +289,7 @@ public sealed class PropertyField : ObservableObject
         var type = property.Type;
         Kind = type == typeof(bool) ? FieldKind.Bool
             : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
+            : type == typeof(string) && IsSoundName(property.Name) ? FieldKind.Sound
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
@@ -303,6 +310,86 @@ public sealed class PropertyField : ObservableObject
     public string Label { get; }
 
     public FieldKind Kind { get; }
+
+    /// <summary>Properties named like JumpSound, Sound or Music hold a sound file's asset path.</summary>
+    public static bool IsSoundName(string name) => name.EndsWith("Sound", StringComparison.Ordinal) || name == "Music";
+
+    /// <summary>For a sound field: whether it's music (made in the Sound Maker's Music mode) rather than an effect.</summary>
+    public bool IsMusic => _property.Name == "Music";
+
+    /// <summary>For a sound field: set to a file that isn't in the project.</summary>
+    public bool IsSoundMissing => Kind == FieldKind.Sound && Value is string { Length: > 0 } path &&
+        Audio.EditorAudio.Current is { AssetsPath: not null } audio && audio.Resolve(path) is null;
+
+    public string SoundTip => Value is string { Length: > 0 } path && Audio.EditorAudio.Current?.CanEdit(path) == true
+        ? "Edit this sound in the Sound Maker"
+        : IsMusic ? "Make music for this in the Sound Maker" : "Make a sound for this in the Sound Maker";
+
+    /// <summary>Plays the field's sound, or stops it if it's playing.</summary>
+    public void PreviewSound() => Audio.EditorAudio.Current?.TogglePreview(Value as string);
+
+    /// <summary>
+    /// Opens the Sound Maker on the field's sound if it was made there, or on a new one; whatever it saves is set here.
+    /// </summary>
+    public void MakeSound()
+    {
+        if (Audio.EditorAudio.Current is not { } audio)
+            return;
+        var current = Value as string;
+        var mode = IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect;
+        audio.OpenMaker(mode, audio.CanEdit(current) ? current : null, saved => TextValue = saved);
+    }
+
+    /// <summary>The project's sounds to choose from.</summary>
+    public IReadOnlyList<string> SoundChoices() => Audio.EditorAudio.Current?.Sounds() ?? [];
+
+    public IRelayCommand PreviewSoundCommand => _previewSound ??= new RelayCommand(PreviewSound);
+
+    public IRelayCommand MakeSoundCommand => _makeSound ??= new RelayCommand(MakeSound);
+
+    /// <summary>Shows the project's sounds in a menu under the button that asked; picking one sets it.</summary>
+    public IRelayCommand<FrameworkElement> ChooseSoundCommand => _chooseSound ??= new RelayCommand<FrameworkElement>(ChooseSound);
+
+    private IRelayCommand? _previewSound, _makeSound;
+    private IRelayCommand<FrameworkElement>? _chooseSound;
+
+    private void ChooseSound(FrameworkElement? anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        var current = Value as string;
+        var sounds = SoundChoices();
+        foreach (var sound in sounds)
+        {
+            var item = new MenuItem
+            {
+                Header = sound,
+                IsCheckable = true,
+                IsChecked = string.Equals(sound, current, StringComparison.OrdinalIgnoreCase),
+                Icon = Icons.Create(sound.StartsWith("Music/", StringComparison.OrdinalIgnoreCase) ? Icons.Music : Icons.Audio),
+            };
+            item.Click += (_, _) =>
+            {
+                TextValue = sound;
+                Audio.EditorAudio.Current?.Preview(sound);
+            };
+            menu.Items.Add(item);
+        }
+
+        if (sounds.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "No sounds in the project yet", IsEnabled = false });
+        menu.Items.Add(new Separator());
+        var make = new MenuItem { Header = IsMusic ? "New Music..." : "New Sound...", Icon = Icons.Create(IsMusic ? Icons.Music : Icons.Audio) };
+        make.Click += (_, _) => Audio.EditorAudio.Current?.OpenMaker(IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect, saved: saved => TextValue = saved);
+        menu.Items.Add(make);
+        if (!string.IsNullOrEmpty(current))
+        {
+            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
+            clear.Click += (_, _) => TextValue = null;
+            menu.Items.Add(clear);
+        }
+
+        menu.IsOpen = true;
+    }
 
     public bool IsInteger => _property.Type == typeof(int);
 

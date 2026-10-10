@@ -147,6 +147,8 @@ public sealed partial class Game
 
     private void Click(Button button)
     {
+        if (!string.IsNullOrWhiteSpace(button.Sound))
+            Audio.Play(button.Sound.Trim());
         switch (button.Action)
         {
             case ButtonAction.LoadScene when string.IsNullOrWhiteSpace(button.Scene):

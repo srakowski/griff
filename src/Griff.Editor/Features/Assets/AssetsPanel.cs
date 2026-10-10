@@ -70,7 +70,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
         return Path.GetExtension(path).ToLowerInvariant() switch
         {
             ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => AssetKind.Image,
-            ".wav" or ".mp3" or ".wma" => AssetKind.Audio,
+            ".wav" or ".mp3" or ".ogg" => AssetKind.Audio,
             ".cs" => AssetKind.Script,
             Project.SceneExtension => AssetKind.Scene,
             Project.PrefabExtension => AssetKind.Prefab,

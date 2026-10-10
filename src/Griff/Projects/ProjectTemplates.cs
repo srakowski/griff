@@ -24,7 +24,23 @@ public static class ProjectTemplates
     };
 
     /// <summary>The start scene for a template. Script components are added as missing components until compiled.</summary>
-    internal static Scene CreateScene(ProjectTemplate template) => template switch
+    internal static Scene CreateScene(ProjectTemplate template) => WithSounds(template, BuildScene(template));
+
+    /// <summary>Sound and music files (relative to Assets) for a template, as WAV bytes.</summary>
+    internal static IReadOnlyDictionary<string, byte[]> Sounds(ProjectTemplate template) => TemplateSounds.Files(template);
+
+    // Templates that come with sounds have them hooked up to everything that makes a noise, and music playing.
+    private static Scene WithSounds(ProjectTemplate template, Scene scene)
+    {
+        if (template == ProjectTemplate.Empty)
+            return scene;
+        foreach (var entity in scene.Entities)
+            TemplateSounds.Wire(entity);
+        TemplateSounds.AddMusic(scene);
+        return scene;
+    }
+
+    private static Scene BuildScene(ProjectTemplate template) => template switch
     {
         ProjectTemplate.Platformer => Platformer(),
         ProjectTemplate.TopDown => TopDown(),
@@ -37,8 +53,8 @@ public static class ProjectTemplates
     {
         ProjectTemplate.Arcade => new Dictionary<string, Scene>
         {
-            ["Scenes/Game.scene"] = ArcadeGame(),
-            ["Scenes/Options.scene"] = ArcadeOptions(),
+            ["Scenes/Game.scene"] = WithSounds(template, ArcadeGame()),
+            ["Scenes/Options.scene"] = WithSounds(template, ArcadeOptions()),
         },
         _ => new Dictionary<string, Scene>(),
     };
@@ -58,7 +74,15 @@ public static class ProjectTemplates
     };
 
     /// <summary>Prefab files (relative to Assets) for a template.</summary>
-    internal static IReadOnlyDictionary<string, Entity> Prefabs(ProjectTemplate template) => template switch
+    internal static IReadOnlyDictionary<string, Entity> Prefabs(ProjectTemplate template)
+    {
+        var prefabs = BuildPrefabs(template);
+        foreach (var entity in prefabs.Values.SelectMany(p => p.SelfAndDescendants()))
+            TemplateSounds.Wire(entity);
+        return prefabs;
+    }
+
+    private static IReadOnlyDictionary<string, Entity> BuildPrefabs(ProjectTemplate template) => template switch
     {
         ProjectTemplate.Platformer or ProjectTemplate.TopDown => new Dictionary<string, Entity>
         {
@@ -916,6 +940,7 @@ public static class ProjectTemplates
                     _cooldown = 1 / FireRate;
                     var bullet = Game.Spawn("Bullet", position);
                     bullet.GetComponent<Body>()!.Velocity = aim * BulletSpeed;
+                    Audio.Play("Sounds/shoot.wav");
                 }
             }
 

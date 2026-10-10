@@ -63,6 +63,11 @@ build: standalone
 | `tune: <Property> = <value>` | Type a value into a property in the script editor's component panel. |
 | `expect: <code>` | Fail unless the script contains `<code>`: checks that what was typed came out as narrated. |
 | `build: standalone` / `build: small` | Game > Build Game (or Build Small Game) and wait for the exe. |
+| `maker` | Wait for the Sound Maker to open (after `menu: Audio > New Sound...` or a field's Sound Maker button). |
+| `slide: <Setting> = <value>` | Drag a Sound Maker slider to a value, e.g. `slide: Slide = 0.4`, `slide: Tempo = 110`. |
+| `name: <text>` | Type the Sound Maker's file name (Save puts it in `Sounds/` or `Music/`). |
+| `pick: <Component>.<Field> = <sound>` | Choose a sound from a sound field's list of the project's sounds, e.g. `pick: Health.HurtSound = Sounds/hit.wav`. |
+| `expectfile: <path>` | Fail unless the file (relative to Assets) exists: checks a Save really saved. |
 
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
@@ -71,6 +76,12 @@ Inspector's Catalog button), `catalog` (the window), `catalog:search`, `catalog:
 `catalog:requires`, `catalog:workswith`, `catalog:neededby`, `catalog:properties`, `catalog:plan`, `catalog:add`,
 `catalog:close`, `catalog:item:Body` (a row in the list), `catalog:link:Body` (a link in the details) and
 `catalog:property:Jump Height`.
+
+In the Sound Maker: `maker` (the window), `maker:preset:Coin`, `maker:wave:Square`, `maker:mood:Spooky`,
+`maker:mode:Effect` / `maker:mode:Music`, `maker:slider:Slide` (a setting's row), `maker:mutate`, `maker:newtune`,
+`maker:play`, `maker:stop`, `maker:save`, `maker:close`, `maker:name`, `maker:waveform`, `maker:presets`,
+`maker:waves`, `maker:settings`, `maker:moods`, `maker:music`, `maker:parts` and `maker:tempo`. A sound field's
+buttons in the Inspector: `sound:Health.HurtSound:play`, `sound:...:choose` and `sound:...:make`.
 
 In the script editor (the script tab showing): `edit:Ship` (a component's Edit Script button in the Inspector),
 `tab:Ship.cs` (a document tab, by its title), `code:editor`, `code:panel` (the component panel), `code:property:Speed` (a

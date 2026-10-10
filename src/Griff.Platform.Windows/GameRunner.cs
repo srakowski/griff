@@ -30,7 +30,7 @@ public sealed class GameRunner : IDisposable
         _keySource = keySource;
         Game = new Game(scene, _input);
         if (surface.AssetRoot is { } assets)
-            Game.Audio = new WpfAudio(assets);
+            Game.Audio = WindowsAudio.Create(assets);
 
         _keySource.PreviewKeyDown += OnKeyDown;
         _keySource.PreviewKeyUp += OnKeyUp;

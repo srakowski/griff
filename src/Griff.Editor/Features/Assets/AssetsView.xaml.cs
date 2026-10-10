@@ -20,9 +20,12 @@ public partial class AssetsView : UserControl
     private Point _dragStart;
     private AssetNode? _dragCandidate;
 
-    public AssetsView(IWorkspace workspace, CommandRegistry commands, ISelection selection, Scripts.ScriptEditors scripts)
+    private readonly Audio.EditorAudio _audio;
+
+    public AssetsView(IWorkspace workspace, CommandRegistry commands, ISelection selection, Scripts.ScriptEditors scripts, Audio.EditorAudio audio)
     {
         InitializeComponent();
+        _audio = audio;
         _scripts = scripts;
         _workspace = workspace;
         _commands = commands;
@@ -38,6 +41,8 @@ public partial class AssetsView : UserControl
             await _workspace.OpenSceneAsync(node.FullPath);
         else if (node.Kind == AssetKind.Script)
             _scripts.Open(node.FullPath);
+        else if (node.Kind == AssetKind.Audio)
+            _audio.TogglePreview(node.AssetPath);
         else if (node.Kind != AssetKind.Folder)
             OpenExternally(node.FullPath);
     }
@@ -67,6 +72,14 @@ public partial class AssetsView : UserControl
             Add(menu, "Open in Another Editor", Icons.Open, () => OpenExternally(node.FullPath));
             menu.Items.Add(new Separator());
         }
+        else if (node is { Kind: AssetKind.Audio })
+        {
+            Add(menu, "Play", Icons.Play, () => _audio.Preview(node.AssetPath));
+            if (_audio.CanEdit(node.AssetPath))
+                Add(menu, "Edit in Sound Maker", Icons.Audio, () => _audio.OpenMaker(editing: node.AssetPath));
+            Add(menu, "Open in Another Program", Icons.Open, () => OpenExternally(node.FullPath));
+            menu.Items.Add(new Separator());
+        }
         else if (node is { Kind: not AssetKind.Folder })
         {
             Add(menu, "Open", Icons.Open, () => OpenExternally(node.FullPath));
@@ -75,6 +88,8 @@ public partial class AssetsView : UserControl
 
         AddCommand(menu, "Scene.New");
         AddCommand(menu, "Script.New");
+        AddCommand(menu, "Audio.NewSound");
+        AddCommand(menu, "Audio.NewMusic");
         menu.Items.Add(new Separator());
         var folder = node is null ? _workspace.Project?.AssetsPath
             : node.Kind == AssetKind.Folder ? node.FullPath

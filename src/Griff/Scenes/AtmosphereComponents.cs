@@ -174,10 +174,70 @@ public sealed class SoundSource : Component
     /// <summary>True while it plays. Untick it to start silent; switches and scripts can set it.</summary>
     public bool Playing { get; set; } = true;
 
+    /// <summary>1 as recorded, 2 an octave up, 0.5 an octave down. Scripts can change it as it plays: an engine revving.</summary>
+    public float Pitch { get; set; } = 1;
+
     /// <summary>How loud it is right now, from 0 (unheard) to its <see cref="Volume"/>; set by the game.</summary>
     [DoNotSerialize]
     public float Loudness { get; internal set; }
 
     // The sound its loop was started with, to start again if it's changed.
     internal string? PlayingSound { get; set; }
+}
+
+/// <summary>
+/// Music for the scene: it starts when the scene does, crossfading over <see cref="Fade"/> seconds from whatever was
+/// playing. If that's the same music it just carries on, so every level can name the same tune and it never restarts.
+/// A <see cref="Room"/>'s music takes over while its room is entered.
+/// </summary>
+[Category("Audio")]
+[ComponentName("Griff.BackgroundMusic")]
+public sealed class BackgroundMusic : Component
+{
+    /// <summary>The music to play, e.g. "Music/theme.wav". Make one with Audio &gt; New Music.</summary>
+    public string? Music { get; set; }
+
+    /// <summary>How loud, 0 to 1, on top of the player's music volume.</summary>
+    public float Volume { get; set; } = 0.6f;
+
+    /// <summary>Seconds to crossfade from the music already playing; 0 cuts straight over.</summary>
+    public float Fade { get; set; } = 1;
+
+    /// <summary>Starts over when it ends. Untick for a jingle that plays once.</summary>
+    public bool Loop { get; set; } = true;
+}
+
+/// <summary>
+/// Plays its <see cref="Sound"/> when something happens, with no code: whenever its <see cref="Message"/> is sent (by a
+/// pickup, a switch, a counter, an enemy's death message or <c>Game.Send</c>), and when it appears if
+/// <see cref="OnStart"/> is ticked. <see cref="PitchVariation"/> makes each play a little different, so a sound heard
+/// over and over doesn't grate.
+/// </summary>
+[Category("Audio")]
+[ComponentName("Griff.SoundPlayer")]
+public sealed class SoundPlayer : Component
+{
+    /// <summary>The sound to play, e.g. "Sounds/door.wav". Make one with Audio &gt; New Sound.</summary>
+    public string? Sound { get; set; }
+
+    /// <summary>The message that plays it, e.g. "Score". Empty plays it only on start.</summary>
+    public string? Message { get; set; }
+
+    /// <summary>Plays it as soon as it appears: a scene's opening sting, a spawned explosion.</summary>
+    public bool OnStart { get; set; }
+
+    /// <summary>How loud, 0 to 1, on top of the player's sound volume.</summary>
+    public float Volume { get; set; } = 1;
+
+    /// <summary>1 as recorded, 2 an octave up, 0.5 an octave down.</summary>
+    public float Pitch { get; set; } = 1;
+
+    /// <summary>How far each play's pitch wanders at random either way: 0.1 is up to a tenth higher or lower.</summary>
+    public float PitchVariation { get; set; }
+
+    /// <summary>Heard from where it is (quieter off screen, from that side) rather than everywhere equally.</summary>
+    public bool Positional { get; set; }
+
+    // Whether it's had its start, so OnStart plays once.
+    internal bool Started { get; set; }
 }

@@ -268,6 +268,30 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "build":
                 await Build(a.Equals("small", StringComparison.OrdinalIgnoreCase));
                 break;
+            case "maker":
+                await ui.WaitForMaker();
+                break;
+            case "name":
+                await ui.EditBox((TextBox)DemoUi.MakerPart("name"), a);
+                break;
+            case "slide":
+                var slideAt = a.IndexOf('=');
+                if (slideAt < 0)
+                    throw new FormatException("slide: <Setting> = <value>");
+                await ui.Slide(a[..slideAt].Trim(), double.Parse(a[(slideAt + 1)..].Trim(), CultureInfo.InvariantCulture));
+                break;
+            case "pick":
+                var pickAt = a.IndexOf('=');
+                var pickTarget = pickAt < 0 ? [] : a[..pickAt].Trim().Split('.', 2);
+                if (pickTarget.Length != 2)
+                    throw new FormatException("pick: <Component>.<Field> = <sound>");
+                await ui.PickSound(pickTarget[0], Label(pickTarget[1]), a[(pickAt + 1)..].Trim());
+                break;
+            case "expectfile":
+                // Checks a file the demo made (a saved sound) is really there, relative to Assets.
+                if (!await Until(() => File.Exists(Path.Combine(workspace.Project!.AssetsPath, a)), 3000))
+                    throw new InvalidOperationException($"{a} wasn't saved.");
+                break;
             default:
                 throw new FormatException($"Unknown command \"{line.Command}\".");
         }
@@ -489,10 +513,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),
+            "maker" => DemoUi.MakerPart(name),
+            "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
+                ui.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, world:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, sound:, world:)."),
         };
     }
 

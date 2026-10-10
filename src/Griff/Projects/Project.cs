@@ -177,6 +177,13 @@ public sealed class Project
             await File.WriteAllTextAsync(path, source.ReplaceLineEndings(), cancellationToken);
         }
 
+        foreach (var (relative, bytes) in ProjectTemplates.Sounds(template))
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllBytesAsync(path, bytes, cancellationToken);
+        }
+
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
         foreach (var (relative, prefab) in ProjectTemplates.Prefabs(template))
         {

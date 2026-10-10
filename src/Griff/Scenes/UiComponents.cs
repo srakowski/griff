@@ -123,6 +123,9 @@ public sealed class Button : Component
     /// <summary>A key that clicks the button too, e.g. Enter for a Play button. None for mouse only.</summary>
     public Runtime.Key Shortcut { get; set; }
 
+    /// <summary>Plays when it's clicked, e.g. "Sounds/select.wav".</summary>
+    public string? Sound { get; set; }
+
     /// <summary>How much lighter the button's sprite and text get under the mouse, from 0 (not at all) to 1 (white).</summary>
     public float Highlight { get; set; } = 0.2f;
 

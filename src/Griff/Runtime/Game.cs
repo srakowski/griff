@@ -214,6 +214,7 @@ public sealed partial class Game
         RunLights();
         FillPrompts();
         RunSoundSources();
+        RunSoundPlayers();
         Audio.Advance(Time.UnscaledDelta);
         SaveSettings();
     }
@@ -385,7 +386,13 @@ public sealed partial class Game
             .Where(c => c.Message?.Trim() == message).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
-        return heard + counters.Count;
+
+        // So do sound players.
+        var players = Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>())
+            .Where(p => p.Message?.Trim() == message).ToList();
+        foreach (var player in players)
+            Play(player);
+        return heard + counters.Count + players.Count;
     }
 
     private static int CountOf(object? data) => data switch
@@ -882,8 +889,18 @@ public sealed partial class Game
         {
             health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);
+            var at = new Vector2(health.Entity.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
+            if (health.Hurt)
+            {
+                health.Hurt = false;
+                if (!string.IsNullOrWhiteSpace(health.HurtSound))
+                    PlaySoundAt(health.HurtSound.Trim(), at);
+            }
+
             if (!health.TakeDeath())
                 continue;
+            if (!string.IsNullOrWhiteSpace(health.DeathSound))
+                PlaySoundAt(health.DeathSound.Trim(), at);
             if (!string.IsNullOrWhiteSpace(health.DeathMessage))
                 Send(health.DeathMessage, health.Entity);
             if (health.Respawn)

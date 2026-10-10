@@ -56,6 +56,12 @@ public sealed class Health : Component
     /// <summary>Seconds it stays gone before it comes back (see <see cref="Respawn"/>).</summary>
     public float RespawnDelay { get; set; } = 1;
 
+    /// <summary>Plays when damage lands but doesn't kill, from where it is. Make one with Audio &gt; New Sound (Hit).</summary>
+    public string? HurtSound { get; set; }
+
+    /// <summary>Plays when it dies, from where it is: an explosion, a last cry.</summary>
+    public string? DeathSound { get; set; }
+
     public bool IsDead => Current <= 0;
 
     /// <summary>True for <see cref="InvincibleTime"/> after a hit.</summary>
@@ -120,6 +126,8 @@ public sealed class Health : Component
             }
         }
 
+        if (Current > 0)
+            Hurt = true;
         Notify(behavior => behavior.RunDamage(amount, source));
         Damaged?.Invoke(amount, source);
         if (IsDead)
@@ -150,6 +158,9 @@ public sealed class Health : Component
     public void Advance(float seconds) => _invincibleLeft = Math.Max(0, _invincibleLeft - seconds);
 
     /// <summary>True once after each death, for the game to send the message and destroy the entity.</summary>
+    // Set when damage lands without killing, until the game plays the hurt sound.
+    internal bool Hurt { get; set; }
+
     internal bool TakeDeath()
     {
         var pending = _deathPending;

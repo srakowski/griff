@@ -56,6 +56,8 @@ public sealed class ComponentRegistry
         registry.Register<Room>();
         registry.Register<Attack>();
         registry.Register<SoundSource>();
+        registry.Register<BackgroundMusic>();
+        registry.Register<SoundPlayer>();
         return registry;
     }
 

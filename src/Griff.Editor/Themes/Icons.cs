@@ -16,6 +16,7 @@ public static class Icons
     public const string Save = "\uE74E";
     public const string SaveAs = "\uE792";
     public const string Audio = "\uE8D6";
+    public const string Music = "\uEC4F";
     public const string SceneFile = "\uE80A";
     public const string Folder = "\uE8B7";
     public const string NewProject = "\uE8F4";
@@ -32,6 +33,7 @@ public static class Icons
     public const string Search = "\uE721";
     public const string Library = "\uE8F1";
     public const string Link = "\uE71B";
+    public const string Shuffle = "\uE8B1";
 
     // Playback
     public const string Play = "\uE768";

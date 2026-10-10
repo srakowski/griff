@@ -10,6 +10,9 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=inspector:InspectorPanel}"
              d:DesignHeight="600" d:DesignWidth="320"
+             AllowDrop="True"
+             PreviewDragOver="OnPreviewDragOver"
+             PreviewDrop="OnPreviewDrop"
              controls:NumberField.EditCompleted="OnEditCompleted">
 
     <UserControl.Resources>

@@ -2,7 +2,7 @@ namespace Griff.Runtime;
 
 /// <summary>
 /// Sound for gameplay code. Paths are relative to the project's Assets folder, e.g. "Sounds/jump.wav".
-/// WAV and MP3 are supported on Windows.
+/// WAV, MP3 and OGG are supported. Make sounds and music in the editor with Audio &gt; Sound Maker.
 /// </summary>
 public interface IAudio
 {
@@ -36,6 +36,13 @@ public interface IAudio
     void Play(string sound, float volume, float pan) => Play(sound, volume);
 
     /// <summary>
+    /// Plays a one-shot sound at a <paramref name="pitch"/>: 1 is as recorded, 2 an octave higher (and twice as quick),
+    /// 0.5 an octave lower. A little randomness keeps a sound heard over and over from getting tiring:
+    /// <c>Audio.Play("Sounds/coin.wav", 1, 0, Random.Shared.NextSingle() * 0.2f + 0.9f)</c>.
+    /// </summary>
+    void Play(string sound, float volume, float pan, float pitch) => Play(sound, volume, pan);
+
+    /// <summary>
     /// Fades the music playing out over <paramref name="seconds"/> while <paramref name="music"/> fades in, for moving
     /// between areas. The same music already playing just carries on.
     /// </summary>
@@ -65,6 +72,13 @@ public interface ISoundLoop
     /// <summary>-1 (left) to 1 (right).</summary>
     float Pan { get; set; }
 
+    /// <summary>1 as recorded, 2 an octave up, 0.5 an octave down: a machine that revs, an engine that speeds up.</summary>
+    float Pitch
+    {
+        get => 1;
+        set { }
+    }
+
     /// <summary>True until <see cref="Stop"/>.</summary>
     bool IsPlaying { get; }
 
@@ -77,6 +91,8 @@ public sealed class SilentLoop : ISoundLoop
     public float Volume { get; set; } = 1;
 
     public float Pan { get; set; }
+
+    public float Pitch { get; set; } = 1;
 
     public bool IsPlaying { get; private set; } = true;
 

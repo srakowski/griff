@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Panels;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +50,49 @@ public partial class InspectorView : UserControl
 
     private void OnCatalogClicked(object sender, RoutedEventArgs e) => OpenCatalog();
 
+    // ----- Dropping assets on fields: a sound from the Assets panel onto a sound field, any asset onto a text field.
+
+    private void OnPreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (DropTarget(e) is not null)
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private void OnPreviewDrop(object sender, DragEventArgs e)
+    {
+        if (DropTarget(e) is not { } field || e.Data.GetData(Assets.AssetNode.DataFormat) is not string path)
+            return;
+        field.TextValue = path;
+        e.Handled = true;
+    }
+
+    private static PropertyField? DropTarget(DragEventArgs e)
+    {
+        if (e.Data.GetData(Assets.AssetNode.DataFormat) is not string path)
+            return null;
+        for (var element = e.OriginalSource as DependencyObject; element is not null; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is FrameworkElement { DataContext: PropertyField field })
+            {
+                var isSound = Audio.EditorAudio.Extensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
+                return field.Kind switch
+                {
+                    FieldKind.Sound when isSound => field,
+                    FieldKind.Text => field,
+                    _ => null,
+                };
+            }
+
+            if (element is not Visual)
+                return null;
+        }
+
+        return null;
+    }
+
     // Not modal, so the editor stays usable alongside it; it follows the selection and the entity's components.
     private void OpenCatalog()
     {
@@ -91,6 +135,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Vector { get; set; }
     public DataTemplate? Color { get; set; }
     public DataTemplate? Lines { get; set; }
+    public DataTemplate? Sound { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
@@ -102,6 +147,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Vector => Vector,
             FieldKind.Color => Color,
             FieldKind.Lines => Lines,
+            FieldKind.Sound => Sound,
             _ => null,
         };
 }

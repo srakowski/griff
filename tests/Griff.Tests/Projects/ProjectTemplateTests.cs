@@ -41,6 +41,46 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.DoesNotContain(entities.SelectMany(e => e.Components), c => c is MissingComponent);
     }
 
+    [Theory]
+    [InlineData(ProjectTemplate.Platformer)]
+    [InlineData(ProjectTemplate.TopDown)]
+    [InlineData(ProjectTemplate.Arcade)]
+    public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(ProjectTemplate template)
+    {
+        var (project, scene, _, registry) = await CreateAndLoad(template);
+        var serializer = new SceneSerializer(registry);
+        var entities = new List<Entity>();
+        foreach (var path in project.FindScenes())
+            entities.AddRange(serializer.LoadFromString(await File.ReadAllTextAsync(path)).Entities);
+        foreach (var path in project.FindPrefabs())
+            entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants());
+
+        var sounds = entities.SelectMany(e => e.Components)
+            .SelectMany(c => c.GetType().GetProperties()
+                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound") || p.Name == "Music"))
+                .Select(p => (Component: c.GetType().Name, Field: p.Name, Path: p.GetValue(c) as string)))
+            .ToList();
+
+        Assert.Contains(sounds, s => s.Component == nameof(BackgroundMusic) && s.Path == "Music/theme.wav");
+        Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
+        Assert.All(sounds.Where(s => s.Path is not null), s =>
+            Assert.True(Griff.Audio.Wav.Decode(Asset(project, s.Path!)) is { Seconds: > 0 }, $"{s.Component}.{s.Field}: {s.Path}"));
+        Assert.NotNull(Griff.Audio.Wav.ReadSoundRecipe(Asset(project, "Sounds/jump.wav")));
+        Assert.NotNull(Griff.Audio.Wav.ReadMusicRecipe(Asset(project, "Music/theme.wav")));
+        Assert.False(Directory.Exists(project.ResolvePath("Sounds")));
+    }
+
+    [Fact]
+    public async Task EmptyTemplate_HasNoSounds()
+    {
+        var (project, _, _, _) = await CreateAndLoad(ProjectTemplate.Empty);
+
+        Assert.False(Directory.Exists(Asset(project, "Sounds")));
+    }
+
+    // Sound fields name files relative to the Assets folder, as the game looks for them.
+    private static string Asset(Project project, string relative) => Path.Combine(project.AssetsPath, relative);
+
     [Fact]
     public async Task Arcade_ClickingPlay_StartsTheGame_AndEnemiesArrive()
     {

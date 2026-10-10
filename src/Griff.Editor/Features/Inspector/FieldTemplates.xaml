@@ -2,7 +2,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
-                    xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls">
+                    xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                    xmlns:theme="clr-namespace:Griff.Editor.Themes">
 
     <DataTemplate x:Key="Field.Bool" DataType="inspector:PropertyField">
         <CheckBox HorizontalAlignment="Left" IsChecked="{Binding BoolValue}" />
@@ -14,6 +15,51 @@
 
     <DataTemplate x:Key="Field.Text" DataType="inspector:PropertyField">
         <controls:CommitTextBox Text="{Binding TextValue}" />
+    </DataTemplate>
+
+    <!-- Sounds and music: the file, with buttons to play it, choose one from the project, or make one -->
+    <DataTemplate x:Key="Field.Sound" DataType="inspector:PropertyField">
+        <DockPanel>
+            <Button x:Name="MakeButton"
+                    Width="24"
+                    Margin="2,0,0,0"
+                    Command="{Binding MakeSoundCommand}"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource Style.Button.Toolbar}"
+                    Tag="sound:make"
+                    ToolTip="{Binding SoundTip}">
+                <TextBlock x:Name="MakeIcon" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Audio}" />
+            </Button>
+            <Button Width="24"
+                    Margin="2,0,0,0"
+                    Command="{Binding ChooseSoundCommand}"
+                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource Style.Button.Toolbar}"
+                    Tag="sound:choose"
+                    ToolTip="Choose a sound from the project">
+                <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
+            </Button>
+            <Button Width="24"
+                    Margin="2,0,0,0"
+                    Command="{Binding PreviewSoundCommand}"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource Style.Button.Toolbar}"
+                    Tag="sound:play"
+                    ToolTip="Play it">
+                <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Play}" />
+            </Button>
+            <controls:CommitTextBox x:Name="Path" Text="{Binding TextValue}" />
+        </DockPanel>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsMusic, Mode=OneTime}" Value="True">
+                <Setter TargetName="MakeIcon" Property="Text" Value="{x:Static theme:Icons.Music}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsSoundMissing}" Value="True">
+                <Setter TargetName="Path" Property="Foreground" Value="{DynamicResource Brush.Status.Error}" />
+                <Setter TargetName="Path" Property="ToolTip" Value="There's no such file in the project's Assets" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- Lists of strings, one per line (tilemap rows): monospace so columns line up -->
@@ -78,6 +124,7 @@
                                      Enum="{StaticResource Field.Enum}"
                                      Lines="{StaticResource Field.Lines}"
                                      Number="{StaticResource Field.Number}"
+                                     Sound="{StaticResource Field.Sound}"
                                      Text="{StaticResource Field.Text}"
                                      Vector="{StaticResource Field.Vector}" />
 

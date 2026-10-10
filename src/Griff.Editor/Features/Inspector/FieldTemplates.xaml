@@ -10,7 +10,7 @@
     </DataTemplate>
 
     <DataTemplate x:Key="Field.Number" DataType="inspector:PropertyField">
-        <controls:NumberField IsInteger="{Binding IsInteger, Mode=OneTime}" Value="{Binding NumberValue}" />
+        <controls:NumberField IsInteger="{Binding IsInteger, Mode=OneTime}" IsMixed="{Binding IsMixed, Mode=OneWay}" Value="{Binding NumberValue}" />
     </DataTemplate>
 
     <DataTemplate x:Key="Field.Text" DataType="inspector:PropertyField">
@@ -142,7 +142,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="inspector:AxisField">
-                    <controls:NumberField x:Name="Field" Margin="0,0,3,0" Label="{Binding Label, Mode=OneTime}" Value="{Binding Value}" />
+                    <controls:NumberField x:Name="Field" Margin="0,0,3,0" IsMixed="{Binding IsMixed, Mode=OneWay}" Label="{Binding Label, Mode=OneTime}" Value="{Binding Value}" />
                     <DataTemplate.Triggers>
                         <DataTrigger Binding="{Binding Label}" Value="X">
                             <Setter TargetName="Field" Property="LabelBrush" Value="{DynamicResource Brush.Axis.X}" />

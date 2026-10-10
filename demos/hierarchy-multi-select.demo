@@ -10,7 +10,7 @@ select: Ctrl+Sign
 expectselected: Slime, Checkpoint, Sign
 explain: panel:Hierarchy | Ctrl-click | Control click adds a row to the selection. The slime, the checkpoint and the sign are all picked.
 explain: scene | All outlined | The Scene view outlines every one of them. The last one picked gets the move handle.
-explain: panel:Inspector | The last one picked | The Inspector shows the sign, the last one picked.
+explain: panel:Inspector | All three | The Inspector shows what all three have in common, to edit together.
 select: Ctrl+Checkpoint
 expectselected: Slime, Sign
 say: Control click on a picked row takes it out again.

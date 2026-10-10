@@ -29,7 +29,7 @@ public interface IAgentScene
     /// <summary>Makes every edit until the scope is disposed one undo step.</summary>
     IDisposable BeginGroup(string description);
 
-    /// <summary>The selected entities; the last is the primary one, which the Inspector shows.</summary>
+    /// <summary>The selected entities, which the Inspector edits together; the last is the primary one.</summary>
     IReadOnlyList<Entity> Selection { get; set; }
 
     /// <summary>A new entity from the project's prefab called <paramref name="name"/>, or null if there's none.</summary>
@@ -158,7 +158,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Title = "Select",
             Description = "Selects entities in the editor (or nothing), as Ctrl-clicking them in the Hierarchy would. Editor commands " +
                 "act on the selection: Entity_Delete, Entity_Duplicate, Entity_Cut and Entity_Copy on every selected entity (one undo step), " +
-                "the Inspector and Entity_Rename on the primary one (the last).",
+                "Entity_Rename on the primary one (the last). The Inspector (ui_inspect \"Inspector\") edits the components all of them have at once.",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("The entity to select.")),
                 ("entities", Schema.Array(Schema.String("name, id or path"), "Several entities to select; the last is the primary one.")),

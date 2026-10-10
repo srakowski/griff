@@ -31,14 +31,31 @@
                       Visibility="{Binding HasEntity, Converter={StaticResource Visible}}">
             <StackPanel Margin="0,0,0,16">
 
-                <!-- Entity header -->
+                <!-- Entity header: the name, or with several selected, how many (their names in the tooltip) -->
                 <DockPanel Margin="10,10,10,8" DataContext="{Binding Header}">
                     <CheckBox Margin="0,0,8,0"
                               VerticalAlignment="Center"
                               IsChecked="{Binding IsEnabled}"
                               ToolTip="Enabled" />
-                    <controls:CommitTextBox FontSize="{StaticResource FontSize.Subtitle}" Text="{Binding Name}" />
+                    <Grid>
+                        <controls:CommitTextBox FontSize="{StaticResource FontSize.Subtitle}"
+                                                Text="{Binding Name}"
+                                                Visibility="{Binding IsSeveral, Converter={StaticResource Hidden}}" />
+                        <TextBlock x:Name="SeveralName"
+                                   VerticalAlignment="Center"
+                                   FontSize="{StaticResource FontSize.Subtitle}"
+                                   Text="{Binding Name, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Names}"
+                                   Visibility="{Binding IsSeveral, Converter={StaticResource Visible}}" />
+                    </Grid>
                 </DockPanel>
+
+                <TextBlock Margin="10,0,10,8"
+                           Style="{StaticResource Style.Text.Caption}"
+                           Text="{Binding HiddenNote}"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding HasHiddenNote, Converter={StaticResource Visible}}" />
 
                 <!-- Components -->
                 <ItemsControl ItemsSource="{Binding Components}">

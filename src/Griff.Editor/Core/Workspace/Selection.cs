@@ -6,8 +6,8 @@ namespace Griff.Editor.Core.Workspace;
 
 /// <summary>
 /// The selected entities, shared by the hierarchy, inspector and scene view. <see cref="Entity"/> is the primary one
-/// (the last picked), which the inspector and the scene view's handles work on; Delete, Duplicate, Cut, Copy and Paste
-/// act on all of <see cref="Entities"/>.
+/// (the last picked), which the scene view's handles work on; the inspector edits all of <see cref="Entities"/> at once,
+/// and Delete, Duplicate, Cut, Copy and Paste act on all of them.
 /// </summary>
 public interface ISelection : INotifyPropertyChanged
 {

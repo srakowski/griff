@@ -199,10 +199,10 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
 
     // ----- IPropertyHost -----
 
-    public void SetValue(Component component, PropertyDescriptor property, object? value)
+    public void SetValues(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
     {
-        if (_scene is not null && !Equals(property.GetValue(component), value))
-            _scene.Execute(new SetPropertyEdit(component, property, value));
+        if (_scene is not null && SetPropertiesEdit.For(components, property, values) is { } edit)
+            _scene.Execute(edit);
     }
 
     public void Seal() => _scene?.History.Seal();

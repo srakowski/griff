@@ -59,6 +59,8 @@ public class ObjectSurfaceTests
 
         public string Paint(int x, int y, string color = "#000000") => $"{x},{y} {color}";
 
+        public void Apply(Preset preset) => Picked = preset;
+
         public async Task<int> CountLaterAsync(int n)
         {
             await Task.Yield();
@@ -138,6 +140,27 @@ public class ObjectSurfaceTests
         Assert.Equal("3,4 #FF0000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("{\"x\": 3, \"y\": 4, \"color\": \"#FF0000\"}")))!.GetValue<string>());
         Assert.Equal(10, (await ObjectSurface.InvokeAsync(maker, "CountLaterAsync", Json("[5]")))!.GetValue<int>());
         await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(maker, "Paint", Json("[\"a\", 2]")));
+    }
+
+    [Fact]
+    public async Task Invoke_AnItemArgument_PicksFromTheObjectsListsByLabel()
+    {
+        var maker = new Maker();
+
+        // Like the Inspector's AddComponent, which takes one of its AvailableComponents.
+        await ObjectSurface.InvokeAsync(maker, "Apply", Json("[\"Jump\"]"));
+        Assert.Same(maker.Presets[1], maker.Picked);
+        await ObjectSurface.InvokeAsync(maker, "Apply", Json("{\"preset\": 0}"));
+        Assert.Same(maker.Presets[0], maker.Picked);
+    }
+
+    [Fact]
+    public void Items_AreFoundByTheNameTheEditorShows()
+    {
+        // A component's Name is what scene files hold ("Griff.Scenes.Health"); people and agents call it "Health".
+        var registry = Griff.Scenes.Serialization.ComponentRegistry.CreateDefault();
+
+        Assert.Same(registry.Get(typeof(Health)), ObjectSurface.Resolve(registry, "All[Health]"));
     }
 
     [Fact]

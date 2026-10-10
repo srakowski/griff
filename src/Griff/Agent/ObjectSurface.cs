@@ -97,24 +97,28 @@ public static partial class ObjectSurface
         if (property.SetMethod?.IsPublic != true)
             throw new AgentException($"{owner.GetType().Name}.{property.Name} can't be changed.");
 
-        property.SetValue(owner, IsLeaf(property.PropertyType) || value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number)
-            ? AgentValues.FromJson(value, property.PropertyType)
-            : Choice(owner, property, value));
+        property.SetValue(owner, Convert(owner, value, property.PropertyType, except: property));
         return TryGet(property, owner, out var now) ? Shown(now) : null;
     }
 
-    // A property holding one of a list's items (a picked template, a selected row), set by the item's label or position:
-    // the item is looked for in the lists the same object offers.
-    private static object? Choice(object owner, PropertyInfo property, JsonElement value)
+    // A value from JSON; an object given by its label or position is one of the owner's list items.
+    private static object? Convert(object owner, JsonElement value, Type type, PropertyInfo? except = null) =>
+        IsLeaf(type) || type == typeof(object) || value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number)
+            ? AgentValues.FromJson(value, type)
+            : Choice(owner, type, except, value);
+
+    // A property or argument holding one of a list's items (a picked template, a selected row, a component to add), given
+    // by the item's label or position: the item is looked for in the lists the same object offers.
+    private static object? Choice(object owner, Type type, PropertyInfo? except, JsonElement value)
     {
         var label = value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText();
-        foreach (var list in Properties(owner.GetType()).Where(p => p != property && typeof(IEnumerable).IsAssignableFrom(p.PropertyType) && p.PropertyType != typeof(string)))
+        foreach (var list in Properties(owner.GetType()).Where(p => p != except && typeof(IEnumerable).IsAssignableFrom(p.PropertyType) && p.PropertyType != typeof(string)))
         {
-            if (!TryGet(list, owner, out var items) || items is not IEnumerable enumerable || !enumerable.Cast<object?>().Any(property.PropertyType.IsInstanceOfType))
+            if (!TryGet(list, owner, out var items) || items is not IEnumerable enumerable || !enumerable.Cast<object?>().Any(type.IsInstanceOfType))
                 continue;
             try
             {
-                if (Item(items, label) is { } item && property.PropertyType.IsInstanceOfType(item))
+                if (Item(items, label) is { } item && type.IsInstanceOfType(item))
                     return item;
             }
             catch (AgentException)
@@ -123,7 +127,7 @@ public static partial class ObjectSurface
             }
         }
 
-        return AgentValues.FromJson(value, property.PropertyType);
+        return AgentValues.FromJson(value, type);
     }
 
     /// <summary>
@@ -161,7 +165,7 @@ public static partial class ObjectSurface
             throw new AgentException($"{owner.GetType().Name} has no command or method \"{member}\". {Listing(owner)}");
         }
 
-        var (method, values) = Bind(candidates, args);
+        var (method, values) = Bind(owner, candidates, args);
         object? returned;
         try
         {
@@ -297,7 +301,7 @@ public static partial class ObjectSurface
 
     private static IEnumerable<string> Labels(object item)
     {
-        foreach (var name in new[] { "Name", "Title", "Label", "Text", "Id", "Header", "DisplayText" })
+        foreach (var name in new[] { "Name", "Title", "Label", "Text", "Id", "Header", "DisplayText", "DisplayName" })
         {
             var property = item.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
             if (property?.GetIndexParameters().Length == 0 && TryGet(property, item, out var value) && value is not null)
@@ -307,7 +311,7 @@ public static partial class ObjectSurface
         yield return item.ToString() ?? "";
     }
 
-    private static (MethodInfo Method, object?[] Values) Bind(List<MethodInfo> candidates, JsonElement? args)
+    private static (MethodInfo Method, object?[] Values) Bind(object owner, List<MethodInfo> candidates, JsonElement? args)
     {
         var positional = args is { ValueKind: JsonValueKind.Array } array ? array.EnumerateArray().ToList() : null;
         var named = args is { ValueKind: JsonValueKind.Object } obj ? obj : (JsonElement?)null;
@@ -330,7 +334,7 @@ public static partial class ObjectSurface
                         : named!.Value.EnumerateObject().FirstOrDefault(p => p.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase)) is { Value.ValueKind: not JsonValueKind.Undefined } found
                             ? found.Value : null;
                     if (supplied is { } element)
-                        values[i] = AgentValues.FromJson(element, parameter.ParameterType);
+                        values[i] = Convert(owner, element, parameter.ParameterType);
                     else if (parameter.HasDefaultValue)
                         values[i] = parameter.DefaultValue;
                     else if (parameter.ParameterType == typeof(CancellationToken))

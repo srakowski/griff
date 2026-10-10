@@ -28,6 +28,10 @@ public class NumberField : Control
     public static readonly DependencyProperty IsIntegerProperty = DependencyProperty.Register(
         nameof(IsInteger), typeof(bool), typeof(NumberField), new PropertyMetadata(false, (d, _) => ((NumberField)d).UpdateText()));
 
+    /// <summary>Shows a dash instead of the value, for several selected entities whose values differ.</summary>
+    public static readonly DependencyProperty IsMixedProperty = DependencyProperty.Register(
+        nameof(IsMixed), typeof(bool), typeof(NumberField), new PropertyMetadata(false, (d, _) => ((NumberField)d).UpdateText()));
+
     /// <summary>Change in value per pixel of drag.</summary>
     public static readonly DependencyProperty StepProperty = DependencyProperty.Register(
         nameof(Step), typeof(double), typeof(NumberField), new PropertyMetadata(0.05));
@@ -40,6 +44,7 @@ public class NumberField : Control
     private bool _scrubbing;
     private Point _scrubOrigin;
     private double _scrubStartValue;
+    private string? _shownText;
 
     public NumberField()
     {
@@ -76,6 +81,12 @@ public class NumberField : Control
         set => SetValue(IsIntegerProperty, value);
     }
 
+    public bool IsMixed
+    {
+        get => (bool)GetValue(IsMixedProperty);
+        set => SetValue(IsMixedProperty, value);
+    }
+
     public double Step
     {
         get => (double)GetValue(StepProperty);
@@ -102,6 +113,8 @@ public class NumberField : Control
 
         _label = GetTemplateChild("PART_Label") as FrameworkElement;
         _input = GetTemplateChild("PART_Input") as TextBox;
+        if (_input is not null)
+            CommitTextBox.PassUndoToEditor(_input);
 
         if (_label is not null)
         {
@@ -178,7 +191,10 @@ public class NumberField : Control
         if (_input is null)
             return;
 
-        if (TryParse(_input.Text, out var parsed) && parsed != Value)
+        // Only what was typed is committed: leaving a field that still shows an old value (its entity's, before the
+        // selection changed) mustn't write that value anywhere. A mixed field takes any number typed, even the one
+        // it would show.
+        if (_input.Text != _shownText && TryParse(_input.Text, out var parsed) && (parsed != Value || IsMixed))
         {
             SetCommitted(parsed);
             RaiseEvent(new RoutedEventArgs(EditCompletedEvent, this));
@@ -187,19 +203,27 @@ public class NumberField : Control
         UpdateText(force: true);
     }
 
-    private void SetCommitted(double value) => Value = IsInteger ? Math.Round(value) : value;
+    private void SetCommitted(double value)
+    {
+        var mixed = IsMixed;
+        Value = IsInteger ? Math.Round(value) : value;
+        // Setting the value it already has wouldn't reach the binding, but the other entities still need it.
+        if (mixed)
+            GetBindingExpression(ValueProperty)?.UpdateSource();
+    }
 
     private static bool TryParse(string text, out double value) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
         double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
 
+    // While it's being typed in, the text is left alone, unless nothing has been typed yet.
     private void UpdateText(bool force = false)
     {
-        if (_input is null || (_input.IsKeyboardFocusWithin && !force))
+        if (_input is null || (_input.IsKeyboardFocusWithin && !force && _input.Text != _shownText))
             return;
 
-        _input.Text = IsInteger
-            ? Math.Round(Value).ToString(CultureInfo.InvariantCulture)
+        _input.Text = _shownText = IsMixed ? "—"
+            : IsInteger ? Math.Round(Value).ToString(CultureInfo.InvariantCulture)
             : Value.ToString("0.####", CultureInfo.InvariantCulture);
     }
 }
@@ -217,7 +241,21 @@ public class CommitTextBox : TextBox
     {
         SetResourceReference(StyleProperty, typeof(TextBox));
         IsUndoEnabled = false;
+        PassUndoToEditor(this);
         AllowDrop = true;
+    }
+
+    /// <summary>
+    /// Lets Ctrl+Z and Ctrl+Y reach the editor's Undo and Redo from a box that has no undo of its own: otherwise the
+    /// text box's own bindings take the keys and do nothing with them.
+    /// </summary>
+    public static void PassUndoToEditor(TextBox box)
+    {
+        if (box.IsUndoEnabled || box.InputBindings.OfType<KeyBinding>().Any(b => b.Command == ApplicationCommands.NotACommand))
+            return;
+        box.InputBindings.Add(new KeyBinding(ApplicationCommands.NotACommand, Key.Z, ModifierKeys.Control));
+        box.InputBindings.Add(new KeyBinding(ApplicationCommands.NotACommand, Key.Y, ModifierKeys.Control));
+        box.InputBindings.Add(new KeyBinding(ApplicationCommands.NotACommand, Key.Z, ModifierKeys.Control | ModifierKeys.Shift));
     }
 
     protected override void OnPreviewDragOver(DragEventArgs e)

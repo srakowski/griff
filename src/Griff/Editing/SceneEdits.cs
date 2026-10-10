@@ -74,6 +74,68 @@ public sealed class SetPropertyEdit : IComponentEdit
 }
 
 /// <summary>
+/// Sets one property on several components at once (editing several selected entities in the Inspector), as one step.
+/// Consecutive changes to the same components merge, so a whole drag undoes in one go.
+/// </summary>
+public sealed class SetPropertiesEdit : IComponentEdit
+{
+    private readonly IReadOnlyList<SetPropertyEdit> _edits;
+
+    public SetPropertiesEdit(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
+    {
+        if (components.Count != values.Count)
+            throw new ArgumentException("One value per component.", nameof(values));
+        _edits = components.Select((component, i) => new SetPropertyEdit(component, property, values[i])).ToList();
+    }
+
+    private SetPropertiesEdit(IReadOnlyList<SetPropertyEdit> edits) => _edits = edits;
+
+    public IEnumerable<Component> Components => _edits.Select(e => e.Component);
+
+    public string Description => $"Change {_edits[0].Property.Name} on {_edits.Count} entities";
+
+    /// <summary>
+    /// The edit that sets each component's property to its value: null when nothing would change, and a plain
+    /// <see cref="SetPropertyEdit"/> for a single component. Every component stays in the edit even if its value is
+    /// already right, so the steps of one drag keep merging.
+    /// </summary>
+    public static IEdit? For(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
+    {
+        if (Enumerable.Range(0, components.Count).All(i => Equals(property.GetValue(components[i]), values[i])))
+            return null;
+        return components.Count == 1 ? new SetPropertyEdit(components[0], property, values[0]) : new SetPropertiesEdit(components, property, values);
+    }
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry) =>
+        _edits.Select(e => e.Remap(replaced, registry)).OfType<SetPropertyEdit>().ToList() is { Count: > 0 } edits
+            ? new SetPropertiesEdit(edits)
+            : null;
+
+    public void Apply()
+    {
+        foreach (var edit in _edits)
+            edit.Apply();
+    }
+
+    public void Revert()
+    {
+        for (var i = _edits.Count - 1; i >= 0; i--)
+            _edits[i].Revert();
+    }
+
+    public bool TryMerge(IEdit next)
+    {
+        if (next is not SetPropertiesEdit other || other._edits.Count != _edits.Count ||
+            _edits.Where((edit, i) => edit.Component != other._edits[i].Component || edit.Property.Name != other._edits[i].Property.Name).Any())
+            return false;
+
+        for (var i = 0; i < _edits.Count; i++)
+            _edits[i].TryMerge(other._edits[i]);
+        return true;
+    }
+}
+
+/// <summary>
 /// Moves several entities at once (dragging or nudging a selection), as one step. Consecutive moves of the same
 /// entities merge, so a whole drag undoes in one go.
 /// </summary>

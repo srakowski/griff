@@ -1,0 +1,62 @@
+title: Edit several at once
+intro: With several entities selected, the Inspector edits them all together: the components they share, with values that differ shown as mixed.
+project: Empty | Multi Edit
+
+# Three gems in different colors and places; the green one also glows.
+deselect
+create: Sprite
+rename: Red Gem
+set: Sprite.Tint = #FF004D
+set: Transform.Position = -3, 0, 0
+deselect
+create: Sprite
+rename: Blue Gem
+set: Sprite.Tint = #29ADFF
+set: Transform.Position = 0, 1, 0
+deselect
+create: Sprite
+rename: Green Gem
+set: Sprite.Tint = #00E436
+set: Transform.Position = 3, -1, 0
+add: Light
+look: 0, 0, 5
+
+chapter: What they share | Select several, see them together
+say: Here are three gems, each its own color, in its own place.
+select: Red Gem
+select: Ctrl+Blue Gem
+select: Ctrl+Green Gem
+expectselected: Red Gem, Blue Gem, Green Gem
+explain: panel:Inspector | Three entities | With all three selected, the Inspector shows them together. Only the green gem has a light, so it shows just the components all three have, and says so.
+expectmixed: Sprite.Tint
+explain: field:Sprite.Tint | Mixed | Their colors differ, so the tint shows a dash rather than picking one of them.
+
+chapter: Change them all | One value, every entity, one undo step
+set: Sprite.Tint = #FFEC27
+expectvalue: Red Gem.Sprite.Tint = #FFEC27
+expectvalue: Blue Gem.Sprite.Tint = #FFEC27
+expectvalue: Green Gem.Sprite.Tint = #FFEC27
+explain: scene | All gold | Type one color, and every gem takes it.
+say: It's a single step to undo, and each gem gets its own color back.
+key: Ctrl+Z
+expectvalue: Red Gem.Sprite.Tint = #FF004D
+expectvalue: Green Gem.Sprite.Tint = #00E436
+expectmixed: Sprite.Tint
+expectat: Red Gem = -3, 0
+expectat: Blue Gem = 0, 1
+expectat: Green Gem = 3, -1
+expectmixed: Transform.Position.Y
+set: Transform.Position.Y = 2
+expectat: Red Gem = -3, 2
+expectat: Blue Gem = 0, 2
+expectat: Green Gem = 3, 2
+explain: world:-4.5, 3.5, 4.5, 0.5 | Lined up | Each axis of a position is its own field. Setting Y lines the gems up in a row, and each keeps its own X.
+
+chapter: Adding to all of them | Add Component works on every one
+add: Health
+set: Health.Max = 5
+expectvalue: Red Gem.Health.Max = 5
+expectvalue: Blue Gem.Health.Max = 5
+expectvalue: Green Gem.Health.Max = 5
+explain: component:Health | Health on all three | Add Component puts a Health on every gem, and setting its Max sets them all.
+say: Editing a row of enemies, a set of platforms or a whole level's coins is now one change instead of one per entity.

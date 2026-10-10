@@ -407,6 +407,26 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => System.Numerics.Vector2.Distance(At(), wantAt) <= 0.1f, 3000))
                     throw new InvalidOperationException($"Expected {atName} at {wantAt.X}, {wantAt.Y}, but it's at {At().X:0.##}, {At().Y:0.##}.");
                 break;
+            case "expectmixed":
+                // "expectmixed: Sprite.Tint" (or "Transform.Position.Y" for one axis): the Inspector shows it as mixed,
+                // the selected entities' values differing.
+                var mixedTarget = a.Split('.', StringSplitOptions.TrimEntries);
+                if (mixedTarget.Length is not (2 or 3))
+                    throw new FormatException("expectmixed: <Component>.<Field>[.X]");
+                bool IsMixed() => ui.InspectorRow(mixedTarget[0], Label(mixedTarget[1]))?.DataContext is PropertyField mixedField &&
+                    (mixedTarget.Length == 2 ? mixedField.IsMixed : mixedField.Axes.Any(x => x.Label.Equals(mixedTarget[2], StringComparison.OrdinalIgnoreCase) && x.IsMixed));
+                if (!await Until(IsMixed, 3000))
+                    throw new InvalidOperationException($"Expected {a} to show as mixed.");
+                break;
+            case "expectvalue":
+                // "expectvalue: Red Gem.Sprite.Tint = #FFEC27": an entity's property has that value.
+                var (valueTarget, wantValue) = Split2(a, '=');
+                var valueParts = valueTarget.Split('.', StringSplitOptions.TrimEntries);
+                if (valueParts.Length != 3)
+                    throw new FormatException("expectvalue: <Entity>.<Component>.<Field> = <value>");
+                if (!await Until(() => ValueMatches(PropertyText(valueParts[0], valueParts[1], valueParts[2]), wantValue), 3000))
+                    throw new InvalidOperationException($"Expected {valueTarget} = {wantValue}, but it's {PropertyText(valueParts[0], valueParts[1], valueParts[2]) ?? "not there"}.");
+                break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.
                 if (!await Until(() => File.Exists(Path.Combine(workspace.Project!.AssetsPath, a)), 3000))
@@ -558,6 +578,29 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 break;
         }
     }
+
+    // A property of the first entity with that name, as text: colors as hex, numbers invariant. Null if it isn't there.
+    private string? PropertyText(string entityName, string componentName, string fieldName)
+    {
+        var component = workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == entityName)?.Components
+            .FirstOrDefault(c => c.GetType().Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
+        var property = component is null ? null : workspace.Components.Get(component.GetType()).Properties
+            .FirstOrDefault(p => p.Name.Equals(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+        return property?.GetValue(component!) switch
+        {
+            null => null,
+            Griff.Color color => color.ToHex(),
+            IFormattable value => value.ToString(null, CultureInfo.InvariantCulture),
+            var value => value.ToString(),
+        };
+    }
+
+    private static bool ValueMatches(string? have, string want) =>
+        have is not null && (Griff.Color.TryParse(want, out var wantColor) && Griff.Color.TryParse(have, out var haveColor)
+            ? wantColor.ToHex() == haveColor.ToHex()
+            : double.TryParse(want, CultureInfo.InvariantCulture, out var wantNumber) && double.TryParse(have, CultureInfo.InvariantCulture, out var haveNumber)
+                ? Math.Abs(wantNumber - haveNumber) < 1e-3
+                : have.Equals(want, StringComparison.OrdinalIgnoreCase));
 
     // "JumpHeight" or "Jump Height": the Inspector shows the spaced form.
     private static string Label(string name) => name.Contains(' ') ? name : InspectorPanel.Humanize(name);

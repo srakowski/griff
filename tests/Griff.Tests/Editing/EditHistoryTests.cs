@@ -227,4 +227,45 @@ public class EditHistoryTests
         Assert.Equal(new Vector3(5, 0, 1), b.Transform.Position);
         Assert.False(_history.CanUndo);
     }
+
+    [Fact]
+    public void SetProperties_SetsSeveral_MergesWhileUnsealed_AndUndoesEachToItsOwnValue()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        b.Transform.Position = new Vector3(5, 0, 1);
+        Component[] both = [a.Transform, b.Transform];
+
+        // Nothing to change: no edit. One component: a plain property edit.
+        Assert.Null(SetPropertiesEdit.For(both, PositionProperty, [Vector3.Zero, new Vector3(5, 0, 1)]));
+        Assert.IsType<SetPropertyEdit>(SetPropertiesEdit.For([a.Transform], PositionProperty, [Vector3.One]));
+
+        _history.Seal();
+        _history.Execute(SetPropertiesEdit.For(both, PositionProperty, [Vector3.One, Vector3.One])!);
+        _history.Execute(SetPropertiesEdit.For(both, PositionProperty, [new Vector3(2), new Vector3(2)])!);
+        Assert.Equal(new Vector3(2), a.Transform.Position);
+        Assert.Equal(new Vector3(2), b.Transform.Position);
+        Assert.Equal("Change Position on 2 entities", _history.UndoDescription);
+
+        _history.Undo();
+        Assert.Equal(Vector3.Zero, a.Transform.Position);
+        Assert.Equal(new Vector3(5, 0, 1), b.Transform.Position);
+        Assert.False(_history.CanUndo);
+
+        _history.Redo();
+        Assert.Equal(new Vector3(2), b.Transform.Position);
+    }
+
+    [Fact]
+    public void SetProperties_FollowsRebuiltComponents()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        _history.Execute(new SetPropertiesEdit([a.Transform, b.Transform], PositionProperty, [Vector3.One, Vector3.One]));
+
+        // A script reload swaps components for new ones: the edit points at those, and still undoes.
+        var replacement = new Transform { Position = Vector3.One };
+        _history.RemapComponents(new Dictionary<Component, Component> { [b.Transform] = replacement }, _registry);
+        _history.Undo();
+        Assert.Equal(Vector3.Zero, a.Transform.Position);
+        Assert.Equal(Vector3.Zero, replacement.Position);
+    }
 }

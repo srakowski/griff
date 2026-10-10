@@ -46,6 +46,8 @@ build: standalone
 | `sceneclick: <point>` | Click in the Scene view at an entity (by name, `Slime`) or a world point (`3, 2`). `sceneclick: Ctrl+Slime` (or `Shift+`) adds it to the selection, or takes it out. |
 | `scenedrag: <point> > <point>` | Drag in the Scene view between two points, as `sceneclick` takes them: from an entity to move the selection, from empty space to draw a selection box. `scenedrag: Shift+-2, 3 > 4, -1` holds Shift, adding the box to the selection. |
 | `expectat: <entity> = <x>, <y>` | Fail unless the entity is at that world position (within a tenth of a unit). |
+| `expectmixed: <Component>.<Field>[.<Axis>]` | Fail unless the Inspector shows that field (or one axis of it, `Transform.Position.Y`) as mixed: the selected entities' values differ. |
+| `expectvalue: <entity>.<Component>.<Field> = <value>` | Fail unless the (first) entity with that name has that value, e.g. `expectvalue: Red Gem.Sprite.Tint = #FFEC27`. Colors compare as colors and numbers as numbers. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |
 | `catalog` | Open the component catalog with the Inspector's Catalog button. |

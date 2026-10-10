@@ -14,7 +14,11 @@ one item, the first unchecked one under **Next**. Do it well rather than doing m
 1. Read `backlog.md`. If an arg was given (`/enhance <text>`), build that instead and leave the list alone, unless it
    matches an item (then that item is the one to tick).
 2. If **Next** has no unchecked items, go to **Building a new backlog** below and stop there.
-3. Check the Griff MCP is on main (`src/Griff/Agent/`, the MCP server the editor serves). Every item is tested through
+3. Size it before starting. Each run should be one focused session: a few components or one editor feature, with
+   its tests, MCP check and demo. If the item is bigger than that (several systems, a template plus the components it
+   needs, a rewrite), split it in `backlog.md` into pieces that each stand on their own, in build order, commit just
+   that change to main (stage `backlog.md` by path and nothing else), and build only the first piece.
+4. Check the Griff MCP is on main (`src/Griff/Agent/`, the MCP server the editor serves). Every item is tested through
    it; if it isn't there yet, say so and stop before writing any code.
 
 ## 1. Work in a worktree

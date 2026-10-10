@@ -1,47 +1,162 @@
 # Enhance backlog
 
 `/enhance` builds the first unchecked item, then ticks it in the same commit. Items are in order: later ones build on
-earlier ones, so reorder with care. Keep each item one small thing; split anything that grows.
+earlier ones, so reorder with care. Keep each item one small thing, a single focused session; split anything that
+grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-- [ ] Add multi-select: Shift/Ctrl-click and box selection in the Scene view and Hierarchy, so several entities can be moved, deleted and edited in the Inspector at once.
-- [ ] Add Scene-view handles to rotate and scale entities, and to resize sprites, colliders, light radii, ranges and sight.
-- [ ] Make entity references (a Switch's Targets, a Dialogue's Box, a Wire's From and the like) pickers you can drag an entity onto, update them on rename, and flag names that don't match anything.
-- [ ] Draw Mover paths, Patrol routes and Switch-to-target links in the Scene view, with points you drag to edit.
-- [ ] Link prefabs to their copies: editing a prefab updates every copy in every scene, with per-copy overrides and a way to open the prefab and edit it on its own.
-- [ ] Make panels dockable, with saved layouts.
-- [ ] Add an animation clip editor: preview clips and pick their frames from the sprite sheet visually, instead of typing strings like "Idle 0-3, Run 4-9 @12".
-- [ ] Improve tilemap painting with rectangle and fill tools, several layers, and more than one tileset (removing the 62-tile limit).
-- [ ] Add grid movement: things that step tile by tile on a tilemap, with no-code components.
-- [ ] Add turn-based play: a turn order where each side moves on its own turn, alongside the existing real-time play.
-- [ ] Add branching dialogue: choices inside dialogue, flags that later lines can check, and portraits.
-- [ ] Add drag-and-drop: things the player can pick up with the mouse or a controller and drop onto a target.
-- [ ] Add a beat clock: the music's playback position and beat events that scripts and components can follow.
-- [ ] Add Sokoban-style puzzles with a Puzzle template: crates pushed on the grid, goals, undo and level restart.
-- [ ] Add roguelikes with a Roguelike template: dungeons generated from a seed, turn-based enemies and items.
-- [ ] Add tactics games with a Tactics template: squads that move and attack on a grid, taking turns.
-- [ ] Add tile-matching boards with a Match-3 template: swap to match, cascades and refills.
-- [ ] Add falling-block puzzles with a Falling Blocks template.
-- [ ] Add card games with a Cards template: decks, hands, play zones and a turn-based opponent.
-- [ ] Add point-and-click adventures with an Adventure template: hotspots, walking to where you click, and using items on things.
-- [ ] Add visual novels with a Visual Novel template: backgrounds, characters on screen, choices and saving.
-- [ ] Add rhythm games with a Rhythm template: notes timed to the music and hit judgments.
-- [ ] Add fighting games with a Fighter template: hitboxes for each animation frame, blocking, special-move inputs and local versus play.
-- [ ] Add isometric tilemaps and depth sorting, with an Isometric template.
-- [ ] Add hex grids that work with the grid movement and turn-based play.
-- [ ] Add a profiler: a frame-time graph while playing, with the cost of each script and component and the entity counts.
-- [ ] Make physics bodies rotate, without breaking the components and templates that already use them.
-- [ ] Make circles roll, and give polygon colliders rotating physics too.
-- [ ] Make ropes swing and sag, and let welded contraptions turn.
-- [ ] Add physics puzzlers with a Physics template, in the Angry Birds style.
-- [ ] Add pinball with flippers and bumpers, and a Pinball template.
-- [ ] Add a web export.
-- [ ] Add breakpoints and stepping to the built-in code editor's scripts.
+### Editor: selection and handles
+
+- [ ] Add multi-select in the Hierarchy: Shift/Ctrl-click, with delete, duplicate, cut, copy and paste working on all of them as one undo step.
+- [ ] Add multi-select in the Scene view: Shift/Ctrl-click and box selection, with dragging moving them all.
+- [ ] Edit several selected entities in the Inspector at once: the components and fields they share, with mixed values shown as mixed.
+- [ ] Add a rotate handle to the Scene view.
+- [ ] Add scale handles to the Scene view.
+- [ ] Add Scene-view handles to resize sprites and box and circle colliders.
+- [ ] Add Scene-view handles for radii and distances: light radii, ranges and sight.
+
+### Editor: references, paths and prefabs
+
+- [ ] Make fields that name an entity (a Switch's Targets, a Dialogue's Box, a Wire's From and the like) pickers: pick from a list or drag an entity onto them from the Hierarchy.
+- [ ] Update entity references when an entity is renamed, and flag references that don't match anything.
+- [ ] Draw the selection's links to other entities (Switch targets, Wire sources, Follow targets) in the Scene view.
+- [ ] Draw Mover paths and Patrol routes in the Scene view, with points you drag to edit.
+- [ ] Link placed copies to their prefab: copies remember their prefab, and saving the prefab updates every copy in every scene.
+- [ ] Keep per-copy overrides on linked prefabs: changed fields stay changed, marked in the Inspector, with Revert and Apply to Prefab.
+- [ ] Open a prefab to edit it on its own, in its own tab.
+
+### Editor: panels, animation and tilemaps
+
+- [ ] Make panels dockable: drag a panel to dock it to any side, tab it with another, or float it.
+- [ ] Save and restore panel layouts, with a reset to the default layout.
+- [ ] Add an animation clip editor that lists a sprite's clips and previews them playing.
+- [ ] Pick a clip's frames from the sprite sheet visually in the clip editor, and set its speed and looping there.
+- [ ] Add rectangle and fill tools to tilemap painting.
+- [ ] Let a tilemap use more than one tileset, removing the 62-tile limit.
+- [ ] Add tilemap layers: several layers on one tilemap, painted separately, each with its own collision settings.
+
+### Gameplay foundations
+
+- [ ] Add grid movement for players: a no-code component that steps tile by tile on a tilemap, blocked by walls.
+- [ ] Add grid movement for enemies and other movers: stepping toward a target or along a path, tile by tile.
+- [ ] Add turn-based play: a turn order where each side acts on its own turn, alongside the existing real-time play.
+- [ ] Make grid movers take turns in a turn order, roguelike style: everything moves when the player moves.
+- [ ] Add choices inside dialogue that branch to different lines.
+- [ ] Add dialogue flags: lines that set flags and lines shown only when a flag is set, kept in save data.
+- [ ] Add portraits and speaker names to dialogue.
+- [ ] Add drag-and-drop with the mouse: things to pick up and targets to drop them on, with snapping and messages.
+- [ ] Add drag-and-drop with a controller: pick up, carry and drop with buttons.
+- [ ] Add a beat clock: the music's playback position and beat and bar events that scripts and components can follow, corrected for output latency.
+
+### Genres: puzzles
+
+- [ ] Add grid pushing: crates pushed tile by tile, goals that count when covered, and a message when every goal is covered.
+- [ ] Add move undo and level restart for grid puzzles.
+- [ ] Add a Puzzle template: Sokoban-style levels built from grid pushing.
+- [ ] Add a match-3 board: swap tiles, matches clear, and tiles cascade and refill.
+- [ ] Add a Match-3 template: scoring, moves left and level goals.
+- [ ] Add a falling-block board: pieces fall, rotate and lock, full lines clear, and the speed goes up.
+- [ ] Add a Falling Blocks template.
+
+### Genres: roguelikes and tactics
+
+- [ ] Generate dungeons from a seed: rooms and corridors on a tilemap.
+- [ ] Add turn-based enemies that see and attack on the grid, and items to pick up and use.
+- [ ] Add a Roguelike template.
+- [ ] Add tactics units on a grid: select a unit, see how far it can move, then move and attack.
+- [ ] Add a computer opponent for tactics.
+- [ ] Add a Tactics template.
+
+### Genres: cards, adventures and stories
+
+- [ ] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them.
+- [ ] Add card effects without code (damage, draw, cost) and a turn-based card opponent.
+- [ ] Add a Cards template.
+- [ ] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it.
+- [ ] Add using inventory items on hotspots and on each other.
+- [ ] Add an Adventure template: a point-and-click adventure.
+- [ ] Add visual novel scenes: backgrounds and characters on screen with positions and expressions, driven by dialogue.
+- [ ] Add visual novel save slots, a log of lines already read, skip and auto-advance.
+- [ ] Add a Visual Novel template.
+
+### Genres: rhythm and fighting
+
+- [ ] Add rhythm notes: a chart of notes timed to the beat clock, scrolling lanes, and hit judgments.
+- [ ] Add rhythm chart recording: tap along to the music in the editor to place notes.
+- [ ] Add a Rhythm template.
+- [ ] Add hitboxes and hurtboxes for each animation frame, edited in the clip editor.
+- [ ] Add fighting moves: blocking, hitstun, an input buffer and special-move inputs like quarter circles.
+- [ ] Add a Fighter template with local versus play.
+
+### Views
+
+- [ ] Add isometric tilemaps: diamond tiles drawn, painted and depth sorted.
+- [ ] Add movement and collision on isometric maps.
+- [ ] Add an Isometric template.
+- [ ] Add hex tilemaps, drawn and painted.
+- [ ] Make grid movement and turn-based play work on hex maps.
+
+### Profiler
+
+- [ ] Add a profiler panel: a frame-time graph and entity counts while playing.
+- [ ] Show each script's and component's cost per frame in the profiler, and the garbage allocated per frame.
+
+### Physics
+
+- [ ] Make physics bodies rotate (spin, torque, rotated box colliders) as an option per body, so existing components and templates keep working unchanged.
+- [ ] Make stacks of rotating bodies settle and rest without jittering.
+- [ ] Make circles roll.
+- [ ] Add polygon colliders that rotate, with their points edited in the Scene view.
+- [ ] Add hinge joints, and let welded contraptions turn.
+- [ ] Make ropes swing and sag.
+- [ ] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts.
+- [ ] Add a Physics template, in the Angry Birds style.
+- [ ] Add pinball pieces: flippers, bumpers, a plunger and tilt.
+- [ ] Add a Pinball template.
+
+### Platforms
+
+- [ ] Make the game player open and draw in its own window without WPF.
+- [ ] Rasterize text without WPF.
+- [ ] Move the player's input and sound off anything still tied to WPF, with controllers through GameInput or Windows.Gaming.Input, so the same player can be hosted as a UWP app.
+- [ ] Compile a project's scripts into the exported game at export time, instead of loading them at runtime.
+- [ ] Make scene loading and components safe for Native AOT (no runtime code generation, nothing trimmed away), and publish exported games with Native AOT.
+- [ ] Put rendering behind a renderer interface, with OpenGL as its first implementation.
+- [ ] Add a Direct3D 11 renderer that draws the same as the OpenGL one (Xbox has no OpenGL).
+- [ ] Prove a web export: the smallest build that draws a sprite and reads input in a browser.
+- [ ] Add a web export of whole games, with sound and saves, from the Build menu.
+- [ ] Prove an Xbox export: the smallest x64 UWP package that draws a sprite and reads a controller on an Xbox Series X in Developer Mode.
+  - Xbox games must use Direct3D (feature level 11.0 in Game Mode on Series X|S), and .NET reaches UWP only through Native AOT, which Microsoft has in preview for .NET 9 and later. This item proves .NET, Native AOT and Direct3D work on the console before the rest is built. Testing needs the user's console in Developer Mode (a Partner Center developer account): build the package, then ask the user to deploy it through the Xbox Device Portal and report back. Retail release goes through ID@Xbox and is out of scope.
+- [ ] Add an Xbox export of whole games from the Build menu, as an x64 UWP package.
+- [ ] Make exported games fit the Xbox: controller-only menus, TV-safe margins and 4K output.
+
+### Debugger
+
+- [ ] Add breakpoints to the code editor: the game pauses at the line, showing the values in scope.
+- [ ] Add stepping (over, into, out) and continue.
 - [ ] Pause on a script exception at the line that threw, with the values in scope, and let rewind go back to just before it.
+
+### Benchmarks
+
 - [ ] Add a BunnyMark benchmark: a scene that keeps adding bouncing sprites, shows the fps and the sprite count, and records how many it holds at 60 fps.
-  - Target: at least 50,000 bunnies (each an ordinary entity with a Sprite and a Body or script) at 60 fps in an exported game, with 1% lows also at 60 fps and no garbage collected per frame, so a jam game never has to think about performance. That's above Godot 3's C# result (about 27,500), and it leaves room for a real game's logic on top. If Griff falls short, profile it and fix the bottlenecks (sprite batching, per-entity overhead, allocations, physics broadphase) as part of this item; if the fixes outgrow one change, add them as items right after it. Record the result in the README.
-- [ ] Add a kata runner that builds the first few 20 Games Challenge clones (Pong, Breakout, Flappy Bird, Space Invaders) and records for each what it needed: no-code components, lines of script, and what was missing.
+- [ ] Reach the BunnyMark target, recording the result in the README.
+  - Target: at least 50,000 bunnies (each an ordinary entity with a Sprite and a Body or script) at 60 fps in an exported game, with 1% lows also at 60 fps and no garbage collected per frame, so a jam game never has to think about performance. That's above Godot 3's C# result (about 27,500), and it leaves room for a real game's logic on top. Profile and fix the bottlenecks (sprite batching, per-entity overhead, allocations, physics broadphase) one at a time; each fix that outgrows one session becomes its own item right after this one.
+- [ ] Add a kata runner that builds a 20 Games Challenge clone (start with Pong) and records what it needed: no-code components, lines of script, and what was missing.
+- [ ] Add Breakout, Flappy Bird and Space Invaders to the kata runner.
+
+### 3D and VR
+
+- [ ] Add a 3D renderer: meshes and a perspective camera with depth.
+- [ ] Add 3D lighting and materials.
+- [ ] Show and move things in 3D in the Scene view.
+- [ ] Draw first-person levels as real 3D geometry: walls of different heights, and textured floors and ceilings.
+- [ ] Let first-person players aim up and down.
+- [ ] Add VR through OpenXR: stereo rendering on a PC headset and head tracking, with a VR camera component.
+- [ ] Add VR hands: tracked controllers that grab, point and press buttons.
+- [ ] Add VR movement: teleport and smooth movement, with comfort options (snap turning, a vignette while moving).
+- [ ] Add a VR template.
+  - Testing VR needs a headset: check what tests and the MCP can, then ask the user to try it on their headset and report back.
 
 ## Done
 

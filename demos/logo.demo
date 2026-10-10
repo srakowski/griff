@@ -1,0 +1,13 @@
+title: The griffin
+intro: Griff has a logo: a pixel-art griffin, in the editor and on every game it builds.
+project: Platformer | Griffin Run
+
+chapter: A griffin in the title bar
+explain: logo | The logo | Griff has a logo now: a griffin's head, drawn as sixteen by sixteen pixel art.
+say: At sixteen pixels every dot of the sprite is one pixel on screen, so it stays sharp in the title bar, on the taskbar and in Alt Tab.
+say: It's the editor's own orange, and it wears it on the start page too.
+
+chapter: Games wear it too | Game > Build Game
+say: Games you build carry the griffin as their icon, so a jam entry looks finished from the moment it's downloaded.
+build: standalone
+say: The exe in the project's Build folder shows the griffin in Explorer, and on the taskbar while it plays.

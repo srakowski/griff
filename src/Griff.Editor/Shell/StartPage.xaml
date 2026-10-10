@@ -5,17 +5,11 @@
              xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters">
     <Grid Background="{DynamicResource Brush.Surface.Document}">
         <StackPanel Width="440" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Border Width="48" Height="48"
-                    HorizontalAlignment="Left"
-                    Background="{DynamicResource Brush.Accent}"
-                    CornerRadius="6">
-                <TextBlock HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           FontSize="28"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource Brush.Text.OnAccent}"
-                           Text="G" />
-            </Border>
+            <Image Width="48" Height="48"
+                   HorizontalAlignment="Left"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   Source="/Griff.Editor;component/Themes/griff.png"
+                   UseLayoutRounding="True" />
             <TextBlock Margin="0,16,0,4" Style="{StaticResource Style.Text.Display}" Text="Griff" />
             <TextBlock Style="{StaticResource Style.Text.Secondary}" Text="Make a game this weekend." />
 

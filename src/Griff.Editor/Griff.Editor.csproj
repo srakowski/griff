@@ -18,8 +18,14 @@
     <None Include="Themes\Fonts\JetBrainsMono-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The griffin logo (drawn by tools\logo.ps1): the .exe's icon, and the title bar's and start page's mark. -->
+  <ItemGroup>
+    <Resource Include="..\..\assets\griff.png" Link="Themes\griff.png" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\assets\griff.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

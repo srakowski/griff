@@ -1,0 +1,39 @@
+title: Select several in the Scene view
+intro: Ctrl and Shift click, or drag a box, to pick several things right in the Scene view, then move them all at once.
+project: TopDown | Scene Select
+
+chapter: Clicking several | Ctrl and Shift in the Scene view
+look: 0, 0, 8.5
+say: The Hierarchy could already pick several entities. Now the Scene view can too.
+sceneclick: Bat
+sceneclick: Ctrl+Portal A
+sceneclick: Shift+-4, 2
+expectselected: Bat, Portal A, Pillar
+explain: world:-11, 3.4, -2.6, -4.2 | Ctrl or Shift click | Control or shift click adds what you click to the selection. The bat, a portal and a pillar are all picked, and each one is outlined.
+sceneclick: Ctrl+Portal A
+expectselected: Bat, Pillar
+say: Clicking a picked one again takes it back out.
+
+chapter: Moving them together | One drag, one undo step
+scenedrag: Bat > -6, -1
+expectat: Bat = -6, -1
+expectat: Pillar = -3, 3
+explain: world:-8, 4.6, -1.6, -2.6 | Moved together | Drag any one of them and they all move, keeping their places to each other.
+say: However far they went, it's one step to undo.
+key: Ctrl+Z
+expectat: Bat = -7, -2
+expectat: Pillar = -4, 2
+
+chapter: Box selection | Drag across empty floor
+say: Drag across empty floor to draw a box. Everything wholly inside it gets picked.
+scenedrag: -10.5, -4 > 10.5, -6
+expectselected: Gem, Gem, Bonus Gem
+explain: world:-10.5, -4, 10.5, -6 | Caught in the box | The box caught both gems along the bottom, and the bonus gem a pressure plate brings out. The pillar pokes out of it, so it's left alone.
+say: Hold shift to add another box to the selection.
+scenedrag: Shift+-10.8, 5.8 > -6, 4
+expectselected: Gem, Gem, Bonus Gem, Gem
+scenedrag: Gem > -8, 3.5
+expectat: Gem = -8, 3.5
+explain: world:-10, 4.5, 10, -7.5 | Four gems | Then drag one, and all four gems move together.
+menu: View > Frame Selection
+say: And View, Frame Selection, or the F key, centers the view on everything picked.

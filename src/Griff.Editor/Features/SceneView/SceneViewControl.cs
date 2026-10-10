@@ -17,7 +17,9 @@ namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
 /// 2D view of the open scene. Y is up, one world unit is <see cref="_zoom"/> pixels.
-/// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects; drag moves (Ctrl snaps); F frames.
+/// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects (Ctrl or Shift adds or takes away); dragging
+/// from empty space selects everything in the box; dragging a selected entity moves the whole selection (Ctrl snaps);
+/// F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
@@ -26,12 +28,14 @@ public sealed class SceneViewControl : FrameworkElement
     private const double MaxZoom = 2048;
     private const float SnapStep = 0.5f;
     private const double MarkerRadius = 7;
-    private const double CameraAspect = 16.0 / 9.0;
+    private const double CameraAspect = SceneViewModel.CameraAspect;
+    private const double DragThreshold = 3;
     private const double PaletteCell = 28;
     private const int PaletteColumns = 8;
 
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
+    private readonly SceneViewModel _model;
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
     private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
@@ -44,8 +48,11 @@ public sealed class SceneViewControl : FrameworkElement
     private DragMode _drag;
     private Point _dragStartScreen;
     private Vector2 _dragStartPan;
-    private Vector3 _dragStartPosition;
-    private Matrix4x4 _dragParentInverse = Matrix4x4.Identity;
+    private SceneViewModel.SelectionMove? _move;
+    // A click on one of several selected entities picks it alone, unless the mouse moves (then they all move).
+    private Entity? _pressed;
+    private Point _boxEnd;
+    private bool _boxAdds;
 
     // Tile painting.
     private int _brushTile;
@@ -54,10 +61,11 @@ public sealed class SceneViewControl : FrameworkElement
     private (int X, int Y)? _lastPaintCell;
     private IDisposable? _stroke;
 
-    public SceneViewControl(IWorkspace workspace, ISelection selection)
+    public SceneViewControl(IWorkspace workspace, ISelection selection, SceneViewModel model)
     {
         _workspace = workspace;
         _selection = selection;
+        _model = model;
         Focusable = true;
         AllowDrop = true;
         FocusVisualStyle = null;
@@ -79,6 +87,7 @@ public sealed class SceneViewControl : FrameworkElement
         None,
         Pan,
         Move,
+        Box,
         Paint,
     }
 
@@ -88,17 +97,17 @@ public sealed class SceneViewControl : FrameworkElement
     private PropertyDescriptor TilesProperty =>
         _workspace.Components.Get(typeof(Tilemap)).Properties.Single(p => p.Name == nameof(Tilemap.Tiles));
 
-    /// <summary>The tilemap being painted: the selected entity's, while it's in the shown scene and enabled.</summary>
+    /// <summary>The tilemap being painted: the selected entity's, when it's the only one selected, in the shown scene and enabled.</summary>
     private Tilemap? PaintTarget =>
-        _selection.Entity is { } entity && entity.Scene == _document?.Scene && SceneRenderer.IsActive(entity)
+        _selection.Entities is [var entity] && entity.Scene == _document?.Scene && SceneRenderer.IsActive(entity)
             ? entity.GetComponent<Tilemap>()
             : null;
 
-    /// <summary>Centers the view on the selection (or the origin).</summary>
+    /// <summary>Centers the view on the selection (the middle of several), or the origin.</summary>
     public void FrameSelection()
     {
-        var position = _selection.Entity?.Transform.WorldPosition ?? Vector3.Zero;
-        _pan = new Vector2(position.X, position.Y);
+        var selected = _selection.Entities.Where(e => e.Scene == _document?.Scene).ToList();
+        _pan = selected.Count == 0 ? Vector2.Zero : selected.Aggregate(Vector2.Zero, (sum, e) => sum + ToVector2(e.Transform.WorldPosition)) / selected.Count;
         InvalidateVisual();
     }
 
@@ -193,7 +202,7 @@ public sealed class SceneViewControl : FrameworkElement
             if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
                 DrawText(dc, entity, text);
             if (entity.GetComponent<Camera>() is { } camera)
-                DrawCameraFrame(dc, entity, camera, entity == _selection.Entity);
+                DrawCameraFrame(dc, entity, camera, _selection.IsSelected(entity));
             if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
                 DrawParticles(dc, entity, emitter);
 
@@ -213,6 +222,9 @@ public sealed class SceneViewControl : FrameworkElement
             if (selected.Scene == _document.Scene)
                 DrawSelection(dc, selected, primary: selected == _selection.Entity);
         }
+
+        if (_drag == DragMode.Box)
+            DrawBoxSelection(dc);
 
         if (PaintTarget is { } painting)
             DrawPaintOverlay(dc, painting);
@@ -654,7 +666,7 @@ public sealed class SceneViewControl : FrameworkElement
     private void DrawSelection(DrawingContext dc, Entity entity, bool primary)
     {
         var accent = Brush("Brush.Accent");
-        if (Bounds(entity) is { } bounds)
+        if (SceneViewModel.Outline(entity) is { } bounds)
         {
             var corners = bounds.Select(p => ToScreen(p)).ToArray();
             var geometry = new StreamGeometry();
@@ -668,6 +680,13 @@ public sealed class SceneViewControl : FrameworkElement
             dc.DrawGeometry(null, new Pen(Brush("Brush.Surface.Chrome"), 4), geometry);
             dc.DrawGeometry(null, new Pen(accent, 2), geometry);
         }
+        else
+        {
+            // Entities with nothing to outline get a ring around their marker.
+            var center = ToScreen(ToVector2(entity.Transform.WorldPosition));
+            dc.DrawEllipse(null, new Pen(Brush("Brush.Surface.Chrome"), 4), center, MarkerRadius + 3, MarkerRadius + 3);
+            dc.DrawEllipse(null, new Pen(accent, 2), center, MarkerRadius + 3, MarkerRadius + 3);
+        }
 
         if (!primary)
             return;
@@ -677,6 +696,18 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawLine(new Pen(Brush("Brush.Axis.X"), 2), pivot, new Point(pivot.X + 28, pivot.Y));
         dc.DrawLine(new Pen(Brush("Brush.Axis.Y"), 2), pivot, new Point(pivot.X, pivot.Y - 28));
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
+    }
+
+    // The box being dragged, and outlines on what it will catch.
+    private void DrawBoxSelection(DrawingContext dc)
+    {
+        if ((_boxEnd - _dragStartScreen).Length < DragThreshold)
+            return;
+        foreach (var caught in _model.EntitiesInBox(ToWorld(_dragStartScreen), ToWorld(_boxEnd)).Where(e => !_selection.IsSelected(e)))
+            DrawSelection(dc, caught, primary: false);
+
+        var accent = Brush("Brush.Accent");
+        dc.DrawRectangle(Faded("Brush.Accent", 0.12), new Pen(accent, 1), new Rect(_dragStartScreen, _boxEnd));
     }
 
     private void DrawZoomLabel(DrawingContext dc)
@@ -693,32 +724,6 @@ public sealed class SceneViewControl : FrameworkElement
         var scene = _document!.Scene;
         return SceneRenderer.DrawOrder(scene)
             .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && SceneRenderer.IsActive(e)));
-    }
-
-    /// <summary>World-space outline of the entity's sprite, tilemap or camera frame, or null for bare entities.</summary>
-    private static Vector2[]? Bounds(Entity entity)
-    {
-        Vector2 min, max;
-        if (entity.GetComponent<Sprite>() is { } sprite)
-            (min, max) = (-sprite.Size / 2, sprite.Size / 2);
-        else if (entity.GetComponent<Tilemap>() is { Height: > 0 } tilemap)
-            (min, max) = (new Vector2(0, -tilemap.Height * tilemap.TileSize), new Vector2(tilemap.Width * tilemap.TileSize, 0));
-        else if (entity.GetComponent<Camera>() is { } camera)
-        {
-            max = new Vector2((float)(camera.Size * CameraAspect), camera.Size);
-            min = -max;
-        }
-        else
-            return null;
-
-        var world = entity.Transform.WorldMatrix;
-        return
-        [
-            ToVector2(Vector3.Transform(new Vector3(min.X, min.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(max.X, min.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(max.X, max.Y, 0), world)),
-            ToVector2(Vector3.Transform(new Vector3(min.X, max.Y, 0), world)),
-        ];
     }
 
     /// <summary>Topmost entity under the point. Sprites hit by area; bare entities and cameras by their pivot.</summary>
@@ -812,14 +817,30 @@ public sealed class SceneViewControl : FrameworkElement
         else if (e.ChangedButton == MouseButton.Left)
         {
             var hit = HitTest(position);
-            _selection.Select(hit);
-            if (hit is not null)
+            var adds = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+            if (hit is null)
             {
-                _dragStartPosition = hit.Transform.Position;
-                _dragParentInverse = hit.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inv)
-                    ? inv
-                    : Matrix4x4.Identity;
-                BeginDrag(DragMode.Move, position);
+                // Empty space: a click selects nothing (Ctrl or Shift keep the selection), a drag draws a box.
+                if (!adds)
+                    _selection.Select(null);
+                _boxAdds = adds;
+                _boxEnd = position;
+                BeginDrag(DragMode.Box, position);
+            }
+            else
+            {
+                if (adds)
+                    _selection.Toggle(hit);
+                else if (!_selection.IsSelected(hit))
+                    _selection.Select(hit);
+                else if (_selection.Entities.Count > 1)
+                    _pressed = hit;
+
+                if (_selection.IsSelected(hit) && _model.BeginMove() is { } move)
+                {
+                    _move = move;
+                    BeginDrag(DragMode.Move, position);
+                }
             }
         }
 
@@ -848,22 +869,28 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
-        if (_selection.Entity is not { } entity || _document is null)
+        if (_drag == DragMode.Box)
+        {
+            _boxEnd = position;
+            InvalidateVisual();
             return;
+        }
 
-        // Convert the world-space drag into the parent's space so nested entities move under the cursor.
-        var worldDelta = ToWorld(position) - ToWorld(_dragStartScreen);
-        var localDelta = Vector3.TransformNormal(new Vector3(worldDelta, 0), _dragParentInverse);
-        var target = _dragStartPosition + localDelta;
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-            target = new Vector3(Snap(target.X), Snap(target.Y), target.Z);
-
-        if (target != entity.Transform.Position)
-            _document.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, target));
+        if (_move is null)
+            return;
+        if ((position - _dragStartScreen).Length >= DragThreshold)
+            _pressed = null;
+        _move.To(ToWorld(position) - ToWorld(_dragStartScreen), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
     }
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
+        var position = e.GetPosition(this);
+        if (_drag == DragMode.Box && (position - _dragStartScreen).Length >= DragThreshold)
+            _model.SelectInBox(ToWorld(_dragStartScreen), ToWorld(position), _boxAdds);
+        else if (_drag == DragMode.Move && _pressed is { } pressed)
+            _selection.Select(pressed);
+
         if (_drag != DragMode.None)
             EndDrag();
     }
@@ -1050,7 +1077,7 @@ public sealed class SceneViewControl : FrameworkElement
             }
         }
 
-        // Arrows nudge the selection: half a unit, or a tenth with Shift. Each press is its own undo step.
+        // Arrows nudge everything selected: half a unit, or a tenth with Shift. Each press is its own undo step.
         var direction = e.Key switch
         {
             Key.Left => new Vector3(-1, 0, 0),
@@ -1059,13 +1086,10 @@ public sealed class SceneViewControl : FrameworkElement
             Key.Down => new Vector3(0, -1, 0),
             _ => Vector3.Zero,
         };
-        if (direction != Vector3.Zero && _selection.Entity is { } entity && _document is { } document &&
-            (Keyboard.Modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
+        if (direction != Vector3.Zero && _selection.Entity is not null && (Keyboard.Modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
         {
             var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 0.1f : SnapStep;
-            document.History.Seal();
-            document.Execute(new SetPropertyEdit(entity.Transform, PositionProperty, entity.Transform.Position + direction * step));
-            document.History.Seal();
+            _model.MoveSelection(new Vector2(direction.X, direction.Y) * step);
             e.Handled = true;
         }
     }
@@ -1095,7 +1119,14 @@ public sealed class SceneViewControl : FrameworkElement
         if (IsMouseCaptured)
             ReleaseMouseCapture();
         if (mode == DragMode.Move)
-            _document?.History.Seal();
+        {
+            _move?.End();
+            _move = null;
+            _pressed = null;
+        }
+
+        if (mode == DragMode.Box)
+            InvalidateVisual();
         if (mode == DragMode.Paint)
         {
             _stroke?.Dispose();
@@ -1192,8 +1223,6 @@ public sealed class SceneViewControl : FrameworkElement
         _tileImages[key] = cropped;
         return cropped;
     }
-
-    private static float Snap(float value) => MathF.Round(value / SnapStep) * SnapStep;
 
     private static Vector2 ToVector2(Vector3 v) => new(v.X, v.Y);
 

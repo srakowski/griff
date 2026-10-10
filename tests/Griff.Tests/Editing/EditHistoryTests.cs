@@ -203,4 +203,28 @@ public class EditHistoryTests
         using (_history.BeginGroup("Open"))
             Assert.Throws<InvalidOperationException>(() => _history.Undo());
     }
+
+    [Fact]
+    public void SetPositions_MovesSeveral_MergesWhileUnsealed_AndUndoesInOneStep()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        b.Transform.Position = new Vector3(5, 0, 1);
+        Transform[] both = [a.Transform, b.Transform];
+
+        _history.Seal();
+        _history.Execute(new SetPositionsEdit(both, [new Vector3(1, 0, 0), new Vector3(6, 0, 1)]));
+        _history.Execute(new SetPositionsEdit(both, [new Vector3(2, 3, 0), new Vector3(7, 3, 1)]));
+        Assert.Equal(new Vector3(7, 3, 1), b.Transform.Position);
+        Assert.Equal("Move 2 entities", _history.UndoDescription);
+
+        // A different set of entities is its own step.
+        _history.Execute(new SetPositionsEdit([b.Transform], [Vector3.Zero]));
+        _history.Undo();
+        Assert.Equal(new Vector3(7, 3, 1), b.Transform.Position);
+
+        _history.Undo();
+        Assert.Equal(Vector3.Zero, a.Transform.Position);
+        Assert.Equal(new Vector3(5, 0, 1), b.Transform.Position);
+        Assert.False(_history.CanUndo);
+    }
 }

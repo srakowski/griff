@@ -117,6 +117,27 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         }
     }
 
+    /// <summary>Drags from one point to another with modifier keys held (a Shift-drag adding a box to the selection).</summary>
+    public async Task DragWith(Point from, Point to, ModifierKeys modifiers)
+    {
+        await MoveTo(from);
+        await Gate();
+        var held = Modifiers(modifiers).ToList();
+        if (held.Count > 0)
+            overlay.ShowKeys(string.Join("+", held.Select(m => m.ToString().Replace("Left", ""))) + "+Drag");
+        foreach (var m in held)
+            Send(VirtualKey(m, down: true));
+        try
+        {
+            await Drag(from, [to], 700);
+        }
+        finally
+        {
+            foreach (var m in Enumerable.Reverse(held))
+                Send(VirtualKey(m, down: false));
+        }
+    }
+
     /// <summary>Presses a mouse button where the cursor is (with a ripple there) and keeps it down until <see cref="Release"/>.</summary>
     public void Press(Point at, bool right = false)
     {

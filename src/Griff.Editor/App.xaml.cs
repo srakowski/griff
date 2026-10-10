@@ -113,7 +113,9 @@ public partial class App : Application
         services.AddSingleton<MenuBuilder>();
         services.AddSingleton<ToolbarBuilder>();
         services.AddSingleton<PanelHost>();
+        services.AddSingleton<SceneViewModel>();
         services.AddSingleton<SceneViewControl>();
+        services.AddCommand<FrameSelectionCommand>();
         services.AddSingleton<StartPage>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();

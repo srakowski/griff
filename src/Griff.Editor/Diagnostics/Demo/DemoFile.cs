@@ -385,6 +385,28 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => workspace.Scene?.Scene.Entities.Count(e => e.Name == countName) == wantCount, 3000))
                     throw new InvalidOperationException($"Expected {wantCount} {countName}, but there are {workspace.Scene?.Scene.Entities.Count(e => e.Name == countName)}.");
                 break;
+            case "sceneclick":
+                // "sceneclick: Ctrl+Slime" or "sceneclick: 3, 2": a click in the Scene view on an entity or a world point.
+                var (clickAt, clickModifiers) = ParseModifiedName(a);
+                await Input.ClickWith(ScenePoint(clickAt), clickModifiers);
+                await DemoUi.Settle();
+                break;
+            case "scenedrag":
+                // "scenedrag: Shift+-2, 3 > 4, -1" or "scenedrag: Slime > 6, 1": a drag in the Scene view.
+                var (dragText, dragModifiers) = ParseModifiedName(a);
+                var (dragFromText, dragToText) = Split2(dragText, '>');
+                await Input.DragWith(ScenePoint(dragFromText), ScenePoint(dragToText), dragModifiers);
+                await DemoUi.Settle();
+                break;
+            case "expectat":
+                // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
+                var (atName, atText) = Split2(a, '=');
+                var wantAt = Vector(atText);
+                var atEntity = workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == atName) ?? throw new InvalidOperationException($"No {atName} in the scene.");
+                System.Numerics.Vector2 At() => new(atEntity.Transform.WorldPosition.X, atEntity.Transform.WorldPosition.Y);
+                if (!await Until(() => System.Numerics.Vector2.Distance(At(), wantAt) <= 0.1f, 3000))
+                    throw new InvalidOperationException($"Expected {atName} at {wantAt.X}, {wantAt.Y}, but it's at {At().X:0.##}, {At().Y:0.##}.");
+                break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.
                 if (!await Until(() => File.Exists(Path.Combine(workspace.Project!.AssetsPath, a)), 3000))
@@ -881,6 +903,16 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     }
 
     private static double Seconds(string text) => text.Length > 0 ? double.Parse(text, CultureInfo.InvariantCulture) : 60;
+
+    // Where an entity (by name) or a world point ("x, y") is on screen in the Scene view.
+    private Point ScenePoint(string text)
+    {
+        text = text.Trim();
+        if (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == text) is { } entity)
+            return ui.World(entity.Transform.WorldPosition.X, entity.Transform.WorldPosition.Y);
+        var world = Vector(text);
+        return ui.World(world.X, world.Y);
+    }
 
     private static System.Numerics.Vector2 Vector(string text)
     {

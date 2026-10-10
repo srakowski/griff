@@ -1,0 +1,74 @@
+title: The Sprite Painter
+intro: Griff now paints its own pixel art: sprites with animation frames, and tilesets for tilemaps.
+project: Platformer | Paint Kit
+
+chapter: Paint a sprite | From the Inspector's new image fields
+say: The Platformer template's slime is still a green box. Let's give it some art.
+select: Slime
+look: -8, 2.65, 3
+explain: field:Sprite.Image | Image fields | Image fields in the Inspector now show a preview, a list of the project's pictures, and a Paint button.
+click: image:Sprite.Image:paint
+painter
+explain: painter:ideas | Start from | Like the Sound Maker, you can start from an idea. Creature makes a little monster, with two frames of it breathing.
+click: painter:idea:Creature
+wait: 1
+say: Not quite right? Another makes a different one.
+click: painter:another
+wait: 1
+click: painter:another
+wait: 1
+explain: painter:preview | Preview | The preview plays the frames, at the speed set under it.
+explain: painter:tools | Tools | Then paint over it: a pencil, fill, lines, rectangles and ellipses, and a color picker. Right-dragging erases.
+click: painter:color:10
+click: painter:mirror
+explain: painter:mirror | Mirror | With Mirror on, everything is drawn on both halves at once, so a symmetrical sprite takes half the work.
+paint: 4,1 > 6,1
+paint: 5,0
+wait: 0.6
+explain: painter:frames | Frames | Each frame has its own picture. The second one sinks a pixel, so give it the crown too.
+click: painter:frame:2
+click: painter:onion
+explain: painter:canvas | Onion skin | Onion skin shows the frame before faintly underneath, to line things up.
+paint: 4,2 > 6,2
+paint: 5,1
+click: painter:onion
+wait: 1
+artname: slime
+explain: painter:save | Save | Save writes a PNG into the project's Sprites folder, and puts it on the slime.
+click: painter:save
+expectart: Sprites/slime.png | 2
+click: painter:close
+explain: component:Animation | Hooked up | The sprite took the sheet's two frames, lost the green it had as a placeholder, and got an Animation to play them. One undo step takes it all back.
+say: Here it is in the game.
+play
+wait: 3
+stop
+
+chapter: Tilesets | Art, New Tileset
+say: Tilemaps need tilesets. The Art menu paints those too.
+menu: Art > New Tileset...
+painter
+explain: painter:layout | Tileset | A tileset is tiles in a grid. Here, four across and four down, sixteen pixels each.
+click: painter:idea:Ground
+wait: 0.6
+click: painter:frame:1
+click: painter:idea:Bricks
+wait: 0.6
+click: painter:frame:2
+click: painter:tool:Fill
+click: painter:color:12
+paint: 8,8
+explain: painter:frames | Tile numbers | Tiles are numbered from zero, the same way a tilemap's rows name them.
+explain: painter:preview | Preview | The preview repeats the tile, to check how it joins up with itself.
+artname: cave
+click: painter:save
+expectart: Tiles/cave.png | 16
+click: painter:close
+say: Now a tilemap to use it.
+create: Tilemap
+set: Transform.Position = -3, 6, 0
+pickimage: Tilemap.Image = Tiles/cave.png
+explain: field:Tilemap.Columns | The grid comes along | Choosing a picture painted in Griff brings its grid with it: four tiles across, four down.
+set: Tilemap.Tiles = 1111111\n0000000\n2...2.2
+look: 0, 4, 4
+say: Painted in Griff, and in the level a moment later. Double-click any picture in the Assets panel to paint over it.

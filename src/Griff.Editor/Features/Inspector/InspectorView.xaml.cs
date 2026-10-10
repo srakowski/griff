@@ -136,6 +136,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Color { get; set; }
     public DataTemplate? Lines { get; set; }
     public DataTemplate? Sound { get; set; }
+    public DataTemplate? Image { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
@@ -148,6 +149,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Color => Color,
             FieldKind.Lines => Lines,
             FieldKind.Sound => Sound,
+            FieldKind.Image => Image,
             _ => null,
         };
 }

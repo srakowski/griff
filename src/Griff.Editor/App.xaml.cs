@@ -7,6 +7,7 @@ using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Assets;
 using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Build;
@@ -46,6 +47,7 @@ public partial class App : Application
         new InspectorModule(),
         new AssetsModule(),
         new AudioModule(),
+        new ArtModule(),
         new ControlsModule(),
         new OutputModule(),
         new DesignSystemModule(),

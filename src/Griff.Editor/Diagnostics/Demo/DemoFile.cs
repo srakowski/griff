@@ -375,6 +375,37 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => File.Exists(Path.Combine(workspace.Project!.AssetsPath, a)), 3000))
                     throw new InvalidOperationException($"{a} wasn't saved.");
                 break;
+            case "painter":
+                await ui.WaitForPainter();
+                break;
+            case "paint":
+                // "paint: 3,4 > 12,4 > 12,10" drags through those pixels of the frame; "| right" erases.
+                var (paintPath, paintButton) = Split2(a);
+                var paintPixels = paintPath.Split('>', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(p => Numbers(p, 2)).Select(n => ((int)n[0], (int)n[1])).ToList();
+                await ui.Paint(paintPixels, right: paintButton.Equals("right", StringComparison.OrdinalIgnoreCase));
+                break;
+            case "pickimage":
+                var pickImageAt = a.IndexOf('=');
+                var pickImageTarget = pickImageAt < 0 ? [] : a[..pickImageAt].Trim().Split('.', 2);
+                if (pickImageTarget.Length != 2)
+                    throw new FormatException("pickimage: <Component>.<Field> = <image>");
+                await ui.PickImage(pickImageTarget[0], Label(pickImageTarget[1]), a[(pickImageAt + 1)..].Trim());
+                break;
+            case "artname":
+                await ui.EditBox((TextBox)DemoUi.PainterPart("name"), a);
+                break;
+            case "expectart":
+                // "expectart: Sprites/slime.png | 2": the picture was saved, remembering that many frames (or tiles).
+                var (artPath, artFrames) = Split2(a);
+                var artFile = Path.Combine(workspace.Project!.AssetsPath, artPath);
+                if (!await Until(() => File.Exists(artFile), 3000))
+                    throw new InvalidOperationException($"{artPath} wasn't saved.");
+                var artLayout = Griff.Art.SheetLayout.Parse(Griff.Art.Png.ReadText(File.ReadAllBytes(artFile)))
+                    ?? throw new InvalidOperationException($"{artPath} wasn't painted in the Sprite Painter.");
+                if (artFrames.Length > 0 && artLayout.Frames != int.Parse(artFrames, CultureInfo.InvariantCulture))
+                    throw new InvalidOperationException($"{artPath} has {artLayout.Frames} frames, not {artFrames}.");
+                break;
             case "controls":
                 await ui.WaitForControls();
                 break;
@@ -922,12 +953,15 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "catalog" => DemoUi.CatalogPart(name),
             "maker" => DemoUi.MakerPart(name),
             "controls" => DemoUi.ControlsPart(name),
+            "painter" => DemoUi.PainterPart(name),
+            "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
+                ui.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, world:, gameworld:, hud:)."),
         };
     }
 

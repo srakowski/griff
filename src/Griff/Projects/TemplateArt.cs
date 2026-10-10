@@ -1,5 +1,3 @@
-using System.IO.Compression;
-
 namespace Griff.Projects;
 
 /// <summary>
@@ -626,71 +624,13 @@ internal static partial class TemplateArt
                 Pixel.Clamp(under.B + (over.B - under.B) * a), Math.Max(under.A, over.A));
         }
 
-        /// <summary>The picture as a PNG file: 8-bit RGBA, unfiltered rows, deflated.</summary>
+        /// <summary>The picture as a PNG file.</summary>
         public byte[] Png()
         {
-            var raw = new byte[height * (width * 4 + 1)];
-            for (var y = 0; y < height; y++)
-            {
-                var row = y * (width * 4 + 1);
-                for (var x = 0; x < width; x++)
-                {
-                    var p = _pixels[y * width + x];
-                    var at = row + 1 + x * 4;
-                    (raw[at], raw[at + 1], raw[at + 2], raw[at + 3]) = (p.R, p.G, p.B, p.A);
-                }
-            }
-
-            using var compressed = new MemoryStream();
-            using (var zlib = new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
-                zlib.Write(raw);
-
-            using var png = new MemoryStream();
-            png.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-            var header = new byte[13];
-            WriteBigEndian(header, 0, (uint)width);
-            WriteBigEndian(header, 4, (uint)height);
-            (header[8], header[9], header[10], header[11], header[12]) = (8, 6, 0, 0, 0);
-            Chunk(png, "IHDR", header);
-            Chunk(png, "IDAT", compressed.ToArray());
-            Chunk(png, "IEND", []);
-            return png.ToArray();
-        }
-
-        private static void Chunk(Stream stream, string type, byte[] data)
-        {
-            var length = new byte[4];
-            WriteBigEndian(length, 0, (uint)data.Length);
-            stream.Write(length);
-            var typed = new byte[4 + data.Length];
-            for (var i = 0; i < 4; i++)
-                typed[i] = (byte)type[i];
-            data.CopyTo(typed, 4);
-            stream.Write(typed);
-            var crc = new byte[4];
-            WriteBigEndian(crc, 0, Crc32(typed));
-            stream.Write(crc);
-        }
-
-        private static void WriteBigEndian(byte[] buffer, int at, uint value)
-        {
-            buffer[at] = (byte)(value >> 24);
-            buffer[at + 1] = (byte)(value >> 16);
-            buffer[at + 2] = (byte)(value >> 8);
-            buffer[at + 3] = (byte)value;
-        }
-
-        private static uint Crc32(byte[] data)
-        {
-            var crc = 0xFFFFFFFFu;
-            foreach (var b in data)
-            {
-                crc ^= b;
-                for (var k = 0; k < 8; k++)
-                    crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
-            }
-
-            return ~crc;
+            var rgba = new byte[width * height * 4];
+            for (var i = 0; i < _pixels.Length; i++)
+                (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]) = (_pixels[i].R, _pixels[i].G, _pixels[i].B, _pixels[i].A);
+            return Art.Png.Encode(rgba, width, height);
         }
     }
 }

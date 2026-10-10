@@ -102,17 +102,18 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
 
     /// <summary>Presses at <paramref name="from"/> and drags through <paramref name="path"/>, releasing at the end.</summary>
     /// <param name="holdMs">Real milliseconds to keep the button down at the end, for a running game to catch up.</param>
-    public async Task Drag(Point from, IReadOnlyList<Point> path, double msPerSegment = 350, int holdMs = 60)
+    /// <param name="right">Drag with the right button instead.</param>
+    public async Task Drag(Point from, IReadOnlyList<Point> path, double msPerSegment = 350, int holdMs = 60, bool right = false)
     {
         await MoveTo(from);
         await Pause(80);
         overlay.Ripple(from);
-        Mouse(LeftDown);
+        Mouse(right ? RightDown : LeftDown);
         await Task.Delay(60);
         foreach (var point in path)
             await MoveTo(point, msPerSegment);
         await Task.Delay(holdMs);
-        Mouse(LeftUp);
+        Mouse(right ? RightUp : LeftUp);
         await Pause(150);
     }
 

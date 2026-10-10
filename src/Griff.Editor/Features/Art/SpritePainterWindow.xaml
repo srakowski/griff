@@ -1,0 +1,292 @@
+<controls:ChromeWindow x:Class="Griff.Editor.Features.Art.SpritePainterWindow"
+                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                       xmlns:art="clr-namespace:Griff.Editor.Features.Art"
+                       xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                       xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+                       xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                       mc:Ignorable="d"
+                       d:DataContext="{d:DesignInstance Type=art:SpritePainterViewModel}"
+                       Title="Sprite Painter"
+                       Width="1000"
+                       Height="720"
+                       MinWidth="760"
+                       MinHeight="540"
+                       ShowInTaskbar="False"
+                       WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="Visible" />
+
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
+            <Setter Property="Margin" Value="0,12,0,6" />
+        </Style>
+        <Style x:Key="Choice" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style x:Key="ChoiceButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style x:Key="Small" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="Padding" Value="8,0" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource Brush.Surface.Panel}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- A sprite or a tileset, and its size -->
+        <DockPanel Margin="16,12,16,0">
+            <StackPanel x:Name="LayoutPanel" Orientation="Horizontal">
+                <ToggleButton x:Name="SpriteMode" Width="110" Height="28" IsChecked="{Binding IsSprite}" ToolTip="Frames played one after another">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Image}" />
+                        <TextBlock Text="Sprite" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="TilesetMode" Width="110" Height="28" Margin="4,0,0,0" IsChecked="{Binding IsTileset}" ToolTip="Tiles in a grid, for a tilemap">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Palette}" />
+                        <TextBlock Text="Tileset" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <TextBlock Margin="20,0,6,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Size" />
+                <controls:NumberField x:Name="CellWidthField" Width="64" IsInteger="True" Label="W" Step="0.2" Value="{Binding CellWidth}" ToolTip="Pixels across each frame or tile" />
+                <controls:NumberField x:Name="CellHeightField" Width="64" Margin="4,0,0,0" IsInteger="True" Label="H" Step="0.2" Value="{Binding CellHeight}" ToolTip="Pixels down each frame or tile" />
+
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsTileset, Converter={StaticResource Visible}}">
+                    <TextBlock Margin="16,0,6,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Tiles" />
+                    <controls:NumberField x:Name="ColumnsField" Width="64" IsInteger="True" Label="↔" Step="0.1" Value="{Binding Columns}" ToolTip="Tiles across" />
+                    <controls:NumberField x:Name="RowsField" Width="64" Margin="4,0,0,0" IsInteger="True" Label="↕" Step="0.1" Value="{Binding Rows}" ToolTip="Tiles down" />
+                </StackPanel>
+            </StackPanel>
+            <TextBlock HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Style.Text.Secondary}"
+                       Text="{Binding Status}" />
+        </DockPanel>
+
+        <Grid Grid.Row="1" Margin="16,4,16,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="160" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="200" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Tools, then starting points -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Heading}" Text="Tools" />
+                    <ItemsControl x:Name="ToolPanel" ItemsSource="{Binding Tools, Mode=OneTime}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="art:ToolChoice">
+                                <ToggleButton IsChecked="{Binding IsSelected}" Style="{StaticResource Choice}" ToolTip="{Binding Tip}">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Key}" />
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DockPanel>
+                                </ToggleButton>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel x:Name="OptionsPanel" Margin="0,6,0,0">
+                        <CheckBox x:Name="MirrorBox" Margin="0,3" Content="Mirror (M)" IsChecked="{Binding Mirror}" ToolTip="Draw on both halves at once" />
+                        <CheckBox Margin="0,3" Content="Filled shapes" IsChecked="{Binding FilledShapes}" />
+                        <CheckBox x:Name="OnionBox" Margin="0,3" Content="Onion skin" IsChecked="{Binding Onion}" ToolTip="Show the frame before, faintly" />
+                        <CheckBox Margin="0,3" Content="Grid" IsChecked="{Binding ShowGrid}" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Start from" />
+                    <ItemsControl x:Name="IdeaPanel" ItemsSource="{Binding Ideas, Mode=OneTime}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="art:IdeaChoice">
+                                <Button Command="{Binding Command}" Content="{Binding Label}" Style="{StaticResource ChoiceButton}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="AnotherButton"
+                            Margin="0,6,0,4"
+                            Command="{Binding AnotherCommand}"
+                            Style="{StaticResource ChoiceButton}"
+                            ToolTip="Another one of the same kind">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Shuffle}" />
+                            <TextBlock Text="Another" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- The frame being painted -->
+            <Border Grid.Column="2"
+                    Background="{DynamicResource Brush.Surface.Document}"
+                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius.Medium}">
+                <Grid>
+                    <art:PixelCanvas x:Name="Canvas" Painter="{Binding}" />
+                    <TextBlock Margin="10,6" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource Style.Text.Secondary}" Text="{Binding FrameText}" IsHitTestVisible="False" />
+                    <TextBlock Margin="10,6" HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding HoverText}" IsHitTestVisible="False" />
+                </Grid>
+            </Border>
+
+            <!-- Colors, the preview, and changes to the whole frame -->
+            <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <DockPanel Margin="0,12,0,6">
+                        <ComboBox x:Name="PaletteBox" Width="100" DockPanel.Dock="Right" DisplayMemberPath="Name" ItemsSource="{Binding Palettes, Mode=OneTime}" SelectedItem="{Binding SelectedPalette}" />
+                        <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" Text="Colors" />
+                    </DockPanel>
+                    <ItemsControl x:Name="SwatchPanel" ItemsSource="{Binding Swatches}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="art:Swatch">
+                                <RadioButton Width="24" Height="24" Margin="0,0,1,1" GroupName="Swatches" IsChecked="{Binding IsSelected}" ToolTip="{Binding Hex}">
+                                    <RadioButton.Template>
+                                        <ControlTemplate TargetType="RadioButton">
+                                            <Border x:Name="Frame" Background="{Binding Brush}" BorderBrush="{DynamicResource Brush.Border.Subtle}" BorderThickness="1" />
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="Frame" Property="BorderBrush" Value="White" />
+                                                    <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </RadioButton.Template>
+                                </RadioButton>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <DockPanel Margin="0,8,0,0">
+                        <Border x:Name="CurrentColor" Width="26" Height="26" Margin="0,0,6,0" Background="{Binding ColorBrush}" BorderBrush="{DynamicResource Brush.Border.Default}" BorderThickness="1" DockPanel.Dock="Left" />
+                        <controls:CommitTextBox x:Name="HexBox" FontFamily="{StaticResource Font.Mono}" Text="{Binding ColorHex}" ToolTip="Any color, as #RRGGBB" />
+                    </DockPanel>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Preview" />
+                    <Border x:Name="Preview"
+                            Height="132"
+                            Background="{DynamicResource Brush.Surface.Document}"
+                            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Medium}">
+                        <Image Margin="10" RenderOptions.BitmapScalingMode="NearestNeighbor" Source="{Binding PreviewImage}" Stretch="Uniform" />
+                    </Border>
+                    <Grid Margin="0,6,0,0" Visibility="{Binding IsSprite, Converter={StaticResource Visible}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="36" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Speed" />
+                        <Slider x:Name="FpsSlider" Grid.Column="1" VerticalAlignment="Center" Minimum="1" Maximum="24" SmallChange="1" LargeChange="4" IsSnapToTickEnabled="True" TickFrequency="1" Value="{Binding FramesPerSecond}" />
+                        <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding FramesPerSecond, StringFormat={}{0:0} fps}" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="This frame" />
+                    <WrapPanel x:Name="FramePanel">
+                        <Button Command="{Binding FlipCommand}" Content="Flip ↔" Style="{StaticResource Small}" ToolTip="Mirror it left to right" />
+                        <Button Command="{Binding FlipVerticalCommand}" Content="Flip ↕" Style="{StaticResource Small}" ToolTip="Turn it upside down" />
+                        <Button x:Name="OutlineButton" Command="{Binding OutlineCommand}" Content="Outline" Style="{StaticResource Small}" ToolTip="Draw round everything in the color" />
+                        <Button Command="{Binding ClearCommand}" Content="Clear" Style="{StaticResource Small}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Frames (or tiles) -->
+        <DockPanel Grid.Row="2" Margin="16,10,16,0">
+            <StackPanel Margin="8,0,0,0" VerticalAlignment="Center" DockPanel.Dock="Right" Visibility="{Binding IsSprite, Converter={StaticResource Visible}}">
+                <Button x:Name="AddFrameButton" Width="110" Command="{Binding AddFrameCommand}" Style="{StaticResource Small}" ToolTip="A copy of this frame, after it">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                        <TextBlock Text="Add Frame" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="RemoveFrameButton" Width="110" Command="{Binding RemoveFrameCommand}" Style="{StaticResource Small}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                        <TextBlock Text="Remove" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="FrameStrip" ItemsSource="{Binding Frames}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="art:FrameItem">
+                            <RadioButton Width="60" Height="72" Margin="0,0,4,0" GroupName="Frames" IsChecked="{Binding IsSelected}">
+                                <RadioButton.Template>
+                                    <ControlTemplate TargetType="RadioButton">
+                                        <Border x:Name="Frame"
+                                                Background="{DynamicResource Brush.Surface.Document}"
+                                                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                                BorderThickness="1"
+                                                CornerRadius="{StaticResource Radius.Small}">
+                                            <DockPanel>
+                                                <TextBlock Margin="0,0,0,2" HorizontalAlignment="Center" DockPanel.Dock="Bottom" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Label}" />
+                                                <Image Margin="6,6,6,2" RenderOptions.BitmapScalingMode="NearestNeighbor" Source="{Binding Image}" Stretch="Uniform" />
+                                            </DockPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                                <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </RadioButton.Template>
+                            </RadioButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- Save it into the project -->
+        <DockPanel Grid.Row="3" Margin="16,12,16,14">
+            <Button x:Name="CloseButton" Width="80" Margin="8,0,0,0" Click="OnClose" Content="Close" DockPanel.Dock="Right" />
+            <Button x:Name="SaveButton" Width="96" Command="{Binding SaveCommand}" DockPanel.Dock="Right" Style="{StaticResource Style.Button.Primary}" ToolTip="Save it in the project (Ctrl+S)">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Save}" />
+                    <TextBlock Text="Save" />
+                </StackPanel>
+            </Button>
+            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="Save as" />
+                <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Folder, StringFormat={}{0}/}" />
+                <TextBox x:Name="NameBox" Width="180" Margin="2,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text=".png" />
+                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Status.Error}" Text="{Binding NameError}" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</controls:ChromeWindow>

@@ -70,6 +70,11 @@ build: standalone
 | `name: <text>` | Type the Sound Maker's file name (Save puts it in `Sounds/` or `Music/`). |
 | `pick: <Component>.<Field> = <sound>` | Choose a sound from a sound field's list of the project's sounds, e.g. `pick: Health.HurtSound = Sounds/hit.wav`. |
 | `expectfile: <path>` | Fail unless the file (relative to Assets) exists: checks a Save really saved. |
+| `painter` | Wait for the Sprite Painter to open (after `menu: Art > New Sprite...` or an image field's Paint button). |
+| `paint: <x>,<y> [> <x>,<y> ...] [\| right]` | Paint on the Sprite Painter's canvas with the real mouse, through those pixels of the frame (from 0, 0 at its top left), with the selected tool: one pixel is a click. `\| right` drags with the right button, which erases. |
+| `artname: <text>` | Type the Sprite Painter's file name (Save puts it in `Sprites/` or `Tiles/`). |
+| `pickimage: <Component>.<Field> = <image>` | Choose an image from an image field's list of the project's pictures, e.g. `pickimage: Tilemap.Image = Tiles/cave.png`. |
+| `expectart: <path> [\| <frames>]` | Fail unless the picture (relative to Assets) was saved by the Sprite Painter, with that many frames or tiles. |
 | `controls` | Wait for the Controls window to open (after `menu: Game > Controls...`). |
 | `action: <name>` | Pick an action in the Controls window, e.g. `action: Jump`. |
 | `bind: <key>` | Click Press a Key and press it, e.g. `bind: W`, `bind: LeftShift`, `bind: Mouse Right`. |
@@ -109,6 +114,14 @@ In the Sound Maker: `maker` (the window), `maker:preset:Coin`, `maker:wave:Squar
 `maker:play`, `maker:stop`, `maker:save`, `maker:close`, `maker:name`, `maker:waveform`, `maker:presets`,
 `maker:waves`, `maker:settings`, `maker:moods`, `maker:music`, `maker:parts` and `maker:tempo`. A sound field's
 buttons in the Inspector: `sound:Health.HurtSound:play`, `sound:...:choose` and `sound:...:make`.
+
+In the Sprite Painter: `painter` (the window), `painter:tool:Fill`, `painter:color:8` (a palette swatch, from 0, or
+`painter:color:#FF004D`), `painter:idea:Creature`, `painter:frame:2` (a frame or tile by its label), `painter:mode:Sprite` /
+`painter:mode:Tileset`, `painter:another`, `painter:canvas`, `painter:preview`, `painter:frames`, `painter:addframe`,
+`painter:removeframe`, `painter:mirror`, `painter:onion`, `painter:outline`, `painter:save`, `painter:close`,
+`painter:name`, `painter:palette`, `painter:swatches`, `painter:hex`, `painter:current`, `painter:fps`, `painter:tools`,
+`painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. An image field's buttons in the Inspector:
+`image:Sprite.Image:choose` and `image:Sprite.Image:paint`.
 
 In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),
 `controls:addaction`, `controls:move`, `controls:name`, `controls:builtin`, `controls:usedby`, `controls:keys`,

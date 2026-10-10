@@ -29,11 +29,13 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private SceneDocument? _document;
     private EntityHeader? _header;
 
-    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts)
+    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art)
     {
         _workspace = workspace;
         _selection = selection;
         _scripts = scripts;
+        // A picture saved over the one a field shows: show the new one.
+        art.ImageSaved += (_, _) => Refresh();
         selection.PropertyChanged += (_, _) => Rebuild();
         workspace.PropertyChanged += (_, e) =>
         {
@@ -99,6 +101,14 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     {
         if (!Equals(property.GetValue(component), value))
             Execute(new SetPropertyEdit(component, property, value));
+    }
+
+    /// <summary>Puts a painted picture on a component: a sprite or tilemap also takes its frames or tiles.</summary>
+    public void UseImage(Component component, PropertyDescriptor property, string image, Griff.Art.SheetLayout layout)
+    {
+        if (ArtEdits.UseSheet(_workspace.Components, component, property.Name, image, layout) is { } edit)
+            Execute(edit);
+        Seal();
     }
 
     private void Track(SceneDocument? document)
@@ -268,6 +278,9 @@ public enum FieldKind
 
     /// <summary>A sound or music file: text, with buttons to play it, pick one from the project, or make one.</summary>
     Sound,
+
+    /// <summary>An image file: a preview and the path, with buttons to pick one from the project or paint one.</summary>
+    Image,
 }
 
 /// <summary>One editable property. Exposes typed accessors for each editor template.</summary>
@@ -290,6 +303,7 @@ public sealed class PropertyField : ObservableObject
         Kind = type == typeof(bool) ? FieldKind.Bool
             : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
             : type == typeof(string) && IsSoundName(property.Name) ? FieldKind.Sound
+            : type == typeof(string) && IsImageName(property.Name) ? FieldKind.Image
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
@@ -313,6 +327,89 @@ public sealed class PropertyField : ObservableObject
 
     /// <summary>Properties named like JumpSound, Sound or Music hold a sound file's asset path.</summary>
     public static bool IsSoundName(string name) => name.EndsWith("Sound", StringComparison.Ordinal) || name == "Music";
+
+    /// <summary>Properties named Image or like FireImage hold an image file's asset path.</summary>
+    public static bool IsImageName(string name) => name.EndsWith("Image", StringComparison.Ordinal);
+
+    /// <summary>For an image field: a small preview of the picture, or null.</summary>
+    public System.Windows.Media.ImageSource? ImagePreview => Kind == FieldKind.Image ? Art.EditorArt.Current?.Thumbnail(Value as string) : null;
+
+    /// <summary>For an image field: set to a file that isn't in the project.</summary>
+    public bool IsImageMissing => Kind == FieldKind.Image && Value is string { Length: > 0 } path &&
+        Art.EditorArt.Current is { AssetsPath: not null } art && art.Resolve(path) is null;
+
+    public string ImageTip => Value is string { Length: > 0 } && !IsImageMissing ? "Paint over this in the Sprite Painter" : "Paint a picture for this in the Sprite Painter";
+
+    /// <summary>
+    /// Opens the Sprite Painter on the field's picture (or a new one shaped for the component); each picture it saves
+    /// is put on the component.
+    /// </summary>
+    public void PaintImage() => PaintImage(fresh: false);
+
+    private void PaintImage(bool fresh)
+    {
+        if (Art.EditorArt.Current is not { } art)
+            return;
+        var host = _owner;
+        var (component, property) = (_component, _property);
+        var current = fresh || art.Resolve(Value as string) is null ? null : (string)Value!;
+        var painter = art.OpenPainter(current, Art.EditorArt.LayoutFor(component), (image, used) => host.UseImage(component, property, image, used));
+        if (current is null && component.Entity is { } entity)
+            painter.Model.Name = painter.Model.SuggestName(Art.EditorArt.Slug(entity.Name));
+    }
+
+    public IRelayCommand PaintImageCommand => _paintImage ??= new RelayCommand(PaintImage);
+
+    /// <summary>Shows the project's images in a menu under the button that asked; picking one sets it.</summary>
+    public IRelayCommand<FrameworkElement> ChooseImageCommand => _chooseImage ??= new RelayCommand<FrameworkElement>(ChooseImage);
+
+    private IRelayCommand? _paintImage;
+    private IRelayCommand<FrameworkElement>? _chooseImage;
+
+    private void ChooseImage(FrameworkElement? anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        var current = Value as string;
+        var art = Art.EditorArt.Current;
+        var images = art?.Images() ?? [];
+        foreach (var image in images)
+        {
+            var item = new MenuItem
+            {
+                Header = image,
+                IsCheckable = true,
+                IsChecked = string.Equals(image, current, StringComparison.OrdinalIgnoreCase),
+                Icon = new System.Windows.Controls.Image { Source = art?.Thumbnail(image), Width = 16, Height = 16, Stretch = Stretch.Uniform },
+            };
+            RenderOptions.SetBitmapScalingMode(item.Icon as DependencyObject, BitmapScalingMode.NearestNeighbor);
+            item.Click += (_, _) => UseChosenImage(image);
+            menu.Items.Add(item);
+        }
+
+        if (images.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "No images in the project yet", IsEnabled = false });
+        menu.Items.Add(new Separator());
+        var paint = new MenuItem { Header = "Paint a New One...", Icon = Icons.Create(Icons.Palette) };
+        paint.Click += (_, _) => PaintImage(fresh: true);
+        menu.Items.Add(paint);
+        if (!string.IsNullOrEmpty(current))
+        {
+            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
+            clear.Click += (_, _) => TextValue = null;
+            menu.Items.Add(clear);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    // A picture painted in Griff brings its frames or tiles along; any other is just set.
+    private void UseChosenImage(string image)
+    {
+        if (Art.EditorArt.Current?.LayoutOf(image) is { } layout)
+            _owner.UseImage(_component, _property, image, layout);
+        else
+            TextValue = image;
+    }
 
     /// <summary>For a sound field: whether it's music (made in the Sound Maker's Music mode) rather than an effect.</summary>
     public bool IsMusic => _property.Name == "Music";
@@ -532,6 +629,13 @@ public sealed class AxisField(PropertyField owner, int index, string label) : Ob
 public interface IPropertyHost
 {
     void SetValue(Component component, PropertyDescriptor property, object? value);
+
+    /// <summary>Sets an image field to a picture painted in the Sprite Painter, laid out as <paramref name="layout"/>.</summary>
+    void UseImage(Component component, PropertyDescriptor property, string image, Griff.Art.SheetLayout layout)
+    {
+        SetValue(component, property, image);
+        Seal();
+    }
 
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     void Seal();

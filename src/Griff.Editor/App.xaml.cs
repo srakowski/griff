@@ -67,6 +67,8 @@ public partial class App : Application
 #if DEBUG
         if (Diagnostics.SnapshotRunner.TryRun(_host.Services, MainWindow))
             return;
+        if (Diagnostics.Demo.DemoRunner.TryRun(_host.Services, MainWindow))
+            return;
 #endif
         MainWindow.Show();
 

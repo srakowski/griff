@@ -32,26 +32,184 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private DemoInput Input => ui.Input;
     private DemoOverlay Overlay => ui.Overlay;
 
-    public async Task Run()
+    private DemoControl Control => options.Control;
+
+    // Where each chapter's starting state is kept, so the viewer can rewind to it.
+    private static readonly string SnapshotRoot = Path.Combine(Path.GetTempPath(), "griff-demo-snapshots");
+
+    private Process? _shippedGame;
+
+    /// <summary>Runs the chapters in order, handling the viewer's jumps between them, until the end or Exit.</summary>
+    /// <returns>True if the viewer asked to start over from the very beginning (which needs a fresh editor).</returns>
+    public async Task<bool> Run()
     {
         ui.Log = Log;
-        await Intro();
-        await CreateProject();
-        await Tour();
-        await ArtPack();
-        await PaintLevel();
-        await AddPlayer();
-        await FollowCamera();
-        await FirstPlaytest();
-        await Coins();
-        await Enemies();
-        await KeyScript();
-        await LockedDoor();
-        await Atmosphere();
-        await Menus();
-        await PlayThrough();
-        await Ship();
-        await Outro();
+        (string Title, Func<Task> Run)[] chapters =
+        [
+            ("Intro", Intro),
+            ("A new project", CreateProject),
+            ("Finding your way around", Tour),
+            ("Bring in some art", ArtPack),
+            ("Paint a level", PaintLevel),
+            ("A hero who can run and jump", AddPlayer),
+            ("A camera that follows", FollowCamera),
+            ("Press play", FirstPlaytest),
+            ("Coins and a score", Coins),
+            ("Slimes and a sword", Enemies),
+            ("Your own code", KeyScript),
+            ("A locked door", LockedDoor),
+            ("Atmosphere", Atmosphere),
+            ("Menus", Menus),
+            ("Play it through", PlayThrough),
+            ("Ship it", Ship),
+            ("Outro", Outro),
+        ];
+        Control.Chapters = chapters.Select(c => c.Title).ToList();
+        if (options.StartAt == 0 && Directory.Exists(SnapshotRoot))
+            Directory.Delete(SnapshotRoot, recursive: true);
+        Control.Snapshots.UnionWith(Directory.Exists(SnapshotRoot)
+            ? Directory.EnumerateDirectories(SnapshotRoot).Select(d => int.TryParse(Path.GetFileName(d), out var n) ? n : -1).Where(n => n >= 0)
+            : []);
+
+        var i = options.StartAt;
+        int? restore = i > 0 ? i : null;
+        while (i < chapters.Length)
+        {
+            try
+            {
+                // A jump lands here; another jump while restoring just restores again.
+                if (restore is { } target)
+                {
+                    restore = null;
+                    i = target;
+                    await Restore(target);
+                }
+
+                Control.Enter(i);
+                // From the tour on there's a project to snapshot.
+                if (i >= 2 && !Control.Snapshots.Contains(i))
+                    await Snapshot(i);
+                await chapters[i].Run();
+                i++;
+            }
+            catch (OperationCanceledException) when (Control.ExitRequested)
+            {
+                Log("viewer exited");
+                await Recover();
+                return false;
+            }
+            catch (OperationCanceledException) when (Control.RewindTo is { } target)
+            {
+                Log($"jump to chapter {target} from {i}");
+                Control.Rearm();
+                await Recover();
+                if (target < 2)
+                    return true; // before the project existed: start again in a fresh editor
+                restore = target;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Saves the open scene and copies the project, so this chapter can be gone back to.</summary>
+    private async Task Snapshot(int chapter)
+    {
+        if (workspace.Project is not { } project || workspace.Scene is not { } scene || play.IsPlaying)
+            return;
+        if (scene.IsDirty)
+            await workspace.SaveSceneAsync();
+
+        var folder = Path.Combine(SnapshotRoot, chapter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (Directory.Exists(folder))
+            Directory.Delete(folder, recursive: true);
+        CopyProject(project.RootPath, folder);
+        File.WriteAllText(Path.Combine(folder, ".demo-scene"), project.GetRelativePath(scene.FilePath));
+        Control.Snapshots.Add(chapter);
+        Log($"snapshot {chapter}");
+    }
+
+    /// <summary>Puts the project back as it was when <paramref name="chapter"/> began, and reopens it.</summary>
+    private async Task Restore(int chapter)
+    {
+        var folder = Path.Combine(SnapshotRoot, chapter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var root = workspace.Project?.RootPath ?? DemoRunner.ProjectFolder;
+        workspace.Scene?.MarkSaved();
+        if (play.IsPlaying)
+            play.Stop();
+
+        // Everything but the builds goes back to how the snapshot has it.
+        foreach (var entry in Directory.Exists(root) ? Directory.EnumerateFileSystemEntries(root) : [])
+        {
+            if (Path.GetFileName(entry) == "Build")
+                continue;
+            if (Directory.Exists(entry))
+                Directory.Delete(entry, recursive: true);
+            else
+                File.Delete(entry);
+        }
+
+        CopyProject(folder, root);
+        var scene = File.ReadAllText(Path.Combine(folder, ".demo-scene"));
+        File.Delete(Path.Combine(root, ".demo-scene"));
+        await workspace.OpenProjectAsync(root);
+        var scenePath = Path.Combine(root, scene);
+        if (workspace.Scene?.FilePath is { } open && !string.Equals(Path.GetFullPath(open), Path.GetFullPath(scenePath), StringComparison.OrdinalIgnoreCase))
+            await workspace.OpenSceneAsync(scenePath);
+        selection.Select(null);
+        await DemoUi.Settle(300);
+        Log($"restored {chapter}");
+    }
+
+    /// <summary>Undoes whatever a chapter cut short was in the middle of: menus, dialogs, play mode, held keys.</summary>
+    private async Task Recover()
+    {
+        _pilot?.Dispose();
+        _pilot = null;
+        ui.StopSpeaking();
+        Overlay.Reset();
+        Input.Boost = 1;
+        Input.ReleaseAll();
+
+        foreach (var item in DemoUi.Descendants<MenuItem>(ui.Main.MainMenu))
+            item.IsSubmenuOpen = false;
+        foreach (var menu in DemoUi.Roots().SelectMany(DemoUi.Descendants<ContextMenu>).ToList())
+            menu.IsOpen = false;
+        foreach (var combo in DemoUi.Descendants<ComboBox>(ui.Main))
+            combo.IsDropDownOpen = false;
+        foreach (var window in Application.Current.Windows.OfType<Window>().Where(w => w != ui.Main && w is not DemoOverlay and not DemoControlBar).ToList())
+            window.Close();
+
+        if (play.IsPlaying)
+            play.Stop();
+        try
+        {
+            if (_shippedGame is { HasExited: false })
+                _shippedGame.Kill();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        Keyboard.ClearFocus();
+        ui.Main.Activate();
+        // Not DemoUi.Settle: after an exit, waits that check the control would stop straight away.
+        await Task.Delay(200);
+    }
+
+    private static void CopyProject(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(from, file);
+            var top = relative.Split(Path.DirectorySeparatorChar)[0];
+            if (top is "Build" or ".griff")
+                continue;
+            var target = Path.Combine(to, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
     }
 
     // ===== 0. Intro =====
@@ -59,11 +217,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private async Task Intro()
     {
         Overlay.ShowCard("A guided tour of Griff", "Let's build a game", "From an empty project to a finished platformer with enemies, a locked door, lighting, a menu and a shipped .exe.");
-        await Task.Delay(600);
+        await Wait(600);
         await ui.Say("Hi! In this walkthrough we're going to build a complete little platformer in Griff, a game engine made for game jams.");
         await ui.Say("We'll go from an empty project to a game with a painted level, enemies, a key and a locked door, a custom script, lighting, a menu, and a standalone exe you can share. I'll drive the editor. Just sit back and watch.");
+        await ui.Say("If you want to take over, just move your mouse and I'll pause. The bar at the top pauses, changes speed, and jumps back and forth between chapters.");
         Overlay.HideCard();
-        await Task.Delay(500);
+        await Wait(500);
     }
 
     private async Task Chapter(int number, string title, string subtitle)
@@ -288,7 +447,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await statusSay;
         await ui.Say("Jump the pond, up the step, then a double jump through the planks, and another up to the ledge.");
         await WaitUntil(() => _pilot.PlayerPosition.Y > 2.5f, 9000);
-        await Task.Delay(Ms(600));
+        await Wait(600);
 
         // Rewind.
         _pilot.Enabled = false;
@@ -310,7 +469,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.FocusEditor();
         await ui.Shortcut(Key.F6);
         _pilot.Enabled = true;
-        await Task.Delay(Ms(1800));
+        await Wait(1800);
 
         // Tweak while playing and keep it.
         await ui.Say("While it runs, I can tweak anything in the Inspector. Let's give the jump a little more height.");
@@ -318,7 +477,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.Say("Normally, play mode changes are thrown away when you stop. But when you find the perfect value, Control K, Keep Play Changes, copies the selected entity's live values back into your scene.");
         await ui.FocusEditor();
         await ui.Shortcut(Key.K, ModifierKeys.Control);
-        await Task.Delay(Ms(800));
+        await Wait(800);
         _pilot.Dispose();
         _pilot = null;
         await StopPlaying();
@@ -576,13 +735,13 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         var cardCode = Overlay.TypeCode(CodeCardRect(), "Assets/Scripts/Hover.cs", code, 1);
         await cardCode;
         await Overlay.EditCode(code, HoverFrom, HoverTo, options.Fast ? 3 : 45);
-        await Task.Delay(Ms(400));
+        await Wait(400);
         File.WriteAllText(path, HoverCode.Replace(HoverFrom, HoverTo).ReplaceLineEndings(Environment.NewLine));
         Overlay.ShowKeys("Ctrl + S");
         await ui.Say("Save, and every Hover in the running game is swapped for the new version in a moment, without restarting. Now it bounces like a ball.");
         Overlay.HideCode();
         ui.Spot(keyRect, "Hot reloaded: bouncing", dim: false);
-        await Task.Delay(Ms(2500));
+        await Wait(2500);
         ui.Unspot();
         await ui.Say("If the code doesn't compile, the last good version keeps running and the Output panel points at the exact line. Let's keep the bounce, and stop.");
         await ui.FocusEditor();
@@ -835,18 +994,18 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.Say("That's the whole game. Let's play it from the title screen. F5.");
         await ui.FocusEditor();
         await StartPlaying();
-        await Task.Delay(Ms(1500));
+        await Wait(1500);
         await ui.Say("Enter to start.");
         if (play.Game?.Input is Griff.Runtime.InputState menuInput)
         {
             Overlay.ShowKeys("Enter");
             menuInput.SetKey(Griff.Runtime.Key.Enter, true);
-            await Task.Delay(80);
+            await Wait(80);
             menuInput.SetKey(Griff.Runtime.Key.Enter, false);
         }
 
         await WaitUntil(() => play.Game?.SceneName == "Main", 6000);
-        await Task.Delay(Ms(700));
+        await Wait(700);
         _pilot = new DemoPilot(() => play.Game, Overlay);
         var pilot = _pilot;
 
@@ -858,11 +1017,11 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await WaitUntil(() => pilot.PlayerPosition.X > 44, 15000);
         await ui.Say("Checkpoint. One more slime, one more pond, and the door.");
         await WaitUntil(() => play.Game?.SceneName == "Win", 30000);
-        await Task.Delay(Ms(1200));
+        await Wait(1200);
         pilot.Dispose();
         _pilot = null;
         await ui.Say("We escaped! And the win screen remembers our best coin count.");
-        await Task.Delay(Ms(800));
+        await Wait(800);
         await ui.FocusEditor();
         await StopPlaying();
     }
@@ -881,7 +1040,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             ? Directory.GetFiles(buildFolder, ProjectName + ".exe", SearchOption.AllDirectories).FirstOrDefault()
             : null, "the built game", 120000);
         buildFolder = Path.GetDirectoryName(exe)!;
-        await Task.Delay(Ms(2500));
+        await Wait(2500);
         await ui.Say("There it is in Explorer: Ember Hollow dot exe, ready to zip up and post on itch dot io. I'll put a copy on the desktop, and run it from there.");
         CloseExplorerAt(buildFolder);
 
@@ -894,28 +1053,28 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         exe = copy;
         buildFolder = desktop;
         Log($"exported to {copy}");
-        await Task.Delay(Ms(500));
+        await Wait(500);
 
         Process? game = null;
         try
         {
-            game = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = buildFolder, UseShellExecute = true });
+            game = _shippedGame = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = buildFolder, UseShellExecute = true });
             var window = await WaitForWindow(game!, 20000);
             if (window != IntPtr.Zero)
             {
                 SetForegroundWindow(window);
-                await Task.Delay(Ms(2200));
+                await Wait(2200);
                 await ui.Say("Our title screen, running on its own. Enter to play.");
                 await Input.Press(Key.Enter);
-                await Task.Delay(1500);
+                await Wait(1500);
                 Overlay.ShowKeys("→");
                 Input.KeyDown(Key.Right);
-                await Task.Delay(900);
+                await Wait(900);
                 await Input.Press(Key.Space, showBadge: true);
-                await Task.Delay(1800);
+                await Wait(1800);
                 Input.KeyUp(Key.Right);
                 await ui.Say("Same game, same feel, no editor required.");
-                await Task.Delay(Ms(600));
+                await Wait(600);
             }
         }
         finally
@@ -946,18 +1105,18 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         Overlay.ShowCard("That's Ember Hollow", "Your turn", "Tilemaps · no-code players, enemies, pickups and doors · C# scripts with hot reload · rewind · lighting · menus · one-click builds");
         await ui.Say("And that's it. In one sitting we went from an empty project to a finished, shipped platformer: a painted level, a hero, coins, slimes, a sword, a key and a locked door, our own script with live reloading, lighting, menus, and a standalone exe.");
         await ui.Say("Griff has much more to explore, like pause menus, dialogue, top-down movement, pathfinding, and particles. Start from a template, and see what you can make by Sunday night. Happy jamming!");
-        await Task.Delay(Ms(1500));
+        await Wait(1500);
         Overlay.HideCard();
     }
 
     // ===== Helpers =====
 
-    private TimeSpan Ms(double ms) => TimeSpan.FromMilliseconds(Math.Max(1, ms / (options.Fast ? 4 : 1)));
+    /// <summary>Waits <paramref name="ms"/> of demo time: shorter in test runs and when sped up, held while paused.</summary>
+    private Task Wait(double ms) => options.Control.Delay(Math.Max(1, ms / (options.Fast ? 4 : 1)));
 
     private async Task FastForward(Func<Task> body)
     {
-        var speed = Input.Speed;
-        Input.Speed = speed * 3.5;
+        Input.Boost = 3.5;
         Overlay.Badge("⏩  Sped up");
         try
         {
@@ -965,7 +1124,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         }
         finally
         {
-            Input.Speed = speed;
+            Input.Boost = 1;
             Overlay.Badge(null);
         }
     }
@@ -1037,7 +1196,14 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     {
         var clock = Stopwatch.StartNew();
         while (!condition() && clock.ElapsedMilliseconds < timeoutMs)
+        {
+            // Time spent paused doesn't count against the timeout.
+            var paused = options.Control.Paused;
+            await options.Control.Gate();
+            if (paused)
+                clock.Restart();
             await Task.Delay(50);
+        }
         Log($"wait {(condition() ? "met" : "TIMED OUT")} after {clock.ElapsedMilliseconds} ms; player at {_pilot?.PlayerPosition}");
     }
 
@@ -1098,5 +1264,5 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private static extern bool SetForegroundWindow(IntPtr hwnd);
 }
 
-internal sealed record DemoOptions(bool Fast, Action<string>? Log);
+internal sealed record DemoOptions(bool Fast, Action<string>? Log, DemoControl Control, int StartAt = 0);
 #endif

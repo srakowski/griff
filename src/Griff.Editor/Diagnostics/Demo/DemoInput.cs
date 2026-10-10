@@ -15,12 +15,30 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
     private const uint LeftDown = 0x0002, LeftUp = 0x0004, RightDown = 0x0008, RightUp = 0x0010, Wheel = 0x0800;
     private const uint KeyRelease = 0x0002, Unicode = 0x0004, Extended = 0x0001;
 
-    /// <summary>Above 1, everything happens faster (for sped-up stretches and test runs).</summary>
-    public double Speed { get; set; } = speed;
+    /// <summary>Extra speed for sped-up stretches of the script.</summary>
+    public double Boost { get; set; } = 1;
+
+    /// <summary>Above 1, everything happens faster: test runs, sped-up stretches, and the viewer's chosen speed.</summary>
+    public double Speed => speed * Boost * (DemoControl.Active?.Factor ?? 1);
+
+    private static Task Gate() => DemoControl.Active?.Gate() ?? Task.CompletedTask;
+
+    /// <summary>Lets go of every key and button the demo might be holding (after a jump or exit mid-action).</summary>
+    public void ReleaseAll()
+    {
+        foreach (var key in new[] { Key.LeftCtrl, Key.LeftAlt, Key.LeftShift, Key.Left, Key.Right, Key.Up, Key.Down, Key.Space })
+            Send(VirtualKey(key, down: false));
+        Mouse(LeftUp);
+        Mouse(RightUp);
+    }
 
     public Point Cursor => GetCursorPos(out var p) ? new Point(p.X, p.Y) : default;
 
-    public Task Pause(double ms) => Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, ms / Speed)));
+    public async Task Pause(double ms)
+    {
+        await Gate();
+        await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, ms / Speed)));
+    }
 
     /// <summary>Glides the cursor to <paramref name="target"/> (screen pixels) on an eased curve.</summary>
     public async Task MoveTo(Point target, double ms = 650)
@@ -41,6 +59,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
 
         while (clock.Elapsed.TotalMilliseconds < duration)
         {
+            await Gate();
             var t = clock.Elapsed.TotalMilliseconds / duration;
             var eased = t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
             var along = start + (target - start) * eased + normal * (Math.Sin(eased * Math.PI) * bow);
@@ -59,6 +78,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         else
             SetCursorPos((int)Math.Round(at.X), (int)Math.Round(at.Y));
         await Pause(90);
+        await Gate();
         for (var i = 0; i < clicks; i++)
         {
             overlay.Ripple(at);
@@ -106,6 +126,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
                 continue;
             }
 
+            await Gate();
             Send(Char(c, down: true), Char(c, down: false));
             // A little unevenness reads as typing rather than pasting.
             await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, msPerChar * (0.6 + Random.Shared.NextDouble() * 0.8) / Speed)));
@@ -115,6 +136,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
     /// <summary>Presses a key, with modifiers held, and shows it on screen like a demo recording would.</summary>
     public async Task Press(Key key, ModifierKeys modifiers = ModifierKeys.None, bool showBadge = true)
     {
+        await Gate();
         if (showBadge)
             overlay.ShowKeys(Describe(key, modifiers));
 

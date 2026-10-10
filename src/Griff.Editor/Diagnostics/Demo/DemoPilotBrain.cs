@@ -19,6 +19,10 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
         new(32.6f, -0.5f, Double: true, DoubleAtVelocity: 1f, HoldRightAboveY: 3.7f, ReleaseAboveY: 4.4f), // straight up from the planks, then onto the ledge
         new(43.6f, -5, Double: false),   // the bump that keeps the second slime in
         new(51.9f, -5, Double: false),   // second pond
+        // Going back for a missed key: the same obstacles the other way.
+        new(58.1f, -5, Double: false, Direction: -1),
+        new(46.5f, -5, Double: false, Direction: -1),
+        new(37.5f, -5, Double: false, Direction: -1),
     ];
 
     private readonly HashSet<Key> _down = [];
@@ -26,11 +30,12 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
     private Jump? _current;
     private int _releaseFrames;
     private int _frames;
+    private bool _retreating;
     private float _attackCooldown;
     private float _lastX = float.NaN;
     private double _lastTime;
 
-    private sealed record Jump(float X, float MinY, bool Double, float DoubleAtVelocity = 1.5f, float HoldRightAboveY = float.MinValue, float StopRightAtX = float.MaxValue, float ReleaseAboveY = float.MaxValue)
+    private sealed record Jump(float X, float MinY, bool Double, float DoubleAtVelocity = 1.5f, float HoldRightAboveY = float.MinValue, float StopRightAtX = float.MaxValue, float ReleaseAboveY = float.MaxValue, int Direction = 1)
     {
         public bool Used { get; set; }
     }
@@ -85,16 +90,34 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
 
         _lastX = p.X;
 
-        var right = StopAt is not { } stop || p.X < stop;
+        // Past the planks on the ground without the key (knocked back by a slime, or a jump went wrong): walk back and
+        // try the planks again. The door won't open without it.
+        var hasKey = player.GetComponent<Inventory>()?.Has("Key") == true || game.Find("Key") is null;
+        if (!_retreating && !hasKey && body.IsGrounded && p.Y < -1 && p.X > 35 && _jumpStage == 0)
+        {
+            _retreating = true;
+            foreach (var j in _jumps.Where(j => j.Direction < 0))
+                j.Used = false;
+            showKeys?.Invoke("←  ·  Back for the key");
+        }
+        else if (_retreating && p.X <= 27.5f)
+        {
+            _retreating = false;
+            foreach (var j in _jumps.Where(j => j.X is > 29 and < 34))
+                j.Used = false;
+        }
+
+        var direction = _retreating ? -1 : 1;
+        var move = _retreating || StopAt is not { } stop || p.X < stop;
         var attack = false;
 
-        // A slime close ahead at about our height: stand and swing.
+        // A slime close ahead (the way we're walking) at about our height: stand and swing.
         if (Attacks && NearestSlime(game, p) is { } enemy)
         {
-            var ahead = enemy.X - p.X;
+            var ahead = (enemy.X - p.X) * direction;
             if (ahead is > -0.4f and < 2.0f && Math.Abs(enemy.Y - p.Y) < 1.2f && body.IsGrounded)
             {
-                right = ahead > 1.5f;
+                move = ahead > 1.5f;
                 if (_attackCooldown <= 0)
                 {
                     attack = true;
@@ -109,7 +132,7 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
         switch (_jumpStage)
         {
             case 0:
-                if (body.IsGrounded && _jumps.FirstOrDefault(j => !j.Used && p.X >= j.X && p.X < j.X + 1.6f && p.Y > j.MinY) is { } next)
+                if (body.IsGrounded && _jumps.FirstOrDefault(j => !j.Used && j.Direction == direction && (direction > 0 ? p.X >= j.X && p.X < j.X + 1.6f : p.X <= j.X && p.X > j.X - 1.6f) && p.Y > j.MinY) is { } next)
                 {
                     next.Used = true;
                     _current = next;
@@ -158,12 +181,13 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
         }
 
         // Some jumps go straight up first, so as not to hit the underside of what they land on.
-        if (_current is { HoldRightAboveY: var clear } && _jumpStage is 1 or 3 or 4 && p.Y < clear)
-            right = false;
-        if (_current is { StopRightAtX: var limit } && _jumpStage is 1 or 3 or 4 or 5 && p.X >= limit)
-            right = false;
+        if (!_retreating && _current is { HoldRightAboveY: var clear } && _jumpStage is 1 or 3 or 4 && p.Y < clear)
+            move = false;
+        if (!_retreating && _current is { StopRightAtX: var limit } && _jumpStage is 1 or 3 or 4 or 5 && p.X >= limit)
+            move = false;
 
-        Set(input, Key.Right, right);
+        Set(input, Key.Right, move && direction > 0);
+        Set(input, Key.Left, move && direction < 0);
         Set(input, Key.Space, jump);
         Set(input, Key.X, attack); // a tap: down this frame, up the next
     }

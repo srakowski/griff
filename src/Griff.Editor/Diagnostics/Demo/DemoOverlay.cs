@@ -167,12 +167,29 @@ internal sealed class DemoOverlay : Window
         BringToFront();
     }
 
+    /// <summary>Windows that stay above the overlay, like the demo's control bar.</summary>
+    public List<Window> Above { get; } = [];
+
     public void BringToFront()
     {
         var handle = new WindowInteropHelper(this).Handle;
         if (handle != IntPtr.Zero)
             SetWindowPos(handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0040);
+        foreach (var window in Above.OfType<DemoControlBar>())
+            window.BringToFront();
     }
+
+    /// <summary>Clears everything the overlay shows.</summary>
+    public void Reset()
+    {
+        ClearSpotlight();
+        HideCode();
+        HideCard();
+        Badge(null);
+        Caption(null);
+    }
+
+    private static Task Wait(double ms) => DemoControl.Active?.Delay(ms) ?? Task.Delay(TimeSpan.FromMilliseconds(ms));
 
     // ----- Spotlight -----
 
@@ -301,9 +318,9 @@ internal sealed class DemoOverlay : Window
         _cardTitle.Text = title;
         _cardSubtitle.Text = subtitle;
         Fade(_card, 1, 380);
-        await Task.Delay(380 + (int)holdMs);
+        await Wait(380 + holdMs);
         Fade(_card, 0, 420);
-        await Task.Delay(420);
+        await Wait(420);
     }
 
     public void ShowCard(string kicker, string title, string subtitle)
@@ -329,7 +346,7 @@ internal sealed class DemoOverlay : Window
         _codeTitle.Text = title;
         _codeText.Inlines.Clear();
         Fade(_code, 1, 250);
-        await Task.Delay(250);
+        await Wait(250);
 
         for (var i = 1; i <= code.Length; i++)
         {
@@ -339,7 +356,7 @@ internal sealed class DemoOverlay : Window
             var c = code[i - 1];
             if (c is ' ' or '\n' && i < code.Length && code[i] is ' ')
                 continue; // indentation goes in at once, like an editor's auto-indent
-            await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, msPerChar * (c == '\n' ? 3 : 1))));
+            await Wait(Math.Max(1, msPerChar * (c == '\n' ? 3 : 1)));
         }
 
         SetCode(code);
@@ -354,13 +371,13 @@ internal sealed class DemoOverlay : Window
         for (var i = from.Length; i >= 0; i--)
         {
             SetCode(head + from[..i] + "▌" + tail, highlight: (head.Length, i + 1));
-            await Task.Delay(TimeSpan.FromMilliseconds(msPerChar));
+            await Wait(msPerChar);
         }
 
         for (var i = 1; i <= to.Length; i++)
         {
             SetCode(head + to[..i] + "▌" + tail, highlight: (head.Length, i + 1));
-            await Task.Delay(TimeSpan.FromMilliseconds(msPerChar * 1.4));
+            await Wait(msPerChar * 1.4);
         }
 
         SetCode(head + to + tail, highlight: (head.Length, to.Length));

@@ -12,11 +12,13 @@ internal sealed class DemoNarrator
     private readonly DemoOverlay _overlay;
     private readonly dynamic? _voice;
     private readonly double _silentSpeed;
+    private readonly int _rate;
 
     public DemoNarrator(DemoOverlay overlay, bool speak, string? voiceName, int rate, double silentSpeed)
     {
         _overlay = overlay;
         _silentSpeed = silentSpeed;
+        _rate = rate;
         if (!speak || Type.GetTypeFromProgID("SAPI.SpVoice") is not { } type)
             return;
 
@@ -38,20 +40,54 @@ internal sealed class DemoNarrator
     /// <summary>Speaks <paramref name="text"/> and finishes when it's been said.</summary>
     public async Task Say(string text)
     {
+        var control = DemoControl.Active;
         _overlay.Caption(text);
         IsSpeaking = true;
         try
         {
-            if (_voice is null)
+            // Hurrying past a chapter, or no voice: show the caption for about as long as it takes to read.
+            if (_voice is null || control?.Skipping == true)
             {
-                // Roughly reading speed, scaled for test runs.
-                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(150, text.Length * 55 / _silentSpeed)));
+                var ms = Math.Max(150, text.Length * 55 / _silentSpeed);
+                await (control?.Delay(ms) ?? Task.Delay(TimeSpan.FromMilliseconds(ms)));
                 return;
             }
 
+            // Faster playback speaks faster: SAPI's rate goes up to 10, about three times normal.
+            _voice.Rate = control?.Speed switch { >= 4 => 10, >= 2 => Math.Min(10, _rate + 5), _ => _rate };
             _voice.Speak(Pronounce(text), SpeakAsync | PurgeBeforeSpeak);
             while (!(bool)_voice.WaitUntilDone(0))
+            {
+                if (control is not null)
+                {
+                    if (control.Paused)
+                    {
+                        _voice.Pause();
+                        try
+                        {
+                            await control.Gate();
+                        }
+                        finally
+                        {
+                            _voice.Resume();
+                        }
+                    }
+
+                    await control.Gate();
+                    if (control.Skipping)
+                    {
+                        _voice.Speak("", SpeakAsync | PurgeBeforeSpeak);
+                        break;
+                    }
+                }
+
                 await Task.Delay(40);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _voice?.Speak("", SpeakAsync | PurgeBeforeSpeak);
+            throw;
         }
         finally
         {

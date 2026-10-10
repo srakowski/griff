@@ -28,6 +28,8 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
 
     public Task Say(string text) => narrator.Say(text);
 
+    public void StopSpeaking() => narrator.Stop();
+
     /// <summary>Says <paramref name="text"/> while doing <paramref name="action"/>; done when both are.</summary>
     public async Task SayWhile(string text, Func<Task> action)
     {
@@ -41,6 +43,7 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
     /// <summary>Lets the UI catch up: layout, bindings and anything queued.</summary>
     public static async Task Settle(int ms = 60)
     {
+        await (DemoControl.Active?.Gate() ?? Task.CompletedTask);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         await Task.Delay(ms);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -53,6 +56,15 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
         {
             if (find() is { } found)
                 return found;
+            // Time spent paused doesn't count against the timeout.
+            if (DemoControl.Active is { } control)
+            {
+                var paused = control.Paused;
+                await control.Gate();
+                if (paused)
+                    clock.Restart();
+            }
+
             await Task.Delay(50);
         }
 
@@ -155,7 +167,7 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
     /// <summary>Every visual root on screen: windows, menus and popups.</summary>
     public static IEnumerable<Visual> Roots() =>
         PresentationSource.CurrentSources.OfType<HwndSource>()
-            .Where(s => !s.IsDisposed && s.RootVisual is not null && IsWindowVisible(s.Handle) && s.RootVisual is not DemoOverlay)
+            .Where(s => !s.IsDisposed && s.RootVisual is not null && IsWindowVisible(s.Handle) && s.RootVisual is not DemoOverlay and not DemoControlBar)
             .Select(s => s.RootVisual!);
 
     public static T? Find<T>(Func<T, bool> match) where T : DependencyObject =>
@@ -299,7 +311,8 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
             var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
             var box = Descendants<TextBox>(row).First();
             await EditBox(box, text, attempt == 0 ? note : null);
-            if (TextMatches(row, text))
+            await Settle(40);
+            if (InspectorRow(component, label) is { } fresh && TextMatches(fresh, text))
                 return;
             Log?.Invoke($"retry {component}.{label} = {text}");
         }
@@ -319,7 +332,8 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
 
     private static bool TextMatches(Grid row, string text)
     {
-        var field = (PropertyField)row.DataContext;
+        if (row.DataContext is not PropertyField field)
+            return false;
         return field.Kind switch
         {
             FieldKind.Color => Griff.Color.TryParse(text, out var want) && field.Value is Griff.Color have && have.ToHex() == want.ToHex(),
@@ -338,8 +352,9 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
             var box = Descendants<TextBox>(field).First();
             await EditBox(box, Format(value), attempt == 0 ? note : null);
             await Settle(40);
-            var model = (PropertyField)row.DataContext;
-            var actual = axis is null ? model.NumberValue : model.Axes.First(x => x.Label == axis).Value;
+            // The row may have been rebuilt meanwhile (the Inspector redraws on some edits): read the current one.
+            var model = InspectorRow(component, label)?.DataContext as PropertyField;
+            var actual = model is null ? double.NaN : axis is null ? model.NumberValue : model.Axes.First(x => x.Label == axis).Value;
             if (Math.Abs(actual - value) < 1e-3)
                 return;
             Log?.Invoke($"retry {component}.{label}{axis} = {value} (box {field.Value}, model {actual})");
@@ -377,8 +392,7 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
             Unspot();
         }
 
-        var field = (PropertyField)row.DataContext;
-        if (field.BoolValue != value)
+        if ((InspectorRow(component, label) ?? row).DataContext is PropertyField field && field.BoolValue != value)
         {
             field.BoolValue = value;
             Log?.Invoke($"FORCED {component}.{label} = {value}");
@@ -396,8 +410,7 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
         if (combo.IsDropDownOpen)
             combo.IsDropDownOpen = false;
 
-        var field = (PropertyField)row.DataContext;
-        if (field.EnumValue?.ToString() != value && field.EnumValues is { } values)
+        if ((InspectorRow(component, label) ?? row).DataContext is PropertyField field && field.EnumValue?.ToString() != value && field.EnumValues is { } values)
         {
             field.EnumValue = values.Cast<object>().First(v => v.ToString() == value);
             Log?.Invoke($"FORCED {component}.{label} = {value}");
@@ -444,24 +457,31 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
             await Click(button);
             var item = await WaitFor(() => MenuItem(name), $"component {name} in the list");
             await Settle(120);
-            // Long lists don't fit on screen: pick the item with the arrow keys (menus wrap around), then Enter.
-            var menu = (ItemsControl)ItemsControl.ItemsControlFromItemContainer(item);
-            var items = menu.Items.OfType<MenuItem>().ToList();
-            var index = items.IndexOf(item);
-            var count = items.Count;
-            await input.Press(Key.Down, showBadge: false);
-            var down = index;
-            var up = count - index;
-            for (var i = 0; i < Math.Min(down, up); i++)
+            // The list is longer than the screen: scroll it with the wheel until the item shows, then click it. The cursor
+            // jumps rather than glides there, since passing over the list's scroll arrows would scroll it again.
+            var menu = ItemsControl.ItemsControlFromItemContainer(item);
+            // The content area, not the whole viewer: its scroll arrows sit over the viewer's ends.
+            var viewer = Descendants<ScrollViewer>(menu).FirstOrDefault() is { } scroller
+                ? Descendants<ScrollContentPresenter>(scroller).FirstOrDefault() ?? (FrameworkElement)scroller
+                : null;
+            if (viewer is not null)
             {
-                await input.Press(down <= up ? Key.Down : Key.Up, showBadge: false);
-                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(5, 25 / input.Speed)));
+                await input.MoveTo(Center(viewer));
+                for (var i = 0; i < 40 && !Shows(viewer, item); i++)
+                {
+                    await input.Scroll(ScreenRect(item).Top > ScreenRect(viewer).Bottom ? -1 : 1);
+                    await Settle(20);
+                }
+
+                if (!Shows(viewer, item))
+                {
+                    item.BringIntoView();
+                    Log?.Invoke($"wheel didn't reach {name}");
+                    await Settle(100);
+                }
             }
 
-            await Settle(80);
-            if (!item.IsHighlighted)
-                Log?.Invoke($"arrow keys landed elsewhere looking for {name}");
-            await input.Press(Key.Enter);
+            await input.Click(Center(item), glide: false);
             await Settle(100);
             if (Find<ContextMenu>(m => m.IsOpen) is { } open)
                 open.IsOpen = false;
@@ -477,6 +497,13 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
         }
 
         bool HasSection() => panel.Components.Any(s => s.Title == name);
+
+        static bool Shows(FrameworkElement viewer, FrameworkElement item)
+        {
+            var view = ScreenRect(viewer);
+            var at = ScreenRect(item);
+            return at.Top >= view.Top - 1 && at.Bottom <= view.Bottom + 1;
+        }
     }
 
     /// <summary>Presses a shortcut, showing it on screen.</summary>

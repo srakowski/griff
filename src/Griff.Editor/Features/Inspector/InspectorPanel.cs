@@ -305,8 +305,9 @@ public sealed class PropertyField : ObservableObject
     public double NumberValue
     {
         get => Convert.ToDouble(Value);
-        set => Value = _property.Type == typeof(int) ? (int)Math.Round(value)
-            : _property.Type == typeof(float) ? (float)value
+        // Boxed separately: as one conditional, int and float would both widen to double.
+        set => Value = _property.Type == typeof(int) ? (object)(int)Math.Round(value)
+            : _property.Type == typeof(float) ? (object)(float)value
             : value;
     }
 

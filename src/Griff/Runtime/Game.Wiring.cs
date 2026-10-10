@@ -109,7 +109,7 @@ public sealed partial class Game
         RunWireSensors();
 
         // Wires anywhere in the scene, even on hidden entities: a wire into "Show" brings its entity back.
-        var wires = Scene.Entities.SelectMany(e => e.GetComponents<Wire>()).ToList();
+        var wires = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Wire>()).ToList();
         var gates = Active<WireGate>().ToList();
         var inputs = new Dictionary<(Entity Entity, string Port), float>();
         for (var pass = 0; pass < WirePasses; pass++)
@@ -274,14 +274,16 @@ public sealed partial class Game
     // E with the mouse over a button, or while touching it, presses it.
     private void RunWireButtons()
     {
-        var mouse = Input.IsMouseInView ? Physics.OverlapPoint(Scene, Input.MouseWorld).ToHashSet() : [];
-        var pressed = Input.WasPressed("Interact");
-        var held = Input.IsDown("Interact");
+        // Every player can press buttons: with the mouse over one, or touching it.
+        var players = PlayerInputs().Select(i => (Input: i, Mouse: i.IsMouseInView ? Physics.OverlapPoint(Scene, i.MouseWorld).ToHashSet() : [])).ToList();
+        var held = players.Any(p => p.Input.IsDown("Interact"));
         foreach (var button in Active<WireButton>())
         {
             var entity = button.Entity!;
-            var within = mouse.Contains(entity) || TouchersOf(entity).Any();
-            if (pressed && within)
+            var touchers = TouchersOf(entity).Select(t => t.By).ToList();
+            var pressing = players.Any(p => p.Input.WasPressed("Interact") && (p.Mouse.Contains(entity) || touchers.Any(t => InputOf(t) == p.Input)))
+                           || (!Net.IsOnline && touchers.Count > 0 && Input.WasPressed("Interact"));
+            if (pressing)
             {
                 if (button.Toggle)
                     button.IsOn = !button.IsOn;

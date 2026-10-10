@@ -78,6 +78,21 @@ public enum ButtonAction
 
     /// <summary>Puts every action back to the game's own controls, forgetting the player's rebinding.</summary>
     ResetControls,
+
+    /// <summary>
+    /// Hosts a network game others can join (see <see cref="Scenes.Multiplayer"/>), then goes to <see cref="Button.Scene"/>
+    /// if it's set: the menu's "Host" button.
+    /// </summary>
+    HostGame,
+
+    /// <summary>
+    /// Joins the network game at the address typed into a <see cref="TextField"/> for the join address (empty looks on
+    /// the local network). Once in, the host's scene loads by itself.
+    /// </summary>
+    JoinGame,
+
+    /// <summary>Leaves the network game (or stops hosting it), then goes to <see cref="Button.Scene"/> if it's set.</summary>
+    LeaveGame,
 }
 
 /// <summary>
@@ -96,7 +111,10 @@ public sealed class Button : Component
 
     public ButtonAction Action { get; set; }
 
-    /// <summary>For <see cref="ButtonAction.LoadScene"/>: the scene's name, e.g. "Level1".</summary>
+    /// <summary>
+    /// For <see cref="ButtonAction.LoadScene"/>: the scene's name, e.g. "Level1". For Host Game and Leave Game, the scene
+    /// to go to afterwards (empty stays).
+    /// </summary>
     public string? Scene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
@@ -266,8 +284,10 @@ public sealed class Bar : Component
     {
         if (!string.IsNullOrWhiteSpace(Track))
         {
-            if (_tracked?.Scene != scene || _tracked.Name != Track)
-                _tracked = scene.Entities.FirstOrDefault(e => e.Name == Track && e.GetComponent<Health>() is not null) ?? _tracked;
+            // In a network game, this player's own character comes first.
+            if (_tracked?.Scene != scene || _tracked.Name != Track || (scene.PreferNamed is { } prefer && !prefer(_tracked)))
+                _tracked = (scene.FindNamed(Track) is { } named && named.GetComponent<Health>() is not null ? named : null)
+                           ?? scene.Entities.FirstOrDefault(e => e.Name == Track && e.GetComponent<Health>() is not null) ?? _tracked;
             if (_tracked?.GetComponent<Health>() is { } health)
                 (Value, Max) = _tracked.Scene == scene ? (health.Current, health.Max) : (0, health.Max);
         }

@@ -39,6 +39,8 @@ internal static partial class TemplateArt
             return SandboxFiles();
         if (template == ProjectTemplate.Contraption)
             return ContraptionFiles();
+        if (template == ProjectTemplate.Multiplayer)
+            return ArenaFiles();
         if (template != ProjectTemplate.Shooter)
             return new Dictionary<string, byte[]>();
         return new Dictionary<string, byte[]>

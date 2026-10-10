@@ -35,6 +35,9 @@ public abstract class EditorCommand : ICommand
     /// <summary>Where the command appears on the main toolbar, or null to keep it off the toolbar.</summary>
     public virtual ToolbarPlacement? Toolbar => null;
 
+    /// <summary>For an on/off setting: whether it's on, shown as a tick by its menu item. Null for an ordinary command.</summary>
+    public virtual bool? IsChecked => null;
+
     public event EventHandler? CanExecuteChanged
     {
         add => CommandManager.RequerySuggested += value;

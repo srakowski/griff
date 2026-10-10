@@ -25,22 +25,23 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0 || PausedThisFrame)
             return;
-        foreach (var movement in Active<PlatformerMovement>())
+        foreach (var movement in Moving<PlatformerMovement>())
             RunPlatformer(movement);
-        foreach (var movement in Active<TopDownMovement>())
+        foreach (var movement in Moving<TopDownMovement>())
             RunTopDown(movement);
     }
 
     private void RunPlatformer(PlatformerMovement m)
     {
         var entity = m.Entity!;
+        var keys = InputOf(entity);
         if (entity.GetComponent<Body>() is not { } body)
             return;
 
         var dt = Time.Delta;
         var control = m.Controllable;
-        var x = control ? Input.Horizontal : 0;
-        var y = control ? Input.Vertical : 0;
+        var x = control ? keys.Horizontal : 0;
+        var y = control ? keys.Vertical : 0;
         var v = body.Velocity;
         var grounded = body.IsGrounded;
         var gravity = -Physics.Gravity.Y * body.GravityScale;
@@ -104,7 +105,7 @@ public sealed partial class Game
             v = new Vector2(x * m.ClimbSpeed, y * m.ClimbSpeed);
             m.JumpsLeft = m.AirJumps;
             m.AirDashUsed = false;
-            if (control && Input.WasPressed("Jump", Math.Max(0, m.JumpBuffer)))
+            if (control && keys.WasPressed("Jump", Math.Max(0, m.JumpBuffer)))
             {
                 // Jump off it, or just let go while holding down.
                 m.IsClimbing = false;
@@ -121,7 +122,7 @@ public sealed partial class Game
         }
 
         // A dash goes straight, ignoring gravity, then carries on at running speed.
-        if (m.Dash && control && m.DashLeft <= 0 && m.DashCooldownLeft <= 0 && (grounded || !m.AirDashUsed) && Input.WasPressed("Dash"))
+        if (m.Dash && control && m.DashLeft <= 0 && m.DashCooldownLeft <= 0 && (grounded || !m.AirDashUsed) && keys.WasPressed("Dash"))
         {
             m.DashDirection = x > 0.1f ? 1 : x < -0.1f ? -1 : m.Facing;
             m.DashLeft = Math.Max(0, m.DashTime);
@@ -159,7 +160,7 @@ public sealed partial class Game
         var canWall = m.WallJump && !grounded && m.WallAge <= WallCoyoteTime && m.LastWallSide != 0;
         var canAir = m.JumpsLeft > 0;
         var drop = m.DropThrough && y < -0.5f && oneWayFloor is not null;
-        if (control && (canGround || canWall || canAir || drop) && Input.WasPressed("Jump", Math.Max(0, m.JumpBuffer)))
+        if (control && (canGround || canWall || canAir || drop) && keys.WasPressed("Jump", Math.Max(0, m.JumpBuffer)))
         {
             if (drop)
             {
@@ -189,7 +190,7 @@ public sealed partial class Game
 
         if (v.Y <= 0)
             m.IsJumping = false;
-        else if (m.ShortHop && m.IsJumping && control && !Input.IsDown("Jump"))
+        else if (m.ShortHop && m.IsJumping && control && !keys.IsDown("Jump"))
         {
             v.Y *= 0.5f;
             m.IsJumping = false;
@@ -255,12 +256,13 @@ public sealed partial class Game
     private void RunTopDown(TopDownMovement m)
     {
         var entity = m.Entity!;
+        var keys = InputOf(entity);
         if (entity.GetComponent<Body>() is not { } body)
             return;
 
         var dt = Time.Delta;
         var control = m.Controllable;
-        var raw = control ? Input.Move : Vector2.Zero;
+        var raw = control ? keys.Move : Vector2.Zero;
         var input = raw;
         if (m.FourWay)
         {
@@ -280,7 +282,7 @@ public sealed partial class Game
             m.Facing = Vector2.Normalize(input);
 
         m.DashCooldownLeft = Math.Max(0, m.DashCooldownLeft - dt);
-        if (m.Dash && control && m.DashLeft <= 0 && m.DashCooldownLeft <= 0 && Input.WasPressed("Dash"))
+        if (m.Dash && control && m.DashLeft <= 0 && m.DashCooldownLeft <= 0 && keys.WasPressed("Dash"))
         {
             m.DashDirection = m.Facing;
             m.DashLeft = Math.Max(0, m.DashTime);
@@ -341,7 +343,7 @@ public sealed partial class Game
     private LadderSpot? LadderAt(Vector2 point, float reach)
     {
         var span = new Box(point, new Vector2(reach, 0));
-        foreach (var ladder in Active<Ladder>())
+        foreach (var ladder in Showing<Ladder>())
         {
             foreach (var collider in ladder.Entity!.GetComponents<Collider>())
             {
@@ -351,7 +353,7 @@ public sealed partial class Game
             }
         }
 
-        foreach (var tilemap in Active<Tilemap>())
+        foreach (var tilemap in Showing<Tilemap>())
         {
             if ((tilemap.LadderAt(point) ?? tilemap.LadderAt(point - new Vector2(reach, 0)) ?? tilemap.LadderAt(point + new Vector2(reach, 0))) is { } x)
                 return new LadderSpot(x);
@@ -372,7 +374,7 @@ public sealed partial class Game
     private void PlayIfSet(string? sound)
     {
         if (!string.IsNullOrWhiteSpace(sound))
-            Audio.Play(sound.Trim());
+            PlayShared(sound.Trim());
     }
 
     private static float MoveTowards(float from, float to, float step) =>
@@ -385,10 +387,11 @@ public sealed partial class Game
         return length <= step || length < 1e-6f ? to : from + gap / length * step;
     }
 
-    // Touches from this frame's physics: whatever touches a bouncer from its launching side is sent off that way.
+    // Touches from this frame's physics: whatever touches a bouncer from its launching side is sent off that way. In a
+    // network game, each machine launches what it moves, so a player's own character springs off at once.
     private void RunBouncers()
     {
-        foreach (var bouncer in Active<Bouncer>())
+        foreach (var bouncer in Showing<Bouncer>())
         {
             foreach (var key in bouncer.Recent.Keys.ToList())
             {
@@ -403,7 +406,7 @@ public sealed partial class Game
             var box = collider is null ? new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero) : Physics.BoundsOf(collider);
             foreach (var (by, layer) in TouchersOf(entity).ToList())
             {
-                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by))
+                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by) || !Moves(by))
                     continue;
                 if (!OnLaunchingSide(by, box, way, collider is { IsTrigger: false }))
                     continue;
@@ -445,7 +448,7 @@ public sealed partial class Game
     // all of them are looked at, not just the active ones.
     private void RunCrumbles()
     {
-        foreach (var crumble in Scene.Entities.SelectMany(e => e.GetComponents<Crumble>()).ToList())
+        foreach (var crumble in Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Crumble>()).ToList())
         {
             var entity = crumble.Entity!;
             if (crumble.Crumbled)

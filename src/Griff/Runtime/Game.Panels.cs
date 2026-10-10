@@ -128,7 +128,8 @@ public sealed partial class Game
 
         foreach (var (panel, _) in _openPanels)
             panel.IsTop = panel == TopPanel;
-        Time.IsPaused = _openPanels.Any(p => p.Panel.PauseGame);
+        // A network game is shared, so it can't stop for one player's menu (their keys just don't reach it meanwhile).
+        Time.IsPaused = !Net.IsOnline && _openPanels.Any(p => p.Panel.PauseGame);
     }
 
     // Its First if that names a control on it, else its top control.

@@ -150,11 +150,13 @@ public sealed partial class Game
     public bool IsVisible(Vector2 point) => Rts.Fog?.IsVisible(point) ?? true;
 
     // Before physics, after scripts: a script's orders take effect this frame.
+    // In a network game the host runs the units; a player's machine runs its own commander (selecting, the camera, the
+    // fog), seeing the host's units, and sends its orders to the host.
     private void RunStrategy()
     {
         var commander = Active<Commander>().FirstOrDefault();
-        var units = Active<Unit>().Where(u => IsAlive(u.Entity!)).ToList();
-        var buildings = Active<Building>().Where(b => IsAlive(b.Entity!)).ToList();
+        var units = Showing<Unit>().Where(u => IsAlive(u.Entity!)).ToList();
+        var buildings = Showing<Building>().Where(b => IsAlive(b.Entity!)).ToList();
         (Rts.Commander, Rts.Units, Rts.Buildings) = (commander, units, buildings);
         if (!Rts.IsActive)
             return;
@@ -167,10 +169,10 @@ public sealed partial class Game
         if (commander is not null)
             RunCommander(commander);
 
-        if (Time.Delta > 0 && !PausedThisFrame)
+        if (Time.Delta > 0 && !PausedThisFrame && !Net.IsClient)
         {
             var dt = Time.Delta;
-            foreach (var opponent in Active<Opponent>())
+            foreach (var opponent in Active<Opponent>().Where(o => !PlayedByPerson(o)))
                 RunOpponent(opponent, dt);
             foreach (var producer in Active<Producer>())
                 RunProducer(producer, dt);
@@ -182,8 +184,10 @@ public sealed partial class Game
             foreach (var building in buildings)
                 RunTower(building);
             RunShots(dt);
-            CheckDefeats();
         }
+
+        if (Time.Delta > 0 && !PausedThisFrame)
+            CheckDefeats();
 
         UpdateFog(commander);
         foreach (var marker in Rts.Markers)
@@ -973,6 +977,8 @@ public sealed partial class Game
 
     internal void Notice(string text)
     {
+        if (_orderingFor is not null)
+            return;
         Rts.Notice = text;
         Rts.NoticeLeft = 2.5f;
     }
@@ -986,8 +992,8 @@ public sealed partial class Game
             return;
         Rts.DefeatCheckLeft = 0.5f;
 
-        var factions = Active<Faction>().ToList();
-        foreach (var faction in factions.Where(f => !f.IsDefeated))
+        var factions = Showing<Faction>().ToList();
+        foreach (var faction in factions.Where(f => !f.IsDefeated && Runs(f.Entity!)))
         {
             if (Rts.Buildings.Any(b => SameTeam(b.Team, faction.Team) && IsAlive(b.Entity!)))
                 continue;

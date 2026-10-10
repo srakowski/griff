@@ -87,8 +87,14 @@ public sealed partial class Game
     /// right of the middle of the screen, and quieter the further it is off screen, out to a screen's width beyond the
     /// edge (where it can't be heard at all).
     /// </summary>
-    public void PlaySoundAt(string sound, Vector2 position, float volume = 1, float pitch = 1)
+    public void PlaySoundAt(string sound, Vector2 position, float volume = 1, float pitch = 1) =>
+        PlaySoundAt(sound, position, volume, pitch, relay: true);
+
+    // On the host of a network game, everyone hears it, from where it is on their own screen.
+    internal void PlaySoundAt(string sound, Vector2 position, float volume, float pitch, bool relay)
     {
+        if (relay)
+            Net.RelaySound(sound, volume, pitch, position);
         var (loudness, pan) = Hearing(position, range: 0);
         if (loudness <= 0)
             return;
@@ -132,8 +138,9 @@ public sealed partial class Game
         var volume = Math.Clamp(player.Volume, 0, 1);
         if (player.Positional)
         {
+            // Every machine has its own copy of a sound player, so each plays it itself.
             var at = player.Entity!.Transform.WorldPosition;
-            PlaySoundAt(sound, new Vector2(at.X, at.Y), volume, pitch);
+            PlaySoundAt(sound, new Vector2(at.X, at.Y), volume, pitch, relay: false);
         }
         else if (pitch == 1)
             Audio.Play(sound, volume);

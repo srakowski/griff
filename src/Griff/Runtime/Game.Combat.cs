@@ -26,7 +26,7 @@ public sealed partial class Game
                 var action = attack.Action?.Trim();
                 if (!string.IsNullOrEmpty(action))
                 {
-                    if (Input.WasPressed(action))
+                    if (InputOf(owner).WasPressed(action))
                         attack.Queued = true;
                 }
                 else if (attack.Phase == AttackPhase.Ready && TargetInRange(attack) is { } target)
@@ -147,9 +147,9 @@ public sealed partial class Game
 
     private Entity? TargetInRange(Attack attack)
     {
-        if (string.IsNullOrWhiteSpace(attack.Target) || Find(attack.Target.Trim()) is not { } target || !Rendering.SceneRenderer.IsActive(target))
-            return null;
         var from = attack.Entity!.Transform.WorldPosition;
+        if (string.IsNullOrWhiteSpace(attack.Target) || Nearest(attack.Target.Trim(), new Vector2(from.X, from.Y)) is not { } target || !Rendering.SceneRenderer.IsActive(target))
+            return null;
         var to = target.Transform.WorldPosition;
         return Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y)) <= attack.Range ? target : null;
     }

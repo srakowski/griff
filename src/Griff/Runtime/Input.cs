@@ -547,6 +547,37 @@ public sealed class InputState : IInput
 
     public bool IsDown(Key key) => _down.Contains(key);
 
+    // What's held and what happened this frame, for sending to the host of a network game.
+    internal IReadOnlyCollection<Key> DownKeys => _down;
+
+    internal IReadOnlyCollection<Key> PressedKeys => _pressed;
+
+    internal IReadOnlyCollection<Key> ReleasedKeys => _released;
+
+    internal IReadOnlyCollection<MouseButton> DownMouse => _mouseDown;
+
+    internal IReadOnlyCollection<MouseButton> PressedMouse => _mousePressed;
+
+    internal IReadOnlyCollection<MouseButton> ReleasedMouse => _mouseReleased;
+
+    internal IReadOnlyCollection<GamepadButton> DownPad => _padDown;
+
+    internal IReadOnlyCollection<GamepadButton> PressedPad => _padPressed;
+
+    internal IReadOnlyCollection<GamepadButton> ReleasedPad => _padReleased;
+
+    internal string RawTyped => _typed.ToString();
+
+    /// <summary>Uses <paramref name="other"/>'s actions and their bindings (but not its player's rebinding) from now on.</summary>
+    internal void CopyBindingsFrom(InputState other)
+    {
+        _actions.Clear();
+        foreach (var (action, bindings) in other._actions)
+            _actions[action] = [.. bindings];
+        _projectActions.Clear();
+        _projectActions.UnionWith(other._projectActions);
+    }
+
     public bool WasPressed(Key key) => _pressed.Contains(key);
 
     public bool WasReleased(Key key) => _released.Contains(key);

@@ -43,7 +43,16 @@ public sealed partial class Game
         FadeColor = color ?? Color.Black;
     }
 
+    // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
     private IEnumerable<T> Active<T>() where T : Component =>
+        Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+
+    // What this machine moves: what it runs, less other players' own characters, plus this player's own.
+    private IEnumerable<T> Moving<T>() where T : Component =>
+        Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+
+    // Everything showing, wherever it's run: for what only changes how things look.
+    private IEnumerable<T> Showing<T>() where T : Component =>
         Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // Movers go before physics, so whatever stands on them is carried along this frame.
@@ -103,8 +112,9 @@ public sealed partial class Game
         if (entity.GetComponent<Body>() is not { } body)
             return;
 
-        if (chase.TargetEntity?.Scene != Scene)
-            chase.TargetEntity = string.IsNullOrWhiteSpace(chase.Target) ? null : Find(chase.Target.Trim());
+        // In a network game there's a "Player" for everyone: go after whoever is nearest.
+        if (chase.TargetEntity?.Scene != Scene || (Net.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
+            chase.TargetEntity = string.IsNullOrWhiteSpace(chase.Target) ? null : Nearest(chase.Target.Trim(), Flat(entity.Transform.WorldPosition));
         var target = chase.TargetEntity;
 
         var here = Flat(entity.Transform.WorldPosition);
@@ -213,13 +223,14 @@ public sealed partial class Game
 
             if (!string.IsNullOrWhiteSpace(shooter.Action))
             {
-                wantsToFire = Input.IsDown(shooter.Action);
-                if (Input.AimFrom(here) is var aimed && aimed != Vector2.Zero)
+                var keys = InputOf(entity);
+                wantsToFire = keys.IsDown(shooter.Action);
+                if (keys.AimFrom(here) is var aimed && aimed != Vector2.Zero)
                     aim = aimed;
             }
             else if (!string.IsNullOrWhiteSpace(shooter.Target))
             {
-                var target = Find(shooter.Target.Trim());
+                var target = Nearest(shooter.Target.Trim(), here);
                 wantsToFire = target is not null && SceneRenderer.IsActive(target) && Health.Of(target) is not { IsDead: true };
                 if (target is not null)
                 {
@@ -240,6 +251,7 @@ public sealed partial class Game
             foreach (var direction in shooter.VolleyAround(aim))
             {
                 var shot = Spawn(shooter.Prefab.Trim(), here + shooter.Offset);
+                Claim(shot, entity);
                 if (shot.GetComponent<Body>() is { } body)
                     body.Velocity = direction * shooter.Speed;
                 shot.Transform.Rotation = shot.Transform.Rotation with { Z = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI };
@@ -247,7 +259,7 @@ public sealed partial class Game
             }
 
             if (!string.IsNullOrWhiteSpace(shooter.Sound))
-                Audio.Play(shooter.Sound);
+                PlayShared(shooter.Sound);
         }
     }
 
@@ -262,7 +274,7 @@ public sealed partial class Game
 
     private void RunCheckpoints()
     {
-        var all = Scene.Entities.SelectMany(e => e.GetComponents<Checkpoint>()).ToList();
+        var all = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Checkpoint>()).ToList();
         foreach (var checkpoint in all.Where(c => SceneRenderer.IsActive(c.Entity!)))
         {
             if (checkpoint.Active)
@@ -276,7 +288,7 @@ public sealed partial class Game
             checkpoint.Active = true;
             Flash(checkpoint.Entity!);
             if (!string.IsNullOrWhiteSpace(checkpoint.Sound))
-                Audio.Play(checkpoint.Sound);
+                PlayShared(checkpoint.Sound);
             checkpoint.RaiseReached(by);
             if (!string.IsNullOrWhiteSpace(checkpoint.Message))
                 Send(checkpoint.Message.Trim(), checkpoint.Entity);
@@ -297,7 +309,7 @@ public sealed partial class Game
     // Dead and set to respawn: gone for a moment, then back at the active checkpoint (or where it started).
     private void RunRespawns()
     {
-        foreach (var health in Scene.Entities.SelectMany(e => e.GetComponents<Health>()).Where(h => h.Respawn && h.IsDead).ToList())
+        foreach (var health in Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Health>()).Where(h => h.Respawn && h.IsDead).ToList())
         {
             var entity = health.Entity!;
             if (float.IsNaN(health.RespawnLeft))
@@ -347,9 +359,10 @@ public sealed partial class Game
             // One trip at a time: not while a scene change or another door's fade is under way.
             if (ready.Count == 0 || _fadingOut is not null || _pendingScene is not null)
                 continue;
-            if (door.NeedsInteract && !Input.WasPressed("Interact"))
+            var user = door.NeedsInteract ? ready.FirstOrDefault(u => InputOf(u).WasPressed("Interact")) : ready[0];
+            if (user is null)
                 continue;
-            UseDoor(door, ready[0]);
+            UseDoor(door, user);
         }
 
         // Physics only reports touches while game time runs; don't forget arrivals during a pause.
@@ -361,7 +374,7 @@ public sealed partial class Game
     {
         UseKey(door, user);
         if (!string.IsNullOrWhiteSpace(door.Sound))
-            Audio.Play(door.Sound);
+            PlayShared(door.Sound);
         door.RaiseUsed(user);
 
         if (!string.IsNullOrWhiteSpace(door.Scene))
@@ -373,6 +386,14 @@ public sealed partial class Game
         if (string.IsNullOrWhiteSpace(door.Target) || Find(door.Target.Trim()) is not { } target)
             return;
         _arrivedByDoor.Add(user);
+
+        // Another player's trip through a door doesn't fade this screen.
+        if (Net.IsOnline && !Net.IsMine(user))
+        {
+            PlaceAt(user, Flat(target.Transform.WorldPosition));
+            return;
+        }
+
         FadeThrough(door.Fade, () =>
         {
             if (user.Scene == Scene && target.Scene == Scene)
@@ -396,14 +417,15 @@ public sealed partial class Game
         }
 
         var touched = new HashSet<Dialogue>();
-        foreach (var dialogue in Active<Dialogue>())
+        foreach (var dialogue in Showing<Dialogue>())
         {
             // Boxes are hidden until there's something to say.
             if (_dialoguesSeen.Add(dialogue) && BoxOf(dialogue) is { } box)
                 box.IsEnabled = false;
 
             var available = !(dialogue.Once && dialogue.IsDone) && dialogue.Lines.Count > 0;
-            var touching = available && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer));
+            // In a network game each player reads for themselves, on their own machine.
+            var touching = available && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Net.IsMine(t.By));
             if (touching)
                 touched.Add(dialogue);
             ShowPrompt(dialogue.Entity!, dialogue.Prompt, touching && dialogue.Start == DialogueStart.Interact);

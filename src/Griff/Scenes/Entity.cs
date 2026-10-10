@@ -37,6 +37,12 @@ public sealed class Entity
 
     public Transform Transform { get; }
 
+    /// <summary>
+    /// How a network game treats this entity on this machine: copied from the host (so the host runs it), and moved here
+    /// by this player, or moved by another player (on the host). See <c>Runtime.NetSession</c>.
+    /// </summary>
+    internal NetFlags NetFlags { get; set; }
+
     /// <summary>All components, starting with <see cref="Transform"/>.</summary>
     public IReadOnlyList<Component> Components => _components;
 
@@ -121,4 +127,19 @@ public sealed class Entity
         _components.Add(component);
         component.Entity = this;
     }
+}
+
+[Flags]
+internal enum NetFlags : byte
+{
+    None = 0,
+
+    /// <summary>A copy of the host's entity: the host runs it, and this machine shows it.</summary>
+    Replicated = 1,
+
+    /// <summary>A copy this machine's player moves (their own character).</summary>
+    OwnMoved = 2,
+
+    /// <summary>On the host: another player's character, which their machine moves.</summary>
+    RemoteMoved = 4,
 }

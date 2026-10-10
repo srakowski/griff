@@ -21,6 +21,28 @@ public sealed class Scene
     public Entity? Find(Guid id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
+    /// The entity called <paramref name="name"/>. When several are (every player's character is "Player" in a network
+    /// game), the one this machine's player plays comes first, so a camera or health bar follows your own.
+    /// </summary>
+    public Entity? FindNamed(string name, bool activeOnly = false)
+    {
+        Entity? first = null;
+        foreach (var entity in Entities)
+        {
+            if (entity.Name != name || (activeOnly && !Rendering.SceneRenderer.IsActive(entity)))
+                continue;
+            if (PreferNamed is null || PreferNamed(entity))
+                return entity;
+            first ??= entity;
+        }
+
+        return first;
+    }
+
+    /// <summary>Set in a network game: which of several entities with the same name <see cref="FindNamed"/> picks first.</summary>
+    internal Func<Entity, bool>? PreferNamed { get; set; }
+
+    /// <summary>
     /// Adds <paramref name="entity"/> (and its descendants) under <paramref name="parent"/>,
     /// or as a root if parent is null, at <paramref name="index"/> or the end.
     /// </summary>

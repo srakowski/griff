@@ -235,6 +235,15 @@ public sealed class Physics
         var moved = new HashSet<BodyGroup>();
         foreach (var body in scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
         {
+            // In a network game, another machine moves this one (a player's own character, or the host's copy of
+            // anything): leave it where it's put. On the host, what another player's character touches still counts.
+            if (!Game.Moves(body.Entity!))
+            {
+                if (body.Entity!.NetFlags.HasFlag(NetFlags.RemoteMoved))
+                    ReportContacts(body, solids, onCollision);
+                continue;
+            }
+
             if (groups.TryGetValue(body, out var group))
             {
                 if (moved.Add(group))
@@ -294,6 +303,21 @@ public sealed class Physics
         _grounds = scene.Entities.Select(e => e.GetComponent<Body>()).OfType<Body>().Where(b => b.Ground is not null)
             .ToDictionary(b => b, b => (b.Ground!, PositionOf(b.Ground!)));
         UpdateTriggers(colliders, onTrigger);
+    }
+
+    // Whatever a body moved by someone else is touching (or all but touching), as if it had bumped into it.
+    private static void ReportContacts(Body body, List<Shape> solids, Action<Entity, Entity> onCollision)
+    {
+        if (body.Entity!.GetComponent<Collider>() is not { IsTrigger: false } collider)
+            return;
+        var area = Area.Of(collider);
+        var filter = LayerFilter.Of(collider);
+        foreach (var solid in solids)
+        {
+            if (solid.Entity.IsSelfOrDescendantOf(body.Entity) || filter.IgnoresEachOther(solid.Filter) || !area.Overlaps(solid.Area, -0.06f))
+                continue;
+            onCollision(body.Entity, solid.Entity);
+        }
     }
 
     // A welded group: gravity on each member, then one velocity for all (shared by weight, so a balloon lifts what it's

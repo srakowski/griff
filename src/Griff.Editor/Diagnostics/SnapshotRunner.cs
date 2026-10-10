@@ -71,6 +71,14 @@ internal static partial class SnapshotRunner
                 return;
             }
 
+            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "multiplayer")
+            {
+                await workspace.SaveSceneAsync();
+                await MultiplayerSnapshots(services, workspace, projectDir, outputDir);
+                TryDelete(projectDir);
+                return;
+            }
+
             if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "strategy")
             {
                 await workspace.SaveSceneAsync();

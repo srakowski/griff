@@ -30,7 +30,11 @@ public abstract class Behavior : Component
 
     protected Time Time => Game.Time;
 
-    protected IInput Input => Game.Input;
+    /// <summary>
+    /// The controls of whoever plays this entity: this machine's, or in a network game, those of the player it belongs
+    /// to (see <see cref="Runtime.Game.InputOf"/>).
+    /// </summary>
+    protected IInput Input => Game.InputOf(Entity);
 
     protected IAudio Audio => Game.Audio;
 

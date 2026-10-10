@@ -76,6 +76,9 @@ public sealed class Health : Component
     /// <summary>Raised when it comes back after dying (see <see cref="Respawn"/>).</summary>
     public event Action? Respawned;
 
+    /// <summary>What dealt the last blow that landed, if known: for scoring who defeated it.</summary>
+    internal Entity? LastHitBy { get; private set; }
+
     // Where it was when the game first saw it, to respawn at without a checkpoint; and how long until it comes back.
     internal Vector2? Home { get; set; }
 
@@ -109,6 +112,7 @@ public sealed class Health : Component
             return false;
 
         Current = Math.Max(0, Current - amount);
+        LastHitBy = source;
         var sprites = Sprites().ToList();
         if (FlashOnHit)
         {

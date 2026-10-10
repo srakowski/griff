@@ -18,14 +18,14 @@ public sealed partial class Game
     public Entity? ToolFirst => Sandbox.First;
 
     /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene.</summary>
-    public SandboxTools? Tools => Active<SandboxTools>().FirstOrDefault();
+    public SandboxTools? Tools => Mine<SandboxTools>().FirstOrDefault();
 
     // The HUD for this frame's view, its buttons, and a click on one of them.
     private void RunSandboxHud()
     {
         Sandbox.Buttons.Clear();
-        var hotbar = Active<Hotbar>().FirstOrDefault();
-        var crafting = Active<Crafting>().FirstOrDefault();
+        var hotbar = Mine<Hotbar>().FirstOrDefault();
+        var crafting = Mine<Crafting>().FirstOrDefault();
         var tools = Tools;
         if (hotbar is null && crafting is null && tools is null)
         {
@@ -34,10 +34,8 @@ public sealed partial class Game
             return;
         }
 
-        var camera = SceneRenderer.FindCamera(Scene);
-        var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
-        var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
-        var hud = Sandbox.Hud = new SandboxHud(center, new Vector2(size * (ViewAspect > 0 ? ViewAspect : 1), size));
+        var (center, size, aspect) = HudView();
+        var hud = Sandbox.Hud = new SandboxHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
         var areas = new List<HudRect>();
 
         if (hotbar is not null)
@@ -96,7 +94,8 @@ public sealed partial class Game
 
         var mouse = Input.MouseWorld;
         Sandbox.MouseOnHud = Input.IsMouseInView && (areas.Any(a => a.Contains(mouse)) || Sandbox.Buttons.Any(b => b.Rect.Contains(mouse)));
-        if (TopPanel is null && !PausedThisFrame && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud)
+        // On a player's machine the host does what the button does.
+        if (!PanelOpenHere && !PausedThisFrame && !Net.IsClient && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud)
             Sandbox.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
     }
 
@@ -123,7 +122,7 @@ public sealed partial class Game
             Sandbox.Held = null;
         if (Sandbox.First is { } first && first.Scene != Scene)
             CancelTool();
-        if (tools is null || Time.Delta <= 0 || PausedThisFrame || TopPanel is not null)
+        if (tools is null || Time.Delta <= 0 || PausedThisFrame || PanelOpenHere || Net.IsClient)
         {
             if (tools is null)
                 CancelTool();
@@ -243,6 +242,7 @@ public sealed partial class Game
 
         entity.Transform.Position = new Vector3(at, entity.Transform.Position.Z);
         entity.Name = UniqueName(entity.Name);
+        Claim(entity, tools.Entity!);
         Spawn(entity);
         Sandbox.Made.Add(entity);
         ToolSound(tools);

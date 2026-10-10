@@ -28,7 +28,9 @@ public sealed partial class Game
     public Game(Scene scene, IInput input)
     {
         Scene = scene;
-        Input = input;
+        _input = input;
+        Net = new NetSession(this);
+        ListenForCommands();
         Debug = new DebugDraw(Time);
         (input as InputState)?.UseSaveData(_saveData);
         LoadSettings();
@@ -76,7 +78,13 @@ public sealed partial class Game
     /// <summary>True once <see cref="Quit"/> has been called.</summary>
     public bool IsQuitting { get; private set; }
 
-    public IInput Input { get; }
+    /// <summary>
+    /// This machine's controls. (While the host of a network game runs another player's tools for them, theirs; see
+    /// <see cref="InputOf"/> for whoever plays a particular entity.)
+    /// </summary>
+    public IInput Input => _actingInput ?? _input;
+
+    private readonly IInput _input;
 
     public Time Time { get; } = new();
 
@@ -128,14 +136,16 @@ public sealed partial class Game
         Time.Advance(seconds);
         (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
         Debug.BeginFrame();
+        Net.BeginFrame(Time.UnscaledDelta);
 
-        // Snapshot first: behaviors may spawn or destroy while we iterate.
-        var behaviors = ActiveBehaviors().ToList();
+        // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
+        var behaviors = ActiveBehaviors().Where(b => Runs(b.Entity!)).ToList();
         foreach (var behavior in behaviors.Where(b => !b.IsStarted))
             behavior.RunStart(this);
 
         StartWorlds();
         UpdateMenus();
+        RunLobby();
         ApplySwitches();
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
@@ -153,6 +163,12 @@ public sealed partial class Game
         RunSandboxHud();
         RunBlocks();
         RunTools();
+        ForEachRemotePlayer(() =>
+        {
+            RunSandboxHud();
+            RunBlockPlayers();
+            RunTools();
+        });
         RunStrategy();
         RunAttacks();
         RunTimers();
@@ -170,7 +186,7 @@ public sealed partial class Game
         foreach (var emitter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<ParticleEmitter>()).ToList())
         {
             emitter.Advance(Time.Delta, Physics.Gravity);
-            if (emitter.DestroyWhenFinished && emitter.IsFinished)
+            if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
                 Destroy(emitter.Entity!);
         }
 
@@ -229,6 +245,7 @@ public sealed partial class Game
         RunSoundPlayers();
         Audio.Advance(Time.UnscaledDelta);
         SaveSettings();
+        Net.EndFrame(Time.UnscaledDelta);
     }
 
     /// <summary>
@@ -246,6 +263,10 @@ public sealed partial class Game
     {
         if (SceneLoader is null)
             throw new InvalidOperationException("This game can't load scenes (no scene loader is set).");
+
+        // On a player's machine, going to another scene (a menu's Quit to Title) leaves the host's game.
+        if (Net.IsClient || Net.IsConnecting)
+            Net.Leave();
 
         if (fade > 0)
         {
@@ -391,10 +412,14 @@ public sealed partial class Game
     public int Send(string message, object? data = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        // On the host, everyone else's machine hears it too (their HUD counts it, their sound players play).
+        if (Net.IsHost && !_netMessage)
+            Net.Relay(message, data);
         var heard = _messages.Send(message, data, Scene);
 
         // Counters add up their message with no listener of their own: the number sent, or 1.
-        var counters = Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Counter>())
+        var counters = Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Counter>())
             .Where(c => c.Message?.Trim() == message).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
@@ -463,7 +488,8 @@ public sealed partial class Game
             _pendingDestroy.Add(entity);
     }
 
-    public Entity? Find(string name) => Scene.Entities.FirstOrDefault(e => e.Name == name);
+    /// <summary>The entity called <paramref name="name"/>; in a network game, this machine's player's own first (see <see cref="Scene.FindNamed"/>).</summary>
+    public Entity? Find(string name) => Scene.FindNamed(name);
 
     /// <summary>Every entity called <paramref name="name"/>, e.g. all the copies of the "Enemy" prefab.</summary>
     public IReadOnlyList<Entity> FindAll(string name) => Scene.Entities.Where(e => e.Name == name).ToList();
@@ -480,7 +506,8 @@ public sealed partial class Game
     /// </summary>
     public void HitStop(float seconds = 0.08f)
     {
-        if (seconds > 0)
+        // A network game is shared: one player's big hit can't freeze everyone's.
+        if (seconds > 0 && !Net.IsOnline)
             Time.Freeze(seconds);
     }
 
@@ -491,7 +518,7 @@ public sealed partial class Game
     /// </summary>
     public void SlowMotion(float scale = 0.3f, float seconds = 0.6f)
     {
-        if (seconds > 0 && float.IsFinite(scale))
+        if (seconds > 0 && float.IsFinite(scale) && !Net.IsOnline)
             Time.SlowDown(Math.Clamp(scale, 0, 1), seconds);
     }
 
@@ -538,6 +565,7 @@ public sealed partial class Game
 
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
+        Net.Leave("The game closed.");
         SaveSettings();
         SaveWorlds();
         StopSoundSources();
@@ -667,6 +695,14 @@ public sealed partial class Game
         StopSoundSources();
         _focus = null;
         SyncPanels();
+        if (Net.IsHost)
+            Net.StartHostScene();
+        else if (_netLoading)
+        {
+            _netLoading = false;
+            Net.HostSceneLoaded();
+        }
+
         SceneChanged?.Invoke(this, next);
     }
 
@@ -680,7 +716,7 @@ public sealed partial class Game
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     private void RunFollowers()
     {
-        foreach (var follow in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
+        foreach (var follow in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<Follow>()).ToList())
             follow.Advance(Time.Delta, ViewAspect, Time.UnscaledDelta);
     }
 
@@ -727,7 +763,7 @@ public sealed partial class Game
     // Lifetimes run on game time; the fade out is an ordinary FadeTo, so it shows on sprites, text and tilemaps alike.
     private void RunLifetimes()
     {
-        foreach (var lifetime in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
+        foreach (var lifetime in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
         {
             lifetime.Age += Time.Delta;
             if (!lifetime.IsFading && lifetime.FadeOut > 0 && lifetime.Age >= lifetime.Seconds - lifetime.FadeOut)
@@ -743,7 +779,7 @@ public sealed partial class Game
 
     private void RunSpawners()
     {
-        foreach (var spawner in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Spawner>()).ToList())
+        foreach (var spawner in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Spawner>()).ToList())
             spawner.Advance(Time.Delta, this);
     }
 
@@ -759,7 +795,7 @@ public sealed partial class Game
 
     private void RunPickupSpin()
     {
-        foreach (var pickup in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Pickup>()))
+        foreach (var pickup in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<Pickup>()))
         {
             if (pickup.Spin != 0)
                 pickup.Entity!.Transform.Rotation += new Vector3(0, 0, pickup.Spin * Time.Delta);
@@ -771,7 +807,7 @@ public sealed partial class Game
     {
         foreach (var (source, target) in _touches.ToList())
         {
-            if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
+            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
                 continue;
             if (BodyOwner(target) is not { } collector || !pickup.AcceptsLayer(LayerOf(target)) || source.IsSelfOrDescendantOf(collector))
                 continue;
@@ -787,7 +823,7 @@ public sealed partial class Game
         var entity = pickup.Entity!;
         var position = entity.Transform.WorldPosition;
         if (!string.IsNullOrWhiteSpace(pickup.Sound))
-            Audio.Play(pickup.Sound);
+            PlayShared(pickup.Sound);
 
         if (!string.IsNullOrWhiteSpace(pickup.Effect))
         {
@@ -826,14 +862,14 @@ public sealed partial class Game
 
     private void RunBars()
     {
-        foreach (var bar in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Bar>()).ToList())
+        foreach (var bar in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Bar>()).ToList())
             bar.Advance(Time.Delta, Scene);
     }
 
     // Counters show their count, keep their best, and pop when the count changes.
     private void RunCounters()
     {
-        foreach (var counter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Counter>()).ToList())
+        foreach (var counter in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Counter>()).ToList())
         {
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
@@ -871,7 +907,7 @@ public sealed partial class Game
     {
         foreach (var (source, target) in _touches)
         {
-            if (source.Scene != Scene || target.Scene != Scene || source.GetComponent<DamageOnTouch>() is not { } touch)
+            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<DamageOnTouch>() is not { } touch)
                 continue;
             if (touch.DestroyOnWall && IsWall(target) && !(Health.Of(target) is { } struck && struck != Health.Of(source) && touch.Hurts(LayerOf(target))))
             {
@@ -879,7 +915,7 @@ public sealed partial class Game
                 continue;
             }
 
-            if (Health.Of(target) is not { } health || health == Health.Of(source) || !touch.Hurts(LayerOf(target)))
+            if (Health.Of(target) is not { } health || health == Health.Of(source) || !touch.Hurts(LayerOf(target)) || !CanHurt(source, health.Entity!))
                 continue;
 
             var hurt = health.Entity!;
@@ -918,7 +954,7 @@ public sealed partial class Game
     // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.
     private void RunHealth()
     {
-        foreach (var health in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Health>()).ToList())
+        foreach (var health in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Health>()).ToList())
         {
             health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);
@@ -932,6 +968,7 @@ public sealed partial class Game
 
             if (!health.TakeDeath())
                 continue;
+            Net.CountDefeat(health.Entity!, health.LastHitBy);
             if (!string.IsNullOrWhiteSpace(health.DeathSound))
                 PlaySoundAt(health.DeathSound.Trim(), at);
             if (!string.IsNullOrWhiteSpace(health.DeathMessage))
@@ -983,7 +1020,7 @@ public sealed partial class Game
             var batch = _pendingDestroy.ToList();
             _pendingDestroy.Clear();
 
-            foreach (var entity in batch.Where(e => e.Scene == Scene))
+            foreach (var entity in batch.Where(e => e.Scene == Scene && Runs(e)))
             {
                 foreach (var behavior in entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Behavior>()))
                     behavior.RunDestroy();

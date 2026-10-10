@@ -12,7 +12,14 @@ public sealed partial class Game
     private const float FallStep = 0.06f;
     private const float SaveEvery = 2f;
 
-    internal SandboxState Sandbox { get; private set; } = new();
+    // The world's, or while the host runs another player's tools for them, that player's own HUD and tool state.
+    internal SandboxState Sandbox
+    {
+        get => _acting?.Sandbox ?? _sandbox;
+        private set => _sandbox = value;
+    }
+
+    private SandboxState _sandbox = new();
 
     /// <summary>The sandbox HUD's layout for the view as it is now, if anything in the scene shows one.</summary>
     public SandboxHud? SandboxHud => Sandbox.Hud;
@@ -131,17 +138,7 @@ public sealed partial class Game
         if (Time.Delta <= 0 || PausedThisFrame)
             return;
 
-        foreach (var hotbar in Active<Hotbar>())
-            RunHotbar(hotbar);
-        foreach (var crafting in Active<Crafting>())
-        {
-            if (TopPanel is null && Input.WasPressed(crafting.Key))
-                crafting.IsOpen = !crafting.IsOpen;
-        }
-
-        foreach (var builder in Active<BlockBuilder>())
-            RunBuilder(builder);
-
+        RunBlockPlayers();
         DarkenUnderground();
         foreach (var blocks in Active<Blocks>())
         {
@@ -150,6 +147,40 @@ public sealed partial class Game
             if (blocks.SinceSaved >= SaveEvery && Changed(blocks))
                 SaveWorld(blocks);
         }
+    }
+
+    // A player's hotbar, crafting and digging: on the host (for each player in turn, in a network game). A player's own
+    // machine works out just what its HUD shows.
+    private void RunBlockPlayers()
+    {
+        if (Time.Delta <= 0 || PausedThisFrame)
+            return;
+        var acts = !Net.IsClient;
+        foreach (var hotbar in Mine<Hotbar>())
+            RunHotbar(hotbar, acts);
+        if (!acts)
+        {
+            foreach (var builder in Mine<BlockBuilder>())
+                AimOnly(builder);
+            return;
+        }
+
+        foreach (var crafting in Mine<Crafting>())
+        {
+            if (!PanelOpenHere && Input.WasPressed(crafting.Key))
+                crafting.IsOpen = !crafting.IsOpen;
+        }
+
+        foreach (var builder in Mine<BlockBuilder>())
+            RunBuilder(builder);
+    }
+
+    // What a builder points at, for its outline on this player's screen; the host does the digging.
+    private void AimOnly(BlockBuilder builder)
+    {
+        if (builder.Map is null || builder.Map.Entity?.Scene != Scene)
+            builder.Map = WorldFor(builder);
+        (builder.Target, builder.PlaceAt) = builder.Map is null || PanelOpenHere ? (null, null) : Aim(builder, builder.Map);
     }
 
     // Below the surface the camera's light fades towards the world's Underground color.
@@ -177,7 +208,7 @@ public sealed partial class Game
     }
 
     // Each item keeps its slot until it runs out; new ones take the first empty slot. Number keys and the wheel pick.
-    private void RunHotbar(Hotbar hotbar)
+    private void RunHotbar(Hotbar hotbar, bool acts)
     {
         var slots = Math.Clamp(hotbar.Slots, 1, 10);
         var contents = hotbar.Entity!.GetComponent<Inventory>()?.Contents ?? [];
@@ -201,7 +232,7 @@ public sealed partial class Game
 
         hotbar.Shown = items.Select(i => (i, i is null ? 0 : contents.First(c => c.Name.Equals(i, StringComparison.OrdinalIgnoreCase)).Count)).ToList();
 
-        if (TopPanel is null)
+        if (acts && !PanelOpenHere)
         {
             for (var i = 0; i < slots; i++)
             {
@@ -226,7 +257,7 @@ public sealed partial class Game
             builder.Map = WorldFor(builder);
         var map = builder.Map;
         var before = builder.Target;
-        (builder.Target, builder.PlaceAt) = map is null || TopPanel is not null ? (null, null) : Aim(builder, map);
+        (builder.Target, builder.PlaceAt) = map is null || PanelOpenHere ? (null, null) : Aim(builder, map);
         if (builder.Target != before)
         {
             builder.Progress = 0;
@@ -236,7 +267,7 @@ public sealed partial class Game
         if (map is null)
             return;
         var blocks = map.Entity!.GetComponent<Blocks>();
-        var onHud = Sandbox.Hud is not null && Sandbox.MouseOnHud && FirstPersonViewer != entity;
+        var onHud = Sandbox.Hud is not null && Sandbox.MouseOnHud && !LooksThrough(entity);
 
         // Digging: hold the button on a block until it breaks.
         if (builder.CanMine && !onHud && builder.Target is { } target && Input.IsDown(MouseButton.Left) &&
@@ -302,7 +333,7 @@ public sealed partial class Game
         var origin = CenterOf(entity);
         var reach = Math.Max(0, builder.Reach);
 
-        if (FirstPersonViewer == entity && entity.GetComponent<FirstPersonMovement>() is { } movement)
+        if (LooksThrough(entity) && entity.GetComponent<FirstPersonMovement>() is { } movement)
         {
             // Through the cells along the way the player faces, a little at a time.
             var facing = movement.Facing;
@@ -399,7 +430,7 @@ public sealed partial class Game
         inventory.Add(recipe.Item, recipe.Count);
         SandboxNote(recipe.Count == 1 ? $"Made a {recipe.Item}" : $"Made {recipe.Count} {recipe.Item}");
         if (crafter.GetComponent<Crafting>()?.Sound is { } sound && !string.IsNullOrWhiteSpace(sound))
-            Audio.Play(sound.Trim());
+            PlayShared(sound.Trim());
         return true;
     }
 
@@ -458,6 +489,22 @@ public sealed partial class Game
 /// <summary>What the sandbox features keep track of while a scene runs.</summary>
 internal sealed class SandboxState
 {
+    public SandboxState()
+    {
+    }
+
+    /// <summary>One player's own HUD and tools in a network game, sharing the world's welds, wiring and worlds.</summary>
+    public SandboxState(SandboxState world)
+    {
+        World = world;
+        Started = world.Started;
+        Groups = world.Groups;
+        Applied = world.Applied;
+    }
+
+    /// <summary>For one player's state, the world's it shares.</summary>
+    public SandboxState? World { get; }
+
     public HashSet<WorldGenerator> Started { get; } = [];
 
     public SandboxHud? Hud { get; set; }

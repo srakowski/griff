@@ -28,6 +28,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Shooter)]
     [InlineData(ProjectTemplate.Sandbox)]
     [InlineData(ProjectTemplate.Contraption)]
+    [InlineData(ProjectTemplate.Multiplayer)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);

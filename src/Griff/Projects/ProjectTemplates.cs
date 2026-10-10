@@ -14,6 +14,7 @@ public enum ProjectTemplate
     Shooter,
     Sandbox,
     Contraption,
+    Multiplayer,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
@@ -28,6 +29,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Shooter => "Fight your way out of a dark base in first person: grunts that charge, robots that throw fireballs, sliding doors, a blue key for the way out and a shotgun in the armory. The level is a tilemap you paint top-down. WASD to move, the mouse or arrows to turn, click to fire, 1 and 2 to change weapon.",
         ProjectTemplate.Sandbox => "Dig and build in a world of blocks made from a seed: grassy hills, caves, coal, iron and gold, trees and sand that falls. Mine with the left mouse button, build with the right, pick blocks on the hotbar, and craft planks, torches, workbenches, furnaces and glass. A/D to walk, Space to jump, C to craft.",
         ProjectTemplate.Contraption => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.",
+        ProjectTemplate.Multiplayer => "Play with friends: up to eight players in an arena, on one network or over the internet. Host from the menu and others join with your address (in the editor, Game > Play with 2 Players). Shoot each other and the slimes, grab hearts, and top the scoreboard. WASD to move, the mouse to aim, click to fire, Shift to dash.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -60,6 +62,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Shooter => Shooter(),
         ProjectTemplate.Sandbox => Sandbox(),
         ProjectTemplate.Contraption => Contraption(),
+        ProjectTemplate.Multiplayer => MultiplayerMenu(),
         _ => Empty(),
     };
 
@@ -70,6 +73,10 @@ public static partial class ProjectTemplates
         {
             ["Scenes/Game.scene"] = WithSounds(template, ArcadeGame()),
             ["Scenes/Options.scene"] = WithSounds(template, ArcadeOptions()),
+        },
+        ProjectTemplate.Multiplayer => new Dictionary<string, Scene>
+        {
+            ["Scenes/Arena.scene"] = WithSounds(template, MultiplayerArena()),
         },
         _ => new Dictionary<string, Scene>(),
     };
@@ -113,6 +120,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Shooter => ShooterPrefabs(),
         ProjectTemplate.Sandbox => SandboxPrefabs(),
         ProjectTemplate.Contraption => ContraptionPrefabs(),
+        ProjectTemplate.Multiplayer => MultiplayerPrefabs(),
         _ => new Dictionary<string, Entity>(),
     };
 

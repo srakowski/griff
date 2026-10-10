@@ -32,7 +32,7 @@ build: standalone
 | Command | What it does |
 | --- | --- |
 | `title: <text>` / `intro: <text>` | The opening card's title and subtitle. |
-| `project: <Template> [\| <Name>]` | A fresh project from a template: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Strategy`, `Shooter`, `Sandbox` or `Contraption`. |
+| `project: <Template> [\| <Name>]` | A fresh project from a template: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Strategy`, `Shooter`, `Sandbox`, `Contraption` or `Multiplayer`. |
 | `open: <folder>` | A copy of an existing project (the original is never changed). |
 | `scene: <name>` | Open a scene by name. |
 | `chapter: <title> [\| <subtitle>]` | Start a chapter: a card, a dot on the control bar, a rewind point. |
@@ -51,6 +51,8 @@ build: standalone
 | `click: <target>` | Click something. |
 | `look: <x>, <y>, <half height>` | Glide the Scene view to show a part of the world. |
 | `play` / `stop` / `pause` | Play mode (F5, Shift+F5, F6). |
+| `players: <n>` | Game > Play with n Players: the Game tab hosts, and each other player gets a window that joins it. Waits until everyone's in. |
+| `player: <n>` | Play as player n from now on: `tap`, `hold`, `gameclick` and the other game commands go to their game and window (1 is the Game tab). `stop` goes back to player 1. |
 | `tap: <Key>` / `hold: <Key> <seconds>` | Press a key in the running game, e.g. `hold: Right 1.5`, `tap: Space`. `hold: LeftShift+Right 1` holds both. |
 | `type: <text>` | Type into whatever has focus (`\n` presses Enter). Quotes keep spaces at the ends: `type: " * 2"`. |
 | `wait: <seconds>` | Pause the demo. |
@@ -74,7 +76,7 @@ build: standalone
 | `bindpad: <button>` | Add a gamepad button from Add Button's list, e.g. `bindpad: LB`, `bindpad: A`. |
 | `actionname: <text>` | Type a new name for the selected action (the game's own actions only). |
 | `expectcontrol: <action> = <binding>` | Fail unless project.griff gives the action that binding, e.g. `expectcontrol: Jump = W`. |
-| `gameclick: <x>, <y>` | Click a point in the running game's world (where its camera shows it now) with the real mouse. Fails if it's off screen or under a HUD. Any game point can also be an entity's middle, `Crate`, or a point from it, `Player + 1.5, -1` (the camera follows the player, so this keeps pointing at the same spot). |
+| `gameclick: <x>, <y>` | Click a point in the running game's world (where its camera shows it now) with the real mouse. Fails if it's off screen or under a HUD. Any game point can also be an entity's middle, `Crate`, or a point from it, `Player + 1.5, -1` (the camera follows the player, so this keeps pointing at the same spot). In a network game, a player's name, `Player 1`, is their character. |
 | `mouselook: <x>[, <y>] <seconds>` | Move the real mouse by that many pixels (right and up are positive) over that long, e.g. `mouselook: 300 1`: turns a first-person game. Clicks the game first if it isn't holding the mouse yet. |
 | `gameorder: <x>, <y>` | Right-click a point in the running game's world: a strategy game's orders, putting a block down. |
 | `gamehover: <point>` | Move the real mouse to a point in the running game, e.g. before `tap: E` presses a wire button under it. |
@@ -92,7 +94,7 @@ build: standalone
 The waits that watch the running game fail when their time runs out, logging how each team stands every ten seconds
 while they wait (`%TEMP%\griff-demos\demo.log`).
 
-Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
+Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
 `world:left,top,right,bottom` for a box in the Scene view, `gameworld:left,top,right,bottom` for a box in the running
 game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD, and `hud:hotbar`, `hud:crafting`, `hud:tools`, `hud:props` or `hud:ports` for a sandbox game's.

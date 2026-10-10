@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
+using Griff.Networking;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
@@ -26,6 +28,15 @@ public sealed class PlayMode : ObservableObject
     private Timeline? _timeline;
     private int _position;
     private string? _sceneName;
+    private MemoryNetwork? _network;
+    private readonly List<PlayerWindow> _players = [];
+    private bool _slowConnection;
+
+    // Another player's game, in a window of its own, joined to the one in the Game tab.
+    private sealed record PlayerWindow(int Number, Window Window, GameSurface Surface, GameRunner Runner);
+
+    /// <summary>A bad connection to pretend between the players of Play with Players: lag, jitter, a few lost packets.</summary>
+    public static readonly NetConditions SlowConditions = new() { Latency = 0.06, Jitter = 0.03, Loss = 0.02 };
 
     public PlayMode(IWorkspace workspace, ISelection selection, IStatusService status, ILogger<PlayMode> logger)
     {
@@ -56,6 +67,42 @@ public sealed class PlayMode : ObservableObject
 
     public bool IsPaused => _runner?.IsPaused == true;
 
+    /// <summary>How many players are playing: 1, or more with Play with Players (the Game tab is player 1, the host).</summary>
+    public int PlayerCount => _runner is null ? 0 : 1 + _players.Count;
+
+    /// <summary>
+    /// Pretend the players of Play with Players are on a slow connection (see <see cref="SlowConditions"/>), to feel what
+    /// lag does to the game. Takes effect straight away.
+    /// </summary>
+    public bool SlowConnection
+    {
+        get => _slowConnection;
+        set
+        {
+            _slowConnection = value;
+            foreach (var game in AllGames())
+                game.Net.FakeLag = value ? SlowConditions : new NetConditions();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Player <paramref name="number"/>'s game (1 is the Game tab's), for diagnostics.</summary>
+    internal Game? PlayerGame(int number) => number == 1 ? Game : _players.FirstOrDefault(p => p.Number == number)?.Runner.Game;
+
+    /// <summary>Where player <paramref name="number"/>'s game draws.</summary>
+    internal GameSurface? PlayerSurface(int number) => number == 1 ? Surface : _players.FirstOrDefault(p => p.Number == number)?.Surface;
+
+    /// <summary>Player <paramref name="number"/>'s window (null for player 1, who plays in the Game tab).</summary>
+    internal Window? PlayerWindowOf(int number) => _players.FirstOrDefault(p => p.Number == number)?.Window;
+
+    private IEnumerable<Game> AllGames()
+    {
+        if (_runner?.Game is { } host)
+            yield return host;
+        foreach (var player in _players)
+            yield return player.Runner.Game;
+    }
+
     /// <summary>Number of rewind snapshots kept (about the last 20 seconds).</summary>
     public int TimelineCount => _timeline?.Count ?? 0;
 
@@ -68,6 +115,18 @@ public sealed class PlayMode : ObservableObject
 
     /// <summary>Seconds behind the newest snapshot, for the timeline label.</summary>
     public double SecondsBehind => _timeline is { Count: > 0 } t ? t.TimeAt(t.Count - 1) - t.TimeAt(Math.Clamp(_position, 0, t.Count - 1)) : 0;
+
+    /// <summary>
+    /// Plays with <paramref name="players"/> players: the Game tab hosts a network game (player 1), and each other player
+    /// gets a window of their own that joins it, as if on another machine. Click a window to play as that player.
+    /// </summary>
+    public void Play(int players)
+    {
+        Play();
+        if (_runner is null || players <= 1)
+            return;
+        StartPlayers(players);
+    }
 
     public void Play()
     {
@@ -108,6 +167,7 @@ public sealed class PlayMode : ObservableObject
             return;
 
         _runner = null;
+        StopPlayers();
         runner.Ticked -= OnTicked;
         runner.Faulted -= OnFaulted;
         try
@@ -142,6 +202,8 @@ public sealed class PlayMode : ObservableObject
             _timeline.TruncateAfter(_position);
 
         _runner.IsPaused = !_runner.IsPaused;
+        foreach (var player in _players)
+            player.Runner.IsPaused = _runner.IsPaused;
         _status.Show(_runner.IsPaused ? "Paused" : "Playing");
         Raise();
     }
@@ -165,6 +227,11 @@ public sealed class PlayMode : ObservableObject
         index = Math.Clamp(index, 0, timeline.Count - 1);
         if (index == _position && _runner.IsPaused)
             return;
+        if (_players.Count > 0)
+        {
+            _status.Show("Rewinding works with one player; stop and play again to start over");
+            return;
+        }
 
         var selectedId = _selection.Entity?.Id;
         var old = _runner;
@@ -193,12 +260,120 @@ public sealed class PlayMode : ObservableObject
             _runner.Game.SceneLoader = name => LoadScene(project, name);
             _runner.Game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
             _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
+            _runner.Game.Title = project.Name;
+            _runner.Game.Components = _workspace.Components;
+            _runner.Game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
             (_runner.Game.Input as InputState)?.UseControls(project.Controls);
         }
         _runner.Game.SceneName = _sceneName;
         _runner.Game.SceneChanged += OnGameSceneChanged;
         _runner.Game.QuitRequested += OnGameQuit;
         _runner.Start();
+    }
+
+    // ----- Play with Players -----
+
+    // The Game tab hosts on a pretend network inside the editor, and each other player's window joins it there.
+    private void StartPlayers(int players)
+    {
+        if (_runner is null || _workspace.Project is not { } project)
+            return;
+        _network = new MemoryNetwork();
+        var host = _runner.Game;
+        host.Net.PlayerName = "Player 1";
+        host.Net.Host(_network.Open(NetSession.DefaultPort));
+        for (var number = 2; number <= Math.Min(players, 8); number++)
+            OpenPlayer(project, number, players);
+        _status.Show($"Playing with {players} players: click a window to play as that player");
+        _logger.LogInformation("Play with {Players} players", players);
+        Raise();
+    }
+
+    private void OpenPlayer(Griff.Projects.Project project, int number, int players)
+    {
+        var main = Application.Current.MainWindow!;
+        var surface = new GameSurface { AssetRoot = project.AssetsPath };
+        var (left, top, width, height) = PlaceFor(main, number, players);
+        var window = new Window
+        {
+            Title = $"{project.Name}: Player {number}",
+            Width = width,
+            Height = height,
+            Left = left,
+            Top = top,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Background = Brushes.Black,
+            Content = surface,
+            Owner = main,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+        };
+
+        // Its own copy of the scene, which it swaps for the host's as soon as it's in.
+        var serializer = _workspace.Serializer;
+        var scene = _workspace.EditScene is { } edit ? serializer.LoadFromString(serializer.SaveToString(edit.Scene)) : new Scene();
+        window.Show();
+        var runner = new GameRunner(scene, surface, window);
+        var game = runner.Game;
+        game.SceneLoader = name => LoadScene(project, name);
+        game.PrefabLoader = new PrefabLibrary(project, _workspace.Components).Instantiate;
+        game.SaveData = new SaveData();
+        game.Title = project.Name;
+        game.Components = _workspace.Components;
+        game.SceneName = _sceneName;
+        game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
+        game.Net.PlayerName = $"Player {number}";
+        (game.Input as InputState)?.UseControls(project.Controls);
+        game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
+        runner.Faulted += OnFaulted;
+        runner.Start();
+
+        var player = new PlayerWindow(number, window, surface, runner);
+        _players.Add(player);
+        window.Closed += (_, _) =>
+        {
+            if (_players.Remove(player))
+            {
+                runner.Faulted -= OnFaulted;
+                runner.Dispose();
+                Raise();
+            }
+        };
+    }
+
+    // Down the right of the editor, a strip of windows the size of a small game view.
+    private static (double Left, double Top, double Width, double Height) PlaceFor(Window main, int number, int players)
+    {
+        var area = SystemParameters.WorkArea;
+        var others = Math.Max(1, players - 1);
+        var width = Math.Clamp(main.ActualWidth * 0.34, 320, 760);
+        var height = Math.Min(width * 9 / 16 + 32, (area.Height - 120) / others - 8);
+        width = Math.Min(width, (height - 32) * 16 / 9);
+        var right = Math.Min(main.Left + main.ActualWidth, area.Right);
+        var left = right - width - 18;
+        var top = Math.Max(area.Top, main.Top) + 96 + (number - 2) * (height + 8);
+        return (left, top, width, height);
+    }
+
+    private void StopPlayers()
+    {
+        foreach (var player in _players.ToList())
+        {
+            _players.Remove(player);
+            player.Runner.Faulted -= OnFaulted;
+            try
+            {
+                player.Runner.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while stopping player {Number}", player.Number);
+            }
+
+            player.Window.Close();
+        }
+
+        _network = null;
     }
 
     // The scene open in the editor plays as it is there, unsaved changes included (so Retry doesn't lose them);
@@ -268,6 +443,7 @@ public sealed class PlayMode : ObservableObject
 
     private void Raise()
     {
+        OnPropertyChanged(nameof(PlayerCount));
         OnPropertyChanged(nameof(IsPlaying));
         OnPropertyChanged(nameof(IsPaused));
         OnPropertyChanged(nameof(TimelineCount));

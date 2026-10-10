@@ -180,6 +180,20 @@ public sealed partial class Game
             case ButtonAction.ResetControls:
                 Input.ResetBindings();
                 break;
+            case ButtonAction.HostGame:
+                // Already hosting (say, playing with players in the editor): just go there, taking everyone along.
+                if ((Net.IsHost || Net.Host()) && !string.IsNullOrWhiteSpace(button.Scene))
+                    LoadScene(button.Scene.Trim(), button.Fade);
+                break;
+            case ButtonAction.JoinGame:
+                if (!Net.IsClient)
+                    Net.Join(SaveData.GetString(NetSession.AddressSaveKey));
+                break;
+            case ButtonAction.LeaveGame:
+                Net.Leave();
+                if (!string.IsNullOrWhiteSpace(button.Scene))
+                    LoadScene(button.Scene.Trim(), button.Fade);
+                break;
         }
 
         if (button.Entity!.GetComponent<Toggle>() is { } toggle)

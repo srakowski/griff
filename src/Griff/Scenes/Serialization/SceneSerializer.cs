@@ -100,6 +100,22 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         }
     }
 
+    /// <summary>Just <paramref name="entity"/> (not its children), ids and all, compact: how a network game sends one.</summary>
+    internal string SerializeEntityAlone(Entity entity)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteEntity(writer, entity, writeIds: true, children: false);
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>A detached entity from <see cref="SerializeEntityAlone"/> or <see cref="SerializeEntity"/>, keeping its ids.</summary>
+    internal Entity DeserializeEntityKeepingIds(string json, ICollection<string>? warnings = null)
+    {
+        using var document = JsonDocument.Parse(json);
+        return ReadEntity(document.RootElement, new LoadContext(warnings, newIds: false));
+    }
+
     /// <summary>
     /// <paramref name="entity"/> and its descendants as a prefab file. Ids are left out: every spawn gets
     /// fresh ones, and re-saving a prefab from an instance doesn't change lines that didn't change.
@@ -166,7 +182,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return component;
     }
 
-    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true)
+    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true, bool children = true)
     {
         writer.WriteStartObject();
         if (writeIds)
@@ -180,7 +196,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             WriteComponent(writer, component);
         writer.WriteEndArray();
 
-        if (entity.Children.Count > 0)
+        if (children && entity.Children.Count > 0)
         {
             writer.WriteStartArray("children");
             foreach (var child in entity.Children)

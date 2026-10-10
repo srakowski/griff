@@ -24,7 +24,11 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<StepCommand>()
             .AddCommand<StopCommand>()
             .AddCommand<KeepPlayChangesCommand>()
-            .AddCommand<ClearSaveDataCommand>();
+            .AddCommand<ClearSaveDataCommand>()
+            .AddCommand<PlayWithTwoCommand>()
+            .AddCommand<PlayWithThreeCommand>()
+            .AddCommand<PlayWithFourCommand>()
+            .AddCommand<SlowConnectionCommand>();
     }
 }
 
@@ -133,6 +137,52 @@ public sealed class StopCommand(PlayMode play) : EditorCommand
     protected override Task ExecuteCoreAsync()
     {
         play.Stop();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Plays a multiplayer game with several players at once: the Game tab hosts, and each other player gets a window of their
+/// own that joins it, as if on another machine. Click a window to play as that player.
+/// </summary>
+public abstract class PlayWithPlayersCommand(PlayMode play, IWorkspace workspace, int players) : EditorCommand
+{
+    public override string Id => $"Game.PlayWith{players}";
+    public override string Text => $"Play with _{players} Players";
+    public override string? Icon => Icons.Play;
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 1, Order: players);
+
+    protected override bool CanExecuteCore() => !play.IsPlaying && workspace.Scene is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        play.Play(players);
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class PlayWithTwoCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 2)
+{
+    public override KeyGesture? Gesture { get; } = new(Key.F5, ModifierKeys.Control);
+}
+
+public sealed class PlayWithThreeCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 3);
+
+public sealed class PlayWithFourCommand(PlayMode play, IWorkspace workspace) : PlayWithPlayersCommand(play, workspace, 4);
+
+/// <summary>Pretends the players of Play with Players are on a slow connection, to feel what lag does. Again turns it off.</summary>
+public sealed class SlowConnectionCommand(PlayMode play, IStatusService status) : EditorCommand
+{
+    public override string Id => "Game.SlowConnection";
+    public override string Text => "Pretend a Slow _Connection";
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 1, Order: 9);
+
+    public override bool? IsChecked => play.SlowConnection;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        play.SlowConnection = !play.SlowConnection;
+        status.Show(play.SlowConnection ? "Pretending a slow connection: about 150 ms there and back, a few packets lost" : "Back to a perfect connection");
         return Task.CompletedTask;
     }
 }

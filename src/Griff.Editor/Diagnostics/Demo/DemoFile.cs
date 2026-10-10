@@ -184,7 +184,14 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "play":
                 await Play();
                 break;
+            case "players":
+                await PlayWith(int.Parse(a, CultureInfo.InvariantCulture));
+                break;
+            case "player":
+                await AsPlayer(int.Parse(a, CultureInfo.InvariantCulture));
+                break;
             case "stop":
+                _player = 1;
                 await Stop();
                 break;
             case "pause":
@@ -200,7 +207,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "hold":
                 var (name, seconds) = Split2(a, ' ');
                 await GameKey(name, double.Parse(seconds, CultureInfo.InvariantCulture));
-                if (play.Game?.Find("Player") is { } walker)
+                if ((CurrentGame?.Net.LocalPlayer?.Avatar ?? CurrentGame?.Find("Player")) is { } walker)
                     options.Log($"hold: {a} -> Player at {walker.Transform.WorldPosition.X:0.0}, {walker.Transform.WorldPosition.Y:0.0}");
                 break;
             case "gameclick":
@@ -513,7 +520,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     private async Task GameKey(string name, double seconds)
     {
-        if (play.Game?.Input is not Griff.Runtime.InputState input)
+        if (CurrentGame?.Input is not Griff.Runtime.InputState input)
             throw new InvalidOperationException("The game isn't playing.");
         // "LeftShift+Right" holds both.
         var keys = name.Split('+', StringSplitOptions.TrimEntries).Select(k => Enum.Parse<Griff.Runtime.Key>(k, ignoreCase: true)).ToList();
@@ -526,7 +533,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         }
         finally
         {
-            if (play.Game?.Input is Griff.Runtime.InputState still)
+            if (CurrentGame?.Input is Griff.Runtime.InputState still)
             {
                 foreach (var key in keys)
                     still.SetKey(key, false);
@@ -538,7 +545,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     // A first-person game turns with it once it holds the mouse, so the game is clicked first to give it the mouse.
     private async Task MouseLook(string argument)
     {
-        if (play.Game?.Input is not Griff.Runtime.InputState input)
+        if (CurrentGame?.Input is not Griff.Runtime.InputState input)
             throw new InvalidOperationException("The game isn't playing.");
         var space = argument.LastIndexOf(' ');
         if (space < 0)
@@ -550,7 +557,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
         if (!input.IsMouseLocked)
         {
-            var rect = DemoUi.ScreenRect(play.Surface);
+            var rect = DemoUi.ScreenRect(CurrentSurface);
             await Input.Click(new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
             await Task.Delay(150);
         }
@@ -574,7 +581,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     // What the game made of a click: the mouse as it saw it, what's selected, the player's resources.
     private void LogGame(Line line)
     {
-        if (play.Game is not { } game)
+        if (CurrentGame is not { } game)
             return;
         var mouse = game.Input.MouseWorld;
         var team = game.Find<Griff.Scenes.Commander>()?.Team;
@@ -586,13 +593,56 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}{sandbox}");
     }
 
-    private Griff.Runtime.Game RunningGame => play.Game ?? throw new InvalidOperationException("The game isn't playing.");
+    private Griff.Runtime.Game RunningGame => CurrentGame ?? throw new InvalidOperationException("The game isn't playing.");
+
+    // ----- Several players -----
+
+    // Which player's game and window the game commands (tap, hold, gameclick...) go to: 1 is the Game tab.
+    private int _player = 1;
+
+    private Griff.Runtime.Game? CurrentGame => play.PlayerGame(_player);
+
+    private Griff.Platform.Windows.GameSurface CurrentSurface => play.PlayerSurface(_player) ?? play.Surface;
+
+    // "players: 2": Game > Play with 2 Players, then waits until everyone's in.
+    private async Task PlayWith(int players)
+    {
+        await ui.FocusEditor();
+        await ui.Menu("Game", $"Play with {players} Players");
+        if (!await Until(() => play.IsPlaying, 3000))
+            play.Play(players);
+        bool AllIn() => play.PlayerCount == players &&
+                        Enumerable.Range(1, players).All(n => play.PlayerGame(n) is { Net.LocalPlayer.Avatar: not null } g && g.Net.Players.Count == players);
+        if (!await Until(AllIn, 8000))
+            throw new TimeoutException($"Not all {players} players joined (there are {play.PlayerCount}).");
+        _player = 1;
+        options.Log($"players: {players} -> {string.Join(", ", play.PlayerGame(1)!.Net.Players.Select(p => p.Name))}");
+        for (var n = 1; play.PlayerGame(n) is { } game; n++)
+            options.Log($"  player {n}: {game.Net.Describe()}");
+        await DemoUi.Settle(300);
+    }
+
+    // "player: 2": from now on, play as player 2, in their window.
+    private async Task AsPlayer(int number)
+    {
+        if (play.PlayerGame(number) is null)
+            throw new InvalidOperationException($"There's no player {number} (play with players first: players: 2).");
+        _player = number;
+        if (play.PlayerWindowOf(number) is { } window)
+            window.Activate();
+        else
+            await ui.FocusEditor();
+        options.Log($"player: {number} -> {CurrentGame!.Net.LocalPlayer?.Name}");
+        for (var n = 1; play.PlayerGame(n) is { } game; n++)
+            options.Log($"  player {n}: {game.Net.Describe()}");
+        await DemoUi.Settle(150);
+    }
 
     /// <summary>Where a world point is on screen in the Game view, as the game's camera sees it right now.</summary>
     private Point GameScreenPoint(System.Numerics.Vector2 world)
     {
         var game = RunningGame;
-        var rect = DemoUi.ScreenRect(play.Surface);
+        var rect = DemoUi.ScreenRect(CurrentSurface);
         var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene);
         var size = camera?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Rendering.SceneRenderer.DefaultCameraSize;
         var aspect = rect.Height > 0 ? (float)(rect.Width / rect.Height) : 1;
@@ -615,7 +665,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     private void CheckOnField(System.Numerics.Vector2 world)
     {
-        var rect = DemoUi.ScreenRect(play.Surface);
+        var rect = DemoUi.ScreenRect(CurrentSurface);
         var at = GameScreenPoint(world);
         if (!rect.Contains(at))
             throw new InvalidOperationException($"{world.X}, {world.Y} is off screen; move the camera there first (minimap:).");
@@ -646,8 +696,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var offset = plus >= 0 ? Vector(text[(plus + 1)..]) : System.Numerics.Vector2.Zero;
         var game = RunningGame;
         var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
+        // In a network game, a player's name ("Player 1") is their character.
         var entity = game.Scene.Entities.Where(e => e.Name == name && Griff.Rendering.SceneRenderer.IsActive(e))
             .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
+            ?? game.Net.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar
             ?? throw new InvalidOperationException($"No {name} in the running game.");
         return MiddleOf(entity) + offset;
     }
@@ -743,13 +795,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         while (clock.Elapsed.TotalSeconds < seconds)
         {
             await options.Control.Gate();
-            if (play.Game is { } game && done(game))
+            if (CurrentGame is { } game && done(game))
             {
                 options.Log($"{what} after {clock.Elapsed.TotalSeconds:0.0}s");
                 return;
             }
 
-            if (clock.Elapsed.TotalSeconds - noted >= 10 && play.Game is { } running)
+            if (clock.Elapsed.TotalSeconds - noted >= 10 && CurrentGame is { } running)
             {
                 noted = clock.Elapsed.TotalSeconds;
                 options.Log($"  waiting for {what}: {Standings(running)}");
@@ -758,7 +810,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             await Task.Delay(100);
         }
 
-        throw new TimeoutException($"No {what} within {seconds:0} seconds. {(play.Game is { } state ? Standings(state) : "")}");
+        throw new TimeoutException($"No {what} within {seconds:0} seconds. {(CurrentGame is { } state ? Standings(state) : "")}");
     }
 
     // Each team's fighters, workers and buildings.
@@ -858,6 +910,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "panel" => ui.PanelContent(name),
             "scene" => sceneView,
             "game" => (FrameworkElement)ui.Main.GameTab.Content,
+            "player" when int.TryParse(name, out var number) && number == 1 => (FrameworkElement)ui.Main.GameTab.Content,
+            "player" when int.TryParse(name, out var number) => play.PlayerSurface(number) ?? throw new InvalidOperationException($"There's no player {name}."),
             "toolbar" => ui.ToolbarButton(name),
             "field" when name.Split('.', 2) is [var component, var field] =>
                 ui.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
@@ -873,7 +927,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, sound:, world:, gameworld:, hud:)."),
         };
     }
 

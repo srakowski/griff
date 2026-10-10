@@ -86,7 +86,7 @@ public sealed partial class Game
 
         if (best is not null)
             return best;
-        foreach (var entity in Rts.Buildings.Select(b => b.Entity!).Concat(Active<Resource>().Select(r => r.Entity!)))
+        foreach (var entity in Rts.Buildings.Select(b => b.Entity!).Concat(Showing<Resource>().Select(r => r.Entity!)))
         {
             if (Footprint(entity) is { } box && box.Contains(point) && (Rts.Fog?.IsExplored(point) ?? true))
                 return entity;
@@ -170,7 +170,7 @@ public sealed partial class Game
             {
                 var point = hud.MinimapToWorld(mouse);
                 if (Rts.Targeting is { } targeting)
-                    OrderTargeted(commander, targeting, point, null, shift);
+                    Order(commander, "targeted", () => OrderTargeted(commander, targeting, point, null, shift), (int)targeting, point, null, shift);
                 else
                     Rts.DraggingMinimap = true;
             }
@@ -184,7 +184,8 @@ public sealed partial class Game
             }
             else if (Rts.Targeting is { } targeting)
             {
-                OrderTargeted(commander, targeting, mouse, PickAt(mouse), shift);
+                var target = PickAt(mouse);
+                Order(commander, "targeted", () => OrderTargeted(commander, targeting, mouse, target, shift), (int)targeting, mouse, target, shift);
             }
             else
             {
@@ -213,9 +214,15 @@ public sealed partial class Game
             if (Rts.Placing is not null || Rts.Targeting is not null)
                 (Rts.Placing, Rts.Targeting) = (null, null);
             else if (hud is not null && hud.Minimap.Contains(mouse))
-                SmartOrder(commander, hud.MinimapToWorld(mouse), null);
+            {
+                var point = hud.MinimapToWorld(mouse);
+                Order(commander, "smart", () => SmartOrder(commander, point, null), point, null);
+            }
             else if (!onHud)
-                SmartOrder(commander, mouse, PickAt(mouse));
+            {
+                var target = PickAt(mouse);
+                Order(commander, "smart", () => SmartOrder(commander, mouse, target), mouse, target);
+            }
         }
     }
 
@@ -246,7 +253,7 @@ public sealed partial class Game
             if (Rts.Placing is not null || Rts.Targeting is not null)
                 (Rts.Placing, Rts.Targeting) = (null, null);
             else if (MySelected(commander).Select(e => e.GetComponent<Producer>()).OfType<Producer>().FirstOrDefault(p => p.QueueList.Count > 0) is { } producer)
-                CancelTraining(producer);
+                Order(commander, "cancel", () => CancelTraining(producer), producer.Entity);
             else
                 SetSelection([]);
         }
@@ -257,7 +264,7 @@ public sealed partial class Game
         {
             if (button.Key.Length == 1 && Enum.TryParse<Key>(button.Key, out var key) && Input.WasPressed(key))
             {
-                button.Press();
+                PressCard(commander, button);
                 break;
             }
         }
@@ -267,7 +274,7 @@ public sealed partial class Game
     {
         if (Rts.HoveredButton >= 0 && Rts.HoveredButton < Rts.Card.Count)
         {
-            Rts.Card[Rts.HoveredButton].Press();
+            PressCard(Rts.Commander!, Rts.Card[Rts.HoveredButton]);
             return;
         }
 
@@ -382,6 +389,8 @@ public sealed partial class Game
 
     private void Ordered(Vector2 at, Color color)
     {
+        if (_orderingFor is not null)
+            return;
         Rts.Markers.Add(new Marker(at, color));
         if (Rts.Commander?.OrderSound is { } sound && !string.IsNullOrWhiteSpace(sound))
             Audio.Play(sound.Trim());
@@ -475,7 +484,7 @@ public sealed partial class Game
                         .OrderBy(p => p.QueueList.Count).FirstOrDefault() ?? producer;
                     if (Train(best, unit) is { } why)
                         Notice(why);
-                    else if (Rts.Commander?.OrderSound is { } sound && !string.IsNullOrWhiteSpace(sound))
+                    else if (_orderingFor is null && Rts.Commander?.OrderSound is { } sound && !string.IsNullOrWhiteSpace(sound))
                         Audio.Play(sound.Trim());
                 })
                 { Swatch = info?.Entity?.GetComponent<Sprite>()?.Tint });
@@ -517,6 +526,23 @@ public sealed partial class Game
     {
         if (Rts.Placing is not { } building)
             return;
+
+        // On a player's machine, the host puts it up.
+        if (Net.IsClient)
+        {
+            if (!Rts.PlaceOk)
+            {
+                Notice("Can't build there.");
+                return;
+            }
+
+            Net.SendCommand(StrategyCommand, new object?[] { "place", building, Rts.PlaceAt }.Concat(MySelected(commander)).ToArray());
+            Ordered(Rts.PlaceAt, MoveColor);
+            if (!keepPlacing)
+                Rts.Placing = null;
+            return;
+        }
+
         var workers = MySelected(commander).Select(e => e.GetComponent<Worker>()).OfType<Worker>()
             .Where(w => w.Options().Contains(building, StringComparer.OrdinalIgnoreCase))
             .OrderBy(w => Vector2.DistanceSquared(Flat(w.Entity!.Transform.WorldPosition), Rts.PlaceAt))

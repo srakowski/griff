@@ -44,16 +44,16 @@ public sealed partial class Game
         var name = view.Viewer?.Trim();
         if (string.IsNullOrEmpty(name))
             return view.Entity;
-        // A viewer away respawning is still looked through, from where it fell.
-        return Scene.Entities.FirstOrDefault(e => e.Name == name && SceneRenderer.IsActive(e)) ?? Scene.Entities.FirstOrDefault(e => e.Name == name) ?? view.Entity;
+        // A viewer away respawning is still looked through, from where it fell. In a network game, through your own eyes.
+        return Scene.FindNamed(name, activeOnly: true) ?? Scene.FindNamed(name) ?? view.Entity;
     }
 
     private void RunFirstPerson()
     {
         var view = FirstPersonView;
-        var movements = Active<FirstPersonMovement>();
+        var movements = Moving<FirstPersonMovement>();
         Input.WantsMouseLock = view is not null && !PausedThisFrame && TopPanel is null &&
-                               movements.Any(m => m.MouseLook && m.Controllable);
+                               movements.Any(m => m.MouseLook && m.Controllable && InputOf(m.Entity) == Input);
         if (Time.Delta <= 0 || PausedThisFrame)
             return;
 
@@ -84,6 +84,7 @@ public sealed partial class Game
             return;
         var dt = Time.Delta;
         var control = m.Controllable;
+        var Input = InputOf(entity);
 
         // Turning: the arrow keys, the right stick, and the mouse while the game holds it.
         var turn = 0f;
@@ -181,14 +182,14 @@ public sealed partial class Game
 
             var controllable = owner.GetComponent<FirstPersonMovement>() is not { Controllable: false };
             if (controllable)
-                SwitchWeapons(usable);
+                SwitchWeapons(usable, InputOf(owner));
             if (CurrentWeaponOf(owner) is { } current && controllable)
                 RunWeapon(current, owner);
         }
     }
 
     // The number keys take out the weapon in that slot; the mouse wheel and the gamepad's Y go through them in turn.
-    private void SwitchWeapons(List<Weapon> usable)
+    private void SwitchWeapons(List<Weapon> usable, IInput Input)
     {
         if (usable.Count == 0)
             return;
@@ -209,8 +210,9 @@ public sealed partial class Game
     private void RunWeapon(Weapon weapon, Entity owner)
     {
         var action = string.IsNullOrWhiteSpace(weapon.Action) ? "Fire" : weapon.Action.Trim();
-        var pressed = Input.WasPressed(action);
-        var wants = weapon.Automatic ? Input.IsDown(action) : pressed;
+        var keys = InputOf(owner);
+        var pressed = keys.WasPressed(action);
+        var wants = weapon.Automatic ? keys.IsDown(action) : pressed;
         // A weapon just taken out is raised before it fires.
         if (!wants || weapon.Cooldown > 0 || Fps.Swapped < 0.2f)
             return;
@@ -243,7 +245,7 @@ public sealed partial class Game
         weapon.SinceFired = 0;
         PlayIfSet(weapon.Sound);
         if (weapon.Shake > 0)
-            ShakeCamera(weapon.Shake, 0.15f);
+            ShakeFor(owner, weapon.Shake, 0.15f);
 
         var position = owner.Transform.WorldPosition;
         var origin = new Vector2(position.X, position.Y);
@@ -266,7 +268,7 @@ public sealed partial class Game
             if (!string.IsNullOrWhiteSpace(weapon.ImpactEffect))
                 Spawn(weapon.ImpactEffect.Trim(), hit.Point - direction * 0.1f);
             weapon.RaiseHit(hit.Entity);
-            if (Health.Of(hit.Entity) is { } health && health.Entity != owner)
+            if (Health.Of(hit.Entity) is { } health && health.Entity != owner && CanHurt(owner, health.Entity!))
             {
                 var sum = damage.GetValueOrDefault(health);
                 damage[health] = (sum.Amount + weapon.Damage, direction);
@@ -287,6 +289,7 @@ public sealed partial class Game
     private void Launch(Weapon weapon, Entity owner, Vector2 origin, Vector2 direction)
     {
         var shot = Spawn(weapon.Projectile!.Trim(), origin + direction * 0.45f);
+        Claim(shot, owner);
         if (shot.GetComponent<Body>() is { } body)
             body.Velocity = direction * weapon.ProjectileSpeed;
         shot.Transform.Rotation = shot.Transform.Rotation with { Z = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI };

@@ -39,10 +39,22 @@ public sealed class MenuBuilder(CommandRegistry commands, IEnumerable<MenuDefini
                         Command = command,
                         InputGestureText = command.GestureText,
                         Icon = command.Icon is { } icon ? Icons.Create(icon) : null,
+                        IsCheckable = false,
+                        IsChecked = command.IsChecked == true,
+                        Tag = command,
                     });
                 }
             }
 
+            // On/off settings show their tick as the menu opens.
+            topLevel.SubmenuOpened += (_, _) =>
+            {
+                foreach (var item in topLevel.Items.OfType<MenuItem>())
+                {
+                    if (item.Tag is EditorCommand { IsChecked: { } on })
+                        item.IsChecked = on;
+                }
+            };
             menu.Items.Add(topLevel);
         }
     }

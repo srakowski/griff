@@ -90,6 +90,12 @@ public sealed class ComponentRegistry
         registry.Register<WireLamp>();
         registry.Register<WireDisplay>();
         registry.Register<Wire>();
+        registry.Register<Multiplayer>();
+        registry.Register<Networked>();
+        registry.Register<PlayerSpawn>();
+        registry.Register<Scoreboard>();
+        registry.Register<TextField>();
+        registry.Register<NameTag>();
         return registry;
     }
 

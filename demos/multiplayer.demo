@@ -1,0 +1,57 @@
+title: Multiplayer
+intro: Network games of every kind: host one, join one, or play as several players at once right in the editor. The host runs the game, and everyone sees the same world.
+project: Multiplayer | Arena Party
+scene: Arena
+
+chapter: A multiplayer game from components | The Multiplayer template
+say: The new Multiplayer template is an arena for up to eight players, made only of components.
+select: Game
+explain: component:Multiplayer | Multiplayer | The Multiplayer component makes a scene a network game. Each player gets their own copy of the Player, at a spawn point, in their own color, moved by their own keys.
+explain: field:Multiplayer.Teams | Teams | Name some teams for a team game. Players are shared out between them, and can't hurt their teammates.
+explain: field:Multiplayer.ViewDistance | View Distance | For a big world, like an MMO, each player is only sent what's near them.
+select: Player
+explain: component:Shooter | The same components | Movement, shooting, health and respawning are the components a single player game uses. Now they work for every player.
+select: Slime Pit
+set: Spawner.Delay = 40
+explain: field:Spawner.Delay | Slimes | Slimes crawl out of the middle after whoever is nearest. For this demo, they wait a while.
+
+chapter: Two players at once | Game > Play with 2 Players
+players: 2
+explain: player:2 | Player 2 | Play with 2 Players opens a second window. That's another player, joined over a pretend network, as if on another computer.
+explain: player:1 | Player 1 | The Game tab is player one, the host. It runs the game for everyone.
+say: Player one heads for the middle,
+hold: S+D 2
+player: 2
+say: and so does player two, in their own window. Each moves at once on their own screen, and the other sees them come.
+hold: W+A 2
+say: Player two opens fire. Shots, hits and scores all happen on the host, so everyone agrees on them.
+gamehold: Player 1 | 3.5
+explain: player:2 | Scores | The scoreboard in the corner shows each player's score and ping. A point for defeating another player, or a slime.
+wait: 2
+player: 1
+say: Player one is back a moment later, at a spawn point.
+wait: 2
+
+chapter: Any kind of game | Strategy, sandbox, first person, big worlds
+stop
+browse: Networked
+explain: catalog:docs | Networked | Every entity is shared with everyone, except cameras, menus and the HUD, which each player keeps for themselves. Networked changes that for one entity.
+click: catalog:close
+say: It isn't just arenas. In a platformer, players move their own characters at once, and the host's spikes and checkpoints work for all of them.
+say: In a strategy game, each player commands their own team, and their orders go to the host.
+say: In a block world, everyone digs and builds in the same world. In first person, every player has their own view.
+say: Big worlds send each player only what's near them, and can remember players when they leave. A dedicated server runs the game for everyone without playing.
+say: Exported games host and join from their own menus, over the local network or the internet.
+
+chapter: A slow connection | Game > Pretend a Slow Connection
+menu: Game > Pretend a Slow Connection
+say: To feel what lag does, pretend a slow connection, about a hundred and fifty milliseconds there and back.
+players: 2
+player: 2
+hold: S+A 1.5
+say: Your own character still moves the moment you press a key. Everyone else's glides smoothly, a moment behind.
+player: 1
+hold: W 1
+stop
+menu: Game > Pretend a Slow Connection
+say: That's multiplayer in Griff: one engine for arcade games, shooters, strategy, sandboxes and big online worlds.

@@ -13,11 +13,11 @@ public sealed partial class Game
 
     // Before anything runs, so a switched-off turret or spawner can't get a shot off in the first frame (or the frame
     // after a script sets a switch).
-    private void ApplySwitches() => ApplySwitches(Scene.Entities.SelectMany(e => e.GetComponents<Switch>()).ToList());
+    private void ApplySwitches() => ApplySwitches(Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Switch>()).ToList());
 
     private void RunSwitches()
     {
-        var all = Scene.Entities.SelectMany(e => e.GetComponents<Switch>()).ToList();
+        var all = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Switch>()).ToList();
 
         // The state it starts in isn't a change; being worked in its first frame is.
         foreach (var @switch in all)
@@ -32,7 +32,7 @@ public sealed partial class Game
                     ShowPrompt(@switch.Entity!, @switch.Prompt, users.Count > 0 && _talking is null);
 
                     // Not with the press that just started a conversation beside it.
-                    if (users.Count > 0 && _talking is null && !PausedThisFrame && Input.WasPressed("Interact"))
+                    if (users.Count > 0 && _talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
                     {
                         if (@switch.IsOn)
                             @switch.IsOn = false;
@@ -192,9 +192,14 @@ public sealed partial class Game
             inventory.Take(pickup.Item.Trim(), -pickup.Amount);
     }
 
-    // The first inventory in the scene, the player's in practice, even while they're away respawning.
-    private int ItemCount(string item) =>
-        Scene.Entities.SelectMany(e => e.GetComponents<Inventory>()).FirstOrDefault()?.Count(item.Trim()) ?? 0;
+    // The first inventory in the scene, the player's in practice, even while they're away respawning. In a network game,
+    // this machine's player's own.
+    private int ItemCount(string item)
+    {
+        var inventories = Scene.Entities.SelectMany(e => e.GetComponents<Inventory>()).ToList();
+        var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && Net.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
+        return inventory?.Count(item.Trim()) ?? 0;
+    }
 
     // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
     private void RunTrails()

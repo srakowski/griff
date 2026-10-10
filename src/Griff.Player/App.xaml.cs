@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Griff.Platform.Windows;
 using Griff.Runtime;
 
@@ -12,21 +15,30 @@ namespace Griff.Player;
 /// <c>game</c> folder next to it, or a project folder passed on the command line, and plays its start scene. F11 toggles fullscreen, as does the game itself
 /// (<see cref="Game.Fullscreen"/>), and the choice is remembered.
 /// </summary>
+/// <remarks>
+/// For network games: <c>--host [port]</c> hosts straight away, <c>--join &lt;address&gt;</c> joins, <c>--name &lt;name&gt;</c>
+/// sets the player's name, and <c>--server [port]</c> runs a dedicated server with no window (the game's start scene,
+/// hosted for everyone, played by nobody) until it's closed.
+/// </remarks>
 public partial class App : Application
 {
     private GameRunner? _runner;
     private WindowState _windowedState;
 
+    // What the command line asked for, besides the game folder.
+    private sealed record Options(string? Folder, int? Host, string? Join, int? Server, string? Name);
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        var folder = e.Args.FirstOrDefault() ?? Path.Combine(AppContext.BaseDirectory, ExportLayout.GameFolder);
+        var options = Parse(e.Args);
+        var folder = options.Folder ?? Path.Combine(AppContext.BaseDirectory, ExportLayout.GameFolder);
         LoadedGame game;
         try
         {
             // An exported game carries its content inside the exe; unpack it (once) and play from there.
-            if (e.Args.Length == 0 && Environment.ProcessPath is { } exe && GamePackage.IsPackaged(exe))
+            if (options.Folder is null && Environment.ProcessPath is { } exe && GamePackage.IsPackaged(exe))
             {
                 var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "Games");
                 folder = GamePackage.Extract(exe, cache, Path.GetFileNameWithoutExtension(exe))!;
@@ -42,8 +54,21 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            if (options.Server is not null)
+            {
+                Console.Error.WriteLine($"Couldn't load the game from \"{folder}\": {ex.Message}");
+                Shutdown(1);
+                return;
+            }
+
             MessageBox.Show($"Couldn't load the game from \"{folder}\".\n\n{ex.Message}", "Griff", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
+            return;
+        }
+
+        if (options.Server is { } serverPort)
+        {
+            RunServer(game, serverPort);
             return;
         }
 
@@ -81,6 +106,8 @@ public partial class App : Application
         _runner.Game.SceneLoader = game.LoadScene;
         _runner.Game.PrefabLoader = game.LoadPrefab;
         _runner.Game.SceneName = game.SceneName;
+        _runner.Game.Title = game.Project.Name;
+        _runner.Game.Components = game.Components;
         (_runner.Game.Input as InputState)?.UseControls(game.Project.Controls);
         _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
         _runner.Game.FullscreenChanged += (_, _) => SetFullscreen(window, _runner.Game.Fullscreen);
@@ -94,6 +121,7 @@ public partial class App : Application
             _runner.IsPaused = false;
         };
         _runner.Start();
+        StartNetwork(_runner.Game, options);
 
         if (smokeOutput is not null)
         {
@@ -105,6 +133,97 @@ public partial class App : Application
 
         Keyboard.Focus(window);
     }
+
+    private static Options Parse(string[] args)
+    {
+        string? folder = null, join = null, name = null;
+        int? host = null, server = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            string? Next() => i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal) ? args[++i] : null;
+            int? Port() => Next() is { } text && int.TryParse(text, out var port) ? port : 0;
+            switch (arg.ToLowerInvariant())
+            {
+                case "--host": host = Port(); break;
+                case "--server": server = Port(); break;
+                case "--join": join = Next() ?? ""; break;
+                case "--name": name = Next(); break;
+                default:
+                    if (!arg.StartsWith("--", StringComparison.Ordinal))
+                        folder ??= arg;
+                    break;
+            }
+        }
+
+        return new Options(folder, host, join, server, name);
+    }
+
+    private static void StartNetwork(Game game, Options options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.Name))
+            game.Net.PlayerName = options.Name;
+        if (options.Host is { } port)
+            game.Net.Host(port);
+        else if (options.Join is { } address)
+            game.Net.Join(address);
+    }
+
+    // A dedicated server: the start scene, run and hosted with no window, until the process is ended.
+    private void RunServer(LoadedGame loaded, int port)
+    {
+        AttachConsole(-1);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var game = new Game(loaded.Scene, new InputState())
+        {
+            SceneLoader = loaded.LoadScene,
+            PrefabLoader = loaded.LoadPrefab,
+            SceneName = loaded.SceneName,
+            Title = loaded.Project.Name,
+            Components = loaded.Components,
+            SaveData = new SaveData(SaveData.PlayerPath(loaded.Project.Name + " Server")),
+        };
+        (game.Input as InputState)?.UseControls(loaded.Project.Controls);
+        if (!game.Net.HostServer(port))
+        {
+            Console.Error.WriteLine(game.Net.Status);
+            Shutdown(1);
+            return;
+        }
+
+        Console.WriteLine($"{loaded.Project.Name}: {game.Net.Status}. Close this window (or press Ctrl+C) to stop.");
+        game.Net.PlayerJoined += p => Console.WriteLine($"{p.Name} joined ({game.Net.Players.Count} playing)");
+        game.Net.PlayerLeft += p => Console.WriteLine($"{p.Name} left");
+        var clock = Stopwatch.StartNew();
+        var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(1000.0 / 60) };
+        timer.Tick += (_, _) =>
+        {
+            var seconds = clock.Elapsed.TotalSeconds;
+            clock.Restart();
+            try
+            {
+                game.Tick(Math.Min(seconds, 0.1));
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Game error: {ex.Message}");
+            }
+            finally
+            {
+                (game.Input as InputState)?.EndFrame();
+            }
+        };
+        timer.Start();
+        Console.CancelKeyPress += (_, _) => Dispatcher.Invoke(() =>
+        {
+            timer.Stop();
+            game.Stop();
+            Shutdown(0);
+        });
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern bool AttachConsole(int processId);
 
     private static bool SaveFrame(GameSurface surface, Griff.Scenes.Scene scene, string path)
     {

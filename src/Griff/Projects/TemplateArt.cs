@@ -3,10 +3,10 @@ using System.IO.Compression;
 namespace Griff.Projects;
 
 /// <summary>
-/// The pictures the Shooter template comes with, painted in code as small pixel art: a tileset of walls, enemies,
+/// The pictures the Shooter, Sandbox and Contraption templates come with, painted in code as small pixel art: a tileset of walls, enemies,
 /// pickups, and the guns held in hand. Saved as PNGs in Textures/, so they open (and can be repainted) in any editor.
 /// </summary>
-internal static class TemplateArt
+internal static partial class TemplateArt
 {
     public const string Walls = "Textures/walls.png";
     public const string Grunt = "Textures/grunt.png";
@@ -35,6 +35,10 @@ internal static class TemplateArt
     /// <summary>The image files for a template (relative to Assets), as PNG bytes.</summary>
     public static IReadOnlyDictionary<string, byte[]> Files(ProjectTemplate template)
     {
+        if (template == ProjectTemplate.Sandbox)
+            return SandboxFiles();
+        if (template == ProjectTemplate.Contraption)
+            return ContraptionFiles();
         if (template != ProjectTemplate.Shooter)
             return new Dictionary<string, byte[]>();
         return new Dictionary<string, byte[]>

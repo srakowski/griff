@@ -12,6 +12,8 @@ public enum ProjectTemplate
     Arcade,
     Strategy,
     Shooter,
+    Sandbox,
+    Contraption,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
@@ -24,6 +26,8 @@ public static partial class ProjectTemplates
         ProjectTemplate.Arcade => "Blast waves of enemies in an arena, with three hearts, a menu, options, game over and high score. WASD to fly, mouse to aim, click to fire.",
         ProjectTemplate.Strategy => "Command an army in real time against the computer: gather gold and wood with workers, put up farms, barracks and towers, train soldiers and archers, and destroy the red base. Click or drag to select, right-click to send, hotkeys on the command card, arrow keys or the minimap to look around.",
         ProjectTemplate.Shooter => "Fight your way out of a dark base in first person: grunts that charge, robots that throw fireballs, sliding doors, a blue key for the way out and a shotgun in the armory. The level is a tilemap you paint top-down. WASD to move, the mouse or arrows to turn, click to fire, 1 and 2 to change weapon.",
+        ProjectTemplate.Sandbox => "Dig and build in a world of blocks made from a seed: grassy hills, caves, coal, iron and gold, trees and sand that falls. Mine with the left mouse button, build with the right, pick blocks on the hotbar, and craft planks, torches, workbenches, furnaces and glass. A/D to walk, Space to jump, C to craft.",
+        ProjectTemplate.Contraption => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -54,6 +58,8 @@ public static partial class ProjectTemplates
         ProjectTemplate.Arcade => ArcadeMenu(),
         ProjectTemplate.Strategy => Strategy(),
         ProjectTemplate.Shooter => Shooter(),
+        ProjectTemplate.Sandbox => Sandbox(),
+        ProjectTemplate.Contraption => Contraption(),
         _ => Empty(),
     };
 
@@ -105,6 +111,8 @@ public static partial class ProjectTemplates
         },
         ProjectTemplate.Strategy => StrategyPrefabs(),
         ProjectTemplate.Shooter => ShooterPrefabs(),
+        ProjectTemplate.Sandbox => SandboxPrefabs(),
+        ProjectTemplate.Contraption => ContraptionPrefabs(),
         _ => new Dictionary<string, Entity>(),
     };
 

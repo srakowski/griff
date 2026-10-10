@@ -200,24 +200,44 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "hold":
                 var (name, seconds) = Split2(a, ' ');
                 await GameKey(name, double.Parse(seconds, CultureInfo.InvariantCulture));
+                if (play.Game?.Find("Player") is { } walker)
+                    options.Log($"hold: {a} -> Player at {walker.Transform.WorldPosition.X:0.0}, {walker.Transform.WorldPosition.Y:0.0}");
                 break;
             case "gameclick":
-                await Input.Click(await GamePoint(Vector(a)));
+                await Input.Click(await GamePoint(GameWorld(a)));
                 LogGame(line);
+                break;
+            case "gamehover":
+                await GamePoint(GameWorld(a));
+                LogGame(line);
+                break;
+            case "gamehold":
+                await GameHold(a);
+                LogGame(line);
+                break;
+            case "gamebutton":
+                await Input.Click(await SandboxButtonPoint(a));
+                LogGame(line);
+                await DemoUi.Settle(150);
                 break;
             case "mouselook":
                 await MouseLook(a);
                 break;
             case "gameorder":
-                await Input.Click(await GamePoint(Vector(a)), right: true);
+                await Input.Click(await GamePoint(GameWorld(a)), right: true);
                 LogGame(line);
                 break;
             case "gamedrag":
-                var dragBox = Numbers(a, 4);
-                var dragFrom = await GamePoint(new System.Numerics.Vector2((float)dragBox[0], (float)dragBox[1]));
-                CheckOnField(new System.Numerics.Vector2((float)dragBox[2], (float)dragBox[3]));
-                var dragTo = GameScreenPoint(new System.Numerics.Vector2((float)dragBox[2], (float)dragBox[3]));
-                await Input.Drag(dragFrom, [dragTo], 700);
+                // "gamedrag: 1, 2, 5, 6", or "gamedrag: Crate > Plate + 0, 1" between points as gameclick takes them.
+                var arrow = a.IndexOf('>');
+                var dragBox = arrow >= 0 ? [] : Numbers(a, 4);
+                var dragStart = arrow >= 0 ? GameWorld(a[..arrow]) : new System.Numerics.Vector2((float)dragBox[0], (float)dragBox[1]);
+                var dragEnd = arrow >= 0 ? GameWorld(a[(arrow + 1)..]) : new System.Numerics.Vector2((float)dragBox[2], (float)dragBox[3]);
+                var dragFrom = await GamePoint(dragStart);
+                CheckOnField(dragEnd);
+                var dragTo = GameScreenPoint(dragEnd);
+                // Held a moment at the end, so whatever a grab tool carries catches up before it's let go.
+                await Input.Drag(dragFrom, [dragTo], 700, holdMs: 400);
                 LogGame(line);
                 break;
             case "minimap":
@@ -234,6 +254,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (waitName, waitSeconds) = Split2(a);
                 await WaitInGame($"{waitName} showing", Seconds(waitSeconds),
                     game => game.Scene.Entities.Any(e => e.Name == waitName && Griff.Rendering.SceneRenderer.IsActive(e)));
+                break;
+            case "waitgone":
+                var (goneName, goneSeconds) = Split2(a);
+                await WaitInGame($"{goneName} gone", Seconds(goneSeconds),
+                    game => !game.Scene.Entities.Any(e => e.Name == goneName && Griff.Rendering.SceneRenderer.IsActive(e)));
                 break;
             case "ready":
                 var (readyName, readySeconds) = Split2(a);
@@ -553,7 +578,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             return;
         var mouse = game.Input.MouseWorld;
         var team = game.Find<Griff.Scenes.Commander>()?.Team;
-        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}");
+        var sandbox = game.Find<Griff.Scenes.Inventory>() is { } inventory ? $"; carrying {string.Join(", ", inventory.Items)}" : "";
+        if (game.Tools is { } tools)
+            sandbox += $"; tool {tools.Current}{(game.ToolFirst is { } first ? $" after {first.Name}" : "")}{(game.Grabbed is { } held ? $" holding {held.Name}" : "")}";
+        if (game.SandboxNotice is { } notice)
+            sandbox += $"; \"{notice}\"";
+        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}{sandbox}");
     }
 
     private Griff.Runtime.Game RunningGame => play.Game ?? throw new InvalidOperationException("The game isn't playing.");
@@ -591,6 +621,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             throw new InvalidOperationException($"{world.X}, {world.Y} is off screen; move the camera there first (minimap:).");
         if (RunningGame.StrategyHud?.Covers(world) == true)
             throw new InvalidOperationException($"{world.X}, {world.Y} is under the HUD; move the camera first (minimap:).");
+        if (RunningGame.SandboxButtons.Any(b => b.Rect.Contains(world)))
+            throw new InvalidOperationException($"{world.X}, {world.Y} is under the sandbox HUD (gamebutton: clicks its buttons).");
     }
 
     /// <summary>Where the minimap shows a world point, on screen.</summary>
@@ -600,9 +632,76 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         return GameScreenPoint(hud.WorldToMinimap(world));
     }
 
-    /// <summary>The screen box of a part of the strategy HUD: minimap, card, selection or resources.</summary>
+    // ----- The sandbox HUD, and points in the running game -----
+
+    // "3, -2" is a world point; "Player" is the middle of the entity called that (the nearest to the camera, if there are
+    // several), and "Player + 1.5, -1" a point that far from it: things move, and the camera follows the player.
+    private System.Numerics.Vector2 GameWorld(string text)
+    {
+        text = text.Trim();
+        if (text.Length > 0 && (char.IsDigit(text[0]) || text[0] is '-' or '.'))
+            return Vector(text);
+        var plus = text.IndexOf('+');
+        var name = (plus >= 0 ? text[..plus] : text).Trim();
+        var offset = plus >= 0 ? Vector(text[(plus + 1)..]) : System.Numerics.Vector2.Zero;
+        var game = RunningGame;
+        var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
+        var entity = game.Scene.Entities.Where(e => e.Name == name && Griff.Rendering.SceneRenderer.IsActive(e))
+            .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
+            ?? throw new InvalidOperationException($"No {name} in the running game.");
+        return MiddleOf(entity) + offset;
+    }
+
+    private static System.Numerics.Vector2 MiddleOf(Griff.Scenes.Entity entity) =>
+        entity.GetComponent<Griff.Scenes.Collider>() is { } collider
+            ? Griff.Runtime.Physics.BoundsOf(collider).Center
+            : new System.Numerics.Vector2(entity.Transform.WorldPosition.X, entity.Transform.WorldPosition.Y);
+
+    // "gamehold: Player + 0, -1.5 | 1.2" holds the left button there that long (digging); "| right" holds the right.
+    private async Task GameHold(string argument)
+    {
+        var parts = argument.Split('|', StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+            throw new FormatException("gamehold: <point> | <seconds> [| right]");
+        var right = parts.Length > 2 && parts[2].Equals("right", StringComparison.OrdinalIgnoreCase);
+        var at = await GamePoint(GameWorld(parts[0]));
+        Input.Press(at, right);
+        try
+        {
+            await options.Control.Delay(double.Parse(parts[1], CultureInfo.InvariantCulture) * 1000);
+        }
+        finally
+        {
+            Input.Release(right);
+        }
+
+        await DemoUi.Settle(100);
+    }
+
+    // "gamebutton: Spawn" clicks the sandbox HUD's button with that label; "tool:", "prop:", "slot:", "recipe:" or "port:"
+    // first says which kind, when a label is on more than one.
+    private async Task<Point> SandboxButtonPoint(string label)
+    {
+        var (kind, name) = label.Contains(':') ? Split2(label, ':') : ("", label.Trim());
+        Griff.Runtime.HudButton? Find() => RunningGame.SandboxButtons.FirstOrDefault(b =>
+            b.Label.Equals(name, StringComparison.OrdinalIgnoreCase) && (kind.Length == 0 || b.Kind.ToString().Equals(kind, StringComparison.OrdinalIgnoreCase)));
+        if (Find() is null)
+            await Until(() => Find() is not null, 1500);
+        var button = Find() ?? throw new InvalidOperationException(
+            $"No \"{label}\" on the sandbox HUD (it has {string.Join(", ", RunningGame.SandboxButtons.Select(b => b.Label))}).");
+        await Input.MoveTo(GameScreenPoint(button.Rect.Center));
+        await Task.Delay(40);
+        return GameScreenPoint((Find() ?? button).Rect.Center);
+    }
+
+    /// <summary>
+    /// The screen box of a part of the strategy HUD (minimap, card, selection or resources) or the sandbox HUD (hotbar,
+    /// crafting, tools, props or ports).
+    /// </summary>
     private Rect HudRect(string part)
     {
+        if (RunningGame.StrategyHud is null && RunningGame.SandboxHud is not null)
+            return SandboxHudRect(part);
         var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander).");
         var area = part.ToLowerInvariant() switch
         {
@@ -613,6 +712,26 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             _ => throw new FormatException($"Unknown HUD part \"{part}\" (minimap, card, selection, resources)."),
         };
         return new Rect(GameScreenPoint(new System.Numerics.Vector2(area.X, area.Top)), GameScreenPoint(new System.Numerics.Vector2(area.Right, area.Y)));
+    }
+
+    private Rect SandboxHudRect(string part)
+    {
+        var kind = part.ToLowerInvariant() switch
+        {
+            "hotbar" => Griff.Runtime.HudButtonKind.Slot,
+            "crafting" => Griff.Runtime.HudButtonKind.Recipe,
+            "tools" => Griff.Runtime.HudButtonKind.Tool,
+            "props" => Griff.Runtime.HudButtonKind.Prop,
+            "ports" => Griff.Runtime.HudButtonKind.Port,
+            _ => throw new FormatException($"Unknown HUD part \"{part}\" (hotbar, crafting, tools, props, ports)."),
+        };
+        var rects = RunningGame.SandboxButtons.Where(b => b.Kind == kind).Select(b => b.Rect).ToList();
+        if (rects.Count == 0)
+            throw new InvalidOperationException($"The sandbox HUD isn't showing its {part}.");
+        var margin = RunningGame.SandboxHud!.Unit;
+        var topLeft = new System.Numerics.Vector2(rects.Min(r => r.X) - margin, rects.Max(r => r.Top) + margin);
+        var bottomRight = new System.Numerics.Vector2(rects.Max(r => r.Right) + margin, rects.Min(r => r.Y) - margin);
+        return new Rect(GameScreenPoint(topLeft), GameScreenPoint(bottomRight));
     }
 
     // Waits (real time, as the game plays) until the running game is as asked, noting how the sides stand every few

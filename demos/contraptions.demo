@@ -1,0 +1,69 @@
+title: Contraptions and wiring
+intro: Garry's Mod style tools and Wiremod style logic. Grab, freeze, spawn, weld, rope and wire props into machines, all as components.
+project: Contraption | Gizmo Garage
+
+chapter: Props and parts | Bodies, welds, ropes and wires
+say: The new Contraption template is a room to build machines in.
+select: Left Thruster
+explain: component:Thruster | Thruster | A thruster pushes whatever it's welded to,
+explain: component:Weld | Weld | this weld sticks it to the plank above it,
+explain: component:Wire | Wire | and this wire powers it from the lift button.
+select: Not Gate
+explain: component:WireGate | Wire Gate | Gates do logic and math: and, or, not, toggles, latches, delays, clocks and counters.
+select: Player
+explain: component:SandboxTools | Sandbox Tools | And Sandbox Tools gives the player tools to build with while the game runs.
+
+chapter: Buttons and wires | E presses a button
+play
+wait: 1.5
+gamehover: Button
+tap: E
+say: Press E with the mouse over a button. This one is wired to the lamp hanging from the ceiling on a rope.
+gamehover: Lift Button
+tap: E
+say: This one powers the two thrusters welded under that plank. Up goes the lift.
+wait: 2
+tap: E
+say: Press it again to bring it down.
+wait: 1.5
+
+chapter: Grab and logic | Carry things, open the door
+explain: hud:tools | Tools | The tools are along the top. The grab tool carries things.
+gamedrag: Crate > Plate + 0, 1.5
+say: Drop the crate on the plate.
+waitgone: Gate Wall | 3
+say: The plate's sensor goes through a not gate into the wall's Show input, so the wall goes away.
+hold: D 0.6
+hold: D+Space 0.5
+hold: D 1
+say: Past it, a clock blinks a lamp, a counter counts the ticks, and a display shows the count.
+wait: 2
+
+chapter: Build your own | Spawn, weld, wire, undo
+gamebutton: tool:Spawn
+explain: hud:props | Spawn | The spawn tool puts down props: crates, balloons, thrusters, lamps, buttons and gates.
+gamebutton: prop:Crate
+gameclick: Player + -2, 0
+gamebutton: prop:Thruster
+gameclick: Player + -2, 1.6
+gamebutton: prop:Button
+gameclick: Player + 1.5, 0
+wait: 0.5
+gamebutton: tool:Weld
+say: Weld the thruster to the crate,
+gameclick: Thruster
+gameclick: Crate 2
+gamebutton: tool:Wire
+say: then wire the button to the thruster.
+gameclick: Button 2
+explain: hud:ports | Outputs | A part with more than one output asks which.
+gamebutton: port:On
+gameclick: Thruster
+gamebutton: port:Power
+gamehover: Button 2
+tap: E
+say: Press the button, and up it goes.
+wait: 1.5
+tap: Z
+say: Z undoes the last thing made: the wire's gone, and down it comes.
+wait: 1.5

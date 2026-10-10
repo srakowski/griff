@@ -1,0 +1,64 @@
+title: Block worlds
+intro: Worlds made from a seed to dig up and build in, with a hotbar, crafting, falling sand and torch-lit caves. Terraria and Minecraft style, all components.
+project: Sandbox | Deepdelve
+
+chapter: A world from a seed | World Generator and Blocks
+say: The new Sandbox template is a world of blocks, made from a seed.
+select: World
+explain: component:WorldGenerator | World Generator | A World Generator fills a tilemap with rolling hills of grass, dirt and stone, with caves, ore, sand and trees.
+explain: field:WorldGenerator.Seed | Seed | The same seed always makes the same world. Change it, or set it to zero, for a new one every time.
+explain: component:Blocks | Blocks | Blocks makes the tilemap something to dig and build with: what each block gives, how long it takes to break, and which blocks fall, glow, or can't be broken.
+select: Player
+explain: component:BlockBuilder | Block Builder | On the player, a Block Builder digs and builds with the mouse,
+explain: component:Hotbar | Hotbar | a Hotbar shows what they're carrying,
+explain: component:Crafting | Crafting | and Crafting makes new things out of it.
+
+chapter: Dig and build | The left button digs, the right builds
+play
+wait: 1.5
+say: Hold the left mouse button on a block to dig it out.
+gamehold: Player + 1, -1.4 | 0.8
+gamehold: Player + 2, -1.4 | 0.8
+explain: hud:hotbar | Hotbar | Whatever's dug goes in the hotbar. Pick a block with the number keys, the mouse wheel, or a click.
+gamebutton: slot:Sand
+say: Right-click puts the picked block down, next to another one.
+gameorder: Player + 1, -1.4
+gameorder: Player + 1, -0.4
+wait: 0.5
+
+chapter: Crafting | C opens the list
+tap: C
+explain: hud:crafting | Crafting | C opens the crafting list. The recipes there's enough for are lit up.
+gamebutton: recipe:Planks
+say: Our wood makes planks,
+gamebutton: recipe:Planks
+gamebutton: recipe:Workbench
+say: and planks make a workbench.
+tap: C
+gamebutton: slot:Workbench
+gameorder: Player + -1, -0.4
+say: Put it down. Recipes marked at Workbench need one close by, like bricks and the furnace.
+wait: 1
+
+chapter: Underground | Falling sand, darkness and torches
+say: Now, down.
+gamehold: Player + 0, -1.4 | 0.7
+gamehold: Player + 0, -1.4 | 0.7
+gamehold: Player + 0, -1.4 | 0.7
+say: Sand falls when there's nothing under it. Dig out the dirt below that column of sand.
+gamehold: Player + 1, -1.4 | 0.7
+wait: 1
+gamehold: Player + 0, -1.4 | 0.7
+gamehold: Player + 0, -1.4 | 0.7
+gamehold: Player + 0, -1.4 | 1.1
+gamehold: Player + 0, -1.4 | 1.1
+say: Below the surface it gets dark.
+gamehold: Player + 1, 0 | 1.1
+gamebutton: slot:Torch
+gameorder: Player + 1, 0
+say: Torches light the way. Any block can glow, and the light reaches as far as you like.
+wait: 1.5
+stop
+select: World
+explain: field:Blocks.Underground | Underground | Underground sets how dark it gets down there.
+explain: field:Blocks.SaveAs | Save As | And Save As keeps the world in the game's save data, so everything dug and built is still there next time.

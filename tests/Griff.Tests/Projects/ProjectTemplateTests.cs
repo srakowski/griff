@@ -26,6 +26,8 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Arcade)]
     [InlineData(ProjectTemplate.Strategy)]
     [InlineData(ProjectTemplate.Shooter)]
+    [InlineData(ProjectTemplate.Sandbox)]
+    [InlineData(ProjectTemplate.Contraption)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -989,6 +991,151 @@ public sealed class ProjectTemplateTests : IDisposable
         inflate.CopyTo(rows);
         Assert.Equal(height * (width * 4 + 1), rows.Length);
         return (width, height, rows.ToArray());
+    }
+
+    // ----- Sandbox -----
+
+    [Fact]
+    public async Task Sandbox_MakesItsWorld_StandsThePlayerOnIt_AndDiggingFillsTheHotbar()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Sandbox);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 1);
+
+        var player = game.Find("Player")!;
+        var map = game.Find("World")!.GetComponent<Tilemap>()!;
+        Assert.Equal(70, map.Height);
+        Assert.True(player.GetComponent<Body>()!.IsGrounded);
+
+        // Dig straight down under the player's feet.
+        var feet = player.Transform.WorldPosition;
+        input.MouseWorld = new Vector2(feet.X, feet.Y - 1.4f);
+        input.SetMouseButton(MouseButton.Left, true);
+        Run(game, input, 1);
+        input.SetMouseButton(MouseButton.Left, false);
+        Run(game, input, 0.1);
+
+        // The player starts on a patch of sand.
+        Assert.Equal([("Torch", 8), ("Wood", 3), ("Sand", 1)], player.GetComponent<Hotbar>()!.Shown.Take(3));
+        Assert.True(player.Transform.WorldPosition.Y < feet.Y - 0.5f);
+    }
+
+    [Fact]
+    public async Task Sandbox_TurnsWoodIntoPlanks_AndAWorkbench_ThenBricksBesideIt()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Sandbox);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.5);
+        var player = game.Find("Player")!;
+        var inventory = player.GetComponent<Inventory>()!;
+        var recipes = player.GetComponent<Crafting>()!.Parsed;
+        inventory.Add("Wood", 2);
+        inventory.Add("Stone", 2);
+
+        Assert.True(game.Craft(player, recipes.Single(r => r.Item == "Planks")));
+        Assert.True(game.Craft(player, recipes.Single(r => r.Item == "Planks")));
+        Assert.True(game.Craft(player, recipes.Single(r => r.Item == "Workbench")));
+        Assert.False(game.CanCraft(player, recipes.Single(r => r.Item == "Bricks")));
+
+        // Put the workbench down beside the player: now bricks can be made.
+        Run(game, input, Frame);
+        player.GetComponent<Hotbar>()!.Selected = player.GetComponent<Hotbar>()!.Shown.ToList().FindIndex(s => s.Item == "Workbench");
+        Run(game, input, Frame * 2);
+        var map = game.Find("World")!.GetComponent<Tilemap>()!;
+        var ground = Enumerable.Range(0, map.Height).First(y => map.IsBlocked(82, y));
+        input.MouseWorld = Vector2.Transform(map.CellCenter(82, ground - 1), map.Entity!.Transform.WorldMatrix);
+        input.SetMouseButton(MouseButton.Right, true);
+        Run(game, input, 0.1);
+        input.SetMouseButton(MouseButton.Right, false);
+        Run(game, input, Frame);
+        Assert.Equal(0, inventory.Count("Workbench"));
+        Assert.True(game.Craft(player, recipes.Single(r => r.Item == "Bricks")));
+        Assert.Equal(2, inventory.Count("Bricks"));
+    }
+
+    [Fact]
+    public async Task Sandbox_ComesWithItsBlocks_AsAPng()
+    {
+        var (project, _, _, _) = await CreateAndLoad(ProjectTemplate.Sandbox);
+
+        Assert.True(new FileInfo(Asset(project, "Textures/blocks.png")).Length > 100);
+        Assert.True(Griff.Audio.Wav.Decode(Asset(project, "Sounds/dig.wav")) is { Seconds: > 0 });
+    }
+
+    // ----- Contraption -----
+
+    [Fact]
+    public async Task Contraption_TheLiftButton_SendsTheLiftUp_AndBackDown()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.5);
+        var plank = game.Find("Lift Plank")!;
+        var start = plank.Transform.WorldPosition.Y;
+
+        var button = game.Find("Lift Button")!;
+        input.MouseWorld = new Vector2(button.Transform.WorldPosition.X, button.Transform.WorldPosition.Y);
+        input.SetKey(Key.E, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.E, false);
+        Run(game, input, 2);
+        Assert.True(plank.Transform.WorldPosition.Y > start + 4, $"{plank.Transform.WorldPosition.Y}");
+        Assert.Equal(game.Find("Left Thruster")!.Transform.WorldPosition.Y + 0.6f, plank.Transform.WorldPosition.Y, 2);
+
+        input.SetKey(Key.E, true);
+        Run(game, input, Frame);
+        input.SetKey(Key.E, false);
+        Run(game, input, 2);
+        Assert.Equal(start, plank.Transform.WorldPosition.Y, 1);
+    }
+
+    [Fact]
+    public async Task Contraption_ACrateOnThePlate_OpensTheDoor()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var game = NewGame(project, scene, input, registry);
+        Run(game, input, 0.5);
+        var wall = game.Find("Gate Wall")!;
+        Assert.True(wall.IsEnabled);
+
+        // Carry the crate over with the Grab tool and drop it on the plate.
+        var crate = game.Find("Crate")!;
+        input.MouseWorld = new Vector2(crate.Transform.WorldPosition.X, crate.Transform.WorldPosition.Y);
+        input.SetMouseButton(MouseButton.Left, true);
+        Run(game, input, Frame);
+        input.MouseWorld = new Vector2(3, -5);
+        Run(game, input, 0.6);
+        input.SetMouseButton(MouseButton.Left, false);
+        Run(game, input, 1);
+
+        Assert.False(wall.IsEnabled);
+    }
+
+    [Fact]
+    public async Task Contraption_TheClock_BlinksALamp_AndCountsOnTheDisplay()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var game = NewGame(project, scene, input, registry);
+        var lit = new HashSet<float>();
+        for (var i = 0; i < 120; i++)
+        {
+            Run(game, input, Frame);
+            lit.Add(game.Find("Blinker")!.GetComponent<WireLamp>()!.Brightness);
+        }
+
+        Assert.Equal([0f, 1f], lit.Order());
+        Assert.True(game.Find("Display")!.GetComponent<WireDisplay>()!.Value >= 1);
+    }
+
+    [Fact]
+    public async Task Contraption_EveryPropTheToolsList_IsAPrefab()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var game = NewGame(project, scene, input, registry);
+        var props = scene.Entities.Select(e => e.GetComponent<SandboxTools>()).OfType<SandboxTools>().Single().PropList;
+
+        Assert.Equal(13, props.Count);
+        Assert.All(props, p => Assert.Equal(p, game.PrefabLoader!(p).Name));
     }
 
     private static Game NewGame(Project project, Scene scene, InputState input, ComponentRegistry registry) =>

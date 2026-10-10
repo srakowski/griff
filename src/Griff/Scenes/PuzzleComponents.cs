@@ -155,6 +155,9 @@ public sealed class Inventory : Component
     /// <summary>Raised when what it holds changes, with the item's name.</summary>
     public event Action<string>? Changed;
 
+    /// <summary>Everything it holds and how many, in the order each was first added.</summary>
+    public IReadOnlyList<(string Name, int Count)> Contents => _items.ToList();
+
     /// <summary>How many of <paramref name="item"/> it holds (names ignore case).</summary>
     public int Count(string item) => IndexOf(item) is var i and >= 0 ? _items[i].Count : 0;
 

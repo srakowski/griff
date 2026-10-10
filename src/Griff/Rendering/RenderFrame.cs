@@ -143,6 +143,7 @@ public static partial class SceneRenderer
         var strategy = game is not null && game.Rts.IsActive;
         if (strategy)
             sprites = WithStrategy(game!, sprites, camera, view.Center, view.Half, size);
+        sprites = WithSandbox(scene, game, sprites, camera, view, size);
 
         // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched.
         var ambient = component?.CurrentAmbient ?? Color.White;
@@ -219,6 +220,9 @@ public static partial class SceneRenderer
                 draw = draw with { Casters = Shadows.CastersFor(edges ??= Shadows.Edges(scene), light) };
             yield return draw;
         }
+
+        foreach (var glow in GlowDraws(scene))
+            yield return glow;
     }
 
     // Pinned to the screen: a ScreenAnchor on the entity or any ancestor (HUDs, menus, dialogue boxes), or riding along
@@ -422,7 +426,7 @@ public static partial class SceneRenderer
     {
         var parallax = ParallaxOf(entity);
         if (parallax is null)
-            return Shaken(entity, Draws(entity));
+            return Shaken(entity, Draws(entity, (View?)view));
 
         var shift = parallax.OffsetFor(view.Center);
         var draws = Draws(entity).Select(d => d with { World = d.World * Matrix4x4.CreateTranslation(shift.X, shift.Y, 0) });
@@ -442,6 +446,36 @@ public static partial class SceneRenderer
         return list.SelectMany((d, i) => i >= sprite && i < sprite + pieces
             ? offsets.Select(o => d with { World = d.World * Matrix4x4.CreateTranslation(o.X, o.Y, 0) })
             : [d]);
+    }
+
+    // The cells of a map inside a view (and a cell around it), row by row.
+    private static IEnumerable<(int X, int Y, int Tile)> CellsIn(Tilemap tilemap, Matrix4x4 world, View view)
+    {
+        if (!Matrix4x4.Invert(world, out var toLocal) || !(tilemap.TileSize > 0))
+        {
+            foreach (var cell in tilemap.Cells())
+                yield return cell;
+            yield break;
+        }
+
+        var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
+        foreach (var corner in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(1, 1), new Vector2(-1, 1) })
+        {
+            var local = Vector2.Transform(view.Center + corner * view.Half, toLocal);
+            (min, max) = (Vector2.Min(min, local), Vector2.Max(max, local));
+        }
+
+        var size = tilemap.TileSize;
+        var (fromX, toX) = (Math.Max(0, (int)MathF.Floor(min.X / size) - 1), Math.Min(tilemap.Width - 1, (int)MathF.Floor(max.X / size) + 1));
+        var (fromY, toY) = (Math.Max(0, (int)MathF.Floor(-max.Y / size) - 1), Math.Min(tilemap.Height - 1, (int)MathF.Floor(-min.Y / size) + 1));
+        for (var y = fromY; y <= toY; y++)
+        {
+            for (var x = fromX; x <= toX; x++)
+            {
+                if (tilemap.GetTile(x, y) is var tile and >= 0)
+                    yield return (x, y, tile);
+            }
+        }
     }
 
     // A crumbling platform about to go is drawn shaken off its place (with whatever is inside it); its collider stays put.
@@ -494,13 +528,14 @@ public static partial class SceneRenderer
 
     // An entity with several draws its tilemap, then its trail and sprite, its bar or slider, its text, and its particles on top.
     // A button shades its own sprite and text to show it's under the mouse or held.
-    private static IEnumerable<SpriteDraw> Draws(Entity entity)
+    // With a view, a tilemap draws only the tiles in it: a big world doesn't draw all of itself every frame.
+    private static IEnumerable<SpriteDraw> Draws(Entity entity, View? cull = null)
     {
         var button = entity.GetComponent<Button>();
 
         if (entity.GetComponent<Tilemap>() is { } tilemap)
         {
-            foreach (var draw in TileDraws(entity, tilemap))
+            foreach (var draw in TileDraws(entity, tilemap, cull))
                 yield return draw;
         }
 
@@ -586,12 +621,14 @@ public static partial class SceneRenderer
     }
 
     /// <summary>One quad per tile, in the tilemap's space. Without an image, tiles are solid squares of the tint.</summary>
-    public static IEnumerable<SpriteDraw> TileDraws(Entity entity, Tilemap tilemap)
+    public static IEnumerable<SpriteDraw> TileDraws(Entity entity, Tilemap tilemap) => TileDraws(entity, tilemap, null);
+
+    private static IEnumerable<SpriteDraw> TileDraws(Entity entity, Tilemap tilemap, View? cull)
     {
         var world = entity.Transform.WorldMatrix;
         var size = Matrix4x4.CreateScale(tilemap.TileSize, tilemap.TileSize, 1);
         var image = string.IsNullOrEmpty(tilemap.Image) ? null : tilemap.Image;
-        foreach (var (x, y, tile) in tilemap.Cells())
+        foreach (var (x, y, tile) in cull is { } view ? CellsIn(tilemap, world, view) : tilemap.Cells())
         {
             var center = tilemap.CellCenter(x, y);
             var matrix = size * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;

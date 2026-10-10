@@ -147,6 +147,11 @@ public class TilemapTests
         map.TileSize = 2;
         map.Tiles = ["0.", ".1"];
         scene.Add(entity);
+        // Only what's in view is drawn, so the camera looks at the map.
+        var camera = new Entity("Camera");
+        camera.Transform.Position = new Vector3(12, -2, 0);
+        camera.AddComponent<Camera>();
+        scene.Add(camera);
 
         var draws = SceneRenderer.Build(scene, 1).Sprites;
 

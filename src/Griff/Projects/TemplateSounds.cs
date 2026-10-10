@@ -21,6 +21,8 @@ internal static class TemplateSounds
     public const string Spring = "Sounds/spring.wav";
     public const string Select = "Sounds/select.wav";
     public const string Switch = "Sounds/switch.wav";
+    public const string Dig = "Sounds/dig.wav";
+    public const string Place = "Sounds/place.wav";
     public const string Music = "Music/theme.wav";
 
     // Each sound is the first of its kind (counting seeds up from its own) short enough to suit it.
@@ -38,6 +40,8 @@ internal static class TemplateSounds
         (Spring, SoundPreset.Jump, 14, 0.45f, 0.55f),
         (Select, SoundPreset.Blip, 1, 0.15f, 0.45f),
         (Switch, SoundPreset.Blip, 9, 0.2f, 0.5f),
+        (Dig, SoundPreset.Hit, 40, 0.15f, 0.3f),
+        (Place, SoundPreset.Blip, 13, 0.15f, 0.4f),
     ];
 
     /// <summary>The sound files for a template (relative to Assets), as WAV bytes.</summary>
@@ -64,6 +68,8 @@ internal static class TemplateSounds
         ProjectTemplate.Arcade => MusicRecipe.ForMood(MusicMood.Tense, seed: 2) with { Volume = 0.7f },
         ProjectTemplate.Strategy => MusicRecipe.ForMood(MusicMood.Heroic, seed: 5) with { Volume = 0.6f },
         ProjectTemplate.Shooter => MusicRecipe.ForMood(MusicMood.Tense, seed: 8) with { Volume = 0.5f },
+        ProjectTemplate.Sandbox => MusicRecipe.ForMood(MusicMood.Chill, seed: 6) with { Volume = 0.55f },
+        ProjectTemplate.Contraption => MusicRecipe.ForMood(MusicMood.Bright, seed: 7) with { Volume = 0.5f },
         _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
     };
 
@@ -155,6 +161,20 @@ internal static class TemplateSounds
                     break;
                 case Choice ch:
                     Set(ch.Sound, s => ch.Sound = s, Select);
+                    break;
+                case Blocks b:
+                    Set(b.DigSound, s => b.DigSound = s, Dig);
+                    Set(b.BreakSound, s => b.BreakSound = s, Hit);
+                    Set(b.PlaceSound, s => b.PlaceSound = s, Place);
+                    break;
+                case Crafting c:
+                    Set(c.Sound, s => c.Sound = s, PowerUp);
+                    break;
+                case SandboxTools t:
+                    Set(t.Sound, s => t.Sound = s, Place);
+                    break;
+                case WireButton w:
+                    Set(w.Sound, s => w.Sound = s, Switch);
                     break;
             }
         }

@@ -75,6 +75,21 @@ public sealed class ComponentRegistry
         registry.Register<Weapon>();
         registry.Register<Billboard>();
         registry.Register<Block>();
+        registry.Register<WorldGenerator>();
+        registry.Register<Blocks>();
+        registry.Register<BlockBuilder>();
+        registry.Register<Hotbar>();
+        registry.Register<Crafting>();
+        registry.Register<SandboxTools>();
+        registry.Register<Weld>();
+        registry.Register<Rope>();
+        registry.Register<Thruster>();
+        registry.Register<WireGate>();
+        registry.Register<WireButton>();
+        registry.Register<WireSensor>();
+        registry.Register<WireLamp>();
+        registry.Register<WireDisplay>();
+        registry.Register<Wire>();
         return registry;
     }
 

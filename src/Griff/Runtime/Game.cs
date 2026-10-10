@@ -134,6 +134,7 @@ public sealed partial class Game
         foreach (var behavior in behaviors.Where(b => !b.IsStarted))
             behavior.RunStart(this);
 
+        StartWorlds();
         UpdateMenus();
         ApplySwitches();
 
@@ -149,6 +150,9 @@ public sealed partial class Game
                 behavior.RunUpdate();
         }
 
+        RunSandboxHud();
+        RunBlocks();
+        RunTools();
         RunStrategy();
         RunAttacks();
         RunTimers();
@@ -183,6 +187,8 @@ public sealed partial class Game
         RunTypewriters();
         RunPickupSpin();
 
+        RunThrusters();
+        GroupWelds();
         if (Time.Delta > 0)
         {
             Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
@@ -193,11 +199,14 @@ public sealed partial class Game
             }
         }
 
+        RunRopes();
+
         RunPickups();
         RunCheckpoints();
         RunDoors();
         RunDialogues();
         RunSwitches();
+        RunWiring();
         RunBouncers();
         RunCrumbles();
         RunTouchDamage();
@@ -530,6 +539,7 @@ public sealed partial class Game
         foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
         SaveSettings();
+        SaveWorlds();
         StopSoundSources();
         Audio.StopAll();
     }
@@ -617,6 +627,7 @@ public sealed partial class Game
         if (_pendingScene is not { } name)
             return;
         _pendingScene = null;
+        SaveWorlds();
 
         var next = SceneLoader!(name);
 
@@ -651,6 +662,8 @@ public sealed partial class Game
         ForgetPanelState();
         Rts = new StrategyState();
         Fps = new FirstPersonState();
+        Sandbox = new SandboxState();
+        Physics.Groups = [];
         StopSoundSources();
         _focus = null;
         SyncPanels();

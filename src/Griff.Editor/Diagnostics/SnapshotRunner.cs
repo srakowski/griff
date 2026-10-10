@@ -60,6 +60,17 @@ internal static partial class SnapshotRunner
                 return;
             }
 
+            if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") is "sandbox" or "contraption")
+            {
+                await workspace.SaveSceneAsync();
+                if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "sandbox")
+                    await SandboxSnapshots(services, main, workspace, projectDir, outputDir);
+                else
+                    await ContraptionSnapshots(services, main, workspace, projectDir, outputDir);
+                TryDelete(projectDir);
+                return;
+            }
+
             if (Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_ONLY") == "strategy")
             {
                 await workspace.SaveSceneAsync();

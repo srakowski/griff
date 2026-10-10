@@ -116,6 +116,25 @@ public sealed class Body : Component
     /// </summary>
     public float Bounciness { get; set; }
 
+    /// <summary>
+    /// How quickly it stops sliding along the ground, in world units per second lost each second: a crate shoved or
+    /// thrown comes to rest instead of gliding on. 0 (the default) keeps sliding; movement components steer bodies
+    /// themselves either way.
+    /// </summary>
+    public float Friction { get; set; }
+
+    /// <summary>
+    /// Holds it still where it is, like a wall: it doesn't fall or move, and other bodies bump into it. Untick it (or
+    /// grab it with <see cref="SandboxTools"/>) and it moves again. Welded to it, a whole contraption holds still.
+    /// </summary>
+    public bool Frozen { get; set; }
+
+    /// <summary>
+    /// How heavy it is, for pushes from a <see cref="Thruster"/> and for sharing movement with what it's welded or roped
+    /// to: a heavy crate drags a light balloon down, a light one is lifted. 1 is a crate.
+    /// </summary>
+    public float Mass { get; set; } = 1;
+
     /// <summary>True if the body rested on something below it during the last physics step.</summary>
     [DoNotSerialize]
     public bool IsGrounded { get; internal set; }
@@ -164,4 +183,11 @@ public sealed class Body : Component
     /// time, so a jump pressed a moment too late still happens. <c>if (body.WasGrounded(0.1f) &amp;&amp; Input.WasPressed("Jump"))</c>
     /// </summary>
     public bool WasGrounded(float seconds) => IsGrounded || (!RoseSinceGrounded && AirTime <= seconds);
+
+    /// <summary>Applies a push for one step: <paramref name="force"/> divided by its <see cref="Mass"/>, over <paramref name="seconds"/>.</summary>
+    public void Push(Vector2 force, float seconds)
+    {
+        if (!Frozen)
+            Velocity += force / Math.Max(0.01f, Mass) * seconds;
+    }
 }

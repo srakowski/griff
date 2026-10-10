@@ -32,7 +32,7 @@ build: standalone
 | Command | What it does |
 | --- | --- |
 | `title: <text>` / `intro: <text>` | The opening card's title and subtitle. |
-| `project: <Template> [\| <Name>]` | A fresh project from a template: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Strategy` or `Shooter`. |
+| `project: <Template> [\| <Name>]` | A fresh project from a template: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Strategy`, `Shooter`, `Sandbox` or `Contraption`. |
 | `open: <folder>` | A copy of an existing project (the original is never changed). |
 | `scene: <name>` | Open a scene by name. |
 | `chapter: <title> [\| <subtitle>]` | Start a chapter: a card, a dot on the control bar, a rewind point. |
@@ -74,15 +74,19 @@ build: standalone
 | `bindpad: <button>` | Add a gamepad button from Add Button's list, e.g. `bindpad: LB`, `bindpad: A`. |
 | `actionname: <text>` | Type a new name for the selected action (the game's own actions only). |
 | `expectcontrol: <action> = <binding>` | Fail unless project.griff gives the action that binding, e.g. `expectcontrol: Jump = W`. |
-| `gameclick: <x>, <y>` | Click a point in the running game's world (where its camera shows it now) with the real mouse. Fails if it's off screen or under a strategy HUD. |
+| `gameclick: <x>, <y>` | Click a point in the running game's world (where its camera shows it now) with the real mouse. Fails if it's off screen or under a HUD. Any game point can also be an entity's middle, `Crate`, or a point from it, `Player + 1.5, -1` (the camera follows the player, so this keeps pointing at the same spot). |
 | `mouselook: <x>[, <y>] <seconds>` | Move the real mouse by that many pixels (right and up are positive) over that long, e.g. `mouselook: 300 1`: turns a first-person game. Clicks the game first if it isn't holding the mouse yet. |
-| `gameorder: <x>, <y>` | Right-click a point in the running game's world: a strategy game's orders. |
-| `gamedrag: <x1>, <y1>, <x2>, <y2>` | Drag from one world point to another in the running game: a strategy game's selection box. |
+| `gameorder: <x>, <y>` | Right-click a point in the running game's world: a strategy game's orders, putting a block down. |
+| `gamehover: <point>` | Move the real mouse to a point in the running game, e.g. before `tap: E` presses a wire button under it. |
+| `gamehold: <point> \| <seconds> [\| right]` | Hold the left (or right) mouse button on a point in the running game: digging a block, e.g. `gamehold: Player + 0, -1.4 \| 0.8`. |
+| `gamebutton: [<kind>:]<label>` | Click a button on the sandbox HUD by its label: a hotbar slot, recipe, tool, prop or port, e.g. `gamebutton: tool:Spawn`, `gamebutton: recipe:Planks`. |
+| `gamedrag: <x1>, <y1>, <x2>, <y2>` | Drag from one world point to another in the running game: a strategy game's selection box, or carrying something with the grab tool (`gamedrag: Crate > Plate + 0, 1.5`). |
 | `minimap: <x>, <y>` | Click a strategy game's minimap where it shows a world point: moves the camera there, or sends units after `tap: A`. |
 | `minimaporder: <x>, <y>` | Right-click the minimap where it shows a world point: sends the selected units there, or sets a building's rally point. |
 | `ready: <building> \| <seconds>` | Wait (real time) until one of the player's buildings with that name is finished, e.g. `ready: Barracks \| 40`. |
 | `afford: <cost> \| <seconds>` | Wait (real time) until the player's team can pay for something, e.g. `afford: 180 Gold \| 60`. |
 | `have: <count> <name> \| <seconds>` | Wait (real time) until the player has at least that many units (or finished buildings) with that name, e.g. `have: 12 Soldier \| 120`. |
+| `waitgone: <entity> \| <seconds>` | Wait (real time) until no entity with that name shows in the running game, e.g. a wall a sensor opens. |
 | `waitfor: <entity> \| <seconds>` | Wait (real time) until an entity with that name shows in the running game, e.g. `waitfor: Victory \| 240`. |
 
 The waits that watch the running game fail when their time runs out, logging how each team stands every ten seconds
@@ -91,7 +95,7 @@ while they wait (`%TEMP%\griff-demos\demo.log`).
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
 `world:left,top,right,bottom` for a box in the Scene view, `gameworld:left,top,right,bottom` for a box in the running
-game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD.
+game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD, and `hud:hotbar`, `hud:crafting`, `hud:tools`, `hud:props` or `hud:ports` for a sandbox game's.
 In the component catalog: `catalog:button` (the
 Inspector's Catalog button), `catalog` (the window), `catalog:search`, `catalog:list`, `catalog:docs`,
 `catalog:requires`, `catalog:workswith`, `catalog:neededby`, `catalog:properties`, `catalog:plan`, `catalog:add`,

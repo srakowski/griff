@@ -213,14 +213,45 @@ public sealed class Physics
         return best;
     }
 
+    /// <summary>
+    /// Bodies welded together (see <see cref="Weld"/>), set by the game before each step: each group moves as one, with
+    /// one velocity shared by weight, and its members don't collide with each other. An anchored group (welded to
+    /// something without a body, or with a frozen member) holds still.
+    /// </summary>
+    internal IReadOnlyList<BodyGroup> Groups { get; set; } = [];
+
     internal void Step(Scene scene, float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
     {
         var colliders = ActiveColliders(scene).ToList();
         var solids = Shapes(scene, includeTriggers: false).ToList();
         _slopes = Slopes(scene).ToList();
+        var groups = new Dictionary<Body, BodyGroup>();
+        foreach (var group in Groups)
+        {
+            foreach (var member in group.Bodies)
+                groups[member] = group;
+        }
 
+        var moved = new HashSet<BodyGroup>();
         foreach (var body in scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
         {
+            if (groups.TryGetValue(body, out var group))
+            {
+                if (moved.Add(group))
+                    StepGroup(group, solids, dt, onCollision);
+                continue;
+            }
+
+            if (body.Frozen)
+            {
+                body.Velocity = Vector2.Zero;
+                body.IsGrounded = false;
+                body.Ground = null;
+                body.WallSide = 0;
+                EndStep(body, dt);
+                continue;
+            }
+
             var collider = body.Entity!.GetComponent<Collider>();
             if (!body.FloatThisStep)
                 body.Velocity += Gravity * body.GravityScale * dt;
@@ -246,6 +277,8 @@ public sealed class Physics
 
             MoveAxis(body, collider, solids, new Vector2(body.Velocity.X * dt, 0), onCollision);
             MoveAxis(body, collider, solids, new Vector2(0, body.Velocity.Y * dt), onCollision);
+            if (body.IsGrounded)
+                Rub(body, body.Friction, dt);
 
             // Walking down a slope, keep to it rather than skipping off into the air a little each step.
             if (wasGrounded && !body.IsGrounded && body.Velocity.Y <= 0 && _slopes.Count > 0)
@@ -261,6 +294,146 @@ public sealed class Physics
         _grounds = scene.Entities.Select(e => e.GetComponent<Body>()).OfType<Body>().Where(b => b.Ground is not null)
             .ToDictionary(b => b, b => (b.Ground!, PositionOf(b.Ground!)));
         UpdateTriggers(colliders, onTrigger);
+    }
+
+    // A welded group: gravity on each member, then one velocity for all (shared by weight, so a balloon lifts what it's
+    // welded to), moved together one axis at a time.
+    private void StepGroup(BodyGroup group, List<Shape> solids, float dt, Action<Entity, Entity> onCollision)
+    {
+        var members = group.Bodies.Where(b => b.Entity is not null && SceneRenderer.IsActive(b.Entity)).ToList();
+        foreach (var body in members)
+        {
+            body.IsGrounded = false;
+            body.Ground = null;
+            body.WallSide = 0;
+        }
+
+        if (group.Anchored || members.Any(b => b.Frozen))
+        {
+            foreach (var body in members)
+            {
+                body.Velocity = Vector2.Zero;
+                EndStep(body, dt);
+            }
+
+            return;
+        }
+
+        var momentum = Vector2.Zero;
+        var mass = 0f;
+        foreach (var body in members)
+        {
+            if (!body.FloatThisStep)
+                body.Velocity += Gravity * body.GravityScale * dt;
+            var weight = Math.Max(0.01f, body.Mass);
+            momentum += body.Velocity * weight;
+            mass += weight;
+        }
+
+        var velocity = mass > 0 ? momentum / mass : Vector2.Zero;
+        foreach (var body in members)
+            body.Velocity = velocity;
+
+        MoveGroupAxis(members, solids, new Vector2(velocity.X * dt, 0), onCollision, nudge: false);
+        MoveGroupAxis(members, solids, new Vector2(0, velocity.Y * dt), onCollision, nudge: false);
+        if (members.Any(b => b.IsGrounded))
+        {
+            var friction = members.Max(b => b.Friction);
+            foreach (var body in members)
+                Rub(body, friction, dt);
+        }
+
+        foreach (var body in members)
+            EndStep(body, dt);
+    }
+
+    // Sliding along the ground slows by `friction` units per second, every second, down to a stop.
+    private static void Rub(Body body, float friction, float dt)
+    {
+        if (!(friction > 0))
+            return;
+        var x = body.Velocity.X;
+        body.Velocity = body.Velocity with { X = MathF.Sign(x) * Math.Max(0, MathF.Abs(x) - friction * dt) };
+    }
+
+    /// <summary>
+    /// Moves <paramref name="bodies"/> together by a world-space delta, stopping where the first of them meets something
+    /// solid (not each other). Velocities are left alone and nothing is reported: for pulling things along a rope.
+    /// </summary>
+    internal void Nudge(Scene scene, IReadOnlyList<Body> bodies, Vector2 delta)
+    {
+        if (delta == Vector2.Zero || bodies.Count == 0)
+            return;
+        var solids = Shapes(scene, includeTriggers: false).ToList();
+        MoveGroupAxis(bodies, solids, new Vector2(delta.X, 0), (_, _) => { }, nudge: true);
+        MoveGroupAxis(bodies, solids, new Vector2(0, delta.Y), (_, _) => { }, nudge: true);
+    }
+
+    // Like MoveAxis for a group: everyone moves, then everyone is pushed back by the deepest overlap any of them made.
+    private static void MoveGroupAxis(IReadOnlyList<Body> members, List<Shape> solids, Vector2 delta, Action<Entity, Entity> onCollision, bool nudge)
+    {
+        if (delta == Vector2.Zero)
+            return;
+        var axis = delta.X != 0 ? 0 : 1;
+        var sign = MathF.Sign(axis == 0 ? delta.X : delta.Y);
+        foreach (var body in members)
+            Translate(body.Entity!, delta);
+
+        var push = 0f;
+        var touched = new List<(Entity Member, Entity Solid)>();
+        Entity? ground = null;
+        foreach (var body in members)
+        {
+            if (body.Entity!.GetComponent<Collider>() is not { IsTrigger: false } collider)
+                continue;
+            var area = Area.Of(collider);
+            var bottomBefore = area.Bounds.Min.Y - delta.Y;
+            var filter = LayerFilter.Of(collider);
+            foreach (var solid in solids)
+            {
+                if (members.Any(m => solid.Entity.IsSelfOrDescendantOf(m.Entity!)) || filter.IgnoresEachOther(solid.Filter))
+                    continue;
+                var other = solid.Area;
+                if (!area.Overlaps(other, CircleSkin))
+                    continue;
+                if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f || body.IsDroppingThrough))
+                    continue;
+                var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis);
+                var back = target - Component(area.Center, axis);
+                if (back * sign > 0)
+                    continue; // Already overlapping from the far side: not something this move ran into.
+                if (MathF.Abs(back) > MathF.Abs(push))
+                    push = back;
+                touched.Add((body.Entity, solid.Entity));
+                if (axis == 1 && sign < 0)
+                    ground = solid.Entity;
+            }
+        }
+
+        if (push != 0)
+        {
+            foreach (var body in members)
+                Translate(body.Entity!, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
+        }
+
+        if (nudge || touched.Count == 0)
+            return;
+        var bounciness = members.Min(b => Math.Clamp(b.Bounciness, 0, 1));
+        foreach (var body in members)
+        {
+            var velocity = body.Velocity;
+            var speed = (axis == 0 ? velocity.X : velocity.Y) * -bounciness;
+            if (MathF.Abs(speed) < SettleSpeed)
+                speed = 0;
+            body.Velocity = axis == 0 ? velocity with { X = speed } : velocity with { Y = speed };
+            if (axis == 1 && sign < 0)
+                (body.IsGrounded, body.Ground) = (true, ground);
+            else if (axis == 0)
+                body.WallSide = sign;
+        }
+
+        foreach (var (member, solid) in touched)
+            onCollision(member, solid);
     }
 
     // Movement's requests last one step; dropping through platforms lasts its time.
@@ -797,4 +970,13 @@ public sealed class Physics
             return (enter, normal);
         }
     }
+}
+
+/// <summary>Bodies welded into one; see <see cref="Physics.Groups"/>.</summary>
+internal sealed class BodyGroup(IReadOnlyList<Body> bodies, bool anchored)
+{
+    public IReadOnlyList<Body> Bodies { get; } = bodies;
+
+    /// <summary>Welded to something without a body (a wall, the ground): the whole group holds still.</summary>
+    public bool Anchored { get; } = anchored;
 }

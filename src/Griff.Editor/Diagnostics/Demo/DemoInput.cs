@@ -91,8 +91,18 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         await Pause(160);
     }
 
+    /// <summary>Presses a mouse button where the cursor is (with a ripple there) and keeps it down until <see cref="Release"/>.</summary>
+    public void Press(Point at, bool right = false)
+    {
+        overlay.Ripple(at);
+        Mouse(right ? RightDown : LeftDown);
+    }
+
+    public void Release(bool right = false) => Mouse(right ? RightUp : LeftUp);
+
     /// <summary>Presses at <paramref name="from"/> and drags through <paramref name="path"/>, releasing at the end.</summary>
-    public async Task Drag(Point from, IReadOnlyList<Point> path, double msPerSegment = 350)
+    /// <param name="holdMs">Real milliseconds to keep the button down at the end, for a running game to catch up.</param>
+    public async Task Drag(Point from, IReadOnlyList<Point> path, double msPerSegment = 350, int holdMs = 60)
     {
         await MoveTo(from);
         await Pause(80);
@@ -101,7 +111,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         await Task.Delay(60);
         foreach (var point in path)
             await MoveTo(point, msPerSegment);
-        await Task.Delay(60);
+        await Task.Delay(holdMs);
         Mouse(LeftUp);
         await Pause(150);
     }

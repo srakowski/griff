@@ -12,6 +12,7 @@ namespace Griff.Scenes;
 /// <c>0-9</c>, <c>a-z</c>, <c>A-Z</c> pick tiles 0–61 of the sheet. Rows are saved one per line, so levels diff
 /// line by line in git.
 /// </remarks>
+[Category("Rendering")]
 [ComponentName("Tilemap")]
 public sealed class Tilemap : Component
 {

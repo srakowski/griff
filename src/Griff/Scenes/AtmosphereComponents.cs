@@ -20,6 +20,7 @@ public enum SceneTransition
 /// where the <see cref="Camera"/>'s <see cref="Camera.Ambient"/> is darker than white; there, everything within
 /// <see cref="Radius"/> is lit by its <see cref="Color"/>, brightest in the middle. Where lights overlap they add up.
 /// </summary>
+[Category("Rendering")]
 [ComponentName("Griff.Light")]
 public sealed class Light : Component
 {
@@ -106,6 +107,7 @@ public sealed class Light : Component
 /// A room is a box of <see cref="Size"/> centered on its entity. Make rooms at least as big as the camera's view; where
 /// they overlap, the one listed first wins. Out of every room (a gap between them), the camera keeps to the last one.
 /// </remarks>
+[Category("Level")]
 [ComponentName("Griff.Room")]
 public sealed class Room : Component
 {
@@ -156,6 +158,7 @@ public sealed class Room : Component
 /// close to the middle of the screen and fades out by <see cref="Range"/>, and comes from the left or the right speaker as
 /// it's to that side. A <see cref="Switch"/> turns it on and off.
 /// </summary>
+[Category("Audio")]
 [ComponentName("Griff.SoundSource")]
 public sealed class SoundSource : Component
 {

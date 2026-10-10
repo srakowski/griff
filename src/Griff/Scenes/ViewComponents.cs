@@ -8,6 +8,8 @@ namespace Griff.Scenes;
 /// on the camera and name the <see cref="Target"/>. With <see cref="StayInside"/>, a camera never shows past the edges
 /// of the level. Applied while the game runs, after physics, so it follows where things ended up this frame.
 /// </summary>
+[Category("Movement")]
+[WorksWith(typeof(Camera), Note = "a camera that follows the player")]
 [ComponentName("Follow")]
 public sealed class Follow : Component
 {
@@ -236,6 +238,8 @@ public sealed class Follow : Component
 /// Applied when the game is drawn, so it never changes the entity's transform: colliders, buttons and the Scene view
 /// all use where the transform puts it. The layer is drawn exactly there when the camera is at the world's origin.
 /// </remarks>
+[Category("Rendering")]
+[WorksWith(typeof(Sprite), Note = "to repeat a strip of background")]
 [ComponentName("Parallax")]
 public sealed class Parallax : Component
 {

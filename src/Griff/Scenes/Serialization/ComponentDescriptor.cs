@@ -15,6 +15,9 @@ public sealed class ComponentDescriptor
         Name = type.GetCustomAttribute<ComponentNameAttribute>()?.Name ?? type.FullName!;
         DisplayName = type.Name;
         Properties = DiscoverProperties(type);
+        Category = type.GetCustomAttribute<CategoryAttribute>()?.Name;
+        Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
+        WorksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
     }
 
     public Type Type { get; }
@@ -27,6 +30,15 @@ public sealed class ComponentDescriptor
 
     /// <summary>Saved, editable properties in declaration order (base class first).</summary>
     public IReadOnlyList<PropertyDescriptor> Properties { get; }
+
+    /// <summary>Where the editor's catalog lists it, from <see cref="CategoryAttribute"/>; null if it doesn't say.</summary>
+    public string? Category { get; }
+
+    /// <summary>Components it needs on the same entity, from <see cref="RequiresAttribute"/>.</summary>
+    public IReadOnlyList<ComponentLink> Requires { get; }
+
+    /// <summary>Components that go well with it, from <see cref="WorksWithAttribute"/>.</summary>
+    public IReadOnlyList<ComponentLink> WorksWith { get; }
 
     public Component CreateInstance() => (Component)Activator.CreateInstance(Type)!;
 
@@ -63,6 +75,16 @@ public sealed class ComponentDescriptor
     }
 }
 
+/// <summary>
+/// A component type another one needs or works with, plus a note on why. <see cref="Type"/> may be a base type such as
+/// <see cref="Collider"/>, which any kind of it satisfies.
+/// </summary>
+public sealed record ComponentLink(Type Type, string? Note)
+{
+    /// <summary>True if <paramref name="entity"/> has a component of this type (or a subtype).</summary>
+    public bool IsMetBy(Entity entity) => entity.Components.Any(c => Type.IsInstanceOfType(c));
+}
+
 public sealed class PropertyDescriptor
 {
     private readonly PropertyInfo _property;
@@ -72,6 +94,8 @@ public sealed class PropertyDescriptor
         _property = property;
         SerializedName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
     }
+
+    internal PropertyInfo Info => _property;
 
     public string Name => _property.Name;
 

@@ -51,6 +51,8 @@ public static class CollisionLayers
 /// An axis-aligned box for collisions, centered on the entity (plus <see cref="Offset"/>) and scaled by its transform.
 /// Rotation is ignored. Without a <see cref="Body"/> the box is static: walls, floors, platforms.
 /// </summary>
+[Category("Physics")]
+[WorksWith(typeof(Body), Note = "to make it move and fall")]
 [ComponentName("BoxCollider")]
 public sealed class BoxCollider : Collider
 {
@@ -76,6 +78,8 @@ public sealed class BoxCollider : Collider
 /// transform's X and Y scale, so it stays round. Good for balls, coins, bullets and round enemies.
 /// </summary>
 /// <remarks>Circle bodies don't roll: one resting on a corner stays balanced there.</remarks>
+[Category("Physics")]
+[WorksWith(typeof(Body), Note = "to make it move and fall")]
 [ComponentName("CircleCollider")]
 public sealed class CircleCollider : Collider
 {
@@ -95,6 +99,8 @@ public sealed class CircleCollider : Collider
 }
 
 /// <summary>Makes an entity with a <see cref="Collider"/> move under velocity and gravity and collide with solids.</summary>
+[Category("Physics")]
+[Requires(typeof(Collider), Note = "the shape that collides")]
 [ComponentName("Body")]
 public sealed class Body : Component
 {

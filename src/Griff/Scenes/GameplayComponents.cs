@@ -8,6 +8,8 @@ namespace Griff.Scenes;
 /// entity can't be hurt again for <see cref="InvincibleTime"/>, flashing and blinking to show it. At zero it dies: its
 /// behaviors hear <c>OnDeath</c>, the <see cref="DeathMessage"/> is sent, and it's destroyed.
 /// </summary>
+[Category("Combat")]
+[WorksWith(typeof(Bar), Note = "a health bar (on another entity)")]
 [ComponentName("Griff.Health")]
 public sealed class Health : Component
 {
@@ -195,6 +197,8 @@ public sealed class Health : Component
 /// collisions and triggers, and keeps hurting while they stay touching (each hit still waits out the target's
 /// <see cref="Health.InvincibleTime"/>). Needs a collider on the same entity.
 /// </summary>
+[Category("Combat")]
+[Requires(typeof(Collider))]
 [ComponentName("Griff.DamageOnTouch")]
 public sealed class DamageOnTouch : Component
 {
@@ -229,6 +233,9 @@ public sealed class DamageOnTouch : Component
 /// up), plays its <see cref="Sound"/>, spawns its <see cref="Effect"/> and disappears. Needs a collider on the same entity,
 /// usually a trigger.
 /// </summary>
+[Category("Gameplay")]
+[Requires(typeof(Collider), Note = "usually a trigger")]
+[WorksWith(typeof(Counter), Note = "adds up what's collected (on another entity)")]
 [ComponentName("Griff.Pickup")]
 public sealed class Pickup : Component
 {
@@ -281,6 +288,8 @@ public sealed class Pickup : Component
 /// adds to it (the number sent along, or 1), so it adds up <see cref="Pickup"/>s with no code; scripts can call
 /// <see cref="Add"/>. With <see cref="SaveBestAs"/> it remembers the highest count ever, between runs.
 /// </summary>
+[Category("Gameplay")]
+[WorksWith(typeof(Text), Note = "shows the count")]
 [ComponentName("Griff.Counter")]
 public sealed class Counter : Component
 {
@@ -348,6 +357,7 @@ public sealed class Counter : Component
 }
 
 /// <summary>Destroys its entity after <see cref="Seconds"/> of game time, optionally fading it out first: bullets, effects, popups.</summary>
+[Category("Gameplay")]
 [ComponentName("Griff.Lifetime")]
 public sealed class Lifetime : Component
 {
@@ -367,6 +377,7 @@ public sealed class Lifetime : Component
 /// Spawns copies of a prefab every <see cref="Interval"/> seconds at its position, with no code: enemy waves, falling
 /// rocks, collectibles that come back. Limit it with <see cref="Count"/> and <see cref="MaxAlive"/>.
 /// </summary>
+[Category("Gameplay")]
 [ComponentName("Griff.Spawner")]
 public sealed class Spawner : Component
 {
@@ -444,6 +455,8 @@ public sealed class Spawner : Component
 /// Types out its entity's <see cref="Text"/> a letter at a time, for dialogue and story cards. Whenever a script sets the
 /// text's Value, the new text types out from the start. Runs on real time, so it works in a paused game.
 /// </summary>
+[Category("Story")]
+[Requires(typeof(Text), Note = "the text it types out")]
 [ComponentName("Griff.Typewriter")]
 public sealed class Typewriter : Component
 {

@@ -43,6 +43,8 @@ build: standalone
 | `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |
+| `catalog` | Open the component catalog with the Inspector's Catalog button. |
+| `browse: <Component>` | Open the catalog (if needed), search for a component and pick it, e.g. `browse: Patrol`. `click: catalog:add` adds it. |
 | `set: <Component>.<Field> = <value>` | Type into the Inspector. Any field: numbers, text, colors, checkboxes (`true`/`false`), choices, tile rows (`\n` between rows). Vectors take `x, y` or one axis: `set: Transform.Position.Y = 2`. Field names as shown (`Jump Height`) or as in code (`JumpHeight`). |
 | `spot: <target> [\| <label>]` / `unspot` | Spotlight something until the next spot or `unspot`. |
 | `explain: <target> \| <label> \| <text>` | Spotlight something while saying `<text>`. |
@@ -58,6 +60,10 @@ build: standalone
 
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
-`world:left,top,right,bottom` for a box in the Scene view.
+`world:left,top,right,bottom` for a box in the Scene view. In the component catalog: `catalog:button` (the
+Inspector's Catalog button), `catalog` (the window), `catalog:search`, `catalog:list`, `catalog:docs`,
+`catalog:requires`, `catalog:workswith`, `catalog:neededby`, `catalog:properties`, `catalog:plan`, `catalog:add`,
+`catalog:close`, `catalog:item:Body` (a row in the list), `catalog:link:Body` (a link in the details) and
+`catalog:property:Jump Height`.
 
 Keep a demo to a few minutes: show the change working, the way someone would use it, and say why it matters.

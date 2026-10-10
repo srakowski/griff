@@ -22,6 +22,7 @@ public enum MoverMode
 /// offsets from where it's placed, e.g. "4 0" (four units right and back) or "4 0; 4 3" (right, then up). Bodies standing
 /// on it ride along. The Scene view draws the path.
 /// </summary>
+[Category("Movement")]
 [ComponentName("Griff.Mover")]
 public sealed class Mover : Component
 {
@@ -172,6 +173,10 @@ public sealed class Mover : Component
 /// basic enemy. Needs a <see cref="Body"/> and a collider. With a <see cref="Chase"/> too, it patrols until it spots its
 /// target.
 /// </summary>
+[Category("Movement")]
+[Requires(typeof(Body))]
+[Requires(typeof(Collider))]
+[WorksWith(typeof(Chase), Note = "patrols until it spots its target")]
 [ComponentName("Griff.Patrol")]
 public sealed class Patrol : Component
 {
@@ -203,6 +208,9 @@ public sealed class Patrol : Component
 /// body with gravity it only runs left and right; without gravity it heads straight for the target, or around walls with
 /// <see cref="Around"/>. Needs a <see cref="Body"/>.
 /// </summary>
+[Category("Movement")]
+[Requires(typeof(Body))]
+[WorksWith(typeof(Patrol), Note = "patrols until it spots its target")]
 [ComponentName("Griff.Chase")]
 public sealed class Chase : Component
 {
@@ -263,6 +271,7 @@ public sealed class Chase : Component
 /// <see cref="Action"/>). Each shot's <see cref="Body"/> is sent off at <see cref="Speed"/> and it's turned to face the way
 /// it's going.
 /// </summary>
+[Category("Combat")]
 [ComponentName("Griff.Shooter")]
 public sealed class Shooter : Component
 {
@@ -352,6 +361,8 @@ public sealed class Shooter : Component
 /// checkpoint, and a <see cref="Health"/> with <see cref="Health.Respawn"/> comes back here after dying. Needs a collider,
 /// usually a trigger.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Collider), Note = "usually a trigger")]
 [ComponentName("Griff.Checkpoint")]
 public sealed class Checkpoint : Component
 {
@@ -394,6 +405,8 @@ public sealed class Checkpoint : Component
 /// teleporter to the <see cref="Target"/> entity in this one. It's used on touch, or with the Interact action while
 /// touching it when <see cref="NeedsInteract"/> is on. Needs a collider, usually a trigger.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Collider), Note = "usually a trigger")]
 [ComponentName("Griff.Door")]
 public sealed class Door : Component
 {
@@ -458,6 +471,8 @@ public enum DialogueStart
 /// line being typed, then moves on. The <see cref="Box"/> is shown while talking and hidden otherwise; put a
 /// <see cref="Typewriter"/> next to its text to type the lines out. Needs a collider, usually a trigger.
 /// </summary>
+[Category("Story")]
+[Requires(typeof(Collider), Note = "usually a trigger")]
 [ComponentName("Griff.Dialogue")]
 public sealed class Dialogue : Component
 {

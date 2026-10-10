@@ -1,0 +1,368 @@
+<controls:ChromeWindow x:Class="Griff.Editor.Features.Inspector.ComponentCatalogWindow"
+                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                       xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
+                       xmlns:editing="clr-namespace:Griff.Editing;assembly=Griff"
+                       xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                       xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+                       xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                       mc:Ignorable="d"
+                       d:DataContext="{d:DesignInstance Type=inspector:ComponentCatalogViewModel}"
+                       Title="Component Catalog"
+                       Width="980"
+                       Height="680"
+                       MinWidth="640"
+                       MinHeight="420"
+                       ShowInTaskbar="False"
+                       WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="Visible" />
+        <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
+
+        <!-- A heading over one part of the details -->
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
+            <Setter Property="Margin" Value="0,20,0,8" />
+        </Style>
+
+        <!-- A small rounded label: the category, "Script" -->
+        <Style x:Key="Chip" TargetType="Border">
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Small}" />
+            <Setter Property="Background" Value="{DynamicResource Brush.Control.Background}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- A component name that jumps to it in the catalog -->
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Status.Info}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <TextBlock x:Name="Label" Text="{TemplateBinding Content}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource Brush.Surface.Panel}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" MinWidth="220" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- The list: search, then components by category -->
+        <DockPanel>
+            <Grid Margin="12,12,12,8" DockPanel.Dock="Top">
+                <TextBox x:Name="SearchBox"
+                         Padding="24,0,6,0"
+                         PreviewKeyDown="OnSearchKeyDown"
+                         Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Search names and descriptions" />
+                <TextBlock Margin="8,0,0,0"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource Brush.Text.Tertiary}"
+                           IsHitTestVisible="False"
+                           Style="{StaticResource Style.Icon}"
+                           FontSize="{StaticResource IconSize.Small}"
+                           Text="{x:Static theme:Icons.Search}" />
+                <TextBlock Margin="25,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource Brush.Text.Tertiary}"
+                           IsHitTestVisible="False"
+                           Text="Search components"
+                           Visibility="{Binding Text.IsEmpty, ElementName=SearchBox, Converter={StaticResource Visible}}" />
+            </Grid>
+
+            <Grid>
+                <ListBox x:Name="ComponentList"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ItemsSource="{Binding View}"
+                         MouseDoubleClick="OnListDoubleClick"
+                         PreviewKeyDown="OnListKeyDown"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectedItem="{Binding Selected}"
+                         VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="12,12,12,4">
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Style.Text.Caption}" Text="{Binding ItemCount}" />
+                                        <TextBlock Style="{StaticResource Style.Text.Overline}" Text="{Binding Name}" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="inspector:CatalogItem">
+                            <StackPanel Margin="4,4,4,5">
+                                <DockPanel>
+                                    <Border Margin="6,0,0,0"
+                                            DockPanel.Dock="Right"
+                                            Style="{StaticResource Chip}"
+                                            Visibility="{Binding IsScript, Converter={StaticResource Visible}}">
+                                        <TextBlock Style="{StaticResource Style.Text.Caption}" Text="Script" />
+                                    </Border>
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                </DockPanel>
+                                <TextBlock Margin="0,2,0,0"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Text="{Binding Blurb}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <StackPanel Margin="0,2,0,0" Orientation="Horizontal" Visibility="{Binding HasRequirements, Converter={StaticResource Visible}}">
+                                    <TextBlock Margin="0,1,4,0"
+                                               Foreground="{DynamicResource Brush.Status.Info}"
+                                               Style="{StaticResource Style.Icon}"
+                                               FontSize="10"
+                                               Text="{x:Static theme:Icons.Link}" />
+                                    <TextBlock Foreground="{DynamicResource Brush.Status.Info}" Style="{StaticResource Style.Text.Caption}" Text="{Binding NeedsText}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock Margin="12,16"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Top"
+                           Style="{StaticResource Style.Text.Caption}"
+                           Text="No components match."
+                           Visibility="{Binding HasResults, Converter={StaticResource Hidden}}" />
+            </Grid>
+        </DockPanel>
+
+        <GridSplitter Grid.Column="1"
+                      Width="1"
+                      HorizontalAlignment="Stretch"
+                      Background="{DynamicResource Brush.Border.Subtle}" />
+
+        <!-- The selected component -->
+        <DockPanel Grid.Column="2" Background="{DynamicResource Brush.Surface.Document}">
+            <Border Padding="20,12"
+                    Background="{DynamicResource Brush.Surface.PanelHeader}"
+                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                    BorderThickness="0,1,0,0"
+                    DockPanel.Dock="Bottom">
+                <DockPanel>
+                    <StackPanel Margin="16,0,0,0" DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button x:Name="CloseButton" MinWidth="88" Click="OnClose" Content="Close" IsCancel="True" />
+                        <Button x:Name="AddButton"
+                                MinWidth="120"
+                                Margin="8,0,0,0"
+                                Click="OnAdd"
+                                IsDefault="True"
+                                IsEnabled="{Binding CanAdd}"
+                                Style="{StaticResource Style.Button.Primary}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Add}" />
+                                <TextBlock Margin="6,0,0,0" Text="{Binding AddLabel}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock x:Name="PlanText"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource Style.Text.Secondary}"
+                               Text="{Binding PlanText}"
+                               TextWrapping="Wrap" />
+                </DockPanel>
+            </Border>
+
+            <Grid>
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Style.Text.Caption}"
+                       Text="Pick a component to read about it." />
+            <ScrollViewer x:Name="DetailsScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer" BasedOn="{StaticResource {x:Type ScrollViewer}}">
+                        <Setter Property="Background" Value="{DynamicResource Brush.Surface.Document}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Details}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+                <StackPanel x:Name="DetailsPanel" MaxWidth="760" Margin="24,20,24,24" HorizontalAlignment="Left" DataContext="{Binding Details}">
+                    <!-- Name and category -->
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Text.Display}" Text="{Binding Name}" />
+                        <Border Margin="12,4,0,0" Style="{StaticResource Chip}">
+                            <TextBlock Style="{StaticResource Style.Text.Caption}" Text="{Binding Category}" />
+                        </Border>
+                        <Border Margin="6,4,0,0" Style="{StaticResource Chip}" Visibility="{Binding IsScript, Converter={StaticResource Visible}}">
+                            <TextBlock Style="{StaticResource Style.Text.Caption}" Text="Script" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- What it does -->
+                    <inspector:DocView x:Name="SummaryDoc"
+                                       Margin="0,12,0,0"
+                                       Doc="{Binding Summary}"
+                                       NavigateCommand="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                       TextElement.FontSize="{StaticResource FontSize.Subtitle}" />
+
+                    <!-- Requires -->
+                    <StackPanel x:Name="RequiresSection" Visibility="{Binding HasRequirements, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Heading}" Text="Requires" />
+                        <TextBlock Margin="0,0,0,8" Style="{StaticResource Style.Text.Caption}" Text="It only works with these on the same entity. Adding it adds any that are missing." TextWrapping="Wrap" />
+                        <ItemsControl ItemsSource="{Binding Requirements}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="inspector:RequirementRow">
+                                    <Border Margin="0,0,0,6"
+                                            Padding="10,8"
+                                            Background="{DynamicResource Brush.Surface.Panel}"
+                                            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource Radius.Medium}">
+                                        <DockPanel>
+                                            <StackPanel x:Name="Status" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock x:Name="StatusIcon"
+                                                           Margin="0,1,6,0"
+                                                           Style="{StaticResource Style.Icon}"
+                                                           FontSize="{StaticResource IconSize.Small}" />
+                                                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" />
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding Target}"
+                                                            Content="{Binding Name}"
+                                                            Style="{StaticResource LinkButton}"
+                                                            ToolTip="Show it in the catalog" />
+                                                    <TextBlock x:Name="Note" Margin="8,0,0,0" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Note}" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="Options" Margin="0,2,0,0" Style="{StaticResource Style.Text.Caption}" Text="{Binding Options}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Note}" Value="{x:Null}">
+                                            <Setter TargetName="Note" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Options}" Value="{x:Null}">
+                                            <Setter TargetName="Options" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Met">
+                                            <Setter TargetName="StatusIcon" Property="Text" Value="{x:Static theme:Icons.CheckMark}" />
+                                            <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
+                                            <Setter TargetName="StatusText" Property="Foreground" Value="{DynamicResource Brush.Status.Success}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="WillAdd">
+                                            <Setter TargetName="StatusIcon" Property="Text" Value="{x:Static theme:Icons.Add}" />
+                                            <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                                            <Setter TargetName="StatusText" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Unknown">
+                                            <Setter TargetName="Status" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Works with -->
+                    <StackPanel x:Name="WorksWithSection" Visibility="{Binding HasWorksWith, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Heading}" Text="Works well with" />
+                        <ItemsControl ItemsSource="{Binding WorksWith}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="inspector:LinkRow">
+                                    <StackPanel Margin="0,0,0,4" Orientation="Horizontal">
+                                        <TextBlock Margin="0,0,8,0" Text="•" Style="{StaticResource Style.Text.Secondary}" />
+                                        <Button Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding Target}"
+                                                Content="{Binding Name}"
+                                                Style="{StaticResource LinkButton}"
+                                                ToolTip="Show it in the catalog" />
+                                        <TextBlock Margin="8,0,0,0" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Note}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Required by -->
+                    <StackPanel x:Name="RequiredBySection" Visibility="{Binding HasRequiredBy, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Heading}" Text="Needed by" />
+                        <TextBlock Margin="0,0,0,8" Style="{StaticResource Style.Text.Caption}" Text="These components only work alongside this one." TextWrapping="Wrap" />
+                        <ItemsControl ItemsSource="{Binding RequiredBy}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="inspector:LinkRow">
+                                    <Border Margin="0,0,6,6" Style="{StaticResource Chip}" Padding="8,2">
+                                        <Button Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding Target}"
+                                                Content="{Binding Name}"
+                                                Style="{StaticResource LinkButton}"
+                                                ToolTip="Show it in the catalog" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Notes -->
+                    <StackPanel Visibility="{Binding HasRemarks, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Heading}" Text="Good to know" />
+                        <inspector:DocView Doc="{Binding Remarks}" NavigateCommand="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </StackPanel>
+
+                    <!-- Properties -->
+                    <StackPanel x:Name="PropertiesSection" Visibility="{Binding HasProperties, Converter={StaticResource Visible}}">
+                        <TextBlock Style="{StaticResource Heading}" Text="Properties" />
+                        <ItemsControl Grid.IsSharedSizeScope="True" ItemsSource="{Binding Properties}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="editing:CatalogProperty">
+                                    <Border Padding="0,8" BorderBrush="{DynamicResource Brush.Border.Subtle}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" MinWidth="140" SharedSizeGroup="Name" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,16,0">
+                                                <TextBlock FontWeight="SemiBold" Text="{Binding Name, Converter={x:Static inspector:HumanizeConverter.Instance}}" />
+                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource Style.Text.Caption}" Text="{Binding Kind}" TextWrapping="Wrap" MaxWidth="200" HorizontalAlignment="Left" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <inspector:DocView x:Name="Doc" Doc="{Binding Doc}" NavigateCommand="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource Style.Text.Caption}">
+                                                    <Run Text="Starts at" />
+                                                    <Run FontFamily="{StaticResource Font.Mono}" Text="{Binding Default, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+            </Grid>
+        </DockPanel>
+    </Grid>
+</controls:ChromeWindow>

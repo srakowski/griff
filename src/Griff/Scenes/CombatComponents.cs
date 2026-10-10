@@ -15,6 +15,8 @@ namespace Griff.Scenes;
 /// <see cref="Animation"/> with an <c>Attack</c> clip (or <c>AttackUp</c> and <c>AttackDown</c> in a top-down game), it
 /// plays while the attack does.
 /// </remarks>
+[Category("Combat")]
+[WorksWith(typeof(Animation), Note = "plays an Attack clip")]
 [ComponentName("Griff.Attack")]
 public sealed class Attack : Component
 {

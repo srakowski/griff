@@ -10,6 +10,10 @@ namespace Griff.Scenes;
 /// on down and Jump, and plays its <see cref="Animation"/>'s Idle, Run, Jump, Fall, Climb, Dash and WallSlide clips if it
 /// has them. Needs a <see cref="Body"/> and a collider.
 /// </summary>
+[Category("Movement")]
+[Requires(typeof(Body))]
+[Requires(typeof(Collider))]
+[WorksWith(typeof(Animation), Note = "plays Idle, Run, Jump and Fall clips")]
 [ComponentName("Griff.PlatformerMovement")]
 public sealed class PlatformerMovement : Component
 {
@@ -178,6 +182,10 @@ public sealed class PlatformerMovement : Component
 /// <see cref="Animation"/>'s Idle and Run clips if it has them (and IdleUp, IdleDown, RunUp and RunDown, facing that
 /// way). Needs a <see cref="Body"/> and a collider.
 /// </summary>
+[Category("Movement")]
+[Requires(typeof(Body))]
+[Requires(typeof(Collider))]
+[WorksWith(typeof(Animation), Note = "plays Idle and Run clips")]
 [ComponentName("Griff.TopDownMovement")]
 public sealed class TopDownMovement : Component
 {

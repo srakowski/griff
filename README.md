@@ -121,6 +121,8 @@ Every template has a pause menu. Both the Platformer and Top-down players carry 
 
 **Prefabs.** Select an entity and choose **Entity → Save as Prefab** to save it (with its children) to `Assets/Prefabs`. Drag a prefab into the Scene view to place it, or spawn it from a script. Save as Prefab works while playing too, to keep a live entity you've tweaked.
 
+**Component catalog.** Next to **Add Component** (the quick list), the Inspector's **Catalog** button opens every component by category, searchable, with what it does, what it **Requires** on the same entity (checked against the selected entity, with what's missing marked), what it **Works well with**, what it's **Needed by**, and each property's kind, starting value and description. Names in the text are links to that component. **Add** puts it on the selected entity along with any requirement it's missing (a Patrol brings a Body and a BoxCollider), as one undo step. Scripts are listed too, described by their `///` comments.
+
 In the **Inspector**, drag any number's label sideways to scrub it (Shift for fine steps, Ctrl for coarse). While the game is playing, typing in the Inspector doesn't reach the game; click the game to give it the keyboard back.
 
 In the **Assets** panel:
@@ -159,6 +161,21 @@ public class PlayerController : Behavior
         if (other.Name == "Coin")
             Game.Destroy(other);
     }
+}
+```
+
+Describe a script for the component catalog with a `///` summary over the class and its properties, and say how it fits with other components using attributes:
+
+```csharp
+/// <summary>Walks toward the player and explodes next to them.</summary>
+[Category("Enemies")]                                  // where the catalog lists it (default: Scripts)
+[Requires(typeof(Body), Note = "moves by velocity")]   // the catalog adds a Body along with it
+[Requires(typeof(Collider))]                           // a base type: any kind of collider will do
+[WorksWith(typeof(Health), Note = "so it can be shot")]
+public class Creeper : Behavior
+{
+    /// <summary>How close it gets before exploding, in world units.</summary>
+    public float FuseRange { get; set; } = 1.5f;
 }
 ```
 

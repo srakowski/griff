@@ -30,6 +30,8 @@ public static class Icons
     public const string Delete = "\uE74D";
     public const string Clear = "\uE894";
     public const string Search = "\uE721";
+    public const string Library = "\uE8F1";
+    public const string Link = "\uE71B";
 
     // Playback
     public const string Play = "\uE768";

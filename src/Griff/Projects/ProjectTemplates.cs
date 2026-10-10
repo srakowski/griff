@@ -879,6 +879,9 @@ public static class ProjectTemplates
         /// Fly with WASD, the arrow keys or a gamepad. Aim with the mouse; hold the left button or Space to fire. Its Health
         /// takes the hits: each one costs a heart.
         /// </summary>
+        [Category("Arcade")]
+        [Requires(typeof(Body), Note = "flies by setting its velocity")]
+        [Requires(typeof(Health), Note = "the hearts it shows")]
         public class Ship : Behavior
         {
             public float Speed { get; set; } = 8;
@@ -954,6 +957,9 @@ public static class ProjectTemplates
 
     private const string BulletScript = """
         /// <summary>Stops at walls. Its DamageOnTouch hurts enemies, and its Lifetime clears it away if it misses.</summary>
+        [Category("Arcade")]
+        [WorksWith(typeof(DamageOnTouch), Note = "hurts what it hits")]
+        [WorksWith(typeof(Lifetime), Note = "clears it away if it misses")]
         public class Bullet : Behavior
         {
             protected override void OnTriggerEnter(Entity other)
@@ -967,6 +973,8 @@ public static class ProjectTemplates
 
     private const string EnemyScript = """
         /// <summary>Chases the ship, hurting it on contact (DamageOnTouch). One hit destroys it, for a point.</summary>
+        [Category("Arcade")]
+        [Requires(typeof(Body), Note = "chases by setting its velocity")]
         public class Enemy : Behavior
         {
             public float Speed { get; set; } = 2.5f;
@@ -1015,6 +1023,7 @@ public static class ProjectTemplates
 
     private const string EnemySpawnerScript = """
         /// <summary>Spawns enemies around the edge of the arena, faster and faster, until the ship is gone.</summary>
+        [Category("Arcade")]
         public class EnemySpawner : Behavior
         {
             /// <summary>Enemies appear on the edge of a box this size around the middle.</summary>
@@ -1070,6 +1079,8 @@ public static class ProjectTemplates
 
     private const string GameOverScript = """
         /// <summary>The game over panel: its Panel keeps it hidden until the ship's destroyed, then it shows the score against the best.</summary>
+        [Category("Arcade")]
+        [Requires(typeof(Panel))]
         public class GameOver : Behavior
         {
             // Runs the first frame the panel is shown. The score's Counter has already saved a new best.

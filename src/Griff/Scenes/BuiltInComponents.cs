@@ -1,6 +1,8 @@
 namespace Griff.Scenes;
 
 /// <summary>What the game sees. The entity's transform positions the camera; rotation and scale apply too.</summary>
+[Category("Rendering")]
+[WorksWith(typeof(Follow), Note = "to follow the player")]
 [ComponentName("Camera")]
 public sealed class Camera : Component
 {
@@ -110,6 +112,7 @@ public enum TextAlign
 }
 
 /// <summary>Draws a line (or lines) of text at the entity. Scripts set <see cref="Value"/>.</summary>
+[Category("Rendering")]
 [ComponentName("Text")]
 public sealed class Text : Component
 {
@@ -147,6 +150,8 @@ public sealed class Text : Component
 }
 
 /// <summary>Draws an image (or a solid rectangle when no image is set) at the entity's transform.</summary>
+[Category("Rendering")]
+[WorksWith(typeof(Animation), Note = "to play frames of a sprite sheet")]
 [ComponentName("Sprite")]
 public sealed class Sprite : Component
 {
@@ -252,6 +257,8 @@ public readonly record struct AnimationClip(string Name, int FirstFrame, int Fra
 /// Plays frames of the entity's sprite sheet: <see cref="FrameCount"/> frames starting at <see cref="FirstFrame"/>.
 /// For several animations on one sheet, name them in <see cref="Clips"/> and switch with <see cref="Play"/>.
 /// </summary>
+[Category("Rendering")]
+[Requires(typeof(Sprite), Note = "its image is the sprite sheet")]
 [ComponentName("Animation")]
 public sealed class Animation : Component
 {

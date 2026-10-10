@@ -69,6 +69,19 @@ public sealed partial class InspectorPanel : ToolPanel
             _document.Execute(new AddComponentEdit(entity, descriptor.CreateInstance()));
     }
 
+    /// <summary>The component catalog, checked against the selected entity.</summary>
+    public ComponentCatalogViewModel CreateCatalog() => new(_workspace.Components, _selection.Entity);
+
+    /// <summary>The selected entity, which components are added to.</summary>
+    public Entity? Entity => _selection.Entity;
+
+    /// <summary>Adds a component and any components it requires that the entity is missing, as one undo step.</summary>
+    public void AddWithRequirements(ComponentDescriptor descriptor)
+    {
+        if (_document is not null && _selection.Entity is { } entity)
+            _document.Execute(Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, descriptor, entity));
+    }
+
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     public void Seal() => _document?.History.Seal();
 

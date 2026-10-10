@@ -1,0 +1,40 @@
+title: Component Catalog
+intro: A second way to add components: browse them all, read what each one does, and see what it needs.
+project: Arcade | Catalog Tour
+scene: Game
+
+chapter: Two ways to add | The Inspector's Catalog button
+create: Sprite
+rename: Guard
+say: Here's a new sprite in the Arcade template. Let's turn it into an enemy, the way someone new to Griff would.
+explain: catalog:button | Catalog | Add Component is still the quick list, for when you know what you want. The new Catalog button is for when you don't.
+catalog
+explain: catalog:list | Every component | The catalog lists every component, grouped by what it's for: rendering, physics, movement, combat and more. Each says in a line what it does, and which components it needs.
+
+chapter: Reading a component | Documentation and dependencies
+browse: Patrol
+explain: catalog:docs | What it does | Searching finds Patrol. Its page says what it does in plain words, from the engine's own documentation.
+explain: catalog:requires | Requires | And here's what it needs. A patrol only works with a body and a collider on the same entity. The guard has neither, so both are marked to be added. Any kind of collider will do, so it picks a box.
+explain: catalog:workswith | Works well with | It also suggests what goes well with it, without needing it. Add a chase, and it patrols until it spots its target.
+explain: catalog:properties | Properties | Further down, every property is explained, with the kind of value it takes and what it starts at.
+click: catalog:link:Body
+explain: catalog:neededby | Needed by | Component names are links. This is Body's page, and it shows the other side: everything that needs a body to work.
+
+chapter: Adding it with what it needs | One click, one undo
+browse: Patrol
+explain: catalog:plan | What Add does | Before you add anything, it spells out exactly what will happen.
+click: catalog:add
+explain: panel:Inspector | Added together | The guard now has a box collider, a body and a patrol. That's everything it needs, added in the right order.
+key: Ctrl+Z
+say: It's one undo step, so a single undo takes all three back off.
+key: Ctrl+Y
+say: And redo puts them back.
+
+chapter: Scripts too | Documented from their comments
+select: Player
+catalog
+browse: Ship
+explain: catalog:docs | A script | Scripts are in the catalog too. The ship's description comes straight from the comment above its class.
+explain: catalog:requires | Its requirements | A script declares what it needs with a Requires attribute. The player already has a body and health, so both are ticked.
+say: So whether a component comes with Griff or from your own scripts, the catalog shows what it does and what it needs before you add it.
+click: catalog:close

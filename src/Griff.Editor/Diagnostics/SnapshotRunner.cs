@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.DesignSystem;
+using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Play;
 using Griff.Rendering;
 using Griff.Scenes;
@@ -386,6 +387,34 @@ internal static class SnapshotRunner
             var gallery = services.GetRequiredService<DesignSystemWindow>();
             Show(gallery);
             Render(gallery, Path.Combine(outputDir, "gallery.png"));
+
+            // The component catalog, checked against a bare entity: what Patrol needs, then a script's page.
+            var lookoutPath = Path.Combine(workspace.Project!.AssetsPath, "Scripts", "Lookout.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(lookoutPath)!);
+            File.WriteAllText(lookoutPath, """
+                /// <summary>Watches for the player and shouts when it sees them. Needs a <see cref="Body"/> to turn.</summary>
+                [Category("Enemies")]
+                [Requires(typeof(Body), Note = "turns to look")]
+                public class Lookout : Behavior
+                {
+                    /// <summary>How far it sees, in world units.</summary>
+                    public float Range { get; set; } = 6;
+                }
+                """);
+            workspace.ReloadScripts();
+            var guard = new Entity("Guard");
+            var catalogModel = new ComponentCatalogViewModel(workspace.Components, guard);
+            var catalog = new ComponentCatalogWindow(catalogModel, _ => { });
+            Show(catalog);
+            catalogModel.Selected = catalogModel.Items.First(i => i.Name == "Patrol");
+            Render(catalog, Path.Combine(outputDir, "catalog.png"));
+            catalogModel.Selected = catalogModel.Items.First(i => i.Name == "Body");
+            Render(catalog, Path.Combine(outputDir, "catalog-body.png"));
+            catalogModel.Search = "lookout";
+            Render(catalog, Path.Combine(outputDir, "catalog-script.png"));
+            catalogModel.Search = "nothing like this";
+            Render(catalog, Path.Combine(outputDir, "catalog-empty.png"));
+            catalog.Close();
 
             // Save so shutdown doesn't stop at the unsaved-changes prompt, then remove the sample project.
             await workspace.SaveSceneAsync();

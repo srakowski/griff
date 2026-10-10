@@ -27,6 +27,8 @@ public enum SwitchMode
 /// with that name is switched. If several switches name the same entity, it's on only while all of them are, so a
 /// gate can need two plates held down.
 /// </remarks>
+[Category("Level")]
+[Requires(typeof(Collider), Note = "usually a trigger")]
 [ComponentName("Griff.Switch")]
 public sealed class Switch : Component
 {
@@ -122,6 +124,7 @@ public sealed class Switch : Component
 /// <see cref="Counter.Item"/> shows how many there are.
 /// </summary>
 /// <remarks>It's saved with the scene, so it rewinds with everything else and you can start a playtest holding a key.</remarks>
+[Category("Gameplay")]
 [ComponentName("Griff.Inventory")]
 public sealed class Inventory : Component
 {
@@ -215,6 +218,8 @@ public sealed class Inventory : Component
 /// Leaves fading copies of its entity's <see cref="Sprite"/> behind as it moves: dashes, speed, ghosts, bullets with
 /// streaks. Copies are left every <see cref="Interval"/> seconds while it moves at least <see cref="MinSpeed"/>.
 /// </summary>
+[Category("Rendering")]
+[Requires(typeof(Sprite), Note = "the copies left behind")]
 [ComponentName("Griff.Trail")]
 public sealed class Trail : Component
 {

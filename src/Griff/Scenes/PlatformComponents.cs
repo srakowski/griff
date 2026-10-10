@@ -8,6 +8,8 @@ namespace Griff.Scenes;
 /// <see cref="Tilemap.LadderTiles"/> for ladders painted into the level.) Put a one-way platform at the top to stand on;
 /// climbing passes through it both ways.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Collider), Note = "a trigger as tall as the ladder")]
 [ComponentName("Griff.Ladder")]
 public sealed class Ladder : Component
 {
@@ -20,6 +22,9 @@ public sealed class Ladder : Component
 /// (when its <see cref="Body"/>'s Gravity Scale is 0). It pushes crates in front of it in turn, and stops at walls. Needs
 /// a <see cref="Body"/> and a solid collider. Give it a layer (say "Crate") to have it hold a pressure plate down.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Body))]
+[Requires(typeof(Collider), Note = "solid, not a trigger")]
 [ComponentName("Griff.Pushable")]
 public sealed class Pushable : Component
 {
@@ -42,6 +47,8 @@ public sealed class Pushable : Component
 /// way at <see cref="Strength"/>. Works on solid colliders (land on it) and triggers (pass through it). A
 /// <see cref="PlatformerMovement"/> launched by it gets its air jumps and dash back.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Collider))]
 [ComponentName("Griff.Bouncer")]
 public sealed class Bouncer : Component
 {
@@ -85,6 +92,8 @@ public sealed class Bouncer : Component
 /// A platform that gives way, with no code: once something on its <see cref="Layers"/> stands on it, it shakes for
 /// <see cref="Delay"/> seconds and falls away, coming back <see cref="Respawn"/> seconds later. Needs a collider.
 /// </summary>
+[Category("Level")]
+[Requires(typeof(Collider))]
 [ComponentName("Griff.Crumble")]
 public sealed class Crumble : Component
 {

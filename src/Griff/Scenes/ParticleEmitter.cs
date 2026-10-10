@@ -15,6 +15,8 @@ public readonly record struct Particle(Vector2 Position, Vector2 Velocity, float
 /// <see cref="DestroyWhenFinished"/> in a prefab and spawn it.
 /// </summary>
 /// <remarks>Live particles aren't saved, so rewinding during play clears them.</remarks>
+[Category("Rendering")]
+[WorksWith(typeof(Lifetime), Note = "for one-off effects")]
 [ComponentName("ParticleEmitter")]
 public sealed class ParticleEmitter : Component
 {

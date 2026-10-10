@@ -506,6 +506,81 @@ internal sealed class DemoUi(MainWindow main, SceneViewControl sceneView, DemoIn
         }
     }
 
+    // ----- Component catalog -----
+
+    /// <summary>The open component catalog, if any.</summary>
+    public static ComponentCatalogWindow? Catalog =>
+        Application.Current.Windows.OfType<ComponentCatalogWindow>().FirstOrDefault(w => w.IsVisible);
+
+    /// <summary>Opens the component catalog with the Inspector's Catalog button, unless it's open already.</summary>
+    public async Task<ComponentCatalogWindow> OpenCatalog()
+    {
+        if (Catalog is { } open)
+            return open;
+        await Click((Button)Inspector.FindName("CatalogButton"));
+        var window = await WaitFor(() => Catalog, "the component catalog");
+        await Settle(350);
+        return window;
+    }
+
+    /// <summary>Opens the catalog, searches for <paramref name="name"/> and picks it from the list.</summary>
+    public async Task Browse(string name)
+    {
+        var window = await OpenCatalog();
+        var search = (TextBox)window.FindName("SearchBox");
+        await input.Click(Center(search));
+        await Settle(20);
+        await input.Press(Key.A, ModifierKeys.Control, showBadge: false);
+        await input.Type(name, msPerChar: 70);
+        await Settle(250);
+
+        var item = await WaitFor(() => CatalogItem(window, name), $"{name} in the catalog");
+        await Click(item);
+        await Settle(200);
+        if (window.Model.Selected?.Name != name)
+        {
+            window.Model.Selected = window.Model.Items.First(i => i.Name == name);
+            Log?.Invoke($"FORCED catalog pick {name}");
+            await Settle(100);
+        }
+    }
+
+    /// <summary>A component's row in the catalog's list.</summary>
+    public static ListBoxItem? CatalogItem(ComponentCatalogWindow window, string name) =>
+        Descendants<ListBoxItem>(window).FirstOrDefault(i => i.DataContext is CatalogItem c && c.Name == name && i.IsVisible);
+
+    /// <summary>
+    /// A part of the open catalog: search, list, docs, requires, workswith, neededby, properties, plan, add, close; a
+    /// property's row by its name (property:Jump Height); a component in the list (item:Body); a link to another component
+    /// in the details (link:Body); or the whole window. (catalog:button, the Inspector's Catalog button, is in DemoFile.)
+    /// </summary>
+    public static FrameworkElement CatalogPart(string part)
+    {
+        var window = Catalog ?? throw new InvalidOperationException("The component catalog isn't open.");
+        var (kind, name) = part.IndexOf(':') is var at and >= 0 ? (part[..at].Trim(), part[(at + 1)..].Trim()) : (part.Trim(), "");
+        return kind.ToLowerInvariant() switch
+        {
+            "" or "window" => (FrameworkElement)window.Content,
+            "search" => (FrameworkElement)window.FindName("SearchBox"),
+            "list" => (FrameworkElement)window.FindName("ComponentList"),
+            "docs" => (FrameworkElement)window.FindName("SummaryDoc"),
+            "requires" => (FrameworkElement)window.FindName("RequiresSection"),
+            "workswith" => (FrameworkElement)window.FindName("WorksWithSection"),
+            "neededby" => (FrameworkElement)window.FindName("RequiredBySection"),
+            "properties" => (FrameworkElement)window.FindName("PropertiesSection"),
+            "plan" => (FrameworkElement)window.FindName("PlanText"),
+            "add" => (FrameworkElement)window.FindName("AddButton"),
+            "close" => (FrameworkElement)window.FindName("CloseButton"),
+            "item" => CatalogItem(window, name) ?? throw new InvalidOperationException($"No {name} in the catalog's list."),
+            "link" => Descendants<Button>((FrameworkElement)window.FindName("DetailsPanel")).FirstOrDefault(b => b.Content as string == name && b.IsVisible)
+                ?? throw new InvalidOperationException($"No link to {name} in the catalog."),
+            "property" => Descendants<Border>((FrameworkElement)window.FindName("PropertiesSection"))
+                .FirstOrDefault(b => b.DataContext is Griff.Editing.CatalogProperty p && b.Child is Grid && (p.Name == name || InspectorPanel.Humanize(p.Name) == name))
+                ?? throw new InvalidOperationException($"No property {name} in the catalog."),
+            _ => throw new FormatException($"Unknown catalog part \"{part}\" (search, list, docs, requires, workswith, neededby, properties, plan, add, close, item:, link:, property:)."),
+        };
+    }
+
     /// <summary>Presses a shortcut, showing it on screen.</summary>
     public async Task Shortcut(Key key, ModifierKeys modifiers = ModifierKeys.None)
     {

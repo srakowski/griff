@@ -22,6 +22,7 @@ public enum Anchor
 /// every Update; the entity keeps its Z.
 /// </summary>
 /// <remarks>The camera's rotation is ignored. In the Scene view the entity shows where its transform puts it.</remarks>
+[Category("UI")]
 [ComponentName("ScreenAnchor")]
 public sealed class ScreenAnchor : Component
 {
@@ -84,6 +85,9 @@ public enum ButtonAction
 /// over it. Behaviors on the entity get OnClick. Menus need no code at all: set <see cref="Action"/> to load a scene,
 /// restart or quit. Put a <see cref="Sprite"/> on the entity for a background and a <see cref="Text"/> for its label.
 /// </summary>
+[Category("UI")]
+[WorksWith(typeof(Sprite), Note = "a background")]
+[WorksWith(typeof(Text), Note = "a label")]
 [ComponentName("Button")]
 public sealed class Button : Component
 {
@@ -210,6 +214,7 @@ public enum BarDirection
 /// Name an entity in <see cref="Track"/> and it shows that entity's <see cref="Health"/> with no code. When it goes down,
 /// the part just lost lingers in the <see cref="Trail"/> color for a moment before draining away.
 /// </summary>
+[Category("UI")]
 [ComponentName("Bar")]
 public sealed class Bar : Component
 {
@@ -292,6 +297,7 @@ public sealed class Bar : Component
 /// slider changes it, and the game remembers it next time. <see cref="SaveAs"/> keeps any other choice (a difficulty)
 /// in <c>Game.SaveData</c>.
 /// </summary>
+[Category("UI")]
 [ComponentName("Slider")]
 public sealed class Slider : Component
 {
@@ -379,6 +385,8 @@ public sealed class Slider : Component
 /// set ("Sound: On"). Set <see cref="Setting"/> to turn the sound or fullscreen on and off with no code, remembered next
 /// time. Needs a Button on the same entity.
 /// </summary>
+[Category("UI")]
+[Requires(typeof(Button))]
 [ComponentName("Toggle")]
 public sealed class Toggle : Component
 {
@@ -411,6 +419,7 @@ public sealed class Toggle : Component
 /// entity).
 /// </summary>
 /// <remarks>Panels are hidden when the game starts unless <see cref="Open"/> is ticked, so they can be laid out in the Scene view.</remarks>
+[Category("UI")]
 [ComponentName("Panel")]
 public sealed class Panel : Component
 {
@@ -464,6 +473,8 @@ public sealed class Panel : Component
 /// change it while it's picked, and clicking (or the mouse wheel) moves to the next. <see cref="SaveAs"/> keeps the choice
 /// for next time, for scripts to read with <c>Game.SaveData.GetString("difficulty")</c>. Needs a Button on the same entity.
 /// </summary>
+[Category("UI")]
+[Requires(typeof(Button))]
 [ComponentName("Choice")]
 public sealed class Choice : Component
 {

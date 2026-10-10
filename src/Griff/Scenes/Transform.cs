@@ -6,6 +6,7 @@ namespace Griff.Scenes;
 /// Position, rotation and scale relative to the parent entity. Every entity has exactly one.
 /// Values are 3D so 2D and 3D share one model: 2D games use X/Y and rotate around Z.
 /// </summary>
+[Category("Basics")]
 [ComponentName("Transform")]
 public sealed class Transform : Component
 {

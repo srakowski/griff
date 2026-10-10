@@ -148,6 +148,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "add":
                 await ui.AddComponent(a);
                 break;
+            case "catalog":
+                await ui.OpenCatalog();
+                break;
+            case "browse":
+                await ui.Browse(a);
+                break;
             case "set":
                 await Set(a);
                 break;
@@ -419,7 +425,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     /// <summary>
     /// What a spotlight or click points at: panel:Inspector, scene, game, toolbar:Game.Play, field:Health.Max,
-    /// component:Health, entity:Player, menu:Game, world:left,top,right,bottom.
+    /// component:Health, entity:Player, menu:Game, catalog:requires, world:left,top,right,bottom.
     /// </summary>
     private FrameworkElement Target(string target)
     {
@@ -435,7 +441,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, world:)."),
+            "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
+            "catalog" => DemoUi.CatalogPart(name),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, toolbar:, field:, component:, entity:, menu:, catalog:, world:)."),
         };
     }
 

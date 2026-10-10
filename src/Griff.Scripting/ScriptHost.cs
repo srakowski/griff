@@ -1,4 +1,5 @@
 using System.Runtime.Loader;
+using Griff.Editing;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -75,6 +76,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
 
         var context = new AssemblyLoadContext("GriffScripts", isCollectible: true);
         var assembly = context.LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
+        DocComments.Register(assembly, compiled.Documentation);
         var newTypes = assembly.GetTypes()
             .Where(t => t.IsSubclassOf(typeof(Component)) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
             .ToList();

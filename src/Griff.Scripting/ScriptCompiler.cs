@@ -24,6 +24,9 @@ public sealed class CompileResult
 
     public byte[]? Symbols { get; init; }
 
+    /// <summary>The scripts' <c>///</c> comments as documentation XML, for the editor's component catalog.</summary>
+    public string? Documentation { get; init; }
+
     public IEnumerable<ScriptDiagnostic> Errors => Diagnostics.Where(d => d.IsError);
 }
 
@@ -76,11 +79,14 @@ public static class ScriptCompiler
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable,
-                optimizationLevel: OptimizationLevel.Debug));
+                optimizationLevel: OptimizationLevel.Debug,
+                // Documentation is optional in scripts; don't nag about public members without it.
+                specificDiagnosticOptions: [new("CS1591", ReportDiagnostic.Suppress)]));
 
         using var assembly = new MemoryStream();
         using var symbols = new MemoryStream();
-        var result = compilation.Emit(assembly, symbols, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
+        using var documentation = new MemoryStream();
+        var result = compilation.Emit(assembly, symbols, documentation, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
 
         var diagnostics = result.Diagnostics
             .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning && !d.IsSuppressed)
@@ -94,6 +100,7 @@ public static class ScriptCompiler
             Diagnostics = diagnostics,
             Assembly = result.Success ? assembly.ToArray() : null,
             Symbols = result.Success ? symbols.ToArray() : null,
+            Documentation = result.Success ? System.Text.Encoding.UTF8.GetString(documentation.ToArray()) : null,
         };
     }
 

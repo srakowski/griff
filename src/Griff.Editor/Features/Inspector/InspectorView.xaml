@@ -177,15 +177,29 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Button x:Name="AddComponentButton"
-                        Margin="10,12,10,0"
-                        HorizontalAlignment="Stretch"
-                        Click="OnAddComponentClicked">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Add}" />
-                        <TextBlock Margin="6,0,0,0" Text="Add Component" />
-                    </StackPanel>
-                </Button>
+                <!-- Add Component is the quick list; Catalog explains each component and what it needs -->
+                <Grid Margin="10,12,10,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="AddComponentButton" HorizontalAlignment="Stretch" Click="OnAddComponentClicked">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Add}" />
+                            <TextBlock Margin="6,0,0,0" Text="Add Component" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CatalogButton"
+                            Grid.Column="1"
+                            Margin="6,0,0,0"
+                            Click="OnCatalogClicked"
+                            ToolTip="Browse every component: what it does, what it needs, and its properties">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Library}" />
+                            <TextBlock Margin="6,0,0,0" Text="Catalog" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
 

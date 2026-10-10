@@ -222,7 +222,8 @@ public static class ProjectTemplates
     {
         var scene = new Scene();
 
-        // A dim dungeon: the camera's Ambient light is a deep blue, lit up by torches in the corners and the player's lantern.
+        // A dim dungeon: the camera's Ambient light is a deep blue, lit up by torches in the corners and the player's lantern,
+        // which cast shadows from the walls and whatever stands in the way.
         var follow = AddCameraWithScore(scene);
         var camera = follow.Entity!.GetComponent<Camera>()!;
         camera.SortByY = true;
@@ -238,6 +239,7 @@ public static class ProjectTemplates
         lantern.Radius = 5;
         lantern.Intensity = 0.8f;
         lantern.Color = Color.FromBytes(0xFF, 0xF1, 0xD6);
+        lantern.Shadows = true;
         scene.Add(player);
         AddSword(scene, player);
         foreach (var position in new[] { new Vector2(-10.5f, 6.5f), new Vector2(10.5f, 6.5f), new Vector2(-10.5f, -6.5f), new Vector2(10.5f, -6.5f) })
@@ -733,6 +735,7 @@ public static class ProjectTemplates
         light.Radius = 6;
         light.Color = Color.FromBytes(0xFF, 0xB8, 0x6A);
         light.Flicker = 0.2f;
+        light.Shadows = true;
         return torch;
     }
 

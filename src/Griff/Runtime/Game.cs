@@ -212,6 +212,7 @@ public sealed partial class Game
         LayOutScreen();
         RunTrails();
         RunLights();
+        RunWeather();
         FillPrompts();
         RunSoundSources();
         RunSoundPlayers();

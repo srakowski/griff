@@ -75,6 +75,102 @@ public sealed class SpriteRenderer : IDisposable
         }
         """;
 
+    // Screen effects over the finished frame (see ScreenEffects), in the order a picture goes through them: the curved
+    // glass bends where each pixel looks, big pixels sample one spot per block, the lens splits red and blue, then the
+    // colors are graded, lined, vignetted and grained, and last of all limited to a palette (so a handheld's four greens
+    // stay four). The few-color palettes lift the darks first, so a dim scene doesn't sink into a single shade.
+    private const string PostFragmentShader = """
+        #version 330 core
+        in vec2 vUv;
+        uniform sampler2D uTexture;
+        uniform vec2 uSize;
+        uniform float uVignette;
+        uniform float uScanlines;
+        uniform float uCurvature;
+        uniform float uPixel;
+        uniform float uAberration;
+        uniform float uSaturation;
+        uniform float uContrast;
+        uniform float uBrightness;
+        uniform vec4 uTint;
+        uniform float uGrain;
+        uniform int uPalette;
+        uniform float uTime;
+        out vec4 fragColor;
+
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+        vec3 palette(vec3 color)
+        {
+            float l = dot(color, vec3(0.299, 0.587, 0.114));
+            float lifted = pow(clamp(l, 0.0, 1.0), 0.55);
+            if (uPalette == 1)
+            {
+                vec3 shades[4] = vec3[](vec3(0.06, 0.22, 0.06), vec3(0.19, 0.38, 0.19), vec3(0.55, 0.67, 0.06), vec3(0.61, 0.74, 0.06));
+                return shades[int(clamp(floor(lifted * 4.0), 0.0, 3.0))];
+            }
+            if (uPalette == 2)
+                return vec3(l * 1.07 + 0.05, l * 0.87 + 0.03, l * 0.64);
+            if (uPalette == 3)
+                return vec3(step(0.5, lifted));
+            return color;
+        }
+
+        void main()
+        {
+            vec2 uv = vUv;
+            if (uCurvature > 0.0)
+            {
+                vec2 c = uv * 2.0 - 1.0;
+                c *= 1.0 + uCurvature * 0.18 * dot(c, c);
+                uv = c * 0.5 + 0.5;
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+                {
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+            }
+
+            float block = max(1.0, uPixel * uSize.y / 720.0);
+            if (block > 1.0)
+                uv = (floor(uv * uSize / block) + 0.5) * block / uSize;
+
+            vec3 color;
+            if (uAberration > 0.0)
+            {
+                vec2 shift = (uv - 0.5) * uAberration * 0.03;
+                color = vec3(texture(uTexture, uv + shift).r, texture(uTexture, uv).g, texture(uTexture, uv - shift).b);
+            }
+            else
+            {
+                color = texture(uTexture, uv).rgb;
+            }
+
+            color *= uTint.rgb;
+            color = (color - 0.5) * uContrast + 0.5 + uBrightness;
+            float luma = dot(color, vec3(0.299, 0.587, 0.114));
+            color = mix(vec3(luma), color, uSaturation);
+
+            if (uScanlines > 0.0)
+            {
+                float line = max(2.0, uSize.y / 240.0);
+                float y = uv.y * uSize.y / line;
+                color *= 1.0 - uScanlines * 0.6 * pow(abs(sin(y * 3.14159)), 2.0);
+            }
+
+            if (uVignette > 0.0)
+            {
+                vec2 d = (vUv - 0.5) * vec2(uSize.x / uSize.y, 1.0);
+                color *= 1.0 - uVignette * smoothstep(0.35, 1.0, length(d) * 1.25);
+            }
+
+            if (uGrain > 0.0)
+                color += (hash(gl_FragCoord.xy + fract(uTime * 7.31) * 113.0) - 0.5) * uGrain * 0.25;
+
+            fragColor = vec4(palette(clamp(color, 0.0, 1.0)), 1.0);
+        }
+        """;
+
     // Unit quad corners with their UVs. Image row 0 is the top, so the quad's top maps to v = 0.
     private static readonly (Vector2 Position, Vector2 Uv)[] Corners =
     [
@@ -89,6 +185,8 @@ public sealed class SpriteRenderer : IDisposable
     private readonly uint _program;
     private readonly uint _shapeProgram;
     private readonly int _shapeMode;
+    private readonly uint _postProgram;
+    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private readonly uint _vao;
     private readonly uint _vbo;
     private readonly uint _ebo;
@@ -99,7 +197,13 @@ public sealed class SpriteRenderer : IDisposable
     // The light map: a texture the size of the screen that lights add up in, and the framebuffer that draws into it.
     private uint _lightFramebuffer;
     private uint _lightTexture;
+    private uint _lightStencil;
     private (int Width, int Height) _lightSize;
+
+    // With screen effects, the frame is drawn into this texture first, then onto the screen through the effects.
+    private uint _sceneFramebuffer;
+    private uint _sceneTexture;
+    private (int Width, int Height) _sceneSize;
 
     public SpriteRenderer(GL gl, string assetRoot, TextRasterizer? textRasterizer = null)
     {
@@ -109,6 +213,9 @@ public sealed class SpriteRenderer : IDisposable
         _gl.Uniform1(_gl.GetUniformLocation(_program, "uTexture"), 0);
         _shapeProgram = CreateProgram(ShapeFragmentShader);
         _shapeMode = _gl.GetUniformLocation(_shapeProgram, "uMode");
+        _postProgram = CreateProgram(PostFragmentShader);
+        _gl.Uniform1(_gl.GetUniformLocation(_postProgram, "uTexture"), 0);
+        _gl.UseProgram(_program);
 
         _vao = gl.GenVertexArray();
         gl.BindVertexArray(_vao);
@@ -153,6 +260,14 @@ public sealed class SpriteRenderer : IDisposable
         _textures.RefreshChanged();
         LastDrawCalls = 0;
 
+        var screen = 0;
+        if (frame.Effects is not null)
+        {
+            _gl.GetInteger(GetPName.DrawFramebufferBinding, out screen);
+            EnsureTarget(ref _sceneFramebuffer, ref _sceneTexture, ref _sceneSize, width, height);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFramebuffer);
+        }
+
         _gl.Viewport(0, 0, (uint)Math.Max(width, 1), (uint)Math.Max(height, 1));
         var background = frame.Background;
         _gl.ClearColor(background.R, background.G, background.B, 1f);
@@ -176,6 +291,12 @@ public sealed class SpriteRenderer : IDisposable
         if (frame.IsDark && frame.LitCount >= sprites.Count)
             ApplyLighting(frame, width, height);
         Flush();
+        if (frame.Effects is { } effects)
+        {
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
+            ApplyEffects(effects, width, height);
+        }
+
         _textures.EndFrame();
 
         _gl.BindVertexArray(0);
@@ -198,12 +319,17 @@ public sealed class SpriteRenderer : IDisposable
     public void Dispose()
     {
         DeleteLightTarget();
+        if (_sceneFramebuffer != 0)
+            _gl.DeleteFramebuffer(_sceneFramebuffer);
+        if (_sceneTexture != 0)
+            _gl.DeleteTexture(_sceneTexture);
         _textures.Dispose();
         _gl.DeleteBuffer(_vbo);
         _gl.DeleteBuffer(_ebo);
         _gl.DeleteVertexArray(_vao);
         _gl.DeleteProgram(_program);
         _gl.DeleteProgram(_shapeProgram);
+        _gl.DeleteProgram(_postProgram);
     }
 
     private void Add(SpriteDraw sprite, Matrix4x4 viewProjection)
@@ -279,9 +405,24 @@ public sealed class SpriteRenderer : IDisposable
         _gl.ClearColor(frame.Ambient.R, frame.Ambient.G, frame.Ambient.B, 1f);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
         _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
-        DrawShapes(0, frame.Lights.Select(l =>
-            (Matrix4x4.CreateScale(l.Radius * 2, l.Radius * 2, 1) * Matrix4x4.CreateTranslation(l.Center.X, l.Center.Y, 0) * frame.ViewProjection,
-             l.Color, l.Softness)));
+        DrawShapes(0, frame.Lights.Where(l => l.Casters.Count == 0).Select(l => LightQuad(l, frame.ViewProjection)));
+
+        // A light with shadows on its own: its shadows mark the stencil, and it's added up only where they didn't.
+        foreach (var light in frame.Lights.Where(l => l.Casters.Count > 0))
+        {
+            _gl.Enable(EnableCap.StencilTest);
+            _gl.ClearStencil(0);
+            _gl.Clear(ClearBufferMask.StencilBufferBit);
+            _gl.ColorMask(false, false, false, false);
+            _gl.StencilFunc(StencilFunction.Always, 1, 0xFF);
+            _gl.StencilOp(StencilOp.Keep, StencilOp.Keep, StencilOp.Replace);
+            DrawShadows(light, frame.ViewProjection);
+            _gl.ColorMask(true, true, true, true);
+            _gl.StencilFunc(StencilFunction.Equal, 0, 0xFF);
+            _gl.StencilOp(StencilOp.Keep, StencilOp.Keep, StencilOp.Keep);
+            DrawShapes(0, [LightQuad(light, frame.ViewProjection)]);
+            _gl.Disable(EnableCap.StencilTest);
+        }
 
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
         _gl.Viewport(0, 0, (uint)width, (uint)height);
@@ -293,6 +434,71 @@ public sealed class SpriteRenderer : IDisposable
         DrawBatch();
 
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+    }
+
+    // The frame drawn so far, onto the screen through the effects.
+    private void ApplyEffects(ScreenEffects effects, int width, int height)
+    {
+        _gl.Viewport(0, 0, (uint)width, (uint)height);
+        _gl.Disable(EnableCap.Blend);
+        _gl.UseProgram(_postProgram);
+        void Set(string name, float value) => _gl.Uniform1(_gl.GetUniformLocation(_postProgram, name), value);
+        _gl.Uniform2(_gl.GetUniformLocation(_postProgram, "uSize"), (float)width, height);
+        Set("uVignette", Math.Clamp(effects.Vignette, 0, 1));
+        Set("uScanlines", Math.Clamp(effects.Scanlines, 0, 1));
+        Set("uCurvature", Math.Clamp(effects.Curvature, 0, 1));
+        Set("uPixel", Math.Clamp(effects.PixelSize, 1, 64));
+        Set("uAberration", Math.Clamp(effects.Aberration, 0, 1));
+        Set("uSaturation", Math.Max(effects.Saturation, 0));
+        Set("uContrast", Math.Max(effects.Contrast, 0));
+        Set("uBrightness", Math.Clamp(effects.Brightness, -1, 1));
+        _gl.Uniform4(_gl.GetUniformLocation(_postProgram, "uTint"), effects.Tint.R, effects.Tint.G, effects.Tint.B, 1f);
+        Set("uGrain", Math.Clamp(effects.Grain, 0, 1));
+        _gl.Uniform1(_gl.GetUniformLocation(_postProgram, "uPalette"), (int)effects.Palette);
+        Set("uTime", (float)(_clock.Elapsed.TotalSeconds % 1000));
+        _gl.BindTexture(TextureTarget.Texture2D, _sceneTexture);
+        WriteQuad(Matrix4x4.CreateScale(2, 2, 1), new Vector4(0, 1, 1, -1), Color.White, Color.Transparent);
+        DrawBatch();
+        _gl.UseProgram(_program);
+        _gl.Enable(EnableCap.Blend);
+    }
+
+    private static (Matrix4x4 ToClip, Color Color, float Parameter) LightQuad(LightDraw light, Matrix4x4 viewProjection) =>
+        (Matrix4x4.CreateScale(light.Radius * 2, light.Radius * 2, 1) * Matrix4x4.CreateTranslation(light.Center.X, light.Center.Y, 0) * viewProjection,
+         light.Color, light.Softness);
+
+    // Each casting side's shadow as two quads fanned from its near end (the second folds its last corner onto itself).
+    private void DrawShadows(LightDraw light, Matrix4x4 viewProjection)
+    {
+        _gl.UseProgram(_shapeProgram);
+        _gl.Uniform1(_shapeMode, 0);
+        foreach (var edge in light.Casters)
+        {
+            var (a, b, farB, farMiddle, farA) = Shadows.Shadow(edge, light.Center, light.Radius * 2);
+            WriteCorners(viewProjection, a, b, farB, farMiddle);
+            WriteCorners(viewProjection, a, farMiddle, farA, farA);
+            if (_quadCount >= MaxQuads - 1)
+                DrawBatch();
+        }
+
+        DrawBatch();
+        _gl.UseProgram(_program);
+    }
+
+    // A quad from four world points, in order round it, with no image.
+    private void WriteCorners(Matrix4x4 viewProjection, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
+    {
+        var offset = _quadCount * 4 * FloatsPerVertex;
+        foreach (var point in (ReadOnlySpan<Vector2>)[p0, p1, p2, p3])
+        {
+            var clip = Vector4.Transform(new Vector4(point, 0, 1), viewProjection);
+            _vertices[offset++] = clip.X / clip.W;
+            _vertices[offset++] = clip.Y / clip.W;
+            for (var i = 0; i < FloatsPerVertex - 2; i++)
+                _vertices[offset++] = 0;
+        }
+
+        _quadCount++;
     }
 
     // Lights (mode 0) or holes (mode 1) with the shape program, each quad already in clip space; the sprite program is
@@ -352,8 +558,40 @@ public sealed class SpriteRenderer : IDisposable
         _lightFramebuffer = _gl.GenFramebuffer();
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _lightFramebuffer);
         _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _lightTexture, 0);
+
+        // Shadows are marked in a stencil buffer beside it.
+        _lightStencil = _gl.GenRenderbuffer();
+        _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _lightStencil);
+        _gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Depth24Stencil8, (uint)width, (uint)height);
+        _gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment, RenderbufferTarget.Renderbuffer, _lightStencil);
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
         _lightSize = (width, height);
+    }
+
+    // A plain color target the size of the screen (no stencil): for the frame before screen effects.
+    private unsafe void EnsureTarget(ref uint framebuffer, ref uint texture, ref (int Width, int Height) size, int width, int height)
+    {
+        if (framebuffer != 0 && size == (width, height))
+            return;
+        if (framebuffer != 0)
+            _gl.DeleteFramebuffer(framebuffer);
+        if (texture != 0)
+            _gl.DeleteTexture(texture);
+
+        texture = _gl.GenTexture();
+        _gl.BindTexture(TextureTarget.Texture2D, texture);
+        _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        _gl.GetInteger(GetPName.DrawFramebufferBinding, out var screen);
+        framebuffer = _gl.GenFramebuffer();
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebuffer);
+        _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, texture, 0);
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
+        size = (width, height);
     }
 
     private void DeleteLightTarget()
@@ -362,7 +600,9 @@ public sealed class SpriteRenderer : IDisposable
             _gl.DeleteFramebuffer(_lightFramebuffer);
         if (_lightTexture != 0)
             _gl.DeleteTexture(_lightTexture);
-        (_lightFramebuffer, _lightTexture, _lightSize) = (0, 0, (0, 0));
+        if (_lightStencil != 0)
+            _gl.DeleteRenderbuffer(_lightStencil);
+        (_lightFramebuffer, _lightTexture, _lightStencil, _lightSize) = (0, 0, 0, (0, 0));
     }
 
     private uint CreateProgram(string fragmentSource)

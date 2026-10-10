@@ -40,6 +40,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateCrateCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
+            .AddCommand<CreateWeatherCommand>()
             .AddCommand<CreateHitboxCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
@@ -442,6 +443,17 @@ public sealed class CreateLightCommand(IWorkspace workspace, ISelection selectio
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
     protected override string EntityName => "Light";
     protected override void Configure(Entity entity) => entity.AddComponent<Light>();
+}
+
+/// <summary>Creates weather: an entity with a <see cref="Weather"/>, rain to start with, that fills the view while the game runs.</summary>
+public sealed class CreateWeatherCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateWeather";
+    public override string Text => "Create Weather";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
+    protected override string EntityName => "Weather";
+    protected override void Configure(Entity entity) => entity.AddComponent<Weather>();
 }
 
 /// <summary>Creates a room one camera view big, for a camera with a Follow to keep to and slide between.</summary>

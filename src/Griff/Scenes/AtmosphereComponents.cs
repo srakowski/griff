@@ -45,6 +45,13 @@ public sealed class Light : Component
     /// <summary>Where the light is, relative to the entity, e.g. (0, 0.5) for a lantern held up.</summary>
     public Vector2 Offset { get; set; }
 
+    /// <summary>
+    /// Walls, solid tiles and solid colliders block the light and cast shadows behind them. What carries the light (a
+    /// lantern's holder) and anything the light is inside (a torch set into a wall) cast none; triggers, one-way
+    /// platforms and background tiles let it through.
+    /// </summary>
+    public bool Shadows { get; set; }
+
     /// <summary>The intensity right now, flicker included. The game updates it while it runs.</summary>
     public float CurrentIntensity => Intensity * (1 - Math.Clamp(Flicker, 0, 1) * FlickerDip);
 

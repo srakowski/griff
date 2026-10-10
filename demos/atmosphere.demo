@@ -1,0 +1,81 @@
+title: Shadows, weather and screen effects
+intro: Lights now cast shadows, weather fills the sky, and the camera can make the whole screen look like an old TV or a handheld.
+project: TopDown | Storm Keep
+
+chapter: Shadows | Light, Shadows
+say: The Top-down template is a dark dungeon, lit by torches and the player's lantern.
+select: Main Camera
+say: First, let's give the floor the color of stone, so we can see where the light falls.
+set: Camera.Background = #6E685C
+select: Player
+explain: field:Light.Shadows | Shadows | Lights have a new setting, Shadows. With it ticked, walls, solid tiles and anything solid block the light and cast a shadow behind them.
+say: The template's lantern and torches have it on. What carries the light, here the player, never gets in its way.
+play
+wait: 1
+hold: Down 0.6
+wait: 0.5
+say: Walk past the crate, and its shadow swings away from the lantern.
+hold: Left 1.2
+wait: 0.4
+hold: Right 2.2
+wait: 0.8
+say: Scripts see shadows too. Game dot Light At says how lit a spot is, so a stealth game's guards can't see you behind a pillar.
+wait: 1
+stop
+
+chapter: Weather | Entity, Create Weather
+create: Weather
+explain: component:Weather | Weather | Create Weather makes rain, snow, falling leaves or rising embers that fill the view wherever the camera goes.
+set: Weather.Amount = 0.8
+set: Weather.Wind = -4
+explain: field:Weather.Wind | Wind | Amount says how heavy it is, and Wind slants the rain and drifts the snow.
+play
+wait: 2
+hold: Right 1.5
+wait: 1
+say: In the dark it's lit like everything else, so the rain glints near the lantern.
+wait: 1
+stop
+set: Weather.Kind = Snow
+set: Weather.Wind = 1
+say: Switch it to snow.
+play
+wait: 3.5
+stop
+set: Weather.Kind = Rain
+set: Weather.Storm = true
+pick: Weather.ThunderSound = Sounds/explode.wav
+explain: field:Weather.Storm | Storm | Tick Storm for lightning that flashes every few seconds, with thunder rumbling a moment later.
+play
+wait: 9
+stop
+
+chapter: Screen effects | Add Screen Effects to the camera
+select: Main Camera
+browse: ScreenEffects
+explain: catalog:docs | Screen Effects | The new Screen Effects component changes the look of the whole screen, HUD included. It goes on the camera.
+click: catalog:add
+explain: component:ScreenEffects | A soft vignette | It starts with a soft vignette round the edges.
+set: ScreenEffects.Scanlines = 0.6
+set: ScreenEffects.Curvature = 0.35
+set: ScreenEffects.Aberration = 0.35
+set: ScreenEffects.Grain = 0.3
+say: Scanlines, curved glass, color fringes and a little grain make an old TV.
+play
+wait: 1
+hold: Left 1.5
+wait: 1.5
+stop
+set: ScreenEffects.Scanlines = 0
+set: ScreenEffects.Curvature = 0
+set: ScreenEffects.Aberration = 0
+set: ScreenEffects.Grain = 0
+set: ScreenEffects.PixelSize = 4
+set: ScreenEffects.Palette = GameBoy
+explain: field:ScreenEffects.Palette | Palette | Or chunky pixels in four shades of green, like an old handheld. There's sepia and one bit black and white too.
+play
+wait: 1
+hold: Right 1.5
+wait: 1.5
+stop
+explain: component:ScreenEffects | Tween them | Saturation, contrast, brightness and tint grade the colors, and scripts can change any of it as the game runs: drain the color as the player's health runs low.

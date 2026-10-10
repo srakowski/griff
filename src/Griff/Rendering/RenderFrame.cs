@@ -32,9 +32,17 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
 /// <summary>A light to draw: its middle in the world, how far it reaches, its color times its brightness, and its softness.</summary>
 public readonly record struct LightDraw(Vector2 Center, float Radius, Color Color, float Softness)
 {
+    /// <summary>
+    /// For a light with <see cref="Scenes.Light.Shadows"/>: the sides that cast its shadows (see
+    /// <see cref="Rendering.Shadows.CastersFor"/>). Empty for a light without, or with nothing in its way.
+    /// </summary>
+    public IReadOnlyList<ShadowEdge> Casters { get; init; } = [];
+
     /// <summary>How much light it puts on <paramref name="point"/>, per channel.</summary>
     public Vector3 At(Vector2 point)
     {
+        if (Casters.Count > 0 && !Shadows.Reaches(Casters, Center, point))
+            return Vector3.Zero;
         var amount = Scenes.Light.Falloff(Vector2.Distance(point, Center), Radius, Softness);
         return new Vector3(Color.R, Color.G, Color.B) * amount;
     }
@@ -67,6 +75,9 @@ public sealed class RenderFrame
     /// debug shapes) are drawn over it as they are.
     /// </summary>
     public int LitCount { get; init; }
+
+    /// <summary>The camera's <see cref="ScreenEffects"/>, applied to the whole finished screen; null if it has none in use.</summary>
+    public ScreenEffects? Effects { get; init; }
 
     /// <summary>True if the scene is dark, so the renderer darkens the first <see cref="LitCount"/> sprites and adds lights.</summary>
     public bool IsDark => Ambient.R < 1 || Ambient.G < 1 || Ambient.B < 1;
@@ -145,6 +156,7 @@ public static class SceneRenderer
             Ambient = dark ? ambient : Color.White,
             Lights = dark ? LightsIn(scene, view) : [],
             LitCount = dark ? litCount : sprites.Count,
+            Effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } effects ? effects : null,
         };
     }
 
@@ -169,15 +181,23 @@ public static class SceneRenderer
         return lights;
     }
 
-    /// <summary>Every light in the scene that gives off any light, as it is now (flicker included).</summary>
+    /// <summary>
+    /// Every light in the scene that gives off any light, as it is now (flicker included), with the shadows of those
+    /// that cast them.
+    /// </summary>
     public static IEnumerable<LightDraw> LightDraws(Scene scene)
     {
+        List<ShadowEdge>? edges = null;
         foreach (var light in scene.Entities.Where(IsActive).SelectMany(e => e.GetComponents<Light>()))
         {
             var intensity = light.CurrentIntensity;
-            if (light.Radius > 0 && intensity > 0)
-                yield return new LightDraw(light.WorldCenter, light.Radius,
-                    new Color(light.Color.R * intensity, light.Color.G * intensity, light.Color.B * intensity), light.Softness);
+            if (!(light.Radius > 0) || !(intensity > 0))
+                continue;
+            var draw = new LightDraw(light.WorldCenter, light.Radius,
+                new Color(light.Color.R * intensity, light.Color.G * intensity, light.Color.B * intensity), light.Softness);
+            if (light.Shadows)
+                draw = draw with { Casters = Shadows.CastersFor(edges ??= Shadows.Edges(scene), light) };
+            yield return draw;
         }
     }
 
@@ -332,15 +352,53 @@ public static class SceneRenderer
     }
 
     /// <summary>
-    /// The draw order of an entity (its sprite's, tilemap's, bar's, slider's, text's or particles', in that preference), or
+    /// The draw order of an entity (its sprite's, tilemap's, bar's, slider's, text's, particles' or weather's, in that preference), or
     /// null if it draws nothing.
     /// </summary>
     public static int? OrderOf(Entity entity) =>
         entity.GetComponent<Sprite>()?.Order ?? entity.GetComponent<Tilemap>()?.Order ?? entity.GetComponent<Bar>()?.Order ??
-        entity.GetComponent<Slider>()?.Order ?? entity.GetComponent<Text>()?.Order ?? entity.GetComponent<ParticleEmitter>()?.Order;
+        entity.GetComponent<Slider>()?.Order ?? entity.GetComponent<Text>()?.Order ?? entity.GetComponent<ParticleEmitter>()?.Order ??
+        entity.GetComponent<Weather>()?.Order;
+
+    // An entity's draws, and its weather over the view on top.
+    private static IEnumerable<SpriteDraw> Draws(Entity entity, View view)
+    {
+        var draws = LayerDraws(entity, view);
+        return entity.GetComponent<Weather>() is { Drops.Count: > 0 } weather ? draws.Concat(WeatherDraws(entity, weather, view)) : draws;
+    }
+
+    /// <summary>
+    /// One quad per raindrop, snowflake, leaf or ember, wrapped into the view so it's always full however far the camera
+    /// goes: rain as streaks along the way it falls, leaves turning, embers flickering.
+    /// </summary>
+    private static IEnumerable<SpriteDraw> WeatherDraws(Entity entity, Weather weather, View view)
+    {
+        var z = entity.Transform.WorldPosition.Z;
+        var area = weather.Area;
+        var corner = view.Center - area / 2;
+        var slant = MathF.Atan2(weather.Wind, 18 * Math.Max(weather.Speed, 0.05f));
+        foreach (var drop in weather.Drops)
+        {
+            var position = new Vector2(corner.X + Wrap(drop.Position.X - corner.X, area.X), corner.Y + Wrap(drop.Position.Y - corner.Y, area.Y));
+            var color = new Color(drop.Color.R * weather.Tint.R, drop.Color.G * weather.Tint.G, drop.Color.B * weather.Tint.B, drop.Color.A * weather.Tint.A);
+            var shape = weather.Kind switch
+            {
+                WeatherKind.Rain => Matrix4x4.CreateScale(0.035f, drop.Size, 1) * Matrix4x4.CreateRotationZ(slant),
+                // A leaf flutters: it narrows and widens as it turns over.
+                WeatherKind.Leaves => Matrix4x4.CreateScale(drop.Size * (0.35f + 0.65f * MathF.Abs(MathF.Cos(drop.Phase * 2))), drop.Size * 0.55f, 1) *
+                                      Matrix4x4.CreateRotationZ(drop.Angle),
+                _ => Matrix4x4.CreateScale(drop.Size, drop.Size, 1),
+            };
+            if (weather.Kind == WeatherKind.Embers)
+                color = color with { A = color.A * (0.55f + 0.45f * MathF.Sin(drop.Phase)) };
+            yield return new SpriteDraw(shape * Matrix4x4.CreateTranslation(position.X, position.Y, z), null, color, entity);
+        }
+
+        static float Wrap(float value, float length) => length > 0 ? value - MathF.Floor(value / length) * length : value;
+    }
 
     // A parallax layer (the entity or an ancestor) shifts everything it draws, and may repeat its sprite across the view.
-    private static IEnumerable<SpriteDraw> Draws(Entity entity, View view)
+    private static IEnumerable<SpriteDraw> LayerDraws(Entity entity, View view)
     {
         var parallax = ParallaxOf(entity);
         if (parallax is null)

@@ -58,6 +58,8 @@ public sealed class ComponentRegistry
         registry.Register<SoundSource>();
         registry.Register<BackgroundMusic>();
         registry.Register<SoundPlayer>();
+        registry.Register<ScreenEffects>();
+        registry.Register<Weather>();
         return registry;
     }
 

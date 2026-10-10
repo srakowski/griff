@@ -18,48 +18,57 @@ public sealed class ExportResult
 }
 
 /// <summary>
-/// Builds a standalone game: the player app, the project's content (minus script sources) and the
-/// compiled scripts. The result can be zipped and uploaded as-is.
+/// Builds a standalone game as one executable: a copy of the player with the project's content (minus script
+/// sources) and the compiled scripts zipped onto its end (see <see cref="GamePackage"/>). The file can be shared as-is.
 /// </summary>
 public static class GameExporter
 {
-    private const string PlayerExecutable = "Griff.Player.exe";
-
-    /// <param name="playerFolder">Folder holding the built Griff.Player app.</param>
-    /// <param name="outputParent">The game is written to a folder named after the project inside this one.</param>
-    public static ExportResult Export(Project project, string playerFolder, string outputParent)
+    /// <param name="playerExecutable">The single-file Griff.Player to build from: self-contained, or one that needs .NET.</param>
+    /// <param name="outputFolder">Where the game's .exe is written.</param>
+    /// <param name="suffix">Added to the file name, e.g. " (needs .NET)", so builds of both kinds can sit side by side.</param>
+    public static ExportResult Export(Project project, string playerExecutable, string outputFolder, string suffix = "")
     {
-        if (!File.Exists(Path.Combine(playerFolder, PlayerExecutable)))
-            return new ExportResult { Success = false, Error = $"The player isn't installed at \"{playerFolder}\"." };
+        if (!File.Exists(playerExecutable))
+            return new ExportResult { Success = false, Error = $"The player isn't installed at \"{playerExecutable}\"." };
 
         var compiled = ScriptCompiler.CompileFolder(project.AssetsPath);
         if (!compiled.Success)
             return new ExportResult { Success = false, Diagnostics = compiled.Diagnostics, Error = "Scripts have errors." };
 
-        var output = Path.Combine(outputParent, project.Name);
-        if (Directory.Exists(output))
+        Directory.CreateDirectory(outputFolder);
+        var executable = Path.Combine(outputFolder, SafeFileName(project.Name) + suffix + ".exe");
+
+        // Only ever replace a file an earlier export created.
+        if (File.Exists(executable) && !GamePackage.IsPackaged(executable))
+            return new ExportResult { Success = false, Error = $"\"{executable}\" already exists and wasn't created by Griff. Choose another folder." };
+
+        var staging = Path.Combine(Path.GetTempPath(), "griff-export-" + Guid.NewGuid().ToString("N")[..8]);
+        try
         {
-            // Only ever replace a folder an earlier export created.
-            if (!File.Exists(Path.Combine(output, ExportLayout.Marker)))
-                return new ExportResult { Success = false, Error = $"\"{output}\" already exists and wasn't created by Griff. Choose another folder." };
-            Directory.Delete(output, recursive: true);
+            File.Copy(project.ManifestPath, Path.Combine(Directory.CreateDirectory(staging).FullName, Project.ManifestFileName));
+            CopyFolder(project.AssetsPath, Path.Combine(staging, Project.AssetsFolderName),
+                path => !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
+            if (compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
+                File.WriteAllBytes(Path.Combine(staging, ExportLayout.ScriptsAssembly), assembly);
+
+            // Written next to the target and moved into place, so a failed export leaves the last good one alone.
+            var partial = executable + ".partial";
+            File.Copy(playerExecutable, partial, overwrite: true);
+            GamePackage.Append(partial, staging);
+            File.Move(partial, executable, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
         }
 
-        CopyFolder(playerFolder, output, _ => true);
-        var executable = Path.Combine(output, SafeFileName(project.Name) + ".exe");
-        File.Move(Path.Combine(output, PlayerExecutable), executable, overwrite: true);
-
-        var game = Path.Combine(output, ExportLayout.GameFolder);
-        Directory.CreateDirectory(game);
-        File.Copy(project.ManifestPath, Path.Combine(game, Project.ManifestFileName));
-        CopyFolder(project.AssetsPath, Path.Combine(game, Project.AssetsFolderName),
-            path => !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
-
-        if (compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
-            File.WriteAllBytes(Path.Combine(game, ExportLayout.ScriptsAssembly), assembly);
-
-        File.WriteAllText(Path.Combine(output, ExportLayout.Marker), $"Exported {DateTimeOffset.Now:u}\n");
-        return new ExportResult { Success = true, Diagnostics = compiled.Diagnostics, OutputFolder = output, Executable = executable };
+        return new ExportResult { Success = true, Diagnostics = compiled.Diagnostics, OutputFolder = outputFolder, Executable = executable };
     }
 
     private static void CopyFolder(string source, string destination, Func<string, bool> include)

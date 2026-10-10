@@ -8,8 +8,8 @@ using Griff.Runtime;
 namespace Griff.Player;
 
 /// <summary>
-/// Runs an exported Griff game: loads the <c>game</c> folder next to the executable (or a project folder
-/// passed on the command line) and plays its start scene. F11 toggles fullscreen, as does the game itself
+/// Runs an exported Griff game: loads the game packed into the executable (see <see cref="GamePackage"/>), else the
+/// <c>game</c> folder next to it, or a project folder passed on the command line, and plays its start scene. F11 toggles fullscreen, as does the game itself
 /// (<see cref="Game.Fullscreen"/>), and the choice is remembered.
 /// </summary>
 public partial class App : Application
@@ -25,6 +25,13 @@ public partial class App : Application
         LoadedGame game;
         try
         {
+            // An exported game carries its content inside the exe; unpack it (once) and play from there.
+            if (e.Args.Length == 0 && Environment.ProcessPath is { } exe && GamePackage.IsPackaged(exe))
+            {
+                var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "Games");
+                folder = GamePackage.Extract(exe, cache, Path.GetFileNameWithoutExtension(exe))!;
+            }
+
             game = await GameLoader.LoadAsync(folder);
         }
         catch (Exception ex) when (Environment.GetEnvironmentVariable("GRIFF_PLAYER_SMOKE") is not null)

@@ -9,15 +9,15 @@ public sealed class GameExporterTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-export-" + Guid.NewGuid().ToString("N"));
     private readonly string _player;
     private readonly string _output;
+    private readonly string _cache;
 
     public GameExporterTests()
     {
-        _player = Path.Combine(_root, "player");
+        _player = Path.Combine(_root, "player", "Griff.Player.exe");
         _output = Path.Combine(_root, "out");
-        Directory.CreateDirectory(Path.Combine(_player, "runtimes"));
-        File.WriteAllText(Path.Combine(_player, "Griff.Player.exe"), "exe");
-        File.WriteAllText(Path.Combine(_player, "Griff.dll"), "dll");
-        File.WriteAllText(Path.Combine(_player, "runtimes", "native.dll"), "native");
+        _cache = Path.Combine(_root, "cache");
+        Directory.CreateDirectory(Path.GetDirectoryName(_player)!);
+        File.WriteAllText(_player, "player exe");
     }
 
     public void Dispose()
@@ -27,7 +27,7 @@ public sealed class GameExporterTests : IDisposable
     }
 
     [Fact]
-    public async Task Export_LaysOutPlayerContentAndScripts()
+    public async Task Export_PacksContentAndScriptsIntoOneExe()
     {
         var project = await Project.CreateAsync(_root, "Space Hop");
         Directory.CreateDirectory(Path.Combine(project.AssetsPath, "Scripts"));
@@ -37,10 +37,12 @@ public sealed class GameExporterTests : IDisposable
         var result = GameExporter.Export(project, _player, _output);
 
         Assert.True(result.Success, result.Error);
-        var game = Path.Combine(result.OutputFolder!, ExportLayout.GameFolder);
-        Assert.True(File.Exists(Path.Combine(result.OutputFolder!, "Space Hop.exe")));
-        Assert.False(File.Exists(Path.Combine(result.OutputFolder!, "Griff.Player.exe")));
-        Assert.True(File.Exists(Path.Combine(result.OutputFolder!, "runtimes", "native.dll")));
+        Assert.Equal(Path.Combine(_output, "Space Hop.exe"), result.Executable);
+        Assert.Equal(["Space Hop.exe"], Directory.GetFileSystemEntries(_output).Select(Path.GetFileName));
+        Assert.StartsWith("player exe", File.ReadAllText(result.Executable!));
+        Assert.True(GamePackage.IsPackaged(result.Executable!));
+
+        var game = GamePackage.Extract(result.Executable!, _cache, "Space Hop")!;
         Assert.True(File.Exists(Path.Combine(game, "project.griff")));
         Assert.True(File.Exists(Path.Combine(game, "Assets", "Main.scene")));
         Assert.True(File.Exists(Path.Combine(game, "Assets", "hero.png")));
@@ -55,7 +57,7 @@ public sealed class GameExporterTests : IDisposable
         File.WriteAllText(Path.Combine(project.AssetsPath, "Bouncer.cs"), "public class Bouncer : Behavior { public float Height { get; set; } = 2; }");
 
         var result = GameExporter.Export(project, _player, _output);
-        var loaded = await GameLoader.LoadAsync(Path.Combine(result.OutputFolder!, ExportLayout.GameFolder));
+        var loaded = await GameLoader.LoadAsync(GamePackage.Extract(result.Executable!, _cache, "Loader Test")!);
 
         Assert.Equal("Loader Test", loaded.Project.Name);
         Assert.NotNull(loaded.Components.Find("Bouncer"));
@@ -69,7 +71,7 @@ public sealed class GameExporterTests : IDisposable
 
         var result = GameExporter.Export(project, _player, _output);
         Assert.True(result.Success, result.Error);
-        var loaded = await GameLoader.LoadAsync(Path.Combine(result.OutputFolder!, ExportLayout.GameFolder));
+        var loaded = await GameLoader.LoadAsync(GamePackage.Extract(result.Executable!, _cache, "Arcade Export")!);
         Assert.Empty(loaded.Warnings);
         Assert.Equal(Project.DefaultSceneName, loaded.SceneName);
 
@@ -97,23 +99,61 @@ public sealed class GameExporterTests : IDisposable
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.Diagnostics);
-        Assert.False(Directory.Exists(Path.Combine(_output, "Broken")));
+        Assert.False(File.Exists(Path.Combine(_output, "Broken.exe")));
     }
 
     [Fact]
-    public async Task Export_ReplacesItsOwnOutput_ButNotOtherFolders()
+    public async Task Export_ReplacesItsOwnOutput_ButNotOtherFiles()
     {
         var project = await Project.CreateAsync(_root, "Again");
         Assert.True(GameExporter.Export(project, _player, _output).Success);
         Assert.True(GameExporter.Export(project, _player, _output).Success);
 
         var foreign = await Project.CreateAsync(_root, "Foreign");
-        Directory.CreateDirectory(Path.Combine(_output, "Foreign"));
-        File.WriteAllText(Path.Combine(_output, "Foreign", "keep.txt"), "mine");
+        File.WriteAllText(Path.Combine(_output, "Foreign.exe"), "mine");
 
         var result = GameExporter.Export(foreign, _player, _output);
 
         Assert.False(result.Success);
-        Assert.True(File.Exists(Path.Combine(_output, "Foreign", "keep.txt")));
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(_output, "Foreign.exe")));
+    }
+
+    [Fact]
+    public async Task Export_WithSuffix_SitsBesideTheOtherKind()
+    {
+        var project = await Project.CreateAsync(_root, "Both");
+
+        Assert.True(GameExporter.Export(project, _player, _output).Success);
+        var small = GameExporter.Export(project, _player, _output, " (needs .NET)");
+
+        Assert.True(small.Success, small.Error);
+        Assert.True(File.Exists(Path.Combine(_output, "Both.exe")));
+        Assert.Equal(Path.Combine(_output, "Both (needs .NET).exe"), small.Executable);
+    }
+
+    [Fact]
+    public async Task Extract_UnpacksOncePerVersion_AndClearsOldVersions()
+    {
+        var project = await Project.CreateAsync(_root, "Versions");
+        var exe = GameExporter.Export(project, _player, _output).Executable!;
+        var first = GamePackage.Extract(exe, _cache, "Versions")!;
+        File.WriteAllText(Path.Combine(first, "touched.txt"), "kept while the game is unchanged");
+        Assert.Equal(first, GamePackage.Extract(exe, _cache, "Versions"));
+        Assert.True(File.Exists(Path.Combine(first, "touched.txt")));
+
+        File.WriteAllText(Path.Combine(project.AssetsPath, "new.txt"), "a change");
+        GameExporter.Export(project, _player, _output);
+        var second = GamePackage.Extract(exe, _cache, "Versions")!;
+
+        Assert.NotEqual(first, second);
+        Assert.True(File.Exists(Path.Combine(second, "Assets", "new.txt")));
+        Assert.False(Directory.Exists(first));
+    }
+
+    [Fact]
+    public void Extract_OfAPlainExe_IsNull()
+    {
+        Assert.False(GamePackage.IsPackaged(_player));
+        Assert.Null(GamePackage.Extract(_player, _cache, "Plain"));
     }
 }

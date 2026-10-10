@@ -13,7 +13,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 - **A crash costs nothing.** Unsaved scenes are written to a recovery copy every 20 seconds and offered back next time you open them.
 - **Readable files.** Scenes are small, stable JSON (`"position": [1.5, -2, 0]`) that diff and merge cleanly in git. A deleted or renamed script never destroys data; its values are kept and come back with it.
 - **Batteries included.** Sprites and sprite-sheet animation with named clips, tilemaps you paint right in the Scene view (with autotiles that fit themselves to their neighbors, and slopes to run up and down), pathfinding around their walls, players that run, jump, wall-jump, dash and climb ladders or move top-down with no code, crates to push, springs, crumbling ledges, platforms you drop through, particles, prefabs, timers, coroutines, tweens with easing, messages between scripts, text in your own fonts, 2D physics with boxes, circles, bounce, triggers, collision layers, raycasts, moving platforms that follow a path, wall checks and coyote time, a follow camera that stays inside the level, rooms the camera slides between, darkness lit by flickering torches and lanterns, parallax backgrounds, top-down depth sorting, camera shake, screen flashes, slow motion, health with hit flashes and invincibility, health bars, damage on touch, checkpoints and respawning, enemies that patrol or chase (around walls too), swords and other close-up attacks for players and enemies, turrets and guns, doors and teleporters, dialogue with signs and characters, levers, pressure plates and buttons that open gates and bring out bridges, keys, locked doors and an inventory, animated tiles, afterimage trails, hit stop, pickups and score counters that need no code, spawners and lifetimes, typewriter dialogue text, debug drawing, save data, input with named actions players can rebind (and keep), jump buffering, twin-stick aiming, rumble and name entry, sound and music with volume settings, sounds that come from where things are, looping sounds in the level, music that crossfades, menus and HUDs with buttons, sliders, toggles and choices that work with the mouse, keyboard or a controller, pause menus and panels that need no code, button prompts that switch between keyboard and controller, a controls screen players rebind from, options that are remembered, stretchable nine-slice panels, screen-pinned text, fades, wipes and irises between scenes, and Platformer, Top-down and Arcade templates that are playable from the first second.
-- **One click to ship.** Build Game produces a standalone folder with a `.exe`, ready to zip and upload.
+- **One click to ship.** Build Game produces a single `.exe` that carries everything, .NET included, so players install nothing. Build Small Game makes a 4 MB `.exe` for players who have the .NET Desktop Runtime.
 
 ## Using the editor
 
@@ -27,7 +27,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 | Rename, duplicate, delete | F2, Ctrl+D, Delete |
 | Play / pause / step / stop | F5 / F6 / F10 / Shift+F5 |
 | Cut / copy / paste entities | Ctrl+X / Ctrl+C / Ctrl+V |
-| Build game | Ctrl+B |
+| Build game / small game | Ctrl+B / Ctrl+Shift+B |
 
 In the **Scene view**:
 - Scroll to zoom.

@@ -11,7 +11,7 @@ namespace Griff.Editor.Features.Hierarchy;
 public partial class HierarchyView : UserControl
 {
     private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"];
-    private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete"];
+    private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock"];
     private static readonly string[] ClipboardCommands = ["Entity.Cut", "Entity.Copy", "Entity.Paste"];
 
     private readonly CommandRegistry _commands;
@@ -44,10 +44,17 @@ public partial class HierarchyView : UserControl
                     Command = command,
                     InputGestureText = command.GestureText,
                     Icon = command.Icon is { } icon ? Icons.Create(icon) : null,
+                    Tag = command,
                 });
             }
         }
 
+        // On/off commands (Lock) show their tick as the menu opens.
+        menu.Opened += (_, _) =>
+        {
+            foreach (var item in menu.Items.OfType<MenuItem>())
+                item.IsChecked = item.Tag is EditorCommand { IsChecked: true };
+        };
         return menu;
     }
 

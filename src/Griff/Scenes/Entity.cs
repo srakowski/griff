@@ -29,6 +29,27 @@ public sealed class Entity
 
     public bool IsEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Locked in the editor: clicks and box selections in the Scene view pass through it (and everything inside it) to
+    /// what's behind, though the Hierarchy still selects it. The game ignores it.
+    /// </summary>
+    public bool IsLocked { get; set; }
+
+    /// <summary>True if this entity or one of its parents is <see cref="IsLocked"/>.</summary>
+    public bool IsLockedInHierarchy
+    {
+        get
+        {
+            for (var current = this; current is not null; current = current.Parent)
+            {
+                if (current.IsLocked)
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
     public Scene? Scene { get; internal set; }
 
     public Entity? Parent { get; internal set; }

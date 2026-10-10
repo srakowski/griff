@@ -193,7 +193,7 @@ public sealed class SceneViewControl : FrameworkElement
 
         DrawGrid(dc);
 
-        foreach (var entity in DrawOrder())
+        foreach (var entity in SceneViewModel.DrawOrder(_document.Scene))
         {
             if (entity.GetComponent<Tilemap>() is { } tilemap)
                 DrawTilemap(dc, entity, tilemap);
@@ -718,43 +718,9 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Scene queries -----
 
-    /// <summary>Everything drawn, back to front: drawables in render order, then cameras and bare entities on top.</summary>
-    private IEnumerable<Entity> DrawOrder()
-    {
-        var scene = _document!.Scene;
-        return SceneRenderer.DrawOrder(scene)
-            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && SceneRenderer.IsActive(e)));
-    }
-
-    /// <summary>Topmost entity under the point. Sprites hit by area; bare entities and cameras by their pivot.</summary>
-    private Entity? HitTest(Point screen)
-    {
-        if (_document is null)
-            return null;
-
-        var world = ToWorld(screen);
-        foreach (var entity in DrawOrder().Reverse())
-        {
-            var pivot = ToScreen(ToVector2(entity.Transform.WorldPosition));
-            if ((pivot - screen).Length <= MarkerRadius + 3)
-                return entity;
-
-            if (!Matrix4x4.Invert(entity.Transform.WorldMatrix, out var inverse))
-                continue;
-            var local = Vector3.Transform(new Vector3(world, 0), inverse);
-            if (entity.GetComponent<Sprite>() is { } sprite && Math.Abs(local.X) <= sprite.Size.X / 2 && Math.Abs(local.Y) <= sprite.Size.Y / 2)
-                return entity;
-            if ((entity.GetComponent<Bar>()?.Size ?? entity.GetComponent<Griff.Scenes.Slider>()?.Size) is { } bar &&
-                Math.Abs(local.X) <= Math.Abs(bar.X) / 2 && Math.Abs(local.Y) <= Math.Abs(bar.Y) / 2)
-                return entity;
-
-            // Tilemaps are hit where there's a tile, so the empty parts don't block clicks on what's behind.
-            if (entity.GetComponent<Tilemap>() is { } tilemap && tilemap.CellAt(new Vector2(local.X, local.Y)) is var (x, y) && tilemap.GetTile(x, y) >= 0)
-                return entity;
-        }
-
-        return null;
-    }
+    /// <summary>Topmost unlocked entity under the point (see <see cref="SceneViewModel.EntityAt"/>); pivots are hit within a few pixels.</summary>
+    private Entity? HitTest(Point screen) =>
+        _document is null ? null : _model.EntityAt(ToWorld(screen), (float)((MarkerRadius + 3) / _zoom));
 
     // ----- Tile palette -----
 

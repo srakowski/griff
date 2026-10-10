@@ -204,6 +204,28 @@ public sealed class SetEntityEnabledEdit(Entity entity, bool enabled) : IEdit
     public void Revert() => Entity.IsEnabled = _oldEnabled;
 }
 
+/// <summary>Locks or unlocks entities in the Scene view (see <see cref="Entity.IsLocked"/>), as one undo step.</summary>
+public sealed class SetEntitiesLockedEdit(IReadOnlyList<Entity> entities, bool locked) : IEdit
+{
+    private readonly bool[] _oldLocked = entities.Select(e => e.IsLocked).ToArray();
+
+    public IReadOnlyList<Entity> Entities { get; } = entities;
+
+    public string Description => (locked ? "Lock " : "Unlock ") + (Entities.Count == 1 ? Entities[0].Name : $"{Entities.Count} entities");
+
+    public void Apply()
+    {
+        foreach (var entity in Entities)
+            entity.IsLocked = locked;
+    }
+
+    public void Revert()
+    {
+        for (var i = 0; i < Entities.Count; i++)
+            Entities[i].IsLocked = _oldLocked[i];
+    }
+}
+
 /// <summary>Adds an entity (with any children it already has) to a scene.</summary>
 public sealed class AddEntityEdit(Scene scene, Entity entity, Entity? parent = null, int? index = null) : IEdit
 {

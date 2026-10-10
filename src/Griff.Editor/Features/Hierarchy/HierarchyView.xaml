@@ -58,16 +58,53 @@
                 </TreeView.ItemContainerStyle>
                 <TreeView.ItemTemplate>
                     <HierarchicalDataTemplate DataType="hierarchy:EntityNode" ItemsSource="{Binding Children}">
-                        <Grid>
+                        <Grid x:Name="Row" Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
                             <!-- Drop indicators -->
                             <Border x:Name="DropInto"
+                                    Grid.ColumnSpan="2"
                                     Margin="-4,-2"
                                     BorderBrush="{DynamicResource Brush.Accent}"
                                     BorderThickness="1"
                                     CornerRadius="{StaticResource Radius.Small}"
                                     Visibility="Collapsed" />
-                            <Rectangle x:Name="DropBefore" Height="2" Margin="-4,-4,0,0" VerticalAlignment="Top" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
-                            <Rectangle x:Name="DropAfter" Height="2" Margin="-4,0,0,-4" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+                            <Rectangle x:Name="DropBefore" Grid.ColumnSpan="2" Height="2" Margin="-4,-4,0,0" VerticalAlignment="Top" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+                            <Rectangle x:Name="DropAfter" Grid.ColumnSpan="2" Height="2" Margin="-4,0,0,-4" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+
+                            <!-- Lock: shown on locked rows (faint when a parent's lock covers it), and on hover to lock one. -->
+                            <ToggleButton x:Name="LockToggle"
+                                          Grid.Column="1"
+                                          Margin="6,0,0,0"
+                                          Cursor="Hand"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsLocked, Mode=TwoWay}"
+                                          Opacity="0"
+                                          ToolTip="Lock in the Scene view: clicks pass through it">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Width="18" Height="18" Background="Transparent">
+                                            <TextBlock FontSize="{StaticResource IconSize.Small}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       Style="{StaticResource Style.Icon}"
+                                                       Text="{x:Static theme:Icons.Lock}" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Tertiary}" />
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
 
                             <TextBlock x:Name="Label" VerticalAlignment="Center" Text="{Binding Name}" />
                             <TextBox x:Name="Editor"
@@ -83,6 +120,17 @@
                         <DataTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsEnabled}" Value="False">
                                 <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                            </DataTrigger>
+                            <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="LockToggle" Property="Opacity" Value="0.6" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsLockedByParent}" Value="True">
+                                <Setter TargetName="LockToggle" Property="Opacity" Value="0.4" />
+                                <Setter TargetName="LockToggle" Property="ToolTip" Value="Locked with its parent" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                <Setter TargetName="LockToggle" Property="Opacity" Value="1" />
+                                <Setter TargetName="LockToggle" Property="ToolTip" Value="Locked in the Scene view: click to unlock" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsEditing}" Value="True">
                                 <Setter TargetName="Label" Property="Visibility" Value="Hidden" />

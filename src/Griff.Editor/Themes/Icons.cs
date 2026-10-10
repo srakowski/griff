@@ -34,6 +34,7 @@ public static class Icons
     public const string Library = "\uE8F1";
     public const string Link = "\uE71B";
     public const string Shuffle = "\uE8B1";
+    public const string Lock = "\uE72E";
 
     // Playback
     public const string Play = "\uE768";

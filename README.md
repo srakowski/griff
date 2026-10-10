@@ -41,11 +41,13 @@ In the **Scene view**:
 - Press F to frame the selection.
 - Arrow keys nudge everything selected by half a unit (Shift for a tenth).
 - Drop an image to create a sprite, or a prefab to place a copy of it.
+- Lock a backdrop or a big tilemap so clicks and box selections pass through it to what's behind: click the lock by its row in the Hierarchy (it shows when you hover), or **Entity → Lock**. Everything inside a locked entity is locked with it. Locked entities can still be selected in the Hierarchy, and nudged or edited in the Inspector; the game ignores locking.
 
 In the **Hierarchy**:
 - Click to select; Ctrl-click adds or takes one away, Shift-click selects every row from the last one clicked (Ctrl+Shift-click adds them).
 - Delete, duplicate, cut, copy and paste work on everything selected, as one undo step. Duplicates go right after their originals, pastes after the selected entity, and the copies end up selected.
 - Drag a row onto another to put it inside, or above or below it.
+- The lock by a row locks it in the Scene view (all of the selection, if the row is one of them). Locked rows keep their lock showing; rows a parent's lock covers show it faintly.
 - The Inspector edits them all at once, and the Scene view outlines them all.
 
 **Tilemaps.** **Entity → Create Tilemap**, then set its **Image** to a tileset and its **Columns** and **Rows** to the tileset's layout. While a tilemap is selected, the Scene view paints:
@@ -217,7 +219,7 @@ While the editor is open it runs a [Model Context Protocol](https://modelcontext
 
 - **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity` (or `select` several first: Delete, Duplicate, Cut and Copy act on all of them); a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
 - **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
-- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's box selection and moving, the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
+- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection and moving, the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
 - **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
 - **Checking work**: `editor_screenshot` shows the game or the editor, `game_input` plays the running game with keys (and can pause it between moves), `editor_state` and `output_read` say what's going on.
 
@@ -553,7 +555,6 @@ Griff is young. Known gaps:
 - Tilemaps use one tileset of up to 62 tiles.
 - Panels are resizable but not dockable.
 - Dragging rows in the Hierarchy moves one at a time, even with several selected.
-- Entities can't be locked in the Scene view yet, so a drag that starts on a big backdrop sprite moves it rather than drawing a selection box.
 - Strategy games' units only walk (no flying or water), and the fog of war is drawn in squares.
 - Multiplayer connects directly: to play over the internet, the host forwards their port (7777 by default) on their router; there's no matchmaking, relay or lobby server yet. Players' own machines move their own characters, which suits friends better than strangers (pick **Host** movement where cheating matters), and shots are judged where the host sees things, without rewinding for lag. Rewinding in the editor works with one player, and a network game can't hit-stop or slow down (it's everyone's).
 - Block worlds are side-on (Terraria style); in first person, digging works on the flat map's walls. Water and lava don't flow, and light from glowing blocks casts no shadows.

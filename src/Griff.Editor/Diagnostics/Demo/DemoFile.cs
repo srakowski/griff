@@ -1039,6 +1039,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 ui.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),
@@ -1052,7 +1053,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, world:, gameworld:, hud:)."),
         };
     }
 

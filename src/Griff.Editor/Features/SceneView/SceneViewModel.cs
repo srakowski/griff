@@ -40,10 +40,63 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         bool Inside(Vector2 p) => p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
 
         return document.Scene.Entities
-            .Where(SceneRenderer.IsActive)
+            .Where(e => SceneRenderer.IsActive(e) && !e.IsLockedInHierarchy)
             .Where(e => Outline(e) is { } corners ? corners.All(Inside) : Inside(Flat(e.Transform.WorldPosition)))
             .ToList();
     }
+
+    /// <summary>
+    /// A click at a point in the world, as the Scene view takes one: selects the entity there (see
+    /// <see cref="EntityAt"/>), or nothing on empty space. <paramref name="add"/> adds it to the selection or takes it
+    /// out, as Ctrl-click does. Returns the entity clicked.
+    /// </summary>
+    public Entity? SelectAt(Vector2 world, bool add = false)
+    {
+        var hit = EntityAt(world, pivotRadius: 0.25f);
+        if (hit is not null && add)
+            selection.Toggle(hit);
+        else if (hit is not null || !add)
+            selection.Select(hit);
+        return hit;
+    }
+
+    /// <summary>
+    /// The topmost entity a click at <paramref name="world"/> picks, or null for empty space. Sprites, bars and sliders
+    /// are hit by their area, tilemaps where they have a tile, and anything by its position within
+    /// <paramref name="pivotRadius"/> world units. Locked entities are passed over, so the click reaches what's behind.
+    /// </summary>
+    public Entity? EntityAt(Vector2 world, float pivotRadius)
+    {
+        if (workspace.Scene is not { } document)
+            return null;
+
+        foreach (var entity in DrawOrder(document.Scene).Reverse())
+        {
+            if (entity.IsLockedInHierarchy)
+                continue;
+            if (Vector2.Distance(Flat(entity.Transform.WorldPosition), world) <= pivotRadius)
+                return entity;
+
+            if (!Matrix4x4.Invert(entity.Transform.WorldMatrix, out var inverse))
+                continue;
+            var local = Vector3.Transform(new Vector3(world, 0), inverse);
+            if (entity.GetComponent<Sprite>() is { } sprite && Math.Abs(local.X) <= sprite.Size.X / 2 && Math.Abs(local.Y) <= sprite.Size.Y / 2)
+                return entity;
+            if ((entity.GetComponent<Bar>()?.Size ?? entity.GetComponent<Slider>()?.Size) is { } bar &&
+                Math.Abs(local.X) <= Math.Abs(bar.X) / 2 && Math.Abs(local.Y) <= Math.Abs(bar.Y) / 2)
+                return entity;
+
+            // Tilemaps are hit where there's a tile, so the empty parts don't block clicks on what's behind.
+            if (entity.GetComponent<Tilemap>() is { } tilemap && tilemap.CellAt(new Vector2(local.X, local.Y)) is var (x, y) && tilemap.GetTile(x, y) >= 0)
+                return entity;
+        }
+
+        return null;
+    }
+
+    /// <summary>Everything drawn, back to front: drawables in render order, then cameras and bare entities on top.</summary>
+    public static IEnumerable<Entity> DrawOrder(Scene scene) =>
+        SceneRenderer.DrawOrder(scene).Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && SceneRenderer.IsActive(e)));
 
     /// <summary>Moves everything selected by <paramref name="offset"/> world units, as one undo step.</summary>
     public void MoveSelection(Vector2 offset)

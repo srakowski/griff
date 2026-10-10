@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Entities;
 using Griff.Editor.Themes;
 using Griff.Scenes;
 
@@ -32,6 +33,23 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
     public string Name => Entity.Name;
 
     public bool IsEnabled => Entity.IsEnabled;
+
+    /// <summary>
+    /// Whether the entity is locked in the Scene view. Setting it locks or unlocks this row, or every selected row if
+    /// this one is selected, as one undo step.
+    /// </summary>
+    public bool IsLocked
+    {
+        get => Entity.IsLocked;
+        set
+        {
+            if (value != Entity.IsLocked)
+                owner.SetLocked(this, value);
+        }
+    }
+
+    /// <summary>Whether a parent's lock covers the entity (so the Scene view passes over it too).</summary>
+    public bool IsLockedByParent => !Entity.IsLocked && Entity.IsLockedInHierarchy;
 
     public ObservableCollection<EntityNode> Children { get; } = [];
 
@@ -150,6 +168,13 @@ public sealed class HierarchyPanel : ToolPanel
             _selection.Toggle(entity);
         else
             _selection.Select(entity);
+    }
+
+    /// <summary>Locks or unlocks a row's entity in the Scene view; a selected row takes the rest of the selection with it.</summary>
+    public void SetLocked(EntityNode node, bool locked)
+    {
+        if (_document is not null)
+            EntityEdits.SetLocked(_document, node.IsSelected ? _selection.Entities : [node.Entity], locked);
     }
 
     public void CommitRename(EntityNode node)

@@ -1,0 +1,36 @@
+title: Lock things in the Scene view
+intro: Lock a backdrop or a big tilemap, and clicks and box selections pass straight through it to what's in front.
+project: Platformer | Scene Lock
+
+chapter: The backdrop gets in the way | Every drag starts on it
+look: 6, 3, 6
+say: This level sits on a big backdrop sprite that fills the whole sky.
+say: Say we want to box select the crumbling ledge up here, and its coin. We drag across the sky around them.
+scenedrag: 5.5, 6.5 > 12, 3.4
+expectat: Backdrop = 6.5, -1.1
+explain: entity:Backdrop | Moved the backdrop | But there's no empty sky to start from. The drag grabbed the backdrop and dragged it away.
+key: Ctrl+Z
+expectat: Backdrop = 0, 2
+
+chapter: Lock it | The lock by its row in the Hierarchy
+say: Every row in the Hierarchy now has a lock that shows when you hover over it.
+click: lock:Backdrop
+explain: lock:Backdrop | Locked | Click it, and the backdrop is locked in the Scene view. Anything inside a locked entity is locked along with it.
+say: Locked things still draw and still play the same. The Scene view just looks past them.
+
+chapter: Clicks pass through | Box selection works again
+scenedrag: 5.5, 6.5 > 12, 3.4
+expectat: Backdrop = 0, 2
+expectselected: Crumbling Ledge, Coin
+explain: world:5.5, 6.5, 12, 3.4 | Caught in the box | The same drag now draws a box, and it catches the ledge and its coin, not the backdrop.
+sceneclick: 1.5, 7.5
+expectselected:
+say: A click on the sky is a click on empty space, so it clears the selection.
+select: Backdrop
+explain: panel:Inspector | Still editable | The Hierarchy still picks a locked entity, so you can change it in the Inspector whenever you like.
+menu: Entity > Lock
+say: And Entity, Lock, locks or unlocks everything selected, as one undo step.
+deselect
+sceneclick: 1.5, 7.5
+expectselected: Backdrop
+say: Unlocked again, a click on the sky picks the backdrop.

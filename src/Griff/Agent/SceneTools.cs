@@ -47,7 +47,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     private const string EntityFormat =
         "An entity is a JSON object: {\"name\": \"Coin\", \"position\": [3, 1], \"components\": {\"Sprite\": {\"image\": \"Sprites/coin.png\"}, " +
         "\"Pickup\": {\"message\": \"Score\"}}, \"children\": [ ...more entities ]}. Optional: \"prefab\" (start from a prefab by name), " +
-        "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\". Components are keyed by name (see components_list), or " +
+        "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\", \"locked\" (the editor's Scene view clicks through it; " +
+        "the game ignores it). Components are keyed by name (see components_list), or " +
         "given as a list of {\"type\": \"Light\", ...} for several of one kind. Property keys are as component_describe shows them (camelCase; any case works). " +
         "Whatever a component needs (a Patrol needs a Body and a collider) is added along with it.";
 
@@ -116,13 +117,13 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             Name = "entity_update",
             Title = "Update Entities",
-            Description = "Changes entities, as one undo step: rename, enable, move in the hierarchy (\"parent\": a name, or null for " +
+            Description = "Changes entities, as one undo step: rename, enable, lock (\"locked\": the Scene view clicks through it), move in the hierarchy (\"parent\": a name, or null for " +
                 "the top level; \"index\": its place among siblings), place (\"position\", \"rotation\", \"scale\"), and set component " +
                 "properties with \"components\": {\"Light\": {\"radius\": 6}} (a component it doesn't have yet is added, with what it needs; " +
                 "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off.",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("The entity to change (name, id or path).")),
-                ("changes", Schema.Map("What to change: name, enabled, parent, index, position, rotation, scale, components, remove.")),
+                ("changes", Schema.Map("What to change: name, enabled, locked, parent, index, position, rotation, scale, components, remove.")),
                 ("updates", Schema.Array(Schema.Map("{\"entity\": ..., \"changes\": {...}}"), "Several entities to change at once.")),
             ]),
             Invoke = args => Task.FromResult(Update(args)),
@@ -230,7 +231,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     {
         var p = entity.Transform.Position;
         var components = entity.Components.Skip(1).Select(c => c is MissingComponent m ? $"{m.TypeName} (missing)" : c.GetType().Name);
-        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")} [{string.Join(", ", components)}]";
+        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")}{(entity.IsLocked ? " locked" : "")} [{string.Join(", ", components)}]";
     }
 
     private ToolResult Get(ToolArgs args)
@@ -251,6 +252,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         if (!entity.IsEnabled)
             result["enabled"] = false;
+        if (entity.IsLocked)
+            result["locked"] = true;
 
         var components = new JsonArray();
         foreach (var component in entity.Components)
@@ -363,6 +366,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         if (Prop(spec, "enabled") is { } enabled)
             entity.IsEnabled = enabled.ValueKind != JsonValueKind.False;
+        if (Prop(spec, "locked") is { } locked)
+            entity.IsLocked = locked.ValueKind == JsonValueKind.True;
 
         foreach (var (type, occurrence, properties) in ComponentEntries(spec))
         {
@@ -461,6 +466,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             host.Execute(new RenameEntityEdit(entity, name.GetString()!));
         if (Prop(changes, "enabled") is { } enabled && (enabled.ValueKind != JsonValueKind.False) != entity.IsEnabled)
             host.Execute(new SetEntityEnabledEdit(entity, enabled.ValueKind != JsonValueKind.False));
+        if (Prop(changes, "locked") is { } locked && (locked.ValueKind == JsonValueKind.True) != entity.IsLocked)
+            host.Execute(new SetEntitiesLockedEdit([entity], locked.ValueKind == JsonValueKind.True));
 
         if (changes.TryGetProperty("parent", out var parentElement) || Prop(changes, "index") is not null)
         {

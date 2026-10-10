@@ -188,6 +188,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public TreeViewItem? HierarchyItem(string name) =>
         Descendants<TreeViewItem>(PanelContent("Hierarchy")).FirstOrDefault(i => i.DataContext is EntityNode n && n.Name == name && i.IsVisible);
 
+    /// <summary>The lock button on an entity's row in the Hierarchy.</summary>
+    public ToggleButton? HierarchyLock(string name) =>
+        HierarchyItem(name) is { DataContext: EntityNode node } item
+            ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "LockToggle" && b.DataContext == node)
+            : null;
+
     public InspectorView Inspector => (InspectorView)PanelContent("Inspector");
 
     public Border? ComponentHeader(string component) =>

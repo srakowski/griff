@@ -147,6 +147,24 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void Locked_IsSaved_OnlyWhenSet_AndCoversChildren()
+    {
+        var scene = new Scene();
+        var backdrop = new Entity("Backdrop") { IsLocked = true };
+        var stars = new Entity("Stars");
+        scene.Add(backdrop);
+        scene.Add(stars, backdrop);
+        scene.Add(new Entity("Player"));
+
+        var json = _serializer.SaveToString(scene);
+        var loaded = _serializer.LoadFromString(json);
+
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"locked\": true"));
+        Assert.Equal([true, false, false], loaded.Entities.Select(e => e.IsLocked));
+        Assert.Equal([true, true, false], loaded.Entities.Select(e => e.IsLockedInHierarchy));
+    }
+
+    [Fact]
     public void UnknownComponent_IsKeptAndWrittenBackUnchanged()
     {
         var json = """

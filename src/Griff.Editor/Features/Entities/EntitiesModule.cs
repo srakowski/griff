@@ -48,7 +48,8 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CopyEntityCommand>()
             .AddCommand<CutEntityCommand>()
             .AddCommand<PasteEntityCommand>()
-            .AddCommand<SaveAsPrefabCommand>();
+            .AddCommand<SaveAsPrefabCommand>()
+            .AddCommand<LockEntityCommand>();
     }
 }
 
@@ -581,6 +582,13 @@ internal static class EntityEdits
     /// <summary>Removes entities (in scene order) from the bottom up, so each one's place is still right on undo.</summary>
     public static IEdit Remove(Scene scene, IReadOnlyList<Entity> entities, string verb) =>
         Group(entities.Reverse().Select(e => (IEdit)new RemoveEntityEdit(scene, e)).ToList(), verb, entities);
+
+    /// <summary>Locks or unlocks the entities that aren't that way already, as one undo step.</summary>
+    public static void SetLocked(SceneDocument document, IEnumerable<Entity> entities, bool locked)
+    {
+        if (entities.Where(e => e.IsLocked != locked).ToList() is { Count: > 0 } changing)
+            document.Execute(new SetEntitiesLockedEdit(changing, locked));
+    }
 }
 
 /// <summary>Entities on the clipboard are scene JSON, so they paste across scenes and even projects.</summary>
@@ -701,6 +709,30 @@ public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selecti
     {
         if (workspace.Scene is { } document && selection.TopLevel() is { Count: > 0 } entities)
             document.Execute(EntityEdits.Remove(document.Scene, entities, "Delete"));
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Locks the selected entities in the Scene view, so clicks and box selections pass through them (and what's inside
+/// them) to what's behind: a backdrop or a big tilemap stops catching every drag. Unlocks them if they're all locked
+/// already. The Hierarchy still selects locked entities, and the game ignores locking. One undo step.
+/// </summary>
+public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.Lock";
+    public override string Text => "Loc_k";
+    public override string? Icon => Icons.Lock;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
+
+    public override bool? IsChecked => selection.Entities.Count > 0 && selection.Entities.All(e => e.IsLocked);
+
+    protected override bool CanExecuteCore() => selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is { } document && selection.Entities.Count > 0)
+            EntityEdits.SetLocked(document, selection.Entities, IsChecked != true);
         return Task.CompletedTask;
     }
 }

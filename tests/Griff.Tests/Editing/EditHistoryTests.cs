@@ -15,6 +15,24 @@ public class EditHistoryTests
         _registry.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
 
     [Fact]
+    public void SetLocked_LocksSeveral_AndUndoesEachToItsOwnState()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B") { IsLocked = true });
+
+        _history.Execute(new SetEntitiesLockedEdit([a, b], locked: true));
+        Assert.True(a.IsLocked && b.IsLocked);
+        Assert.Equal("Lock 2 entities", _history.UndoDescription);
+
+        _history.Undo();
+        Assert.False(a.IsLocked);
+        Assert.True(b.IsLocked);
+
+        _history.Execute(new SetEntitiesLockedEdit([b], locked: false));
+        Assert.Equal("Unlock B", _history.UndoDescription);
+        Assert.False(b.IsLocked);
+    }
+
+    [Fact]
     public void UndoRedo_RestoresStateExactly()
     {
         var entity = new Entity("Player");

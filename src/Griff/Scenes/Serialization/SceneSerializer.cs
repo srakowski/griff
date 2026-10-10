@@ -233,6 +233,8 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         writer.WriteString("name", entity.Name);
         if (!entity.IsEnabled)
             writer.WriteBoolean("enabled", false);
+        if (entity.IsLocked)
+            writer.WriteBoolean("locked", true);
 
         writer.WriteStartArray("components");
         foreach (var component in entity.Components)
@@ -289,6 +291,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         var entity = new Entity(id, name, transform)
         {
             IsEnabled = !element.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean(),
+            IsLocked = element.TryGetProperty("locked", out var locked) && locked.GetBoolean(),
         };
 
         if (element.TryGetProperty("components", out var components))

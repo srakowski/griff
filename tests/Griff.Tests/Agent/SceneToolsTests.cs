@@ -263,4 +263,25 @@ public class SceneToolsTests
         Assert.Contains("- thrust: [x, y] = [0,12]", described);
         Assert.Contains("Jetpack", Run("components_list", """{"category": "Gameplay"}""").Text);
     }
+
+    [Fact]
+    public void Locked_IsCreatedShownAndUpdated()
+    {
+        Run("entity_create", """{"entity": {"name": "Backdrop", "locked": true, "components": {"Sprite": {}}}}""");
+        Run("entity_create", """{"entity": {"name": "Ground"}}""");
+        var backdrop = Named("Backdrop");
+
+        Assert.True(backdrop.IsLocked);
+        Assert.Contains("Backdrop", Run("scene_tree", "{}").Text.Split('\n').Single(l => l.Contains("locked")));
+        Assert.Contains("\"locked\": true", Run("entity_get", """{"entity": "Backdrop"}""").Text);
+
+        var result = Run("entity_update", """{"updates": [{"entity": "Backdrop", "changes": {"locked": false}}, {"entity": "Ground", "changes": {"locked": true}}]}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.False(backdrop.IsLocked);
+        Assert.True(Named("Ground").IsLocked);
+
+        _host.History.Undo();
+        Assert.True(backdrop.IsLocked);
+        Assert.False(Named("Ground").IsLocked);
+    }
 }

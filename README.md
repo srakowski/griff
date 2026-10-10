@@ -1,3 +1,5 @@
+<img src="assets/griff.png" width="128" alt="Griff's logo: a pixel-art griffin's head">
+
 # Griff
 
 **A game engine for game jams.** Griff is a 2D-first engine and editor (built so 3D can follow), written in C#. It aims to be the shortest path from an idea to something people can play by Sunday night, with an editor that just works.

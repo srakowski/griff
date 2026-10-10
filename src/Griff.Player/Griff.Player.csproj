@@ -8,6 +8,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!-- Exported games wear the griffin (drawn by tools\logo.ps1) in Explorer and on the taskbar. -->
+    <ApplicationIcon>..\..\assets\griff.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

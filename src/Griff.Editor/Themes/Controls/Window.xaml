@@ -97,18 +97,14 @@
                                             Style="{StaticResource Style.Button.Caption.Close}" />
                                 </StackPanel>
 
-                                <!-- App mark -->
-                                <Border Width="18" Height="18"
-                                        Margin="10,0,8,0"
-                                        Background="{DynamicResource Brush.Accent}"
-                                        CornerRadius="{StaticResource Radius.Medium}">
-                                    <TextBlock HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               FontSize="12"
-                                               FontWeight="Bold"
-                                               Foreground="{DynamicResource Brush.Text.OnAccent}"
-                                               Text="G" />
-                                </Border>
+                                <!-- App mark: the 16 x 16 griffin, one sprite pixel to a screen pixel -->
+                                <Image x:Name="AppMark"
+                                       Width="16" Height="16"
+                                       Margin="11,0,9,0"
+                                       VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                       Source="/Griff.Editor;component/Themes/griff.png"
+                                       UseLayoutRounding="True" />
 
                                 <ContentPresenter VerticalAlignment="Center"
                                                   Content="{TemplateBinding TitleBarContent}"

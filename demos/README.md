@@ -99,7 +99,7 @@ build: standalone
 The waits that watch the running game fail when their time runs out, logging how each team stands every ten seconds
 while they wait (`%TEMP%\griff-demos\demo.log`).
 
-Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
+Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `logo` (the griffin in the title bar), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `menu:Game`, and
 `world:left,top,right,bottom` for a box in the Scene view, `gameworld:left,top,right,bottom` for a box in the running
 game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD, and `hud:hotbar`, `hud:crafting`, `hud:tools`, `hud:props` or `hud:ports` for a sandbox game's.

@@ -930,7 +930,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     // ----- Targets -----
 
     /// <summary>
-    /// What a spotlight or click points at: panel:Inspector, scene, game, toolbar:Game.Play, field:Health.Max,
+    /// What a spotlight or click points at: panel:Inspector, logo, scene, game, toolbar:Game.Play, field:Health.Max,
     /// component:Health, entity:Player, menu:Game, catalog:requires, world:left,top,right,bottom.
     /// </summary>
     private FrameworkElement Target(string target)
@@ -939,6 +939,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         return kind.ToLowerInvariant() switch
         {
             "panel" => ui.PanelContent(name),
+            "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
             "scene" => sceneView,
             "game" => (FrameworkElement)ui.Main.GameTab.Content,
             "player" when int.TryParse(name, out var number) && number == 1 => (FrameworkElement)ui.Main.GameTab.Content,
@@ -961,7 +962,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, world:, gameworld:, hud:)."),
         };
     }
 

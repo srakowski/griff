@@ -14,6 +14,7 @@ Every user-visible change gets a narrated demo, and the demos stay current:
 - `/demo` (`.claude/skills/demo/SKILL.md`) writes or updates a `.demo` script in `demos/` for the current changes,
   checks it, and plays it in the editor. Format: `demos/README.md`.
 - When a change alters something an existing demo shows (menu text, component or field names, a flow), update
-  that demo in the same change. `tools\demo.ps1 -All -Check` must pass before committing.
+  that demo in the same change. Only check and play the demos for the current changes; never run other demos
+  (`-All -Check`, the tour) unless asked, including before a commit.
 - The guided tour (`tools\demo.ps1 -Tour`, `Diagnostics/Demo/DemoScript.cs`) builds a whole game; keep it working
   when the features it uses change.

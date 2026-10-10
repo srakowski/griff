@@ -7,12 +7,12 @@ showing a control bar to pause, change speed, skip or rewind between chapters, o
 ```powershell
 tools\demo.ps1 demos\single-file-builds.demo           # play it, narrated (move the mouse to pause)
 tools\demo.ps1 demos\single-file-builds.demo -Check    # run it silently at speed; PASS or FAIL
-tools\demo.ps1 -All -Check                             # check every demo: run this when features change
+tools\demo.ps1 -All -Check                             # check every demo (only when asked for)
 tools\demo.ps1 -Tour                                   # the full guided tour that builds Ember Hollow
 ```
 
-Demos are kept current. A change that alters something a demo shows updates that demo in the same commit, and
-`tools\demo.ps1 -All -Check` passes before it's committed.
+Demos are kept current. A change that alters something a demo shows updates that demo in the same commit. Only the
+demos for the change are checked and played; other demos (`-All -Check`, the tour) run only when asked for.
 
 ## Writing a demo
 

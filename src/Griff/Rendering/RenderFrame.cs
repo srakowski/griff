@@ -626,7 +626,10 @@ public static partial class SceneRenderer
     private static IEnumerable<SpriteDraw> TileDraws(Entity entity, Tilemap tilemap, View? cull)
     {
         var world = entity.Transform.WorldMatrix;
-        var size = Matrix4x4.CreateScale(tilemap.TileSize, tilemap.TileSize, 1);
+        // A hair bigger than a cell, so neighbors overlap: edges computed tile by tile can round apart and let a hairline of
+        // the background show between them as the camera moves. The image is stretched, not extended, so nothing bleeds in.
+        const float seamless = 1.004f;
+        var size = Matrix4x4.CreateScale(tilemap.TileSize * seamless, tilemap.TileSize * seamless, 1);
         var image = string.IsNullOrEmpty(tilemap.Image) ? null : tilemap.Image;
         foreach (var (x, y, tile) in cull is { } view ? CellsIn(tilemap, world, view) : tilemap.Cells())
         {

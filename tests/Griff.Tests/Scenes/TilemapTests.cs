@@ -158,7 +158,8 @@ public class TilemapTests
         Assert.Equal(2, draws.Count);
         Assert.Equal(new Vector3(11, -1, 0), draws[0].World.Translation);
         Assert.Equal(new Vector3(13, -3, 0), draws[1].World.Translation);
-        Assert.Equal(2, draws[0].World.M11);
+        // A cell wide, plus a hair so neighbors overlap and no seam shows between them.
+        Assert.InRange(draws[0].World.M11, 2f, 2.02f);
         Assert.Equal(new Vector4(0.5f, 0, 0.5f, 1), draws[1].Source);
         Assert.All(draws, d => Assert.Equal("tiles.png", d.Image));
     }

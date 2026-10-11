@@ -120,8 +120,8 @@ public sealed class Selection : ObservableObject, ISelection
         OnPropertyChanged(nameof(Entities));
     }
 
-    // Going from tab to tab (the scene's and prefabs') keeps each one's selection to come back to. Play mode picks its
-    // own (see PlayMode).
+    // Going from tab to tab (the scene's and prefabs') keeps each one's selection to come back to; a prefab's tab opens
+    // with the prefab selected, so the Inspector shows it straight away. Play mode picks its own (see PlayMode).
     private void Track(SceneDocument? document)
     {
         if (_document is not null)
@@ -132,7 +132,10 @@ public sealed class Selection : ObservableObject, ISelection
         _document = document;
         if (_document is not null)
             _document.Changed += OnDocumentChanged;
-        Set(switching && _kept.TryGetValue(document!, out var kept) ? kept.Where(e => e.Scene == document!.Scene).ToList() : []);
+        if (switching && _kept.TryGetValue(document!, out var kept))
+            Set(kept.Where(e => e.Scene == document!.Scene).ToList());
+        else
+            Set(document is { IsPrefab: true } prefab ? [.. prefab.Scene.Roots.Take(1)] : []);
     }
 
     // Deleting (or undoing the creation of) selected entities takes them out of the selection.

@@ -1,0 +1,49 @@
+title: Prefabs inside prefabs
+intro: A prefab can hold copies of other prefabs, like gems in a chest. Save the gem, and the gems in every chest follow it.
+project: Platformer | Nested Prefabs
+
+chapter: A gem and a chest | Two prefabs
+look: 8, -2, 4
+deselect
+create: Sprite
+rename: Gem
+set: Transform.Position = 5, -3, 0
+set: Sprite.Tint = #FFEC27
+set: Sprite.Size = 0.5, 0.5
+add: Pickup
+menu: Entity > Save as Prefab
+deselect
+create: Sprite
+rename: Chest
+set: Transform.Position = 9, -3.2, 0
+set: Sprite.Tint = #AB5236
+set: Sprite.Size = 1.2, 0.8
+menu: Entity > Save as Prefab
+say: A gem and a chest, each saved as a prefab.
+
+chapter: Put a gem in the chest | In the chest's own tab
+menu: Entity > Edit Prefab
+assetmenu: Prefabs/Gem.prefab > Add to Scene
+set: Transform.Position = 0, 0.7, 0
+set: Sprite.Tint = #FFA300
+expectprefab: Gem = Gem
+explain: entity:Gem | A gem inside the chest | In the chest's tab, Add to Scene puts a copy of the gem inside the chest. This chest's gem is a darker gold, a change of its own.
+save
+click: tab:Main
+expectcount: Gem = 2
+
+chapter: Change the gem | Every chest's gems follow
+select: Gem
+menu: Entity > Edit Prefab
+set: Pickup.Amount = 5
+set: Sprite.Size = 0.7, 0.7
+save
+explain: tab:Gem | Saved | Saving the gem prefab updates every copy of it: in the scenes, and inside other prefabs too.
+click: tab:Chest
+expectvalue: Gem.Pickup.Amount = 5
+expectvalue: Gem.Sprite.Size.X = 0.7
+expectvalue: Gem.Sprite.Tint = #FFA300
+explain: entity:Gem | Updated, change kept | The chest's gem is worth five now, and bigger, and it's still the darker gold the chest gave it.
+click: tab:Main
+expectoverrides: Chest = none
+explain: world:4, -1.5, 12, -4.5 | The placed chest too | And the chest placed in the scene is just like its prefab, with no changes of its own to look after.

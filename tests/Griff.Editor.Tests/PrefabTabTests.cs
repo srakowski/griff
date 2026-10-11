@@ -93,13 +93,12 @@ public sealed class PrefabTabTests : IDisposable
         Assert.Equal("Coin", prefab.Name);
         Assert.Same(scene, workspace.EditScene);
 
-        // The prefab on its own: its entity, not linked to anything, and nothing selected yet.
+        // The prefab on its own: its entity, not linked to anything, selected so the Inspector shows it.
         var root = Assert.Single(prefab.Scene.Roots);
         Assert.Equal("Coin", root.Name);
         Assert.Null(root.Prefab);
-        Assert.Empty(selection.Entities);
+        Assert.Equal(root, selection.Entity);
         Assert.Equal(root, Assert.Single(services.GetRequiredService<HierarchyPanel>().Roots).Entity);
-        selection.Select(root);
         Assert.NotNull(services.GetRequiredService<InspectorPanel>().Header);
 
         // Back to the scene: its selection is as it was, and the prefab stays open in its tab.
@@ -162,6 +161,7 @@ public sealed class PrefabTabTests : IDisposable
         var selection = services.GetRequiredService<ISelection>();
 
         // Made with nothing selected, it goes inside the prefab.
+        selection.Select(null);
         Wait(Run(services, "Entity.CreateEmpty"));
         Assert.Equal(root, selection.Entity!.Parent);
         Assert.Single(prefab.Scene.Roots);

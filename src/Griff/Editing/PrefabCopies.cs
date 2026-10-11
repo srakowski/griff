@@ -81,6 +81,29 @@ public static class PrefabCopies
     }
 
     /// <summary>
+    /// Brings the copies of a prefab placed inside another prefab, the file at <paramref name="prefabFile"/> (a chest
+    /// holding coins), up to date with <paramref name="prefabJson"/>, keeping what each changed from
+    /// <paramref name="oldPrefabJson"/>, as <see cref="UpdateFile"/> does for scenes. The file is rewritten only if it has
+    /// any.
+    /// </summary>
+    /// <returns>How many copies were updated.</returns>
+    /// <exception cref="InvalidDataException">Either prefab can't be read.</exception>
+    public static int UpdatePrefabFile(string prefabFile, string prefabPath, string prefabJson, string? oldPrefabJson, SceneSerializer serializer)
+    {
+        var scene = new Scene();
+        var root = serializer.LoadPrefabFromString(File.ReadAllText(prefabFile));
+        scene.Add(root);
+        if (Update(scene, prefabPath, prefabJson, oldPrefabJson, serializer) is not { } edit)
+            return 0;
+
+        edit.Apply();
+        var temp = prefabFile + ".saving";
+        File.WriteAllText(temp, serializer.SavePrefabToString(root));
+        File.Move(temp, prefabFile, overwrite: true);
+        return edit is CompositeEdit composite ? composite.Edits.Count : 1;
+    }
+
+    /// <summary>
     /// One undo step linking every copy of the prefab at <paramref name="oldPath"/> in <paramref name="scene"/> (copies
     /// inside other copies too) to <paramref name="newPath"/>, where its file was renamed or moved. Null if there are none.
     /// </summary>

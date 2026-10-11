@@ -177,6 +177,33 @@ public sealed class PrefabCopiesTests : IDisposable
     }
 
     [Fact]
+    public void UpdatePrefabFile_UpdatesCopiesInsideAnotherPrefab_KeepingWhatItChanged()
+    {
+        // A chest prefab holding a coin it made worth 3.
+        Directory.CreateDirectory(_root);
+        var chest = new Scene();
+        var root = new Entity("Chest");
+        chest.Add(root);
+        var coin = Place(chest, CoinPrefab(1), "Coin", new Vector3(0, 1, 0), parent: root);
+        coin.GetComponent<Pickup>()!.Amount = 3;
+        var chestPath = Path.Combine(_root, "Chest.prefab");
+        File.WriteAllText(chestPath, _serializer.SavePrefabToString(root));
+        var gemPath = Path.Combine(_root, "Gem.prefab");
+        File.WriteAllText(gemPath, _serializer.SavePrefabToString(new Entity("Gem")));
+        var gemWritten = File.GetLastWriteTimeUtc(gemPath);
+
+        Assert.Equal(1, PrefabCopies.UpdatePrefabFile(chestPath, CoinPath, CoinPrefab(1, image: "Sprites/gold.png"), CoinPrefab(1), _serializer));
+        Assert.Equal(0, PrefabCopies.UpdatePrefabFile(gemPath, CoinPath, CoinPrefab(1, image: "Sprites/gold.png"), CoinPrefab(1), _serializer));
+
+        var updated = _serializer.LoadPrefabFromString(File.ReadAllText(chestPath)).Children.Single();
+        Assert.Equal("Sprites/gold.png", updated.GetComponent<Sprite>()!.Image);
+        Assert.Equal(3, updated.GetComponent<Pickup>()!.Amount);
+        Assert.Equal(new Vector3(0, 1, 0), updated.Transform.Position);
+        Assert.Equal(CoinPath, updated.Prefab);
+        Assert.Equal(gemWritten, File.GetLastWriteTimeUtc(gemPath));
+    }
+
+    [Fact]
     public void Relink_PointsEveryCopyAtTheMovedPrefab_CopiesInsideCopiesToo_AsOneUndoStep()
     {
         var scene = new Scene();

@@ -129,8 +129,10 @@ public static class PrefabFiles
     /// After the prefab at <paramref name="assetPath"/> is saved as <paramref name="json"/> over
     /// <paramref name="oldJson"/> (null if it's new or that isn't known): links <paramref name="source"/> (the entity it
     /// was saved from, if any) to it, and brings every other copy of it up to date, keeping what each copy changed from
-    /// the old version, in the scene being edited (one undo step, with the link) and in the project's other scene files.
-    /// The prefab's tab, if it's open, is brought up to date the same way (as one undo step there).
+    /// the old version, in the scene being edited (one undo step, with the link), in the project's other scene files, and
+    /// inside its other prefabs (a chest holding coins), on disk and in their open tabs (one undo step in each). The
+    /// prefab's own tab, if it's open, is brought up to date the same way. A prefab that the saved one holds a copy of
+    /// isn't updated, as they'd hold each other.
     /// </summary>
     public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, string? oldJson, Entity? source)
     {
@@ -190,32 +192,85 @@ public static class PrefabFiles
             }
         }
 
+        // Copies placed inside other prefabs (coins in a chest), on disk: open ones' files too, so they stay right
+        // whether or not their tabs are saved. Not inside a prefab the saved one holds a copy of: they'd hold each other.
+        var holds = Holds(json, serializer);
+        var openTabs = workspace.Prefabs.Select(t => Path.GetFullPath(t.FilePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var prefabFile in project.FindPrefabs())
+        {
+            var other = AssetPathOf(project, prefabFile);
+            if (string.Equals(other, PrefabCopies.Normalize(assetPath), StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var name = Path.GetFileNameWithoutExtension(prefabFile);
+            try
+            {
+                if (holds.Contains(other))
+                {
+                    if (PrefabCopies.In(LoadInto(prefabFile, serializer), assetPath).Count > 0)
+                        problems.Add($"{name}: it and {PrefabCopies.NameOf(assetPath)} hold copies of each other");
+                    continue;
+                }
+
+                if (PrefabCopies.UpdatePrefabFile(prefabFile, assetPath, json, oldJson, serializer) is > 0 and var count && !openTabs.Contains(Path.GetFullPath(prefabFile)))
+                {
+                    copies += count;
+                    scenes.Add(name);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"{name}: {ex.Message}");
+            }
+        }
+
         foreach (var tab in workspace.Prefabs)
         {
             if (tab.Scene.Roots.Count != 1)
                 continue;
             var root = tab.Scene.Roots[0];
-
-            // Something inside a prefab's tab, saved as a prefab of its own, becomes a copy of it there.
-            if (source?.Scene == tab.Scene)
-            {
-                if (source != root && !PrefabCopies.IsCopyOf(source, assetPath))
-                    tab.Execute(new SetEntitiesPrefabEdit([source], PrefabCopies.Normalize(assetPath)));
-                continue;
-            }
-
-            // The prefab's own tab, if it's open and wasn't what saved it, shows the new version, keeping its unsaved
-            // changes.
-            if (!string.Equals(AssetPathOf(project, tab.FilePath), PrefabCopies.Normalize(assetPath), StringComparison.OrdinalIgnoreCase))
-                continue;
+            var own = IsOwnTab(workspace, tab, assetPath);
+            var saved = !tab.IsDirty;
 
             try
             {
-                var fresh = serializer.LoadPrefabFromString(json);
-                if (oldJson is not null)
-                    fresh = PrefabOverrides.Merge(root, serializer.LoadPrefabFromString(oldJson), fresh, serializer);
-                var saved = !tab.IsDirty;
-                tab.Execute(new UpdatePrefabCopyEdit(tab.Scene, root, fresh));
+                if (own && source?.Scene != tab.Scene)
+                {
+                    // The prefab's own tab, if it wasn't what saved it, shows the new version, keeping its unsaved changes.
+                    var fresh = serializer.LoadPrefabFromString(json);
+                    if (oldJson is not null)
+                        fresh = PrefabOverrides.Merge(root, serializer.LoadPrefabFromString(oldJson), fresh, serializer);
+                    tab.Execute(new UpdatePrefabCopyEdit(tab.Scene, root, fresh));
+                }
+                else if (!own && !holds.Contains(AssetPathOf(project, tab.FilePath)))
+                {
+                    // Copies inside another prefab's tab are brought up to date, and something in it the prefab was
+                    // saved from becomes a copy of it there.
+                    var edits = new List<IEdit>();
+                    var here = source?.Scene == tab.Scene && source != root ? source : null;
+                    if (here is not null && !PrefabCopies.IsCopyOf(here, assetPath))
+                    {
+                        // A link its file doesn't have yet.
+                        edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath)));
+                        saved = false;
+                    }
+                    var count = PrefabCopies.In(tab.Scene, assetPath).Count(c => c != here);
+                    if (PrefabCopies.Update(tab.Scene, assetPath, json, oldJson, serializer, except: here) is { } update)
+                    {
+                        edits.Add(update);
+                        copies += count;
+                        scenes.Add(tab.Name);
+                    }
+
+                    if (edits.Count > 0)
+                        tab.Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Save {PrefabCopies.NameOf(assetPath)} as Prefab", edits));
+                }
+                else
+                {
+                    continue;
+                }
+
+                // Its file was brought up to date too, so one with nothing unsaved before still has nothing unsaved.
                 if (saved)
                     tab.MarkSaved();
             }
@@ -226,6 +281,28 @@ public static class PrefabFiles
         }
 
         return new PrefabUpdate(copies, scenes, problems);
+    }
+
+    // The prefabs a prefab's text holds copies of, by their paths in Assets.
+    private static HashSet<string> Holds(string json, SceneSerializer serializer)
+    {
+        try
+        {
+            return serializer.LoadPrefabFromString(json).SelfAndDescendants()
+                .Select(e => e.Prefab).OfType<string>().Select(PrefabCopies.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (InvalidDataException)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    // A prefab file's entity, in a scene of its own to look through.
+    private static Scene LoadInto(string prefabFile, SceneSerializer serializer)
+    {
+        var scene = new Scene();
+        scene.Add(serializer.LoadPrefabFromString(File.ReadAllText(prefabFile)));
+        return scene;
     }
     /// <summary>The prefab file's text, or null if there's no such file (or it can't be read).</summary>
     public static string? ReadText(IWorkspace workspace, string assetPath)

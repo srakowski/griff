@@ -6,6 +6,10 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Editor
+
+- [ ] Hide entities in the Scene view while editing: an eye by each Hierarchy row (and Entity > Hide), so a pause menu, dialogue box or tilemap layer stops covering the level. Editor-only (the game still shows them), saved with the scene, and covering children, like locking.
+
 ### Gameplay foundations
 
 - [ ] Add grid movement for players: a no-code component that steps tile by tile on a tilemap, blocked by walls.

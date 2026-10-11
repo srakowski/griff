@@ -1,0 +1,26 @@
+title: Links in the Scene view
+intro: Select something and the Scene view shows what it's linked to: arrows to the entities its fields name, and from the ones that name it.
+project: Platformer | Links
+
+chapter: What a lever works | Arrows to what it names
+select: Lever
+look: -8, 0, 6
+expectlink: Lever > Bridge = Switch Targets
+explain: link:Lever > Bridge | Switch Targets | The lever brings out the bridge. Its Targets name it, so an arrow runs from the lever to the bridge, labelled with the field.
+expectlink: Lever > Hint = Switch Prompt
+say: Its Prompt gets one too: the little hint above it, its own child.
+pickentity: Switch.Targets = Lift
+expectlink: Lever > Lift = Switch Targets
+explain: link:Lever > Lift | A new target | Name the lift as well, and a second arrow appears. No more reading names in the Inspector and hunting for them in the level.
+
+chapter: What names it | Arrows the other way
+select: Player
+look: -3, 1, 6
+expectlink: Main Camera > Player = Follow Target
+expectlink: Health Bar > Player = Bar Track
+explain: link:Main Camera > Player | Follow Target | Nothing on the player names the camera, but the camera's Follow names the player, so selecting the player shows that arrow too, pointing at it.
+explain: link:Health Bar > Player | Bar Track | And the health bar tracks the player. Before deleting or renaming something, you can see everything that depends on it.
+select: Lever
+pickentity: Switch.Targets = Lift
+expectlink: Lever > Lift = none
+say: Take the lift out of the lever's targets, and its arrow goes with it.

@@ -524,6 +524,18 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => Flagged() == wantFlagged, 3000))
                     throw new InvalidOperationException($"Expected {flagTarget} to flag \"{wantFlagged}\", but it flags \"{Flagged()}\".");
                 break;
+            case "expectlink":
+                // "expectlink: Lever > Bridge = Switch Targets": the Scene view draws an arrow from one to the other,
+                // labelled with those fields; "= none" when it shouldn't.
+                var (linkPair, wantFields) = Split2(a, '=');
+                var (linkFrom, linkTo) = Split2(linkPair, '>');
+                if (linkTo.Length == 0)
+                    throw new FormatException("expectlink: <from> > <to> = <fields> | none");
+                var wantLink = wantFields.Equals("none", StringComparison.OrdinalIgnoreCase) ? null : wantFields;
+                string? Linked() => ui.LinkArrow(linkFrom, linkTo)?.Fields;
+                if (!await Until(() => Linked() == wantLink, 3000))
+                    throw new InvalidOperationException($"Expected the arrow from {linkFrom} to {linkTo} to be \"{wantLink ?? "none"}\", but it's \"{Linked() ?? "none"}\".");
+                break;
             case "expectvalue":
                 // "expectvalue: Red Gem.Sprite.Tint = #FFEC27": an entity's property has that value ("Plank.Transform.Rotation.Z
                 // = 45" for one axis of a vector).
@@ -1203,6 +1215,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 : ui.DistanceKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
                     ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
+        }
+
+        if (kind.Equals("link", StringComparison.OrdinalIgnoreCase))
+        {
+            var (from, to) = Split2(name, '>');
+            var label = ui.LinkArrow(from, to)?.Screen ?? throw new InvalidOperationException($"There's no arrow from {from} to {to} showing.");
+            return new Rect(label.X - 70, label.Y - 16, 140, 32);
         }
 
         if (!kind.Equals("world", StringComparison.OrdinalIgnoreCase))

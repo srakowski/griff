@@ -423,7 +423,7 @@ public sealed class Door : Component
     public string? Scene { get; set; }
 
     /// <summary>The name of an entity in this scene to go to, e.g. "CaveExit", when there's no <see cref="Scene"/>.</summary>
-    [EntityName]
+    [EntityName(Unless = nameof(Scene))]
     public string? Target { get; set; }
 
     /// <summary>Seconds to fade the screen out (and as long back in) around the trip. 0 cuts straight there.</summary>

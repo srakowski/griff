@@ -19,6 +19,35 @@ public static class EntityReferences
 
         /// <summary>"Follow.Target": what agents and messages call it.</summary>
         public string Label => $"{Component.GetType().Name}.{Property.Name}";
+
+        /// <summary>
+        /// False when the field is set aside by its <see cref="EntityNameAttribute.Unless"/> (a door's Target when it goes
+        /// to another Scene), so its names aren't links and aren't flagged.
+        /// </summary>
+        public bool IsUsed => Kind.Unless is not { } unless || !IsSet(Component.GetType().GetProperty(unless)?.GetValue(Component));
+
+        private static bool IsSet(object? value) => value switch
+        {
+            null => false,
+            string text => !string.IsNullOrWhiteSpace(text),
+            bool on => on,
+            float number => number != 0,
+            int number => number != 0,
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// A field on <see cref="From"/> naming <see cref="To"/>: the Scene view draws it as an arrow between them when either
+    /// is selected.
+    /// </summary>
+    public readonly record struct Link(Reference Reference, Entity To)
+    {
+        /// <summary>The entity whose field names <see cref="To"/>.</summary>
+        public Entity From => Reference.Component.Entity!;
+
+        /// <summary>"Lever to Door: Switch.Targets".</summary>
+        public string Label => $"{From.Name} to {To.Name}: {Reference.Label}";
     }
 
     /// <summary>The names a field's value holds: split at commas for one that names several, empty when it's unset.</summary>
@@ -49,7 +78,7 @@ public static class EntityReferences
     /// </summary>
     public static IReadOnlyList<string> Unmatched(Reference reference, IReadOnlyCollection<string>? prefabs = null)
     {
-        if (reference.Component.Entity is not { } owner)
+        if (reference.Component.Entity is not { } owner || !reference.IsUsed)
             return [];
         var names = reference.Names;
         if (names.Count == 0)
@@ -65,6 +94,32 @@ public static class EntityReferences
             .SelectMany(e => On(e, registry))
             .Select(r => (Reference: r, Names: Unmatched(r, prefabs)))
             .Where(r => r.Names.Count > 0);
+
+    /// <summary>
+    /// Every entity a field on <paramref name="owner"/> can mean by <paramref name="name"/>, as a switch finds its
+    /// targets: those inside the owner with the name (itself too, unless the field names one inside it), otherwise every
+    /// one in the scene with it.
+    /// </summary>
+    public static IReadOnlyList<Entity> Named(Entity owner, EntityNameAttribute kind, string name)
+    {
+        var own = owner.SelfAndDescendants().Skip(kind.Inside ? 1 : 0).Where(e => e.Name == name).ToList();
+        if (own.Count > 0 || kind.Inside || owner.Scene is null)
+            return own;
+        return [.. owner.Scene.Entities.Where(e => e.Name == name)];
+    }
+
+    /// <summary>
+    /// The links out of <paramref name="entity"/>: each entity its fields name (see <see cref="Named"/>), other than
+    /// itself, once per field. Fields set aside by their <see cref="EntityNameAttribute.Unless"/> have none.
+    /// </summary>
+    public static IEnumerable<Link> From(Entity entity, ComponentRegistry registry) =>
+        On(entity, registry)
+            .Where(r => r.IsUsed)
+            .SelectMany(r => r.Names.SelectMany(n => Named(entity, r.Kind, n)).Distinct().Where(e => e != entity).Select(e => new Link(r, e)));
+
+    /// <summary>The links into <paramref name="entity"/>: fields on the other entities in its scene that name it.</summary>
+    public static IEnumerable<Link> To(Entity entity, ComponentRegistry registry) =>
+        (entity.Scene?.Entities ?? []).Where(e => e != entity).SelectMany(e => From(e, registry)).Where(l => l.To == entity);
 
     /// <summary>
     /// The entity a field on <paramref name="owner"/> means by <paramref name="name"/>, as the game finds it: one inside

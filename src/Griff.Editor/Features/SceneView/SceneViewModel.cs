@@ -44,8 +44,9 @@ public sealed record SceneDistance(Component Component, PropertyDescriptor Prope
 
 /// <summary>
 /// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
-/// selected together, resizing the primary selection's sprite and colliders, and dragging its distances. The view's drags
-/// call these, and agents can too (positions are world units, Y up).
+/// selected together, resizing the primary selection's sprite and colliders, dragging its distances, and the links it
+/// draws to and from the entities the selection's fields name. The view's drags call these, and agents can too
+/// (positions are world units, Y up).
 /// </summary>
 public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {
@@ -366,6 +367,22 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) :
         if (workspace.Scene is not { } document || selection.Entity is not { } primary || distance.Component.Entity != primary)
             return null;
         return new DistanceDrag(document, distance);
+    }
+
+    /// <summary>
+    /// The selection's links the Scene view draws as arrows: each entity a selected entity's fields name (a switch's
+    /// Targets, a camera's Follow target, a wire's From), and each field elsewhere in the scene naming a selected
+    /// entity, from the field's entity to the one it names. Each field and entity it names is listed once.
+    /// </summary>
+    public IReadOnlyList<EntityReferences.Link> Links()
+    {
+        if (workspace.Scene is not { } document)
+            return [];
+        var selected = selection.Entities.Where(e => e.Scene == document.Scene).ToList();
+        return selected.SelectMany(e => EntityReferences.From(e, workspace.Components))
+            .Concat(selected.SelectMany(e => EntityReferences.To(e, workspace.Components)))
+            .Distinct()
+            .ToList();
     }
 
     /// <summary>World-space corners of what the entity draws (its sprite, tilemap or camera frame), or null if it draws none of those.</summary>

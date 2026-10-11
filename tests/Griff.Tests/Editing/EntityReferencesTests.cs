@@ -154,4 +154,78 @@ public class EntityReferencesTests
 
         Assert.Empty(EntityReferences.UnmatchedIn(scene, _registry));
     }
+
+    [Fact]
+    public void Unmatched_IgnoresADoorsTarget_WhenItGoesToAnotherScene()
+    {
+        var scene = Level();
+        var door = new Entity("Exit");
+        door.AddComponent(new Door { Scene = "Level2", Target = "Start" });
+        scene.Add(door);
+
+        Assert.Empty(EntityReferences.UnmatchedIn(scene, _registry));
+
+        door.GetComponent<Door>()!.Scene = "";
+        Assert.Equal("Door.Target", Assert.Single(EntityReferences.UnmatchedIn(scene, _registry)).Reference.Label);
+    }
+
+    [Fact]
+    public void From_IsEachEntityTheFieldsName_OncePerField()
+    {
+        var scene = Level();
+        Named(scene, "Lever").GetComponent<Switch>()!.Targets = "Bridge, Lift, Bridge, Gate";
+
+        var links = EntityReferences.From(Named(scene, "Lever"), _registry).Select(l => l.Label).ToList();
+
+        Assert.Equal(["Lever to Bridge: Switch.Targets", "Lever to Lift: Switch.Targets", "Lever to Hint: Switch.Prompt"], links);
+    }
+
+    [Fact]
+    public void From_LinksEveryEntityWithTheName_ButNotItself()
+    {
+        var scene = Level();
+        scene.Add(new Entity("Bridge"));
+        Named(scene, "Lever").GetComponent<Switch>()!.Targets = "Bridge, Lever";
+
+        var links = EntityReferences.From(Named(scene, "Lever"), _registry).Where(l => l.Reference.Label == "Switch.Targets").ToList();
+
+        Assert.Equal(2, links.Count);
+        Assert.All(links, l => Assert.Equal("Bridge", l.To.Name));
+    }
+
+    [Fact]
+    public void From_PrefersOnesInsideTheEntity()
+    {
+        var scene = Level();
+        var lever = Named(scene, "Lever");
+        scene.Add(new Entity("Hint"), lever);
+
+        var prompt = Assert.Single(EntityReferences.From(lever, _registry), l => l.Reference.Label == "Switch.Prompt");
+
+        Assert.Equal(lever, prompt.To.Parent);
+    }
+
+    [Fact]
+    public void From_SkipsADoorsTarget_WhenItGoesToAnotherScene()
+    {
+        var scene = Level();
+        var door = new Entity("Exit");
+        door.AddComponent(new Door { Target = "Player" });
+        scene.Add(door);
+        Assert.Equal("Player", Assert.Single(EntityReferences.From(door, _registry)).To.Name);
+
+        door.GetComponent<Door>()!.Scene = "Level2";
+        Assert.Empty(EntityReferences.From(door, _registry));
+    }
+
+    [Fact]
+    public void To_IsTheFieldsElsewhereThatNameIt()
+    {
+        var scene = Level();
+
+        var links = EntityReferences.To(Named(scene, "Player"), _registry).Select(l => l.Label).ToList();
+
+        Assert.Equal(["Camera to Player: Follow.Target", "Fighter to Player: Attack.Target"], links);
+        Assert.Empty(EntityReferences.To(Named(scene, "Lever"), _registry));
+    }
 }

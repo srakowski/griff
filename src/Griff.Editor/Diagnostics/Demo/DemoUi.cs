@@ -142,6 +142,21 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             .FirstOrDefault();
     }
 
+    private static readonly MethodInfo SceneLinkArrows = typeof(SceneViewControl).GetMethod("LinkArrows", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// The Scene view's arrow from one entity to another, by their names: the fields it's labelled with ("Switch
+    /// Targets") and where that label is on screen. Null when there's no such arrow showing.
+    /// </summary>
+    public (string Fields, Point Screen)? LinkArrow(string from, string to)
+    {
+        var arrows = (IEnumerable<(Griff.Scenes.Entity From, Griff.Scenes.Entity To, string Fields, Point Start, Point Bend, Point Tip, Point Middle)>)SceneLinkArrows.Invoke(sceneView, [])!;
+        return arrows
+            .Where(a => a.From.Name == from.Trim() && a.To.Name == to.Trim())
+            .Select(a => ((string, Point)?)(a.Fields, sceneView.PointToScreen(a.Middle)))
+            .FirstOrDefault();
+    }
+
     private static readonly MethodInfo SceneDistanceHandles = typeof(SceneViewControl).GetMethod("DistanceHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>

@@ -26,6 +26,7 @@ namespace Griff.Editor.Features.SceneView;
 /// half units); with Distance handles picked (D), the round knobs on its circles change its light radii, ranges and sight
 /// (Ctrl snaps to half units); F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
+/// Arrows link the selection to the entities its fields name, and to it from the fields that name it.
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
 {
@@ -255,6 +256,7 @@ public sealed class SceneViewControl : FrameworkElement
         DrawColliders(dc);
         DrawRooms(dc);
         DrawLevelGuides(dc);
+        DrawLinks(dc);
 
         foreach (var selected in _selection.Entities)
         {
@@ -558,7 +560,7 @@ public sealed class SceneViewControl : FrameworkElement
     }
 
     // Where movers go, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
-    // which way a shooter fires, where a door leads, and what a switch turns on (dashed) or hides (dotted).
+    // which way a shooter fires, and how far a player jumps. Where a door leads and what a switch turns on are links.
     private void DrawLevelGuides(DrawingContext dc)
     {
         var guide = Brush("Brush.Status.Warning");
@@ -588,12 +590,6 @@ public sealed class SceneViewControl : FrameworkElement
         foreach (var shooter in selected.GetComponents<Shooter>().Where(s => string.IsNullOrWhiteSpace(s.Target) && s.Direction != Vector2.Zero))
             dc.DrawLine(dashed, ToScreen(here + shooter.Offset), ToScreen(here + shooter.Offset + Vector2.Normalize(shooter.Direction) * 2));
 
-        foreach (var door in selected.GetComponents<Door>().Where(d => string.IsNullOrWhiteSpace(d.Scene) && !string.IsNullOrWhiteSpace(d.Target)))
-        {
-            if (_document.Scene.Entities.FirstOrDefault(e => e.Name == door.Target!.Trim()) is { } target)
-                dc.DrawLine(dashed, ToScreen(here), ToScreen(ToVector2(target.Transform.WorldPosition)));
-        }
-
         // How far a player jumps, each way, and where a bouncer sends things: under the default gravity.
         foreach (var movement in selected.GetComponents<PlatformerMovement>())
         {
@@ -606,15 +602,86 @@ public sealed class SceneViewControl : FrameworkElement
 
         foreach (var bouncer in selected.GetComponents<Bouncer>())
             DrawArc(dc, here, bouncer.Way * bouncer.Strength, -Griff.Runtime.Physics.DefaultGravity.Y, 1, 0);
+    }
 
-        var dotted = new Pen(guide, 1.5) { DashStyle = new DashStyle([1, 3], 0) };
-        foreach (var @switch in selected.GetComponents<Switch>())
+    // The selection's links (see SceneViewModel.Links): a dashed arrow from each field's entity to the one it names,
+    // with the fields named halfway along.
+    private void DrawLinks(DrawingContext dc)
+    {
+        var accent = Brush("Brush.Accent");
+        var chrome = Brush("Brush.Surface.Chrome");
+        var pen = new Pen(accent, 1.5) { DashStyle = new DashStyle([5, 3], 0) };
+        var border = new Pen(accent, 1);
+        foreach (var arrow in LinkArrows())
         {
-            foreach (var target in Switch.Named(selected, @switch.Targets).Where(e => e != selected))
-                dc.DrawLine(dashed, ToScreen(here), ToScreen(ToVector2(target.Transform.WorldPosition)));
-            foreach (var hidden in Switch.Named(selected, @switch.Hides).Where(e => e != selected))
-                dc.DrawLine(dotted, ToScreen(here), ToScreen(ToVector2(hidden.Transform.WorldPosition)));
+            var curve = new StreamGeometry();
+            using (var context = curve.Open())
+            {
+                context.BeginFigure(arrow.Start, false, false);
+                context.QuadraticBezierTo(arrow.Bend, arrow.Tip, true, false);
+            }
+
+            curve.Freeze();
+            dc.DrawGeometry(null, pen, curve);
+            dc.DrawEllipse(accent, null, arrow.Start, 2.5, 2.5);
+
+            var into = arrow.Tip - arrow.Bend;
+            into.Normalize();
+            var across = new Vector(-into.Y, into.X) * 4.5;
+            var head = new StreamGeometry();
+            using (var context = head.Open())
+            {
+                context.BeginFigure(arrow.Tip, true, true);
+                context.LineTo(arrow.Tip - into * 10 + across, true, false);
+                context.LineTo(arrow.Tip - into * 10 - across, true, false);
+            }
+
+            head.Freeze();
+            dc.DrawGeometry(accent, null, head);
+
+            var label = Text(arrow.Fields, "Brush.Text.Secondary");
+            var place = new Point(arrow.Middle.X - label.Width / 2, arrow.Middle.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, border, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
         }
+    }
+
+    /// <summary>
+    /// The arrows for the selection's links, in screen space: one from each entity to each it names (several fields
+    /// naming the same one share it, their names joined, as "Switch Targets"), bowed to one side so links both ways
+    /// between two entities stay apart, its tip a little short of the entity so its marker stays clear, and
+    /// <c>Middle</c> where the fields are named: halfway along, or past the tip when the arrow is too short.
+    /// </summary>
+    private List<(Entity From, Entity To, string Fields, Point Start, Point Bend, Point Tip, Point Middle)> LinkArrows()
+    {
+        var arrows = new List<(Entity, Entity, string, Point, Point, Point, Point)>();
+        foreach (var pair in _model.Links().GroupBy(l => (l.From, l.To)))
+        {
+            var from = ToScreen(ToVector2(pair.Key.From.Transform.WorldPosition));
+            var to = ToScreen(ToVector2(pair.Key.To.Transform.WorldPosition));
+            var along = to - from;
+            if (along.Length < 1)
+                continue;
+            var side = new Vector(-along.Y, along.X) / along.Length;
+            var bend = from + along / 2 + side * Math.Min(along.Length * 0.15, 40);
+            var into = to - bend;
+            into.Normalize();
+            var fields = string.Join(", ", pair.Select(l => $"{l.Reference.Component.GetType().Name} {l.Reference.Property.Name}"));
+
+            // Too short to hold its label (a lever's own hint, a fighter's hitbox), the label goes past the tip instead,
+            // off the selection.
+            var label = Text(fields, "Brush.Text.Secondary");
+            var middle = from + along / 4 + (bend - from) / 2;
+            if (along.Length < label.Width + 40)
+            {
+                var way = along / along.Length;
+                middle = to + way * (Math.Abs(way.X) * (label.Width / 2 + 4) + Math.Abs(way.Y) * (label.Height / 2 + 1) + 8);
+            }
+
+            arrows.Add((pair.Key.From, pair.Key.To, fields, from, bend, to - into * 4, middle));
+        }
+
+        return arrows;
     }
 
     // A dashed arc: where something leaving `from` at `velocity` goes under `gravity` (heavier on the way down), for 1.5 seconds

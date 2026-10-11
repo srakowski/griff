@@ -91,4 +91,10 @@ public sealed class EntityNameAttribute : Attribute
 
     /// <summary>It names one inside the entity (an attack's Hitbox, a panel's First control), so those are the ones listed.</summary>
     public bool Inside { get; init; }
+
+    /// <summary>
+    /// A property that, when set (not empty, false or zero), means this one isn't used, e.g. a door's Target when it goes
+    /// to another Scene. Its names then aren't drawn as links or flagged when they match nothing.
+    /// </summary>
+    public string? Unless { get; init; }
 }

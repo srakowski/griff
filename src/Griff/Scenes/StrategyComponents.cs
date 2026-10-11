@@ -179,9 +179,11 @@ public sealed class Unit : Component
     public float Speed { get; set; } = 3;
 
     /// <summary>How much room it takes up: for clicking it, its selection ring, and keeping others off it.</summary>
+    [Distance]
     public float Radius { get; set; } = 0.4f;
 
     /// <summary>How far it sees through the fog of war, and how close an enemy has to come for it to notice.</summary>
+    [Distance]
     public float Sight { get; set; } = 6;
 
     /// <summary>The supply it takes up. A team can only have as much as its buildings provide.</summary>
@@ -289,6 +291,7 @@ public sealed class Building : Component
     public Vector2 Size { get; set; } = new(3, 3);
 
     /// <summary>How far it sees through the fog of war.</summary>
+    [Distance]
     public float Sight { get; set; } = 7;
 
     /// <summary>What it costs to build, e.g. "150 Gold, 50 Wood".</summary>

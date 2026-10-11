@@ -303,6 +303,7 @@ public sealed class Blocks : Component
 public sealed class BlockBuilder : Component
 {
     /// <summary>How far away it can reach a block, in world units from the middle of the entity.</summary>
+    [Distance]
     public float Reach { get; set; } = 5;
 
     /// <summary>How fast it digs: 2 breaks blocks in half the time.</summary>
@@ -431,6 +432,7 @@ public sealed class Crafting : Component
     public Key Key { get; set; } = Key.C;
 
     /// <summary>How close a recipe's workbench has to be, in world units.</summary>
+    [Distance]
     public float StationReach { get; set; } = 4;
 
     /// <summary>True while the list is open.</summary>

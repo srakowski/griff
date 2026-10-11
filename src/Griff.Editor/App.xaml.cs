@@ -119,6 +119,7 @@ public partial class App : Application
         services.AddCommand<ScaleHandlesCommand>();
         services.AddCommand<ResizeHandlesCommand>();
         services.AddCommand<ColliderHandlesCommand>();
+        services.AddCommand<DistanceHandlesCommand>();
         services.AddSingleton<StartPage>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();

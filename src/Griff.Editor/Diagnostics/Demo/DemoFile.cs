@@ -462,6 +462,20 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(resizeFrom, ui.World(resizeWorld.X, resizeWorld.Y), resizeModifiers);
                 await DemoUi.Settle();
                 break;
+            case "distance":
+                // "distance: Light.Radius = 6" (or "Ctrl+Chase.Range = 4"): drags that distance's knob straight out or in
+                // from its circle's middle to where the distance is that much.
+                var (distanceText, distanceModifiers) = ParseModifiedName(a);
+                var (distanceName, valueText) = Split2(distanceText, '=');
+                var (distance, distanceFrom) = ui.DistanceKnob(distanceName)
+                    ?? throw new InvalidOperationException($"The {distanceName} handle isn't showing: pick Distance handles and select something with that distance above zero.");
+                var middle = ui.World(distance.Center.X, distance.Center.Y);
+                var outward = distanceFrom - middle;
+                outward.Normalize();
+                var reach = (ui.World(distance.Center.X + float.Parse(valueText, CultureInfo.InvariantCulture), distance.Center.Y) - middle).Length;
+                await Input.DragWith(distanceFrom, middle + outward * reach, distanceModifiers);
+                await DemoUi.Settle();
+                break;
             case "expectat":
                 // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
                 var (atName, atText) = Split2(a, '=');
@@ -1156,7 +1170,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             var handle = name.Equals("rotate", StringComparison.OrdinalIgnoreCase)
                 ? ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.")
-                : ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
+                : ui.DistanceKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
+                    ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }
 

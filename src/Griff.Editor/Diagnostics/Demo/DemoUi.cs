@@ -142,6 +142,21 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             .FirstOrDefault();
     }
 
+    private static readonly MethodInfo SceneDistanceHandles = typeof(SceneViewControl).GetMethod("DistanceHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// The knob of one of the selection's distances (with Distance handles out), by its name ("Light.Radius"): the
+    /// distance and where its knob is on screen. Null when it isn't showing.
+    /// </summary>
+    public (SceneDistance Distance, Point Screen)? DistanceKnob(string name)
+    {
+        var handles = (IEnumerable<(SceneDistance Distance, Point Screen, System.Windows.Vector Outward)>)SceneDistanceHandles.Invoke(sceneView, [])!;
+        return handles
+            .Where(h => h.Distance.Key.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(h => ((SceneDistance, Point)?)(h.Distance, sceneView.PointToScreen(h.Screen)))
+            .FirstOrDefault();
+    }
+
     // A handle's place on the selection or shape, as its spot from -1 to 1 along its own axes.
     private static Vector2 HandleSpot(string name) =>
         name.Trim().ToLowerInvariant() switch

@@ -223,12 +223,14 @@ public sealed class Chase : Component
     public float Speed { get; set; } = 3;
 
     /// <summary>How close the target has to be to notice it, in world units. 0 notices it anywhere.</summary>
+    [Distance]
     public float Range { get; set; } = 6;
 
     /// <summary>Once chasing, it gives up when the target gets this much further away than <see cref="Range"/>.</summary>
     public float GiveUp { get; set; } = 2;
 
     /// <summary>Stop this close to the target, e.g. for an enemy that shoots from a distance.</summary>
+    [Distance]
     public float StopDistance { get; set; }
 
     /// <summary>Only notice the target when nothing solid is in the way.</summary>
@@ -296,6 +298,7 @@ public sealed class Shooter : Component
     public Vector2 Direction { get; set; } = Vector2.UnitX;
 
     /// <summary>With a <see cref="Target"/>, only fire when it's this close. 0 fires at any distance.</summary>
+    [Distance(When = nameof(Target))]
     public float Range { get; set; } = 10;
 
     /// <summary>With a <see cref="Target"/>, only fire when nothing solid is in the way: no shooting through walls.</summary>

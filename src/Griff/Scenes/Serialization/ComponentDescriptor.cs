@@ -93,6 +93,7 @@ public sealed class PropertyDescriptor
     {
         _property = property;
         SerializedName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+        Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
     }
 
     internal PropertyInfo Info => _property;
@@ -103,6 +104,9 @@ public sealed class PropertyDescriptor
     public string SerializedName { get; }
 
     public Type Type => _property.PropertyType;
+
+    /// <summary>For a number marked <see cref="DistanceAttribute"/>: how the Scene view draws it as a circle around the entity.</summary>
+    public DistanceAttribute? Distance { get; }
 
     public object? GetValue(Component component) => _property.GetValue(component);
 

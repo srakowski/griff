@@ -48,6 +48,7 @@ public sealed class Attack : Component
     public string? Target { get; set; } = "Player";
 
     /// <summary>For an enemy: how close its target has to be before it swings, in world units.</summary>
+    [Distance]
     public float Range { get; set; } = 1.5f;
 
     /// <summary>True from the start of a swing until its hitbox goes away.</summary>

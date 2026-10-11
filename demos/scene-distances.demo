@@ -1,0 +1,42 @@
+title: Distances in the Scene view
+intro: Drag how far a light reaches, or how close an enemy notices you, right in the Scene view.
+project: TopDown | Scene Distances
+
+create: Light
+rename: Lamp
+set: Transform.Position = 20, 0, 0
+set: Light.Radius = 3
+deselect
+create: Sprite
+rename: Guard
+set: Transform.Position = 32, 0, 0
+set: Sprite.Tint = #FF004D
+add: Chase
+add: Shooter
+set: Shooter.Target = Player
+deselect
+
+chapter: Distance handles | View > Distance Handles, or D
+select: Lamp
+look: 20, 0, 5
+say: A selected light shows how far it reaches as a dashed circle. Until now, the only way to change it was typing in the Inspector.
+menu: View > Distance Handles
+explain: handle:Light.Radius | Distance handles | With distance handles out, each circle gets a knob, with its name beside it.
+distance: Ctrl+Light.Radius = 5
+expectvalue: Lamp.Light.Radius = 5
+explain: field:Light.Radius | Radius | Drag the knob and the radius follows. Holding control snaps it to half units.
+
+chapter: Ranges | Every distance on the entity
+select: Guard
+look: 32, 0, 11
+say: This guard has two circles: how close the player has to come before it gives chase, and how far it shoots.
+explain: handle:Chase.Range | Chase range | Each has its own knob, spaced around the circle so they don't hide each other.
+distance: Ctrl+Chase.Range = 4
+expectvalue: Guard.Chase.Range = 4
+distance: Ctrl+Shooter.Range = 7.5
+expectvalue: Guard.Shooter.Range = 7.5
+explain: field:Shooter.Range | Range | So a sneaky level is tuned by eye: pull the guard's notice in, push its aim out.
+key: Ctrl+Z
+expectvalue: Guard.Shooter.Range = 10
+say: Each drag is one step to undo. Light radii, sound ranges, a unit's sight and your own scripts' distances all get knobs the same way.
+menu: View > Scale Handles

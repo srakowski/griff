@@ -6,10 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Editor: selection and handles
-
-- [ ] Add Scene-view handles for radii and distances: light radii, ranges and sight.
-
 ### Editor: references, paths and prefabs
 
 - [ ] Make fields that name an entity (a Switch's Targets, a Dialogue's Box, a Wire's From and the like) pickers: pick from a list or drag an entity onto them from the Hierarchy.
@@ -163,3 +159,4 @@ grows. The headings only group items; build order is top to bottom.
 - [x] Add a rotate handle to the Scene view. (2026-10-10) A knob on a stem above the primary selection; several turn around the one picked last, as one undo step, landing on whole degrees (Ctrl snaps to 15). Agents turn the selection with SceneViewModel.RotateSelection. It turns Rotation Z only (the engine is 2D), and colliders still don't rotate in physics. Demos gain rotate:, the handle:rotate target and expectvalue on one axis of a vector.
 - [x] Add scale handles to the Scene view. (2026-10-10) Squares on the primary selection's corners (both axes) and edges (one), scaling around its position along its own axes; several scale around the one picked last, as one undo step. Shift keeps proportions, Ctrl snaps to tenths, otherwise hundredths; scales never reach zero, and dragging past the pivot flips. Handles hide on things drawn smaller than 16 pixels (zoom in). Agents scale with SceneViewModel.ScaleSelection. Others in a multi-selection that are turned differently from the primary scale along their own axes, which is only an approximation. Demos gain scale: and handle:<corner or edge>.
 - [x] Add Scene-view handles to resize sprites and box and circle colliders. (2026-10-10) View > Scale, Resize and Collider Handles (S, R, C in the Scene view) pick what the square handles do. A sprite resizes around its position, so its colliders and children stay put (keeping the opposite edge would move the entity and everything on it); a box collider keeps its opposite side (moving its offset), a circle its middle. Shift keeps proportions, Ctrl snaps to half units, one undo step per drag (SetPropertyGroupEdit). Only the entity picked last resizes. Agents set SceneViewModel.Handles and call ResizeShape. Demos gain resize:.
+- [x] Add Scene-view handles for radii and distances: light radii, ranges and sight. (2026-10-10) A [Distance] attribute marks a number as a distance from the entity (Center names an offset, When a property that has to be set), so scripts get handles too; the selection's distances all draw as dashed circles, and View > Distance Handles (D) puts a named knob on each, spaced round the circle. Ctrl snaps to half units, one undo step per drag. Distances of 0 (often "anywhere") have no circle or knob. Agents list them with SceneViewModel.Distances and drag with DragDistance; component_describe says which properties are distances. Demos gain distance: and handle:<Component.Property>. Fighter.Range (from its edge), Chase.GiveUp (on top of Range), Multiplayer.ViewDistance and FirstPersonView.FogDistance aren't marked.

@@ -41,6 +41,7 @@ In the **Scene view**:
 - Drag the round handle above the selected entity to rotate it. With several selected, they all turn around the one picked last, as one undo step. Angles land on whole degrees; hold Ctrl to snap to 15 degrees.
 - Drag the square handles on the selected entity's corners to scale it, or on its edges to stretch it one way. It grows or shrinks around its position, along its own axes; with several selected, they all scale around the one picked last, as one undo step. Hold Shift to keep its proportions, and Ctrl to snap to tenths; otherwise the scale lands on hundredths.
 - Press R (or **View → Resize Handles**) and the square handles resize the selected entity's sprite instead, changing its **Size** rather than its scale, so a platform grows longer without stretching the coins on it. Like the scale handles it grows around its position: the opposite edge moves out as much, and its colliders and children stay where they are. Press C (**Collider Handles**) for green handles on its box and circle colliders: a box's edges and corners change its **Size** and **Offset** (the opposite side stays put), and a circle's edge changes its **Radius** around its middle. Hold Shift to keep proportions, and Ctrl to snap sizes to half units (a circle's radius to quarters); otherwise they land on hundredths. Each drag is one undo step. Press S to go back to scaling; the corner of the Scene view says which handles are out.
+- The selected entity's distances show as dashed circles around it: how far its light reaches, its sound is heard, it notices the player or shoots, a unit sees. Press D (**View → Distance Handles**) for a round knob on each circle, named beside it: drag one to change how far it reaches, as one undo step. Hold Ctrl to snap to half units; otherwise it lands on hundredths. A distance of 0 (often "anywhere") has no circle; set it in the Inspector.
 - Press F to frame the selection.
 - Arrow keys nudge everything selected by half a unit (Shift for a tenth).
 - Drop an image to create a sprite, or a prefab to place a copy of it.
@@ -222,7 +223,7 @@ While the editor is open it runs a [Model Context Protocol](https://modelcontext
 
 - **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity` (or `select` several first: Delete, Duplicate, Cut and Copy act on all of them); a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
 - **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
-- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection, moving, rotating, scaling and resizing (its `Handles` mode, `ResizeShape`), the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
+- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection, moving, rotating, scaling and resizing (its `Handles` mode, `ResizeShape`), dragging distances (`Distances`, `DragDistance`), the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
 - **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
 - **Checking work**: `editor_screenshot` shows the game or the editor, `game_input` plays the running game with keys (and can pause it between moves), `editor_state` and `output_read` say what's going on.
 
@@ -283,6 +284,7 @@ Describe a script for the component catalog with a `///` summary over the class 
 public class Creeper : Behavior
 {
     /// <summary>How close it gets before exploding, in world units.</summary>
+    [Distance]                                         // drawn as a circle around it in the Scene view, with a handle
     public float FuseRange { get; set; } = 1.5f;
 }
 ```
@@ -557,7 +559,7 @@ Griff is young. Known gaps:
 - Shadows are hard-edged, and come from colliders and tiles rather than sprites' shapes.
 - Tilemaps use one tileset of up to 62 tiles.
 - Panels are resizable but not dockable.
-- The Scene view's handles resize sprites and box and circle colliders, but not light radii, ranges or other sizes yet (set those in the Inspector), and they resize only the entity picked last, even with several selected.
+- The Scene view's handles resize sprites, box and circle colliders and distances (light radii, ranges, sight) only on the entity picked last, even with several selected, and distances of 0 have no handle until they're set in the Inspector.
 - Dragging rows in the Hierarchy moves one at a time, even with several selected.
 - Strategy games' units only walk (no flying or water), and the fog of war is drawn in squares.
 - Multiplayer connects directly: to play over the internet, the host forwards their port (7777 by default) on their router; there's no matchmaking, relay or lobby server yet. Players' own machines move their own characters, which suits friends better than strangers (pick **Host** movement where cheating matters), and shots are judged where the host sees things, without rewinding for lag. Rewinding in the editor works with one player, and a network game can't hit-stop or slow down (it's everyone's).

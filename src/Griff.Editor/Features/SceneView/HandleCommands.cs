@@ -51,3 +51,15 @@ public sealed class ColliderHandlesCommand(SceneViewModel model) : HandlesComman
     public override string? GestureText => "C";
     public override MenuPlacement? Placement { get; } = new(Menus.View, Group: 1, Order: 2);
 }
+
+/// <summary>
+/// Puts round handles on the circles of the selected entity's distances, such as a light's radius, how far an enemy
+/// notices the player, or a unit's sight: drag one to change how far it reaches.
+/// </summary>
+public sealed class DistanceHandlesCommand(SceneViewModel model) : HandlesCommand(model, SceneHandles.Distance)
+{
+    public override string Id => "View.DistanceHandles";
+    public override string Text => "_Distance Handles";
+    public override string? GestureText => "D";
+    public override MenuPlacement? Placement { get; } = new(Menus.View, Group: 1, Order: 3);
+}

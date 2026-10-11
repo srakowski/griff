@@ -231,6 +231,15 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Describe_SaysWhichPropertiesAreDistances()
+    {
+        var text = Run("component_describe", """{"component": "Unit"}""").Text.Split('\n');
+
+        Assert.Contains("(A distance:", text.Single(l => l.StartsWith("- sight:", StringComparison.Ordinal)));
+        Assert.DoesNotContain("(A distance:", text.Single(l => l.StartsWith("- speed:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void ListComponents_ByCategoryAndSearch()
     {
         Assert.Contains("## Movement", Run("components_list", "{}").Text);

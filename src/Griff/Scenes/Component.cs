@@ -60,3 +60,21 @@ public sealed class WorksWithAttribute(Type type) : Attribute
     /// <summary>What the two do together, shown with the suggestion.</summary>
     public string? Note { get; init; }
 }
+
+/// <summary>
+/// Marks a number property as a distance from the entity in world units, e.g. how far a light reaches or how close an
+/// enemy notices the player: with the entity selected, the editor's Scene view draws it as a circle around it, and
+/// View > Distance Handles puts a handle on the circle to drag. Zero isn't drawn (it often means "anywhere").
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class DistanceAttribute : Attribute
+{
+    /// <summary>A <see cref="System.Numerics.Vector2"/> property the circle is centered on, offset from the entity in its own units (a light's Offset).</summary>
+    public string? Center { get; init; }
+
+    /// <summary>
+    /// A property that has to be set for the distance to count (not empty, false or zero), e.g. a shooter's range only
+    /// matters with a Target. The circle isn't drawn without it.
+    /// </summary>
+    public string? When { get; init; }
+}

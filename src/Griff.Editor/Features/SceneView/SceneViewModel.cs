@@ -20,12 +20,32 @@ public enum SceneHandles
 
     /// <summary>Resize its box and circle colliders: a box's size and offset (its opposite side stays), a circle's radius.</summary>
     Collider,
+
+    /// <summary>
+    /// Drag its distances instead: round handles on the circles of its light radii, ranges and sight (see
+    /// <see cref="SceneViewModel.Distances"/>).
+    /// </summary>
+    Distance,
+}
+
+/// <summary>
+/// A distance on the primary selection that the Scene view draws as a circle: a number marked
+/// <see cref="DistanceAttribute"/>, such as a light's radius or a unit's sight. <see cref="Center"/> is the circle's
+/// middle in the world and <see cref="Value"/> its radius, in world units.
+/// </summary>
+public sealed record SceneDistance(Component Component, PropertyDescriptor Property, Vector2 Center, float Value)
+{
+    /// <summary>"Light.Radius", as <see cref="SceneViewModel.DragDistance"/> takes it.</summary>
+    public string Key => $"{Component.GetType().Name}.{Property.Name}";
+
+    /// <summary>What the Scene view and agents see: "Light.Radius = 4 around 1, 2".</summary>
+    public string Label => FormattableString.Invariant($"{Key} = {Value:0.##} around {Center.X:0.##}, {Center.Y:0.##}");
 }
 
 /// <summary>
 /// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
-/// selected together, and resizing the primary selection's sprite and colliders. The view's drags call these, and agents
-/// can too (positions are world units, Y up).
+/// selected together, resizing the primary selection's sprite and colliders, and dragging its distances. The view's drags
+/// call these, and agents can too (positions are world units, Y up).
 /// </summary>
 public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {
@@ -37,8 +57,9 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) :
     private SceneHandles _handles;
 
     /// <summary>
-    /// What the square handles on the primary selection do: scale it (the default), resize its sprite, or resize its
-    /// box and circle colliders. View > Scale Handles, Resize Handles and Collider Handles switch it.
+    /// What the handles on the primary selection do: scale it (the default), resize its sprite, resize its box and
+    /// circle colliders, or drag its distances (light radii, ranges, sight). View > Scale Handles, Resize Handles,
+    /// Collider Handles and Distance Handles switch it.
     /// </summary>
     public SceneHandles Handles
     {
@@ -270,6 +291,81 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) :
             BoxCollider => new ShapeResize(document, shape, frame, Property(shape, nameof(BoxCollider.Size)), Property(shape, nameof(BoxCollider.Offset))),
             _ => new ShapeResize(document, shape, frame, Property(shape, nameof(CircleCollider.Radius)), Property(shape, nameof(CircleCollider.Offset))),
         };
+    }
+
+    /// <summary>
+    /// The primary selection's distances the Scene view draws as circles, whatever <see cref="Handles"/> is out: every
+    /// number marked <see cref="DistanceAttribute"/> on its components (scripts' too) that's above zero, and whose
+    /// <see cref="DistanceAttribute.When"/> is set. In Distance mode each gets a handle.
+    /// </summary>
+    public IReadOnlyList<SceneDistance> Distances()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+            return [];
+        var distances = new List<SceneDistance>();
+        foreach (var component in primary.Components)
+        {
+            var properties = workspace.Components.Get(component.GetType()).Properties;
+            foreach (var property in properties.Where(p => p.Distance is not null))
+            {
+                if (property.GetValue(component) is not float value || !(value > 0) || !float.IsFinite(value))
+                    continue;
+                var attribute = property.Distance!;
+                if (attribute.When is { } when && !IsSet(properties.FirstOrDefault(p => p.Name == when)?.GetValue(component)))
+                    continue;
+                var center = attribute.Center is { } name && properties.FirstOrDefault(p => p.Name == name)?.GetValue(component) is Vector2 offset
+                    ? Vector2.Transform(offset, primary.Transform.WorldMatrix)
+                    : Flat(primary.Transform.WorldPosition);
+                distances.Add(new SceneDistance(component, property, center, value));
+            }
+        }
+
+        return distances;
+
+        static bool IsSet(object? value) => value switch
+        {
+            null => false,
+            string text => !string.IsNullOrWhiteSpace(text),
+            bool on => on,
+            float number => number != 0,
+            int number => number != 0,
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// Drags the handle of one of the primary selection's distances (see <see cref="Distances"/>), named like
+    /// "Light.Radius" or "Unit.Sight", to a point in the world, as one undo step: the distance becomes how far that
+    /// point is from the circle's middle, landing on hundredths (<paramref name="snap"/>: half units). Throws when the
+    /// selection has no such distance showing.
+    /// </summary>
+    public void DragDistance(string distance, Vector2 to, bool snap = false)
+    {
+        var distances = Distances();
+        var found = distances.FirstOrDefault(d => string.Equals(d.Key, distance.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (found is null)
+        {
+            throw new ArgumentException(distances.Count == 0
+                ? $"The selection has no distance \"{distance}\" showing: select an entity with one above zero."
+                : $"The selection has no distance \"{distance}\" showing; it has {string.Join(", ", distances.Select(d => d.Key))}.");
+        }
+
+        if (BeginDistance(found) is not { } drag)
+            return;
+        workspace.Scene!.History.Seal();
+        drag.To(Vector2.Distance(found.Center, to), snap);
+        drag.End();
+    }
+
+    /// <summary>
+    /// Starts dragging one of the primary selection's distances, for a drag of its handle: <see cref="DistanceDrag.To"/>
+    /// sets it, and the whole drag is one undo step. Null when it isn't the primary selection's.
+    /// </summary>
+    public DistanceDrag? BeginDistance(SceneDistance distance)
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || distance.Component.Entity != primary)
+            return null;
+        return new DistanceDrag(document, distance);
     }
 
     /// <summary>World-space corners of what the entity draws (its sprite, tilemap or camera frame), or null if it draws none of those.</summary>
@@ -687,5 +783,44 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) :
             var perUnit = MathF.Round(1 / step);
             return MathF.Max(step, MathF.Round(value * perUnit) / perUnit);
         }
+    }
+
+    /// <summary>One drag of a distance's handle, from <see cref="BeginDistance"/>.</summary>
+    public sealed class DistanceDrag
+    {
+        /// <summary>The step Ctrl snaps distances to: half a unit.</summary>
+        public const float SnapStep = 0.5f;
+
+        // Distances never get smaller than this (zero often means "anywhere"), and a drag leaves them on multiples of it.
+        private const float RoundStep = 0.01f;
+
+        private readonly SceneDocument _document;
+
+        internal DistanceDrag(SceneDocument document, SceneDistance distance)
+        {
+            _document = document;
+            Distance = distance;
+            document.History.Seal();
+        }
+
+        /// <summary>The distance being dragged, as it was when the drag started.</summary>
+        public SceneDistance Distance { get; }
+
+        /// <summary>
+        /// Sets the distance to <paramref name="value"/> world units, on a hundredth, or with <paramref name="snap"/> a
+        /// multiple of <see cref="SnapStep"/>; never less than a hundredth.
+        /// </summary>
+        public void To(float value, bool snap)
+        {
+            var step = snap ? SnapStep : RoundStep;
+            var perUnit = MathF.Round(1 / step);
+            var fitted = MathF.Max(step, MathF.Round(value * perUnit) / perUnit);
+            if (Equals(Distance.Property.GetValue(Distance.Component), fitted))
+                return;
+            _document.Execute(new SetPropertyEdit(Distance.Component, Distance.Property, fitted));
+        }
+
+        /// <summary>Ends the drag, so the next change is its own undo step.</summary>
+        public void End() => _document.History.Seal();
     }
 }

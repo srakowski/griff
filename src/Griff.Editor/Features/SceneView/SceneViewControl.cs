@@ -23,7 +23,8 @@ namespace Griff.Editor.Features.SceneView;
 /// dragging the rotate handle above the primary selection turns the selection around it (Ctrl snaps to 15 degrees);
 /// dragging the square handles on its corners and edges scales it (Shift keeps proportions, Ctrl snaps to tenths), or,
 /// with Resize or Collider handles picked (R and C; S goes back), resizes its sprite or its colliders (Ctrl snaps to
-/// half units); F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
+/// half units); with Distance handles picked (D), the round knobs on its circles change its light radii, ranges and sight
+/// (Ctrl snaps to half units); F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
@@ -79,6 +80,9 @@ public sealed class SceneViewControl : FrameworkElement
     private Vector2 _resizeSpot;
     private Vector2 _resizePress;
     private (Component Shape, Vector2 Spot)? _overResize;
+    private SceneViewModel.DistanceDrag? _distance;
+    private float _distanceGrab;
+    private string? _overDistance;
 
     // Tile painting.
     private int _brushTile;
@@ -106,7 +110,7 @@ public sealed class SceneViewControl : FrameworkElement
         selection.PropertyChanged += (_, _) => InvalidateVisual();
         model.PropertyChanged += (_, _) =>
         {
-            (_overScale, _overResize) = (null, null);
+            (_overScale, _overResize, _overDistance) = (null, null, null);
             InvalidateVisual();
         };
         workspace.ScriptsReloaded += (_, _) => InvalidateVisual();
@@ -123,6 +127,7 @@ public sealed class SceneViewControl : FrameworkElement
         Rotate,
         Scale,
         Resize,
+        Distance,
     }
 
     private PropertyDescriptor PositionProperty =>
@@ -552,8 +557,8 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
-    // Where movers go, always; for the selection, how far a chaser notices and a shooter reaches, where a door leads, and
-    // what a switch turns on (dashed) or hides (dotted).
+    // Where movers go, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
+    // which way a shooter fires, where a door leads, and what a switch turns on (dashed) or hides (dotted).
     private void DrawLevelGuides(DrawingContext dc)
     {
         var guide = Brush("Brush.Status.Warning");
@@ -578,22 +583,10 @@ public sealed class SceneViewControl : FrameworkElement
         if (_selection.Entity is not { } selected || selected.Scene != _document.Scene)
             return;
         var here = ToVector2(selected.Transform.WorldPosition);
-        foreach (var chase in selected.GetComponents<Chase>().Where(c => c.Range > 0))
-            dc.DrawEllipse(null, dashed, ToScreen(here), chase.Range * _zoom, chase.Range * _zoom);
-        foreach (var shooter in selected.GetComponents<Shooter>())
-        {
-            if (!string.IsNullOrWhiteSpace(shooter.Target) && shooter.Range > 0)
-                dc.DrawEllipse(null, dashed, ToScreen(here), shooter.Range * _zoom, shooter.Range * _zoom);
-            else if (string.IsNullOrWhiteSpace(shooter.Target) && shooter.Direction != Vector2.Zero)
-                dc.DrawLine(dashed, ToScreen(here + shooter.Offset), ToScreen(here + shooter.Offset + Vector2.Normalize(shooter.Direction) * 2));
-        }
-
-        foreach (var source in selected.GetComponents<SoundSource>().Where(s => s.Range > 0))
-            dc.DrawEllipse(null, dashed, ToScreen(here), source.Range * _zoom, source.Range * _zoom);
-        foreach (var attack in selected.GetComponents<Attack>().Where(a => string.IsNullOrWhiteSpace(a.Action) && a.Range > 0))
-            dc.DrawEllipse(null, dashed, ToScreen(here), attack.Range * _zoom, attack.Range * _zoom);
-        foreach (var light in selected.GetComponents<Light>().Where(l => l.Radius > 0))
-            dc.DrawEllipse(null, dashed, ToScreen(light.WorldCenter), light.Radius * _zoom, light.Radius * _zoom);
+        foreach (var distance in _model.Distances())
+            dc.DrawEllipse(null, dashed, ToScreen(distance.Center), distance.Value * _zoom, distance.Value * _zoom);
+        foreach (var shooter in selected.GetComponents<Shooter>().Where(s => string.IsNullOrWhiteSpace(s.Target) && s.Direction != Vector2.Zero))
+            dc.DrawLine(dashed, ToScreen(here + shooter.Offset), ToScreen(here + shooter.Offset + Vector2.Normalize(shooter.Direction) * 2));
 
         foreach (var door in selected.GetComponents<Door>().Where(d => string.IsNullOrWhiteSpace(d.Scene) && !string.IsNullOrWhiteSpace(d.Target)))
         {
@@ -734,13 +727,42 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
     }
 
-    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem.
+    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem, and
+    // the knobs on its distances' circles.
     private void DrawHandles(DrawingContext dc)
     {
         if (RotateHandle() is var (root, knob))
             DrawRotateHandle(dc, root, knob);
         DrawScaleHandles(dc);
         DrawResizeHandles(dc);
+        DrawDistanceHandles(dc);
+    }
+
+    // A knob on each distance's circle in the guides' color, named on its outer side; while dragging, its value too.
+    private void DrawDistanceHandles(DrawingContext dc)
+    {
+        var color = Brush("Brush.Status.Warning");
+        var chrome = Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        foreach (var (distance, point, outward) in DistanceHandles())
+        {
+            var dragging = _drag == DragMode.Distance && _distance?.Distance.Key == distance.Key;
+            var active = dragging || _drag == DragMode.None && _overDistance == distance.Key;
+            var radius = HandleRadius + (active ? 1.5 : 0);
+            dc.DrawEllipse(chrome, halo, point, radius, radius);
+            dc.DrawEllipse(active ? color : chrome, new Pen(color, 2), point, radius, radius);
+
+            var name = $"{distance.Component.GetType().Name} {distance.Property.Name}";
+            var label = dragging
+                ? Text($"{name} {distance.Value.ToString("0.##", CultureInfo.CurrentCulture)}", "Brush.Text.Primary")
+                : Text(name, active ? "Brush.Text.Primary" : "Brush.Text.Secondary");
+            // Out to the side for knobs on the left or right, above or below for those on the top or bottom.
+            var place = outward.X > 0.5 ? new Point(point.X + 12, point.Y - label.Height / 2)
+                : outward.X < -0.5 ? new Point(point.X - 12 - label.Width, point.Y - label.Height / 2)
+                : new Point(point.X - label.Width / 2, outward.Y > 0 ? point.Y + 10 : point.Y - 10 - label.Height);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
     }
 
     // A stem out of the top of the primary selection with a knob to drag; while turning, the circle the knob follows and
@@ -855,6 +877,7 @@ public sealed class SceneViewControl : FrameworkElement
         {
             SceneHandles.Resize => "Resize handles  ·  ",
             SceneHandles.Collider => "Collider handles  ·  ",
+            SceneHandles.Distance => "Distance handles  ·  ",
             _ => "",
         };
         var text = Text($"{handles}{_zoom / 64:P0}", "Brush.Text.Tertiary");
@@ -986,6 +1009,36 @@ public sealed class SceneViewControl : FrameworkElement
             ? SizeCursor(ToScreen(frame.ToWorld(frame.HandleAt(spot))) - ToScreen(frame.ToWorld(frame.Center)))
             : Cursors.SizeAll;
 
+    /// <summary>
+    /// The knobs on the primary selection's distances (see <see cref="SceneViewModel.Distances"/>), in Distance mode, in
+    /// screen space, with the way out from their circle's middle (Y down). Each sits at its own angle, the first on the
+    /// right and the next ones an eighth further round clockwise, so circles of the same size keep their knobs (and
+    /// names) apart.
+    /// </summary>
+    private List<(SceneDistance Distance, Point Screen, Vector Outward)> DistanceHandles()
+    {
+        if (_model.Handles != SceneHandles.Distance || HandleFrame() is null)
+            return [];
+        return _model.Distances()
+            .Select((distance, i) =>
+            {
+                var angle = -i * MathF.PI / 4;
+                var way = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+                return (distance, ToScreen(distance.Center + way * distance.Value), new Vector(way.X, -way.Y));
+            })
+            .ToList();
+    }
+
+    // The distance knob under a point (the nearest, where they crowd), if any.
+    private SceneDistance? DistanceHandleAt(Point screen) =>
+        DistanceHandles().Where(h => (screen - h.Screen).Length <= HandleRadius + 4)
+            .OrderBy(h => (screen - h.Screen).Length)
+            .Select(h => h.Distance)
+            .FirstOrDefault();
+
+    // A resize cursor out from the distance's middle toward the cursor.
+    private Cursor DistanceCursor(SceneDistance distance, Point screen) => SizeCursor(screen - ToScreen(distance.Center));
+
     // The resize cursor closest to a direction on screen (Y down).
     private static Cursor SizeCursor(Vector outward)
     {
@@ -1093,6 +1146,14 @@ public sealed class SceneViewControl : FrameworkElement
             _rotateTotal = 0;
             BeginDrag(DragMode.Rotate, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && DistanceHandleAt(position) is { } knob && _model.BeginDistance(knob) is { } distance)
+        {
+            // Grabbing the knob a little off its circle doesn't make the distance jump.
+            _distance = distance;
+            _distanceGrab = knob.Value - Vector2.Distance(knob.Center, ToWorld(position));
+            BeginDrag(DragMode.Distance, position);
+            Cursor = DistanceCursor(knob, position);
+        }
         else if (e.ChangedButton == MouseButton.Left && ResizeHandleAt(position) is var (shape, resizeSpot) && _model.BeginResize(shape) is { } resize)
         {
             _resize = resize;
@@ -1158,12 +1219,15 @@ public sealed class SceneViewControl : FrameworkElement
             var over = IsOverRotateHandle(position);
             var overScale = over ? null : ScaleHandleAt(position);
             var overResize = over ? null : ResizeHandleAt(position);
-            if (over != _overHandle || overScale != _overScale || overResize != _overResize)
+            var overDistance = over ? null : DistanceHandleAt(position);
+            if (over != _overHandle || overScale != _overScale || overResize != _overResize || overDistance?.Key != _overDistance)
             {
                 _overHandle = over;
                 _overScale = overScale;
                 _overResize = overResize;
+                _overDistance = overDistance?.Key;
                 Cursor = over ? Cursors.Hand
+                    : overDistance is not null ? DistanceCursor(overDistance, position)
                     : overScale is { } spot ? ScaleCursor(spot)
                     : overResize is var (shape, resizeSpot) ? ResizeCursor(shape, resizeSpot)
                     : null;
@@ -1176,6 +1240,13 @@ public sealed class SceneViewControl : FrameworkElement
         if (_drag == DragMode.Scale)
         {
             _scale?.To(ScaleFactor(_scale, ToWorld(position)), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+            return;
+        }
+
+        if (_drag == DragMode.Distance)
+        {
+            if (_distance is not null)
+                _distance.To(Vector2.Distance(_distance.Distance.Center, ToWorld(position)) + _distanceGrab, snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
             return;
         }
 
@@ -1396,10 +1467,16 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
-        // S, R and C pick what the square handles do: scale, resize the sprite, or resize the colliders.
-        if (e.Key is Key.S or Key.R or Key.C && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None)
+        // S, R, C and D pick what the handles do: scale, resize the sprite, resize the colliders, or change distances.
+        if (e.Key is Key.S or Key.R or Key.C or Key.D && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None)
         {
-            _model.Handles = e.Key switch { Key.R => SceneHandles.Resize, Key.C => SceneHandles.Collider, _ => SceneHandles.Scale };
+            _model.Handles = e.Key switch
+            {
+                Key.R => SceneHandles.Resize,
+                Key.C => SceneHandles.Collider,
+                Key.D => SceneHandles.Distance,
+                _ => SceneHandles.Scale,
+            };
             e.Handled = true;
             return;
         }
@@ -1493,6 +1570,14 @@ public sealed class SceneViewControl : FrameworkElement
             _resize?.End();
             _resize = null;
             _overResize = null;
+            InvalidateVisual();
+        }
+
+        if (mode == DragMode.Distance)
+        {
+            _distance?.End();
+            _distance = null;
+            _overDistance = null;
             InvalidateVisual();
         }
 

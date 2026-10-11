@@ -59,6 +59,7 @@ public sealed class SandboxTools : Component
     public float GrabStrength { get; set; } = 14;
 
     /// <summary>How far from the entity the tools reach, in world units. 0 reaches anywhere on screen.</summary>
+    [Distance]
     public float Reach { get; set; }
 
     /// <summary>The key that undoes the last prop, weld, rope or wire made.</summary>

@@ -426,6 +426,7 @@ public sealed class Spawner : Component
     public int MaxAlive { get; set; }
 
     /// <summary>Spawns land at a random spot up to this far from the spawner.</summary>
+    [Distance]
     public float Radius { get; set; }
 
     /// <summary>Untick it to stop spawning for now. <see cref="Switch"/>es tick and untick it.</summary>

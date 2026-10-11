@@ -25,6 +25,7 @@ public enum SceneTransition
 public sealed class Light : Component
 {
     /// <summary>How far the light reaches, in world units.</summary>
+    [Distance(Center = nameof(Offset))]
     public float Radius { get; set; } = 4;
 
     /// <summary>The light's color: warm orange for a torch, pale blue for moonlight.</summary>
@@ -176,6 +177,7 @@ public sealed class SoundSource : Component
     public float Volume { get; set; } = 1;
 
     /// <summary>How far away it can be heard, in world units. 0 plays it at full volume everywhere (rain, wind).</summary>
+    [Distance]
     public float Range { get; set; } = 10;
 
     /// <summary>True while it plays. Untick it to start silent; switches and scripts can set it.</summary>

@@ -168,6 +168,7 @@ public sealed class Weapon : Component
     public bool Automatic { get; set; }
 
     /// <summary>How far bullets reach, in world units.</summary>
+    [Distance]
     public float Range { get; set; } = 30;
 
     /// <summary>Bullets in each shot: 1 for a pistol, 7 or so for a shotgun.</summary>

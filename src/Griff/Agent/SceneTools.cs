@@ -634,6 +634,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             text.Append($"- {property.SerializedName}: {AgentValues.Describe(property.Type)} = {fallback}");
             if (meaning.Length > 0)
                 text.Append(". ").Append(meaning);
+            if (property.Distance is not null)
+                text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
             text.AppendLine();
         }
 

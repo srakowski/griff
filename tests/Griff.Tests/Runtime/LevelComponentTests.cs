@@ -222,6 +222,54 @@ public class LevelComponentTests
     }
 
     [Fact]
+    public void Patrol_TurnsAtItsLeftAndRight_OnALongFloor()
+    {
+        _game.Physics.Gravity = new Vector2(0, -25);
+        AddBox("Floor", new Vector2(0, -0.5f), new Vector2(40, 1));
+        var walker = AddWalker(new Vector2(0, 0.4f));
+        var patrol = walker.GetComponent<Patrol>()!;
+        (patrol.Left, patrol.Right) = (2, 1);
+
+        var (least, most) = (float.MaxValue, float.MinValue);
+        for (var t = 0f; t < 6; t += Step)
+        {
+            Run(Step);
+            least = MathF.Min(least, Position(walker).X);
+            most = MathF.Max(most, Position(walker).X);
+        }
+
+        // Out to each turn (a frame's walk past it at most), and no further.
+        Assert.InRange(least, -2.2f, -1.9f);
+        Assert.InRange(most, 0.9f, 1.2f);
+        Assert.Equal(Position(walker).X, patrol.Walked, 2);
+    }
+
+    [Fact]
+    public void Patrol_Walked_CountsHowFarItIsFromWhereItWasPlaced_HoweverItGotThere()
+    {
+        _game.Physics.Gravity = new Vector2(0, -25);
+        AddBox("Floor", new Vector2(0, -0.5f), new Vector2(40, 1));
+        var walker = AddWalker(new Vector2(0, 0.4f));
+        var patrol = walker.GetComponent<Patrol>()!;
+        patrol.Right = 3;
+
+        Run(0.5f);
+        // Knocked (or dragged) further along: past its Right turn, so it heads back.
+        walker.Transform.Position += new Vector3(4, 0, 0);
+        Run(0.5f);
+
+        Assert.True(patrol.GoingLeft);
+        Assert.Equal(Position(walker).X, patrol.Walked, 2);
+
+        // Starting part of the way along: it's already at its Right turn, so it turns straight away.
+        var other = AddWalker(new Vector2(10, 0.4f));
+        var started = other.GetComponent<Patrol>()!;
+        (started.Right, started.Walked) = (1, 1);
+        Run(Step * 2);
+        Assert.True(started.GoingLeft);
+    }
+
+    [Fact]
     public void Patrol_WithoutTurningAtEdges_WalksOff()
     {
         _game.Physics.Gravity = new Vector2(0, -25);

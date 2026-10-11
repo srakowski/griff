@@ -490,6 +490,40 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(distanceFrom, middle + outward * reach, distanceModifiers);
                 await DemoUi.Settle();
                 break;
+            case "path":
+                // "path: Mover.2 = 4, 3" (or "Ctrl+Mover.+3 = 6, 3" for the plus that adds point 3): drags that knob on the
+                // selection's path to where the point is that far from the mover's start. "path: Patrol.Left = 3" drags a
+                // patrol's turn to that far out on its side (0 clears it).
+                var (pathText, pathModifiers) = ParseModifiedName(a);
+                var (pathName, pathValue) = Split2(pathText, '=');
+                var (pathHandle, pathFrom) = ui.PathKnob(pathName)
+                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover or a Patrol.");
+                var pathEntity = (pathHandle.Point?.Component ?? pathHandle.Mover)!.Entity!;
+                var pathParent = pathEntity.Parent?.Transform.WorldMatrix ?? System.Numerics.Matrix4x4.Identity;
+                var placed = new System.Numerics.Vector2(pathEntity.Transform.Position.X, pathEntity.Transform.Position.Y);
+                System.Numerics.Vector2 pathLocal;
+                if (pathHandle.Point?.Component is Griff.Scenes.Patrol pathPatrol)
+                {
+                    var side = float.Parse(pathValue, CultureInfo.InvariantCulture) * pathHandle.Index;
+                    pathLocal = placed + new System.Numerics.Vector2(side - pathPatrol.Walked, 0);
+                }
+                else
+                {
+                    var pathMover = pathEntity.GetComponent<Griff.Scenes.Mover>()!;
+                    pathLocal = placed - pathMover.OffsetAt(pathMover.Time) + Vector(pathValue);
+                }
+
+                var pathTo = System.Numerics.Vector2.Transform(pathLocal, pathParent);
+                await Input.DragWith(pathFrom, ui.World(pathTo.X, pathTo.Y), pathModifiers);
+                await DemoUi.Settle();
+                break;
+            case "removepoint":
+                // "removepoint: Mover.2" (or "Patrol.Left"): double-clicks that knob on the selection's path, taking the
+                // point off (a patrol's turn clears).
+                var removeAt = ui.PathKnob(a)?.Screen ?? throw new InvalidOperationException($"The {a} knob isn't showing.");
+                await Input.Click(removeAt, clicks: 2);
+                await DemoUi.Settle();
+                break;
             case "expectat":
                 // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
                 var (atName, atText) = Split2(a, '=');
@@ -1212,7 +1246,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             var handle = name.Equals("rotate", StringComparison.OrdinalIgnoreCase)
                 ? ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.")
-                : ui.DistanceKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
+                : ui.DistanceKnob(name)?.Screen ?? ui.PathKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
                     ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }

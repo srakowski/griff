@@ -20,7 +20,7 @@ public enum MoverMode
 /// <summary>
 /// Moves its entity along a path with no code: moving platforms, lifts, saws, patrolling hazards. <see cref="Points"/> are
 /// offsets from where it's placed, e.g. "4 0" (four units right and back) or "4 0; 4 3" (right, then up). Bodies standing
-/// on it ride along. The Scene view draws the path.
+/// on it ride along. The Scene view draws the path; select it to drag its points.
 /// </summary>
 [Category("Movement")]
 [ComponentName("Griff.Mover")]
@@ -169,9 +169,9 @@ public sealed class Mover : Component
 }
 
 /// <summary>
-/// Walks back and forth with no code, turning at walls and (optionally) at the edges of what it stands on: a platformer's
-/// basic enemy. Needs a <see cref="Body"/> and a collider. With a <see cref="Chase"/> too, it patrols until it spots its
-/// target.
+/// Walks back and forth with no code, turning at walls, (optionally) at the edges of what it stands on, and at
+/// <see cref="Left"/> and <see cref="Right"/> when they're set: a platformer's basic enemy. Needs a <see cref="Body"/> and
+/// a collider. With a <see cref="Chase"/> too, it patrols until it spots its target. The Scene view draws its route.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -191,6 +191,27 @@ public sealed class Patrol : Component
 
     /// <summary>Flip its sprite to face the way it walks (art should face right).</summary>
     public bool FlipSprite { get; set; } = true;
+
+    /// <summary>
+    /// How far left of where it's placed it walks before turning, in world units. 0 walks on until a wall or an edge.
+    /// </summary>
+    public float Left { get; set; }
+
+    /// <summary>
+    /// How far right of where it's placed it walks before turning, in world units. 0 walks on until a wall or an edge.
+    /// </summary>
+    public float Right { get; set; }
+
+    /// <summary>
+    /// How far right of where it was placed it is (left is below zero), which <see cref="Left"/> and <see cref="Right"/>
+    /// are measured from. The game keeps it up to date as it walks or is knocked about; set it to start part of the way
+    /// along.
+    /// </summary>
+    public float Walked { get; set; }
+
+    // Where it was last frame, along X in its parent's space, to add how far it went to Walked. Not saved: a restored game
+    // starts counting again from wherever it is.
+    internal float? LastX { get; set; }
 
     /// <summary>Raised when it turns round.</summary>
     public event Action<Patrol>? Turned;

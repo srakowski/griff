@@ -172,6 +172,24 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             .FirstOrDefault();
     }
 
+    private static readonly MethodInfo ScenePathHandles = typeof(SceneViewControl).GetMethod("PathHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// A knob on the selection's path, by its name: a mover's point ("Mover.2"), the plus that adds one ("Mover.+3"), or
+    /// a patrol's turn ("Patrol.Left"). The handle and where it is on screen; null when it isn't showing.
+    /// </summary>
+    public (SceneViewControl.PathHandle Handle, Point Screen)? PathKnob(string name)
+    {
+        var key = name.Trim();
+        if (key.StartsWith("Mover.+", StringComparison.OrdinalIgnoreCase))
+            key = key["Mover.".Length..];
+        var handles = (IEnumerable<SceneViewControl.PathHandle>)ScenePathHandles.Invoke(sceneView, [])!;
+        return handles
+            .Where(h => h.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .Select(h => ((SceneViewControl.PathHandle, Point)?)(h, sceneView.PointToScreen(h.Screen)))
+            .FirstOrDefault();
+    }
+
     // A handle's place on the selection or shape, as its spot from -1 to 1 along its own axes.
     private static Vector2 HandleSpot(string name) =>
         name.Trim().ToLowerInvariant() switch

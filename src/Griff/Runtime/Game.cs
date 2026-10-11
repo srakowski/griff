@@ -243,6 +243,7 @@ public sealed partial class Game
         FillPrompts();
         RunSoundSources();
         RunSoundPlayers();
+        CountPatrolWalks();
         Audio.Advance(Time.UnscaledDelta);
         SaveSettings();
         Net.EndFrame(Time.UnscaledDelta);

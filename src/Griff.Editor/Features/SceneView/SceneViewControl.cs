@@ -24,7 +24,9 @@ namespace Griff.Editor.Features.SceneView;
 /// dragging the square handles on its corners and edges scales it (Shift keeps proportions, Ctrl snaps to tenths), or,
 /// with Resize or Collider handles picked (R and C; S goes back), resizes its sprite or its colliders (Ctrl snaps to
 /// half units); with Distance handles picked (D), the round knobs on its circles change its light radii, ranges and sight
-/// (Ctrl snaps to half units); F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
+/// (Ctrl snaps to half units); the knobs on its path move a mover's points and a patrol's turns (Ctrl snaps to half units;
+/// drag a plus to add a point, double-click a point to take it off); F frames. The selection's actions live in
+/// <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// Arrows link the selection to the entities its fields name, and to it from the fields that name it.
 /// </summary>
@@ -44,6 +46,7 @@ public sealed class SceneViewControl : FrameworkElement
     private const double MarkerFrame = MarkerRadius + 8;
     private const double EdgeHandleRoom = 28;
     private const double ScaleHandleRoom = 16;
+    private const double PathGap = 28;
 
     // Where the scale handles sit on the primary selection's frame, in its own axes: corners and edge middles.
     private static readonly Vector2[] ScaleSpots =
@@ -84,6 +87,10 @@ public sealed class SceneViewControl : FrameworkElement
     private SceneViewModel.DistanceDrag? _distance;
     private float _distanceGrab;
     private string? _overDistance;
+    private SceneViewModel.PathPointDrag? _path;
+    private string? _pathKey;
+    private Vector2 _pathGrab;
+    private string? _overPath;
 
     // Tile painting.
     private int _brushTile;
@@ -111,12 +118,16 @@ public sealed class SceneViewControl : FrameworkElement
         selection.PropertyChanged += (_, _) => InvalidateVisual();
         model.PropertyChanged += (_, _) =>
         {
-            (_overScale, _overResize, _overDistance) = (null, null, null);
+            (_overScale, _overResize, _overDistance, _overPath) = (null, null, null, null);
             InvalidateVisual();
         };
         workspace.ScriptsReloaded += (_, _) => InvalidateVisual();
         Track(workspace.Scene);
     }
+
+    // A handle on the primary selection's path: on one of its points, or (with no Point) a plus that adds point Index to
+    // its Mover.
+    internal sealed record PathHandle(string Key, Point Screen, ScenePathPoint? Point, Mover? Mover, int Index);
 
     private enum DragMode
     {
@@ -129,6 +140,7 @@ public sealed class SceneViewControl : FrameworkElement
         Scale,
         Resize,
         Distance,
+        Path,
     }
 
     private PropertyDescriptor PositionProperty =>
@@ -559,26 +571,57 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
-    // Where movers go, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
+    // Where movers go and where patrols turn, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
     // which way a shooter fires, and how far a player jumps. Where a door leads and what a switch turns on are links.
     private void DrawLevelGuides(DrawingContext dc)
     {
         var guide = Brush("Brush.Status.Warning");
         var dashed = new Pen(guide, 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var dotted = new Pen(guide, 1.5) { DashStyle = new DashStyle([1, 3], 0) };
         foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
         {
             foreach (var mover in entity.GetComponents<Mover>())
             {
-                // The path starts where the mover would be at the start of its trip.
-                var parent = entity.Parent?.Transform.WorldMatrix ?? Matrix4x4.Identity;
-                var start = new Vector2(entity.Transform.Position.X, entity.Transform.Position.Y) - mover.OffsetAt(mover.Time);
-                var points = mover.Path.Select(p => ToScreen(Vector2.Transform(start + p, parent))).ToList();
+                var points = SceneViewModel.PathOf(mover).Select(ToScreen).ToList();
                 for (var i = 1; i < points.Count; i++)
                     dc.DrawLine(dashed, points[i - 1], points[i]);
                 if (mover.Mode == MoverMode.Loop && points.Count > 2)
                     dc.DrawLine(dashed, points[^1], points[0]);
                 foreach (var point in points)
                     dc.DrawEllipse(guide, null, point, 3, 3);
+            }
+
+            // A patrol's route out to its turns, each end marked across; a side with no turn (it walks on until a wall
+            // or an edge) is a dotted arrow, shown only on the selection.
+            foreach (var patrol in entity.GetComponents<Patrol>())
+            {
+                var isPrimary = entity == _selection.Entity;
+                if (patrol.Left <= 0 && patrol.Right <= 0 && !isPrimary)
+                    continue;
+                var route = SceneViewModel.RouteOf(patrol);
+                var home = ToScreen(route.Home);
+                foreach (var (end, open) in new[] { (route.Left, route.LeftOpen), (route.Right, route.RightOpen) })
+                {
+                    var tip = ToScreen(end);
+                    var way = tip - home;
+                    if (way.Length < 1 || open && !isPrimary)
+                        continue;
+                    way.Normalize();
+                    var across = new Vector(-way.Y, way.X) * 6;
+                    if (open)
+                    {
+                        dc.DrawLine(dotted, home, tip);
+                        dc.DrawLine(new Pen(guide, 1.5), tip, tip - way * 6 + across);
+                        dc.DrawLine(new Pen(guide, 1.5), tip, tip - way * 6 - across);
+                    }
+                    else
+                    {
+                        dc.DrawLine(dashed, home, tip);
+                        dc.DrawLine(new Pen(guide, 2), tip - across, tip + across);
+                    }
+                }
+
+                dc.DrawEllipse(guide, null, home, 3, 3);
             }
         }
 
@@ -794,8 +837,8 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
     }
 
-    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem, and
-    // the knobs on its distances' circles.
+    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem, the
+    // knobs on its distances' circles, and those on its path.
     private void DrawHandles(DrawingContext dc)
     {
         if (RotateHandle() is var (root, knob))
@@ -803,6 +846,65 @@ public sealed class SceneViewControl : FrameworkElement
         DrawScaleHandles(dc);
         DrawResizeHandles(dc);
         DrawDistanceHandles(dc);
+        DrawPathHandles(dc);
+    }
+
+    // A knob on each of the primary selection's mover points (numbered) and patrol turns (hollow while it walks on to a
+    // wall), and a small plus between points and past the last to drag out a new one, in the guides' color. Hovering says
+    // what a knob does; dragging, where it is.
+    private void DrawPathHandles(DrawingContext dc)
+    {
+        var color = Brush("Brush.Status.Warning");
+        var chrome = Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        string Number(float value) => value.ToString("0.##", CultureInfo.CurrentCulture);
+        foreach (var handle in PathHandles())
+        {
+            var dragging = _drag == DragMode.Path && _pathKey == handle.Key;
+            var hovered = _drag == DragMode.None && _overPath == handle.Key;
+            var active = dragging || hovered;
+            if (handle.Point is not { } point)
+            {
+                var small = HandleSquare + (active ? 1 : 0);
+                dc.DrawEllipse(chrome, halo, handle.Screen, small, small);
+                dc.DrawEllipse(active ? color : chrome, new Pen(color, 1.5), handle.Screen, small, small);
+                var plus = new Pen(active ? chrome : color, 1.5);
+                dc.DrawLine(plus, handle.Screen + new Vector(-2, 0), handle.Screen + new Vector(2, 0));
+                dc.DrawLine(plus, handle.Screen + new Vector(0, -2), handle.Screen + new Vector(0, 2));
+                if (hovered)
+                    PathLabel(Text("Drag to add a point", "Brush.Text.Primary"), handle.Screen);
+                continue;
+            }
+
+            var radius = HandleRadius + (active ? 1.5 : 0);
+            dc.DrawEllipse(chrome, halo, handle.Screen, radius, radius);
+            dc.DrawEllipse(active || !point.Open ? color : chrome, new Pen(color, 2), handle.Screen, radius, radius);
+
+            string text;
+            if (point.Component is Patrol patrol)
+            {
+                var side = point.Index < 0 ? "Left" : "Right";
+                var value = point.Index < 0 ? patrol.Left : patrol.Right;
+                text = point.Open
+                    ? dragging ? $"{side}: on to a wall" : hovered ? $"{side}: on to a wall or an edge  ·  drag to set" : side
+                    : dragging ? $"{side} {Number(value)}" : hovered ? $"{side} {Number(value)}  ·  double-click to clear" : side;
+            }
+            else
+            {
+                var offset = ((Mover)point.Component).Path[point.Index];
+                text = dragging ? $"{point.Index}  ·  {Number(offset.X)}, {Number(offset.Y)}"
+                    : hovered ? $"{point.Index}  ·  double-click to remove" : $"{point.Index}";
+            }
+
+            PathLabel(Text(text, active ? "Brush.Text.Primary" : "Brush.Text.Secondary"), handle.Screen);
+        }
+
+        void PathLabel(FormattedText label, Point at)
+        {
+            var place = new Point(at.X + 10, at.Y - label.Height - 4);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
     }
 
     // A knob on each distance's circle in the guides' color, named on its outer side; while dragging, its value too.
@@ -1103,6 +1205,52 @@ public sealed class SceneViewControl : FrameworkElement
             .Select(h => h.Distance)
             .FirstOrDefault();
 
+    /// <summary>
+    /// The handles on the primary selection's path, in screen space: one on each of its points (see
+    /// <see cref="SceneViewModel.PathPoints"/>), and for a mover a plus between each two points far enough apart (and on
+    /// the way back to the start of a loop) and one past its last point, to drag out a new point. The pluses hide while a
+    /// point is dragged, and everything while painting.
+    /// </summary>
+    private List<PathHandle> PathHandles()
+    {
+        if (_document is null || PaintTarget is not null)
+            return [];
+        var handles = _model.PathPoints().Select(p => new PathHandle(p.Key, ToScreen(p.World), p, null, p.Index)).ToList();
+        if (_selection.Entity?.GetComponent<Mover>() is not { } mover || _drag == DragMode.Path || mover.Entity?.Scene != _document.Scene)
+            return handles;
+
+        var path = SceneViewModel.PathOf(mover).Select(ToScreen).ToList();
+        for (var i = 1; i < path.Count; i++)
+        {
+            if ((path[i] - path[i - 1]).Length >= PathGap)
+                handles.Add(new PathHandle($"+{i}", path[i - 1] + (path[i] - path[i - 1]) / 2, null, mover, i));
+        }
+
+        // A loop adds on the way back to its start; anything else adds past its end, on along its last stretch.
+        if (mover.Mode == MoverMode.Loop && path.Count > 2)
+        {
+            if ((path[0] - path[^1]).Length >= PathGap)
+                handles.Add(new PathHandle($"+{path.Count}", path[^1] + (path[0] - path[^1]) / 2, null, mover, path.Count));
+        }
+        else
+        {
+            var way = path.Count > 1 ? path[^1] - path[^2] : new Vector(1, 0);
+            way = way.Length < 1 ? new Vector(1, 0) : way / way.Length;
+            handles.Add(new PathHandle($"+{path.Count}", path[^1] + way * PathGap, null, mover, path.Count));
+        }
+
+        return handles;
+    }
+
+    // The path handle under a point (the nearest, where they crowd), if any.
+    private PathHandle? PathHandleAt(Point screen) =>
+        PathHandles().Where(h => (screen - h.Screen).Length <= HandleRadius + 4)
+            .OrderBy(h => (screen - h.Screen).Length)
+            .FirstOrDefault();
+
+    // Patrol turns slide left and right; points and new points go anywhere.
+    private static Cursor PathCursor(PathHandle handle) => handle.Point?.Component is Patrol ? Cursors.SizeWE : Cursors.SizeAll;
+
     // A resize cursor out from the distance's middle toward the cursor.
     private Cursor DistanceCursor(SceneDistance distance, Point screen) => SizeCursor(screen - ToScreen(distance.Center));
 
@@ -1213,6 +1361,10 @@ public sealed class SceneViewControl : FrameworkElement
             _rotateTotal = 0;
             BeginDrag(DragMode.Rotate, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && PathHandleAt(position) is { } pathHandle)
+        {
+            BeginPathDrag(pathHandle, position, e.ClickCount);
+        }
         else if (e.ChangedButton == MouseButton.Left && DistanceHandleAt(position) is { } knob && _model.BeginDistance(knob) is { } distance)
         {
             // Grabbing the knob a little off its circle doesn't make the distance jump.
@@ -1286,14 +1438,18 @@ public sealed class SceneViewControl : FrameworkElement
             var over = IsOverRotateHandle(position);
             var overScale = over ? null : ScaleHandleAt(position);
             var overResize = over ? null : ResizeHandleAt(position);
-            var overDistance = over ? null : DistanceHandleAt(position);
-            if (over != _overHandle || overScale != _overScale || overResize != _overResize || overDistance?.Key != _overDistance)
+            var overPath = over ? null : PathHandleAt(position);
+            var overDistance = over || overPath is not null ? null : DistanceHandleAt(position);
+            if (over != _overHandle || overScale != _overScale || overResize != _overResize || overDistance?.Key != _overDistance ||
+                overPath?.Key != _overPath)
             {
                 _overHandle = over;
                 _overScale = overScale;
                 _overResize = overResize;
                 _overDistance = overDistance?.Key;
+                _overPath = overPath?.Key;
                 Cursor = over ? Cursors.Hand
+                    : overPath is not null ? PathCursor(overPath)
                     : overDistance is not null ? DistanceCursor(overDistance, position)
                     : overScale is { } spot ? ScaleCursor(spot)
                     : overResize is var (shape, resizeSpot) ? ResizeCursor(shape, resizeSpot)
@@ -1307,6 +1463,12 @@ public sealed class SceneViewControl : FrameworkElement
         if (_drag == DragMode.Scale)
         {
             _scale?.To(ScaleFactor(_scale, ToWorld(position)), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+            return;
+        }
+
+        if (_drag == DragMode.Path)
+        {
+            _path?.To(ToWorld(position) + _pathGrab, snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
             return;
         }
 
@@ -1591,6 +1753,42 @@ public sealed class SceneViewControl : FrameworkElement
             InvalidateVisual();
     }
 
+    // A press on a path handle: a double-click takes its point off (a patrol's turn clears); otherwise it drags the
+    // point, or for a plus, a new point added there.
+    private void BeginPathDrag(PathHandle handle, Point position, int clicks)
+    {
+        if (handle.Point is { } point && clicks == 2)
+        {
+            try
+            {
+                _model.RemovePathPoint(point.Key);
+            }
+            catch (InvalidOperationException)
+            {
+                // A mover's last point stays: it needs somewhere to go.
+            }
+
+            _overPath = null;
+            InvalidateVisual();
+            return;
+        }
+
+        var drag = handle.Point is { } existing ? _model.BeginPathPoint(existing)
+            : handle.Mover is { } mover ? _model.BeginInsertPathPoint(mover, handle.Index)
+            : null;
+        if (drag is null)
+            return;
+
+        // The handle follows the cursor from where it was pressed, so grabbing it a little off doesn't jump. A plus adds
+        // its point straight away, so a click adds one there.
+        BeginDrag(DragMode.Path, position);
+        (_path, _pathKey) = (drag, handle.Point?.Key ?? $"{nameof(Mover)}.{handle.Index}");
+        _pathGrab = ToWorld(handle.Screen) - ToWorld(position);
+        if (handle.Point is null)
+            drag.To(ToWorld(handle.Screen), snap: false);
+        Cursor = PathCursor(handle);
+    }
+
     private void BeginDrag(DragMode mode, Point position)
     {
         _drag = mode;
@@ -1637,6 +1835,13 @@ public sealed class SceneViewControl : FrameworkElement
             _resize?.End();
             _resize = null;
             _overResize = null;
+            InvalidateVisual();
+        }
+
+        if (mode == DragMode.Path)
+        {
+            _path?.End();
+            (_path, _pathKey, _overPath) = (null, null, null);
             InvalidateVisual();
         }
 

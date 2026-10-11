@@ -44,11 +44,11 @@ public sealed record SceneDistance(Component Component, PropertyDescriptor Prope
 
 /// <summary>
 /// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
-/// selected together, resizing the primary selection's sprite and colliders, dragging its distances, and the links it
-/// draws to and from the entities the selection's fields name. The view's drags call these, and agents can too
-/// (positions are world units, Y up).
+/// selected together, resizing the primary selection's sprite and colliders, dragging its distances and the points of its
+/// path (a mover's points, a patrol's turns), and the links it draws to and from the entities the selection's fields
+/// name. The view's drags call these, and agents can too (positions are world units, Y up).
 /// </summary>
-public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
+public sealed partial class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {
     /// <summary>The shape of a camera's frame, as the game's window is.</summary>
     public const double CameraAspect = 16.0 / 9.0;

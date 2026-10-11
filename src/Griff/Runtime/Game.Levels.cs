@@ -76,11 +76,14 @@ public sealed partial class Game
     private void RunPatrol(Patrol patrol)
     {
         var entity = patrol.Entity!;
+        // Where it starts from, before it moves, for CountPatrolWalks.
+        patrol.LastX ??= entity.Transform.Position.X;
         if (entity.GetComponent<Body>() is not { } body || entity.GetComponent<Chase>() is { IsChasing: true })
             return;
 
         var direction = patrol.GoingLeft ? -1 : 1;
-        if (body.WallSide == direction || (patrol.TurnAtEdges && body.IsGrounded && !GroundAhead(entity, direction)))
+        var pastEnd = direction > 0 ? patrol.Right > 0 && patrol.Walked >= patrol.Right : patrol.Left > 0 && patrol.Walked <= -patrol.Left;
+        if (pastEnd || body.WallSide == direction || (patrol.TurnAtEdges && body.IsGrounded && !GroundAhead(entity, direction)))
         {
             patrol.Turn();
             direction = -direction;
@@ -89,6 +92,19 @@ public sealed partial class Game
         body.Velocity = body.Velocity with { X = direction * patrol.Speed };
         if (patrol.FlipSprite)
             Face(entity, direction);
+    }
+
+    // At the end of the frame, once everything has moved them, patrols count how far they are from where they were
+    // placed, however they got there (walking, chasing, knockback, a respawn), so a snapshot holds where they are.
+    private void CountPatrolWalks()
+    {
+        foreach (var patrol in Active<Patrol>())
+        {
+            var x = patrol.Entity!.Transform.Position.X;
+            if (patrol.LastX is { } last)
+                patrol.Walked += x - last;
+            patrol.LastX = x;
+        }
     }
 
     // Is there something to stand on just past its leading foot? The ray starts a little above the foot, so a slope

@@ -6,8 +6,8 @@ namespace Griff.Editing;
 
 /// <summary>
 /// Placed copies of prefabs: entities whose <see cref="Entity.Prefab"/> names a prefab file. Saving a prefab brings
-/// every copy up to date, in the open scene as one undo step (<see cref="Update"/>) and in scene files on disk
-/// (<see cref="UpdateFile"/>).
+/// every copy up to date, keeping what each copy changed (<see cref="PrefabOverrides"/>), in the open scene as one undo
+/// step (<see cref="Update"/>) and in scene files on disk (<see cref="UpdateFile"/>).
 /// </summary>
 public static class PrefabCopies
 {
@@ -34,34 +34,41 @@ public static class PrefabCopies
     }
 
     /// <summary>
-    /// One undo step bringing every copy of the prefab in <paramref name="scene"/> up to date with fresh entities from
-    /// <paramref name="instantiate"/> (see <see cref="UpdatePrefabCopyEdit"/>), skipping <paramref name="except"/> (the
-    /// entity the prefab was just saved from). Null if there are no copies to update.
+    /// One undo step bringing every copy of the prefab in <paramref name="scene"/> up to date with its new version,
+    /// <paramref name="prefabJson"/> (see <see cref="UpdatePrefabCopyEdit"/>), skipping <paramref name="except"/> (the
+    /// entity the prefab was just saved from). Each copy keeps what it changed from the old version,
+    /// <paramref name="oldPrefabJson"/> (see <see cref="PrefabOverrides.Merge"/>); without it (or if it can't be read),
+    /// copies take the new version whole. Null if there are no copies to update.
     /// </summary>
-    public static IEdit? Update(Scene scene, string prefabPath, Func<Entity> instantiate, Entity? except = null)
+    /// <exception cref="InvalidDataException">The new version can't be read.</exception>
+    public static IEdit? Update(Scene scene, string prefabPath, string prefabJson, string? oldPrefabJson, SceneSerializer serializer, Entity? except = null)
     {
-        var edits = In(scene, prefabPath)
-            .Where(copy => copy != except)
-            .Select(IEdit (copy) => new UpdatePrefabCopyEdit(scene, copy, instantiate()))
+        var copies = In(scene, prefabPath).Where(copy => copy != except).ToList();
+        if (copies.Count == 0)
+            return null;
+
+        var old = Old(oldPrefabJson, serializer);
+        var edits = copies
+            .Select(IEdit (copy) =>
+            {
+                var fresh = serializer.LoadPrefabFromString(prefabJson);
+                return new UpdatePrefabCopyEdit(scene, copy, old is null ? fresh : PrefabOverrides.Merge(copy, old, fresh, serializer));
+            })
             .ToList();
-        return edits.Count switch
-        {
-            0 => null,
-            1 => edits[0],
-            _ => new CompositeEdit($"Update {edits.Count} copies of {NameOf(prefabPath)}", edits),
-        };
+        return edits.Count == 1 ? edits[0] : new CompositeEdit($"Update {edits.Count} copies of {NameOf(prefabPath)}", edits);
     }
 
     /// <summary>
     /// Brings the copies of a prefab in the scene file at <paramref name="scenePath"/> up to date with
-    /// <paramref name="prefabJson"/> (the prefab file's text), rewriting the file only if it has any.
+    /// <paramref name="prefabJson"/> (the prefab file's new text), keeping what each changed from
+    /// <paramref name="oldPrefabJson"/> (its old text, if known), and rewriting the file only if it has any.
     /// </summary>
     /// <returns>How many copies were updated.</returns>
     /// <exception cref="InvalidDataException">The scene or the prefab can't be read.</exception>
-    public static int UpdateFile(string scenePath, string prefabPath, string prefabJson, SceneSerializer serializer)
+    public static int UpdateFile(string scenePath, string prefabPath, string prefabJson, string? oldPrefabJson, SceneSerializer serializer)
     {
         var scene = serializer.LoadFromString(File.ReadAllText(scenePath));
-        if (Update(scene, prefabPath, () => serializer.LoadPrefabFromString(prefabJson)) is not { } edit)
+        if (Update(scene, prefabPath, prefabJson, oldPrefabJson, serializer) is not { } edit)
             return 0;
 
         edit.Apply();
@@ -71,6 +78,21 @@ public static class PrefabCopies
         File.WriteAllText(temp, serializer.SaveToString(scene));
         File.Move(temp, scenePath, overwrite: true);
         return edit is CompositeEdit composite ? composite.Edits.Count : 1;
+    }
+
+    // The prefab as it was, or null if that isn't known or can't be read: then copies just take the new one.
+    private static Entity? Old(string? json, SceneSerializer serializer)
+    {
+        if (json is null)
+            return null;
+        try
+        {
+            return serializer.LoadPrefabFromString(json);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
     }
 
     private static void Collect(Entity entity, string prefabPath, List<Entity> copies)
@@ -87,8 +109,8 @@ public static class PrefabCopies
 }
 
 /// <summary>
-/// Brings a placed copy of a prefab up to date with a fresh entity made from it: the copy takes the prefab's components,
-/// scale and children, and keeps its own name, place (position and rotation), parent, enabled and locked state, id and
+/// Brings a placed copy of a prefab up to date with a fresh entity made from it (and merged with the copy's overrides):
+/// the copy takes the fresh entity's components, scale and children, and keeps its own name, place (position and rotation), parent, enabled and locked state, id and
 /// link, so the selection and the fields that name it still find it.
 /// </summary>
 public sealed class UpdatePrefabCopyEdit : IEdit

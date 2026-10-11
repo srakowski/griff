@@ -93,7 +93,7 @@ public sealed class PrefabCopiesTests : IDisposable
         var (goldId, oldSparkle) = (gold.Id, gold.Children[0]);
 
         var fresh = CoinPrefab(5, "Sprites/ruby.png", sparkle: false);
-        var edit = PrefabCopies.Update(scene, CoinPath, () => _serializer.LoadPrefabFromString(fresh), except: source);
+        var edit = PrefabCopies.Update(scene, CoinPath, fresh, old, _serializer, except: source);
         Assert.NotNull(edit);
         _history.Execute(edit);
         Assert.Equal("Update 2 copies of Coin", _history.UndoDescription);
@@ -122,13 +122,13 @@ public sealed class PrefabCopiesTests : IDisposable
     }
 
     [Fact]
-    public void Update_TakesThePrefabsScale_AndGivesCopiesNewChildren()
+    public void Update_WithoutTheOldPrefab_TakesTheNewOneWhole_ScaleAndNewChildren()
     {
         var scene = new Scene();
         var copy = Place(scene, CoinPrefab(1, sparkle: false), "Coin", Vector3.Zero);
         copy.Transform.Scale = new Vector3(3, 3, 1);
 
-        var edit = PrefabCopies.Update(scene, CoinPath, () => _serializer.LoadPrefabFromString(CoinPrefab(2)))!;
+        var edit = PrefabCopies.Update(scene, CoinPath, CoinPrefab(2), oldPrefabJson: null, _serializer)!;
         _history.Execute(edit);
         Assert.Equal(new Vector3(0.5f, 0.5f, 1), copy.Transform.Scale);
         var sparkle = Assert.Single(copy.Children);
@@ -146,7 +146,7 @@ public sealed class PrefabCopiesTests : IDisposable
     {
         var scene = new Scene();
         scene.Add(new Entity("Coin"));
-        Assert.Null(PrefabCopies.Update(scene, CoinPath, () => throw new InvalidOperationException("Not needed.")));
+        Assert.Null(PrefabCopies.Update(scene, CoinPath, "not a prefab", null, _serializer));
     }
 
     [Fact]
@@ -164,8 +164,8 @@ public sealed class PrefabCopiesTests : IDisposable
         File.WriteAllText(emptyPath, _serializer.SaveToString(menu));
         var menuWritten = File.GetLastWriteTimeUtc(emptyPath);
 
-        Assert.Equal(1, PrefabCopies.UpdateFile(levelPath, CoinPath, CoinPrefab(9), _serializer));
-        Assert.Equal(0, PrefabCopies.UpdateFile(emptyPath, CoinPath, CoinPrefab(9), _serializer));
+        Assert.Equal(1, PrefabCopies.UpdateFile(levelPath, CoinPath, CoinPrefab(9), CoinPrefab(1), _serializer));
+        Assert.Equal(0, PrefabCopies.UpdateFile(emptyPath, CoinPath, CoinPrefab(9), CoinPrefab(1), _serializer));
 
         var updated = _serializer.LoadFromString(File.ReadAllText(levelPath));
         var coin = updated.Roots.Single(e => e.Name == "Coin");

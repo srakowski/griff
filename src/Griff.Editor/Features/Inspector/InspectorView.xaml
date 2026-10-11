@@ -55,7 +55,7 @@
                 <DockPanel x:Name="PrefabNote"
                            Margin="10,0,10,8"
                            DataContext="{Binding Header}"
-                           ToolTip="Saving the prefab (Entity, Save as Prefab) updates every copy of it, in every scene"
+                           ToolTip="Saving the prefab (Entity, Save as Prefab) updates every copy of it, in every scene, keeping what each copy changed (the marked fields). Entity, Revert to Prefab undoes those changes."
                            Visibility="{Binding HasPrefabNote, Converter={StaticResource Visible}}">
                     <TextBlock Margin="0,0,6,0"
                                VerticalAlignment="Center"
@@ -101,6 +101,17 @@
                                                 Visibility="{Binding IsScript, Converter={StaticResource Visible}}">
                                             <TextBlock FontSize="12" Foreground="{DynamicResource Brush.Accent}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Code}" />
                                         </Button>
+                                        <!-- On a prefab copy: added there, the prefab doesn't have it -->
+                                        <TextBlock x:Name="AddedMark"
+                                                   Margin="0,0,6,0"
+                                                   VerticalAlignment="Center"
+                                                   DockPanel.Dock="Right"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Brush.Accent}"
+                                                   Style="{StaticResource Style.Text.Caption}"
+                                                   Text="Added"
+                                                   ToolTip="Added to this copy: the prefab doesn't have it. Save as Prefab adds it to the prefab."
+                                                   Visibility="{Binding IsAddedToCopy, Converter={StaticResource Visible}}" />
                                         <ToggleButton Width="20"
                                                       IsChecked="{Binding IsExpanded}"
                                                       Style="{StaticResource Style.TreeView.Expander}" />
@@ -133,15 +144,48 @@
                                                     <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="Label" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Margin="0,0,12,0"
-                                                           VerticalAlignment="Center"
-                                                           Style="{StaticResource Style.Text.Secondary}"
-                                                           Text="{Binding Label, Mode=OneTime}" />
+                                                <DockPanel>
+                                                    <!-- Changed from the prefab: a mark in the margin, which opens Revert and Apply to Prefab -->
+                                                    <Button x:Name="OverrideMark"
+                                                            Width="8"
+                                                            Height="16"
+                                                            Margin="-11,0,3,0"
+                                                            Padding="0"
+                                                            Command="{Binding OverrideMenuCommand}"
+                                                            CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                                                            Cursor="Hand"
+                                                            DockPanel.Dock="Left"
+                                                            Style="{StaticResource Style.Button.Toolbar}"
+                                                            Tag="override"
+                                                            ToolTip="{Binding OverrideTip}"
+                                                            Visibility="Hidden">
+                                                        <Border Width="3" Height="14" Background="{DynamicResource Brush.Accent}" CornerRadius="1.5" />
+                                                    </Button>
+                                                    <TextBlock x:Name="FieldLabel"
+                                                               Margin="0,0,12,0"
+                                                               VerticalAlignment="Center"
+                                                               Style="{StaticResource Style.Text.Secondary}"
+                                                               Text="{Binding Label, Mode=OneTime}">
+                                                        <TextBlock.InputBindings>
+                                                            <MouseBinding Command="{Binding OverrideMenuCommand}"
+                                                                          CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=TextBlock}}"
+                                                                          Gesture="RightClick" />
+                                                        </TextBlock.InputBindings>
+                                                    </TextBlock>
+                                                </DockPanel>
                                                 <ContentControl Grid.Column="1"
                                                                 Content="{Binding}"
                                                                 ContentTemplateSelector="{StaticResource FieldSelector}"
                                                                 Focusable="False" />
                                             </Grid>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                                    <Setter TargetName="OverrideMark" Property="Visibility" Value="Visible" />
+                                                    <Setter TargetName="FieldLabel" Property="FontWeight" Value="SemiBold" />
+                                                    <Setter TargetName="FieldLabel" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                                    <Setter TargetName="FieldLabel" Property="ToolTip" Value="{Binding OverrideTip}" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

@@ -408,6 +408,31 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => string.Equals(PrefabOf(), prefabName, StringComparison.OrdinalIgnoreCase), 3000))
                     throw new InvalidOperationException($"Expected {copyName} to be a copy of {prefabName}, but it's a copy of {PrefabOf()}.");
                 break;
+            case "revertfield":
+            case "applyfield":
+                // "revertfield: Pickup.Amount": click the mark by a field the copy changed, then Revert (or Apply) to Prefab.
+                if (a.Split('.', 2) is not [var overrideComponent, var overrideLabel])
+                    throw new FormatException($"{line.Command}: <Component>.<Field>");
+                await ui.OverrideAction(overrideComponent, Label(overrideLabel), apply: line.Command == "applyfield");
+                break;
+            case "expectoverrides":
+                // "expectoverrides: Gem 3 = Sprite.Tint, Pickup.Amount" (what the copy changes from its prefab), or "= none".
+                var (overrideCopy, overrideList) = Split2(a, '=');
+                var wantOverrides = overrideList.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    ? []
+                    : overrideList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                string OverridesOf()
+                {
+                    if (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == overrideCopy) is not { Prefab: { } link } copy)
+                        return $"{overrideCopy} isn't a prefab copy";
+                    var prefab = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(workspace.Project!.FindPrefab(link)!));
+                    var found = Griff.Editing.PrefabOverrides.Find(copy, prefab, workspace.Components).Select(o => o.ToString()).ToList();
+                    return found.Count == 0 ? "none" : string.Join(", ", found);
+                }
+
+                if (!await Until(() => OverridesOf() == (wantOverrides.Length == 0 ? "none" : string.Join(", ", wantOverrides)), 3000))
+                    throw new InvalidOperationException($"Expected {overrideCopy} to change {overrideList} from its prefab, but it changes {OverridesOf()}.");
+                break;
             case "answer":
                 // "answer: Yes": click a button on the message box the editor is showing.
                 await ui.Answer(a);
@@ -1223,6 +1248,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "prefab" => (FrameworkElement?)ui.HierarchyPrefabMark(name) ?? throw new InvalidOperationException($"No prefab copy {name} in the Hierarchy."),
             "prefabnote" => ui.Inspector.FindName("PrefabNote") as FrameworkElement ?? throw new InvalidOperationException("No prefab note in the Inspector."),
+            "override" when name.Split('.', 2) is [var component, var field] =>
+                ui.OverrideMark(component, Label(field)) ?? throw new InvalidOperationException($"{name} isn't marked as changed from the prefab."),
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),

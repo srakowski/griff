@@ -50,7 +50,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     private const string EntityFormat =
         "An entity is a JSON object: {\"name\": \"Coin\", \"position\": [3, 1], \"components\": {\"Sprite\": {\"image\": \"Sprites/coin.png\"}, " +
         "\"Pickup\": {\"message\": \"Score\"}}, \"children\": [ ...more entities ]}. Optional: \"prefab\" (start from a prefab by name: the entity is a copy of it, " +
-        "which saving the prefab with Entity_SaveAsPrefab, or writing its file, brings up to date), " +
+        "which saving the prefab with Entity_SaveAsPrefab, or writing its file, brings up to date, keeping what the copy changed; entity_get lists those changes as \"overrides\"), " +
         "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\", \"locked\" (the editor's Scene view clicks through it; " +
         "the game ignores it). Components are keyed by name (see components_list), or " +
         "given as a list of {\"type\": \"Light\", ...} for several of one kind. Property keys are as component_describe shows them (camelCase; any case works). " +
@@ -268,7 +268,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         if (entity.IsLocked)
             result["locked"] = true;
         if (entity.Prefab is { } prefab)
+        {
             result["prefab"] = prefab;
+            // What it changes from its prefab: kept when the prefab is saved, undone by Entity_RevertToPrefab.
+            if (top && host.InstantiatePrefab(prefab) is { } original && PrefabOverrides.Find(entity, original, host.Components) is { Count: > 0 } overrides)
+                result["overrides"] = new JsonArray(overrides.Select(o => (JsonNode)o.ToString()).ToArray());
+        }
 
         var components = new JsonArray();
         foreach (var component in entity.Components)

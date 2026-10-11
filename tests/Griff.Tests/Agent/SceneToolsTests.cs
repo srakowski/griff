@@ -28,7 +28,7 @@ public class SceneToolsTests
 
         public Entity? InstantiatePrefab(string name)
         {
-            if (name != "Coin")
+            if (name is not ("Coin" or "Prefabs/Coin.prefab"))
                 return null;
             var coin = new Entity("Coin") { Prefab = "Prefabs/Coin.prefab" };
             coin.AddComponent<Sprite>();
@@ -355,5 +355,20 @@ public class SceneToolsTests
         Assert.Equal("Prefabs/Coin.prefab", Named("Gold").Prefab);
         Assert.Contains(Run("scene_tree", "{}").Text.Split('\n'), l => l.Contains("Gold #") && l.Contains("copy of Coin"));
         Assert.Contains("\"prefab\": \"Prefabs/Coin.prefab\"", Run("entity_get", """{"entity": "Gold"}""").Text);
+        Assert.DoesNotContain("overrides", Run("entity_get", """{"entity": "Gold"}""").Text);
+    }
+
+    [Fact]
+    public void PrefabCopies_ListWhatTheyChangeFromThePrefab()
+    {
+        Run("entity_create", """{"entity": {"prefab": "Coin", "name": "Gold", "position": [3, 1]}}""");
+        Assert.False(Run("entity_update", """{"entity": "Gold", "changes": {"components": {"Sprite": {"tint": "#FFA300"}, "Light": {"radius": 2}}}}""").IsError);
+
+        var text = Run("entity_get", """{"entity": "Gold"}""").Text;
+        Assert.Contains("\"overrides\"", text);
+        Assert.Contains("\"Sprite.Tint\"", text);
+        Assert.Contains("\"added Light\"", text);
+        // Where it's placed is its own, not a change.
+        Assert.DoesNotContain("Transform.Position", text);
     }
 }

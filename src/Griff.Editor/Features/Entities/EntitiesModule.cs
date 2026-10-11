@@ -8,6 +8,7 @@ using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Griff.Scenes;
+using Griff.Scenes.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Entities;
@@ -50,6 +51,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<PasteEntityCommand>()
             .AddCommand<SaveAsPrefabCommand>()
             .AddCommand<UnlinkPrefabCommand>()
+            .AddCommand<RevertToPrefabCommand>()
             .AddCommand<LockEntityCommand>();
     }
 }
@@ -724,7 +726,7 @@ public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection
     public override string Id => "Entity.Lock";
     public override string Text => "Loc_k";
     public override string? Icon => Icons.Lock;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 6);
 
     public override bool? IsChecked => selection.Entities.Count > 0 && selection.Entities.All(e => e.IsLocked);
 
@@ -777,11 +779,12 @@ public static class PrefabFiles
     }
 
     /// <summary>
-    /// After the prefab at <paramref name="assetPath"/> is saved as <paramref name="json"/>: links
-    /// <paramref name="source"/> (the entity it was saved from, if any) to it, and brings every other copy of it up to
-    /// date, in the scene being edited (one undo step, with the link) and in the project's other scene files.
+    /// After the prefab at <paramref name="assetPath"/> is saved as <paramref name="json"/> over
+    /// <paramref name="oldJson"/> (null if it's new or that isn't known): links <paramref name="source"/> (the entity it
+    /// was saved from, if any) to it, and brings every other copy of it up to date, keeping what each copy changed from
+    /// the old version, in the scene being edited (one undo step, with the link) and in the project's other scene files.
     /// </summary>
-    public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, Entity? source)
+    public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, string? oldJson, Entity? source)
     {
         if (workspace.Project is not { } project)
             return new PrefabUpdate(0, [], []);
@@ -802,7 +805,7 @@ public static class PrefabFiles
             try
             {
                 var count = PrefabCopies.In(document.Scene, assetPath).Count(c => c != here);
-                if (PrefabCopies.Update(document.Scene, assetPath, () => serializer.LoadPrefabFromString(json), except: here) is { } update)
+                if (PrefabCopies.Update(document.Scene, assetPath, json, oldJson, serializer, except: here) is { } update)
                 {
                     edits.Add(update);
                     copies += count;
@@ -827,7 +830,7 @@ public static class PrefabFiles
 
             try
             {
-                if (PrefabCopies.UpdateFile(scenePath, assetPath, json, serializer) is > 0 and var count)
+                if (PrefabCopies.UpdateFile(scenePath, assetPath, json, oldJson, serializer) is > 0 and var count)
                 {
                     copies += count;
                     scenes.Add(Path.GetFileNameWithoutExtension(scenePath));
@@ -841,6 +844,107 @@ public static class PrefabFiles
 
         return new PrefabUpdate(copies, scenes, problems);
     }
+    /// <summary>The prefab file's text, or null if there's no such file (or it can't be read).</summary>
+    public static string? ReadText(IWorkspace workspace, string assetPath)
+    {
+        if (workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } path)
+            return null;
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Applies a field the selected copies changed to their prefabs: sets it in each prefab file to the copy's value,
+    /// then brings the prefab's other copies up to date (keeping what each of them changed). The copies themselves
+    /// then match their prefab there. <paramref name="components"/> are the field's components, one per entity;
+    /// those whose value is the prefab's are skipped.
+    /// </summary>
+    public static PrefabUpdate ApplyField(IWorkspace workspace, IReadOnlyList<Component> components, PropertyDescriptor property)
+    {
+        var copies = 0;
+        var scenes = new List<string>();
+        var problems = new List<string>();
+        var serializer = workspace.Serializer;
+        var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var component in components)
+        {
+            if (component.Entity is not { } entity || PrefabOverrides.CopyFor(entity) is not { Prefab: { } link } copy || done.Contains(PrefabCopies.Normalize(link)))
+                continue;
+
+            var name = PrefabCopies.NameOf(link);
+            if (workspace.Project is not { } project || project.FindPrefab(link) is not { } path || ReadText(workspace, link) is not { } oldJson)
+            {
+                problems.Add($"{name}: the prefab isn't in the project");
+                continue;
+            }
+
+            try
+            {
+                var prefab = serializer.LoadPrefabFromString(oldJson);
+                if (PrefabOverrides.Counterpart(prefab, copy, entity) is not { } part || PrefabOverrides.Counterpart(part, component) is not { } prefabComponent)
+                {
+                    problems.Add($"{name}: the prefab has no {component.GetType().Name} there");
+                    continue;
+                }
+
+                if (!PrefabOverrides.Differs(component, prefabComponent, property))
+                    continue;
+                property.SetValue(prefabComponent, PrefabOverrides.CopyValue(property.GetValue(component)));
+                var json = serializer.SavePrefabToString(prefab);
+                File.WriteAllText(path, json);
+                done.Add(PrefabCopies.Normalize(link));
+
+                var update = UpdateCopies(workspace, AssetPathOf(project, path), json, oldJson, source: copy);
+                copies += update.Copies;
+                scenes.AddRange(update.Scenes.Except(scenes));
+                problems.AddRange(update.Problems);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"{name}: {ex.Message}");
+            }
+        }
+
+        return new PrefabUpdate(copies, scenes, problems);
+    }
+
+    /// <summary>
+    /// One undo step putting the copies back as their prefab has them: every change each made from it (fields,
+    /// components and children added or taken away) is undone, keeping their own name and place. Null if none of them
+    /// changes anything (or their prefabs can't be read).
+    /// </summary>
+    public static IEdit? Revert(IWorkspace workspace, Scene scene, IEnumerable<Entity> copies)
+    {
+        var edits = new List<UpdatePrefabCopyEdit>();
+        foreach (var copy in copies)
+        {
+            if (copy.Prefab is not { } link || ReadText(workspace, link) is not { } json)
+                continue;
+            try
+            {
+                var prefab = workspace.Serializer.LoadPrefabFromString(json);
+                if (PrefabOverrides.Find(copy, prefab, workspace.Components).Count > 0)
+                    edits.Add(new UpdatePrefabCopyEdit(scene, copy, prefab));
+            }
+            catch (InvalidDataException)
+            {
+                // A prefab that can't be read has nothing to revert to.
+            }
+        }
+
+        return edits.Count switch
+        {
+            0 => null,
+            1 => new CompositeEdit($"Revert {edits[0].Copy.Name} to Prefab", [edits[0]]),
+            _ => new CompositeEdit($"Revert {edits.Count} copies to their prefab", [.. edits]),
+        };
+    }
 }
 
 /// <summary>What saving a prefab updated: how many copies, in which scenes, and the scenes that couldn't be updated.</summary>
@@ -853,10 +957,11 @@ public sealed record PrefabUpdate(int Copies, IReadOnlyList<string> Scenes, IRea
 
 /// <summary>
 /// Saves the selected entity and its children as a prefab, ready for <c>Game.Spawn("name")</c> or dragging into a
-/// scene: a placed copy over its own prefab, anything else as Assets/Prefabs/&lt;name&gt;.prefab. The entity becomes a
-/// copy of the prefab, and every other copy of it, in the open scene (one undo step) and in every other scene, is
-/// brought up to date: it takes the prefab's components, scale and children, keeping its own name and place. Works in
-/// play mode too, to keep a tweaked live entity.
+/// scene: a placed copy over its own prefab (applying everything it changed), anything else as
+/// Assets/Prefabs/&lt;name&gt;.prefab. The entity becomes a copy of the prefab, and every other copy of it, in the open
+/// scene (one undo step) and in every other scene, is brought up to date: it takes the prefab's components, scale and
+/// children, keeping its own name and place and whatever it changed from the prefab. Works in play mode too, to keep a
+/// tweaked live entity.
 /// </summary>
 public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand
 {
@@ -879,13 +984,14 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
         if (File.Exists(path))
         {
             var replace = linked is not null
-                ? dialogs.Confirm("Save Prefab", $"Every copy of the {name} prefab, in every scene, will be updated to match. Save \"{entity.Name}\" over it?")
-                : dialogs.Confirm("Replace Prefab", $"{name}{Griff.Projects.Project.PrefabExtension} already exists, and every copy of it, in every scene, will be updated to match. Replace it with \"{entity.Name}\"?");
+                ? dialogs.Confirm("Save Prefab", $"Every copy of the {name} prefab, in every scene, will be updated to match, keeping what each copy changed itself. Save \"{entity.Name}\" over it?")
+                : dialogs.Confirm("Replace Prefab", $"{name}{Griff.Projects.Project.PrefabExtension} already exists, and every copy of it, in every scene, will be updated to match, keeping what each copy changed itself. Replace it with \"{entity.Name}\"?");
             if (!replace)
                 return;
         }
 
         var json = workspace.Serializer.SavePrefabToString(entity);
+        var oldJson = File.Exists(path) ? File.ReadAllText(path) : null;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -897,7 +1003,7 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
             return;
         }
 
-        var update = PrefabFiles.UpdateCopies(workspace, PrefabFiles.AssetPathOf(project, path), json, entity);
+        var update = PrefabFiles.UpdateCopies(workspace, PrefabFiles.AssetPathOf(project, path), json, oldJson, entity);
         if (update.Problems.Count > 0)
             dialogs.ShowError("Some copies weren't updated", string.Join("\n", update.Problems));
         status.Show($"Saved {project.GetRelativePath(path)}. {(update.Copies > 0 ? update.Summary : $"Spawn it with Game.Spawn(\"{name}\").")}");
@@ -920,6 +1026,32 @@ public sealed class UnlinkPrefabCommand(IWorkspace workspace, ISelection selecti
     {
         if (workspace.Scene is { } document && selection.Entities.Where(e => e.Prefab is not null).ToList() is { Count: > 0 } copies)
             document.Execute(new SetEntitiesPrefabEdit(copies, null));
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Reverts the selected copies to their prefab: every field they changed goes back to the prefab's value, and
+/// components and children they added or took away are put back as the prefab has them. Each keeps its own name and
+/// place. One undo step.
+/// </summary>
+public sealed class RevertToPrefabCommand(IWorkspace workspace, ISelection selection, IStatusService status) : EditorCommand
+{
+    public override string Id => "Entity.RevertToPrefab";
+    public override string Text => "_Revert to Prefab";
+    public override string? Icon => Icons.Undo;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
+
+    protected override bool CanExecuteCore() => selection.Entities.Any(e => e.Prefab is not null);
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is not { } document)
+            return Task.CompletedTask;
+        if (PrefabFiles.Revert(workspace, document.Scene, selection.Entities.Where(e => e.Prefab is not null).ToList()) is { } edit)
+            document.Execute(edit);
+        else
+            status.Show("Nothing to revert: the selection is just like its prefab.");
         return Task.CompletedTask;
     }
 }

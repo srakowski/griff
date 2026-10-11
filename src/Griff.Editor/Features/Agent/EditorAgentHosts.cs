@@ -51,7 +51,7 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
 {
     public string? AssetsPath => workspace.Project?.AssetsPath;
 
-    public Task<AssetFeedback?> AssetChangedAsync(string assetPath)
+    public Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null)
     {
         if (assetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
@@ -72,11 +72,12 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
                 + (warnings.Count > 0 ? "\n" + string.Join("\n", warnings) : "")));
         }
 
-        // A prefab written is a prefab saved: its copies, in every scene, are brought up to date.
+        // A prefab written is a prefab saved: its copies, in every scene, are brought up to date, keeping what each
+        // changed from the prefab as it was.
         if (assetPath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase) && workspace.Project is { } owner
             && Path.Combine(owner.AssetsPath, assetPath) is var prefabPath && File.Exists(prefabPath))
         {
-            var update = PrefabFiles.UpdateCopies(workspace, assetPath, File.ReadAllText(prefabPath), source: null);
+            var update = PrefabFiles.UpdateCopies(workspace, assetPath, File.ReadAllText(prefabPath), previousText, source: null);
             var problems = update.Problems.Count > 0 ? "\nNot updated: " + string.Join("; ", update.Problems) : "";
             return Task.FromResult<AssetFeedback?>(update.Copies > 0 || problems.Length > 0
                 ? new AssetFeedback((update.Summary + problems).Trim(), IsError: update.Problems.Count > 0)

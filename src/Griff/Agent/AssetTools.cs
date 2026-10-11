@@ -10,9 +10,11 @@ public interface IAgentProject
 
     /// <summary>
     /// Called after an agent writes or deletes a file (a path under Assets, with '/'), e.g. to compile a script.
-    /// Returns anything the agent should hear about it, like how a script compiled.
+    /// <paramref name="previousText"/> is a text file's text before it was written over (null if it's new, deleted or
+    /// binary), e.g. so a prefab's copies keep what they changed from it. Returns anything the agent should hear about
+    /// it, like how a script compiled.
     /// </summary>
-    Task<AssetFeedback?> AssetChangedAsync(string assetPath);
+    Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null);
 }
 
 /// <summary>What came of writing a file: e.g. a script's compile errors (<see cref="IsError"/>) or "compiled".</summary>
@@ -150,10 +152,11 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             throw new AgentException("Give \"text\" or \"base64\".");
 
         var existed = File.Exists(full);
+        var previous = existed && TextExtensions.Contains(Path.GetExtension(full).ToLowerInvariant()) ? await File.ReadAllTextAsync(full) : null;
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         await File.WriteAllBytesAsync(full, bytes);
         var assetPath = AssetPathOf(full);
-        var feedback = await project.AssetChangedAsync(assetPath);
+        var feedback = await project.AssetChangedAsync(assetPath, previous);
         var result = $"{(existed ? "Replaced" : "Wrote")} {assetPath} ({Size(bytes.Length)}).{(feedback is null ? "" : "\n" + feedback.Message)}";
         return feedback is { IsError: true } ? ToolResult.Error(result) : ToolResult.Ok(result);
     }

@@ -12,6 +12,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
 {
     public const int FormatVersion = 1;
 
+    /// <summary>The components it knows how to save and load.</summary>
+    public ComponentRegistry Components => registry;
+
     private static readonly JsonWriterOptions WriterOptions = new() { Indented = true };
 
     public void Save(Scene scene, Stream stream)

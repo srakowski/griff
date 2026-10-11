@@ -21,24 +21,35 @@ namespace Griff.Editor.Features.Inspector;
 /// Shows and edits the selected entities. Component sections are generated from component
 /// descriptors, so any component (including user scripts) gets an inspector for free. With several
 /// entities selected it shows the components they all have: a change sets it on every one of them as
-/// one undo step, and values that differ show as mixed.
+/// one undo step, and values that differ show as mixed. On placed copies of prefabs, fields set differently from the
+/// prefab are marked, each with Revert and Apply to Prefab.
 /// </summary>
 public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 {
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
     private readonly Scripts.ScriptEditors _scripts;
+    private readonly Core.Dialogs.IDialogService _dialogs;
+    private readonly Core.Status.IStatusService _status;
+    // For the selection: each component of a prefab copy (or of something inside one) and the prefab's own, the
+    // components a copy added, and the prefab files read for them, with when each was written.
+    private readonly Dictionary<Component, Component> _prefabParts = [];
+    private readonly HashSet<Component> _addedToCopies = [];
+    private readonly Dictionary<string, (DateTime Written, Entity? Prefab)> _prefabs = new(StringComparer.OrdinalIgnoreCase);
     private SceneDocument? _document;
     private EntityHeader? _header;
     private string? _hiddenNote;
     private IReadOnlyList<Entity> _entities = [];
     private int[] _componentCounts = [];
 
-    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art)
+    public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
+        Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status)
     {
         _workspace = workspace;
         _selection = selection;
         _scripts = scripts;
+        _dialogs = dialogs;
+        _status = status;
         // A picture saved over the one a field shows: show the new one.
         art.ImageSaved += (_, _) => Refresh();
         selection.PropertyChanged += (_, e) =>
@@ -135,6 +146,53 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     internal bool PrefabExists(string assetPath) =>
         _workspace.Project is { } project && System.IO.File.Exists(System.IO.Path.Combine(project.AssetsPath, assetPath));
 
+    /// <summary>The prefab's own component that <paramref name="component"/>, on a placed copy or inside one, was made from.</summary>
+    public Component? PrefabComponent(Component component) => _prefabParts.GetValueOrDefault(component);
+
+    /// <summary>True for a component on a placed copy (or inside one) that its prefab doesn't have.</summary>
+    public bool IsAddedToCopy(Component component) => _addedToCopies.Contains(component);
+
+    /// <summary>A placed copy's prefab, as an entity made from its file (read again when the file changes), or null.</summary>
+    internal Entity? PrefabOf(Entity copy)
+    {
+        if (copy.Prefab is not { } link || _workspace.Project?.FindPrefab(link) is not { } path)
+            return null;
+        var written = System.IO.File.GetLastWriteTimeUtc(path);
+        if (_prefabs.TryGetValue(path, out var known) && known.Written == written)
+            return known.Prefab;
+
+        Entity? prefab;
+        try
+        {
+            prefab = _workspace.Serializer.LoadPrefabFromString(System.IO.File.ReadAllText(path));
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException)
+        {
+            prefab = null;
+        }
+
+        _prefabs[path] = (written, prefab);
+        return prefab;
+    }
+
+    /// <summary>What a placed copy changes from its prefab (nothing if it isn't one, or its prefab can't be read).</summary>
+    internal IReadOnlyList<PrefabOverride> OverridesOf(Entity copy) =>
+        PrefabOf(copy) is { } prefab ? PrefabOverrides.Find(copy, prefab, _workspace.Components) : [];
+
+    /// <summary>
+    /// Sets the field in each selected copy's prefab to the copy's value, and brings the prefab's other copies up to
+    /// date (keeping what they changed themselves).
+    /// </summary>
+    public void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)
+    {
+        var update = Entities.PrefabFiles.ApplyField(_workspace, components, property);
+        if (update.Problems.Count > 0)
+            _dialogs.ShowError("Couldn't apply it to the prefab", string.Join("\n", update.Problems));
+        else
+            _status.Show($"Applied {Humanize(property.Name)} to the prefab. {update.Summary}".Trim());
+        Rebuild();
+    }
+
     public void SetValues(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
     {
         if (SetPropertiesEdit.For(components, property, values) is { } edit)
@@ -170,7 +228,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private void OnDocumentChanged(object? sender, EditEventArgs e)
     {
-        if (ChangesComponents(e.Edit))
+        if (ChangesComponents(e.Edit) || PrefabsChanged())
             Rebuild();
         else
             Refresh();
@@ -179,7 +237,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     // Show live values while the game runs. Components added or removed by gameplay rebuild the sections.
     private void OnRuntimeTicked(object? sender, EventArgs e)
     {
-        if (_entities.Where((entity, i) => entity.Components.Count != _componentCounts[i]).Any())
+        if (_entities.Where((entity, i) => entity.Components.Count != _componentCounts[i]).Any() || PrefabsChanged())
             Rebuild();
         else
             Refresh();
@@ -192,9 +250,17 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         _ => false,
     };
 
+    // A prefab file the selection's copies come from was saved since it was read.
+    private bool PrefabsChanged() =>
+        _prefabs.Any(p => System.IO.File.Exists(p.Key) ? System.IO.File.GetLastWriteTimeUtc(p.Key) != p.Value.Written : p.Value.Prefab is not null);
+
     private void Rebuild()
     {
         Components.Clear();
+        _prefabParts.Clear();
+        _addedToCopies.Clear();
+        _prefabs.Clear();
+        _overrideCount = null;
         // The primary entity first: its components set the order, and its values show for anything that isn't mixed.
         var entities = _selection.Entities.Reverse().ToList();
         _entities = entities;
@@ -205,11 +271,28 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
             return;
 
         PrefabNames = _workspace.Project?.FindPrefabs().Select(System.IO.Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
+        foreach (var entity in entities)
+            MatchPrefab(entity);
 
         foreach (var components in Shared(entities))
             Components.Add(new ComponentSection(components, this, _workspace.Components));
         if (entities.Any(e => e.Components.Count != Components.Count))
             HiddenNote = $"Only the components all {entities.Count} have are shown.";
+    }
+
+    // Pairs each of the entity's components with its prefab's, if it's a copy or inside one.
+    private void MatchPrefab(Entity entity)
+    {
+        if (PrefabOverrides.CopyFor(entity) is not { } copy || PrefabOf(copy) is not { } prefab ||
+            PrefabOverrides.Counterpart(prefab, copy, entity) is not { } part)
+            return;
+        foreach (var component in entity.Components)
+        {
+            if (PrefabOverrides.Counterpart(part, component) is { } prefabComponent)
+                _prefabParts[component] = prefabComponent;
+            else
+                _addedToCopies.Add(component);
+        }
     }
 
     // Each component of the first entity, with the same component on every other one: the nth of a type matches the
@@ -229,10 +312,16 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private void Refresh()
     {
+        _overrideCount = null;
         Header?.Refresh();
         foreach (var section in Components)
             section.Refresh();
     }
+
+    private int? _overrideCount;
+
+    /// <summary>How many things the one selected copy changes from its prefab.</summary>
+    internal int OverrideCount(Entity copy) => _overrideCount ??= OverridesOf(copy).Count;
 
     internal static string Humanize(string name) => PascalCaseBoundary().Replace(name, " ");
 
@@ -270,18 +359,29 @@ public sealed class EntityHeader(IReadOnlyList<Entity> entities, InspectorPanel 
     public string Names => string.Join(", ", entities.Select(e => e.Name));
 
     /// <summary>
-    /// "Copy of the Coin prefab" when the selection is placed copies of one prefab (saving it updates them), null
-    /// otherwise.
+    /// "Copy of the Coin prefab, with 2 changes" when the selection is placed copies of one prefab (saving it updates
+    /// them, keeping their changes), "Inside a copy of the Coin prefab" for something in one, null otherwise.
     /// </summary>
     public string? PrefabNote
     {
         get
         {
-            if (entities[0].Prefab is not { } prefab || entities.Any(e => !string.Equals(e.Prefab, prefab, StringComparison.OrdinalIgnoreCase)))
+            if (entities[0].Prefab is not { } prefab)
+            {
+                return !IsSeveral && PrefabOverrides.CopyFor(entities[0]) is { Prefab: { } outer }
+                    ? $"Inside a copy of the {PrefabCopies.NameOf(outer)} prefab"
+                    : null;
+            }
+
+            if (entities.Any(e => !string.Equals(e.Prefab, prefab, StringComparison.OrdinalIgnoreCase)))
                 return null;
             var name = PrefabCopies.NameOf(prefab);
-            var copies = IsSeveral ? "Copies" : "Copy";
-            return owner.PrefabExists(prefab) ? $"{copies} of the {name} prefab" : $"{copies} of {prefab}, which isn't in the project";
+            if (!owner.PrefabExists(prefab))
+                return $"{(IsSeveral ? "Copies" : "Copy")} of {prefab}, which isn't in the project";
+            if (IsSeveral)
+                return $"Copies of the {name} prefab";
+            var changes = owner.OverrideCount(entities[0]);
+            return $"Copy of the {name} prefab{changes switch { 0 => "", 1 => ", with 1 change", _ => $", with {changes} changes" }}";
         }
     }
 
@@ -335,7 +435,11 @@ public sealed class ComponentSection : ObservableObject
         var descriptor = registry.Get(component.GetType());
         Title = descriptor.DisplayName;
         Properties = descriptor.Properties.Select(p => new PropertyField(components, p, owner)).ToList();
+        IsAddedToCopy = components.Any(owner.IsAddedToCopy);
     }
+
+    /// <summary>On a placed copy of a prefab (or inside one), added there: the prefab doesn't have it.</summary>
+    public bool IsAddedToCopy { get; }
 
     /// <summary>The primary entity's component.</summary>
     public Component Component { get; }
@@ -864,6 +968,78 @@ public sealed class PropertyField : ObservableObject
         }
     }
 
+    /// <summary>
+    /// True when a selected copy of a prefab (or something inside one) has this field set differently from its prefab.
+    /// Saving the prefab keeps it.
+    /// </summary>
+    public bool IsOverridden => _components.Any(c => _owner.PrefabComponent(c) is { } prefab && PrefabOverrides.Differs(c, prefab, _property));
+
+    /// <summary>For a changed field: what the prefab has, and how to put it back or make it the prefab's.</summary>
+    public string? OverrideTip => _components
+        .Select(c => _owner.PrefabComponent(c) is { } prefab && PrefabOverrides.Differs(c, prefab, _property) ? prefab : null)
+        .FirstOrDefault(p => p is not null) is { } changed
+        ? $"Changed from the prefab, which has {Describe(_property.GetValue(changed))}. Click for Revert and Apply to Prefab."
+        : null;
+
+    /// <summary>Sets the field back to the prefab's value on each selected copy that changed it, as one undo step.</summary>
+    public void RevertToPrefab()
+    {
+        if (!IsOverridden)
+            return;
+        _owner.SetValues(_components, _property, [.. _components.Select(c =>
+            _owner.PrefabComponent(c) is { } prefab ? PrefabOverrides.CopyValue(_property.GetValue(prefab)) : _property.GetValue(c))]);
+        _owner.Seal();
+    }
+
+    /// <summary>
+    /// Makes the copy's value the prefab's: saves it into the prefab file, and brings the prefab's other copies up to
+    /// date (their own changes stay). Not with mixed values.
+    /// </summary>
+    public void ApplyToPrefab()
+    {
+        if (IsOverridden && !IsMixed)
+            _owner.ApplyToPrefab(_components, _property);
+    }
+
+    /// <summary>Shows Revert and Apply to Prefab in a menu under the mark that asked.</summary>
+    public IRelayCommand<FrameworkElement> OverrideMenuCommand => _overrideMenu ??= new RelayCommand<FrameworkElement>(OverrideMenu);
+
+    private IRelayCommand<FrameworkElement>? _overrideMenu;
+
+    private void OverrideMenu(FrameworkElement? anchor)
+    {
+        if (!IsOverridden)
+            return;
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        var revert = new MenuItem { Header = "Revert to Prefab", Tag = "override:revert", Icon = Icons.Create(Icons.Undo) };
+        revert.Click += (_, _) => RevertToPrefab();
+        menu.Items.Add(revert);
+        var apply = new MenuItem
+        {
+            Header = "Apply to Prefab",
+            Tag = "override:apply",
+            Icon = Icons.Create(Icons.Package),
+            IsEnabled = !IsMixed,
+            ToolTip = "Saves this value into the prefab: every copy that hasn't changed it takes it too",
+        };
+        apply.Click += (_, _) => ApplyToPrefab();
+        menu.Items.Add(apply);
+        menu.IsOpen = true;
+    }
+
+    private static string Describe(object? value) => value switch
+    {
+        null or "" => "nothing",
+        string text => $"\"{text}\"",
+        Color color => color.ToHex(),
+        float f => f.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+        double d => d.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+        IReadOnlyList<string> lines => lines.Count == 1 ? "1 line" : $"{lines.Count} lines",
+        Vector2 or Vector3 or Vector4 or Quaternion => string.Join(", ", ToFloats(value).Select(f => f.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))),
+        bool b => b ? "it on" : "it off",
+        _ => value.ToString() ?? "",
+    };
+
     public void Refresh()
     {
         _unmatched = null;
@@ -955,4 +1131,12 @@ public interface IPropertyHost
 
     /// <summary>The project's prefabs' names: an entity field naming one isn't flagged as matching nothing.</summary>
     IReadOnlyCollection<string> PrefabNames => [];
+
+    /// <summary>For a component of a placed prefab copy (or of something inside one): the prefab's own, or null.</summary>
+    Component? PrefabComponent(Component component) => null;
+
+    /// <summary>Saves the components' value of the property into their prefabs, updating the prefabs' other copies.</summary>
+    void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)
+    {
+    }
 }

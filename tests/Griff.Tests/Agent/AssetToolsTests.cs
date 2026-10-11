@@ -8,11 +8,14 @@ public sealed class AssetToolsTests : IDisposable
     {
         public List<string> Changed { get; } = [];
 
+        public List<string?> Previous { get; } = [];
+
         public string? AssetsPath => assets;
 
-        public Task<AssetFeedback?> AssetChangedAsync(string assetPath)
+        public Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null)
         {
             Changed.Add(assetPath);
+            Previous.Add(previousText);
             return Task.FromResult(assetPath.EndsWith(".cs") ? new AssetFeedback("Broken.cs(1,1): error", IsError: true) : null);
         }
     }
@@ -41,6 +44,10 @@ public sealed class AssetToolsTests : IDisposable
         Assert.Equal("jump higher", Run("asset_read", """{"path": "Notes/plan.txt"}""").Text);
         Assert.Contains("Notes/plan.txt", Run("assets_list", "{}").Text);
         Assert.Equal(["Notes/plan.txt"], _project.Changed);
+
+        // Writing over a text file says what it held before (a prefab's copies keep what they changed from it).
+        Run("asset_write", """{"path": "Notes/plan.txt", "text": "jump even higher"}""");
+        Assert.Equal([null, "jump higher"], _project.Previous);
 
         Run("asset_delete", """{"path": "Notes/plan.txt"}""");
         Assert.False(File.Exists(Path.Combine(_root, "Notes", "plan.txt")));

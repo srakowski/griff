@@ -5,7 +5,7 @@ namespace Griff.Scenes;
 /// <summary>
 /// A grid of tiles from one sprite-sheet image, drawn and (optionally) collided with as a whole. The grid starts at
 /// the entity's position and runs right and down. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
-/// inspector, or change it from scripts with <see cref="SetTile"/>.
+/// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
 /// </summary>
 /// <remarks>
 /// Each row of <see cref="Tiles"/> is a line of characters, top row first: <c>.</c> is empty and
@@ -227,28 +227,126 @@ public sealed class Tilemap : Component
     /// grows that way and <c>ShiftX</c>/<c>ShiftY</c> say how many columns and rows were added before the old ones,
     /// so the caller can move the entity back by that many cells to keep existing tiles in place.
     /// </summary>
-    public (IReadOnlyList<string> Tiles, int ShiftX, int ShiftY) Painted(int x, int y, int tile)
+    public (IReadOnlyList<string> Tiles, int ShiftX, int ShiftY) Painted(int x, int y, int tile) => PaintedRect(x, y, x, y, tile);
+
+    /// <summary>
+    /// Sets every cell in the rectangle between cells (<paramref name="fromX"/>, <paramref name="fromY"/>) and
+    /// (<paramref name="toX"/>, <paramref name="toY"/>), corners included and either way round; -1 clears them. The grid
+    /// grows to fit, like <see cref="SetTile"/>.
+    /// </summary>
+    public void FillRect(int fromX, int fromY, int toX, int toY, int tile)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(Math.Min(fromX, toX), nameof(fromX));
+        ArgumentOutOfRangeException.ThrowIfNegative(Math.Min(fromY, toY), nameof(fromY));
+        Tiles = PaintedRect(fromX, fromY, toX, toY, tile).Tiles;
+    }
+
+    /// <summary>
+    /// Fills the area around cell (<paramref name="x"/>, <paramref name="y"/>) with <paramref name="tile"/>, like a paint
+    /// bucket (see <see cref="FillRegion"/> for what it reaches); -1 clears it.
+    /// </summary>
+    public void FloodFill(int x, int y, int tile) => Tiles = Filled(x, y, tile);
+
+    /// <summary>
+    /// The grid with every cell in the rectangle between two corner cells (either way round) set to
+    /// <paramref name="tile"/>, leaving this map alone. Like <see cref="Painted"/>, the grid grows left and up to take
+    /// in a rectangle reaching past those edges; clearing (-1) only reaches the cells already in the grid.
+    /// </summary>
+    public (IReadOnlyList<string> Tiles, int ShiftX, int ShiftY) PaintedRect(int fromX, int fromY, int toX, int toY, int tile)
+    {
+        CheckTile(tile);
+        var (left, right) = (Math.Min(fromX, toX), Math.Max(fromX, toX));
+        var (top, bottom) = (Math.Min(fromY, toY), Math.Max(fromY, toY));
+        if (tile < 0)
+        {
+            // Erasing outside the grid changes nothing.
+            (left, top, right, bottom) = (Math.Max(0, left), Math.Max(0, top), Math.Min(Width - 1, right), Math.Min(Height - 1, bottom));
+            if (left > right || top > bottom)
+                return (_tiles, 0, 0);
+        }
+
+        var shiftX = Math.Max(0, -left);
+        var shiftY = Math.Max(0, -top);
+        var rows = _tiles.Select(r => shiftX > 0 && r.Length > 0 ? new string(Empty, shiftX) + r : r).ToList();
+        rows.InsertRange(0, Enumerable.Repeat("", shiftY));
+        while (rows.Count <= bottom + shiftY)
+            rows.Add("");
+
+        var c = CharOf(tile);
+        for (var y = top + shiftY; y <= bottom + shiftY; y++)
+        {
+            var row = rows[y].PadRight(right + shiftX + 1, Empty).ToCharArray();
+            Array.Fill(row, c, left + shiftX, right - left + 1);
+            rows[y] = new string(row);
+        }
+
+        var tiles = Trim(rows);
+        return tiles.SequenceEqual(_tiles) ? (_tiles, 0, 0) : (tiles, shiftX, shiftY);
+    }
+
+    /// <summary>
+    /// The grid with the area a fill from cell (<paramref name="x"/>, <paramref name="y"/>) reaches (see
+    /// <see cref="FillRegion"/>) set to <paramref name="tile"/>, leaving this map alone. Unchanged when the cell is
+    /// outside the grid or already holds that tile.
+    /// </summary>
+    public IReadOnlyList<string> Filled(int x, int y, int tile)
+    {
+        CheckTile(tile);
+        if (GetTile(x, y) == tile)
+            return _tiles;
+        var region = FillRegion(x, y);
+        if (region.Count == 0)
+            return _tiles;
+
+        var width = Width;
+        var rows = _tiles.Select(r => r.PadRight(width, Empty).ToCharArray()).ToList();
+        var c = CharOf(tile);
+        foreach (var (cx, cy) in region)
+            rows[cy][cx] = c;
+        return Trim(rows.Select(r => new string(r)).ToList());
+    }
+
+    /// <summary>
+    /// The cells a paint-bucket fill from cell (<paramref name="x"/>, <paramref name="y"/>) reaches: that cell and every
+    /// cell joined to it side by side through cells holding the same tile (or all empty), within the grid's
+    /// <see cref="Width"/> and <see cref="Height"/>. Empty when the cell is outside the grid.
+    /// </summary>
+    public IReadOnlyList<(int X, int Y)> FillRegion(int x, int y)
+    {
+        var (width, height) = (Width, Height);
+        if (x < 0 || y < 0 || x >= width || y >= height)
+            return [];
+
+        var tile = GetTile(x, y);
+        var seen = new bool[width * height];
+        var region = new List<(int X, int Y)>();
+        var open = new Stack<(int X, int Y)>();
+        open.Push((x, y));
+        seen[y * width + x] = true;
+        while (open.TryPop(out var cell))
+        {
+            region.Add(cell);
+            Visit(cell.X + 1, cell.Y);
+            Visit(cell.X - 1, cell.Y);
+            Visit(cell.X, cell.Y + 1);
+            Visit(cell.X, cell.Y - 1);
+        }
+
+        return region;
+
+        void Visit(int cx, int cy)
+        {
+            if (cx < 0 || cy < 0 || cx >= width || cy >= height || seen[cy * width + cx] || GetTile(cx, cy) != tile)
+                return;
+            seen[cy * width + cx] = true;
+            open.Push((cx, cy));
+        }
+    }
+
+    private static void CheckTile(int tile)
     {
         if (tile < -1 || tile >= MaxTiles)
             throw new ArgumentOutOfRangeException(nameof(tile), $"Tiles are numbered 0 to {MaxTiles - 1}, or -1 for empty.");
-
-        // Erasing outside the grid changes nothing.
-        if (tile < 0 && GetTile(x, y) < 0)
-            return (_tiles, 0, 0);
-
-        var shiftX = Math.Max(0, -x);
-        var shiftY = Math.Max(0, -y);
-        var rows = _tiles.Select(r => shiftX > 0 && r.Length > 0 ? new string(Empty, shiftX) + r : r).ToList();
-        rows.InsertRange(0, Enumerable.Repeat("", shiftY));
-        x += shiftX;
-        y += shiftY;
-
-        while (rows.Count <= y)
-            rows.Add("");
-        var row = rows[y].PadRight(x + 1, Empty).ToCharArray();
-        row[x] = CharOf(tile);
-        rows[y] = new string(row);
-        return (Trim(rows), shiftX, shiftY);
     }
 
     /// <summary>The cell containing <paramref name="local"/>, a point in the entity's own space.</summary>

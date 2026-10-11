@@ -65,6 +65,8 @@ public class ObjectSurfaceTests
 
         public void Apply(Preset preset) => Picked = preset;
 
+        public (int X, int Y)? CellAt(bool inside) => inside ? (2, 3) : null;
+
         public async Task<int> CountLaterAsync(int n)
         {
             await Task.Yield();
@@ -84,6 +86,7 @@ public class ObjectSurfaceTests
         Assert.Contains("\"Presets\":\"[2 items]\"", description);
         Assert.Contains("\"SaveCommand\":\"available\"", description);
         Assert.Contains("Paint(x: a whole number, y: a whole number, color: text (optional)) -> text", description);
+        Assert.Contains("CellAt(inside: true or false) -> [a whole number, a whole number] or null", description);
     }
 
     [Fact]
@@ -149,6 +152,10 @@ public class ObjectSurfaceTests
         Assert.Equal("3,4 #FF0000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("{\"x\": 3, \"y\": 4, \"color\": \"#FF0000\"}")))!.GetValue<string>());
         Assert.Equal(10, (await ObjectSurface.InvokeAsync(maker, "CountLaterAsync", Json("[5]")))!.GetValue<int>());
         await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(maker, "Paint", Json("[\"a\", 2]")));
+
+        // A tuple comes back as its items in a list.
+        Assert.Equal("[2,3]", (await ObjectSurface.InvokeAsync(maker, "CellAt", Json("[true]")))!.ToJsonString());
+        Assert.Null(await ObjectSurface.InvokeAsync(maker, "CellAt", Json("[false]")));
     }
 
     [Fact]

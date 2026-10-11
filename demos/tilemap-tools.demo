@@ -1,0 +1,47 @@
+title: Rectangles and fills for tilemaps
+intro: Painting a tilemap in the Scene view gets a Rectangle tool and a paint-bucket Fill, next to the Brush.
+project: Shooter | Tile Tools
+
+chapter: Three tools | Under the tile palette
+select: Walls
+look: 22, -7, 8
+say: The Shooter's level is a tilemap of wall tiles, painted top-down. While it's selected, the Scene view paints it.
+explain: tiles:Brush | Brush, B | Under the palette there are now three tools. The Brush paints the cells you drag over, as before.
+explain: tiles:Rectangle | Rectangle, R | The Rectangle fills a whole box at once,
+explain: tiles:Fill | Fill, G | and Fill fills an area, like a paint bucket. B, R and G pick them from the keyboard, the same keys as in the Sprite Painter.
+
+chapter: Rectangles | A new room in two drags
+say: Let's add a room east of the hall. I'll pick the Rectangle, and the panel wall tile from the palette.
+click: tiles:Rectangle
+click: tiles:1
+scenedrag: 24.5, -0.5 > 31.5, -6.5
+expecttile: Walls 31, 6 = 1
+expecttile: Walls 27, 3 = 1
+say: Then drag out a box. It shows as you drag, and letting go fills every cell in it, as one undo step.
+say: Holding Shift erases instead, so a smaller box hollows it out.
+scenedrag: Shift+25.5, -1.5 > 30.5, -5.5
+expecttile: Walls 27, 3 = -1
+expecttile: Walls 24, 3 = 1
+explain: world:24, 0, 32, -7 | A new room | Two drags, and there's a new room.
+key: B
+say: Back on the Brush, Shift clicks knock a doorway through from the hall.
+sceneclick: Shift+23.5, -3.5
+sceneclick: Shift+24.5, -3.5
+expecttile: Walls 23, 3 = -1
+expecttile: Walls 24, 3 = -1
+
+chapter: Fill | Like a paint bucket
+key: G
+click: tiles:3
+scenehover: 27.5, -3.5
+explain: world:0, 0, 32, -18 | What a click would fill | With Fill picked, the Scene view shows what a click would fill: every cell joined to this one holding the same tile. On the floor here, that's every floor in the level, through our new doorway. Not what we want.
+scenehover: 31.5, -3.5
+explain: world:24, 0, 32, -7 | Just the room's walls | Over the new room's wall, it's only the room's own panels. They stop where the hall's bricks begin.
+sceneclick: 31.5, -3.5
+expecttile: Walls 31, 3 = 3
+expecttile: Walls 24, 0 = 3
+expecttile: Walls 23, 0 = 2
+say: One click, and the whole room is mossy stone.
+key: Ctrl+Z
+expecttile: Walls 31, 3 = 1
+say: A fill is one undo step too. And agents building a game reach all three tools through the Scene view's view model, so they can lay out levels the same way.

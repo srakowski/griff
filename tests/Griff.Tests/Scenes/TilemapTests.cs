@@ -77,6 +77,94 @@ public class TilemapTests
     }
 
     [Fact]
+    public void PaintedRect_FillsBetweenCorners_EitherWayRound()
+    {
+        var map = Map("1");
+
+        var (tiles, shiftX, shiftY) = map.PaintedRect(3, 2, 1, 1, 2);
+
+        Assert.Equal((0, 0), (shiftX, shiftY));
+        Assert.Equal(["1", ".222", ".222"], tiles);
+        Assert.Equal(["1"], map.Tiles);
+    }
+
+    [Fact]
+    public void PaintedRect_LeftOrAbove_ShiftsTheGrid()
+    {
+        var map = Map("11");
+
+        var (tiles, shiftX, shiftY) = map.PaintedRect(-1, -1, 0, 0, 3);
+
+        Assert.Equal((1, 1), (shiftX, shiftY));
+        Assert.Equal(["33", "331"], tiles);
+    }
+
+    [Fact]
+    public void PaintedRect_Erasing_OnlyReachesTheGrid_AndTrims()
+    {
+        var map = Map("111", "111", "1");
+
+        var (tiles, shiftX, shiftY) = map.PaintedRect(-5, 1, 9, 9, -1);
+        Assert.Equal((0, 0), (shiftX, shiftY));
+        Assert.Equal(["111"], tiles);
+
+        Assert.Same(map.Tiles, map.PaintedRect(-5, -5, -1, -1, -1).Tiles);
+        // Nothing changes when every cell already holds the tile.
+        Assert.Same(map.Tiles, map.PaintedRect(0, 0, 2, 1, 1).Tiles);
+    }
+
+    [Fact]
+    public void FillRegion_FollowsTheSameTile_SideBySide_WithinTheGrid()
+    {
+        // A ring of 1s with a hole of empty cells inside, and empty cells outside it; diagonals don't join.
+        var map = Map(
+            "11111",
+            "1...1",
+            "1.2.1",
+            "11111",
+            ".....1");
+
+        Assert.Equal(5, map.FillRegion(1, 1).Count); // the hole, round the 2
+        Assert.Equal(14, map.FillRegion(0, 0).Count); // the ring
+        Assert.Equal(5, map.FillRegion(0, 4).Count); // the empty bottom row, up to the 1 at its end
+        Assert.Equal(4, map.FillRegion(5, 0).Count); // the empty column on the right, down to that 1
+        Assert.Equal([(2, 2)], map.FillRegion(2, 2));
+        Assert.Empty(map.FillRegion(6, 0));
+        Assert.Empty(map.FillRegion(-1, 0));
+    }
+
+    [Fact]
+    public void Filled_PaintsTheRegion_OrClearsIt()
+    {
+        var map = Map(
+            "111",
+            "1.1",
+            "111");
+
+        Assert.Equal(["111", "131", "111"], map.Filled(1, 1, 3));
+        Assert.Equal(["222", "2.2", "222"], map.Filled(0, 0, 2));
+        Assert.Empty(map.Filled(0, 0, -1));
+        Assert.Same(map.Tiles, map.Filled(0, 0, 1));
+        Assert.Same(map.Tiles, map.Filled(9, 9, 1));
+    }
+
+    [Fact]
+    public void FillRect_And_FloodFill_ChangeTheMap_FromScripts()
+    {
+        var map = new Tilemap();
+
+        map.FillRect(0, 0, 3, 2, 1);
+        Assert.Equal(["1111", "1111", "1111"], map.Tiles);
+        map.FillRect(1, 1, 2, 1, -1);
+        Assert.Equal(["1111", "1..1", "1111"], map.Tiles);
+        map.FloodFill(1, 1, 5);
+        Assert.Equal(["1111", "1551", "1111"], map.Tiles);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => map.FillRect(-1, 0, 2, 2, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => map.FloodFill(0, 0, Tilemap.MaxTiles));
+    }
+
+    [Fact]
     public void CellAt_And_CellCenter_AreInverse()
     {
         var map = new Tilemap { TileSize = 2 };

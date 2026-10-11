@@ -292,7 +292,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.Type(typed.Replace("\\n", "\n"));
                 break;
             case "click":
-                if (a.StartsWith("world:", StringComparison.OrdinalIgnoreCase))
+                if (a.StartsWith("world:", StringComparison.OrdinalIgnoreCase) || a.StartsWith("tiles:", StringComparison.OrdinalIgnoreCase))
                 {
                     var spot = TargetRect(a);
                     await Input.Click(new Point(spot.X + spot.Width / 2, spot.Y + spot.Height / 2));
@@ -484,6 +484,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.ClickWith(ScenePoint(clickAt), clickModifiers);
                 await DemoUi.Settle();
                 break;
+            case "scenehover":
+                // "scenehover: 3, 2": rests the mouse on a point in the Scene view (showing what a tool would do there).
+                await Input.MoveTo(ScenePoint(a));
+                await DemoUi.Settle(400);
+                break;
             case "scenedrag":
                 // "scenedrag: Shift+-2, 3 > 4, -1" or "scenedrag: Slime > 6, 1": a drag in the Scene view.
                 var (dragText, dragModifiers) = ParseModifiedName(a);
@@ -659,6 +664,17 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 string? ValueText() => PropertyText(valueParts[0], valueParts[1], valueParts[2], valueParts.Length == 4 ? valueParts[3] : null);
                 if (!await Until(() => ValueMatches(ValueText(), wantValue), 3000))
                     throw new InvalidOperationException($"Expected {valueTarget} = {wantValue}, but it's {ValueText() ?? "not there"}.");
+                break;
+            case "expecttile":
+                // "expecttile: Walls 27, 3 = 2": the tilemap's cell (column, row from its top left) holds that tile (-1 for empty).
+                var (tileTarget, wantTileText) = Split2(a, '=');
+                var tileMatch = System.Text.RegularExpressions.Regex.Match(tileTarget, @"^(.+?)\s+(-?\d+)\s*,\s*(-?\d+)$");
+                if (!tileMatch.Success || !int.TryParse(wantTileText, out var wantTile))
+                    throw new FormatException("expecttile: <Entity> <column>, <row> = <tile>");
+                int? TileNow() => workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == tileMatch.Groups[1].Value)?.GetComponent<Griff.Scenes.Tilemap>()
+                    ?.GetTile(int.Parse(tileMatch.Groups[2].Value, CultureInfo.InvariantCulture), int.Parse(tileMatch.Groups[3].Value, CultureInfo.InvariantCulture));
+                if (!await Until(() => TileNow() == wantTile, 3000))
+                    throw new InvalidOperationException($"Expected {tileTarget} = {wantTile}, but it's {TileNow()?.ToString(CultureInfo.InvariantCulture) ?? "not a tilemap"}.");
                 break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.
@@ -850,6 +866,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             null => null,
             Griff.Color color => color.ToHex(),
+            IReadOnlyList<string> rows => string.Join(@"\n", rows), // tile rows, as set: takes them
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             var other => other.ToString(),
         };
@@ -1322,7 +1339,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 
@@ -1349,6 +1366,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }
+
+        if (kind.Equals("tiles", StringComparison.OrdinalIgnoreCase))
+            return ui.TileOverlay(name) ?? throw new InvalidOperationException($"There's no {name} on the tile palette (is a tilemap selected?).");
 
         if (kind.Equals("link", StringComparison.OrdinalIgnoreCase))
         {

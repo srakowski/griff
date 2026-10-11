@@ -28,7 +28,9 @@ namespace Griff.Editor.Features.SceneView;
 /// (Ctrl snaps to half units); the knobs on its path move a mover's points and a patrol's turns (Ctrl snaps to half units;
 /// drag a plus to add a point, double-click a point to take it off); F frames. The selection's actions live in
 /// <see cref="SceneViewModel"/>, where agents reach them too.
-/// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
+/// With a tilemap selected, left-drag paints tiles instead, with the tool picked from the palette or with B (brush), R
+/// (rectangle) and G (fill); Shift erases, Ctrl picks, [ and ] change tile, Esc stops. Painting lives in
+/// <see cref="SceneViewModel"/> too (<see cref="SceneViewModel.PaintTile"/> and the rest).
 /// Arrows link the selection to the entities its fields name, and to it from the fields that name it.
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
@@ -41,6 +43,7 @@ public sealed class SceneViewControl : FrameworkElement
     private const double DragThreshold = 3;
     private const double PaletteCell = 28;
     private const int PaletteColumns = 8;
+    private const double ToolButtonWidth = 84;
     private const double HandleStem = 24;
     private const double HandleRadius = 5;
     private const double HandleSquare = 3.5;
@@ -96,12 +99,13 @@ public sealed class SceneViewControl : FrameworkElement
     private Vector2 _pathGrab;
     private string? _overPath;
 
-    // Tile painting.
-    private int _brushTile;
-    private bool _erasing;
+    // Tile painting: a brush stroke under way, or the corner a rectangle is being dragged from.
     private (int X, int Y)? _hoverCell;
-    private (int X, int Y)? _lastPaintCell;
-    private IDisposable? _stroke;
+    private SceneViewModel.TileStroke? _stroke;
+    private (int X, int Y)? _rectangleFrom;
+    private bool _rectangleErases;
+    private (IReadOnlyList<string> Tiles, (int X, int Y) Cell)? _fillPreviewOf;
+    private IReadOnlyList<(int X, int Y)> _fillPreview = [];
 
     public SceneViewControl(IWorkspace workspace, ISelection selection, SceneViewModel model)
     {
@@ -150,14 +154,8 @@ public sealed class SceneViewControl : FrameworkElement
     private PropertyDescriptor PositionProperty =>
         _workspace.Components.Get(typeof(Transform)).Properties.Single(p => p.Name == nameof(Transform.Position));
 
-    private PropertyDescriptor TilesProperty =>
-        _workspace.Components.Get(typeof(Tilemap)).Properties.Single(p => p.Name == nameof(Tilemap.Tiles));
-
-    /// <summary>The tilemap being painted: the selected entity's, when it's the only one selected, in the shown scene and enabled.</summary>
-    private Tilemap? PaintTarget =>
-        _selection.Entities is [var entity] && entity.Scene == _document?.Scene && SceneRenderer.IsActive(entity)
-            ? entity.GetComponent<Tilemap>()
-            : null;
+    /// <summary>The tilemap being painted (see <see cref="SceneViewModel.PaintTarget"/>).</summary>
+    private Tilemap? PaintTarget => _model.PaintTarget;
 
     /// <summary>Centers the view on the selection (the middle of several), or the origin.</summary>
     public void FrameSelection()
@@ -789,7 +787,8 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawGeometry(null, pen, geometry);
     }
 
-    // While painting: the grid's extent, the cell under the cursor, and a palette of the tileset's tiles.
+    // While painting: the grid's extent, the cell under the cursor (or the rectangle being dragged, or the area a fill
+    // would cover), a palette of the tileset's tiles, and the tools.
     private void DrawPaintOverlay(DrawingContext dc, Tilemap tilemap)
     {
         var accent = Brush("Brush.Accent");
@@ -799,11 +798,32 @@ public sealed class SceneViewControl : FrameworkElement
         var extent = new Rect(0, -Math.Max(1, tilemap.Height) * size, Math.Max(1, tilemap.Width) * size, Math.Max(1, tilemap.Height) * size);
         dc.DrawRectangle(null, new Pen(Brush("Brush.Text.Tertiary"), 1 / _zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
 
-        if (_hoverCell is var (hx, hy))
+        var erasing = _stroke?.Erasing ?? (_rectangleFrom is not null ? _rectangleErases : Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+        var color = erasing ? "Brush.Status.Error" : "Brush.Accent";
+        var outline = new Pen(Brush(color), 2 / _zoom);
+        Rect Cells(int left, int top, int right, int bottom) => new(left * size, -(bottom + 1) * size, (right - left + 1) * size, (bottom - top + 1) * size);
+        if (_rectangleFrom is var (fx, fy) && _hoverCell is var (tx, ty))
         {
-            var center = tilemap.CellCenter(hx, hy);
-            var cell = new Rect(center.X - size / 2, center.Y - size / 2, size, size);
-            dc.DrawRectangle(null, new Pen(_erasing || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Brush("Brush.Status.Error") : accent, 2 / _zoom), cell);
+            var box = Cells(Math.Min(fx, tx), Math.Min(fy, ty), Math.Max(fx, tx), Math.Max(fy, ty));
+            dc.DrawRectangle(Faded(color, 0.2), outline, box);
+        }
+        else if (_hoverCell is var (hx, hy))
+        {
+            if (_model.TileTool == TileTool.Fill && _drag == DragMode.None)
+            {
+                // The area a click would fill, when it's small enough to draw cell by cell.
+                if (_fillPreviewOf is not var (previewTiles, previewCell) || previewTiles != tilemap.Tiles || previewCell != (hx, hy))
+                {
+                    var region = tilemap.FillRegion(hx, hy);
+                    (_fillPreviewOf, _fillPreview) = ((tilemap.Tiles, (hx, hy)), region.Count <= 4096 ? region : []);
+                }
+
+                var shade = Faded(color, 0.2);
+                foreach (var (x, y) in _fillPreview)
+                    dc.DrawRectangle(shade, null, Cells(x, y, x, y));
+            }
+
+            dc.DrawRectangle(null, outline, Cells(hx, hy, hx, hy));
         }
 
         dc.Pop();
@@ -821,12 +841,27 @@ public sealed class SceneViewControl : FrameworkElement
                 dc.DrawImage(image, rect);
             else
                 dc.DrawRectangle(fill, null, rect);
-            if (tile == _brushTile)
+            if (tile == _model.BrushTile)
                 dc.DrawRectangle(null, new Pen(accent, 2), PaletteCellBounds(tile));
         }
 
-        var hint = Text("Paint: drag · Shift erase · Ctrl pick · [ ] tile · Esc done", "Brush.Text.Secondary");
-        dc.DrawText(hint, new Point(panel.Left + 6, panel.Bottom + 4));
+        // The tools, under the palette.
+        foreach (var tool in Enum.GetValues<TileTool>())
+        {
+            var button = ToolButtonBounds(count, tool);
+            var picked = tool == _model.TileTool;
+            dc.DrawRoundedRectangle(picked ? accent : Brush("Brush.Surface.Chrome"), new Pen(picked ? accent : Brush("Brush.Border.Default"), 1), button, 3, 3);
+            var label = Text($"{tool}  {ToolKey(tool)}", picked ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(label, new Point(button.X + (button.Width - label.Width) / 2, button.Y + (button.Height - label.Height) / 2));
+        }
+
+        var hint = Text(_model.TileTool switch
+        {
+            TileTool.Rectangle => "Rectangle: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Esc done",
+            TileTool.Fill => "Fill: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Esc done",
+            _ => "Brush: drag to paint · Shift erase · Ctrl pick · [ ] tile · Esc done",
+        }, "Brush.Text.Secondary");
+        dc.DrawText(hint, new Point(panel.Left + 6, ToolButtonBounds(count, TileTool.Brush).Bottom + 4));
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)
@@ -1364,7 +1399,35 @@ public sealed class SceneViewControl : FrameworkElement
                 return tile;
         }
 
-        return PaletteBounds(count).Contains(screen) ? _brushTile : null;
+        return PaletteBounds(count).Contains(screen) ? _model.BrushTile : null;
+    }
+
+    private static Rect ToolButtonBounds(int count, TileTool tool) =>
+        new(8 + (int)tool * (ToolButtonWidth + 4), PaletteBounds(count).Bottom + 4, ToolButtonWidth, 22);
+
+    private static TileTool? ToolButtonAt(Tilemap tilemap, Point screen) =>
+        Enum.GetValues<TileTool>().Cast<TileTool?>().FirstOrDefault(t => ToolButtonBounds(PaletteCount(tilemap), t!.Value).Contains(screen));
+
+    private static char ToolKey(TileTool tool) => tool switch
+    {
+        TileTool.Rectangle => 'R',
+        TileTool.Fill => 'G',
+        _ => 'B',
+    };
+
+    /// <summary>
+    /// The screen box of a part of the tile painting overlay, for demos to point at: a tool's button ("Rectangle"), or a
+    /// tile in the palette by its number ("3"). Null when nothing is being painted.
+    /// </summary>
+    internal Rect? PaintOverlayBounds(string part)
+    {
+        if (PaintTarget is not { } tilemap)
+            return null;
+        var count = PaletteCount(tilemap);
+        // By name only: Enum.TryParse would read "1" as the second tool.
+        if (Enum.GetValues<TileTool>().Where(t => t.ToString().Equals(part, StringComparison.OrdinalIgnoreCase)).Cast<TileTool?>().FirstOrDefault() is { } tool)
+            return ToolButtonBounds(count, tool);
+        return int.TryParse(part, out var tile) && tile >= 0 && tile < count ? PaletteCellBounds(tile) : null;
     }
 
     // ----- Input -----
@@ -1472,7 +1535,7 @@ public sealed class SceneViewControl : FrameworkElement
         if (PaintTarget is { } tilemap && _drag is DragMode.None or DragMode.Paint)
         {
             UpdateHoverCell(tilemap, position);
-            if (_drag == DragMode.Paint)
+            if (_stroke is not null)
                 PaintTo(tilemap, position);
             return;
         }
@@ -1573,6 +1636,8 @@ public sealed class SceneViewControl : FrameworkElement
             _model.SelectInBox(ToWorld(_dragStartScreen), ToWorld(position), _boxAdds);
         else if (_drag == DragMode.Move && _pressed is { } pressed)
             _selection.Select(pressed);
+        else if (_drag == DragMode.Paint && _rectangleFrom is var (fromX, fromY) && PaintTarget is { } tilemap && CellUnder(tilemap, position) is var (toX, toY))
+            _model.PaintRectangle(fromX, fromY, toX, toY, _rectangleErases);
 
         if (_drag != DragMode.None)
             EndDrag();
@@ -1595,75 +1660,58 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Tile painting -----
 
-    // Click the palette to pick a tile, Ctrl+click the map to pick the tile under the cursor, otherwise paint
-    // (or erase with Shift). One stroke is one undo step.
+    // Click the palette to pick a tile or a tool, Ctrl+click the map to pick the tile under the cursor, otherwise use the
+    // tool (erasing with Shift): drag the brush, drag out a rectangle, or click to fill. Each is one undo step.
     private void BeginPaint(Tilemap tilemap, Point position)
     {
+        if (ToolButtonAt(tilemap, position) is { } tool)
+        {
+            _model.TileTool = tool;
+            return;
+        }
+
         if (PaletteTileAt(tilemap, position) is { } chosen)
         {
-            _brushTile = chosen;
-            InvalidateVisual();
+            _model.BrushTile = chosen;
             return;
         }
 
-        var cell = CellUnder(tilemap, position);
+        if (CellUnder(tilemap, position) is not var (x, y))
+            return;
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
-            if (cell is var (x, y) && tilemap.GetTile(x, y) is var picked and >= 0)
-                _brushTile = picked;
-            InvalidateVisual();
+            _model.PickTile(x, y);
             return;
         }
 
-        _erasing = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
-        _lastPaintCell = null;
-        BeginDrag(DragMode.Paint, position);
-        _stroke = _document!.History.BeginGroup(_erasing ? "Erase Tiles" : "Paint Tiles");
-        PaintTo(tilemap, position);
+        var erase = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        switch (_model.TileTool)
+        {
+            case TileTool.Fill:
+                _model.FillTiles(x, y, erase);
+                InvalidateVisual();
+                return;
+            case TileTool.Rectangle:
+                (_rectangleFrom, _rectangleErases, _hoverCell) = ((x, y), erase, (x, y));
+                BeginDrag(DragMode.Paint, position);
+                InvalidateVisual();
+                return;
+            default:
+                BeginDrag(DragMode.Paint, position);
+                _stroke = _model.BeginTileStroke(erase);
+                PaintTo(tilemap, position);
+                return;
+        }
     }
 
     // Paints every cell on the line from the previous point, so fast drags don't leave gaps.
     private void PaintTo(Tilemap tilemap, Point position)
     {
-        if (CellUnder(tilemap, position) is not var (x, y))
+        if (_stroke is null || CellUnder(tilemap, position) is not var (x, y))
             return;
-
-        var (fromX, fromY) = _lastPaintCell ?? (x, y);
-        var steps = Math.Max(Math.Abs(x - fromX), Math.Abs(y - fromY));
-        var shiftX = 0;
-        var shiftY = 0;
-        for (var i = 0; i <= steps; i++)
-        {
-            var t = steps == 0 ? 1 : (double)i / steps;
-            var cx = (int)Math.Round(fromX + (x - fromX) * t) + shiftX;
-            var cy = (int)Math.Round(fromY + (y - fromY) * t) + shiftY;
-            var (sx, sy) = PaintCell(tilemap, cx, cy);
-            shiftX += sx;
-            shiftY += sy;
-        }
-
-        _lastPaintCell = (x + shiftX, y + shiftY);
-        _hoverCell = _lastPaintCell;
+        _stroke.To(x, y);
+        _hoverCell = _stroke.Last;
         InvalidateVisual();
-    }
-
-    // Sets one cell. Painting left of or above the grid grows it and moves the entity so existing tiles stay put.
-    private (int ShiftX, int ShiftY) PaintCell(Tilemap tilemap, int x, int y)
-    {
-        var tile = _erasing ? -1 : _brushTile;
-        if (_document is not { } document || tilemap.GetTile(x, y) == tile)
-            return (0, 0);
-
-        var (tiles, shiftX, shiftY) = tilemap.Painted(x, y, tile);
-        document.Execute(new SetPropertyEdit(tilemap, TilesProperty, tiles));
-        if (shiftX != 0 || shiftY != 0)
-        {
-            var transform = tilemap.Entity!.Transform;
-            var offset = Vector3.TransformNormal(new Vector3(-shiftX * tilemap.TileSize, shiftY * tilemap.TileSize, 0), transform.LocalMatrix);
-            document.Execute(new SetPropertyEdit(transform, PositionProperty, transform.Position + offset));
-        }
-
-        return (shiftX, shiftY);
     }
 
     private (int X, int Y)? CellUnder(Tilemap tilemap, Point position)
@@ -1676,7 +1724,8 @@ public sealed class SceneViewControl : FrameworkElement
 
     private void UpdateHoverCell(Tilemap tilemap, Point position)
     {
-        var cell = PaletteTileAt(tilemap, position) is null ? CellUnder(tilemap, position) : null;
+        var overPalette = _drag == DragMode.None && (PaletteTileAt(tilemap, position) is not null || ToolButtonAt(tilemap, position) is not null);
+        var cell = overPalette ? null : CellUnder(tilemap, position);
         if (cell != _hoverCell)
         {
             _hoverCell = cell;
@@ -1746,6 +1795,20 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
+        // While painting a tilemap (which hides the handles), B, R and G pick the brush, rectangle and fill, as in the
+        // Sprite Painter.
+        if (e.Key is Key.B or Key.R or Key.G && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None && PaintTarget is not null)
+        {
+            _model.TileTool = e.Key switch
+            {
+                Key.R => TileTool.Rectangle,
+                Key.G => TileTool.Fill,
+                _ => TileTool.Brush,
+            };
+            e.Handled = true;
+            return;
+        }
+
         // S, R, C and D pick what the handles do: scale, resize the sprite, resize the colliders, or change distances.
         if (e.Key is Key.S or Key.R or Key.C or Key.D && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None)
         {
@@ -1765,13 +1828,16 @@ public sealed class SceneViewControl : FrameworkElement
             switch (e.Key)
             {
                 case Key.Escape:
-                    _selection.Select(null);
+                    // Esc lets go of a rectangle being dragged; otherwise it stops painting.
+                    if (_rectangleFrom is not null)
+                        EndDrag();
+                    else
+                        _selection.Select(null);
                     e.Handled = true;
                     return;
                 case Key.OemOpenBrackets or Key.OemCloseBrackets:
                     var count = PaletteCount(tilemap);
-                    _brushTile = ((_brushTile + (e.Key == Key.OemCloseBrackets ? 1 : -1)) % count + count) % count;
-                    InvalidateVisual();
+                    _model.BrushTile = ((_model.BrushTile + (e.Key == Key.OemCloseBrackets ? 1 : -1)) % count + count) % count;
                     e.Handled = true;
                     return;
                 case Key.LeftShift or Key.RightShift:
@@ -1907,10 +1973,9 @@ public sealed class SceneViewControl : FrameworkElement
             InvalidateVisual();
         if (mode == DragMode.Paint)
         {
-            _stroke?.Dispose();
+            _stroke?.End();
             _stroke = null;
-            _lastPaintCell = null;
-            _erasing = false;
+            _rectangleFrom = null;
             InvalidateVisual();
         }
     }

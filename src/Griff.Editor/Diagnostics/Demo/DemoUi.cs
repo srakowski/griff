@@ -104,6 +104,13 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         return sceneView.PointToScreen(local);
     }
 
+    /// <summary>
+    /// Where a part of the Scene view's tile painting overlay is on screen: a tool's button ("Rectangle") or a tile in the
+    /// palette by its number ("3"). Null when nothing is being painted.
+    /// </summary>
+    public Rect? TileOverlay(string part) =>
+        sceneView.PaintOverlayBounds(part) is { } box ? new Rect(sceneView.PointToScreen(box.TopLeft), sceneView.PointToScreen(box.BottomRight)) : null;
+
     private static readonly MethodInfo SceneRotateHandle = typeof(SceneViewControl).GetMethod("RotateHandle", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>Where the Scene view's rotate handle (its knob) is on screen, or null when it isn't showing.</summary>

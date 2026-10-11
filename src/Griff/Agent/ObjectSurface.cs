@@ -404,8 +404,11 @@ public static partial class ObjectSurface
         return $"{method.Name}({parameters}){returns}";
     }
 
+    // A nullable reads as what it holds "or null", and a tuple as its items in brackets, "[a whole number, text]".
     private static string FriendlyType(Type type) =>
         type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>) ? FriendlyType(type.GetGenericArguments()[0])
+        : Nullable.GetUnderlyingType(type) is { } held && !IsLeaf(held) ? FriendlyType(held) + " or null"
+        : typeof(System.Runtime.CompilerServices.ITuple).IsAssignableFrom(type) && type.IsGenericType ? $"[{string.Join(", ", type.GetGenericArguments().Select(FriendlyType))}]"
         : IsLeaf(type) ? AgentValues.Describe(type)
         : type.IsGenericType ? $"{type.Name.Split('`')[0]}<{string.Join(", ", type.GetGenericArguments().Select(FriendlyType))}>"
         : type.Name;
@@ -420,6 +423,7 @@ public static partial class ObjectSurface
         value is null ? null
         : IsLeaf(value.GetType()) || value is IReadOnlyList<string> ? AgentValues.ToJson(value)
         : value is IEnumerable items and not string ? (depth > 0 ? AgentValues.ToJson(value, depth) : $"[{items.Cast<object?>().Count()} items]")
+        : value is System.Runtime.CompilerServices.ITuple tuple ? new JsonArray(Enumerable.Range(0, tuple.Length).Select(i => Shown(tuple[i], depth)).ToArray())
         : depth > 0 && value is JsonNode node ? node.DeepClone()
         : AgentValues.Summary(value);
 

@@ -140,8 +140,8 @@ public sealed class SceneViewControl : FrameworkElement
     }
 
     // A handle on the primary selection's path: on one of its points, or (with no Point) a plus that adds point Index to
-    // its Mover.
-    internal sealed record PathHandle(string Key, Point Screen, ScenePathPoint? Point, Mover? Mover, int Index);
+    // its Mover or GridPatrol (its Path).
+    internal sealed record PathHandle(string Key, Point Screen, ScenePathPoint? Point, Component? Path, int Index);
 
     private enum DragMode
     {
@@ -977,7 +977,7 @@ public sealed class SceneViewControl : FrameworkElement
         DrawPathHandles(dc);
     }
 
-    // A knob on each of the primary selection's mover points (numbered) and patrol turns (hollow while it walks on to a
+    // A knob on each of the primary selection's mover and grid patrol points (numbered) and patrol turns (hollow while it walks on to a
     // wall), and a small plus between points and past the last to drag out a new one, in the guides' color. Hovering says
     // what a knob does; dragging, where it is.
     private void DrawPathHandles(DrawingContext dc)
@@ -1019,7 +1019,9 @@ public sealed class SceneViewControl : FrameworkElement
             }
             else
             {
-                var offset = ((Mover)point.Component).Path[point.Index];
+                var offset = point.Component is GridPatrol grid
+                    ? new Vector2(grid.Path[point.Index].X, grid.Path[point.Index].Y)
+                    : ((Mover)point.Component).Path[point.Index];
                 text = dragging ? $"{point.Index}  ·  {Number(offset.X)}, {Number(offset.Y)}"
                     : hovered ? $"{point.Index}  ·  double-click to remove" : $"{point.Index}";
             }
@@ -1342,8 +1344,9 @@ public sealed class SceneViewControl : FrameworkElement
 
     /// <summary>
     /// The handles on the primary selection's path, in screen space: one on each of its points (see
-    /// <see cref="SceneViewModel.PathPoints"/>), and for a mover a plus between each two points far enough apart (and on
-    /// the way back to the start of a loop) and one past its last point, to drag out a new point. The pluses hide while a
+    /// <see cref="SceneViewModel.PathPoints"/>), and for a mover or grid patrol a plus between each two points far enough
+    /// apart (and on the way back to the start of a loop) and one past its last point, to drag out a new point. A grid
+    /// patrol's pluses sit in cells: the one halfway between, and the next along its last stretch. The pluses hide while a
     /// point is dragged, and everything while painting.
     /// </summary>
     private List<PathHandle> PathHandles()
@@ -1351,30 +1354,68 @@ public sealed class SceneViewControl : FrameworkElement
         if (_document is null || PaintTarget is not null)
             return [];
         var handles = _model.PathPoints().Select(p => new PathHandle(p.Key, ToScreen(p.World), p, null, p.Index)).ToList();
-        if (_selection.Entity?.GetComponent<Mover>() is not { } mover || _drag == DragMode.Path || mover.Entity?.Scene != _document.Scene)
+        if (_drag == DragMode.Path || _selection.Entity is not { } primary || primary.Scene != _document.Scene)
             return handles;
+        if (primary.GetComponent<Mover>() is { } mover)
+            AddMoverPluses(handles, mover);
+        if (primary.GetComponent<GridPatrol>() is { } patrol && primary.GetComponent<GridMovement>() is not null)
+            AddGridPatrolPluses(handles, patrol);
+        return handles;
+    }
 
+    private void AddMoverPluses(List<PathHandle> handles, Mover mover)
+    {
         var path = SceneViewModel.PathOf(mover).Select(ToScreen).ToList();
         for (var i = 1; i < path.Count; i++)
         {
             if ((path[i] - path[i - 1]).Length >= PathGap)
-                handles.Add(new PathHandle($"+{i}", path[i - 1] + (path[i] - path[i - 1]) / 2, null, mover, i));
+                handles.Add(new PathHandle($"Mover.+{i}", path[i - 1] + (path[i] - path[i - 1]) / 2, null, mover, i));
         }
 
         // A loop adds on the way back to its start; anything else adds past its end, on along its last stretch.
         if (mover.Mode == MoverMode.Loop && path.Count > 2)
         {
             if ((path[0] - path[^1]).Length >= PathGap)
-                handles.Add(new PathHandle($"+{path.Count}", path[^1] + (path[0] - path[^1]) / 2, null, mover, path.Count));
+                handles.Add(new PathHandle($"Mover.+{path.Count}", path[^1] + (path[0] - path[^1]) / 2, null, mover, path.Count));
         }
         else
         {
             var way = path.Count > 1 ? path[^1] - path[^2] : new Vector(1, 0);
             way = way.Length < 1 ? new Vector(1, 0) : way / way.Length;
-            handles.Add(new PathHandle($"+{path.Count}", path[^1] + way * PathGap, null, mover, path.Count));
+            handles.Add(new PathHandle($"Mover.+{path.Count}", path[^1] + way * PathGap, null, mover, path.Count));
+        }
+    }
+
+    private void AddGridPatrolPluses(List<PathHandle> handles, GridPatrol patrol)
+    {
+        var cells = patrol.Path;
+        Point At((int X, int Y) cell) => ToScreen(SceneViewModel.CellOf(patrol, cell.X, cell.Y)!.Value);
+
+        // Between two points, in the cell halfway (when there's one between them and they're far enough apart on screen).
+        void Between(int index, (int X, int Y) a, (int X, int Y) b)
+        {
+            var middle = ((a.X + b.X) >> 1, (a.Y + b.Y) >> 1);
+            if (middle != a && middle != b && (At(b) - At(a)).Length >= PathGap)
+                handles.Add(new PathHandle($"GridPatrol.+{index}", At(middle), null, patrol, index));
         }
 
-        return handles;
+        for (var i = 1; i < cells.Count; i++)
+            Between(i, cells[i - 1], cells[i]);
+
+        // A loop adds on the way back to its start; anything else adds past its end, a cell or more on along its last
+        // stretch (straight along the way it mostly goes), enough to clear the last point's knob.
+        if (patrol.Mode == MoverMode.Loop && cells.Count > 2)
+        {
+            Between(cells.Count, cells[^1], cells[0]);
+            return;
+        }
+
+        var (last, before) = (cells[^1], cells.Count > 1 ? cells[^2] : (X: cells[^1].X - 1, Y: cells[^1].Y));
+        var (dx, dy) = (last.X - before.X, last.Y - before.Y);
+        var step = Math.Abs(dx) >= Math.Abs(dy) ? (X: dx >= 0 ? 1 : -1, Y: 0) : (X: 0, Y: Math.Sign(dy));
+        var cellSize = (At((last.X + step.X, last.Y + step.Y)) - At(last)).Length;
+        var cellsOut = cellSize >= PathGap || cellSize <= 0 ? 1 : (int)Math.Ceiling(PathGap / cellSize);
+        handles.Add(new PathHandle($"GridPatrol.+{cells.Count}", At((last.X + step.X * cellsOut, last.Y + step.Y * cellsOut)), null, patrol, cells.Count));
     }
 
     // The path handle under a point (the nearest, where they crowd), if any.
@@ -2107,7 +2148,7 @@ public sealed class SceneViewControl : FrameworkElement
         }
 
         var drag = handle.Point is { } existing ? _model.BeginPathPoint(existing)
-            : handle.Mover is { } mover ? _model.BeginInsertPathPoint(mover, handle.Index)
+            : handle.Path is { } path ? _model.BeginInsertPathPoint(path, handle.Index)
             : null;
         if (drag is null)
             return;
@@ -2115,7 +2156,7 @@ public sealed class SceneViewControl : FrameworkElement
         // The handle follows the cursor from where it was pressed, so grabbing it a little off doesn't jump. A plus adds
         // its point straight away, so a click adds one there.
         BeginDrag(DragMode.Path, position);
-        (_path, _pathKey) = (drag, handle.Point?.Key ?? $"{nameof(Mover)}.{handle.Index}");
+        (_path, _pathKey) = (drag, handle.Point?.Key ?? $"{handle.Path!.GetType().Name}.{handle.Index}");
         _pathGrab = ToWorld(handle.Screen) - ToWorld(position);
         if (handle.Point is null)
             drag.To(ToWorld(handle.Screen), snap: false);

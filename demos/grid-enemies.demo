@@ -48,10 +48,18 @@ set: Transform.Position.X = 3.5
 set: Transform.Position.Y = -3.5
 add: GridPatrol
 explain: component:GridPatrol | Grid Patrol | A Grid Patrol walks it round a route of cells.
-set: GridPatrol.Points = 5 0
 set: GridPatrol.Wait = 0.3
-explain: field:GridPatrol.Points | Points | Its points are steps from where it's placed: five cells right, and back again. It finds its way round walls between them.
-explain: world:3,-3,9,-4 | Its route | The Scene view draws the route.
+explain: world:3,-3,8,-4 | Its route | The Scene view draws the route: four cells right, and back again. It finds its way round walls between them.
+explain: handle:GridPatrol.1 | Point 1 | Each point has a knob. Drag it, and it lands in the middle of whichever cell you drop it on.
+path: GridPatrol.1 = 5, 0
+expectvalue: Guard.GridPatrol.Points = 5 0
+explain: handle:GridPatrol.+2 | Add a point | The small plus past the end adds a point, a cell further on. Drag it out to where the guard should go next.
+path: GridPatrol.+2 = 5, -1
+expectvalue: Guard.GridPatrol.Points = 5 0; 5 -1
+say: Double-click a point to take it off. Each drag is one step to undo.
+removepoint: GridPatrol.2
+expectvalue: Guard.GridPatrol.Points = 5 0
+explain: field:GridPatrol.Points | Points | The Inspector keeps up: its points are steps from where it's placed, now five cells right and back.
 set: GridChase.Range = 2
 explain: field:GridChase.Range | Both together | With a Grid Chase too, it walks its route until the player comes within two units.
 play

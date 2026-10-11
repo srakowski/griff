@@ -163,6 +163,89 @@ public class ScenePathTests
         Assert.True(model.PathPoints().Single(p => p.Key == "Patrol.Right").Open);
     });
 
+    // Level: a tilemap with its top-left corner at the origin, its tiles a unit. Sentry: a grid patrol placed in cell
+    // (1, 0) of it, going "3 0", selected.
+    private static (SceneDocument Document, Entity Sentry, GridPatrol Patrol) OpenGrid(IServiceProvider services)
+    {
+        var (document, selection, _) = Open(services);
+        var level = new Entity("Level");
+        level.AddComponent<Tilemap>().Tiles = ["........", "........"];
+        document.Scene.Add(level);
+        var sentry = new Entity("Sentry");
+        sentry.Transform.Position = new Vector3(1.5f, -0.5f, 0);
+        sentry.AddComponent<GridMovement>();
+        var patrol = sentry.AddComponent<GridPatrol>();
+        patrol.Points = "3 0";
+        document.Scene.Add(sentry);
+        selection.Select(sentry);
+        return (document, sentry, patrol);
+    }
+
+    [Fact]
+    public void DraggingAGridPatrolsPoint_PutsItOnTheCellThere_AsOneUndoStep() => EditorHost.Run(services =>
+    {
+        var (document, _, patrol) = OpenGrid(services);
+        var model = services.GetRequiredService<SceneViewModel>();
+
+        // Its point is on a cell's middle, counted from the cell it was placed on (x right, y up).
+        var point = Assert.Single(model.PathPoints());
+        Assert.Equal("GridPatrol.1", point.Key);
+        Near(new Vector2(4.5f, -0.5f), point.World);
+        Assert.Equal("GridPatrol.1 at 4.5, -0.5", point.Label);
+
+        // Anywhere in a cell is that cell, snapping or not; the whole drag is one step.
+        var drag = model.BeginPathPoint(point)!;
+        drag.To(new Vector2(6.9f, -0.1f), snap: false);
+        Assert.Equal("5 0", patrol.Points);
+        drag.To(new Vector2(2.2f, 1.6f), snap: true);
+        Assert.Equal("1 2", patrol.Points);
+        drag.To(new Vector2(0.3f, -1.7f), snap: false);
+        drag.End();
+        Assert.Equal("-1 -1", patrol.Points);
+        Assert.Equal("Change Points", document.History.UndoDescription);
+        document.History.Undo();
+        Assert.Equal("3 0", patrol.Points);
+        Assert.False(document.History.CanUndo);
+
+        // Counted from where it was placed even when it's two cells on from there (as a game rewound partway keeps it).
+        patrol.Away = new Vector2(2, 0);
+        model.DragPathPoint("gridpatrol.1", new Vector2(4.5f, -0.5f));
+        Assert.Equal("5 0", patrol.Points);
+    });
+
+    [Fact]
+    public void AddingAndRemovingAGridPatrolsPoints_AreEachOneUndoStep() => EditorHost.Run(services =>
+    {
+        var (document, sentry, patrol) = OpenGrid(services);
+        var model = services.GetRequiredService<SceneViewModel>();
+
+        // One past the last adds it at the end; 1 right after the start.
+        model.InsertPathPoint(2, new Vector2(4.5f, -1.5f));
+        Assert.Equal("3 0; 3 -1", patrol.Points);
+        var drag = model.BeginInsertPathPoint(patrol, 1)!;
+        drag.To(new Vector2(1.5f, -1.5f), snap: false);
+        drag.To(new Vector2(2.5f, -1.5f), snap: false);
+        drag.End();
+        Assert.Equal("1 -1; 3 0; 3 -1", patrol.Points);
+        Assert.Equal(["GridPatrol.1", "GridPatrol.2", "GridPatrol.3"], model.PathPoints().Select(p => p.Key));
+        document.History.Undo();
+        Assert.Equal("3 0; 3 -1", patrol.Points);
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.InsertPathPoint(4, Vector2.Zero));
+
+        // It keeps one point to go to.
+        model.RemovePathPoint("GridPatrol.1");
+        Assert.Equal("3 -1", patrol.Points);
+        document.History.Undo();
+        Assert.Equal("3 0; 3 -1", patrol.Points);
+        model.RemovePathPoint("GridPatrol.2");
+        Assert.Throws<InvalidOperationException>(() => model.RemovePathPoint("GridPatrol.1"));
+
+        // With nothing to step it, it has no cells to put points on.
+        document.Execute(new Griff.Editing.RemoveComponentEdit(sentry.GetComponent<GridMovement>()!));
+        Assert.Empty(model.PathPoints());
+        Assert.Throws<ArgumentException>(() => model.InsertPathPoint(2, Vector2.Zero));
+    });
+
     [Fact]
     public void Agents_ReachPathPoints() => EditorHost.Run(services =>
     {

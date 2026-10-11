@@ -8,15 +8,18 @@ using Griff.Scenes.Serialization;
 namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
-/// A point on the primary selection's path that the Scene view puts a handle on: one of its <see cref="Mover"/>'s
-/// <see cref="Mover.Points"/> (<see cref="Index"/> 1 is the first after the start), or where its <see cref="Patrol"/>
-/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right). <see cref="World"/> is where it is in the world. A
-/// patrol's side with no turn set walks on until a wall or an edge: it's <see cref="Open"/>, and its handle sits at the end
-/// of a short stub, to drag out.
+/// A point on the primary selection's path that the Scene view puts a handle on: one of its <see cref="Mover"/>'s or
+/// <see cref="GridPatrol"/>'s Points (<see cref="Index"/> 1 is the first after the start), or where its <see cref="Patrol"/>
+/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right). <see cref="World"/> is where it is in the world (a grid
+/// patrol's, the middle of its cell). A patrol's side with no turn set walks on until a wall or an edge: it's
+/// <see cref="Open"/>, and its handle sits at the end of a short stub, to drag out.
 /// </summary>
 public sealed record ScenePathPoint(Component Component, int Index, Vector2 World, bool Open = false)
 {
-    /// <summary>"Mover.1" (its first point), "Patrol.Left" or "Patrol.Right", as <see cref="SceneViewModel.DragPathPoint"/> takes it.</summary>
+    /// <summary>
+    /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left" or "Patrol.Right", as
+    /// <see cref="SceneViewModel.DragPathPoint"/> takes it.
+    /// </summary>
     public string Key => Component is Patrol ? Index < 0 ? "Patrol.Left" : "Patrol.Right" : $"{Component.GetType().Name}.{Index}";
 
     /// <summary>What agents see: "Mover.1 at 4, 0", or "Patrol.Left not set (walks on until a wall or an edge)".</summary>
@@ -47,15 +50,28 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// The middles of the cells a grid patrol's points are on, in the world, starting with where it was placed. It finds
-    /// its way around walls between them.
+    /// its way around walls between them. Empty without a <see cref="GridMovement"/> to step it.
     /// </summary>
-    public static IReadOnlyList<Vector2> RouteOf(GridPatrol patrol)
+    public static IReadOnlyList<Vector2> RouteOf(GridPatrol patrol) =>
+        patrol.Path.Select(p => CellOf(patrol, p.X, p.Y)).OfType<Vector2>().ToList();
+
+    /// <summary>
+    /// The middle of the cell <paramref name="x"/>, <paramref name="y"/> cells from where a grid patrol was placed (x right,
+    /// y up), in the world: where its point "x y" is. Null without a <see cref="GridMovement"/> to step it.
+    /// </summary>
+    public static Vector2? CellOf(GridPatrol patrol, int x, int y)
     {
         if (patrol.Entity?.GetComponent<GridMovement>() is not { } movement)
-            return [];
-        var here = movement.CellAt(Flat(patrol.Entity.Transform.WorldPosition));
-        var home = (X: here.X - (int)MathF.Round(patrol.Away.X), Y: here.Y + (int)MathF.Round(patrol.Away.Y));
-        return patrol.Path.Select(p => movement.CellCenter((home.X + p.X, home.Y - p.Y))).ToList();
+            return null;
+        var home = HomeCell(patrol, movement);
+        return movement.CellCenter((home.X + x, home.Y - y));
+    }
+
+    // The cell a grid patrol was placed on, which its points are counted from: it's Away from it now.
+    private static (int X, int Y) HomeCell(GridPatrol patrol, GridMovement movement)
+    {
+        var here = movement.CellAt(Flat(patrol.Entity!.Transform.WorldPosition));
+        return (here.X - (int)MathF.Round(patrol.Away.X), here.Y + (int)MathF.Round(patrol.Away.Y));
     }
 
     /// <summary>A patrol's route in the world (see <see cref="PatrolRoute"/>).</summary>
@@ -70,8 +86,9 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// The points on the primary selection's path the Scene view puts handles on: its mover's points after the start
-    /// (the start is where the entity is placed: move the entity to move it), and its patrol's Left and Right turns.
+    /// The points on the primary selection's path the Scene view puts handles on: its mover's and grid patrol's points
+    /// after the start (the start is where the entity is placed: move the entity to move it), and its patrol's Left and
+    /// Right turns.
     /// </summary>
     public IReadOnlyList<ScenePathPoint> PathPoints()
     {
@@ -80,6 +97,8 @@ public sealed partial class SceneViewModel
         var points = new List<ScenePathPoint>();
         if (primary.GetComponent<Mover>() is { } mover)
             points.AddRange(PathOf(mover).Select((world, i) => new ScenePathPoint(mover, i, world)).Skip(1));
+        if (primary.GetComponent<GridPatrol>() is { } gridPatrol)
+            points.AddRange(RouteOf(gridPatrol).Select((world, i) => new ScenePathPoint(gridPatrol, i, world)).Skip(1));
         if (primary.GetComponent<Patrol>() is { } patrol)
         {
             var route = RouteOf(patrol);
@@ -91,10 +110,10 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2" or
-    /// "Patrol.Left", to a point in the world, as one undo step. A mover's point lands there, its offset on hundredths
-    /// (<paramref name="snap"/>: half units); a patrol's turn goes level with it on its side, and dragging it back past
-    /// where the patrol was placed clears it, so it walks on until a wall or an edge.
+    /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2", "GridPatrol.1"
+    /// or "Patrol.Left", to a point in the world, as one undo step. A mover's point lands there, its offset on hundredths
+    /// (<paramref name="snap"/>: half units); a grid patrol's lands on the cell there; a patrol's turn goes level with it
+    /// on its side, and dragging it back past where the patrol was placed clears it, so it walks on until a wall or an edge.
     /// </summary>
     public void DragPathPoint(string point, Vector2 to, bool snap = false)
     {
@@ -106,18 +125,20 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Adds a point to the primary selection's mover at a point in the world, as one undo step: it becomes point
-    /// <paramref name="index"/> (1 is right after the start; one past the last adds it at the end), its offset on
-    /// hundredths (<paramref name="snap"/>: half units).
+    /// Adds a point to the primary selection's mover (or with none, its grid patrol) at a point in the world, as one
+    /// undo step: it becomes point <paramref name="index"/> (1 is right after the start; one past the last adds it at the
+    /// end), a mover's offset on hundredths (<paramref name="snap"/>: half units), a grid patrol's on the cell there.
     /// </summary>
     public void InsertPathPoint(int index, Vector2 at, bool snap = false)
     {
-        if (selection.Entity?.GetComponent<Mover>() is not { } mover)
-            throw new ArgumentException("The selection has no Mover to add a point to.");
-        var count = mover.Path.Count - 1;
+        if (((Component?)selection.Entity?.GetComponent<Mover>() ?? selection.Entity?.GetComponent<GridPatrol>()) is not { } path)
+            throw new ArgumentException("The selection has no Mover or Grid Patrol to add a point to.");
+        if (path is GridPatrol && path.Entity!.GetComponent<GridMovement>() is null)
+            throw new ArgumentException("The selection's Grid Patrol has no Grid Movement to step it: add one first.");
+        var count = PointCount(path);
         if (index < 1 || index > count + 1)
             throw new ArgumentOutOfRangeException(nameof(index), $"A point goes from 1 (right after the start) to {count + 1} (after the last).");
-        if (BeginInsertPathPoint(mover, index) is not { } drag)
+        if (BeginInsertPathPoint(path, index) is not { } drag)
             return;
         workspace.Scene!.History.Seal();
         drag.To(at, snap);
@@ -125,8 +146,8 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Takes a point off the primary selection's path, as one undo step: a mover's point (it keeps at least one, to go
-    /// to), or a patrol's turn (it then walks on until a wall or an edge on that side).
+    /// Takes a point off the primary selection's path, as one undo step: a mover's or grid patrol's point (it keeps at
+    /// least one, to go to), or a patrol's turn (it then walks on until a wall or an edge on that side).
     /// </summary>
     public void RemovePathPoint(string point)
     {
@@ -135,9 +156,10 @@ public sealed partial class SceneViewModel
             return;
         var (property, value) = found.Component switch
         {
-            Mover mover when mover.Path.Count <= 2 =>
-                throw new InvalidOperationException("A mover needs somewhere to go: that's its only point. Drag it instead."),
-            Mover mover => (Property(mover, nameof(Mover.Points)), (object?)FormatPoints(mover.Path.Skip(1).Where((_, i) => i != found.Index - 1))),
+            Mover or GridPatrol when PointCount(found.Component) <= 1 =>
+                throw new InvalidOperationException("It needs somewhere to go: that's its only point. Drag it instead."),
+            Mover or GridPatrol => (Property(found.Component, nameof(Mover.Points)),
+                (object?)FormatPoints(PointsOf(found.Component).Where((_, i) => i != found.Index - 1))),
             _ => (Property(found.Component, found.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), 0f),
         };
         document.History.Seal();
@@ -155,22 +177,24 @@ public sealed partial class SceneViewModel
             return null;
         return point.Component switch
         {
-            Mover mover => new PathPointDrag(document, mover, Property(mover, nameof(Mover.Points)), point.Index, insert: false),
+            Mover or GridPatrol => new PathPointDrag(document, point.Component, Property(point.Component, nameof(Mover.Points)), point.Index, insert: false),
             Patrol patrol => new PathPointDrag(document, patrol, Property(patrol, point.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), point.Index, insert: false),
             _ => null,
         };
     }
 
     /// <summary>
-    /// Starts dragging a new point into the primary selection's mover, for a drag of the handle between two of its points
-    /// (or past its last): the first <see cref="PathPointDrag.To"/> adds it as point <paramref name="index"/>, and the
-    /// whole drag is one undo step. Null when it isn't the primary selection's.
+    /// Starts dragging a new point into the primary selection's <see cref="Mover"/> or <see cref="GridPatrol"/>, for a drag
+    /// of the handle between two of its points (or past its last): the first <see cref="PathPointDrag.To"/> adds it as
+    /// point <paramref name="index"/>, and the whole drag is one undo step. Null when it isn't the primary selection's, or
+    /// a grid patrol has no <see cref="GridMovement"/> to step it.
     /// </summary>
-    public PathPointDrag? BeginInsertPathPoint(Mover mover, int index)
+    public PathPointDrag? BeginInsertPathPoint(Component path, int index)
     {
-        if (workspace.Scene is not { } document || selection.Entity is not { } primary || mover.Entity != primary)
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || path.Entity != primary ||
+            path is not (Mover or GridPatrol) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
             return null;
-        return new PathPointDrag(document, mover, Property(mover, nameof(Mover.Points)), Math.Clamp(index, 1, mover.Path.Count), insert: true);
+        return new PathPointDrag(document, path, Property(path, nameof(Mover.Points)), Math.Clamp(index, 1, PointCount(path) + 1), insert: true);
     }
 
     private ScenePathPoint FindPathPoint(string point)
@@ -178,21 +202,31 @@ public sealed partial class SceneViewModel
         var points = PathPoints();
         return points.FirstOrDefault(p => string.Equals(p.Key, point.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException(points.Count == 0
-                ? $"The selection has no path point \"{point}\": select an entity with a Mover or a Patrol."
+                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol or a Patrol."
                 : $"The selection has no path point \"{point}\"; it has {string.Join(", ", points.Select(p => p.Key))}.");
     }
 
     private PropertyDescriptor Property(Component component, string name) =>
         workspace.Components.Get(component.GetType()).Properties.Single(p => p.Name == name);
 
-    // "4 0; 4 3", as Mover.Points reads it.
+    // A mover's or grid patrol's points after the start, as offsets from it.
+    private static List<Vector2> PointsOf(Component path) => path switch
+    {
+        Mover mover => mover.Path.Skip(1).ToList(),
+        GridPatrol patrol => patrol.Path.Skip(1).Select(p => new Vector2(p.X, p.Y)).ToList(),
+        _ => [],
+    };
+
+    private static int PointCount(Component path) => PointsOf(path).Count;
+
+    // "4 0; 4 3", as Mover.Points and GridPatrol.Points read it.
     private static string FormatPoints(IEnumerable<Vector2> points) =>
         string.Join("; ", points.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.X:0.##} {p.Y:0.##}")));
 
     /// <summary>One drag of a path point's handle, from <see cref="BeginPathPoint"/> or <see cref="BeginInsertPathPoint"/>.</summary>
     public sealed class PathPointDrag
     {
-        /// <summary>The step Ctrl snaps points and turns to: half a unit.</summary>
+        /// <summary>The step Ctrl snaps points and turns to: half a unit. A grid patrol's points are always on cells.</summary>
         public const float SnapStep = 0.5f;
 
         private const float RoundStep = 0.01f;
@@ -203,6 +237,8 @@ public sealed partial class SceneViewModel
         private readonly Matrix4x4 _toParent;
         private readonly Vector2 _start;
         private readonly List<Vector2> _points;
+        private readonly GridMovement? _grid;
+        private readonly (int X, int Y) _home;
 
         internal PathPointDrag(SceneDocument document, Component component, PropertyDescriptor property, int index, bool insert)
         {
@@ -213,25 +249,31 @@ public sealed partial class SceneViewModel
             Index = index;
             var entity = component.Entity!;
             _toParent = entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse) ? inverse : Matrix4x4.Identity;
-            // Where the path is measured from, in the parent's space: a mover's start, a patrol's home.
+            // Where the path is measured from, in the parent's space: a mover's start, a patrol's home. A grid patrol's
+            // points are counted in cells from the one it was placed on.
             (_start, _points) = component switch
             {
-                Mover mover => (Flat(entity.Transform.Position) - mover.OffsetAt(mover.Time), mover.Path.Skip(1).ToList()),
+                Mover mover => (Flat(entity.Transform.Position) - mover.OffsetAt(mover.Time), PointsOf(mover)),
                 Patrol patrol => (new Vector2(entity.Transform.Position.X - patrol.Walked, entity.Transform.Position.Y), []),
-                _ => (Vector2.Zero, []),
+                _ => (Vector2.Zero, PointsOf(component)),
             };
+            if (component is GridPatrol gridPatrol && entity.GetComponent<GridMovement>() is { } movement)
+                (_grid, _home) = (movement, HomeCell(gridPatrol, movement));
             document.History.Seal();
         }
 
-        /// <summary>The mover or patrol whose path it is.</summary>
+        /// <summary>The mover, grid patrol or patrol whose path it is.</summary>
         public Component Component { get; }
 
-        /// <summary>The point being dragged: a mover's point from 1, or -1 and 1 for a patrol's Left and Right.</summary>
+        /// <summary>
+        /// The point being dragged: a mover's or grid patrol's point from 1, or -1 and 1 for a patrol's Left and Right.
+        /// </summary>
         public int Index { get; }
 
         /// <summary>
         /// Puts the point at <paramref name="world"/>, on hundredths, or with <paramref name="snap"/> on half units, from
-        /// the start (a patrol's turn only goes along its side, and clears when dragged back past home).
+        /// the start (a patrol's turn only goes along its side, and clears when dragged back past home; a grid patrol's
+        /// point goes on the cell there).
         /// </summary>
         public void To(Vector2 world, bool snap)
         {
@@ -245,7 +287,9 @@ public sealed partial class SceneViewModel
             else
             {
                 var points = _points.ToList();
-                var point = new Vector2(Fit(offset.X), Fit(offset.Y));
+                var point = _grid?.CellAt(world) is (int x, int y)
+                    ? new Vector2(x - _home.X, _home.Y - y)
+                    : new Vector2(Fit(offset.X), Fit(offset.Y));
                 if (_insert)
                     points.Insert(Index - 1, point);
                 else

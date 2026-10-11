@@ -449,7 +449,7 @@ public sealed class GridChase : Component
 /// block that slides back and forth. <see cref="Points"/> are steps from where it's placed, e.g. "4 0" (four cells right
 /// and back) or "4 0; 4 -3; 0 -3" (round a square). It finds its way around walls between them, waits for whatever
 /// stands in its way, and pauses <see cref="Wait"/> seconds at each. With a <see cref="GridChase"/> too, it walks its
-/// route until it spots the target. The Scene view draws its route.
+/// route until it spots the target. The Scene view draws its route, with knobs to drag its points from cell to cell.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(GridMovement))]

@@ -90,7 +90,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
         bool Inside(Vector2 p) => p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
 
         return document.Scene.Entities
-            .Where(e => SceneRenderer.IsActive(e) && !e.IsLockedInHierarchy)
+            .Where(e => IsShown(e) && !e.IsLockedInHierarchy)
             .Where(e => Outline(e) is { } corners ? corners.All(Inside) : Inside(Flat(e.Transform.WorldPosition)))
             .ToList();
     }
@@ -113,7 +113,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// <summary>
     /// The topmost entity a click at <paramref name="world"/> picks, or null for empty space. Sprites, bars and sliders
     /// are hit by their area, tilemaps where they have a tile, and anything by its position within
-    /// <paramref name="pivotRadius"/> world units. Locked entities are passed over, so the click reaches what's behind.
+    /// <paramref name="pivotRadius"/> world units. Locked and hidden entities are passed over, so the click reaches what's
+    /// behind.
     /// </summary>
     public Entity? EntityAt(Vector2 world, float pivotRadius)
     {
@@ -146,7 +147,14 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
     /// <summary>Everything drawn, back to front: drawables in render order, then cameras and bare entities on top.</summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene) =>
-        SceneRenderer.DrawOrder(scene).Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && SceneRenderer.IsActive(e)));
+        SceneRenderer.DrawOrder(scene).Where(e => !e.IsHiddenInHierarchy)
+            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && IsShown(e)));
+
+    /// <summary>
+    /// Whether the Scene view shows an entity: it's active (it and its parents enabled) and not hidden in the editor
+    /// (see <see cref="Entity.IsHiddenInHierarchy"/>). The game shows hidden ones as usual.
+    /// </summary>
+    public static bool IsShown(Entity entity) => SceneRenderer.IsActive(entity) && !entity.IsHiddenInHierarchy;
 
     /// <summary>Moves everything selected by <paramref name="offset"/> world units, as one undo step.</summary>
     public void MoveSelection(Vector2 offset)

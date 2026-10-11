@@ -1318,6 +1318,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "eye" => (FrameworkElement?)ui.HierarchyEye(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "prefab" => (FrameworkElement?)ui.HierarchyPrefabMark(name) ?? throw new InvalidOperationException($"No prefab copy {name} in the Hierarchy."),
             "prefabnote" => ui.Inspector.FindName("PrefabNote") as FrameworkElement ?? throw new InvalidOperationException("No prefab note in the Inspector."),
             "override" when name.Split('.', 2) is [var component, var field] =>
@@ -1339,7 +1340,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

@@ -359,6 +359,27 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Hidden_IsCreatedShownAndUpdated()
+    {
+        Run("entity_create", """{"entity": {"name": "Pause Menu", "hidden": true, "components": {"Sprite": {}}}}""");
+        Run("entity_create", """{"entity": {"name": "Dialogue"}}""");
+        var menu = Named("Pause Menu");
+
+        Assert.True(menu.IsHidden);
+        Assert.Contains("Pause Menu", Run("scene_tree", "{}").Text.Split('\n').Single(l => l.Contains("hidden")));
+        Assert.Contains("\"hidden\": true", Run("entity_get", """{"entity": "Pause Menu"}""").Text);
+
+        var result = Run("entity_update", """{"updates": [{"entity": "Pause Menu", "changes": {"hidden": false}}, {"entity": "Dialogue", "changes": {"hidden": true}}]}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.False(menu.IsHidden);
+        Assert.True(Named("Dialogue").IsHidden);
+
+        _host.History.Undo();
+        Assert.True(menu.IsHidden);
+        Assert.False(Named("Dialogue").IsHidden);
+    }
+
+    [Fact]
     public void PrefabCopies_ShowWhichPrefabTheyreCopiesOf()
     {
         Run("entity_create", """{"entity": {"prefab": "Coin", "name": "Gold"}}""");

@@ -502,7 +502,7 @@ public sealed class SceneViewControl : FrameworkElement
     // The Scene view isn't lit, so each light shows as a soft glow of its color out to its radius.
     private void DrawLights(DrawingContext dc)
     {
-        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
         {
             foreach (var light in entity.GetComponents<Light>().Where(l => l.Radius > 0))
             {
@@ -519,7 +519,7 @@ public sealed class SceneViewControl : FrameworkElement
     private void DrawRooms(DrawingContext dc)
     {
         var pen = new Pen(Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([10, 5], 0) };
-        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
         {
             foreach (var room in entity.GetComponents<Room>())
             {
@@ -537,7 +537,7 @@ public sealed class SceneViewControl : FrameworkElement
         var solid = new Pen(Brush("Brush.Status.Success"), 1.5);
         var trigger = new Pen(Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
         var clickable = new Pen(Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
-        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
         {
             // Buttons and sliders: where they can be clicked and dragged.
             foreach (var button in entity.GetComponents<Griff.Scenes.Button>())
@@ -621,7 +621,7 @@ public sealed class SceneViewControl : FrameworkElement
         var guide = Brush("Brush.Status.Warning");
         var dashed = new Pen(guide, 1.5) { DashStyle = new DashStyle([4, 3], 0) };
         var dotted = new Pen(guide, 1.5) { DashStyle = new DashStyle([1, 3], 0) };
-        foreach (var entity in _document!.Scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
         {
             foreach (var mover in entity.GetComponents<Mover>())
             {
@@ -1996,6 +1996,16 @@ public sealed class SceneViewControl : FrameworkElement
                 Key.G => TileTool.Fill,
                 _ => TileTool.Brush,
             };
+            e.Handled = true;
+            return;
+        }
+
+        // H hides the selection here (or shows it again), as Entity > Hide does.
+        if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None)
+        {
+            var hide = _services.GetRequiredService<CommandRegistry>().Get("Entity.Hide");
+            if (hide.CanExecute())
+                _ = hide.ExecuteAsync();
             e.Handled = true;
             return;
         }

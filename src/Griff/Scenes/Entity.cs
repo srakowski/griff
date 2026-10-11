@@ -36,18 +36,26 @@ public sealed class Entity
     public bool IsLocked { get; set; }
 
     /// <summary>True if this entity or one of its parents is <see cref="IsLocked"/>.</summary>
-    public bool IsLockedInHierarchy
-    {
-        get
-        {
-            for (var current = this; current is not null; current = current.Parent)
-            {
-                if (current.IsLocked)
-                    return true;
-            }
+    public bool IsLockedInHierarchy => SelfOrParent(e => e.IsLocked);
 
-            return false;
+    /// <summary>
+    /// Hidden in the editor: the Scene view doesn't draw it (or anything inside it), so clicks and box selections don't
+    /// find it, though the Hierarchy still selects it. The game ignores it and shows it as usual.
+    /// </summary>
+    public bool IsHidden { get; set; }
+
+    /// <summary>True if this entity or one of its parents is <see cref="IsHidden"/>.</summary>
+    public bool IsHiddenInHierarchy => SelfOrParent(e => e.IsHidden);
+
+    private bool SelfOrParent(Func<Entity, bool> test)
+    {
+        for (var current = this; current is not null; current = current.Parent)
+        {
+            if (test(current))
+                return true;
         }
+
+        return false;
     }
 
     /// <summary>

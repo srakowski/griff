@@ -11,7 +11,7 @@ namespace Griff.Editor.Features.Hierarchy;
 public partial class HierarchyView : UserControl
 {
     private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"];
-    private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock"];
+    private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock", "Entity.Hide"];
     private static readonly string[] ClipboardCommands = ["Entity.Cut", "Entity.Copy", "Entity.Paste"];
     private static readonly string[] PrefabCommands = ["Entity.SaveAsPrefab", "Entity.UnlinkPrefab"];
 
@@ -51,7 +51,7 @@ public partial class HierarchyView : UserControl
             }
         }
 
-        // On/off commands (Lock) show their tick as the menu opens.
+        // On/off commands (Lock, Hide) show their tick as the menu opens.
         menu.Opened += (_, _) =>
         {
             foreach (var item in menu.Items.OfType<MenuItem>())
@@ -107,6 +107,18 @@ public partial class HierarchyView : UserControl
             item.Focus();
         else
             Tree.Focus();
+        e.Handled = true;
+    }
+
+    // H hides the selection in the Scene view (or shows it again), as Entity > Hide does; not while renaming a row.
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.H || Keyboard.Modifiers != ModifierKeys.None || e.OriginalSource is TextBox)
+            return;
+
+        var hide = _commands.Get("Entity.Hide");
+        if (hide.CanExecute())
+            _ = hide.ExecuteAsync();
         e.Handled = true;
     }
 

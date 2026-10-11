@@ -33,6 +33,24 @@ public class EditHistoryTests
     }
 
     [Fact]
+    public void SetHidden_HidesSeveral_AndUndoesEachToItsOwnState()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B") { IsHidden = true });
+
+        _history.Execute(new SetEntitiesHiddenEdit([a, b], hidden: true));
+        Assert.True(a.IsHidden && b.IsHidden);
+        Assert.Equal("Hide 2 entities", _history.UndoDescription);
+
+        _history.Undo();
+        Assert.False(a.IsHidden);
+        Assert.True(b.IsHidden);
+
+        _history.Execute(new SetEntitiesHiddenEdit([b], hidden: false));
+        Assert.Equal("Show B", _history.UndoDescription);
+        Assert.False(b.IsHidden);
+    }
+
+    [Fact]
     public void UndoRedo_RestoresStateExactly()
     {
         var entity = new Entity("Player");

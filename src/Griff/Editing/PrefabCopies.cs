@@ -189,7 +189,7 @@ public static class PrefabCopies
 
 /// <summary>
 /// Brings a placed copy of a prefab up to date with a fresh entity made from it (and merged with the copy's overrides):
-/// the copy takes the fresh entity's components, scale and children, and keeps its own name, place (position and rotation), parent, enabled and locked state, id and
+/// the copy takes the fresh entity's components, scale and children, and keeps its own name, place (position and rotation), parent, enabled, locked and hidden state, id and
 /// link, so the selection and the fields that name it still find it.
 /// </summary>
 public sealed class UpdatePrefabCopyEdit : IEdit

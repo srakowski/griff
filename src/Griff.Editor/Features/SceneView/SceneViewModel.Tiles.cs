@@ -100,14 +100,18 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Paints another layer of the tilemap being painted, by its place in <see cref="PaintLayers"/> (0 is the base map):
-    /// selects its entity, so painting goes there and the Inspector shows its settings.
+    /// selects its entity, so painting goes there and the Inspector shows its settings. A layer hidden in the Scene view
+    /// is shown again (one undo step), since it can't be painted unseen.
     /// </summary>
     public void ShowLayer(int index)
     {
         var layers = (PaintTarget ?? throw NothingToPaint()).Layers();
         if (index < 0 || index >= layers.Count)
             throw new ArgumentOutOfRangeException(nameof(index), $"The tilemap has {layers.Count} layer{(layers.Count == 1 ? "" : "s")}, numbered from 0.");
-        selection.Select(layers[index].Entity);
+        var entity = layers[index].Entity!;
+        if (entity.IsHidden)
+            workspace.Scene!.Execute(new SetEntitiesHiddenEdit([entity], false));
+        selection.Select(entity);
     }
 
     /// <summary>
@@ -192,11 +196,11 @@ public sealed partial class SceneViewModel
         tilemap.Tilesets().ToList().FindIndex(t => string.Equals(t.Image, image, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// The tilemap the Scene view paints: the selected entity's, when it's the only one selected, in the shown scene and
-    /// enabled. Null otherwise (then the Scene view selects and moves as usual).
+    /// The tilemap the Scene view paints: the selected entity's, when it's the only one selected, in the shown scene,
+    /// enabled and not hidden. Null otherwise (then the Scene view selects and moves as usual).
     /// </summary>
     public Tilemap? PaintTarget =>
-        selection.Entities is [var entity] && entity.Scene == workspace.Scene?.Scene && SceneRenderer.IsActive(entity)
+        selection.Entities is [var entity] && entity.Scene == workspace.Scene?.Scene && IsShown(entity)
             ? entity.GetComponent<Tilemap>()
             : null;
 

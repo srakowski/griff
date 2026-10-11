@@ -365,6 +365,28 @@ public sealed class SetEntitiesLockedEdit(IReadOnlyList<Entity> entities, bool l
     }
 }
 
+/// <summary>Hides or shows entities in the Scene view (see <see cref="Entity.IsHidden"/>), as one undo step.</summary>
+public sealed class SetEntitiesHiddenEdit(IReadOnlyList<Entity> entities, bool hidden) : IEdit
+{
+    private readonly bool[] _oldHidden = entities.Select(e => e.IsHidden).ToArray();
+
+    public IReadOnlyList<Entity> Entities { get; } = entities;
+
+    public string Description => (hidden ? "Hide " : "Show ") + (Entities.Count == 1 ? Entities[0].Name : $"{Entities.Count} entities");
+
+    public void Apply()
+    {
+        foreach (var entity in Entities)
+            entity.IsHidden = hidden;
+    }
+
+    public void Revert()
+    {
+        for (var i = 0; i < Entities.Count; i++)
+            Entities[i].IsHidden = _oldHidden[i];
+    }
+}
+
 /// <summary>
 /// Links entities to a prefab as copies of it (see <see cref="Entity.Prefab"/>), or unlinks them with null, as one undo
 /// step.

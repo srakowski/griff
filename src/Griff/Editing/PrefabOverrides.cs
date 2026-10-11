@@ -12,7 +12,7 @@ namespace Griff.Editing;
 /// <remarks>
 /// Copies and prefabs are matched part by part: children by name (the second "Spark" with the second "Spark"), and
 /// components by type (the second Light with the second Light). A copy's own name, place (position and rotation),
-/// enabled and locked state are its own, never overrides.
+/// enabled, locked and hidden state are its own, never overrides.
 /// </remarks>
 public static class PrefabOverrides
 {
@@ -140,6 +140,8 @@ public static class PrefabOverrides
                 fresh.IsEnabled = copy.IsEnabled;
             if (copy.IsLocked != old.IsLocked)
                 fresh.IsLocked = copy.IsLocked;
+            if (copy.IsHidden != old.IsHidden)
+                fresh.IsHidden = copy.IsHidden;
         }
 
         // Components: the fresh ones the copy has keep its changed fields; ones it took away go.

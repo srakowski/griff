@@ -165,6 +165,24 @@ public class SceneSerializerTests
     }
 
     [Fact]
+    public void Hidden_IsSaved_OnlyWhenSet_AndCoversChildren()
+    {
+        var scene = new Scene();
+        var menu = new Entity("Pause Menu") { IsHidden = true };
+        var button = new Entity("Resume");
+        scene.Add(menu);
+        scene.Add(button, menu);
+        scene.Add(new Entity("Player"));
+
+        var json = _serializer.SaveToString(scene);
+        var loaded = _serializer.LoadFromString(json);
+
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"hidden\": true"));
+        Assert.Equal([true, false, false], loaded.Entities.Select(e => e.IsHidden));
+        Assert.Equal([true, true, false], loaded.Entities.Select(e => e.IsHiddenInHierarchy));
+    }
+
+    [Fact]
     public void UnknownComponent_IsKeptAndWrittenBackUnchanged()
     {
         var json = """

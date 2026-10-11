@@ -1,0 +1,41 @@
+title: Hide things in the Scene view
+intro: Hide a pause menu, a dialogue box or a tilemap layer while you edit, so it stops covering the level. The game still shows it.
+project: Platformer | Scene Hide
+
+chapter: The pause menu covers the level | Every click lands on it
+look: 0, 0, 5
+say: This level's pause menu is laid out right in the middle of it, over the platforms underneath.
+say: Say we want to pick the platform under its left side.
+sceneclick: -2.5, -1.6
+expectselected: Paused
+explain: entity:Paused | Picked the menu | The click lands on the menu instead. It covers just what we're trying to work on.
+
+chapter: Hide it | The eye by its row in the Hierarchy
+say: Every row in the Hierarchy now has an eye that shows when you hover over it.
+click: eye:Paused
+explain: eye:Paused | Hidden | Click it, and the menu is hidden in the Scene view, along with everything inside it.
+sceneclick: -2.5, -1.6
+expectselected: Platform
+explain: world:-3, -1.25, 1, -1.75 | Picked the platform | Now clicks and box selections go straight to what's underneath.
+say: Hiding is only for editing. It's saved with the scene, so the menu stays out of the way next time, but the game still shows it.
+play
+wait: 1
+tap: Escape
+explain: game | Still in the game | Press Escape while playing, and there's the pause menu as usual.
+tap: Escape
+stop
+
+chapter: H hides the selection | Or Entity, Hide
+select: Platform
+sceneclick: -2.5, -1.6
+key: H
+say: Press H in the Scene view, and whatever is selected hides too.
+sceneclick: -2.5, -1.6
+expectselected: Backdrop
+say: Now a click there falls through to the backdrop behind the platform.
+select: Platform
+menu: Entity > Hide
+say: Entity, Hide, shows it again when everything selected is already hidden. Each change is one undo step.
+select: Paused
+menu: Entity > Hide
+explain: scene | Back again | And the pause menu is back, ready to lay out.

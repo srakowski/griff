@@ -57,8 +57,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         "An entity is a JSON object: {\"name\": \"Coin\", \"position\": [3, 1], \"components\": {\"Sprite\": {\"image\": \"Sprites/coin.png\"}, " +
         "\"Pickup\": {\"message\": \"Score\"}}, \"children\": [ ...more entities ]}. Optional: \"prefab\" (start from a prefab by name: the entity is a copy of it, " +
         "which saving the prefab with Entity_SaveAsPrefab, or writing its file, brings up to date, keeping what the copy changed; entity_get lists those changes as \"overrides\"), " +
-        "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\", \"locked\" (the editor's Scene view clicks through it; " +
-        "the game ignores it). Components are keyed by name (see components_list), or " +
+        "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\", \"locked\" (the editor's Scene view clicks through it), \"hidden\" (the editor's Scene view doesn't draw it; " +
+        "the game ignores both). Components are keyed by name (see components_list), or " +
         "given as a list of {\"type\": \"Light\", ...} for several of one kind. Property keys are as component_describe shows them (camelCase; any case works). " +
         "Whatever a component needs (a Patrol needs a Body and a collider) is added along with it.";
 
@@ -127,13 +127,13 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             Name = "entity_update",
             Title = "Update Entities",
-            Description = "Changes entities, as one undo step: rename (fields that name it, a Switch's Targets or a camera's Follow target, are renamed too), enable, lock (\"locked\": the Scene view clicks through it), move in the hierarchy (\"parent\": a name, or null for " +
+            Description = "Changes entities, as one undo step: rename (fields that name it, a Switch's Targets or a camera's Follow target, are renamed too), enable, lock (\"locked\": the Scene view clicks through it), hide (\"hidden\": the Scene view doesn't draw it), move in the hierarchy (\"parent\": a name, or null for " +
                 "the top level; \"index\": its place among siblings), place (\"position\", \"rotation\", \"scale\"), and set component " +
                 "properties with \"components\": {\"Light\": {\"radius\": 6}} (a component it doesn't have yet is added, with what it needs; " +
                 "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off.",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("The entity to change (name, id or path).")),
-                ("changes", Schema.Map("What to change: name, enabled, locked, parent, index, position, rotation, scale, components, remove.")),
+                ("changes", Schema.Map("What to change: name, enabled, locked, hidden, parent, index, position, rotation, scale, components, remove.")),
                 ("updates", Schema.Array(Schema.Map("{\"entity\": ..., \"changes\": {...}}"), "Several entities to change at once.")),
             ]),
             Invoke = args => Task.FromResult(Update(args)),
@@ -252,7 +252,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     {
         var p = entity.Transform.Position;
         var components = entity.Components.Skip(1).Select(c => c is MissingComponent m ? $"{m.TypeName} (missing)" : c.GetType().Name);
-        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")}{(entity.IsLocked ? " locked" : "")}{(entity.Prefab is { } prefab ? $" copy of {PrefabCopies.NameOf(prefab)}" : "")} [{string.Join(", ", components)}]";
+        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")}{(entity.IsLocked ? " locked" : "")}{(entity.IsHidden ? " hidden" : "")}{(entity.Prefab is { } prefab ? $" copy of {PrefabCopies.NameOf(prefab)}" : "")} [{string.Join(", ", components)}]";
     }
 
     private ToolResult Get(ToolArgs args)
@@ -275,6 +275,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             result["enabled"] = false;
         if (entity.IsLocked)
             result["locked"] = true;
+        if (entity.IsHidden)
+            result["hidden"] = true;
         if (entity.Prefab is { } prefab)
         {
             result["prefab"] = prefab;
@@ -409,6 +411,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             entity.IsEnabled = enabled.ValueKind != JsonValueKind.False;
         if (Prop(spec, "locked") is { } locked)
             entity.IsLocked = locked.ValueKind == JsonValueKind.True;
+        if (Prop(spec, "hidden") is { } hidden)
+            entity.IsHidden = hidden.ValueKind == JsonValueKind.True;
 
         foreach (var (type, occurrence, properties) in ComponentEntries(spec))
         {
@@ -514,6 +518,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             host.Execute(new SetEntityEnabledEdit(entity, enabled.ValueKind != JsonValueKind.False));
         if (Prop(changes, "locked") is { } locked && (locked.ValueKind == JsonValueKind.True) != entity.IsLocked)
             host.Execute(new SetEntitiesLockedEdit([entity], locked.ValueKind == JsonValueKind.True));
+        if (Prop(changes, "hidden") is { } hidden && (hidden.ValueKind == JsonValueKind.True) != entity.IsHidden)
+            host.Execute(new SetEntitiesHiddenEdit([entity], hidden.ValueKind == JsonValueKind.True));
 
         if (changes.TryGetProperty("parent", out var parentElement) || Prop(changes, "index") is not null)
         {

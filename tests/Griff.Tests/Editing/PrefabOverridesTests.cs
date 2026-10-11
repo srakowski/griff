@@ -58,6 +58,7 @@ public sealed class PrefabOverridesTests
         var copy = Place(new Scene(), json, "Gem 7", new Vector3(4, 2, 0));
         copy.Transform.Rotation = new Vector3(0, 0, 30);
         copy.IsLocked = true;
+        copy.IsHidden = true;
 
         Assert.Empty(Overrides(copy, json));
     }

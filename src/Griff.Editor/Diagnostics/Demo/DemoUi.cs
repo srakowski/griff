@@ -303,6 +303,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "LockToggle" && b.DataContext == node)
             : null;
 
+    /// <summary>The eye (hide) button on an entity's row in the Hierarchy.</summary>
+    public ToggleButton? HierarchyEye(string name) =>
+        HierarchyItem(name) is { DataContext: EntityNode node } item
+            ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "HideToggle" && b.DataContext == node)
+            : null;
+
     /// <summary>The package mark on a prefab copy's row in the Hierarchy.</summary>
     public TextBlock? HierarchyPrefabMark(string name) =>
         HierarchyItem(name) is { DataContext: EntityNode node } item

@@ -52,7 +52,8 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<SaveAsPrefabCommand>()
             .AddCommand<UnlinkPrefabCommand>()
             .AddCommand<RevertToPrefabCommand>()
-            .AddCommand<LockEntityCommand>();
+            .AddCommand<LockEntityCommand>()
+            .AddCommand<HideEntityCommand>();
     }
 }
 
@@ -592,6 +593,13 @@ internal static class EntityEdits
         if (entities.Where(e => e.IsLocked != locked).ToList() is { Count: > 0 } changing)
             document.Execute(new SetEntitiesLockedEdit(changing, locked));
     }
+
+    /// <summary>Hides or shows the entities that aren't that way already, as one undo step.</summary>
+    public static void SetHidden(SceneDocument document, IEnumerable<Entity> entities, bool hidden)
+    {
+        if (entities.Where(e => e.IsHidden != hidden).ToList() is { Count: > 0 } changing)
+            document.Execute(new SetEntitiesHiddenEdit(changing, hidden));
+    }
 }
 
 /// <summary>Entities on the clipboard are scene JSON, so they paste across scenes and even projects.</summary>
@@ -741,6 +749,34 @@ public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection
     {
         if (workspace.Scene is { } document && selection.Entities.Count > 0)
             EntityEdits.SetLocked(document, selection.Entities, IsChecked != true);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Hides the selected entities in the Scene view, so a pause menu, a dialogue box or a tilemap layer stops covering
+/// the level while you work on it: they (and what's inside them) aren't drawn, clicked or box selected there. Shows
+/// them again if they're all hidden already. The Hierarchy still selects hidden entities, and the game shows them as
+/// usual. One undo step.
+/// </summary>
+public sealed class HideEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.Hide";
+    public override string Text => "_Hide";
+    public override string? Icon => Icons.Hide;
+
+    // H is handled by the Scene view and the Hierarchy, so typing an H elsewhere doesn't hide anything.
+    public override string? GestureText => "H";
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 8);
+
+    public override bool? IsChecked => selection.Entities.Count > 0 && selection.Entities.All(e => e.IsHidden);
+
+    protected override bool CanExecuteCore() => selection.Entity is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is { } document && selection.Entities.Count > 0)
+            EntityEdits.SetHidden(document, selection.Entities, IsChecked != true);
         return Task.CompletedTask;
     }
 }

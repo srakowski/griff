@@ -87,7 +87,7 @@ public sealed class PrefabCopiesTests : IDisposable
         var old = CoinPrefab(1);
         var gold = Place(scene, old, "Gold", new Vector3(3, 1, 0));
         gold.Transform.Rotation = new Vector3(0, 0, 45);
-        gold.IsLocked = true;
+        (gold.IsLocked, gold.IsHidden) = (true, true);
         var silver = Place(scene, old, "Silver", new Vector3(-2, 0, 0));
         var source = Place(scene, old, "Source", Vector3.Zero);
         var (goldId, oldSparkle) = (gold.Id, gold.Children[0]);
@@ -106,7 +106,7 @@ public sealed class PrefabCopiesTests : IDisposable
             Assert.Equal(CoinPath, copy.Prefab);
         }
 
-        Assert.Equal(("Gold", goldId, new Vector3(3, 1, 0), 45f, true), (gold.Name, gold.Id, gold.Transform.Position, gold.Transform.Rotation.Z, gold.IsLocked));
+        Assert.Equal(("Gold", goldId, new Vector3(3, 1, 0), 45f, true, true), (gold.Name, gold.Id, gold.Transform.Position, gold.Transform.Rotation.Z, gold.IsLocked, gold.IsHidden));
         Assert.Same(gold, scene.Find(goldId));
         Assert.Null(scene.Find(oldSparkle.Id));
         Assert.Equal(1, source.GetComponent<Pickup>()!.Amount); // The entity the prefab was saved from is left alone.

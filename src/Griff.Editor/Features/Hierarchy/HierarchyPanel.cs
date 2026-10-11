@@ -57,6 +57,23 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
     /// <summary>Whether a parent's lock covers the entity (so the Scene view passes over it too).</summary>
     public bool IsLockedByParent => !Entity.IsLocked && Entity.IsLockedInHierarchy;
 
+    /// <summary>
+    /// Whether the entity is hidden in the Scene view. Setting it hides or shows this row, or every selected row if this
+    /// one is selected, as one undo step.
+    /// </summary>
+    public bool IsHidden
+    {
+        get => Entity.IsHidden;
+        set
+        {
+            if (value != Entity.IsHidden)
+                owner.SetHidden(this, value);
+        }
+    }
+
+    /// <summary>Whether a parent's hiding covers the entity (so the Scene view doesn't draw it either).</summary>
+    public bool IsHiddenByParent => !Entity.IsHidden && Entity.IsHiddenInHierarchy;
+
     public ObservableCollection<EntityNode> Children { get; } = [];
 
     public bool IsExpanded
@@ -181,6 +198,13 @@ public sealed class HierarchyPanel : ToolPanel
     {
         if (_document is not null)
             EntityEdits.SetLocked(_document, node.IsSelected ? _selection.Entities : [node.Entity], locked);
+    }
+
+    /// <summary>Hides or shows a row's entity in the Scene view; a selected row takes the rest of the selection with it.</summary>
+    public void SetHidden(EntityNode node, bool hidden)
+    {
+        if (_document is not null)
+            EntityEdits.SetHidden(_document, node.IsSelected ? _selection.Entities : [node.Entity], hidden);
     }
 
     public void CommitRename(EntityNode node)

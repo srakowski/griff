@@ -245,6 +245,8 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             writer.WriteBoolean("enabled", false);
         if (entity.IsLocked)
             writer.WriteBoolean("locked", true);
+        if (entity.IsHidden)
+            writer.WriteBoolean("hidden", true);
         if (link && entity.Prefab is { } prefab)
             writer.WriteString("prefab", prefab);
 
@@ -304,6 +306,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         {
             IsEnabled = !element.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean(),
             IsLocked = element.TryGetProperty("locked", out var locked) && locked.GetBoolean(),
+            IsHidden = element.TryGetProperty("hidden", out var hidden) && hidden.GetBoolean(),
             Prefab = element.TryGetProperty("prefab", out var prefab) && prefab.ValueKind == JsonValueKind.String ? prefab.GetString() : null,
         };
 

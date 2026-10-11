@@ -143,6 +143,9 @@ public sealed partial class Game
 
     private static void FaceTowards(Entity entity, Entity target)
     {
+        // A grid mover turns to face it up or down too, so the hitbox swings its way.
+        if (entity.GetComponent<GridMovement>() is { } grid)
+            grid.Facing = WayTowards(Flat(target.Transform.WorldPosition) - Flat(entity.Transform.WorldPosition), grid.Diagonal);
         var dx = target.Transform.WorldPosition.X - entity.Transform.WorldPosition.X;
         if (MathF.Abs(dx) > 1e-3f)
             Face(entity, MathF.Sign(dx));

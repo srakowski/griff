@@ -614,7 +614,7 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
-    // Where movers go and where patrols turn, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
+    // Where movers and grid patrols go and where patrols turn, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
     // which way a shooter fires, and how far a player jumps. Where a door leads and what a switch turns on are links.
     private void DrawLevelGuides(DrawingContext dc)
     {
@@ -629,6 +629,18 @@ public sealed class SceneViewControl : FrameworkElement
                 for (var i = 1; i < points.Count; i++)
                     dc.DrawLine(dashed, points[i - 1], points[i]);
                 if (mover.Mode == MoverMode.Loop && points.Count > 2)
+                    dc.DrawLine(dashed, points[^1], points[0]);
+                foreach (var point in points)
+                    dc.DrawEllipse(guide, null, point, 3, 3);
+            }
+
+            // A grid patrol's points, in cell middles, the way a mover's are.
+            foreach (var patrol in entity.GetComponents<GridPatrol>())
+            {
+                var points = SceneViewModel.RouteOf(patrol).Select(ToScreen).ToList();
+                for (var i = 1; i < points.Count; i++)
+                    dc.DrawLine(dashed, points[i - 1], points[i]);
+                if (patrol.Mode == MoverMode.Loop && points.Count > 2)
                     dc.DrawLine(dashed, points[^1], points[0]);
                 foreach (var point in points)
                     dc.DrawEllipse(guide, null, point, 3, 3);

@@ -37,6 +37,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreatePlatformerPlayerCommand>()
             .AddCommand<CreateTopDownPlayerCommand>()
             .AddCommand<CreateGridPlayerCommand>()
+            .AddCommand<CreateGridEnemyCommand>()
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
@@ -67,6 +68,9 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     {
     }
 
+    /// <summary>Entities to put inside the new one, e.g. an enemy's hitbox. Added in the same undo step.</summary>
+    protected virtual IEnumerable<Entity> CreateChildren() => [];
+
     /// <summary>
     /// A draw order for a menu control: at least <paramref name="order"/>, and above anything drawn by the entity it's
     /// created inside (a button made on a panel draws over the panel's backdrop).
@@ -91,7 +95,14 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
 
         var entity = new Entity(EntityName);
         Configure(entity);
-        document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(selection.Entity)));
+        var children = CreateChildren().ToList();
+        using (children.Count > 0 ? document.History.BeginGroup($"Add {entity.Name}") : null)
+        {
+            document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(selection.Entity)));
+            foreach (var child in children)
+                document.Execute(new AddEntityEdit(document.Scene, child, entity));
+        }
+
         selection.Select(entity);
         return Task.CompletedTask;
     }
@@ -399,6 +410,49 @@ public sealed class CreateGridPlayerCommand(IWorkspace workspace, ISelection sel
         CreatePlatformerPlayerCommand.AddPlayerShape(entity, new System.Numerics.Vector2(0.8f, 0.8f));
         entity.AddComponent<Body>().GravityScale = 0;
         entity.AddComponent<GridMovement>();
+    }
+}
+
+/// <summary>
+/// Creates an enemy that steps tile by tile after the player with no code, around walls: a box sprite with a collider on
+/// the Enemy layer, a <see cref="Body"/> without gravity, a <see cref="GridMovement"/> a little slower than the player's,
+/// a <see cref="GridChase"/>, and an <see cref="Attack"/> whose "Hitbox" child hurts the Player layer once it's next to
+/// the player. Add a <see cref="GridPatrol"/> to have it walk a route until it spots the player.
+/// </summary>
+public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateGridEnemy";
+    public override string Text => "Create Grid _Enemy";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    protected override string EntityName => "Enemy";
+
+    protected override void Configure(Entity entity)
+    {
+        var size = new System.Numerics.Vector2(0.8f, 0.8f);
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = size;
+        sprite.Tint = Griff.Color.FromBytes(0x57, 0xAB, 0x5A);
+        var collider = entity.AddComponent<BoxCollider>();
+        collider.Size = size;
+        collider.Layer = "Enemy";
+        entity.AddComponent<Body>().GravityScale = 0;
+        entity.AddComponent<GridMovement>().StepTime = 0.3f;
+        entity.AddComponent<GridChase>();
+
+        // It swings at the player next to it (not diagonally), with a wind-up to see it coming.
+        var attack = entity.AddComponent<Attack>();
+        (attack.Action, attack.Target, attack.Range, attack.Windup, attack.Cooldown) = ("", "Player", 1.1f, 0.3f, 0.6f);
+    }
+
+    protected override IEnumerable<Entity> CreateChildren()
+    {
+        var hitbox = new Entity("Hitbox");
+        hitbox.Transform.Position = new System.Numerics.Vector3(0.9f, 0, 0);
+        var box = hitbox.AddComponent<BoxCollider>();
+        (box.Size, box.IsTrigger, box.Layer) = (new System.Numerics.Vector2(0.8f, 0.6f), true, "Attack");
+        hitbox.AddComponent<DamageOnTouch>().Layers = "Player";
+        yield return hitbox;
     }
 }
 

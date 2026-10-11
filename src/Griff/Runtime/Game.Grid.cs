@@ -4,29 +4,16 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Players that step tile by tile on a tilemap's grid, blocked by walls.
+// Things that step tile by tile on a tilemap's grid, blocked by walls: players, and enemies and other movers that chase
+// a target or walk a route on their own.
 public sealed partial class Game
 {
     // How far the stick has to lean before it counts as a way.
     private const float GridDeadZone = 0.4f;
 
-    // The cells a grid mover steps between: a tilemap's (its transform and tile size), or with none, world units centered
-    // on whole numbers.
-    private readonly record struct Grid(Tilemap? Map, Matrix4x4 World, Matrix4x4 ToLocal)
-    {
-        public (int X, int Y) CellAt(Vector2 world)
-        {
-            if (Map is null)
-                return ((int)MathF.Round(world.X), -(int)MathF.Round(world.Y));
-            return Map.CellAt(Vector2.Transform(world, ToLocal));
-        }
-
-        public Vector2 Center((int X, int Y) cell) =>
-            Map is null ? new Vector2(cell.X, -cell.Y) : Vector2.Transform(Map.CellCenter(cell.X, cell.Y), World);
-
-        // On no map, a step up is a row up; on a map, row numbers grow downward.
-        public static (int X, int Y) Offset((int X, int Y) way) => (way.X, -way.Y);
-    }
+    // How far past the two ends a search for a way goes with no map to keep it in, in cells; and the most cells it looks at.
+    private const int GridSearchMargin = 12;
+    private const int GridSearchLimit = 250_000;
 
     private void RunGrid(GridMovement m)
     {
@@ -38,7 +25,7 @@ public sealed partial class Game
             body.FloatThisStep = true;
         }
 
-        var grid = GridOf(m);
+        var grid = GridCells.Of(m.FindMap());
         var here = Flat(entity.Transform.WorldPosition);
         if (!m.Started)
         {
@@ -49,7 +36,14 @@ public sealed partial class Game
             MoveTo(entity, grid.Center(m.Cell));
         }
 
-        var way = m.Controllable ? GridWay(m, InputOf(entity).Move) : (X: 0, Y: 0);
+        // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run.
+        var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
+        var chase = Runs(entity) ? entity.GetComponent<GridChase>() : null;
+        var patrol = Runs(entity) ? entity.GetComponent<GridPatrol>() : null;
+        if (chase is not null)
+            WatchForTarget(chase);
+
+        var way = m.Controllable && !driven ? GridWay(m, InputOf(entity).Move) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
         m.HeldFor = way == m.Held ? m.HeldFor + Time.Delta : 0;
         m.Held = way;
@@ -81,17 +75,37 @@ public sealed partial class Game
         // Still, it's in the cell it stands in, wherever a script may have put it.
         if (!m.Stepping)
             m.Cell = grid.CellAt(Flat(entity.Transform.WorldPosition));
+        if (patrol is not null)
+        {
+            CountPatrolSteps(patrol, grid);
+            if (chase is not { IsChasing: true })
+                patrol.WaitLeft = Math.Max(0, patrol.WaitLeft - Time.Delta);
+        }
 
+        m.Rest = Math.Max(0, m.Rest - Time.Delta);
         if (!m.Stepping)
         {
-            // A script's step first, then a way pressed during the last step, then the way held.
+            // A script's step first, then a way pressed during the last step, then the way held, then where a chase or a
+            // patrol wants to go.
             var next = m.Queued ?? m.Buffered;
             if (next is null && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
                 next = way;
+            var decided = false;
+            if (next is null && m.Rest <= 0 && (chase is not null || patrol is not null))
+            {
+                next = DrivenStep(m, grid, chase, patrol);
+                decided = next is not null;
+            }
+
             m.Queued = null;
             m.Buffered = null;
             if (next is { } step && step != (0, 0))
+            {
                 TryGridStep(m, grid, step, Math.Min(spare, stepTime) / stepTime);
+                // Blocked (by the player, another enemy, a closed door): try again in a step's time, not every frame.
+                if (decided && !m.Stepping)
+                    m.Rest = stepTime;
+            }
         }
 
         if (m.FlipSprite && MathF.Abs(m.Facing.X) > 0.1f)
@@ -108,16 +122,17 @@ public sealed partial class Game
     }
 
     // Starts a step if the cell that way is free; otherwise turns to face it and bumps, once a press.
-    private void TryGridStep(GridMovement m, Grid grid, (int X, int Y) way, float progress)
+    private void TryGridStep(GridMovement m, GridCells grid, (int X, int Y) way, float progress)
     {
         var entity = m.Entity!;
         var direction = new Vector2(way.X, way.Y);
         m.Facing = direction;
-        var offset = Grid.Offset(way);
+        var offset = GridCells.Offset(way);
         var target = (m.Cell.X + offset.X, m.Cell.Y + offset.Y);
-        var free = CanEnter(m, grid, target);
+        var walls = GridWalls.Gather(this, m, grid);
+        var free = walls.IsFree(target);
         if (free && offset.X != 0 && offset.Y != 0)
-            free = CanEnter(m, grid, (m.Cell.X + offset.X, m.Cell.Y)) && CanEnter(m, grid, (m.Cell.X, m.Cell.Y + offset.Y));
+            free = walls.IsFree((m.Cell.X + offset.X, m.Cell.Y)) && walls.IsFree((m.Cell.X, m.Cell.Y + offset.Y));
         if (!free)
         {
             if (m.BumpedWay != way)
@@ -155,80 +170,331 @@ public sealed partial class Game
         return m.PreferVertical ? (0, y) : (x, 0);
     }
 
-    private Grid GridOf(GridMovement m)
+    // ----- Chasers and patrols -----
+
+    // Whether a chaser has its target: noticed within range (and in sight, if it needs to be), kept until it gets away.
+    private void WatchForTarget(GridChase chase)
     {
-        var map = string.IsNullOrWhiteSpace(m.Map)
-            ? Showing<Tilemap>().FirstOrDefault(t => t.LayerOf is null)
-            : Scene.Entities.FirstOrDefault(e => e.Name == m.Map.Trim())?.GetComponent<Tilemap>()?.BaseMap;
-        if (map?.Entity is null)
-            return new Grid(null, Matrix4x4.Identity, Matrix4x4.Identity);
-        var world = map.Entity.Transform.WorldMatrix;
-        return Matrix4x4.Invert(world, out var toLocal) ? new Grid(map, world, toLocal) : new Grid(null, Matrix4x4.Identity, Matrix4x4.Identity);
+        var entity = chase.Entity!;
+        var here = Flat(entity.Transform.WorldPosition);
+
+        // In a network game there's a "Player" for everyone: go after whoever is nearest.
+        if (chase.TargetEntity?.Scene != Scene || (Net.IsOnline && !string.IsNullOrWhiteSpace(chase.Target)))
+            chase.TargetEntity = string.IsNullOrWhiteSpace(chase.Target) ? null : Nearest(chase.Target.Trim(), here);
+        var target = chase.TargetEntity;
+
+        var wasChasing = chase.IsChasing;
+        var chasing = false;
+        if (target is not null && SceneRenderer.IsActive(target) && Health.Of(target) is not { IsDead: true })
+        {
+            var distance = Vector2.Distance(here, Flat(target.Transform.WorldPosition));
+            var reach = wasChasing ? chase.Range + Math.Max(0, chase.GiveUp) : chase.Range;
+            chasing = chase.Range <= 0 || distance <= reach;
+            if (chasing && !wasChasing && chase.NeedsSight && !CanSee(entity, target))
+                chasing = false;
+        }
+
+        chase.IsChasing = chasing;
+        if (chasing && !wasChasing)
+            chase.RaiseSpotted();
+        if (!chasing)
+            chase.WasNear = false;
     }
 
-    // Free if it's on the map (when it has to stay on), no solid tile is there on any tilemap, no solid collider covers its
-    // middle and no other grid mover is in it or heading into it. Layers either side passes through don't count.
-    private bool CanEnter(GridMovement m, Grid grid, (int X, int Y) cell)
+    // The step a chaser or a patrol takes next, if any: after the target while it's chasing, else round the route.
+    private (int X, int Y)? DrivenStep(GridMovement m, GridCells grid, GridChase? chase, GridPatrol? patrol)
     {
-        var entity = m.Entity!;
-        if (m.StayOnMap && grid.Map is { } map)
+        if (chase is { IsChasing: true, TargetEntity: { } target })
+            return ChaseStep(m, grid, chase, target);
+        if (patrol is { Running: true })
+            return PatrolStep(m, grid, patrol);
+        return null;
+    }
+
+    // Toward the target's cell (the one it's heading into, if it steps too), stopping its stop distance away and facing it.
+    private (int X, int Y)? ChaseStep(GridMovement m, GridCells grid, GridChase chase, Entity target)
+    {
+        var theirs = target.GetComponent<GridMovement>() is { Started: true } mover ? mover.Cell : grid.CellAt(Flat(target.Transform.WorldPosition));
+        var steps = m.Diagonal
+            ? Math.Max(Math.Abs(theirs.X - m.Cell.X), Math.Abs(theirs.Y - m.Cell.Y))
+            : Math.Abs(theirs.X - m.Cell.X) + Math.Abs(theirs.Y - m.Cell.Y);
+        var near = steps <= Math.Max(0, chase.StopDistance);
+        if (near && !chase.WasNear)
+            chase.RaiseReached();
+        chase.WasNear = near;
+        if (near)
         {
-            var layers = map.Layers();
-            if (cell.X < 0 || cell.Y < 0 || cell.X >= layers.Max(l => l.Width) || cell.Y >= layers.Max(l => l.Height))
-                return false;
+            if (steps > 0)
+                m.Facing = WayTowards(Flat(target.Transform.WorldPosition) - Flat(m.Entity!.Transform.WorldPosition), m.Diagonal);
+            return null;
         }
 
-        var collider = entity.GetComponent<Collider>();
-        var layer = collider?.Layer;
-        var ignores = CollisionLayers.Parse(collider?.IgnoreLayers);
-        bool PassesThrough(string? otherLayer, string? otherIgnores)
-        {
-            var theirs = CollisionLayers.Parse(otherIgnores);
-            return (ignores.Length > 0 && CollisionLayers.Contains(ignores, otherLayer)) ||
-                   (theirs.Length > 0 && CollisionLayers.Contains(theirs, layer));
-        }
+        return FirstStep(m, grid, theirs, target, closerIfNoWay: true);
+    }
 
-        var point = grid.Center(cell);
-        foreach (var other in Scene.Entities.Where(SceneRenderer.IsActive))
-        {
-            if (other.IsSelfOrDescendantOf(entity))
-                continue;
+    // Toward the point of its route the leg it's on heads for; at it, on to the next leg (after a wait).
+    private (int X, int Y)? PatrolStep(GridMovement m, GridCells grid, GridPatrol patrol)
+    {
+        if (patrol.WaitLeft > 0 || patrol.Path.Count < 2)
+            return null;
+        var home = (X: m.Cell.X - (int)MathF.Round(patrol.Away.X), Y: m.Cell.Y + (int)MathF.Round(patrol.Away.Y));
 
-            // Another grid mover holds the cell it's in, or the one it's heading into.
-            if (other.GetComponent<GridMovement>() is { } mover)
+        // Each leg at most once a frame: a route whose points can't be reached gives up on them rather than spinning.
+        for (var tries = 0; tries < 2 * patrol.Path.Count && !patrol.IsFinished; tries++)
+        {
+            var point = patrol.PointOf(patrol.Leg);
+            var offset = GridCells.Offset(patrol.Path[point]);
+            var goal = (home.X + offset.X, home.Y + offset.Y);
+            if (goal != m.Cell)
             {
-                if (other.GetComponent<Collider>() is { IsTrigger: false } theirs && !PassesThrough(theirs.Layer, theirs.IgnoreLayers) &&
-                    (mover.Started ? mover.Cell : grid.CellAt(Flat(other.Transform.WorldPosition))) == cell)
-                    return false;
-                continue;
+                if (FirstStep(m, grid, goal, null, closerIfNoWay: false) is { } step)
+                    return step;
+            }
+            else
+            {
+                patrol.RaiseArrived(point);
             }
 
-            foreach (var component in other.Components)
+            // There, or there's no way there: on to the next point.
+            patrol.Leg++;
+            if (goal == m.Cell && patrol.Wait > 0)
             {
-                switch (component)
-                {
-                    case Tilemap { Solid: true } tilemap when !PassesThrough(tilemap.Layer, tilemap.IgnoreLayers):
-                        if (Matrix4x4.Invert(other.Transform.WorldMatrix, out var toLocal))
-                        {
-                            var (x, y) = tilemap.CellAt(Vector2.Transform(point, toLocal));
-                            if (tilemap.IsBlocked(x, y))
-                                return false;
-                        }
+                patrol.WaitLeft = patrol.Wait;
+                return null;
+            }
+        }
 
-                        break;
-                    case BoxCollider { IsTrigger: false, OneWay: false } box when !PassesThrough(box.Layer, box.IgnoreLayers):
-                        if (Physics.BoundsOf(box).Contains(point))
-                            return false;
-                        break;
-                    case CircleCollider { IsTrigger: false } circle when !PassesThrough(circle.Layer, circle.IgnoreLayers):
-                        if (Physics.BoundsOf(circle).Contains(point))
-                            return false;
-                        break;
+        return null;
+    }
+
+    // The first step of the shortest way to a cell around walls, keeping clear of other grid movers if it can, else past
+    // them (it waits behind whatever is in the way). With no way at all, a step that gets closer, if asked for.
+    private (int X, int Y)? FirstStep(GridMovement m, GridCells grid, (int X, int Y) goal, Entity? target, bool closerIfNoWay)
+    {
+        var walls = GridWalls.Gather(this, m, grid, except: target);
+        var next = FindGridStep(m, walls, goal, avoidMovers: true) ?? FindGridStep(m, walls, goal, avoidMovers: false);
+        if (next is { } into)
+            return (into.X - m.Cell.X, m.Cell.Y - into.Y);
+        if (!closerIfNoWay)
+            return null;
+
+        int Distance((int X, int Y) c) => Math.Abs(goal.X - c.X) + Math.Abs(goal.Y - c.Y);
+        (int X, int Y)? best = null;
+        var bestDistance = Distance(m.Cell);
+        foreach (var (dx, dy) in Neighbours(m.Diagonal))
+        {
+            var cell = (m.Cell.X + dx, m.Cell.Y + dy);
+            if (Distance(cell) < bestDistance && CanPass(walls, m.Cell, (dx, dy), avoidMovers: true, goal))
+                (best, bestDistance) = ((dx, -dy), Distance(cell));
+        }
+
+        return best;
+    }
+
+    // A* over cells from where it stands to the goal: the first cell to step into, or null if there's no way there.
+    private static (int X, int Y)? FindGridStep(GridMovement m, GridWalls walls, (int X, int Y) goal, bool avoidMovers)
+    {
+        var start = m.Cell;
+        if (start == goal)
+            return null;
+
+        // The searched area: its map (and the cells round it, if it may step off), or a margin round both ends.
+        int minX, minY, maxX, maxY;
+        if (walls.Size is { } size)
+            (minX, minY, maxX, maxY) = m.StayOnMap ? (0, 0, size.Width - 1, size.Height - 1) : (-1, -1, size.Width, size.Height);
+        else
+            (minX, minY, maxX, maxY) = (Math.Min(start.X, goal.X) - GridSearchMargin, Math.Min(start.Y, goal.Y) - GridSearchMargin,
+                Math.Max(start.X, goal.X) + GridSearchMargin, Math.Max(start.Y, goal.Y) + GridSearchMargin);
+        (minX, minY) = (Math.Min(minX, Math.Min(start.X, goal.X)), Math.Min(minY, Math.Min(start.Y, goal.Y)));
+        (maxX, maxY) = (Math.Max(maxX, Math.Max(start.X, goal.X)), Math.Max(maxY, Math.Max(start.Y, goal.Y)));
+        var width = maxX - minX + 1;
+        var count = (long)width * (maxY - minY + 1);
+        if (count > GridSearchLimit)
+            return null;
+
+        int IndexOf((int X, int Y) c) => (c.Y - minY) * width + (c.X - minX);
+        (int X, int Y) CellOf(int index) => (index % width + minX, index / width + minY);
+        bool Inside((int X, int Y) c) => c.X >= minX && c.Y >= minY && c.X <= maxX && c.Y <= maxY;
+
+        // Every step takes as long, so the fewest steps win; a diagonal costs a hair more, so it walks straight when it can.
+        float Estimate((int X, int Y) c)
+        {
+            var (dx, dy) = (Math.Abs(c.X - goal.X), Math.Abs(c.Y - goal.Y));
+            return m.Diagonal ? Math.Max(dx, dy) : dx + dy;
+        }
+
+        var cost = new float[count];
+        Array.Fill(cost, float.PositiveInfinity);
+        var cameFrom = new int[count];
+        var open = new PriorityQueue<int, float>();
+        var startIndex = IndexOf(start);
+        cost[startIndex] = 0;
+        open.Enqueue(startIndex, Estimate(start));
+        var neighbours = Neighbours(m.Diagonal);
+        while (open.TryDequeue(out var current, out var priority))
+        {
+            var cell = CellOf(current);
+            if (cell == goal)
+            {
+                // Back from the goal to the cell just after the start.
+                while (cameFrom[current] != startIndex)
+                    current = cameFrom[current];
+                return CellOf(current);
+            }
+
+            if (priority > cost[current] + Estimate(cell) + 1e-4f)
+                continue; // A stale entry: this cell was reached more cheaply since.
+
+            foreach (var (dx, dy) in neighbours)
+            {
+                var next = (cell.X + dx, cell.Y + dy);
+                if (!Inside(next) || !CanPass(walls, cell, (dx, dy), avoidMovers, goal))
+                    continue;
+                var index = IndexOf(next);
+                var nextCost = cost[current] + (dx != 0 && dy != 0 ? 1.001f : 1);
+                if (nextCost >= cost[index])
+                    continue;
+                cost[index] = nextCost;
+                cameFrom[index] = current;
+                open.Enqueue(index, nextCost + Estimate(next));
+            }
+        }
+
+        return null;
+    }
+
+    // Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner. The goal
+    // is open whoever stands in it (it's where the target is).
+    private static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
+    {
+        bool Open((int X, int Y) c) => !walls.IsWall(c) && (!avoidMovers || c == goal || walls.MoverIn(c) is null);
+        if (!Open((from.X + by.X, from.Y + by.Y)))
+            return false;
+        return by.X == 0 || by.Y == 0 || (Open((from.X + by.X, from.Y)) && Open((from.X, from.Y + by.Y)));
+    }
+
+    private static readonly (int X, int Y)[] FourWays = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    private static readonly (int X, int Y)[] EightWays = [.. FourWays, (1, 1), (-1, 1), (1, -1), (-1, -1)];
+
+    private static (int X, int Y)[] Neighbours(bool diagonal) => diagonal ? EightWays : FourWays;
+
+    // The way (x right, y up) a grid mover faces to look along an offset: the longer axis, or both if it steps diagonally.
+    private static Vector2 WayTowards(Vector2 offset, bool diagonal)
+    {
+        var (x, y) = (MathF.Abs(offset.X) > 1e-3f ? MathF.Sign(offset.X) : 0, MathF.Abs(offset.Y) > 1e-3f ? MathF.Sign(offset.Y) : 0);
+        if (diagonal || x == 0 || y == 0)
+            return x == 0 && y == 0 ? -Vector2.UnitY : new Vector2(x, y);
+        return MathF.Abs(offset.X) >= MathF.Abs(offset.Y) ? new Vector2(x, 0) : new Vector2(0, y);
+    }
+
+    // At the end of its move, a patrol counts how far it is from where it was placed, however it got there (stepping,
+    // chasing, a script, a respawn), so a snapshot holds where its route is.
+    private static void CountPatrolSteps(GridPatrol patrol, GridCells grid)
+    {
+        var cell = grid.CellAt(Flat(patrol.Entity!.Transform.WorldPosition));
+        if (patrol.LastCell is { } last && last != cell)
+            patrol.Away += new Vector2(cell.X - last.X, last.Y - cell.Y);
+        patrol.LastCell = cell;
+    }
+
+    // ----- What's in the way -----
+
+    // Where a grid mover can't go, gathered once so a search can ask about many cells: off its map (when it has to stay
+    // on), solid tiles on any tilemap, solid colliders over a cell's middle, and the cells other grid movers are in or
+    // heading into. Layers either side passes through don't count.
+    private sealed class GridWalls
+    {
+        private readonly GridCells _grid;
+        private readonly bool _stayOnMap;
+        private readonly List<(Tilemap Map, Matrix4x4 ToLocal)> _maps = [];
+        private readonly List<Box> _boxes = [];
+        private readonly List<Circle> _circles = [];
+        private readonly Dictionary<(int X, int Y), Entity> _movers = [];
+
+        private GridWalls(GridCells grid, bool stayOnMap)
+        {
+            _grid = grid;
+            _stayOnMap = stayOnMap;
+            if (grid.Map is { } map)
+            {
+                var layers = map.Layers();
+                Size = (layers.Max(l => l.Width), layers.Max(l => l.Height));
+            }
+        }
+
+        /// <summary>The width and height of its map in cells (its widest layer), or null with no map.</summary>
+        public (int Width, int Height)? Size { get; }
+
+        public static GridWalls Gather(Game game, GridMovement m, GridCells grid, Entity? except = null)
+        {
+            var entity = m.Entity!;
+            var walls = new GridWalls(grid, m.StayOnMap);
+            var collider = entity.GetComponent<Collider>();
+            var layer = collider?.Layer;
+            var ignores = CollisionLayers.Parse(collider?.IgnoreLayers);
+            bool PassesThrough(string? otherLayer, string? otherIgnores)
+            {
+                var theirs = CollisionLayers.Parse(otherIgnores);
+                return (ignores.Length > 0 && CollisionLayers.Contains(ignores, otherLayer)) ||
+                       (theirs.Length > 0 && CollisionLayers.Contains(theirs, layer));
+            }
+
+            foreach (var other in game.Scene.Entities.Where(SceneRenderer.IsActive))
+            {
+                if (other.IsSelfOrDescendantOf(entity))
+                    continue;
+
+                // Another grid mover holds the cell it's in, or the one it's heading into.
+                if (other.GetComponent<GridMovement>() is { } mover)
+                {
+                    if (other.GetComponent<Collider>() is { IsTrigger: false } theirs && !PassesThrough(theirs.Layer, theirs.IgnoreLayers))
+                        walls._movers.TryAdd(mover.Started ? mover.Cell : grid.CellAt(Flat(other.Transform.WorldPosition)), other);
+                    continue;
+                }
+
+                if (except is not null && other.IsSelfOrDescendantOf(except))
+                    continue;
+                foreach (var component in other.Components)
+                {
+                    switch (component)
+                    {
+                        case Tilemap { Solid: true } tilemap when !PassesThrough(tilemap.Layer, tilemap.IgnoreLayers):
+                            if (Matrix4x4.Invert(other.Transform.WorldMatrix, out var toLocal))
+                                walls._maps.Add((tilemap, toLocal));
+                            break;
+                        case BoxCollider { IsTrigger: false, OneWay: false } box when !PassesThrough(box.Layer, box.IgnoreLayers):
+                            walls._boxes.Add(Physics.BoundsOf(box));
+                            break;
+                        case CircleCollider { IsTrigger: false } circle when !PassesThrough(circle.Layer, circle.IgnoreLayers):
+                            walls._circles.Add(Physics.BoundsOf(circle));
+                            break;
+                    }
                 }
             }
+
+            return walls;
         }
 
-        return true;
+        /// <summary>Off the map it has to stay on, a solid tile, or under a solid collider.</summary>
+        public bool IsWall((int X, int Y) cell)
+        {
+            if (_stayOnMap && Size is var (width, height) && (cell.X < 0 || cell.Y < 0 || cell.X >= width || cell.Y >= height))
+                return true;
+            var point = _grid.Center(cell);
+            foreach (var (map, toLocal) in _maps)
+            {
+                var (x, y) = map.CellAt(Vector2.Transform(point, toLocal));
+                if (map.IsBlocked(x, y))
+                    return true;
+            }
+
+            return _boxes.Any(b => b.Contains(point)) || _circles.Any(c => c.Contains(point));
+        }
+
+        /// <summary>The grid mover in a cell, or heading into it.</summary>
+        public Entity? MoverIn((int X, int Y) cell) => _movers.GetValueOrDefault(cell);
+
+        public bool IsFree((int X, int Y) cell) => !IsWall(cell) && MoverIn(cell) is null;
     }
 
     // Puts it at a world position, whatever its parent.

@@ -45,6 +45,19 @@ public sealed partial class SceneViewModel
         return mover.Path.Select(p => Vector2.Transform(start + p, parent)).ToList();
     }
 
+    /// <summary>
+    /// The middles of the cells a grid patrol's points are on, in the world, starting with where it was placed. It finds
+    /// its way around walls between them.
+    /// </summary>
+    public static IReadOnlyList<Vector2> RouteOf(GridPatrol patrol)
+    {
+        if (patrol.Entity?.GetComponent<GridMovement>() is not { } movement)
+            return [];
+        var here = movement.CellAt(Flat(patrol.Entity.Transform.WorldPosition));
+        var home = (X: here.X - (int)MathF.Round(patrol.Away.X), Y: here.Y + (int)MathF.Round(patrol.Away.Y));
+        return patrol.Path.Select(p => movement.CellCenter((home.X + p.X, home.Y - p.Y))).ToList();
+    }
+
     /// <summary>A patrol's route in the world (see <see cref="PatrolRoute"/>).</summary>
     public static PatrolRoute RouteOf(Patrol patrol)
     {

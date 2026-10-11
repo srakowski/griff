@@ -1,0 +1,69 @@
+title: Grid enemies
+intro: Enemies and other movers that step tile by tile on their own, with no code: chasing the player around walls, or walking a route.
+project: Empty | Grid Guards
+
+chapter: A dungeon to chase in | A tilemap and a grid player
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 111111111111\n1..........1\n1.1111111111\n1..........1\n1..........1\n111111111111
+select: Main Camera
+set: Transform.Position.X = 6
+set: Transform.Position.Y = -3
+look: 6, -3, 4.5
+say: Here's a small dungeon painted on a tilemap, with a long wall across it.
+deselect
+create: Grid Player
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -4.5
+add: Health
+set: Health.Max = 50
+say: And a grid player in the bottom left corner, with plenty of health.
+
+chapter: A chaser | Entity, Create Grid Enemy
+deselect
+create: Grid Enemy
+set: Transform.Position.X = 10.5
+set: Transform.Position.Y = -1.5
+explain: menu:Entity | Entity, Create Grid Enemy | The Entity menu makes an enemy for grid games: Create Grid Enemy.
+explain: component:GridChase | Grid Chase | It steps with a Grid Movement, like the player, and a Grid Chase moves it after its target, the Player, tile by tile.
+explain: field:GridChase.Range | Range | It notices the player within this many units. Zero notices it anywhere, which suits this demo.
+set: GridChase.Range = 0
+explain: field:GridChase.StopDistance | Stop Distance | It stops this many steps away: one is right next to it. Zero bumps into the player instead, like a roguelike's attack.
+explain: component:Attack | Attack | Once it's next to the player, its attack swings at it, with a short wind-up so you see it coming.
+play
+wait: 1
+explain: game | Around the wall | The wall is in its way, so it finds the shortest way round, one cell at a time, a little slower than the player.
+wait: 3
+expectat: Enemy = 1.5, -3.5
+explain: game | Next to the player | Now it stands beside the player and turns to face it, so its sword swings that way.
+stop
+
+chapter: A guard on its rounds | A Grid Patrol, and a chase when you get close
+select: Enemy
+key: Delete
+deselect
+create: Grid Enemy
+rename: Guard
+set: Transform.Position.X = 3.5
+set: Transform.Position.Y = -3.5
+add: GridPatrol
+explain: component:GridPatrol | Grid Patrol | A Grid Patrol walks it round a route of cells.
+set: GridPatrol.Points = 5 0
+set: GridPatrol.Wait = 0.3
+explain: field:GridPatrol.Points | Points | Its points are steps from where it's placed: five cells right, and back again. It finds its way round walls between them.
+explain: world:3,-3,9,-4 | Its route | The Scene view draws the route.
+set: GridChase.Range = 2
+explain: field:GridChase.Range | Both together | With a Grid Chase too, it walks its route until the player comes within two units.
+play
+wait: 2
+say: It walks its rounds.
+hold: Right 0.5
+wait: 1.5
+explain: game | Spotted | Walk close and it leaves its route to come after you.
+hold: Right 2
+wait: 0.5
+expectat: Player = 10.5, -4.5
+wait: 3
+explain: game | Back to its rounds | Get far enough away and it gives up, finds its way back to its route, and carries on.
+stop
+say: That's grid enemies, with no code. Scripts can see when they spot or reach their target, and in network games the host moves them after the nearest player.

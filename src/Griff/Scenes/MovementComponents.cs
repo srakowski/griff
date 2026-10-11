@@ -247,18 +247,21 @@ public sealed class TopDownMovement : Component
 }
 
 /// <summary>
-/// A player that steps tile by tile with no code, for puzzle games, roguelikes and old-school RPGs: each press of WASD,
+/// Steps tile by tile with no code, for puzzle games, roguelikes and old-school RPGs: as a player, each press of WASD,
 /// the arrow keys, the D-pad or the stick moves it one cell of the scene's <see cref="Tilemap"/>, gliding there over
 /// <see cref="StepTime"/>, and holding a way keeps it walking. Solid tiles, solid colliders and other grid movers block
 /// it (it turns to face them instead). It starts on the middle of the cell it's placed in. Plays its
 /// <see cref="Animation"/>'s Idle and Walk (or Run) clips if it has them (and IdleUp, WalkDown and so on, facing that
-/// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity.
+/// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity. With a
+/// <see cref="GridChase"/> or a <see cref="GridPatrol"/> it's an enemy or another mover instead, stepping on its own.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
 [Requires(typeof(Collider))]
 [WorksWith(typeof(Tilemap), Note = "steps on its grid, blocked by its solid tiles")]
 [WorksWith(typeof(Animation), Note = "plays Idle and Walk clips")]
+[WorksWith(typeof(GridChase), Note = "steps after a target on its own: an enemy")]
+[WorksWith(typeof(GridPatrol), Note = "walks a route of cells on its own")]
 [ComponentName("Griff.GridMovement")]
 public sealed class GridMovement : Component
 {
@@ -287,7 +290,10 @@ public sealed class GridMovement : Component
     /// <summary>Never steps off the edge of its <see cref="Map"/>, even where there's no wall.</summary>
     public bool StayOnMap { get; set; } = true;
 
-    /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works.</summary>
+    /// <summary>
+    /// Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works. Something
+    /// with a <see cref="GridChase"/> or a <see cref="GridPatrol"/> never takes the player's input.
+    /// </summary>
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>
@@ -325,6 +331,26 @@ public sealed class GridMovement : Component
     /// </summary>
     public void Step(int x, int y) => Queued = (Math.Sign(x), Math.Sign(y));
 
+    /// <summary>
+    /// The tilemap it steps on: the one its <see cref="Map"/> names (a layer's map, if it names a layer), else the first in
+    /// its scene that isn't a layer. Null for none: it steps a world unit at a time.
+    /// </summary>
+    public Tilemap? FindMap()
+    {
+        if (Entity?.Scene is not { } scene)
+            return null;
+        var map = string.IsNullOrWhiteSpace(Map)
+            ? scene.Entities.Where(Rendering.SceneRenderer.IsActive).Select(e => e.GetComponent<Tilemap>()).FirstOrDefault(t => t is { LayerOf: null })
+            : scene.Entities.FirstOrDefault(e => e.Name == Map.Trim())?.GetComponent<Tilemap>()?.BaseMap;
+        return map?.Entity is null ? null : map;
+    }
+
+    /// <summary>The cell of its grid a world position is in (see <see cref="Cell"/>).</summary>
+    public (int X, int Y) CellAt(Vector2 world) => GridCells.Of(FindMap()).CellAt(world);
+
+    /// <summary>The world position of the middle of a cell of its grid.</summary>
+    public Vector2 CellCenter((int X, int Y) cell) => GridCells.Of(FindMap()).Center(cell);
+
     internal void RaiseStepped(Vector2 way) => Stepped?.Invoke(this, way);
 
     internal void RaiseBumped(Vector2 way) => Bumped?.Invoke(this, way);
@@ -352,8 +378,179 @@ public sealed class GridMovement : Component
 
     internal (int X, int Y) BumpedWay { get; set; }
 
+    // Seconds before a chase or a patrol tries again after something blocked its step.
+    internal float Rest { get; set; }
+
     // For four-way stepping: which axis was pressed most recently, and the ways pressed last frame on each axis.
     internal bool PreferVertical { get; set; }
 
     internal (int X, int Y) LastRaw { get; set; }
+}
+
+/// <summary>
+/// Steps its <see cref="GridMovement"/> after a <see cref="Target"/> once it's within <see cref="Range"/>, tile by tile
+/// and around walls, with no code: a roguelike's monsters, a maze's ghosts, a dungeon's slimes. It stops next to the
+/// target (see <see cref="StopDistance"/>) and turns to face it, so an <see cref="Attack"/> swings its way. It steps as
+/// fast as its grid movement's Step Time lets it. With a <see cref="GridPatrol"/> too, it walks its route until it spots
+/// the target, and goes back to it once it gives up.
+/// </summary>
+[Category("Movement")]
+[Requires(typeof(GridMovement))]
+[WorksWith(typeof(GridPatrol), Note = "walks its route until it spots its target")]
+[WorksWith(typeof(Attack), Note = "swings at the target once it's next to it")]
+[ComponentName("Griff.GridChase")]
+public sealed class GridChase : Component
+{
+    /// <summary>The name of the entity to chase, e.g. "Player". In a network game it chases the nearest player.</summary>
+    [EntityName]
+    public string? Target { get; set; } = "Player";
+
+    /// <summary>How close the target has to be to notice it, in world units. 0 notices it anywhere.</summary>
+    [Distance]
+    public float Range { get; set; } = 6;
+
+    /// <summary>Once chasing, it gives up when the target gets this much further away than <see cref="Range"/>.</summary>
+    public float GiveUp { get; set; } = 2;
+
+    /// <summary>Only notice the target when nothing solid is in the way.</summary>
+    public bool NeedsSight { get; set; }
+
+    /// <summary>
+    /// How many steps from the target it stops: 1 stops next to it (diagonally next to it too, if its grid movement is
+    /// Diagonal), 2 keeps a cell between them, for one that shoots. 0 walks into the target's cell; a target with a solid
+    /// collider blocks it, so it bumps into it each step instead (Bumped, and its Bump Sound): a roguelike's attack.
+    /// </summary>
+    public int StopDistance { get; set; } = 1;
+
+    /// <summary>True while it's going after the target.</summary>
+    [DoNotSerialize]
+    public bool IsChasing { get; internal set; }
+
+    /// <summary>The entity it chases. Set it from a script to chase something without looking it up by name.</summary>
+    [DoNotSerialize]
+    public Entity? TargetEntity { get; set; }
+
+    /// <summary>Raised when it notices the target and starts chasing.</summary>
+    public event Action<GridChase>? Spotted;
+
+    /// <summary>Raised when it gets within <see cref="StopDistance"/> steps of the target.</summary>
+    public event Action<GridChase>? Reached;
+
+    internal void RaiseSpotted() => Spotted?.Invoke(this);
+
+    internal void RaiseReached() => Reached?.Invoke(this);
+
+    // Whether it was within its stop distance last time it looked, so Reached is raised once each time it gets there.
+    internal bool WasNear { get; set; }
+}
+
+/// <summary>
+/// Walks its <see cref="GridMovement"/> round a route of cells with no code: guards, villagers, a maze's sentries, a
+/// block that slides back and forth. <see cref="Points"/> are steps from where it's placed, e.g. "4 0" (four cells right
+/// and back) or "4 0; 4 -3; 0 -3" (round a square). It finds its way around walls between them, waits for whatever
+/// stands in its way, and pauses <see cref="Wait"/> seconds at each. With a <see cref="GridChase"/> too, it walks its
+/// route until it spots the target. The Scene view draws its route.
+/// </summary>
+[Category("Movement")]
+[Requires(typeof(GridMovement))]
+[WorksWith(typeof(GridChase), Note = "walks its route until it spots its target")]
+[ComponentName("Griff.GridPatrol")]
+public sealed class GridPatrol : Component
+{
+    private string? _points = "4 0";
+    private (int X, int Y)[] _path = [(0, 0), (4, 0)];
+
+    /// <summary>
+    /// Where to go, in cells from where it's placed (x right, y up): "x y" pairs separated by semicolons, e.g. "4 0" or
+    /// "4 0; 4 -3; 0 -3". The start (0 0) is always the first point.
+    /// </summary>
+    public string? Points
+    {
+        get => _points;
+        set
+        {
+            _points = value;
+            _path = [(0, 0), .. Mover.ParsePoints(value).Select(p => ((int)MathF.Round(p.X), (int)MathF.Round(p.Y)))];
+        }
+    }
+
+    /// <summary>How it goes round its points: there and back, round in a loop, or once.</summary>
+    public MoverMode Mode { get; set; }
+
+    /// <summary>Seconds to wait at each point.</summary>
+    public float Wait { get; set; } = 0.5f;
+
+    /// <summary>Untick it to stop it where it is. <see cref="Switch"/>es tick and untick it.</summary>
+    public bool Running { get; set; } = true;
+
+    /// <summary>
+    /// Which stretch of its route it's walking, from 0 (the start to the first point). The game keeps it up to date; set
+    /// it to start part of the way round, so a row of guards don't all walk together.
+    /// </summary>
+    public int Leg { get; set; }
+
+    /// <summary>
+    /// How many cells from where it was placed it is (x right, y up), which its points are counted from. The game keeps
+    /// it up to date as it steps or is moved, so one chased or pushed off its route finds its way back.
+    /// </summary>
+    public Vector2 Away { get; set; }
+
+    /// <summary>Its points in cells from where it was placed (x right, y up), starting with (0, 0).</summary>
+    public IReadOnlyList<(int X, int Y)> Path => _path;
+
+    /// <summary>True once a <see cref="MoverMode.Once"/> patrol has reached its last point.</summary>
+    public bool IsFinished => Mode == MoverMode.Once && Leg >= _path.Length - 1;
+
+    /// <summary>Which of its <see cref="Path"/>'s points stretch <paramref name="leg"/> heads for.</summary>
+    public int PointOf(int leg)
+    {
+        var last = _path.Length - 1;
+        if (last < 1)
+            return 0;
+        switch (Mode)
+        {
+            case MoverMode.Once:
+                return Math.Clamp(leg + 1, 0, last);
+            case MoverMode.Loop:
+                return ((leg + 1) % (last + 1) + last + 1) % (last + 1);
+            default:
+                var round = (leg % (2 * last) + 2 * last) % (2 * last);
+                return round < last ? round + 1 : 2 * last - round - 1;
+        }
+    }
+
+    /// <summary>Raised on reaching each point, with which one (1 is the first after the start, 0 the start).</summary>
+    public event Action<GridPatrol, int>? Arrived;
+
+    internal void RaiseArrived(int point) => Arrived?.Invoke(this, point);
+
+    // The cell it was in last frame, to add how far it went to Away; seconds left waiting at a point. Not saved: a
+    // restored game starts counting again from wherever it is.
+    internal (int X, int Y)? LastCell { get; set; }
+
+    internal float WaitLeft { get; set; }
+}
+
+// The cells grid movers step between: a tilemap's (its transform and tile size), or with none, world units centered on
+// whole numbers. Rows count down either way, so a way (x right, y up) changes the cell by Offset(way).
+internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4x4 ToLocal)
+{
+    public static GridCells Of(Tilemap? map)
+    {
+        if (map?.Entity is null || !Matrix4x4.Invert(map.Entity.Transform.WorldMatrix, out var toLocal))
+            return new GridCells(null, Matrix4x4.Identity, Matrix4x4.Identity);
+        return new GridCells(map, map.Entity.Transform.WorldMatrix, toLocal);
+    }
+
+    public (int X, int Y) CellAt(Vector2 world)
+    {
+        if (Map is null)
+            return ((int)MathF.Round(world.X), -(int)MathF.Round(world.Y));
+        return Map.CellAt(Vector2.Transform(world, ToLocal));
+    }
+
+    public Vector2 Center((int X, int Y) cell) =>
+        Map is null ? new Vector2(cell.X, -cell.Y) : Vector2.Transform(Map.CellCenter(cell.X, cell.Y), World);
+
+    public static (int X, int Y) Offset((int X, int Y) way) => (way.X, -way.Y);
 }

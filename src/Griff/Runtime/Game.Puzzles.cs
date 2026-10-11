@@ -144,8 +144,8 @@ public sealed partial class Game
     }
 
     /// <summary>
-    /// Switches <paramref name="entity"/> on or off as a <see cref="Switch"/> does: its movers, spawners and shooters run,
-    /// particles emit, animations play and doors unlock; if it has none of those, it appears or disappears.
+    /// Switches <paramref name="entity"/> on or off as a <see cref="Switch"/> does: its movers, grid patrols, spawners and
+    /// shooters run, particles emit, animations play and doors unlock; if it has none of those, it appears or disappears.
     /// </summary>
     public static void Power(Entity entity, bool on)
     {
@@ -156,6 +156,8 @@ public sealed partial class Game
             (spawner.Running, any) = (on, true);
         foreach (var shooter in entity.GetComponents<Shooter>())
             (shooter.Running, any) = (on, true);
+        foreach (var patrol in entity.GetComponents<GridPatrol>())
+            (patrol.Running, any) = (on, true);
         foreach (var emitter in entity.GetComponents<ParticleEmitter>())
             (emitter.Emitting, any) = (on, true);
         foreach (var animation in entity.GetComponents<Animation>())

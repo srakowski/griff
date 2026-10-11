@@ -64,6 +64,10 @@ build: standalone
 | `assetmenu: <path> > <item>` | Right-click an asset's row in the Assets panel (its path in Assets, opening the folders it's in) and pick an item from its menu, e.g. `assetmenu: Prefabs/Gem.prefab > Rename...`, then `prompt: Blue Gem`. |
 | `assetdrop: <path> > <folder>` | Drag an asset's row onto a folder's row in the Assets panel with the real mouse, e.g. `assetdrop: Prefabs/Gem.prefab > Pickups`. |
 | `expectlinked: <entity> = <path>` | Fail unless the entity is a copy of the prefab at that path in Assets, e.g. `expectlinked: Gem 2 = Pickups/Gem.prefab`. |
+| `dock: <panel> > <where>` | Drag a panel's tab with the real mouse to dock it: on a side of the window (`dock: Inspector > left`), on a side of another panel or of the documents (`dock: Assets > bottom of Hierarchy`, `dock: Output > right of Documents`), or onto a panel to tab it with that one (`dock: Output > Inspector`, floating or not). |
+| `float: <panel> [> <x>, <y>]` | Drag a panel's tab out over the middle of the document area (moved that far, in screen units), floating it in a window of its own. |
+| `closefloat: <panel>` | Click the close button on the floating window a panel is in, putting its panels back. |
+| `expectlayout: <summary>` | Fail unless the panels are laid out as `PanelLayout.Summary` says, e.g. `Hierarchy \| (Documents / Assets, Output) \| Inspector`: `\|` between parts side by side, `/` between parts one above another, `,` between tabs, then `; floating: Output` for each floating window. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |
 | `catalog` | Open the component catalog with the Inspector's Catalog button. |
@@ -124,7 +128,7 @@ build: standalone
 The waits that watch the running game fail when their time runs out, logging how each team stands every ten seconds
 while they wait (`%TEMP%\griff-demos\demo.log`).
 
-Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `logo` (the griffin in the title bar), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
+Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`; docked or floating), `float:Output` (the floating window a panel is in), `logo` (the griffin in the title bar), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
 (a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `lock:Backdrop` (the lock button on a Hierarchy row), `prefab:Gem` (the package mark on a prefab copy's Hierarchy row), `prefabnote` (the Inspector's line saying which prefab the selection is a copy of), `override:Sprite.Tint` (the mark by a field the selected copy changed from its prefab), `handle:rotate` (the Scene view's rotate handle), `handle:top-right` (a scale handle, named as `scale:` names them, or a resize handle with those out, as `resize:` names them, or a distance's knob with those out, `handle:Light.Radius`, or a knob on the selection's path, named as `path:` names them, `handle:Mover.2`), `link:Lever > Bridge` (the label on the Scene view's arrow from one entity to another), `menu:Game`, and
 `world:left,top,right,bottom` for a box in the Scene view, `gameworld:left,top,right,bottom` for a box in the running
 game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD, and `hud:hotbar`, `hud:crafting`, `hud:tools`, `hud:props` or `hud:ports` for a sandbox game's.

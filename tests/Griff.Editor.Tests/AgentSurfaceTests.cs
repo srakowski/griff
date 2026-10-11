@@ -54,7 +54,7 @@ public class AgentSurfaceTests
 
         foreach (var panel in services.GetServices<PanelDescriptor>())
             Assert.Contains(((ToolPanel)services.GetRequiredService(panel.PanelType)).Id, roots);
-        foreach (var service in new[] { "Workspace", "Selection", "PlayMode", "EditorArt", "EditorAudio", "OutputLog" })
+        foreach (var service in new[] { "Workspace", "Selection", "PlayMode", "EditorArt", "EditorAudio", "OutputLog", "PanelLayout" })
             Assert.Contains(service, roots);
     });
 

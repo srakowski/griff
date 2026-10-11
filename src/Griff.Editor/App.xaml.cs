@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
+using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
@@ -114,6 +115,7 @@ public partial class App : Application
 
         services.AddSingleton<MenuBuilder>();
         services.AddSingleton<ToolbarBuilder>();
+        services.AddSingleton<PanelLayout>();
         services.AddSingleton<PanelHost>();
         services.AddSingleton<SceneViewModel>();
         services.AddSingleton<SceneViewControl>();

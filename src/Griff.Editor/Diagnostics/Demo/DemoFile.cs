@@ -451,6 +451,27 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (dropAsset, dropFolder) = Split2(a, '>');
                 await ui.DropAsset(dropAsset, dropFolder);
                 break;
+            case "dock":
+                // "dock: Inspector > left", "dock: Output > right of Documents", "dock: Assets > bottom of Hierarchy", or
+                // "dock: Output > Inspector" (tabbing it with the Inspector): drag the panel's tab there.
+                var (dockPanel, dockWhere) = Split2(a, '>');
+                await ui.DockPanel(dockPanel, dockWhere);
+                break;
+            case "float":
+                // "float: Output" or "float: Output > 200, -100": drag the panel's tab out over the documents (moved that far).
+                var (floatPanel, floatOffset) = Split2(a, '>');
+                var floatBy = floatOffset.Length == 0 ? new double[2] : Numbers(floatOffset, 2);
+                await ui.FloatPanel(floatPanel, floatBy[0], floatBy[1]);
+                break;
+            case "closefloat":
+                // "closefloat: Output": close the floating window the panel is in, putting its panels back.
+                await ui.CloseFloating(a);
+                break;
+            case "expectlayout":
+                // "expectlayout: Hierarchy | (Documents / Assets, Output) | Inspector": where the panels are, as PanelLayout.Summary says.
+                if (!await Until(() => ui.Panels!.Layout.Summary == a, 3000))
+                    throw new InvalidOperationException($"Expected the panels to be laid out as \"{a}\", but they're \"{ui.Panels!.Layout.Summary}\".");
+                break;
             case "expectlinked":
                 // "expectlinked: Gem 2 = Pickups/Gem.prefab": the entity is a copy of the prefab at that path in Assets.
                 var (linkedName, linkedPath) = Split2(a, '=');
@@ -1255,6 +1276,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         return kind.ToLowerInvariant() switch
         {
             "panel" => ui.PanelContent(name),
+            "float" => (FrameworkElement?)ui.FloatingWindow(name) ?? throw new InvalidOperationException($"{name} isn't floating."),
             "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
             "scene" => sceneView,
             "game" => (FrameworkElement)ui.Main.GameTab.Content,
@@ -1286,7 +1308,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
         };
     }
 

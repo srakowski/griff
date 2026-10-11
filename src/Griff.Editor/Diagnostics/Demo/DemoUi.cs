@@ -281,8 +281,9 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public Button ToolbarButton(string commandId) =>
         Descendants<Button>(main.Toolbar).First(b => b.Command is Core.Commands.EditorCommand c && c.Id == commandId);
 
+    // In the main window or a floating one.
     public TabItem PanelTab(string title) =>
-        Descendants<TabItem>(main).First(t => t.Header is string s ? s == title : Descendants<TextBlock>((DependencyObject)t.Header).Any(b => b.Text == title));
+        Roots().SelectMany(Descendants<TabItem>).First(t => t.Header is string s ? s == title : t.Header is DependencyObject header && Descendants<TextBlock>(header).Any(b => b.Text == title));
 
     public FrameworkElement PanelContent(string title) => (FrameworkElement)PanelTab(title).Content;
 

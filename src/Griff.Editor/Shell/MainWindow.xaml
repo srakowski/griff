@@ -28,31 +28,9 @@
         <!-- Toolbar: populated by ToolbarBuilder. -->
         <StackPanel x:Name="Toolbar" Height="36" Margin="6,0" Orientation="Horizontal" />
 
-        <!-- Workspace: tool panel zones around the document area. Splitters are the gutters. -->
-        <Grid Grid.Row="1" Margin="4,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="LeftColumn" Width="280" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MinWidth="240" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition x:Name="RightColumn" Width="320" />
-            </Grid.ColumnDefinitions>
-
-            <TabControl x:Name="LeftZone" />
-            <GridSplitter x:Name="LeftSplitter"
-                          Grid.Column="1"
-                          Width="4"
-                          HorizontalAlignment="Stretch"
-                          ResizeBehavior="PreviousAndNext"
-                          ResizeDirection="Columns" />
-
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" MinHeight="120" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition x:Name="BottomRow" Height="240" />
-                </Grid.RowDefinitions>
-
+        <!-- Workspace: the tool panels around the document area, laid out by PanelHost from PanelLayout. -->
+        <Border x:Name="DockRoot" Grid.Row="1" Margin="4,0">
+            <Grid x:Name="DocumentArea">
                 <!-- Scene view in a document tab; populated in code-behind. -->
                 <TabControl x:Name="DocumentTabs"
                             Style="{StaticResource Style.TabControl.Document}"
@@ -62,24 +40,8 @@
                 </TabControl>
                 <ContentControl x:Name="StartHost"
                                 Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
-
-                <GridSplitter x:Name="BottomSplitter"
-                              Grid.Row="1"
-                              Height="4"
-                              HorizontalAlignment="Stretch"
-                              ResizeBehavior="PreviousAndNext"
-                              ResizeDirection="Rows" />
-                <TabControl x:Name="BottomZone" Grid.Row="2" />
             </Grid>
-
-            <GridSplitter x:Name="RightSplitter"
-                          Grid.Column="3"
-                          Width="4"
-                          HorizontalAlignment="Stretch"
-                          ResizeBehavior="PreviousAndNext"
-                          ResizeDirection="Columns" />
-            <TabControl x:Name="RightZone" Grid.Column="4" />
-        </Grid>
+        </Border>
 
         <!-- Status bar: turns accent while playing so play mode is unmistakable. -->
         <Border Grid.Row="2" Padding="10,0">

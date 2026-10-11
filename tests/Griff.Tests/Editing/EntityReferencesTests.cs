@@ -146,6 +146,19 @@ public class EntityReferencesTests
     }
 
     [Fact]
+    public void Unmatched_InAPrefabOnItsOwn_OnlyChecksNamesOfThingsInside()
+    {
+        // A prefab's fields name things in whatever scene it's placed in, so only an attack's own hitbox can be checked.
+        var scene = Level();
+        Named(scene, "Camera").GetComponent<Follow>()!.Target = "Playr";
+        Named(scene, "Fighter").GetComponent<Attack>()!.Hitbox = "Lift";
+
+        var unmatched = EntityReferences.UnmatchedIn(scene, _registry, inPrefab: true).ToList();
+
+        Assert.Equal("Attack.Hitbox", Assert.Single(unmatched).Reference.Label);
+    }
+
+    [Fact]
     public void Unmatched_IgnoresEmptyFields()
     {
         var scene = Level();

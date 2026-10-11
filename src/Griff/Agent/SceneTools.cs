@@ -37,6 +37,12 @@ public interface IAgentScene
 
     /// <summary>The names of the project's prefabs, which fields that name entities can name too.</summary>
     IReadOnlyCollection<string> PrefabNames => [];
+
+    /// <summary>True while a prefab is open on its own (in its tab) in place of the scene: <see cref="ScenePath"/> is the prefab's.</summary>
+    bool IsPrefab => ScenePath?.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Where entities made without a parent go: null for the top level, or inside the prefab while one is open on its own.</summary>
+    Entity? TopParent => null;
 }
 
 /// <summary>
@@ -111,7 +117,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             InputSchema = Schema.Object([
                 ("entity", Schema.Map("One entity to create.")),
                 ("entities", Schema.Array(Schema.Map("An entity."), "Several entities to create.")),
-                ("parent", Schema.String("Create inside this entity (name, id or path). Default: the top level.")),
+                ("parent", Schema.String("Create inside this entity (name, id or path). Default: the top level (inside the prefab, while one is open on its own).")),
                 ("select", Schema.Bool("Select the (last) created entity. Default true.")),
             ]),
             Invoke = args => Task.FromResult(Create(args)),
@@ -206,7 +212,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var scene = RequireScene();
         var depth = args.Int("depth", int.MaxValue);
         var text = new StringBuilder();
-        text.Append($"Scene {host.ScenePath ?? "(unsaved)"}: {scene.Count} entities{(host.IsPlaying ? ", PLAYING (live game; changes are lost on Stop)" : "")}");
+        text.Append(host.IsPrefab
+            ? $"Prefab {host.ScenePath}, open on its own in place of the scene (Scene_Save saves it and updates every copy; Prefab_Close goes back to the scene): {scene.Count} entities"
+            : $"Scene {host.ScenePath ?? "(unsaved)"}: {scene.Count} entities{(host.IsPlaying ? ", PLAYING (live game; changes are lost on Stop)" : "")}");
         if (host.Selection.Count > 0)
             text.Append($", selected: {string.Join(", ", host.Selection.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}");
         text.AppendLine();
@@ -214,7 +222,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         IEnumerable<Entity> roots = args.OptionalString("under") is { } under ? [Resolve(scene, under)] : scene.Roots;
         foreach (var root in roots)
             Outline(text, root, 0, depth);
-        var unmatched = EntityReferences.UnmatchedIn(scene, host.Components, host.PrefabNames).ToList();
+        var unmatched = EntityReferences.UnmatchedIn(scene, host.Components, host.PrefabNames, host.IsPrefab).ToList();
         if (unmatched.Count > 0)
         {
             text.AppendLine("Names that match nothing in the scene (fields that name entities, flagged in the Inspector):");
@@ -300,7 +308,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         result["components"] = components;
         var unmatched = EntityReferences.On(entity, host.Components)
-            .Select(r => (Reference: r, Names: EntityReferences.Unmatched(r, host.PrefabNames)))
+            .Select(r => (Reference: r, Names: EntityReferences.Unmatched(r, host.PrefabNames, host.IsPrefab)))
             .Where(r => r.Names.Count > 0)
             .ToList();
         if (unmatched.Count > 0)
@@ -355,7 +363,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         if (specs.Count == 0)
             throw new AgentException("Give \"entity\" or \"entities\".");
 
-        var parent = args.OptionalString("parent") is { } p ? Resolve(scene, p) : null;
+        var parent = args.OptionalString("parent") is { } p ? Resolve(scene, p) : host.TopParent;
         var notes = new List<string>();
         var built = specs.Select(s => Build(s, notes)).ToList();
 

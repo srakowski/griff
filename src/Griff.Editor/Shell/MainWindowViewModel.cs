@@ -10,6 +10,7 @@ namespace Griff.Editor.Shell;
 public sealed class MainWindowViewModel : ObservableObject
 {
     private SceneDocument? _scene;
+    private SceneDocument? _editScene;
 
     public MainWindowViewModel(IWorkspace workspace, IStatusService status, ISelection selection, PlayMode play)
     {
@@ -32,13 +33,15 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool HasProject => Workspace.Project is not null;
 
-    // While playing, the dirty marker belongs to the edit scene, which isn't on screen.
-    public string SceneTitle => Workspace.Scene is { } scene
-        ? scene.IsRuntime ? $"{scene.Name} (playing)" : $"{scene.Name}{(scene.IsDirty ? "*" : "")}"
+    // The scene's tab, whether or not a prefab's tab is showing. While playing, the dirty marker belongs to the edit
+    // scene, which isn't on screen.
+    public string SceneTitle => Workspace.IsPlaying && Workspace.Scene is { } running ? $"{running.Name} (playing)"
+        : Workspace.EditScene is { } scene ? $"{scene.Name}{(scene.IsDirty ? "*" : "")}"
         : "";
 
+    // What's showing: the scene, or a prefab in its tab.
     public string Title => Workspace.Project is { } project
-        ? $"{SceneTitle} - {project.Name} - Griff"
+        ? $"{(Workspace.Scene is { IsPrefab: true } prefab ? $"{prefab.Name}{(prefab.IsDirty ? "*" : "")} (prefab)" : SceneTitle)} - {project.Name} - Griff"
         : "Griff";
 
     public string SceneLocation => Workspace.Project is { } project && Workspace.Scene is { } scene
@@ -52,13 +55,19 @@ public sealed class MainWindowViewModel : ObservableObject
         Raise();
     }
 
+    // Both the scene and the prefab showing (if one is) have dirty markers on screen.
     private void Track(SceneDocument? scene)
     {
         if (_scene is not null)
             _scene.PropertyChanged -= OnSceneChanged;
+        if (_editScene is not null)
+            _editScene.PropertyChanged -= OnSceneChanged;
         _scene = scene;
+        _editScene = Workspace.EditScene == scene ? null : Workspace.EditScene;
         if (_scene is not null)
             _scene.PropertyChanged += OnSceneChanged;
+        if (_editScene is not null)
+            _editScene.PropertyChanged += OnSceneChanged;
         Raise();
     }
 

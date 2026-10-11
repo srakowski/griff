@@ -57,6 +57,7 @@ public sealed class Selection : ObservableObject, ISelection
     private readonly IWorkspace _workspace;
     private SceneDocument? _document;
     private IReadOnlyList<Entity> _entities = [];
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SceneDocument, IReadOnlyList<Entity>> _kept = new();
 
     public Selection(IWorkspace workspace)
     {
@@ -119,14 +120,19 @@ public sealed class Selection : ObservableObject, ISelection
         OnPropertyChanged(nameof(Entities));
     }
 
+    // Going from tab to tab (the scene's and prefabs') keeps each one's selection to come back to. Play mode picks its
+    // own (see PlayMode).
     private void Track(SceneDocument? document)
     {
         if (_document is not null)
             _document.Changed -= OnDocumentChanged;
+        if (_document is { IsRuntime: false } leaving)
+            _kept.AddOrUpdate(leaving, _entities);
+        var switching = _document is { IsRuntime: false } && document is { IsRuntime: false };
         _document = document;
         if (_document is not null)
             _document.Changed += OnDocumentChanged;
-        Set([]);
+        Set(switching && _kept.TryGetValue(document!, out var kept) ? kept.Where(e => e.Scene == document!.Scene).ToList() : []);
     }
 
     // Deleting (or undoing the creation of) selected entities takes them out of the selection.

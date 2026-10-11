@@ -19,6 +19,8 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
 
     public bool IsPlaying => workspace.IsPlaying;
 
+    public Entity? TopParent => workspace.Scene?.ParentFor(null);
+
     public ComponentRegistry Components => workspace.Components;
 
     public void Execute(IEdit edit) => Document.Execute(edit);
@@ -84,7 +86,7 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
                 : null);
         }
 
-        if (assetPath.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) && workspace.Scene is { } open && workspace.Project is { } project
+        if (assetPath.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) && workspace.EditScene is { } open && workspace.Project is { } project
             && Path.GetFullPath(open.FilePath).Equals(Path.GetFullPath(Path.Combine(project.AssetsPath, assetPath)), StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult<AssetFeedback?>(new AssetFeedback("That's the open scene; the editor still shows it as it was. Open it again (Scene_Open) to load the file."));

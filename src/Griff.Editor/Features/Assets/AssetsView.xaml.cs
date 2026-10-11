@@ -41,6 +41,8 @@ public partial class AssetsView : UserControl
 
         if (node.Kind == AssetKind.Scene)
             await _workspace.OpenSceneAsync(node.FullPath);
+        else if (node.Kind == AssetKind.Prefab)
+            await _workspace.OpenPrefabAsync(node.FullPath);
         else if (node.Kind == AssetKind.Script)
             _scripts.Open(node.FullPath);
         else if (node.Kind == AssetKind.Audio)
@@ -66,8 +68,9 @@ public partial class AssetsView : UserControl
         }
         else if (node is { Kind: AssetKind.Prefab })
         {
+            Add(menu, "Edit Prefab", Icons.Package, async () => await _workspace.OpenPrefabAsync(node.FullPath));
             Add(menu, "Add to Scene", Icons.Add, () => AddPrefabToScene(node));
-            Add(menu, "Open", Icons.Open, () => OpenExternally(node.FullPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => OpenExternally(node.FullPath));
             menu.Items.Add(new Separator());
         }
         else if (node is { Kind: AssetKind.Script })
@@ -160,9 +163,10 @@ public partial class AssetsView : UserControl
     // Placed where the prefab was saved from; dragging into the Scene view places it under the cursor instead.
     private void AddPrefabToScene(AssetNode node)
     {
-        if (_workspace.Scene is not { } document || Entities.PrefabFiles.Instantiate(_workspace, node.AssetPath) is not { } entity)
+        if (_workspace.Scene is not { } document || PrefabFiles.IsOwnTab(_workspace, document, node.AssetPath) ||
+            PrefabFiles.Instantiate(_workspace, node.AssetPath) is not { } entity)
             return;
-        document.Execute(new AddEntityEdit(document.Scene, entity));
+        document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(null)));
         _selection.Select(entity);
     }
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -59,6 +60,9 @@ public sealed class SceneViewControl : FrameworkElement
     private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
     private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
     private SceneDocument? _document;
+
+    // Where each tab's view was left (its pan and zoom), to come back to.
+    private readonly ConditionalWeakTable<SceneDocument, StrongBox<(Vector2 Pan, double Zoom)>> _places = new();
 
     private Vector2 _pan;
     private double _zoom = 64;
@@ -171,8 +175,11 @@ public sealed class SceneViewControl : FrameworkElement
             _document.RuntimeTicked -= OnRuntimeTicked;
         }
 
-        // Switching to or from the play-mode copy keeps the camera where the user put it.
+        // Switching to or from the play-mode copy keeps the camera where the user put it, and going back to a tab (the
+        // scene's or a prefab's) looks where it was left.
         var samePlace = _document is not null && document is not null && (_document.IsRuntime || document.IsRuntime);
+        if (_document is { IsRuntime: false } leaving && !_needsFit)
+            _places.AddOrUpdate(leaving, new StrongBox<(Vector2, double)>((_pan, _zoom)));
         _document = document;
         if (_document is not null)
         {
@@ -185,18 +192,30 @@ public sealed class SceneViewControl : FrameworkElement
             _images.Clear();
             _tileImages.Clear();
             _tintedImages.Clear();
-            _needsFit = true;
+            if (document is not null && _places.TryGetValue(document, out var place))
+                (_pan, _zoom) = place.Value;
+            else
+                _needsFit = true;
         }
 
         InvalidateVisual();
     }
 
-    /// <summary>Shows the whole frame of the first camera, so a scene opens looking at what the player sees.</summary>
+    /// <summary>
+    /// Shows the whole frame of the first camera, so a scene opens looking at what the player sees. A prefab has none,
+    /// so it opens with all of it in view.
+    /// </summary>
     private void FitToCamera()
     {
         _needsFit = false;
         _pan = Vector2.Zero;
         _zoom = 64;
+
+        if (_document is { IsPrefab: true } prefab)
+        {
+            FitToContents(prefab.Scene);
+            return;
+        }
 
         var camera = _document?.Scene.Entities.FirstOrDefault(e => e.GetComponent<Camera>() is not null);
         if (camera?.GetComponent<Camera>() is not { } component)
@@ -208,6 +227,24 @@ public sealed class SceneViewControl : FrameworkElement
         _zoom = Math.Clamp(Math.Min(ActualWidth / width, ActualHeight / height), MinZoom, MaxZoom);
         var position = camera.Transform.WorldPosition;
         _pan = new Vector2(position.X, position.Y);
+    }
+
+    // Everything in the scene in view, with room around it (at least a few units across, so a small prefab isn't huge).
+    private void FitToContents(Scene scene)
+    {
+        var points = scene.Entities
+            .SelectMany(e => SceneViewModel.Outline(e) ?? [ToVector2(e.Transform.WorldPosition)])
+            .ToList();
+        if (points.Count == 0)
+            return;
+
+        var min = points.Aggregate(Vector2.Min);
+        var max = points.Aggregate(Vector2.Max);
+        const double margin = 1.5;
+        var width = Math.Max((max.X - min.X) * margin, 4 * CameraAspect);
+        var height = Math.Max((max.Y - min.Y) * margin, 4);
+        _zoom = Math.Clamp(Math.Min(ActualWidth / width, ActualHeight / height), MinZoom, MaxZoom);
+        _pan = (min + max) / 2;
     }
 
     private void OnDocumentChanged(object? sender, EditEventArgs e) => InvalidateVisual();
@@ -1051,6 +1088,13 @@ public sealed class SceneViewControl : FrameworkElement
         };
         var text = Text($"{handles}{_zoom / 64:P0}", "Brush.Text.Tertiary");
         dc.DrawText(text, new Point(ActualWidth - text.Width - 10, ActualHeight - text.Height - 8));
+
+        // In a prefab's tab, a reminder of what's being edited.
+        if (_document is { IsPrefab: true } prefab)
+        {
+            var label = Text($"Editing the {prefab.Name} prefab  ·  saving it updates every copy", "Brush.Accent");
+            dc.DrawText(label, new Point(10, 8));
+        }
     }
 
     // ----- Scene queries -----
@@ -1644,21 +1688,27 @@ public sealed class SceneViewControl : FrameworkElement
     // dropping a prefab places a copy of it there.
     protected override void OnDragOver(DragEventArgs e)
     {
-        e.Effects = _document is not null && DroppedAsset(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = _document is { } document && DroppedAsset(e) is var (assetPath, _) && !PrefabFiles.IsOwnTab(_workspace, document, assetPath)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
         e.Handled = true;
     }
 
+    // In a prefab's tab, what's dropped goes inside the prefab, so where it lands is turned into a place inside it.
     protected override void OnDrop(DragEventArgs e)
     {
         e.Handled = true;
-        if (_document is not { } document || DroppedAsset(e) is not var (assetPath, kind))
+        if (_document is not { } document || DroppedAsset(e) is not var (assetPath, kind) || PrefabFiles.IsOwnTab(_workspace, document, assetPath))
             return;
 
+        var parent = document.ParentFor(null);
         var position = ToWorld(e.GetPosition(this));
+        if (parent is not null && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var toParent))
+            position = ToVector2(Vector3.Transform(new Vector3(position, 0), toParent));
         Entity entity;
         if (kind == Griff.Editor.Features.Assets.AssetKind.Prefab)
         {
-            if (Griff.Editor.Features.Entities.PrefabFiles.Instantiate(_workspace, assetPath) is not { } instance)
+            if (PrefabFiles.Instantiate(_workspace, assetPath) is not { } instance)
                 return;
             entity = instance;
             entity.Transform.Position = new Vector3(position, entity.Transform.Position.Z);
@@ -1674,7 +1724,7 @@ public sealed class SceneViewControl : FrameworkElement
             sprite.Size = new Vector2(aspect, 1);
         }
 
-        document.Execute(new AddEntityEdit(document.Scene, entity));
+        document.Execute(new AddEntityEdit(document.Scene, entity, parent));
         _selection.Select(entity);
         Focus();
     }

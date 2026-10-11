@@ -74,11 +74,13 @@ public static class EntityReferences
 
     /// <summary>
     /// The names <paramref name="reference"/> holds that match nothing: no entity it can name has that name, and
-    /// neither does a prefab (one in <paramref name="prefabs"/>), which a game can bring in while it runs.
+    /// neither does a prefab (one in <paramref name="prefabs"/>), which a game can bring in while it runs. In a prefab on
+    /// its own (<paramref name="inPrefab"/>), only names of things inside the field's entity can be checked: the rest
+    /// name things in whatever scene the prefab is placed in.
     /// </summary>
-    public static IReadOnlyList<string> Unmatched(Reference reference, IReadOnlyCollection<string>? prefabs = null)
+    public static IReadOnlyList<string> Unmatched(Reference reference, IReadOnlyCollection<string>? prefabs = null, bool inPrefab = false)
     {
-        if (reference.Component.Entity is not { } owner || !reference.IsUsed)
+        if (reference.Component.Entity is not { } owner || !reference.IsUsed || (inPrefab && !reference.Kind.Inside))
             return [];
         var names = reference.Names;
         if (names.Count == 0)
@@ -87,12 +89,15 @@ public static class EntityReferences
         return [.. names.Where(n => !known.Contains(n) && (reference.Kind.Inside || prefabs?.Contains(n) != true)).Distinct()];
     }
 
-    /// <summary>Every field in the scene that holds a name matching nothing, with the names it can't find.</summary>
+    /// <summary>
+    /// Every field in the scene (or a prefab on its own, see <see cref="Unmatched"/>) that holds a name matching nothing,
+    /// with the names it can't find.
+    /// </summary>
     public static IEnumerable<(Reference Reference, IReadOnlyList<string> Names)> UnmatchedIn(
-        Scene scene, ComponentRegistry registry, IReadOnlyCollection<string>? prefabs = null) =>
+        Scene scene, ComponentRegistry registry, IReadOnlyCollection<string>? prefabs = null, bool inPrefab = false) =>
         scene.Entities
             .SelectMany(e => On(e, registry))
-            .Select(r => (Reference: r, Names: Unmatched(r, prefabs)))
+            .Select(r => (Reference: r, Names: Unmatched(r, prefabs, inPrefab)))
             .Where(r => r.Names.Count > 0);
 
     /// <summary>

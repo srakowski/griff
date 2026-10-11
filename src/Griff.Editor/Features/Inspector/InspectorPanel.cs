@@ -142,6 +142,12 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>The project's prefabs' names, read as the selection changes: fields can name them as well as entities.</summary>
     public IReadOnlyCollection<string> PrefabNames { get; private set; } = [];
 
+    /// <summary>
+    /// True while a prefab's tab is showing: fields naming things outside the entity they're on aren't flagged, as they
+    /// name things in whatever scene the prefab is placed in.
+    /// </summary>
+    public bool InPrefab => _workspace.Scene?.IsPrefab == true;
+
     /// <summary>Whether the prefab file at <paramref name="assetPath"/> (in Assets) is there.</summary>
     internal bool PrefabExists(string assetPath) =>
         _workspace.Project is { } project && System.IO.File.Exists(System.IO.Path.Combine(project.AssetsPath, assetPath));
@@ -185,7 +191,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// </summary>
     public void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)
     {
-        var update = Entities.PrefabFiles.ApplyField(_workspace, components, property);
+        var update = PrefabFiles.ApplyField(_workspace, components, property);
         if (update.Problems.Count > 0)
             _dialogs.ShowError("Couldn't apply it to the prefab", string.Join("\n", update.Problems));
         else
@@ -760,7 +766,7 @@ public sealed class PropertyField : ObservableObject
     /// Empty when they all match, or with several selected whose values differ.
     /// </summary>
     public IReadOnlyList<string> UnmatchedNames => _unmatched ??=
-        Kind == FieldKind.Entity && !IsMixed ? EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames) : [];
+        Kind == FieldKind.Entity && !IsMixed ? EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames, _owner.InPrefab) : [];
 
     private IReadOnlyList<string>? _unmatched;
 
@@ -1131,6 +1137,9 @@ public interface IPropertyHost
 
     /// <summary>The project's prefabs' names: an entity field naming one isn't flagged as matching nothing.</summary>
     IReadOnlyCollection<string> PrefabNames => [];
+
+    /// <summary>True for a prefab on its own: only names of things inside a field's entity can be checked.</summary>
+    bool InPrefab => false;
 
     /// <summary>For a component of a placed prefab copy (or of something inside one): the prefab's own, or null.</summary>
     Component? PrefabComponent(Component component) => null;

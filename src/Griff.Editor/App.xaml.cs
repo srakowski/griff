@@ -20,6 +20,7 @@ using Griff.Editor.Features.Hierarchy;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
+using Griff.Editor.Features.Prefabs;
 using Griff.Editor.Features.Projects;
 using Griff.Editor.Features.Scenes;
 using Griff.Editor.Features.SceneView;
@@ -41,6 +42,7 @@ public partial class App : Application
         new ScenesModule(),
         new EditingModule(),
         new EntitiesModule(),
+        new PrefabsModule(),
         new PlayModule(),
         new ScriptsModule(),
         new BuildModule(),

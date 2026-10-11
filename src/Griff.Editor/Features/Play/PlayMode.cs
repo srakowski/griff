@@ -130,7 +130,7 @@ public sealed class PlayMode : ObservableObject
 
     public void Play()
     {
-        if (IsPlaying || _workspace.Scene is not { } edit || _workspace.Project is not { } project)
+        if (IsPlaying || _workspace.EditScene is not { } edit || _workspace.Project is not { } project)
             return;
 
         // Same ids in the copy, so the selection carries across.

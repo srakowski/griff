@@ -27,7 +27,8 @@ public partial class MainWindow : ChromeWindow
         MenuBuilder menuBuilder,
         ToolbarBuilder toolbarBuilder,
         PanelHost panelHost,
-        Features.Scripts.ScriptTabs scriptTabs)
+        Features.Scripts.ScriptTabs scriptTabs,
+        Features.Prefabs.PrefabTabs prefabTabs)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -41,6 +42,7 @@ public partial class MainWindow : ChromeWindow
         StartHost.Content = startPage;
         play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
         play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;
+        prefabTabs.Attach(DocumentTabs, SceneTab, sceneView);
         scriptTabs.Attach(DocumentTabs);
 
         menuBuilder.Populate(MainMenu);

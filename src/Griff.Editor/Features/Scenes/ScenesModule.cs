@@ -46,7 +46,10 @@ public sealed partial class NewSceneCommand(IWorkspace workspace, IDialogService
     private static partial Regex SceneName();
 }
 
-/// <summary>Saves the open scene to its file.</summary>
+/// <summary>
+/// Saves the open scene to its file, or, while a prefab's tab is showing, the prefab, bringing every copy of it up to date
+/// (keeping what each copy changed).
+/// </summary>
 public sealed class SaveSceneCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Scene.Save";

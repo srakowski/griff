@@ -89,7 +89,7 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
 
         var entity = new Entity(EntityName);
         Configure(entity);
-        document.Execute(new AddEntityEdit(document.Scene, entity, selection.Entity));
+        document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(selection.Entity)));
         selection.Select(entity);
         return Task.CompletedTask;
     }
@@ -689,8 +689,13 @@ public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selectio
 
         var entities = workspace.Serializer.DeserializeEntities(json);
         var anchor = selection.Entity;
+        var parent = anchor?.Parent;
         var index = anchor is null ? (int?)null : document.Scene.IndexOf(anchor) + 1;
-        var edits = entities.Select((e, i) => (IEdit)new AddEntityEdit(document.Scene, e, anchor?.Parent, index + i)).ToList();
+
+        // In a prefab's tab, what would go at the top goes inside the prefab, at the end.
+        if (parent is null && document.ParentFor(null) is { } inside)
+            (parent, index) = (inside, null);
+        var edits = entities.Select((e, i) => (IEdit)new AddEntityEdit(document.Scene, e, parent, index + i)).ToList();
         document.Execute(EntityEdits.Group(edits, "Paste", entities));
         selection.SelectEntities(entities);
         return Task.CompletedTask;
@@ -726,7 +731,7 @@ public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection
     public override string Id => "Entity.Lock";
     public override string Text => "Loc_k";
     public override string? Icon => Icons.Lock;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 6);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 7);
 
     public override bool? IsChecked => selection.Entities.Count > 0 && selection.Entities.All(e => e.IsLocked);
 
@@ -738,221 +743,6 @@ public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection
             EntityEdits.SetLocked(document, selection.Entities, IsChecked != true);
         return Task.CompletedTask;
     }
-}
-
-/// <summary>Prefab files as the editor uses them: saved from a selection, instantiated by drag-and-drop.</summary>
-public static class PrefabFiles
-{
-    /// <summary>A file name made from an entity name: invalid characters become underscores.</summary>
-    public static string SafeName(string entityName)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var name = new string(entityName.Trim().Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim('.', ' ');
-        return name.Length == 0 ? "Prefab" : name;
-    }
-
-    /// <summary>A file's path in Assets as copies store it ("Prefabs/Coin.prefab").</summary>
-    public static string AssetPathOf(Griff.Projects.Project project, string path) =>
-        PrefabCopies.Normalize(Path.GetRelativePath(project.AssetsPath, path));
-
-    /// <summary>
-    /// A new copy of the prefab at <paramref name="assetPath"/> (relative to Assets), linked to it so saving the prefab
-    /// updates it, or null if it can't be read.
-    /// </summary>
-    public static Entity? Instantiate(IWorkspace workspace, string assetPath, ICollection<string>? warnings = null)
-    {
-        if (workspace.Project is not { } project)
-            return null;
-
-        var path = Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar));
-        try
-        {
-            var entity = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
-            entity.Prefab = PrefabCopies.Normalize(assetPath);
-            return entity;
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            warnings?.Add(ex.Message);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// After the prefab at <paramref name="assetPath"/> is saved as <paramref name="json"/> over
-    /// <paramref name="oldJson"/> (null if it's new or that isn't known): links <paramref name="source"/> (the entity it
-    /// was saved from, if any) to it, and brings every other copy of it up to date, keeping what each copy changed from
-    /// the old version, in the scene being edited (one undo step, with the link) and in the project's other scene files.
-    /// </summary>
-    public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, string? oldJson, Entity? source)
-    {
-        if (workspace.Project is not { } project)
-            return new PrefabUpdate(0, [], []);
-
-        var copies = 0;
-        var scenes = new List<string>();
-        var problems = new List<string>();
-        var serializer = workspace.Serializer;
-
-        // The scene being edited (not the running copy while playing), through its undo history.
-        if (workspace.EditScene is { } document)
-        {
-            var edits = new List<IEdit>();
-            var here = source?.Scene == document.Scene ? source : null;
-            if (here is not null && !PrefabCopies.IsCopyOf(here, assetPath))
-                edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath)));
-
-            try
-            {
-                var count = PrefabCopies.In(document.Scene, assetPath).Count(c => c != here);
-                if (PrefabCopies.Update(document.Scene, assetPath, json, oldJson, serializer, except: here) is { } update)
-                {
-                    edits.Add(update);
-                    copies += count;
-                    scenes.Add(document.Name);
-                }
-            }
-            catch (InvalidDataException ex)
-            {
-                problems.Add($"{document.Name}: {ex.Message}");
-            }
-
-            if (edits.Count > 0)
-                document.Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Save {PrefabCopies.NameOf(assetPath)} as Prefab", edits));
-        }
-
-        // Every other scene, on disk.
-        var open = workspace.EditScene is { } edit ? Path.GetFullPath(edit.FilePath) : null;
-        foreach (var scenePath in project.FindScenes())
-        {
-            if (string.Equals(Path.GetFullPath(scenePath), open, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            try
-            {
-                if (PrefabCopies.UpdateFile(scenePath, assetPath, json, oldJson, serializer) is > 0 and var count)
-                {
-                    copies += count;
-                    scenes.Add(Path.GetFileNameWithoutExtension(scenePath));
-                }
-            }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
-            {
-                problems.Add($"{Path.GetFileNameWithoutExtension(scenePath)}: {ex.Message}");
-            }
-        }
-
-        return new PrefabUpdate(copies, scenes, problems);
-    }
-    /// <summary>The prefab file's text, or null if there's no such file (or it can't be read).</summary>
-    public static string? ReadText(IWorkspace workspace, string assetPath)
-    {
-        if (workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } path)
-            return null;
-        try
-        {
-            return File.ReadAllText(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Applies a field the selected copies changed to their prefabs: sets it in each prefab file to the copy's value,
-    /// then brings the prefab's other copies up to date (keeping what each of them changed). The copies themselves
-    /// then match their prefab there. <paramref name="components"/> are the field's components, one per entity;
-    /// those whose value is the prefab's are skipped.
-    /// </summary>
-    public static PrefabUpdate ApplyField(IWorkspace workspace, IReadOnlyList<Component> components, PropertyDescriptor property)
-    {
-        var copies = 0;
-        var scenes = new List<string>();
-        var problems = new List<string>();
-        var serializer = workspace.Serializer;
-        var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var component in components)
-        {
-            if (component.Entity is not { } entity || PrefabOverrides.CopyFor(entity) is not { Prefab: { } link } copy || done.Contains(PrefabCopies.Normalize(link)))
-                continue;
-
-            var name = PrefabCopies.NameOf(link);
-            if (workspace.Project is not { } project || project.FindPrefab(link) is not { } path || ReadText(workspace, link) is not { } oldJson)
-            {
-                problems.Add($"{name}: the prefab isn't in the project");
-                continue;
-            }
-
-            try
-            {
-                var prefab = serializer.LoadPrefabFromString(oldJson);
-                if (PrefabOverrides.Counterpart(prefab, copy, entity) is not { } part || PrefabOverrides.Counterpart(part, component) is not { } prefabComponent)
-                {
-                    problems.Add($"{name}: the prefab has no {component.GetType().Name} there");
-                    continue;
-                }
-
-                if (!PrefabOverrides.Differs(component, prefabComponent, property))
-                    continue;
-                property.SetValue(prefabComponent, PrefabOverrides.CopyValue(property.GetValue(component)));
-                var json = serializer.SavePrefabToString(prefab);
-                File.WriteAllText(path, json);
-                done.Add(PrefabCopies.Normalize(link));
-
-                var update = UpdateCopies(workspace, AssetPathOf(project, path), json, oldJson, source: copy);
-                copies += update.Copies;
-                scenes.AddRange(update.Scenes.Except(scenes));
-                problems.AddRange(update.Problems);
-            }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
-            {
-                problems.Add($"{name}: {ex.Message}");
-            }
-        }
-
-        return new PrefabUpdate(copies, scenes, problems);
-    }
-
-    /// <summary>
-    /// One undo step putting the copies back as their prefab has them: every change each made from it (fields,
-    /// components and children added or taken away) is undone, keeping their own name and place. Null if none of them
-    /// changes anything (or their prefabs can't be read).
-    /// </summary>
-    public static IEdit? Revert(IWorkspace workspace, Scene scene, IEnumerable<Entity> copies)
-    {
-        var edits = new List<UpdatePrefabCopyEdit>();
-        foreach (var copy in copies)
-        {
-            if (copy.Prefab is not { } link || ReadText(workspace, link) is not { } json)
-                continue;
-            try
-            {
-                var prefab = workspace.Serializer.LoadPrefabFromString(json);
-                if (PrefabOverrides.Find(copy, prefab, workspace.Components).Count > 0)
-                    edits.Add(new UpdatePrefabCopyEdit(scene, copy, prefab));
-            }
-            catch (InvalidDataException)
-            {
-                // A prefab that can't be read has nothing to revert to.
-            }
-        }
-
-        return edits.Count switch
-        {
-            0 => null,
-            1 => new CompositeEdit($"Revert {edits[0].Copy.Name} to Prefab", [edits[0]]),
-            _ => new CompositeEdit($"Revert {edits.Count} copies to their prefab", [.. edits]),
-        };
-    }
-}
-
-/// <summary>What saving a prefab updated: how many copies, in which scenes, and the scenes that couldn't be updated.</summary>
-public sealed record PrefabUpdate(int Copies, IReadOnlyList<string> Scenes, IReadOnlyList<string> Problems)
-{
-    /// <summary>"Updated 3 copies in Level 1 and Level 2.", or empty with none.</summary>
-    public string Summary => Copies == 0 ? "" :
-        $"Updated {Copies} cop{(Copies == 1 ? "y" : "ies")} in {(Scenes.Count == 1 ? Scenes[0] : string.Join(", ", Scenes.Take(Scenes.Count - 1)) + " and " + Scenes[^1])}.";
 }
 
 /// <summary>
@@ -976,6 +766,13 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
     {
         if (selection.Entity is not { } entity || workspace.Project is not { } project)
             return;
+
+        // In a prefab's tab, the entity at the top is the prefab: saving it is saving the tab.
+        if (workspace.Scene is { IsPrefab: true } tab && tab.Scene.Roots.FirstOrDefault() == entity)
+        {
+            await workspace.SaveSceneAsync();
+            return;
+        }
 
         // A copy saves over its own prefab (wherever it is, whatever the copy is called).
         var linked = entity.Prefab is { } link ? project.FindPrefab(link) : null;
@@ -1018,7 +815,7 @@ public sealed class UnlinkPrefabCommand(IWorkspace workspace, ISelection selecti
 {
     public override string Id => "Entity.UnlinkPrefab";
     public override string Text => "_Unlink from Prefab";
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
 
     protected override bool CanExecuteCore() => selection.Entities.Any(e => e.Prefab is not null);
 
@@ -1040,7 +837,7 @@ public sealed class RevertToPrefabCommand(IWorkspace workspace, ISelection selec
     public override string Id => "Entity.RevertToPrefab";
     public override string Text => "_Revert to Prefab";
     public override string? Icon => Icons.Undo;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 6);
 
     protected override bool CanExecuteCore() => selection.Entities.Any(e => e.Prefab is not null);
 

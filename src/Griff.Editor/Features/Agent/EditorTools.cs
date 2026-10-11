@@ -106,6 +106,14 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             text.AppendLine($"Undo: {scene.History.UndoDescription ?? "nothing"}; redo: {scene.History.RedoDescription ?? "nothing"}");
         }
 
+        if (workspace.Prefabs.Count > 0)
+            text.AppendLine($"Prefabs open in their own tabs: {string.Join(", ", workspace.Prefabs.Select(p => Path.GetRelativePath(project.AssetsPath, p.FilePath) + (p.IsDirty ? " (unsaved changes)" : "")))}");
+        if (workspace.Scene is { IsPrefab: true } prefab)
+        {
+            text.AppendLine($"Showing: the {prefab.Name} prefab's tab, so the scene tools, Hierarchy and Inspector edit the prefab (Scene_Save saves it and updates every copy; Prefab_Close or Workspace.ShowScene goes back to the scene)");
+            text.AppendLine($"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
+        }
+
         text.AppendLine($"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
         text.AppendLine($"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
         var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();

@@ -5,7 +5,10 @@ using Griff.Scenes;
 
 namespace Griff.Editor.Core.Workspace;
 
-/// <summary>An open scene: the scene itself, where it's saved, and its undo history.</summary>
+/// <summary>
+/// An open scene: the scene itself, where it's saved, and its undo history. A prefab open in its own tab is one too, a
+/// scene holding just the prefab.
+/// </summary>
 public sealed class SceneDocument : ObservableObject
 {
     public SceneDocument(Scene scene, string filePath, bool isRuntime = false)
@@ -34,6 +37,15 @@ public sealed class SceneDocument : ObservableObject
     public string FilePath { get; }
 
     public string Name => Path.GetFileNameWithoutExtension(FilePath);
+
+    /// <summary>True for a prefab open in its own tab: its scene holds the prefab, and saving writes the prefab file.</summary>
+    public bool IsPrefab => FilePath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Where something new goes when it's put inside <paramref name="parent"/>: there, or with none, at the top of a
+    /// scene. A prefab is one entity, so in a prefab's tab that's inside the prefab.
+    /// </summary>
+    public Entity? ParentFor(Entity? parent) => parent ?? (IsPrefab ? Scene.Roots.FirstOrDefault() : null);
 
     public EditHistory History { get; } = new();
 

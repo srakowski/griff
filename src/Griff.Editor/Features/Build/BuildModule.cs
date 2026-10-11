@@ -69,7 +69,7 @@ public abstract class BuildCommandBase(
             return;
 
         // Export what's on disk, so save first.
-        if (workspace.Scene is { IsDirty: true } && !await workspace.SaveSceneAsync())
+        if (!await workspace.SaveAllAsync())
             return;
 
         status.Show("Building...");

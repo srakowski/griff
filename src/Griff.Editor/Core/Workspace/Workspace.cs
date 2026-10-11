@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,12 +14,22 @@ using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Core.Workspace;
 
-/// <summary>The open project and scene. Everything that edits game content starts here.</summary>
+/// <summary>
+/// The open project, its scene and the prefabs open in tabs of their own. Everything that edits game content starts
+/// here.
+/// </summary>
 public interface IWorkspace : INotifyPropertyChanged
 {
     Project? Project { get; }
 
+    /// <summary>
+    /// What the Hierarchy, Inspector and Scene view edit: the open scene, a prefab whose tab is showing (see
+    /// <see cref="OpenPrefabAsync"/>), or the running copy of the scene while playing.
+    /// </summary>
     SceneDocument? Scene { get; }
+
+    /// <summary>The prefabs open in tabs of their own, in the order they were opened, each with its own undo history.</summary>
+    ReadOnlyObservableCollection<SceneDocument> Prefabs { get; }
 
     ComponentRegistry Components { get; }
 
@@ -29,7 +40,10 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
     bool IsPlaying { get; }
 
-    /// <summary>The scene being edited: the same as <see cref="Scene"/> unless playing.</summary>
+    /// <summary>
+    /// The scene being edited, whatever's showing: the same as <see cref="Scene"/> unless playing or a prefab's tab is
+    /// showing.
+    /// </summary>
     SceneDocument? EditScene { get; }
 
     /// <summary>Shows <paramref name="runtime"/> in place of the edit scene until <see cref="ExitPlayMode"/>.</summary>
@@ -45,13 +59,23 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
     Task<bool> OpenProjectAsync(string path);
 
+    /// <summary>
+    /// Saves what's showing: the scene, or a prefab (to its file, then bringing every copy of it up to date, as
+    /// <see cref="PrefabFiles.UpdateCopies"/> does).
+    /// </summary>
     /// <returns>False if the user cancelled or the save failed.</returns>
     Task<bool> SaveSceneAsync();
 
-    /// <summary>Prompts to save unsaved changes. Returns true if it's safe to close the scene.</summary>
+    /// <summary>Saves every open prefab with unsaved changes, then the scene if it has any. False if one couldn't be saved.</summary>
+    Task<bool> SaveAllAsync();
+
+    /// <summary>Prompts to save the scene's unsaved changes. Returns true if it's safe to close the scene.</summary>
     Task<bool> ConfirmCloseAsync();
 
-    /// <summary>Prompts to save everything unsaved in the project: open scripts (see <see cref="AddCloseGuard"/>) and the scene.</summary>
+    /// <summary>
+    /// Prompts to save everything unsaved in the project: open scripts (see <see cref="AddCloseGuard"/>), open prefabs
+    /// and the scene.
+    /// </summary>
     Task<bool> ConfirmCloseProjectAsync();
 
     /// <summary>Adds a check that runs before the project closes; it returns false to keep the project open.</summary>
@@ -59,6 +83,22 @@ public interface IWorkspace : INotifyPropertyChanged
 
     /// <summary>Opens another scene from the project. Returns false if the user cancelled.</summary>
     Task<bool> OpenSceneAsync(string path);
+
+    /// <summary>
+    /// Opens a prefab to edit on its own, in a tab of its own, and shows it (or shows its tab, if it's open already).
+    /// <paramref name="path"/> is the prefab file's full path, its path in Assets ("Prefabs/Coin.prefab") or its name.
+    /// False while playing or before a scene is open, or if the project has no such prefab or it can't be read.
+    /// </summary>
+    Task<bool> OpenPrefabAsync(string path);
+
+    /// <summary>Shows the scene again in place of a prefab. The prefab stays open in its tab.</summary>
+    void ShowScene();
+
+    /// <summary>Shows <paramref name="document"/>: the scene, or one of the open <see cref="Prefabs"/>. Not while playing.</summary>
+    void Show(SceneDocument document);
+
+    /// <summary>Closes a prefab's tab, asking to save its changes first. False if the user cancelled or the save failed.</summary>
+    Task<bool> ClosePrefabAsync(SceneDocument prefab);
 
     /// <summary>Creates Assets/Scenes/&lt;name&gt;.scene with a camera and opens it.</summary>
     Task<bool> CreateSceneAsync(string name);
@@ -81,8 +121,13 @@ public sealed class Workspace(
     private const int MaxRecentProjects = 10;
 
     private Project? _project;
+
+    // The scene, or the running copy while playing (when the scene waits in _editScene); and the prefab showing, if any.
     private SceneDocument? _scene;
     private SceneDocument? _editScene;
+    private SceneDocument? _prefab;
+    private readonly ObservableCollection<SceneDocument> _prefabs = [];
+    private ReadOnlyObservableCollection<SceneDocument>? _readOnlyPrefabs;
     private FileSystemWatcher? _scriptWatcher;
     private DispatcherTimer? _scriptDebounce;
     private DispatcherTimer? _recoveryTimer;
@@ -94,10 +139,17 @@ public sealed class Workspace(
         private set => SetProperty(ref _project, value);
     }
 
-    public SceneDocument? Scene
+    public SceneDocument? Scene => _prefab ?? _scene;
+
+    public ReadOnlyObservableCollection<SceneDocument> Prefabs => _readOnlyPrefabs ??= new(_prefabs);
+
+    private void SetScene(SceneDocument? scene, SceneDocument? prefab = null)
     {
-        get => _scene;
-        private set => SetProperty(ref _scene, value);
+        if (_scene == scene && _prefab == prefab)
+            return;
+        _scene = scene;
+        _prefab = prefab;
+        OnPropertyChanged(nameof(Scene));
     }
 
     public ComponentRegistry Components { get; } = ComponentRegistry.CreateDefault();
@@ -115,8 +167,8 @@ public sealed class Workspace(
         if (Project is not { } project)
             return null;
 
-        // Rebuild script components everywhere they're live: the edit scene and, while playing, the game.
-        var documents = new[] { _editScene, Scene }.OfType<SceneDocument>().Distinct().ToList();
+        // Rebuild script components everywhere they're live: the edit scene, open prefabs and, while playing, the game.
+        var documents = new[] { _editScene, _scene }.Concat(_prefabs).OfType<SceneDocument>().Distinct().ToList();
         var result = Scripts.ReloadFolder(project.AssetsPath, documents.Select(d => d.Scene));
         if (result.Unchanged)
             return result;
@@ -175,14 +227,15 @@ public sealed class Workspace(
 
     public bool IsPlaying => _editScene is not null;
 
-    public SceneDocument? EditScene => _editScene ?? Scene;
+    public SceneDocument? EditScene => _editScene ?? _scene;
 
+    // Playing plays the scene, so a prefab showing gives way to it.
     public void EnterPlayMode(SceneDocument runtime)
     {
         if (IsPlaying)
             throw new InvalidOperationException("Already playing.");
-        _editScene = Scene;
-        Scene = runtime;
+        _editScene = _scene;
+        SetScene(runtime);
         OnPropertyChanged(nameof(IsPlaying));
     }
 
@@ -190,16 +243,97 @@ public sealed class Workspace(
     {
         if (!IsPlaying)
             throw new InvalidOperationException("Not playing.");
-        Scene = runtime;
+        SetScene(runtime);
     }
 
     public void ExitPlayMode()
     {
         if (!IsPlaying)
             return;
-        Scene = _editScene;
+        var edit = _editScene;
         _editScene = null;
+        SetScene(edit);
         OnPropertyChanged(nameof(IsPlaying));
+    }
+
+    public void ShowScene()
+    {
+        if (!IsPlaying)
+            SetScene(_scene);
+    }
+
+    public void Show(SceneDocument document)
+    {
+        if (IsPlaying)
+            return;
+        if (document == _scene)
+            SetScene(_scene);
+        else if (_prefabs.Contains(document))
+            SetScene(_scene, document);
+        else
+            throw new ArgumentException($"{document.Name} isn't open.", nameof(document));
+    }
+
+    public async Task<bool> OpenPrefabAsync(string path)
+    {
+        // Not while playing, or while the project is still opening its scene.
+        if (Project is not { } project || IsPlaying || _scene is null)
+            return false;
+        var file = Path.IsPathRooted(path) && File.Exists(path) ? path : project.FindPrefab(path);
+        if (file is null)
+        {
+            dialogs.ShowError("Open Prefab", $"The project has no prefab \"{path}\".");
+            return false;
+        }
+
+        if (_prefabs.FirstOrDefault(p => string.Equals(Path.GetFullPath(p.FilePath), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase)) is { } open)
+        {
+            Show(open);
+            return true;
+        }
+
+        var warnings = new List<string>();
+        Entity root;
+        try
+        {
+            root = Serializer.LoadPrefabFromString(await File.ReadAllTextAsync(file), warnings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            logger.LogError("Couldn't open {Prefab}: {Message}", Path.GetFileName(file), ex.Message);
+            dialogs.ShowError("Couldn't open the prefab", ex.Message);
+            return false;
+        }
+
+        foreach (var warning in warnings)
+            logger.LogWarning("{Prefab}: {Warning}", Path.GetFileName(file), warning);
+
+        var scene = new Scene();
+        scene.Add(root);
+        var document = new SceneDocument(scene, file);
+        _prefabs.Add(document);
+        Show(document);
+        status.Show($"Editing the {document.Name} prefab: saving it updates every copy");
+        logger.LogInformation("Opened prefab {Prefab}", document.Name);
+        return true;
+    }
+
+    public async Task<bool> ClosePrefabAsync(SceneDocument prefab)
+    {
+        if (!_prefabs.Contains(prefab))
+            return true;
+        if (prefab.IsDirty)
+        {
+            var choice = dialogs.AskSaveChanges(prefab.Name);
+            if (choice == SaveChangesChoice.Cancel || (choice == SaveChangesChoice.Save && !await SavePrefabAsync(prefab)))
+                return false;
+        }
+
+        // Closing the prefab that's showing shows the scene again.
+        if (_prefab == prefab)
+            SetScene(_scene);
+        _prefabs.Remove(prefab);
+        return true;
     }
 
     public async Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty)
@@ -236,9 +370,25 @@ public sealed class Workspace(
 
     public async Task<bool> SaveSceneAsync()
     {
-        if (Scene is not { IsRuntime: false } document)
-            return false;
+        if (_prefab is { } prefab)
+            return await SavePrefabAsync(prefab);
+        return Scene is { IsRuntime: false } document && await SaveSceneFileAsync(document);
+    }
 
+    // Prefabs first: saving one can update its copies in the scene.
+    public async Task<bool> SaveAllAsync()
+    {
+        foreach (var prefab in _prefabs.Where(p => p.IsDirty).ToList())
+        {
+            if (!await SavePrefabAsync(prefab))
+                return false;
+        }
+
+        return EditScene is not { IsDirty: true, IsRuntime: false } scene || await SaveSceneFileAsync(scene);
+    }
+
+    private async Task<bool> SaveSceneFileAsync(SceneDocument document)
+    {
         try
         {
             // Write to a temporary file first so a failed save never truncates the real one.
@@ -262,11 +412,60 @@ public sealed class Workspace(
         return true;
     }
 
+    // A prefab is one entity, with everything else inside it.
+    private async Task<bool> SavePrefabAsync(SceneDocument prefab)
+    {
+        var roots = prefab.Scene.Roots;
+        if (roots.Count != 1)
+        {
+            dialogs.ShowError("Couldn't save the prefab", roots.Count == 0
+                ? $"The {prefab.Name} prefab is empty. Undo to bring back what was deleted, or close its tab without saving."
+                : $"A prefab is one entity with everything else inside it, but {prefab.Name} has {roots.Count} at the top " +
+                  $"({string.Join(", ", roots.Select(r => r.Name))}). Drag the others onto {roots[0].Name} in the Hierarchy.");
+            return false;
+        }
+
+        var json = Serializer.SavePrefabToString(roots[0]);
+        string? oldJson;
+        try
+        {
+            oldJson = File.Exists(prefab.FilePath) ? await File.ReadAllTextAsync(prefab.FilePath) : null;
+            // Write to a temporary file first so a failed save never truncates the real one.
+            var temp = prefab.FilePath + ".saving";
+            await File.WriteAllTextAsync(temp, json);
+            File.Move(temp, prefab.FilePath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError("Couldn't save {Path}: {Message}", prefab.FilePath, ex.Message);
+            dialogs.ShowError("Save failed", ex.Message);
+            return false;
+        }
+
+        prefab.MarkSaved();
+        logger.LogInformation("Saved prefab {Prefab}", prefab.Name);
+        if (Project is { } project)
+        {
+            var update = PrefabFiles.UpdateCopies(this, PrefabFiles.AssetPathOf(project, prefab.FilePath), json, oldJson, roots[0]);
+            if (update.Problems.Count > 0)
+                dialogs.ShowError("Some copies weren't updated", string.Join("\n", update.Problems));
+            status.Show($"Saved the {prefab.Name} prefab. {update.Summary}".Trim());
+        }
+
+        return true;
+    }
+
     public async Task<bool> ConfirmCloseProjectAsync()
     {
         foreach (var guard in _closeGuards)
         {
             if (!await guard())
+                return false;
+        }
+
+        foreach (var prefab in _prefabs.Where(p => p.IsDirty).ToList())
+        {
+            if (!await ClosePrefabAsync(prefab))
                 return false;
         }
 
@@ -279,13 +478,13 @@ public sealed class Workspace(
     {
         // Leaving play mode discards the runtime copy; the edit scene is what matters.
         ExitPlayMode();
-        if (Scene is not { IsDirty: true } document)
+        if (_scene is not { IsDirty: true } document)
             return true;
 
         switch (dialogs.AskSaveChanges(document.Name))
         {
             case SaveChangesChoice.Save:
-                return await SaveSceneAsync();
+                return await SaveSceneFileAsync(document);
             case SaveChangesChoice.Discard:
                 if (Project is { } project)
                     TryRecovery(() => RecoveryFiles.Delete(project, document.FilePath));
@@ -300,9 +499,10 @@ public sealed class Workspace(
         if (Project is null || IsPlaying || !await ConfirmCloseAsync())
             return false;
 
-        Scene = await LoadSceneAsync(path);
-        status.Show($"Opened {Scene.Name}");
-        logger.LogInformation("Opened scene {Scene}", Scene.Name);
+        var scene = await LoadSceneAsync(path);
+        SetScene(scene);
+        status.Show($"Opened {scene.Name}");
+        logger.LogInformation("Opened scene {Scene}", scene.Name);
         return true;
     }
 
@@ -327,7 +527,8 @@ public sealed class Workspace(
 
     private async Task OpenAsync(Project project)
     {
-        Scene = null;
+        SetScene(null);
+        _prefabs.Clear();
         Project = project;
         RememberRecent(project.RootPath);
 
@@ -340,7 +541,7 @@ public sealed class Workspace(
             ? start
             : project.FindScenes().FirstOrDefault();
 
-        Scene = scenePath is null ? await CreateSceneAsync(project) : await LoadSceneAsync(scenePath);
+        SetScene(scenePath is null ? await CreateSceneAsync(project) : await LoadSceneAsync(scenePath));
         status.Show($"Opened {project.Name}");
         logger.LogInformation("Opened project {Name}", project.Name);
     }
@@ -392,7 +593,7 @@ public sealed class Workspace(
 
     private void WriteRecovery()
     {
-        var document = _editScene ?? Scene;
+        var document = EditScene;
         if (Project is not { } project || document is not { IsDirty: true, IsRuntime: false })
             return;
         var json = Serializer.SaveToString(document.Scene);

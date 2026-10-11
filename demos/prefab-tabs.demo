@@ -1,0 +1,50 @@
+title: Edit a prefab on its own
+intro: Open a prefab in a tab of its own to change the prefab itself. Saving it updates every copy, in every scene, and each copy keeps what it changed.
+project: Platformer | Prefab Tabs
+
+chapter: Three gems | Copies of one prefab
+look: 8, -2, 4
+deselect
+create: Sprite
+rename: Gem
+set: Transform.Position = 5, -3, 0
+set: Sprite.Tint = #29ADFF
+set: Sprite.Size = 0.6, 0.6
+add: Pickup
+menu: Entity > Save as Prefab
+key: Ctrl+D
+rename: Gem 2
+set: Transform.Position = 7.5, -3, 0
+key: Ctrl+D
+rename: Gem 3
+set: Transform.Position = 10, -3, 0
+select: Gem 2
+set: Sprite.Tint = #FF004D
+expectoverrides: Gem 2 = Sprite.Tint
+say: Three gems, all copies of one prefab. The middle one has been made red, a change of its own.
+
+chapter: Open the prefab | Entity > Edit Prefab
+menu: Entity > Edit Prefab
+explain: tab:Gem | A tab of its own | Edit Prefab opens the prefab this gem was placed from in a tab of its own, beside the scene. Double-clicking a prefab in Assets does the same.
+explain: panel:Hierarchy | Just the prefab | Now the Hierarchy, the Inspector and the Scene view edit the prefab itself, with its own undo, not any one copy.
+select: Gem
+set: Sprite.Size = 0.9, 0.9
+set: Pickup.Amount = 5
+deselect
+create: Light
+rename: Glow
+set: Light.Radius = 1.5
+expectcount: Glow = 1
+explain: entity:Glow | Inside the prefab | Something made with nothing selected still goes inside the gem, because a prefab is one entity.
+
+chapter: Save it | Every copy follows, keeping its own changes
+save
+click: tab:Main
+expectcount: Glow = 3
+expectvalue: Gem 3.Pickup.Amount = 5
+expectvalue: Gem 3.Sprite.Size.X = 0.9
+expectvalue: Gem 2.Sprite.Tint = #FF004D
+expectvalue: Gem 2.Pickup.Amount = 5
+expectoverrides: Gem 2 = Sprite.Tint
+explain: world:4, -1.5, 12, -4.2 | Updated, changes kept | Saving the prefab updated every gem: bigger, worth five, and glowing. The red gem is still red, since that was its own change. Copies in other scenes are updated too.
+say: The prefab stays open in its tab, to come back to. Its close button, or File, Close Prefab, closes it. Playing always plays the scene.

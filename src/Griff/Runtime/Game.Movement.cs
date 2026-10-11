@@ -4,7 +4,7 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Players with no code (platformer and top-down movement, ladders) and the level pieces they play with: bouncers and
+// Players with no code (platformer, top-down and grid movement, ladders) and the level pieces they play with: bouncers and
 // crumbling platforms. Pushable crates are physics.
 public sealed partial class Game
 {
@@ -29,6 +29,8 @@ public sealed partial class Game
             RunPlatformer(movement);
         foreach (var movement in Moving<TopDownMovement>())
             RunTopDown(movement);
+        foreach (var movement in Moving<GridMovement>())
+            RunGrid(movement);
     }
 
     private void RunPlatformer(PlatformerMovement m)

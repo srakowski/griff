@@ -274,7 +274,7 @@ public static partial class SceneRenderer
     private static Vector2? IrisCenter(Scene scene)
     {
         var player = scene.Entities.FirstOrDefault(e => e.Name == "Player" && IsActive(e))
-                     ?? scene.Entities.FirstOrDefault(e => IsActive(e) && (e.GetComponent<PlatformerMovement>() is not null || e.GetComponent<TopDownMovement>() is not null));
+                     ?? scene.Entities.FirstOrDefault(e => IsActive(e) && (e.GetComponent<PlatformerMovement>() is not null || e.GetComponent<TopDownMovement>() is not null || e.GetComponent<GridMovement>() is not null));
         if (player is null)
             return null;
         var position = player.Transform.WorldPosition;

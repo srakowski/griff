@@ -135,6 +135,9 @@ public sealed partial class Game
             return MathF.Abs(f.Y) > MathF.Abs(f.X) ? new Vector2(0, MathF.Sign(f.Y)) : new Vector2(MathF.Sign(f.X), 0);
         }
 
+        if (entity.GetComponent<GridMovement>() is { } grid && grid.Facing != Vector2.Zero)
+            return grid.Facing.X != 0 ? new Vector2(MathF.Sign(grid.Facing.X), 0) : new Vector2(0, MathF.Sign(grid.Facing.Y));
+
         return new Vector2(entity.GetComponent<Sprite>()?.FlipX == true ? -1 : 1, 0);
     }
 

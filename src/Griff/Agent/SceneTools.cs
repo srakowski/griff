@@ -145,7 +145,10 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Title = "Delete Entities",
             Destructive = true,
             Description = "Deletes entities and everything inside them, as one undo step.",
-            InputSchema = Schema.Object([("entities", Schema.Array(Schema.String("name, id or path"), "The entities to delete."))], "entities"),
+            InputSchema = Schema.Object([
+                ("entities", Schema.Array(Schema.String("name, id or path"), "The entities to delete.")),
+                ("entity", Schema.String("One entity to delete, instead of \"entities\".")),
+            ]),
             Invoke = args => Task.FromResult(Delete(args)),
         };
 
@@ -574,7 +577,11 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     private ToolResult Delete(ToolArgs args)
     {
         var scene = RequireScene();
-        var entities = args.Strings("entities").Select(r => Resolve(scene, r)).Distinct().ToList();
+        // "entity", as the other tools name one, works too.
+        var names = args.Strings("entities").Concat(args.Strings("entity")).ToList();
+        if (names.Count == 0)
+            throw new AgentException("Give \"entities\": the names, ids or paths of the entities to delete.");
+        var entities = names.Select(r => Resolve(scene, r)).Distinct().ToList();
         // Deleting a parent takes its children; don't delete them twice.
         entities = entities.Where(e => !entities.Any(o => o != e && e.IsSelfOrDescendantOf(o))).ToList();
         using (host.BeginGroup(entities.Count == 1 ? $"Delete {entities[0].Name}" : $"Delete {entities.Count} entities"))

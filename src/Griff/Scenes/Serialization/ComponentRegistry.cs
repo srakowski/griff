@@ -48,6 +48,7 @@ public sealed class ComponentRegistry
         registry.Register<Choice>();
         registry.Register<PlatformerMovement>();
         registry.Register<TopDownMovement>();
+        registry.Register<GridMovement>();
         registry.Register<Ladder>();
         registry.Register<Pushable>();
         registry.Register<Bouncer>();

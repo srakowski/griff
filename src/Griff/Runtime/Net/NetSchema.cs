@@ -71,7 +71,7 @@ internal sealed class NetSlot(SlotKind kind, Component? component, PropertyDescr
 internal static class NetSchema
 {
     // Moved by the player who controls it, when they move it themselves.
-    private static readonly HashSet<Type> MovementComponents = [typeof(PlatformerMovement), typeof(TopDownMovement), typeof(FirstPersonMovement)];
+    private static readonly HashSet<Type> MovementComponents = [typeof(PlatformerMovement), typeof(TopDownMovement), typeof(GridMovement), typeof(FirstPersonMovement)];
 
     // Things each machine keeps for itself: cameras, the HUD, menus, music. Never sent; every machine has its own.
     private static readonly HashSet<Type> LocalComponents =

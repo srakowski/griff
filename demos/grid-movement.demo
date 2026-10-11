@@ -1,0 +1,55 @@
+title: Grid movement
+intro: A player that steps tile by tile on a tilemap, blocked by its walls, with no code: for puzzle games, roguelikes and old-school RPGs.
+project: Empty | Grid Steps
+
+chapter: A room to walk in | A tilemap, a rock and a grid player
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111\n1......1\n1.11...1\n1......1\n11111111
+select: Main Camera
+set: Transform.Position.X = 4
+set: Transform.Position.Y = -2.5
+look: 4, -2.5, 4
+say: Here's a small room painted on a tilemap: walls all round, and a wall in the middle.
+deselect
+create: Sprite
+rename: Rock
+set: Transform.Position.X = 6.5
+set: Transform.Position.Y = -3.5
+add: BoxCollider
+say: And a rock with a collider, in the bottom right corner.
+deselect
+create: Grid Player
+set: Transform.Position.X = 1.4
+set: Transform.Position.Y = -1.6
+explain: menu:Entity | Entity, Create Grid Player | The Entity menu has a new player: Create Grid Player.
+explain: component:GridMovement | Grid Movement | It's a box with a body and a collider, like the other players, and a Grid Movement instead of running and jumping.
+explain: field:GridMovement.StepTime | Step Time | Each press steps it one cell of the tilemap, gliding there in this many seconds.
+explain: field:GridMovement.RepeatDelay | Repeat and Repeat Delay | Holding a way keeps it walking, straight away or after a pause, which suits careful puzzle steps.
+explain: field:GridMovement.Diagonal | Diagonal and Stay On Map | It moves four ways, or diagonally too, and stays on the map even where there's no wall.
+
+chapter: Step by step | Walls and solid things stop it
+play
+wait: 0.5
+expectat: Player = 1.5, -1.5
+say: It's placed a little off, so it starts on the middle of its cell.
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.4
+expectat: Player = 3.5, -1.5
+say: Each tap is one step, one cell at a time.
+hold: Down 0.6
+wait: 0.3
+expectat: Player = 3.5, -1.5
+explain: game | Blocked | Below it is the wall in the middle, so it just turns to face it. A bump sound can play here, once a press.
+hold: Right 1
+wait: 0.3
+expectat: Player = 6.5, -1.5
+say: Holding a way keeps it walking, until the wall on the right stops it.
+hold: Down 1
+wait: 0.3
+expectat: Player = 6.5, -2.5
+explain: game | The rock | Solid colliders stop it too, like this rock, and so do other grid movers. Coins, doors and other triggers don't, so it picks things up as it steps onto them.
+stop
+say: That's grid movement, with no code. Scripts can step it too, and it works in network games, with each player stepping their own.

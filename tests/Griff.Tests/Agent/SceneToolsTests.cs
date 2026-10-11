@@ -214,6 +214,14 @@ public class SceneToolsTests
         Assert.Equal(new Vector3(5, 0, 0), Named("Level").Children[2].Transform.Position);
 
         Assert.Contains("3 entities are called \"Spike\"", Run("entity_delete", """{"entities": ["Spike"]}""").Text);
+
+        // Given nothing to delete, it says so rather than deleting nothing; "entity" names one, like the other tools.
+        var nothing = Run("entity_delete", """{"entitie": "Level"}""");
+        Assert.True(nothing.IsError);
+        Assert.Contains("\"entities\"", nothing.Text);
+        Assert.Contains("Deleted Spike", Run("entity_delete", """{"entity": "Level/Spike"}""").Text);
+        Assert.Equal(2, Named("Level").Children.Count);
+
         Run("entity_delete", """{"entities": ["Level"]}""");
         Assert.Equal(0, _host.Scene!.Count);
     }

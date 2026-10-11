@@ -36,6 +36,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateChoiceCommand>()
             .AddCommand<CreatePlatformerPlayerCommand>()
             .AddCommand<CreateTopDownPlayerCommand>()
+            .AddCommand<CreateGridPlayerCommand>()
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
@@ -381,13 +382,33 @@ public sealed class CreateTopDownPlayerCommand(IWorkspace workspace, ISelection 
     }
 }
 
+/// <summary>
+/// Creates a player that steps tile by tile on the scene's tilemap with no code, blocked by its walls: a box sprite with
+/// a collider on the Player layer, a <see cref="Body"/> without gravity and a <see cref="GridMovement"/>.
+/// </summary>
+public sealed class CreateGridPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateGridPlayer";
+    public override string Text => "Create _Grid Player";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    protected override string EntityName => "Player";
+
+    protected override void Configure(Entity entity)
+    {
+        CreatePlatformerPlayerCommand.AddPlayerShape(entity, new System.Numerics.Vector2(0.8f, 0.8f));
+        entity.AddComponent<Body>().GravityScale = 0;
+        entity.AddComponent<GridMovement>();
+    }
+}
+
 /// <summary>Creates a ladder: a tall thin sprite behind things, with a trigger to climb. Stretch it with its Scale.</summary>
 public sealed class CreateLadderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateLadder";
     public override string Text => "Create _Ladder";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 17);
     protected override string EntityName => "Ladder";
 
     protected override void Configure(Entity entity)
@@ -410,7 +431,7 @@ public sealed class CreateSpringCommand(IWorkspace workspace, ISelection selecti
     public override string Id => "Entity.CreateSpring";
     public override string Text => "Create Sprin_g";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 17);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 18);
     protected override string EntityName => "Spring";
 
     protected override void Configure(Entity entity)
@@ -430,7 +451,7 @@ public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selectio
     public override string Id => "Entity.CreateCrate";
     public override string Text => "Create Cr_ate";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 18);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
     protected override string EntityName => "Crate";
 
     protected override void Configure(Entity entity)
@@ -450,7 +471,7 @@ public sealed class CreateLightCommand(IWorkspace workspace, ISelection selectio
     public override string Id => "Entity.CreateLight";
     public override string Text => "Create Lig_ht";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 20);
     protected override string EntityName => "Light";
     protected override void Configure(Entity entity) => entity.AddComponent<Light>();
 }
@@ -461,7 +482,7 @@ public sealed class CreateWeatherCommand(IWorkspace workspace, ISelection select
     public override string Id => "Entity.CreateWeather";
     public override string Text => "Create Weather";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 23);
     protected override string EntityName => "Weather";
     protected override void Configure(Entity entity) => entity.AddComponent<Weather>();
 }
@@ -474,7 +495,7 @@ public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection
     public override string Id => "Entity.CreateRoom";
     public override string Text => "Create Roo_m";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 20);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
     protected override string EntityName => "Room";
 
     protected override void Configure(Entity entity)
@@ -495,7 +516,7 @@ public sealed class CreateHitboxCommand(IWorkspace workspace, ISelection selecti
     public override string Id => "Entity.CreateHitbox";
     public override string Text => "Add Atta_ck";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
 
     protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
 

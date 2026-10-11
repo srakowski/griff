@@ -245,3 +245,115 @@ public sealed class TopDownMovement : Component
 
     internal Vector2 LastInput { get; set; }
 }
+
+/// <summary>
+/// A player that steps tile by tile with no code, for puzzle games, roguelikes and old-school RPGs: each press of WASD,
+/// the arrow keys, the D-pad or the stick moves it one cell of the scene's <see cref="Tilemap"/>, gliding there over
+/// <see cref="StepTime"/>, and holding a way keeps it walking. Solid tiles, solid colliders and other grid movers block
+/// it (it turns to face them instead). It starts on the middle of the cell it's placed in. Plays its
+/// <see cref="Animation"/>'s Idle and Walk (or Run) clips if it has them (and IdleUp, WalkDown and so on, facing that
+/// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity.
+/// </summary>
+[Category("Movement")]
+[Requires(typeof(Body))]
+[Requires(typeof(Collider))]
+[WorksWith(typeof(Tilemap), Note = "steps on its grid, blocked by its solid tiles")]
+[WorksWith(typeof(Animation), Note = "plays Idle and Walk clips")]
+[ComponentName("Griff.GridMovement")]
+public sealed class GridMovement : Component
+{
+    /// <summary>
+    /// The tilemap whose cells it steps between. Empty uses the first tilemap in the scene (not a layer); with none, it
+    /// steps a world unit at a time, between whole-number positions.
+    /// </summary>
+    [EntityName]
+    public string? Map { get; set; }
+
+    /// <summary>Seconds each step takes to glide from one cell to the next.</summary>
+    public float StepTime { get; set; } = 0.15f;
+
+    /// <summary>Holding a way keeps stepping that way. Untick it to step once per press.</summary>
+    public bool Repeat { get; set; } = true;
+
+    /// <summary>
+    /// Seconds a way has to be held, after the first step, before it keeps walking: 0 walks straight on, about 0.25 lets
+    /// a puzzle's careful single steps come easily.
+    /// </summary>
+    public float RepeatDelay { get; set; }
+
+    /// <summary>Steps diagonally too, when two ways are held. It never cuts a wall's corner.</summary>
+    public bool Diagonal { get; set; }
+
+    /// <summary>Never steps off the edge of its <see cref="Map"/>, even where there's no wall.</summary>
+    public bool StayOnMap { get; set; } = true;
+
+    /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works.</summary>
+    public bool Controllable { get; set; } = true;
+
+    /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>
+    public bool FlipSprite { get; set; } = true;
+
+    /// <summary>A sound played with each step, e.g. "Sounds/step.wav".</summary>
+    public string? StepSound { get; set; }
+
+    /// <summary>A sound played on trying to step into a wall, once per press.</summary>
+    public string? BumpSound { get; set; }
+
+    /// <summary>The way it faces, one cell's step as a unit vector (diagonals are (±1, ±1)): down to start with.</summary>
+    [DoNotSerialize]
+    public Vector2 Facing { get; set; } = -Vector2.UnitY;
+
+    /// <summary>True while it's gliding from one cell to the next.</summary>
+    [DoNotSerialize]
+    public bool IsMoving => Stepping;
+
+    /// <summary>
+    /// The cell it's in, or heading into while it moves: column then row on its <see cref="Map"/>, row 0 at the top (on
+    /// no map, its whole-number position).
+    /// </summary>
+    public (int X, int Y) Cell { get; internal set; }
+
+    /// <summary>Raised as each step starts, with the way it's going.</summary>
+    public event Action<GridMovement, Vector2>? Stepped;
+
+    /// <summary>Raised on trying to step into a wall or anything else solid, with the way it tried.</summary>
+    public event Action<GridMovement, Vector2>? Bumped;
+
+    /// <summary>
+    /// Steps one cell <paramref name="x"/> across and <paramref name="y"/> up (each -1, 0 or 1) once the step under way
+    /// ends, as if the player pressed that way, even when it isn't <see cref="Controllable"/>. Blocked like a press is.
+    /// </summary>
+    public void Step(int x, int y) => Queued = (Math.Sign(x), Math.Sign(y));
+
+    internal void RaiseStepped(Vector2 way) => Stepped?.Invoke(this, way);
+
+    internal void RaiseBumped(Vector2 way) => Bumped?.Invoke(this, way);
+
+    // The step under way: from and to (world positions) and how far along, 0–1. Whether it has snapped onto its grid yet.
+    internal bool Stepping { get; set; }
+
+    internal Vector2 From { get; set; }
+
+    internal Vector2 To { get; set; }
+
+    internal float Progress { get; set; }
+
+    internal bool Started { get; set; }
+
+    // A step asked for by a script; a way pressed during a step, taken when it ends; the way held last frame and for how
+    // long; the way it last bumped into while that's still held, so a wall only bumps once a press.
+    internal (int X, int Y)? Queued { get; set; }
+
+    internal (int X, int Y)? Buffered { get; set; }
+
+    internal (int X, int Y) Held { get; set; }
+
+    internal float HeldFor { get; set; }
+
+    internal (int X, int Y) BumpedWay { get; set; }
+
+    // For four-way stepping: which axis was pressed most recently, and the ways pressed last frame on each axis.
+    internal bool PreferVertical { get; set; }
+
+    internal (int X, int Y) LastRaw { get; set; }
+}

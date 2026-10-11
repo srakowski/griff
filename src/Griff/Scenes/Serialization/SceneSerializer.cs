@@ -143,12 +143,12 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         }
     }
 
-    /// <summary>Just <paramref name="entity"/> (not its children), ids and all, compact: how a network game sends one.</summary>
+    /// <summary>Just <paramref name="entity"/> (not its children), ids and all, compact: how a network game sends one. The editor's prefab link is left out.</summary>
     internal string SerializeEntityAlone(Entity entity)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
-            WriteEntity(writer, entity, writeIds: true, children: false);
+            WriteEntity(writer, entity, writeIds: true, children: false, link: false);
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
@@ -171,7 +171,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             writer.WriteStartObject();
             writer.WriteNumber("formatVersion", FormatVersion);
             writer.WritePropertyName("prefab");
-            WriteEntity(writer, entity, writeIds: false);
+            WriteEntity(writer, entity, writeIds: false, link: false);
             writer.WriteEndObject();
         }
 
@@ -225,7 +225,8 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return component;
     }
 
-    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true, bool children = true)
+    // A prefab's own root isn't a copy of anything (link: false), though copies of other prefabs inside it are.
+    private void WriteEntity(Utf8JsonWriter writer, Entity entity, bool writeIds = true, bool children = true, bool link = true)
     {
         writer.WriteStartObject();
         if (writeIds)
@@ -235,6 +236,8 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             writer.WriteBoolean("enabled", false);
         if (entity.IsLocked)
             writer.WriteBoolean("locked", true);
+        if (link && entity.Prefab is { } prefab)
+            writer.WriteString("prefab", prefab);
 
         writer.WriteStartArray("components");
         foreach (var component in entity.Components)
@@ -292,6 +295,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         {
             IsEnabled = !element.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean(),
             IsLocked = element.TryGetProperty("locked", out var locked) && locked.GetBoolean(),
+            Prefab = element.TryGetProperty("prefab", out var prefab) && prefab.ValueKind == JsonValueKind.String ? prefab.GetString() : null,
         };
 
         if (element.TryGetProperty("components", out var components))

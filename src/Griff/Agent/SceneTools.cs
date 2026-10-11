@@ -49,7 +49,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 {
     private const string EntityFormat =
         "An entity is a JSON object: {\"name\": \"Coin\", \"position\": [3, 1], \"components\": {\"Sprite\": {\"image\": \"Sprites/coin.png\"}, " +
-        "\"Pickup\": {\"message\": \"Score\"}}, \"children\": [ ...more entities ]}. Optional: \"prefab\" (start from a prefab by name), " +
+        "\"Pickup\": {\"message\": \"Score\"}}, \"children\": [ ...more entities ]}. Optional: \"prefab\" (start from a prefab by name: the entity is a copy of it, " +
+        "which saving the prefab with Entity_SaveAsPrefab, or writing its file, brings up to date), " +
         "\"rotation\" (degrees, or [x, y, z]), \"scale\" (a number or [x, y]), \"enabled\", \"locked\" (the editor's Scene view clicks through it; " +
         "the game ignores it). Components are keyed by name (see components_list), or " +
         "given as a list of {\"type\": \"Light\", ...} for several of one kind. Property keys are as component_describe shows them (camelCase; any case works). " +
@@ -243,7 +244,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     {
         var p = entity.Transform.Position;
         var components = entity.Components.Skip(1).Select(c => c is MissingComponent m ? $"{m.TypeName} (missing)" : c.GetType().Name);
-        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")}{(entity.IsLocked ? " locked" : "")} [{string.Join(", ", components)}]";
+        return $"{entity.Name} #{AgentValues.ShortId(entity.Id)} ({Num(p.X)}, {Num(p.Y)}){(entity.IsEnabled ? "" : " disabled")}{(entity.IsLocked ? " locked" : "")}{(entity.Prefab is { } prefab ? $" copy of {PrefabCopies.NameOf(prefab)}" : "")} [{string.Join(", ", components)}]";
     }
 
     private ToolResult Get(ToolArgs args)
@@ -266,6 +267,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             result["enabled"] = false;
         if (entity.IsLocked)
             result["locked"] = true;
+        if (entity.Prefab is { } prefab)
+            result["prefab"] = prefab;
 
         var components = new JsonArray();
         foreach (var component in entity.Components)

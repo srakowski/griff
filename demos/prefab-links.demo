@@ -1,0 +1,55 @@
+title: Prefab copies stay linked
+intro: Placed copies remember their prefab. Change one, save it, and every copy in every scene follows.
+project: Platformer | Prefab Links
+
+chapter: Make a prefab | Entity > Save as Prefab
+look: 8, -2, 4
+deselect
+create: Sprite
+rename: Gem
+set: Transform.Position = 5, -3, 0
+set: Sprite.Tint = #29ADFF
+set: Sprite.Size = 0.6, 0.6
+add: Pickup
+say: Here's a gem worth one point. We want lots of them through the level, all alike.
+menu: Entity > Save as Prefab
+expectfile: Prefabs/Gem.prefab
+expectprefab: Gem = Gem
+explain: prefab:Gem | A prefab copy | Saving it as a prefab makes the gem a copy of the new prefab. The Hierarchy marks copies with a package.
+explain: prefabnote | Copy of the Gem prefab | And the Inspector says which prefab it's a copy of.
+
+chapter: Place copies | Duplicate, or drag the prefab in from Assets
+key: Ctrl+D
+rename: Gem 2
+set: Transform.Position = 7.5, -3, 0
+key: Ctrl+D
+rename: Gem 3
+set: Transform.Position = 11, -3, 0
+expectprefab: Gem 2 = Gem
+expectprefab: Gem 3 = Gem
+explain: world:4, -1.5, 12, -4.2 | Three copies | Duplicating a copy keeps the link, and so does dragging the prefab in from the Assets panel. Each copy has its own name and place.
+
+chapter: Change one, update them all | Save as Prefab on a copy
+select: Gem 2
+set: Sprite.Tint = #FF004D
+set: Sprite.Size = 0.9, 0.9
+set: Pickup.Amount = 5
+say: Say gems should be red, bigger and worth five. We change just one of them.
+menu: Entity > Save as Prefab
+say: Saving a copy saves over its own prefab, whatever the copy is called. Griff checks first, since every copy will change.
+answer: Yes
+expectvalue: Gem.Sprite.Tint = #FF004D
+expectvalue: Gem 3.Pickup.Amount = 5
+expectat: Gem 3 = 11, -3
+explain: world:4, -1.5, 12, -4.2 | Every copy updated | The other copies take the prefab's new look and value straight away, and stay where they were placed. Copies in other scenes are updated in their files too.
+key: Ctrl+Z
+expectvalue: Gem 3.Sprite.Tint = #29ADFF
+say: In this scene it's one step to undo.
+key: Ctrl+Y
+expectvalue: Gem 3.Sprite.Tint = #FF004D
+
+chapter: Unlink a copy | Entity > Unlink from Prefab
+select: Gem 3
+menu: Entity > Unlink from Prefab
+expectprefab: Gem 3 = none
+say: To keep one copy as it is, unlink it. It becomes an ordinary entity, and saving the prefab leaves it alone.

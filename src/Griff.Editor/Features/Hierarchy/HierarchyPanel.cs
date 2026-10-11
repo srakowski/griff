@@ -34,6 +34,12 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
 
     public bool IsEnabled => Entity.IsEnabled;
 
+    /// <summary>Whether the entity is a placed copy of a prefab (marked in its row).</summary>
+    public bool IsPrefabCopy => Entity.Prefab is not null;
+
+    /// <summary>"Copy of the Coin prefab (Prefabs/Coin.prefab)": the mark's tooltip.</summary>
+    public string? PrefabTip => Entity.Prefab is { } prefab ? $"Copy of the {PrefabCopies.NameOf(prefab)} prefab ({prefab}): saving the prefab updates it" : null;
+
     /// <summary>
     /// Whether the entity is locked in the Scene view. Setting it locks or unlocks this row, or every selected row if
     /// this one is selected, as one undo step.

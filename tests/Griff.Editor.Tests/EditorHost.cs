@@ -1,3 +1,4 @@
+using Griff.Editor.Core.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -19,6 +20,9 @@ internal static class EditorHost
                 App.ConfigureCoreServices(services);
                 foreach (var module in App.Modules)
                     module.ConfigureServices(services);
+
+                // Tests never touch the user's own settings (recent projects and the like).
+                services.AddSingleton<ISettingsStore, TestSettings>();
                 using var provider = services.BuildServiceProvider();
                 test(provider);
             }
@@ -32,5 +36,15 @@ internal static class EditorHost
         thread.Join();
         if (failure is not null)
             throw new Exception(failure.Message, failure);
+    }
+}
+
+/// <summary>Settings kept in memory for one test.</summary>
+internal sealed class TestSettings : ISettingsStore
+{
+    public EditorSettings Settings { get; } = new();
+
+    public void Save()
+    {
     }
 }

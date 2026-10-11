@@ -2,6 +2,7 @@ using System.IO;
 using Griff.Agent;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Entities;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -32,9 +33,11 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
 
     public Entity? InstantiatePrefab(string name)
     {
-        if (workspace.Project?.FindPrefab(name) is not { } path)
+        if (workspace.Project is not { } project || project.FindPrefab(name) is not { } path)
             return null;
-        return new SceneSerializer(workspace.Components).LoadPrefabFromString(File.ReadAllText(path));
+        var entity = new SceneSerializer(workspace.Components).LoadPrefabFromString(File.ReadAllText(path));
+        entity.Prefab = PrefabFiles.AssetPathOf(project, path);
+        return entity;
     }
 
     public IReadOnlyCollection<string> PrefabNames =>
@@ -67,6 +70,17 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
             return Task.FromResult<AssetFeedback?>(new AssetFeedback(
                 (result.Unchanged ? "Scripts unchanged." : $"Scripts compiled. Script components: {(components.Count == 0 ? "none" : string.Join(", ", components))}.")
                 + (warnings.Count > 0 ? "\n" + string.Join("\n", warnings) : "")));
+        }
+
+        // A prefab written is a prefab saved: its copies, in every scene, are brought up to date.
+        if (assetPath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase) && workspace.Project is { } owner
+            && Path.Combine(owner.AssetsPath, assetPath) is var prefabPath && File.Exists(prefabPath))
+        {
+            var update = PrefabFiles.UpdateCopies(workspace, assetPath, File.ReadAllText(prefabPath), source: null);
+            var problems = update.Problems.Count > 0 ? "\nNot updated: " + string.Join("; ", update.Problems) : "";
+            return Task.FromResult<AssetFeedback?>(update.Copies > 0 || problems.Length > 0
+                ? new AssetFeedback((update.Summary + problems).Trim(), IsError: update.Problems.Count > 0)
+                : null);
         }
 
         if (assetPath.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) && workspace.Scene is { } open && workspace.Project is { } project

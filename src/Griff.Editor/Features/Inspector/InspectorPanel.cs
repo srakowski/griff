@@ -131,6 +131,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>The project's prefabs' names, read as the selection changes: fields can name them as well as entities.</summary>
     public IReadOnlyCollection<string> PrefabNames { get; private set; } = [];
 
+    /// <summary>Whether the prefab file at <paramref name="assetPath"/> (in Assets) is there.</summary>
+    internal bool PrefabExists(string assetPath) =>
+        _workspace.Project is { } project && System.IO.File.Exists(System.IO.Path.Combine(project.AssetsPath, assetPath));
+
     public void SetValues(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
     {
         if (SetPropertiesEdit.For(components, property, values) is { } edit)
@@ -183,7 +187,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private static bool ChangesComponents(IEdit edit) => edit switch
     {
-        AddComponentEdit or RemoveComponentEdit => true,
+        AddComponentEdit or RemoveComponentEdit or UpdatePrefabCopyEdit => true,
         CompositeEdit composite => composite.Edits.Any(ChangesComponents),
         _ => false,
     };
@@ -264,6 +268,24 @@ public sealed class EntityHeader(IReadOnlyList<Entity> entities, InspectorPanel 
 
     /// <summary>The selected entities' names.</summary>
     public string Names => string.Join(", ", entities.Select(e => e.Name));
+
+    /// <summary>
+    /// "Copy of the Coin prefab" when the selection is placed copies of one prefab (saving it updates them), null
+    /// otherwise.
+    /// </summary>
+    public string? PrefabNote
+    {
+        get
+        {
+            if (entities[0].Prefab is not { } prefab || entities.Any(e => !string.Equals(e.Prefab, prefab, StringComparison.OrdinalIgnoreCase)))
+                return null;
+            var name = PrefabCopies.NameOf(prefab);
+            var copies = IsSeveral ? "Copies" : "Copy";
+            return owner.PrefabExists(prefab) ? $"{copies} of the {name} prefab" : $"{copies} of {prefab}, which isn't in the project";
+        }
+    }
+
+    public bool HasPrefabNote => PrefabNote is not null;
 
     /// <summary>Null (the check box's in-between state) when some are enabled and some aren't.</summary>
     public bool? IsEnabled

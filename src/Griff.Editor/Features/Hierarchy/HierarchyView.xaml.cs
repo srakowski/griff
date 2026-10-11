@@ -13,6 +13,7 @@ public partial class HierarchyView : UserControl
     private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"];
     private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock"];
     private static readonly string[] ClipboardCommands = ["Entity.Cut", "Entity.Copy", "Entity.Paste"];
+    private static readonly string[] PrefabCommands = ["Entity.SaveAsPrefab", "Entity.UnlinkPrefab"];
 
     private readonly CommandRegistry _commands;
     private Point _dragStart;
@@ -23,7 +24,7 @@ public partial class HierarchyView : UserControl
     {
         InitializeComponent();
         _commands = commands;
-        Tree.ContextMenu = BuildMenu(CreateCommands, EditCommands, ClipboardCommands);
+        Tree.ContextMenu = BuildMenu(CreateCommands, EditCommands, ClipboardCommands, PrefabCommands);
     }
 
     private HierarchyPanel Panel => (HierarchyPanel)DataContext;

@@ -295,6 +295,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "LockToggle" && b.DataContext == node)
             : null;
 
+    /// <summary>The package mark on a prefab copy's row in the Hierarchy.</summary>
+    public TextBlock? HierarchyPrefabMark(string name) =>
+        HierarchyItem(name) is { DataContext: EntityNode node } item
+            ? Descendants<TextBlock>(item).FirstOrDefault(t => t.Name == "PrefabMark" && t.DataContext == node && t.IsVisible)
+            : null;
+
     public InspectorView Inspector => (InspectorView)PanelContent("Inspector");
 
     public Border? ComponentHeader(string component) =>

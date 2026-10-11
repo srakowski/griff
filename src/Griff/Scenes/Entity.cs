@@ -50,6 +50,12 @@ public sealed class Entity
         }
     }
 
+    /// <summary>
+    /// The prefab this entity is a placed copy of, as the prefab file's path in Assets ("Prefabs/Coin.prefab"), or null.
+    /// Saving the prefab in the editor brings the copy up to date. The game ignores it.
+    /// </summary>
+    public string? Prefab { get; set; }
+
     public Scene? Scene { get; internal set; }
 
     public Entity? Parent { get; internal set; }

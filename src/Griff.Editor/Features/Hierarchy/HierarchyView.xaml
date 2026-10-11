@@ -63,22 +63,35 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <!-- Drop indicators -->
                             <Border x:Name="DropInto"
-                                    Grid.ColumnSpan="2"
+                                    Grid.ColumnSpan="3"
                                     Margin="-4,-2"
                                     BorderBrush="{DynamicResource Brush.Accent}"
                                     BorderThickness="1"
                                     CornerRadius="{StaticResource Radius.Small}"
                                     Visibility="Collapsed" />
-                            <Rectangle x:Name="DropBefore" Grid.ColumnSpan="2" Height="2" Margin="-4,-4,0,0" VerticalAlignment="Top" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
-                            <Rectangle x:Name="DropAfter" Grid.ColumnSpan="2" Height="2" Margin="-4,0,0,-4" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+                            <Rectangle x:Name="DropBefore" Grid.ColumnSpan="3" Height="2" Margin="-4,-4,0,0" VerticalAlignment="Top" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
+                            <Rectangle x:Name="DropAfter" Grid.ColumnSpan="3" Height="2" Margin="-4,0,0,-4" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.Accent}" Visibility="Collapsed" />
 
                             <!-- Lock: shown on locked rows (faint when a parent's lock covers it), and on hover to lock one. -->
+                            <!-- A placed copy of a prefab: saving the prefab updates it. -->
+                            <TextBlock x:Name="PrefabMark"
+                                       Grid.Column="1"
+                                       Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="{StaticResource IconSize.Small}"
+                                       Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                       Style="{StaticResource Style.Icon}"
+                                       Text="{x:Static theme:Icons.Package}"
+                                       ToolTip="{Binding PrefabTip}"
+                                       Visibility="Collapsed" />
+
                             <ToggleButton x:Name="LockToggle"
-                                          Grid.Column="1"
+                                          Grid.Column="2"
                                           Margin="6,0,0,0"
                                           Cursor="Hand"
                                           Focusable="False"
@@ -119,6 +132,9 @@
                                      Visibility="Collapsed" />
                         </Grid>
                         <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsPrefabCopy}" Value="True">
+                                <Setter TargetName="PrefabMark" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding IsEnabled}" Value="False">
                                 <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
                             </DataTrigger>

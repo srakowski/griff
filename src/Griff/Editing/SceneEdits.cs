@@ -365,6 +365,31 @@ public sealed class SetEntitiesLockedEdit(IReadOnlyList<Entity> entities, bool l
     }
 }
 
+/// <summary>
+/// Links entities to a prefab as copies of it (see <see cref="Entity.Prefab"/>), or unlinks them with null, as one undo
+/// step.
+/// </summary>
+public sealed class SetEntitiesPrefabEdit(IReadOnlyList<Entity> entities, string? prefab) : IEdit
+{
+    private readonly string?[] _oldPrefabs = entities.Select(e => e.Prefab).ToArray();
+
+    public IReadOnlyList<Entity> Entities { get; } = entities;
+
+    public string Description => (prefab is null ? "Unlink " : "Link ") + (Entities.Count == 1 ? Entities[0].Name : $"{Entities.Count} entities");
+
+    public void Apply()
+    {
+        foreach (var entity in Entities)
+            entity.Prefab = prefab;
+    }
+
+    public void Revert()
+    {
+        for (var i = 0; i < Entities.Count; i++)
+            Entities[i].Prefab = _oldPrefabs[i];
+    }
+}
+
 /// <summary>Adds an entity (with any children it already has) to a scene.</summary>
 public sealed class AddEntityEdit(Scene scene, Entity entity, Entity? parent = null, int? index = null) : IEdit
 {

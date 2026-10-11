@@ -51,6 +51,24 @@
                     </Grid>
                 </DockPanel>
 
+                <!-- A placed copy of a prefab: which one -->
+                <DockPanel x:Name="PrefabNote"
+                           Margin="10,0,10,8"
+                           DataContext="{Binding Header}"
+                           ToolTip="Saving the prefab (Entity, Save as Prefab) updates every copy of it, in every scene"
+                           Visibility="{Binding HasPrefabNote, Converter={StaticResource Visible}}">
+                    <TextBlock Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               FontSize="{StaticResource IconSize.Small}"
+                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                               Style="{StaticResource Style.Icon}"
+                               Text="{x:Static theme:Icons.Package}" />
+                    <TextBlock VerticalAlignment="Center"
+                               Style="{StaticResource Style.Text.Caption}"
+                               Text="{Binding PrefabNote}"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
                 <TextBlock Margin="10,0,10,8"
                            Style="{StaticResource Style.Text.Caption}"
                            Text="{Binding HiddenNote}"

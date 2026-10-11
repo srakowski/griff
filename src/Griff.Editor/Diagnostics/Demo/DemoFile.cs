@@ -399,6 +399,19 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => workspace.Scene?.Scene.Entities.Count(e => e.Name == countName) == wantCount, 3000))
                     throw new InvalidOperationException($"Expected {wantCount} {countName}, but there are {workspace.Scene?.Scene.Entities.Count(e => e.Name == countName)}.");
                 break;
+            case "expectprefab":
+                // "expectprefab: Gem 2 = Gem" (a copy of the Gem prefab) or "= none" (not a copy of anything).
+                var (copyName, prefabName) = Split2(a, '=');
+                string PrefabOf() => workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == copyName)?.Prefab is { } link
+                    ? Griff.Editing.PrefabCopies.NameOf(link)
+                    : "none";
+                if (!await Until(() => string.Equals(PrefabOf(), prefabName, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected {copyName} to be a copy of {prefabName}, but it's a copy of {PrefabOf()}.");
+                break;
+            case "answer":
+                // "answer: Yes": click a button on the message box the editor is showing.
+                await ui.Answer(a);
+                break;
             case "sceneclick":
                 // "sceneclick: Ctrl+Slime" or "sceneclick: 3, 2": a click in the Scene view on an entity or a world point.
                 var (clickAt, clickModifiers) = ParseModifiedName(a);
@@ -1208,6 +1221,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "prefab" => (FrameworkElement?)ui.HierarchyPrefabMark(name) ?? throw new InvalidOperationException($"No prefab copy {name} in the Hierarchy."),
+            "prefabnote" => ui.Inspector.FindName("PrefabNote") as FrameworkElement ?? throw new InvalidOperationException("No prefab note in the Inspector."),
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
             "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),

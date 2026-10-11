@@ -30,7 +30,7 @@ public class SceneToolsTests
         {
             if (name != "Coin")
                 return null;
-            var coin = new Entity("Coin");
+            var coin = new Entity("Coin") { Prefab = "Prefabs/Coin.prefab" };
             coin.AddComponent<Sprite>();
             return coin;
         }
@@ -345,5 +345,15 @@ public class SceneToolsTests
         _host.History.Undo();
         Assert.True(backdrop.IsLocked);
         Assert.False(Named("Ground").IsLocked);
+    }
+
+    [Fact]
+    public void PrefabCopies_ShowWhichPrefabTheyreCopiesOf()
+    {
+        Run("entity_create", """{"entity": {"prefab": "Coin", "name": "Gold"}}""");
+
+        Assert.Equal("Prefabs/Coin.prefab", Named("Gold").Prefab);
+        Assert.Contains(Run("scene_tree", "{}").Text.Split('\n'), l => l.Contains("Gold #") && l.Contains("copy of Coin"));
+        Assert.Contains("\"prefab\": \"Prefabs/Coin.prefab\"", Run("entity_get", """{"entity": "Gold"}""").Text);
     }
 }

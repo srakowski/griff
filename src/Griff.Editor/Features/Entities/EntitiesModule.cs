@@ -49,6 +49,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CutEntityCommand>()
             .AddCommand<PasteEntityCommand>()
             .AddCommand<SaveAsPrefabCommand>()
+            .AddCommand<UnlinkPrefabCommand>()
             .AddCommand<LockEntityCommand>();
     }
 }
@@ -723,7 +724,7 @@ public sealed class LockEntityCommand(IWorkspace workspace, ISelection selection
     public override string Id => "Entity.Lock";
     public override string Text => "Loc_k";
     public override string? Icon => Icons.Lock;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 5);
 
     public override bool? IsChecked => selection.Entities.Count > 0 && selection.Entities.All(e => e.IsLocked);
 
@@ -748,7 +749,14 @@ public static class PrefabFiles
         return name.Length == 0 ? "Prefab" : name;
     }
 
-    /// <summary>A new entity from the prefab at <paramref name="assetPath"/> (relative to Assets), or null if it can't be read.</summary>
+    /// <summary>A file's path in Assets as copies store it ("Prefabs/Coin.prefab").</summary>
+    public static string AssetPathOf(Griff.Projects.Project project, string path) =>
+        PrefabCopies.Normalize(Path.GetRelativePath(project.AssetsPath, path));
+
+    /// <summary>
+    /// A new copy of the prefab at <paramref name="assetPath"/> (relative to Assets), linked to it so saving the prefab
+    /// updates it, or null if it can't be read.
+    /// </summary>
     public static Entity? Instantiate(IWorkspace workspace, string assetPath, ICollection<string>? warnings = null)
     {
         if (workspace.Project is not { } project)
@@ -757,7 +765,9 @@ public static class PrefabFiles
         var path = Path.Combine(project.AssetsPath, assetPath.Replace('/', Path.DirectorySeparatorChar));
         try
         {
-            return workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
+            var entity = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path), warnings);
+            entity.Prefab = PrefabCopies.Normalize(assetPath);
+            return entity;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -765,11 +775,88 @@ public static class PrefabFiles
             return null;
         }
     }
+
+    /// <summary>
+    /// After the prefab at <paramref name="assetPath"/> is saved as <paramref name="json"/>: links
+    /// <paramref name="source"/> (the entity it was saved from, if any) to it, and brings every other copy of it up to
+    /// date, in the scene being edited (one undo step, with the link) and in the project's other scene files.
+    /// </summary>
+    public static PrefabUpdate UpdateCopies(IWorkspace workspace, string assetPath, string json, Entity? source)
+    {
+        if (workspace.Project is not { } project)
+            return new PrefabUpdate(0, [], []);
+
+        var copies = 0;
+        var scenes = new List<string>();
+        var problems = new List<string>();
+        var serializer = workspace.Serializer;
+
+        // The scene being edited (not the running copy while playing), through its undo history.
+        if (workspace.EditScene is { } document)
+        {
+            var edits = new List<IEdit>();
+            var here = source?.Scene == document.Scene ? source : null;
+            if (here is not null && !PrefabCopies.IsCopyOf(here, assetPath))
+                edits.Add(new SetEntitiesPrefabEdit([here], PrefabCopies.Normalize(assetPath)));
+
+            try
+            {
+                var count = PrefabCopies.In(document.Scene, assetPath).Count(c => c != here);
+                if (PrefabCopies.Update(document.Scene, assetPath, () => serializer.LoadPrefabFromString(json), except: here) is { } update)
+                {
+                    edits.Add(update);
+                    copies += count;
+                    scenes.Add(document.Name);
+                }
+            }
+            catch (InvalidDataException ex)
+            {
+                problems.Add($"{document.Name}: {ex.Message}");
+            }
+
+            if (edits.Count > 0)
+                document.Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Save {PrefabCopies.NameOf(assetPath)} as Prefab", edits));
+        }
+
+        // Every other scene, on disk.
+        var open = workspace.EditScene is { } edit ? Path.GetFullPath(edit.FilePath) : null;
+        foreach (var scenePath in project.FindScenes())
+        {
+            if (string.Equals(Path.GetFullPath(scenePath), open, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                if (PrefabCopies.UpdateFile(scenePath, assetPath, json, serializer) is > 0 and var count)
+                {
+                    copies += count;
+                    scenes.Add(Path.GetFileNameWithoutExtension(scenePath));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"{Path.GetFileNameWithoutExtension(scenePath)}: {ex.Message}");
+            }
+        }
+
+        return new PrefabUpdate(copies, scenes, problems);
+    }
+}
+
+/// <summary>What saving a prefab updated: how many copies, in which scenes, and the scenes that couldn't be updated.</summary>
+public sealed record PrefabUpdate(int Copies, IReadOnlyList<string> Scenes, IReadOnlyList<string> Problems)
+{
+    /// <summary>"Updated 3 copies in Level 1 and Level 2.", or empty with none.</summary>
+    public string Summary => Copies == 0 ? "" :
+        $"Updated {Copies} cop{(Copies == 1 ? "y" : "ies")} in {(Scenes.Count == 1 ? Scenes[0] : string.Join(", ", Scenes.Take(Scenes.Count - 1)) + " and " + Scenes[^1])}.";
 }
 
 /// <summary>
-/// Saves the selected entity and its children as Assets/Prefabs/&lt;name&gt;.prefab, ready for
-/// <c>Game.Spawn("name")</c> or dragging into a scene. Works in play mode too, to keep a tweaked live entity.
+/// Saves the selected entity and its children as a prefab, ready for <c>Game.Spawn("name")</c> or dragging into a
+/// scene: a placed copy over its own prefab, anything else as Assets/Prefabs/&lt;name&gt;.prefab. The entity becomes a
+/// copy of the prefab, and every other copy of it, in the open scene (one undo step) and in every other scene, is
+/// brought up to date: it takes the prefab's components, scale and children, keeping its own name and place. Works in
+/// play mode too, to keep a tweaked live entity.
 /// </summary>
 public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand
 {
@@ -785,15 +872,24 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
         if (selection.Entity is not { } entity || workspace.Project is not { } project)
             return;
 
-        var name = PrefabFiles.SafeName(entity.Name);
-        var path = project.DefaultPrefabPath(name);
-        if (File.Exists(path) && !dialogs.Confirm("Replace Prefab", $"{name}{Griff.Projects.Project.PrefabExtension} already exists. Replace it with \"{entity.Name}\"?"))
-            return;
+        // A copy saves over its own prefab (wherever it is, whatever the copy is called).
+        var linked = entity.Prefab is { } link ? project.FindPrefab(link) : null;
+        var path = linked ?? project.DefaultPrefabPath(PrefabFiles.SafeName(entity.Name));
+        var name = Path.GetFileNameWithoutExtension(path);
+        if (File.Exists(path))
+        {
+            var replace = linked is not null
+                ? dialogs.Confirm("Save Prefab", $"Every copy of the {name} prefab, in every scene, will be updated to match. Save \"{entity.Name}\" over it?")
+                : dialogs.Confirm("Replace Prefab", $"{name}{Griff.Projects.Project.PrefabExtension} already exists, and every copy of it, in every scene, will be updated to match. Replace it with \"{entity.Name}\"?");
+            if (!replace)
+                return;
+        }
 
+        var json = workspace.Serializer.SavePrefabToString(entity);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, workspace.Serializer.SavePrefabToString(entity));
+            await File.WriteAllTextAsync(path, json);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -801,6 +897,29 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
             return;
         }
 
-        status.Show($"Saved {project.GetRelativePath(path)}. Spawn it with Game.Spawn(\"{name}\").");
+        var update = PrefabFiles.UpdateCopies(workspace, PrefabFiles.AssetPathOf(project, path), json, entity);
+        if (update.Problems.Count > 0)
+            dialogs.ShowError("Some copies weren't updated", string.Join("\n", update.Problems));
+        status.Show($"Saved {project.GetRelativePath(path)}. {(update.Copies > 0 ? update.Summary : $"Spawn it with Game.Spawn(\"{name}\").")}");
+    }
+}
+
+/// <summary>
+/// Unlinks the selected copies from their prefab: they become ordinary entities, which saving the prefab no longer
+/// changes. One undo step.
+/// </summary>
+public sealed class UnlinkPrefabCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.UnlinkPrefab";
+    public override string Text => "_Unlink from Prefab";
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 4);
+
+    protected override bool CanExecuteCore() => selection.Entities.Any(e => e.Prefab is not null);
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is { } document && selection.Entities.Where(e => e.Prefab is not null).ToList() is { Count: > 0 } copies)
+            document.Execute(new SetEntitiesPrefabEdit(copies, null));
+        return Task.CompletedTask;
     }
 }

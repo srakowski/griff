@@ -93,6 +93,12 @@ public enum ButtonAction
 
     /// <summary>Leaves the network game (or stops hosting it), then goes to <see cref="Button.Scene"/> if it's set.</summary>
     LeaveGame,
+
+    /// <summary>
+    /// Ends the turn of the side whose turn it is, in the scene's <see cref="Scenes.TurnOrder"/>, as its End Turn action
+    /// does. It's faded while this player can't: the computer's turn, between turns, another player's turn.
+    /// </summary>
+    EndTurn,
 }
 
 /// <summary>

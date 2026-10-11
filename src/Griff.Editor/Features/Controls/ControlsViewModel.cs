@@ -334,6 +334,7 @@ public sealed partial class ActionRow : ObservableObject
         "attack" => "An Attack (a sword) swings with it.",
         "interact" => "Doors, levers, signs and people to talk to wait for it.",
         "pause" => "Panels that Open On Pause (pause menus) open and close with it.",
+        "endturn" => "A Turn Order ends a person's turn with it.",
         _ => "Griff's components use it.",
     };
 

@@ -67,10 +67,22 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0)
             return;
+        // Waiting for their turn, they stand where they are.
         foreach (var chase in Active<Chase>())
-            RunChase(chase);
+        {
+            if (Waiting(chase.Entity))
+                HoldStill(chase.Entity!);
+            else
+                RunChase(chase);
+        }
+
         foreach (var patrol in Active<Patrol>())
-            RunPatrol(patrol);
+        {
+            if (Waiting(patrol.Entity))
+                HoldStill(patrol.Entity!);
+            else
+                RunPatrol(patrol);
+        }
     }
 
     private void RunPatrol(Patrol patrol)
@@ -260,6 +272,9 @@ public sealed partial class Game
                 wantsToFire = true;
             }
 
+            // Not while it waits for its turn.
+            wantsToFire &= !Waiting(entity);
+
             if (!shooter.Ready(Time.Delta, wantsToFire) || string.IsNullOrWhiteSpace(shooter.Prefab))
                 continue;
 
@@ -276,6 +291,7 @@ public sealed partial class Game
 
             if (!string.IsNullOrWhiteSpace(shooter.Sound))
                 PlayShared(shooter.Sound);
+            UseAction(entity);
         }
     }
 

@@ -38,8 +38,10 @@ public sealed partial class Game
 
         // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run.
         var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
-        var chase = Runs(entity) ? entity.GetComponent<GridChase>() : null;
-        var patrol = Runs(entity) ? entity.GetComponent<GridPatrol>() : null;
+        // Waiting for their turn, they finish the step under way and go no further.
+        var minds = Runs(entity) && !Waiting(entity);
+        var chase = minds ? entity.GetComponent<GridChase>() : null;
+        var patrol = minds ? entity.GetComponent<GridPatrol>() : null;
         if (chase is not null)
             WatchForTarget(chase);
 

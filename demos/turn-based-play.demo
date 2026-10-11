@@ -1,0 +1,50 @@
+title: Turn-based play
+intro: Sides that take turns, with no code, while the rest of the game runs in real time.
+project: Platformer | Taking Turns
+
+chapter: A turn order | Entity, Create Turn Order
+deselect
+create: Turn Order
+explain: menu:Entity | Entity, Create Turn Order | The Entity menu makes a game turn-based: Create Turn Order.
+explain: component:TurnOrder | Turn Order | It holds the turns. Its text in the corner says whose turn it is, and it comes with an End Turn button.
+explain: field:TurnOrder.Sides | Sides | The sides take turns in this order: the player, then the enemy. Two people at one keyboard could be blue and red.
+explain: field:TurnOrder.ComputerSides | Computer Sides | The computer plays the enemy, so its turn ends by itself, after its Computer Turn Time.
+set: TurnOrder.ComputerTurnTime = 2
+
+chapter: Who takes turns | A Turn Taker on each side
+select: Player
+browse: TurnTaker
+explain: catalog:docs | Turn Taker | Whatever acts gets a Turn Taker, naming its side.
+click: catalog:add
+explain: component:TurnTaker | Player | The player is on the Player side.
+select: Slime
+browse: TurnTaker
+click: catalog:add
+set: TurnTaker.Side = Enemy
+explain: field:TurnTaker.Side | Enemy | And the slime is on the Enemy side. Off its turn, its patrol holds still.
+play
+wait: 0.5
+hold: Right 1
+explain: game | The player's turn | It's the player's turn: they run about, and the slime waits on its ledge.
+tap: Tab
+wait: 0.5
+expectvalue: Turns.TurnOrder.Current = Enemy
+hold: Left 1
+explain: game | The enemy's turn | Tab ends the turn. Now the slime walks, and the player's keys do nothing. Everything else, the lift and the coins, runs in real time as ever.
+wait: 1
+expectvalue: Turns.TurnOrder.Current = Player
+explain: game | Round two | Two seconds on, the computer's turn is over, and it's the player's again.
+stop
+
+chapter: Actions | One swing a turn
+select: Player
+set: TurnTaker.Actions = 1
+explain: field:TurnTaker.Actions | Actions | Actions limit what a turn taker does in a turn. Each sword swing or shot uses one. With one, a swing ends the player's turn.
+play
+wait: 0.5
+tap: X
+wait: 1
+expectvalue: Turns.TurnOrder.Current = Enemy
+explain: game | Swung | The player swung, used their only action, and after a moment the turn passed to the slime by itself.
+stop
+say: That's turn-based play with no code. Scripts can end turns and use actions too, rewinding goes back to whose turn it was, and in network games each team takes its turn.

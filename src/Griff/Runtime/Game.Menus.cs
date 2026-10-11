@@ -194,6 +194,9 @@ public sealed partial class Game
                 if (!string.IsNullOrWhiteSpace(button.Scene))
                     LoadScene(button.Scene.Trim(), button.Fade);
                 break;
+            case ButtonAction.EndTurn:
+                Net.SendCommand(EndTurnCommand, null);
+                break;
         }
 
         if (button.Entity!.GetComponent<Toggle>() is { } toggle)

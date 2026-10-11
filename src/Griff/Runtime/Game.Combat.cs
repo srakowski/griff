@@ -29,7 +29,7 @@ public sealed partial class Game
                     if (InputOf(owner).WasPressed(action))
                         attack.Queued = true;
                 }
-                else if (attack.Phase == AttackPhase.Ready && TargetInRange(attack) is { } target)
+                else if (attack.Phase == AttackPhase.Ready && !Waiting(owner) && TargetInRange(attack) is { } target)
                 {
                     FaceTowards(owner, target);
                     attack.Queued = true;
@@ -59,6 +59,7 @@ public sealed partial class Game
         if (attack.Phase == AttackPhase.Windup && attack.PhaseTime == 0)
         {
             attack.Queued = false;
+            UseAction(owner);
             if (owner.GetComponent<Animation>() is { } animation)
                 PlayFirst(animation, AttackClips(owner));
         }

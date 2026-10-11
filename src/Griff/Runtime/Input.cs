@@ -89,7 +89,7 @@ public interface IInput
 {
     /// <summary>
     /// True while any of the action's keys or buttons is held, e.g. <c>IsDown("Fire")</c>. Games start with Jump, Fire,
-    /// Attack, Dash, Interact and Pause; <see cref="Bind"/> changes them or adds more.
+    /// Attack, Dash, Interact, Pause and EndTurn; <see cref="Bind"/> changes them or adds more.
     /// </summary>
     bool IsDown(string action);
 
@@ -272,6 +272,7 @@ public sealed class InputState : IInput
             ["Attack"] = [Key.X, Key.L, MouseButton.Right, GamepadButton.X],
             ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
             ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
+            ["EndTurn"] = [Key.Tab, GamepadButton.Back],
         };
 
     private readonly Dictionary<string, InputBinding[]> _actions =

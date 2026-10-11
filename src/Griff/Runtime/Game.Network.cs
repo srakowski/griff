@@ -29,6 +29,9 @@ public sealed partial class Game
     /// </summary>
     public IInput InputOf(Entity? entity)
     {
+        // A turn taker waiting for its turn hears nothing.
+        if (Waiting(entity))
+            return _noInput ??= new NoInput(Input);
         if (!Net.IsOnline || entity is null)
             return Input;
         var owner = Net.OwnerIdOf(entity);
@@ -325,5 +328,6 @@ public sealed partial class Game
     private void ListenForCommands()
     {
         OnNetCommand(StrategyCommand, RunStrategyOrder);
+        OnNetCommand(EndTurnCommand, RunEndTurn);
     }
 }

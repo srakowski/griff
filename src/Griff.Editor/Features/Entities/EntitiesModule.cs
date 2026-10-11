@@ -38,6 +38,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateTopDownPlayerCommand>()
             .AddCommand<CreateGridPlayerCommand>()
             .AddCommand<CreateGridEnemyCommand>()
+            .AddCommand<CreateTurnOrderCommand>()
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
@@ -453,6 +454,43 @@ public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection sele
         (box.Size, box.IsTrigger, box.Layer) = (new System.Numerics.Vector2(0.8f, 0.6f), true, "Attack");
         hitbox.AddComponent<DamageOnTouch>().Layers = "Player";
         yield return hitbox;
+    }
+}
+
+/// <summary>
+/// Creates turn-based play: a <see cref="TurnOrder"/> whose text in the top-right corner says whose turn it is, with an
+/// End Turn button in the bottom-right corner. Give whatever takes turns a <see cref="TurnTaker"/> naming its side.
+/// </summary>
+public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateTurnOrder";
+    public override string Text => "Create T_urn Order";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    protected override string EntityName => "Turns";
+
+    protected override void Configure(Entity entity)
+    {
+        var anchor = entity.AddComponent<ScreenAnchor>();
+        (anchor.Anchor, anchor.Offset) = (Anchor.TopRight, new System.Numerics.Vector2(-0.6f, -0.7f));
+        var text = entity.AddComponent<Griff.Scenes.Text>();
+        (text.Value, text.Size, text.Align, text.Order) = ("Player's turn", 0.6f, TextAlign.Right, OrderAbove(150));
+        entity.AddComponent<TurnOrder>();
+    }
+
+    protected override IEnumerable<Entity> CreateChildren()
+    {
+        var size = new System.Numerics.Vector2(3, 0.9f);
+        var end = new Entity("End Turn");
+        var anchor = end.AddComponent<ScreenAnchor>();
+        (anchor.Anchor, anchor.Offset) = (Anchor.BottomRight, new System.Numerics.Vector2(-1.9f, 0.8f));
+        var sprite = end.AddComponent<Sprite>();
+        (sprite.Size, sprite.Tint, sprite.Order) = (size, Griff.Color.FromBytes(0x3A, 0x3F, 0x4B), OrderAbove(150));
+        var label = end.AddComponent<Griff.Scenes.Text>();
+        (label.Value, label.Size, label.Order) = ("End Turn", 0.45f, OrderAbove(150) + 1);
+        var button = end.AddComponent<Griff.Scenes.Button>();
+        (button.Size, button.Action, button.Navigable) = (size, ButtonAction.EndTurn, false);
+        yield return end;
     }
 }
 

@@ -7,7 +7,7 @@ say: Until now, changing a game's controls meant writing code. Now there's a win
 menu: Game > Controls...
 controls
 explain: controls:actions | Actions | On the left is every action the game has, with the keys and buttons that do it.
-explain: controls:builtin | Built in | These six come with Griff, because its components use them.
+explain: controls:builtin | Built in | These seven come with Griff, because its components use them.
 explain: controls:usedby | Used by | Each one says what uses it. Platformer Movement jumps with Jump, so changing Jump changes how the player jumps.
 explain: controls:keys | Keyboard and mouse | Its keys and mouse buttons are here.
 explain: controls:pads | Gamepad | And its controller buttons are here.

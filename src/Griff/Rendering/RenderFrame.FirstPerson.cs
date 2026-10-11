@@ -234,8 +234,9 @@ public static partial class SceneRenderer
             if (across ? rx < 0 : ry > 0)
                 u = 1 - u;
             var tile = tilemap.GetTile(cellX, cellY);
-            var image = string.IsNullOrEmpty(tilemap.Image) ? null : tilemap.Image;
-            var source = image is null ? new Vector4(0, 0, 1, 1) : tilemap.TileRect(tilemap.ShownTile(cellX, cellY, tile));
+            var shown = tilemap.ShownTile(cellX, cellY, tile);
+            var image = tilemap.ImageOf(shown);
+            var source = image is null ? new Vector4(0, 0, 1, 1) : tilemap.TileRect(shown);
             var shade = shadeSides && !across ? SideShade : 1;
             var tint = new Color(tilemap.Tint.R * shade, tilemap.Tint.G * shade, tilemap.Tint.B * shade, tilemap.Tint.A);
             return new WallHit(depth, eye + ray * depth, image, Strip(source, u), tint, true);

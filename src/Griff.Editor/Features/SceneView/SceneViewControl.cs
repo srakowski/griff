@@ -3,10 +3,12 @@ using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
 using Griff.Rendering;
 using Griff.Scenes;
@@ -14,6 +16,7 @@ using Griff.Scenes.Serialization;
 using Point = System.Windows.Point;
 using Vector = System.Windows.Vector;
 using Transform = Griff.Scenes.Transform;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.SceneView;
 
@@ -59,6 +62,7 @@ public sealed class SceneViewControl : FrameworkElement
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
     private readonly SceneViewModel _model;
+    private readonly IServiceProvider _services;
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
     private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
@@ -107,11 +111,13 @@ public sealed class SceneViewControl : FrameworkElement
     private (IReadOnlyList<string> Tiles, (int X, int Y) Cell)? _fillPreviewOf;
     private IReadOnlyList<(int X, int Y)> _fillPreview = [];
 
-    public SceneViewControl(IWorkspace workspace, ISelection selection, SceneViewModel model)
+    // Commands are reached through the services on demand: some (Frame Selection) are built with this view.
+    public SceneViewControl(IWorkspace workspace, ISelection selection, SceneViewModel model, IServiceProvider services)
     {
         _workspace = workspace;
         _selection = selection;
         _model = model;
+        _services = services;
         Focusable = true;
         AllowDrop = true;
         FocusVisualStyle = null;
@@ -828,27 +834,50 @@ public sealed class SceneViewControl : FrameworkElement
 
         dc.Pop();
 
-        // Palette, top left.
-        var count = PaletteCount(tilemap);
-        var panel = PaletteBounds(count);
+        // Palette, top left: a tab for each tileset (the one shown picked out) and + to add one, then its tiles.
+        var palette = Palette(tilemap);
+        var panel = palette.Panel;
         dc.DrawRoundedRectangle(Brush("Brush.Surface.Chrome"), new Pen(Brush("Brush.Border.Default"), 1), panel, 4, 4);
-        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
-        for (var tile = 0; tile < count; tile++)
+        foreach (var (box, tileset) in palette.Tabs)
         {
-            var rect = PaletteCellBounds(tile);
+            var shown = tileset == palette.Shown;
+            dc.DrawRoundedRectangle(shown ? accent : null, new Pen(shown ? accent : Brush("Brush.Border.Default"), 1), box, 3, 3);
+            var name = Text(tileset.Name, shown ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(name, new Point(box.X + (box.Width - name.Width) / 2, box.Y + (box.Height - name.Height) / 2));
+        }
+
+        dc.DrawRoundedRectangle(null, new Pen(Brush("Brush.Border.Default"), 1), palette.AddTab, 3, 3);
+        var plus = Text("+", "Brush.Text.Primary");
+        dc.DrawText(plus, new Point(palette.AddTab.X + (palette.AddTab.Width - plus.Width) / 2, palette.AddTab.Y + (palette.AddTab.Height - plus.Height) / 2));
+
+        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
+        for (var tile = palette.Shown.First; tile < palette.Shown.First + palette.Count; tile++)
+        {
+            if (palette.CellBounds(tile) is not { } cell)
+                continue;
+            var rect = cell;
             rect.Inflate(-2, -2);
             if (TileImage(tilemap, tile) is { } image)
                 dc.DrawImage(image, rect);
             else
                 dc.DrawRectangle(fill, null, rect);
             if (tile == _model.BrushTile)
-                dc.DrawRectangle(null, new Pen(accent, 2), PaletteCellBounds(tile));
+                dc.DrawRectangle(null, new Pen(accent, 2), cell);
+        }
+
+        // A thin bar down the right of the tiles when they scroll: how far down the ones in sight are.
+        if (palette.Rows > palette.VisibleRows)
+        {
+            var track = new Rect(panel.Right - 5, palette.CellsTop, 3, palette.VisibleRows * PaletteCell);
+            var thumb = new Rect(track.X, track.Y + track.Height * palette.Scroll / palette.Rows, track.Width, track.Height * palette.VisibleRows / palette.Rows);
+            dc.DrawRectangle(Brush("Brush.Border.Default"), null, track);
+            dc.DrawRectangle(Brush("Brush.Text.Secondary"), null, thumb);
         }
 
         // The tools, under the palette.
         foreach (var tool in Enum.GetValues<TileTool>())
         {
-            var button = ToolButtonBounds(count, tool);
+            var button = palette.ToolBounds(tool);
             var picked = tool == _model.TileTool;
             dc.DrawRoundedRectangle(picked ? accent : Brush("Brush.Surface.Chrome"), new Pen(picked ? accent : Brush("Brush.Border.Default"), 1), button, 3, 3);
             var label = Text($"{tool}  {ToolKey(tool)}", picked ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
@@ -861,7 +890,7 @@ public sealed class SceneViewControl : FrameworkElement
             TileTool.Fill => "Fill: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Esc done",
             _ => "Brush: drag to paint · Shift erase · Ctrl pick · [ ] tile · Esc done",
         }, "Brush.Text.Secondary");
-        dc.DrawText(hint, new Point(panel.Left + 6, ToolButtonBounds(count, TileTool.Brush).Bottom + 4));
+        dc.DrawText(hint, new Point(panel.Left + 6, palette.ToolBounds(TileTool.Brush).Bottom + 4));
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)
@@ -1377,36 +1406,109 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Tile palette -----
 
-    private static int PaletteCount(Tilemap tilemap) =>
-        string.IsNullOrEmpty(tilemap.Image) ? 1 : Math.Clamp(Math.Max(1, tilemap.Columns) * Math.Max(1, tilemap.Rows), 1, Tilemap.MaxTiles);
-
-    private static Rect PaletteCellBounds(int tile) =>
-        new(12 + tile % PaletteColumns * PaletteCell, 12 + tile / PaletteColumns * PaletteCell, PaletteCell, PaletteCell);
-
-    private static Rect PaletteBounds(int count)
+    /// <summary>
+    /// Where the palette's parts go: a tab for each of the map's tilesets (and a + to add one) along the top, the tiles
+    /// of the one <see cref="Shown"/> under them in rows (scrolled down <see cref="Scroll"/> rows when they don't all
+    /// fit), and the tools below.
+    /// </summary>
+    private sealed record PaletteLayout(Tileset Shown, int Count, int Scroll, int VisibleRows, Rect Panel, double CellsTop,
+        IReadOnlyList<(Rect Box, Tileset Tileset)> Tabs, Rect AddTab)
     {
-        var columns = Math.Min(count, PaletteColumns);
+        public int Rows => (Count + PaletteColumns - 1) / PaletteColumns;
+
+        /// <summary>The box of the shown tileset's tile <paramref name="tile"/>, or null when it isn't one of them or is scrolled out of sight.</summary>
+        public Rect? CellBounds(int tile)
+        {
+            var index = tile - Shown.First;
+            var row = index / PaletteColumns - Scroll;
+            if (index < 0 || index >= Count || row < 0 || row >= VisibleRows)
+                return null;
+            return new Rect(12 + index % PaletteColumns * PaletteCell, CellsTop + row * PaletteCell, PaletteCell, PaletteCell);
+        }
+
+        public Rect ToolBounds(TileTool tool) => new(8 + (int)tool * (ToolButtonWidth + 4), Panel.Bottom + 4, ToolButtonWidth, 22);
+    }
+
+    private const double TabHeight = 20;
+
+    private int _paletteScroll;
+    private int? _paletteScrollOf;
+
+    private PaletteLayout Palette(Tilemap tilemap)
+    {
+        var shown = tilemap.TilesetOf(_model.BrushTile);
+        var count = shown.Image is null ? 1 : Math.Clamp(shown.Count, 1, Tilemap.MaxTiles - shown.First);
+
+        var tabs = new List<(Rect, Tileset)>();
+        var x = 12.0;
+        foreach (var tileset in tilemap.Tilesets())
+        {
+            var width = Text(tileset.Name, "Brush.Text.Primary").Width + 14;
+            tabs.Add((new Rect(x, 12, width, TabHeight), tileset));
+            x += width + 2;
+        }
+
+        var add = new Rect(x, 12, TabHeight + 4, TabHeight);
+        var cellsTop = 12 + TabHeight + 4;
+
+        // As many rows as fit above the tools and hint; the rest scroll with the mouse wheel.
         var rows = (count + PaletteColumns - 1) / PaletteColumns;
-        return new Rect(8, 8, columns * PaletteCell + 8, rows * PaletteCell + 8);
+        var visible = Math.Min(rows, Math.Max(2, (int)((ActualHeight - cellsTop - 64) / PaletteCell)));
+        if (_paletteScrollOf != shown.First)
+            (_paletteScroll, _paletteScrollOf) = ((_model.BrushTile - shown.First) / PaletteColumns - visible / 2, shown.First);
+        _paletteScroll = Math.Clamp(_paletteScroll, 0, rows - visible);
+
+        var panelWidth = Math.Max(Math.Min(count, PaletteColumns) * PaletteCell, add.Right - 12) + 8;
+        var panel = new Rect(8, 8, panelWidth, cellsTop - 8 + visible * PaletteCell + 4);
+        return new PaletteLayout(shown, count, _paletteScroll, visible, panel, cellsTop, tabs, add);
+    }
+
+    // Scrolls the palette to show the brush's tile, when it's from the tileset shown.
+    private void ScrollPaletteTo(Tilemap tilemap, int tile)
+    {
+        var palette = Palette(tilemap);
+        var row = (tile - palette.Shown.First) / PaletteColumns;
+        if (row < palette.Scroll)
+            _paletteScroll = row;
+        else if (row >= palette.Scroll + palette.VisibleRows)
+            _paletteScroll = row - palette.VisibleRows + 1;
     }
 
     private int? PaletteTileAt(Tilemap tilemap, Point screen)
     {
-        var count = PaletteCount(tilemap);
-        for (var tile = 0; tile < count; tile++)
+        var palette = Palette(tilemap);
+        for (var tile = palette.Shown.First; tile < palette.Shown.First + palette.Count; tile++)
         {
-            if (PaletteCellBounds(tile).Contains(screen))
+            if (palette.CellBounds(tile) is { } box && box.Contains(screen))
                 return tile;
         }
 
-        return PaletteBounds(count).Contains(screen) ? _model.BrushTile : null;
+        return palette.Panel.Contains(screen) ? _model.BrushTile : null;
     }
 
-    private static Rect ToolButtonBounds(int count, TileTool tool) =>
-        new(8 + (int)tool * (ToolButtonWidth + 4), PaletteBounds(count).Bottom + 4, ToolButtonWidth, 22);
+    private TileTool? ToolButtonAt(Tilemap tilemap, Point screen)
+    {
+        var palette = Palette(tilemap);
+        return Enum.GetValues<TileTool>().Cast<TileTool?>().FirstOrDefault(t => palette.ToolBounds(t!.Value).Contains(screen));
+    }
 
-    private static TileTool? ToolButtonAt(Tilemap tilemap, Point screen) =>
-        Enum.GetValues<TileTool>().Cast<TileTool?>().FirstOrDefault(t => ToolButtonBounds(PaletteCount(tilemap), t!.Value).Contains(screen));
+    // The + tab lists the project's images to add as a tileset, as Art > Add Tileset to Tilemap does.
+    private void ShowAddTilesetMenu(Rect tab)
+    {
+        var command = _services.GetRequiredService<CommandRegistry>().Get("Art.AddTileset");
+        var menu = new ContextMenu { PlacementTarget = this, Placement = System.Windows.Controls.Primitives.PlacementMode.Relative, HorizontalOffset = tab.Left, VerticalOffset = tab.Bottom };
+        var images = command.Choices ?? [];
+        foreach (var image in images)
+        {
+            var item = new MenuItem { Header = image.Replace("_", "__") };
+            item.Click += async (_, _) => await command.ChooseAsync(image);
+            menu.Items.Add(item);
+        }
+
+        if (images.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "No images in Assets yet: paint one with Art > New Tileset", IsEnabled = false });
+        menu.IsOpen = true;
+    }
 
     private static char ToolKey(TileTool tool) => tool switch
     {
@@ -1416,24 +1518,38 @@ public sealed class SceneViewControl : FrameworkElement
     };
 
     /// <summary>
-    /// The screen box of a part of the tile painting overlay, for demos to point at: a tool's button ("Rectangle"), or a
-    /// tile in the palette by its number ("3"). Null when nothing is being painted.
+    /// The screen box of a part of the tile painting overlay, for demos to point at: a tool's button ("Rectangle"), a
+    /// tile of the tileset the palette shows by its number ("3", "104"), a tileset's tab by its name ("props"), or the
+    /// + tab that adds one ("+"). Null when nothing is being painted (or the tile is scrolled out of sight).
     /// </summary>
     internal Rect? PaintOverlayBounds(string part)
     {
         if (PaintTarget is not { } tilemap)
             return null;
-        var count = PaletteCount(tilemap);
+        var palette = Palette(tilemap);
         // By name only: Enum.TryParse would read "1" as the second tool.
         if (Enum.GetValues<TileTool>().Where(t => t.ToString().Equals(part, StringComparison.OrdinalIgnoreCase)).Cast<TileTool?>().FirstOrDefault() is { } tool)
-            return ToolButtonBounds(count, tool);
-        return int.TryParse(part, out var tile) && tile >= 0 && tile < count ? PaletteCellBounds(tile) : null;
+            return palette.ToolBounds(tool);
+        if (part.Trim() == "+")
+            return palette.AddTab;
+        if (int.TryParse(part, out var tile))
+            return palette.CellBounds(tile);
+        return palette.Tabs.Where(t => t.Tileset.Name.Equals(part.Trim(), StringComparison.OrdinalIgnoreCase)).Select(t => (Rect?)t.Box).FirstOrDefault();
     }
 
     // ----- Input -----
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
+        // Over the tile palette, the wheel scrolls its tiles.
+        if (PaintTarget is { } tilemap && Palette(tilemap) is var palette && palette.Panel.Contains(e.GetPosition(this)))
+        {
+            _paletteScroll = Math.Clamp(_paletteScroll - Math.Sign(e.Delta), 0, Math.Max(0, palette.Rows - palette.VisibleRows));
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         var anchor = e.GetPosition(this);
         var before = ToWorld(anchor);
         _zoom = Math.Clamp(_zoom * Math.Pow(1.0015, e.Delta), MinZoom, MaxZoom);
@@ -1670,6 +1786,22 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
+        var palette = Palette(tilemap);
+        if (palette.AddTab.Contains(position))
+        {
+            ShowAddTilesetMenu(palette.AddTab);
+            return;
+        }
+
+        for (var i = 0; i < palette.Tabs.Count; i++)
+        {
+            if (palette.Tabs[i].Box.Contains(position))
+            {
+                _model.ShowTileset(i);
+                return;
+            }
+        }
+
         if (PaletteTileAt(tilemap, position) is { } chosen)
         {
             _model.BrushTile = chosen;
@@ -1836,8 +1968,12 @@ public sealed class SceneViewControl : FrameworkElement
                     e.Handled = true;
                     return;
                 case Key.OemOpenBrackets or Key.OemCloseBrackets:
-                    var count = PaletteCount(tilemap);
-                    _model.BrushTile = ((_model.BrushTile + (e.Key == Key.OemCloseBrackets ? 1 : -1)) % count + count) % count;
+                    // Steps through the tiles of the tileset the palette shows.
+                    var palette = Palette(tilemap);
+                    var (first, count) = (palette.Shown.First, palette.Count);
+                    _model.BrushTile = first + ((_model.BrushTile - first + (e.Key == Key.OemCloseBrackets ? 1 : -1)) % count + count) % count;
+                    ScrollPaletteTo(tilemap, _model.BrushTile);
+                    InvalidateVisual();
                     e.Handled = true;
                     return;
                 case Key.LeftShift or Key.RightShift:
@@ -2042,17 +2178,18 @@ public sealed class SceneViewControl : FrameworkElement
         return tinted;
     }
 
-    /// <summary>One tile of a tilemap's image, cut out for drawing; null when the map has no (loadable) image.</summary>
+    /// <summary>One tile of a tilemap, cut out of its tileset's image for drawing; null when that tileset has no (loadable) image.</summary>
     private BitmapSource? TileImage(Tilemap tilemap, int tile)
     {
-        if (LoadImage(tilemap.Image) is not { } image)
+        var tileset = tilemap.TilesetOf(tile);
+        if (LoadImage(tileset.Image) is not { } image)
             return null;
 
-        var key = (tilemap.Image!, tile, tilemap.Columns, tilemap.Rows);
+        var key = (tileset.Image!, tile - tileset.First, tileset.Columns, tileset.Rows);
         if (_tileImages.TryGetValue(key, out var cached))
             return cached;
 
-        var rect = tilemap.TileRect(tile);
+        var rect = tileset.Rect(tile);
         var area = new Int32Rect(
             (int)Math.Round(rect.X * image.PixelWidth), (int)Math.Round(rect.Y * image.PixelHeight),
             Math.Max(1, (int)Math.Round(rect.Z * image.PixelWidth)), Math.Max(1, (int)Math.Round(rect.W * image.PixelHeight)));

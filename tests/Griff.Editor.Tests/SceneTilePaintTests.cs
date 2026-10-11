@@ -137,4 +137,60 @@ public class SceneTilePaintTests
             Assert.Throws<ArgumentOutOfRangeException>(() => model.BrushTile = Tilemap.MaxTiles);
         });
     }
+
+    [Fact]
+    public void AddTileset_GoesOnFromTheNextHundred_AsOneUndoStep_AndThePaletteShowsIt()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+
+            // The map has no picture yet: the first one added becomes its own.
+            Assert.Equal(0, model.AddTileset("Tiles/ground.png", 4, 4));
+            Assert.Equal(("Tiles/ground.png", 4, 4), (map.Image, map.Columns, map.Rows));
+            Assert.Equal(Griff.Color.White, map.Tint);
+
+            Assert.Equal(100, model.AddTileset("Tiles/props.png", 2, 3));
+            Assert.Equal(["Tiles/props.png 2x3"], map.MoreTilesets);
+            Assert.Equal("Add Tileset Tiles/props.png", document.History.UndoDescription);
+            Assert.Equal(100, model.BrushTile);
+            Assert.Equal("props", model.PaletteTileset!.Name);
+
+            // Painting with a tile from it, then undoing the tileset, leaves the ground tiles alone.
+            model.BrushTile = 105;
+            model.PaintTile(1, 1);
+            Assert.Equal(105, map.GetTile(1, 1));
+            document.History.Undo();
+            document.History.Undo();
+            Assert.Empty(map.MoreTilesets);
+            Assert.Equal("Tiles/ground.png", map.Image);
+
+            // Adding one it already has just shows it.
+            Assert.Equal(0, model.AddTileset("Tiles/ground.png", 8, 8));
+            Assert.Equal(4, map.Columns);
+            Assert.Throws<ArgumentException>(() => model.AddTileset(" ", 1, 1));
+        });
+    }
+
+    [Fact]
+    public void ShowTileset_PicksTheTileLastPickedFromIt()
+    {
+        EditorHost.Run(services =>
+        {
+            var (_, _, model, map) = Open(services);
+            map.MoreTilesets = ["Tiles/props.png 4x4", "Tiles/water.png 2x2"];
+
+            model.BrushTile = 3;
+            model.ShowTileset(2);
+            Assert.Equal(200, model.BrushTile);
+            model.ShowTileset(1);
+            model.BrushTile = 107;
+            model.ShowTileset(0);
+            Assert.Equal(3, model.BrushTile);
+            model.ShowTileset(1);
+            Assert.Equal(107, model.BrushTile);
+            Assert.Equal(100, model.PaletteTileset!.First);
+            Assert.Throws<ArgumentOutOfRangeException>(() => model.ShowTileset(3));
+        });
+    }
 }

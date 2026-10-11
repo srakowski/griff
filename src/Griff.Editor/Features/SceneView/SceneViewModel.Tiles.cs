@@ -36,7 +36,10 @@ public sealed partial class SceneViewModel
         set => SetProperty(ref _tileTool, value);
     }
 
-    /// <summary>The tile painting puts down, numbered from 0 as in the tileset (picked from the Scene view's palette).</summary>
+    /// <summary>
+    /// The tile painting puts down (picked from the Scene view's palette): numbered from 0 in the first tileset, and from
+    /// 100, 200 and so on in the tilesets after it (see <see cref="Tilemap.MoreTilesets"/>).
+    /// </summary>
     public int BrushTile
     {
         get => _brushTile;
@@ -44,9 +47,87 @@ public sealed partial class SceneViewModel
         {
             if (value is < 0 or >= Tilemap.MaxTiles)
                 throw new ArgumentOutOfRangeException(nameof(value), $"Tiles are numbered 0 to {Tilemap.MaxTiles - 1}.");
-            SetProperty(ref _brushTile, value);
+            if (SetProperty(ref _brushTile, value))
+            {
+                if (PaintTarget?.TilesetOf(value) is { } tileset)
+                    _lastPicked[tileset.First] = value;
+                OnPropertyChanged(nameof(PaletteTileset));
+            }
         }
     }
+
+    // The tile last picked from each tileset (by its first tile), so switching back to one picks it again.
+    private readonly Dictionary<int, int> _lastPicked = [];
+
+    /// <summary>
+    /// The selected tilemap's tileset the Scene view's palette shows: the one the <see cref="BrushTile"/> comes from.
+    /// Null with nothing to paint.
+    /// </summary>
+    public Tileset? PaletteTileset => PaintTarget?.TilesetOf(BrushTile);
+
+    /// <summary>
+    /// Shows one of the selected tilemap's tilesets in the palette, by its place in <see cref="Tilemap.Tilesets"/> (0 is
+    /// the first): the <see cref="BrushTile"/> becomes the tile last picked from it, or its first tile.
+    /// </summary>
+    public void ShowTileset(int index)
+    {
+        var tilesets = (PaintTarget ?? throw NothingToPaint()).Tilesets();
+        if (index < 0 || index >= tilesets.Count)
+            throw new ArgumentOutOfRangeException(nameof(index), $"The tilemap has {tilesets.Count} tileset{(tilesets.Count == 1 ? "" : "s")}, numbered from 0.");
+        var tileset = tilesets[index];
+        BrushTile = _lastPicked.TryGetValue(tileset.First, out var tile) && tileset.Contains(tile) ? tile : tileset.First;
+    }
+
+    /// <summary>
+    /// Adds a tileset to the selected tilemap, as one undo step: <paramref name="image"/> (relative to Assets) cut into
+    /// <paramref name="columns"/> by <paramref name="rows"/> tiles. A map with no image yet takes it as its first
+    /// (<see cref="Tilemap.Image"/>); otherwise it goes on the end of <see cref="Tilemap.MoreTilesets"/>, numbered from
+    /// the next hundred. An image the map already uses isn't added again. Either way the palette shows it after.
+    /// Returns its first tile.
+    /// </summary>
+    public int AddTileset(string image, int columns, int rows)
+    {
+        var tilemap = PaintTarget ?? throw NothingToPaint();
+        if (string.IsNullOrWhiteSpace(image))
+            throw new ArgumentException("Name an image in the project's Assets, like Tiles/props.png.", nameof(image));
+        if (workspace.Scene is not { } document)
+            throw NothingToPaint();
+        image = image.Trim().Replace('\\', '/');
+        (columns, rows) = (Math.Clamp(columns, 1, 1024), Math.Clamp(rows, 1, 1024));
+
+        var index = IndexOfTileset(tilemap, image);
+        if (index < 0)
+        {
+            var edits = new List<IEdit>();
+            if (string.IsNullOrWhiteSpace(tilemap.Image))
+            {
+                edits.Add(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Image)), image));
+                edits.Add(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Columns)), columns));
+                edits.Add(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Rows)), rows));
+                // Colored squares standing in for art: the picture shows in its own colors.
+                if (tilemap.Tint != Griff.Color.White)
+                    edits.Add(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.Tint)), Griff.Color.White));
+            }
+            else
+            {
+                IReadOnlyList<string> lines = [.. tilemap.MoreTilesets.Where(l => l.Trim().Length > 0), new Tileset(image, columns, rows, 0).ToLine()];
+                edits.Add(new SetPropertyEdit(tilemap, Property(tilemap, nameof(Tilemap.MoreTilesets)), lines));
+            }
+
+            document.History.Seal();
+            document.Execute(new CompositeEdit($"Add Tileset {image}", edits));
+            document.History.Seal();
+            index = IndexOfTileset(tilemap, image);
+        }
+
+        if (index < 0)
+            throw new InvalidOperationException($"The tilemap has no room for another tileset: tiles are numbered up to {Tilemap.MaxTiles - 1}.");
+        ShowTileset(index);
+        return tilemap.Tilesets()[index].First;
+    }
+
+    private static int IndexOfTileset(Tilemap tilemap, string image) =>
+        tilemap.Tilesets().ToList().FindIndex(t => string.Equals(t.Image, image, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The tilemap the Scene view paints: the selected entity's, when it's the only one selected, in the shown scene and

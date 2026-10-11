@@ -3,14 +3,14 @@ using System.Numerics;
 namespace Griff.Scenes;
 
 /// <summary>
-/// A grid of tiles from one sprite-sheet image, drawn and (optionally) collided with as a whole. The grid starts at
-/// the entity's position and runs right and down. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
+/// A grid of tiles from one or more tileset images, drawn and (optionally) collided with as a whole. The grid starts
+/// at the entity's position and runs right and down. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
 /// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
 /// </summary>
 /// <remarks>
-/// Each row of <see cref="Tiles"/> is a line of characters, top row first: <c>.</c> is empty and
-/// <c>0-9</c>, <c>a-z</c>, <c>A-Z</c> pick tiles 0–61 of the sheet. Rows are saved one per line, so levels diff
-/// line by line in git.
+/// Each row of <see cref="Tiles"/> is a line of characters, one per cell, top row first: <c>.</c> is empty and
+/// <c>0-9</c>, <c>a-z</c>, <c>A-Z</c> pick tiles 0–61; tiles from 62 on are accented letters, then CJK characters
+/// (see <see cref="CharOf"/>). Rows are saved one per line, so levels diff line by line in git.
 /// </remarks>
 [Category("Rendering")]
 [ComponentName("Tilemap")]
@@ -19,38 +19,57 @@ public sealed class Tilemap : Component
     /// <summary>The character for an empty cell.</summary>
     public const char Empty = '.';
 
-    /// <summary>The number of distinct tiles a map can use.</summary>
-    public const int MaxTiles = 62;
+    /// <summary>One more than the highest tile number a cell can hold.</summary>
+    public const int MaxTiles = 62 + 398 + 20992;
 
-    private const string TileChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    /// <summary>Each tileset after the first starts at the next multiple of this after the tiles before it.</summary>
+    public const int TilesetStep = 100;
 
     private string[] _tiles = [];
     private IReadOnlyList<(int X, int Y, int Length)>? _runs;
     private IReadOnlyList<(int X, int Y, int Length, bool OneWay)>? _collisionRuns;
     private string? _backgroundTiles;
     private string? _oneWayTiles;
-    private bool[] _background = new bool[MaxTiles];
-    private bool[] _oneWay = new bool[MaxTiles];
+    private bool[] _background = [];
+    private bool[] _oneWay = [];
     private string? _animatedTiles;
     private IReadOnlyList<TileAnimation> _animations = [];
     private string? _ladderTiles;
-    private bool[] _ladder = new bool[MaxTiles];
+    private bool[] _ladder = [];
     private string? _autoTiles;
     private string? _slopeUpTiles;
-    private bool[] _slopeUp = new bool[MaxTiles];
+    private bool[] _slopeUp = [];
     private string? _slopeDownTiles;
-    private bool[] _slopeDown = new bool[MaxTiles];
+    private bool[] _slopeDown = [];
     private IReadOnlyList<(int X, int Y, bool Rising)>? _slopes;
     private IReadOnlyList<int> _autoGroups = [];
+    private string[] _moreTilesets = [];
+    private TilesetCache? _tilesets;
 
-    /// <summary>Tileset image relative to Assets. Without one, tiles draw as solid squares of <see cref="Tint"/>.</summary>
+    /// <summary>
+    /// The first tileset's image, relative to Assets: tiles 0 on. Without one, its tiles draw as solid squares of
+    /// <see cref="Tint"/>. <see cref="MoreTilesets"/> adds others.
+    /// </summary>
     public string? Image { get; set; }
 
-    /// <summary>Tiles across the tileset image.</summary>
+    /// <summary>Tiles across the first tileset's image.</summary>
     public int Columns { get; set; } = 1;
 
-    /// <summary>Tiles down the tileset image.</summary>
+    /// <summary>Tiles down the first tileset's image.</summary>
     public int Rows { get; set; } = 1;
+
+    /// <summary>
+    /// Tilesets after the first (<see cref="Image"/>), one per line: an image and its tiles across and down, like
+    /// "Tiles/props.png 4x4". Each one's tiles are numbered on from the next hundred after the tiles before it: with a
+    /// first tileset of 16 tiles, the second's are 100 on and a third's 200 on, so a tileset that grows (up to the next
+    /// hundred) doesn't renumber the ones after it. Tile number fields (Background Tiles, Auto Tiles and the rest) and
+    /// <see cref="GetTile"/> use these numbers. Art > Add Tileset to Tilemap adds one.
+    /// </summary>
+    public IReadOnlyList<string> MoreTilesets
+    {
+        get => _moreTilesets;
+        set => _moreTilesets = value?.ToArray() ?? [];
+    }
 
     /// <summary>Width and height of one cell in world units, before the transform's scale.</summary>
     public float TileSize { get; set; } = 1f;
@@ -154,7 +173,7 @@ public sealed class Tilemap : Component
 
     /// <summary>1 for a tile that's a slope rising to the right, -1 for one falling to the right, 0 for anything else.</summary>
     public int SlopeOf(int tile) =>
-        tile is < 0 or >= MaxTiles || _background[tile] ? 0 : _slopeUp[tile] ? 1 : _slopeDown[tile] ? -1 : 0;
+        InSet(_background, tile) ? 0 : InSet(_slopeUp, tile) ? 1 : InSet(_slopeDown, tile) ? -1 : 0;
 
     /// <summary>The cells painted with slope tiles and which way each rises. Cached until the tiles or tile settings change.</summary>
     public IReadOnlyList<(int X, int Y, bool Rising)> SlopeCells() =>
@@ -359,13 +378,54 @@ public sealed class Tilemap : Component
     /// <summary>The center of cell (<paramref name="x"/>, <paramref name="y"/>) in the entity's own space.</summary>
     public Vector2 CellCenter(int x, int y) => new((x + 0.5f) * TileSize, -(y + 0.5f) * TileSize);
 
-    /// <summary>The part of the tileset image showing <paramref name="tile"/>: (u, v, width, height) in 0–1 image space.</summary>
-    public Vector4 TileRect(int tile)
+    /// <summary>
+    /// The part of its tileset's image showing <paramref name="tile"/> (see <see cref="TilesetOf"/>): (u, v, width,
+    /// height) in 0–1 image space.
+    /// </summary>
+    public Vector4 TileRect(int tile) => TilesetOf(tile).Rect(tile);
+
+    /// <summary>The image <paramref name="tile"/> is cut from (see <see cref="TilesetOf"/>); null draws it as a square of <see cref="Tint"/>.</summary>
+    public string? ImageOf(int tile) => TilesetOf(tile).Image;
+
+    /// <summary>
+    /// The map's tilesets in order: the first (<see cref="Image"/>, <see cref="Columns"/> and <see cref="Rows"/>) from
+    /// tile 0, then each line of <see cref="MoreTilesets"/> from the next hundred on. Blank lines are skipped. Cached
+    /// until those change.
+    /// </summary>
+    public IReadOnlyList<Tileset> Tilesets()
     {
-        var columns = Math.Max(1, Columns);
-        var rows = Math.Max(1, Rows);
-        tile = ((tile % (columns * rows)) + columns * rows) % (columns * rows);
-        return new Vector4((float)(tile % columns) / columns, (float)(tile / columns) / rows, 1f / columns, 1f / rows);
+        if (_tilesets is { } cached && cached.Image == Image && cached.Columns == Columns && cached.Rows == Rows && cached.More == _moreTilesets)
+            return cached.Tilesets;
+
+        var list = new List<Tileset> { new(string.IsNullOrWhiteSpace(Image) ? null : Image, Math.Max(1, Columns), Math.Max(1, Rows), 0) };
+        foreach (var line in _moreTilesets)
+        {
+            var last = list[^1];
+            var first = ((long)last.End + TilesetStep - 1) / TilesetStep * TilesetStep;
+            if (first >= MaxTiles)
+                break;
+            if (Tileset.Parse(line, (int)first) is { } tileset)
+                list.Add(tileset);
+        }
+
+        _tilesets = new TilesetCache(Image, Columns, Rows, _moreTilesets, list);
+        return list;
+    }
+
+    /// <summary>
+    /// The tileset <paramref name="tile"/> comes from: the last one starting at or before it. A number past a tileset's
+    /// own tiles (and before the next one's) wraps round them, as numbers past the end of a single tileset always have.
+    /// </summary>
+    public Tileset TilesetOf(int tile)
+    {
+        var tilesets = Tilesets();
+        for (var i = tilesets.Count - 1; i > 0; i--)
+        {
+            if (tile >= tilesets[i].First)
+                return tilesets[i];
+        }
+
+        return tilesets[0];
     }
 
     /// <summary>
@@ -419,7 +479,7 @@ public sealed class Tilemap : Component
     }
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="LadderTiles"/>.</summary>
-    public bool IsLadder(int tile) => tile is >= 0 and < MaxTiles && _ladder[tile];
+    public bool IsLadder(int tile) => InSet(_ladder, tile);
 
     /// <summary>
     /// The ladder cell containing <paramref name="world"/>, a world position, as the world X of its middle; null if there's
@@ -601,18 +661,19 @@ public sealed class Tilemap : Component
     }
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="BackgroundTiles"/>.</summary>
-    public bool IsBackground(int tile) => tile is >= 0 and < MaxTiles && _background[tile];
+    public bool IsBackground(int tile) => InSet(_background, tile);
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="OneWayTiles"/> (and not as a background tile).</summary>
-    public bool IsOneWay(int tile) => tile is >= 0 and < MaxTiles && _oneWay[tile] && !_background[tile];
+    public bool IsOneWay(int tile) => InSet(_oneWay, tile) && !InSet(_background, tile);
 
     /// <summary>
-    /// Reads a list of tile numbers and ranges like "3, 7-9". Anything that isn't a number or range is ignored,
-    /// as are tiles outside 0–61.
+    /// Reads a list of tile numbers and ranges like "3, 7-9", as flags by tile number up to the highest one listed (look
+    /// tiles up with <see cref="InSet"/>). Anything that isn't a number or range is ignored, as are tiles outside 0 to
+    /// <see cref="MaxTiles"/> - 1.
     /// </summary>
     public static bool[] ParseTileSet(string? text)
     {
-        var set = new bool[MaxTiles];
+        var ranges = new List<(int From, int To)>();
         foreach (var part in (text ?? "").Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries))
         {
             var dash = part.IndexOf('-', 1);
@@ -621,12 +682,18 @@ public sealed class Tilemap : Component
                 continue;
             if (from > to)
                 (from, to) = (to, from);
-            for (var tile = Math.Max(0, from); tile <= Math.Min(MaxTiles - 1, to); tile++)
-                set[tile] = true;
+            if (to >= 0 && from < MaxTiles)
+                ranges.Add((Math.Max(0, from), Math.Min(MaxTiles - 1, to)));
         }
 
+        var set = new bool[ranges.Count == 0 ? 0 : ranges.Max(r => r.To) + 1];
+        foreach (var (from, to) in ranges)
+            Array.Fill(set, true, from, to - from + 1);
         return set;
     }
+
+    /// <summary>True if <paramref name="tile"/> is in a set read by <see cref="ParseTileSet"/>.</summary>
+    public static bool InSet(bool[] set, int tile) => (uint)tile < (uint)set.Length && set[tile];
 
     /// <summary>Reads <see cref="AnimatedTiles"/>: "first-last @fps" runs separated by commas. Anything else is skipped.</summary>
     public static IReadOnlyList<TileAnimation> ParseAnimations(string? text)
@@ -654,7 +721,7 @@ public sealed class Tilemap : Component
 
     /// <summary>
     /// Reads <see cref="AutoTiles"/>: the first tile of each run of 16, as "16-31" or "16", separated by commas. Runs that
-    /// aren't 16 long or don't fit in the tileset's 62 tiles are skipped.
+    /// aren't 16 long, or run past the highest tile number, are skipped.
     /// </summary>
     public static IReadOnlyList<int> ParseAutoTiles(string? text)
     {
@@ -673,14 +740,42 @@ public sealed class Tilemap : Component
         return firsts;
     }
 
-    /// <summary>The tile a character stands for, or -1 for empty (and anything unrecognized).</summary>
-    public static int TileOf(char c) => TileChars.IndexOf(c);
+    /// <summary>The tile a character stands for, or -1 for empty (and anything unrecognized); see <see cref="CharOf"/>.</summary>
+    public static int TileOf(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'z' => c - 'a' + 10,
+        >= 'A' and <= 'Z' => c - 'A' + 36,
+        >= 'À' and <= 'Ö' => c - 0xC0 + 62,
+        >= 'Ø' and <= 'ö' => c - 0xD8 + 85,
+        >= 'ø' and <= 'ɏ' => c - 0xF8 + 116,
+        >= '一' and <= '鿿' => c - 0x4E00 + 460,
+        _ => -1,
+    };
 
-    /// <summary>The character for <paramref name="tile"/>; -1 gives <see cref="Empty"/>.</summary>
-    public static char CharOf(int tile) => tile >= 0 && tile < MaxTiles ? TileChars[tile] : Empty;
+    /// <summary>
+    /// The character for <paramref name="tile"/>; -1 (or anything from <see cref="MaxTiles"/> on) gives
+    /// <see cref="Empty"/>. Tiles 0–61 are <c>0-9</c>, <c>a-z</c> and <c>A-Z</c>, 62–459 the accented letters from
+    /// <c>À</c> to <c>ɏ</c> (skipping <c>×</c> and <c>÷</c>), and 460 on the CJK characters from <c>一</c>, so a cell
+    /// is always one character.
+    /// </summary>
+    public static char CharOf(int tile) => tile switch
+    {
+        < 0 or >= MaxTiles => Empty,
+        < 10 => (char)('0' + tile),
+        < 36 => (char)('a' + tile - 10),
+        < 62 => (char)('A' + tile - 36),
+        < 85 => (char)(0xC0 + tile - 62),
+        < 116 => (char)(0xD8 + tile - 85),
+        < 460 => (char)(0xF8 + tile - 116),
+        _ => (char)(0x4E00 + tile - 460),
+    };
 
     // 0 = solid, 1 = one-way, -1 = not a box (empty, background, a ladder, or a slope, which collides by its own shape).
     private int CollisionOf(int tile) => tile < 0 || IsBackground(tile) || IsLadder(tile) || SlopeOf(tile) != 0 ? -1 : IsOneWay(tile) ? 1 : 0;
+
+    // What Tilesets() was worked out from, and the answer.
+    private sealed record TilesetCache(string? Image, int Columns, int Rows, string[] More, IReadOnlyList<Tileset> Tilesets);
 
     // Runs of cells with the same non-negative kind; a change of kind ends a run.
     private static List<(int X, int Y, int Length, int Kind)> FindRuns(string[] tiles, Func<char, int> kindOf)
@@ -713,6 +808,62 @@ public sealed class Tilemap : Component
             rows.RemoveAt(rows.Count - 1);
         return rows.ToArray();
     }
+}
+
+/// <summary>
+/// One of a tilemap's tilesets (see <see cref="Tilemap.Tilesets"/>): <see cref="Image"/> cut into <see cref="Columns"/>
+/// by <see cref="Rows"/> tiles, numbered from <see cref="First"/> along each row, top row first. Without an image its
+/// tiles are squares of the map's tint.
+/// </summary>
+public sealed record Tileset(string? Image, int Columns, int Rows, int First)
+{
+    /// <summary>How many tiles it has.</summary>
+    public int Count => Columns * Rows;
+
+    /// <summary>One past its last tile's number.</summary>
+    public int End => First + Count;
+
+    /// <summary>Its image's file name without the folder or extension ("props"), or "Tiles" without an image.</summary>
+    public string Name => Image is null ? "Tiles" : Path.GetFileNameWithoutExtension(Image.Replace('\\', '/'));
+
+    /// <summary>True if <paramref name="tile"/> is one of its own tiles.</summary>
+    public bool Contains(int tile) => tile >= First && tile < End;
+
+    /// <summary>
+    /// The part of <see cref="Image"/> showing <paramref name="tile"/>, as (u, v, width, height) in 0–1 image space.
+    /// Numbers outside its tiles wrap round them.
+    /// </summary>
+    public Vector4 Rect(int tile)
+    {
+        var index = ((tile - First) % Count + Count) % Count;
+        return new Vector4((float)(index % Columns) / Columns, (float)(index / Columns) / Rows, 1f / Columns, 1f / Rows);
+    }
+
+    /// <summary>
+    /// Reads a line of <see cref="Tilemap.MoreTilesets"/>, "Tiles/props.png 4x4", as a tileset whose tiles start at
+    /// <paramref name="first"/>; null for a blank line. Without its tiles across and down, it's one tile.
+    /// </summary>
+    public static Tileset? Parse(string? line, int first)
+    {
+        var text = (line ?? "").Trim();
+        if (text.Length == 0)
+            return null;
+
+        var (columns, rows) = (1, 1);
+        var space = text.LastIndexOfAny([' ', '\t']);
+        var size = space < 0 ? "" : text[(space + 1)..];
+        var x = size.IndexOfAny(['x', 'X', '×']);
+        if (x > 0 && int.TryParse(size[..x], out var c) && int.TryParse(size[(x + 1)..], out var r) && c > 0 && r > 0)
+        {
+            (columns, rows) = (Math.Min(c, 1024), Math.Min(r, 1024));
+            text = text[..space].TrimEnd();
+        }
+
+        return new Tileset(text, columns, rows, first);
+    }
+
+    /// <summary>The line <see cref="Parse"/> reads back, as <see cref="Tilemap.MoreTilesets"/> holds it: "Tiles/props.png 4x4".</summary>
+    public string ToLine() => $"{Image} {Columns}x{Rows}";
 }
 
 /// <summary>A run of tiles that animate one after another; see <see cref="Tilemap.AnimatedTiles"/>.</summary>

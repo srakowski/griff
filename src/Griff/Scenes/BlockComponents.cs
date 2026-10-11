@@ -111,11 +111,11 @@ public sealed class Blocks : Component
     private string? _hardness;
     private List<(bool[] Tiles, float Seconds)> _hardnessRuns = [];
     private string? _unbreakable;
-    private bool[] _unbreakableSet = new bool[Tilemap.MaxTiles];
+    private bool[] _unbreakableSet = [];
     private string? _falling;
-    private bool[] _fallingSet = new bool[Tilemap.MaxTiles];
+    private bool[] _fallingSet = [];
     private string? _glowing;
-    private bool[] _glowingSet = new bool[Tilemap.MaxTiles];
+    private bool[] _glowingSet = [];
     private Dictionary<string, int> _places = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<int, string> _names = [];
 
@@ -263,18 +263,18 @@ public sealed class Blocks : Component
     {
         foreach (var (tiles, seconds) in _hardnessRuns)
         {
-            if (tile is >= 0 and < Tilemap.MaxTiles && tiles[tile])
+            if (Tilemap.InSet(tiles, tile))
                 return Math.Max(0, seconds);
         }
 
         return Math.Max(0, MineTime);
     }
 
-    public bool IsUnbreakable(int tile) => tile is >= 0 and < Tilemap.MaxTiles && _unbreakableSet[tile];
+    public bool IsUnbreakable(int tile) => Tilemap.InSet(_unbreakableSet, tile);
 
-    public bool Falls(int tile) => tile is >= 0 and < Tilemap.MaxTiles && _fallingSet[tile];
+    public bool Falls(int tile) => Tilemap.InSet(_fallingSet, tile);
 
-    public bool Glows(int tile) => tile is >= 0 and < Tilemap.MaxTiles && _glowingSet[tile];
+    public bool Glows(int tile) => Tilemap.InSet(_glowingSet, tile);
 
     // The game's bookkeeping: falling blocks to look at, when the world last changed, and when it was last saved.
     internal HashSet<(int X, int Y)> Unsettled { get; } = [];

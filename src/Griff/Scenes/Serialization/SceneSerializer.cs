@@ -15,7 +15,13 @@ public sealed class SceneSerializer(ComponentRegistry registry)
     /// <summary>The components it knows how to save and load.</summary>
     public ComponentRegistry Components => registry;
 
-    private static readonly JsonWriterOptions WriterOptions = new() { Indented = true };
+    // Letters past ASCII (accents, tilemap rows past tile 61) are written as themselves, not \u escapes, so they read in
+    // diffs. Quotes and characters HTML treats specially are still escaped, as before.
+    private static readonly JsonWriterOptions WriterOptions = new()
+    {
+        Indented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All),
+    };
 
     public void Save(Scene scene, Stream stream)
     {

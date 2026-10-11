@@ -1,0 +1,39 @@
+title: Several tilesets on one tilemap
+intro: A tilemap can now paint from as many tilesets as it needs, so a level is no longer limited to the 62 tiles of one picture.
+project: Shooter | Tilesets
+
+chapter: Another picture | Painted in the Sprite Painter
+say: The Shooter's level is one tilemap, painted from one tileset of wall tiles. A tileset painted in Griff holds at most sixty four tiles, and a map could only number sixty two, so a bigger level soon ran out.
+say: Let's paint a second tileset, for some trim.
+deselect
+menu: Art > New Tileset...
+painter
+click: painter:idea:Bricks
+wait: 0.6
+click: painter:tool:Fill
+click: painter:color:12
+paint: 8,8
+artname: trim
+click: painter:save
+expectart: Tiles/trim.png | 16
+click: painter:close
+
+chapter: Add it to the map | A tab for each tileset
+select: Walls
+look: 12, -4, 7
+explain: tiles:walls | Tilesets | The tile palette now has a tab along its top for each of the map's tilesets. This one has only its walls.
+explain: tiles:+ | Add a tileset | The plus tab adds another, from the project's pictures. Art, Add Tileset to Tilemap does the same.
+menu: Art > Add Tileset to Tilemap > Tiles/trim.png
+explain: tiles:trim | Its own tab | The trim has its own tab now, and the palette shows its tiles.
+explain: field:Tilemap.MoreTilesets | More Tilesets | In the Inspector, it's a line under More Tilesets: the picture and its tiles across and down. A picture painted in Griff brings its grid along.
+
+chapter: Paint with it | Numbered from the next hundred
+explain: tiles:100 | Tile 100 | The first tileset's tiles are numbered from zero. Each tileset after it starts at the next hundred, so the trim's tiles are 100 on. A tileset that grows doesn't renumber the ones after it.
+click: tiles:100
+scenedrag: 2.5, -0.5 > 8.5, -0.5
+expecttile: Walls 2, 0 = 100
+expecttile: Walls 8, 0 = 100
+say: Painting with it works as before, with the brush, rectangles and fills, and each cell remembers which tileset its tile came from.
+click: tiles:walls
+explain: tiles:walls | Back to the walls | Click a tab to go back to another tileset. It picks the tile you last used from it.
+say: Fields that list tile numbers, like background or ladder tiles, take the new numbers too. And agents add tilesets through the same Art menu command, or the Scene view's view model.

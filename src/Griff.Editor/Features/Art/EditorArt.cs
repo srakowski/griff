@@ -119,6 +119,24 @@ public sealed class EditorArt
         }
     }
 
+    /// <summary>
+    /// How many tiles across and down <paramref name="image"/> holds as a tileset for <paramref name="tilemap"/>: a picture
+    /// painted in Griff says; any other is cut into tiles as many pixels wide and high as the map's first tileset's (16
+    /// without one). At least one each way.
+    /// </summary>
+    public (int Columns, int Rows) TileGrid(string image, Tilemap tilemap)
+    {
+        if (LayoutOf(image) is { } layout)
+            return (layout.Columns, layout.Rows);
+        if (Thumbnail(image) is not { } picture)
+            return (1, 1);
+
+        var (width, height) = (16.0, 16.0);
+        if (Thumbnail(tilemap.Image) is { } first)
+            (width, height) = ((double)first.PixelWidth / Math.Max(1, tilemap.Columns), (double)first.PixelHeight / Math.Max(1, tilemap.Rows));
+        return (Math.Max(1, (int)Math.Round(picture.PixelWidth / Math.Max(1, width))), Math.Max(1, (int)Math.Round(picture.PixelHeight / Math.Max(1, height))));
+    }
+
     /// <summary>Writes a picture into the project. Returns the full path.</summary>
     public string Save(PixelSheet sheet, string assetPath)
     {

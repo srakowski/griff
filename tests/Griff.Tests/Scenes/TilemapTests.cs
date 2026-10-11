@@ -192,6 +192,127 @@ public class TilemapTests
     }
 
     [Fact]
+    public void TileChars_GoPastTheFirst62_OneCharacterPerTile()
+    {
+        Assert.Equal(['0', 'a', 'Z', 'À', 'Ö', 'Ø', 'ö', 'ø', 'ɏ', '一'], new[] { 0, 10, 61, 62, 84, 85, 115, 116, 459, 460 }.Select(Tilemap.CharOf));
+        Assert.Equal(Tilemap.Empty, Tilemap.CharOf(Tilemap.MaxTiles));
+        Assert.Equal(-1, Tilemap.TileOf('×'));
+        Assert.Equal(-1, Tilemap.TileOf('÷'));
+
+        var all = Enumerable.Range(0, Tilemap.MaxTiles).Select(Tilemap.CharOf).ToList();
+        Assert.Equal(all.Count, all.Distinct().Count());
+        Assert.All(Enumerable.Range(0, Tilemap.MaxTiles), tile => Assert.Equal(tile, Tilemap.TileOf(Tilemap.CharOf(tile))));
+    }
+
+    [Fact]
+    public void SetTile_PastTheFirst62_KeepsOneCharacterPerCell()
+    {
+        var map = new Tilemap();
+
+        map.SetTile(0, 0, 3);
+        map.SetTile(1, 0, 105);
+        map.SetTile(2, 0, 2000);
+
+        Assert.Equal(3, map.Tiles[0].Length);
+        Assert.Equal([3, 105, 2000], new[] { 0, 1, 2 }.Select(x => map.GetTile(x, 0)));
+        Assert.Equal([(0, 0, 3)], map.Runs().Select(r => (r.X, r.Y, r.Length)));
+    }
+
+    [Fact]
+    public void Tilesets_NumberEachOneFromTheNextHundred()
+    {
+        var map = new Tilemap
+        {
+            Image = "Tiles/ground.png", Columns = 4, Rows = 4,
+            MoreTilesets = ["Tiles/props.png 4x2", "", "Tiles/big world.png 16x16", "Tiles/one.png"],
+        };
+
+        var tilesets = map.Tilesets();
+
+        Assert.Equal(
+            [("Tiles/ground.png", 4, 4, 0), ("Tiles/props.png", 4, 2, 100), ("Tiles/big world.png", 16, 16, 200), ("Tiles/one.png", 1, 1, 500)],
+            tilesets.Select(t => (t.Image, t.Columns, t.Rows, t.First)));
+        Assert.Equal(["ground", "props", "big world", "one"], tilesets.Select(t => t.Name));
+        Assert.Equal("Tiles/props.png", map.TilesetOf(105).Image);
+        Assert.Equal("Tiles/ground.png", map.TilesetOf(15).Image);
+        Assert.Equal("Tiles/big world.png", map.ImageOf(455));
+        Assert.Equal("Tiles/props.png 4x2", tilesets[1].ToLine());
+    }
+
+    [Fact]
+    public void Tilesets_GrowingOne_LeavesTheNextOnesNumbersAlone()
+    {
+        var map = new Tilemap { Image = "a.png", Columns = 4, Rows = 4, MoreTilesets = ["b.png 2x2"] };
+        Assert.Equal(100, map.Tilesets()[1].First);
+
+        map.Rows = 8;
+
+        Assert.Equal(100, map.Tilesets()[1].First);
+        Assert.Equal(32, map.Tilesets()[0].Count);
+    }
+
+    [Fact]
+    public void TileRect_CutsEachTileFromItsOwnTileset()
+    {
+        var map = new Tilemap { Image = "a.png", Columns = 4, Rows = 2, MoreTilesets = ["b.png 2x2"] };
+
+        Assert.Equal(new Vector4(0.25f, 0.5f, 0.25f, 0.5f), map.TileRect(5));
+        Assert.Equal(new Vector4(0.5f, 0.5f, 0.5f, 0.5f), map.TileRect(103));
+        Assert.Equal(map.TileRect(100), map.TileRect(104));
+    }
+
+    [Fact]
+    public void TileDraws_UseTheImageOfEachCellsTileset()
+    {
+        var entity = new Entity("Level");
+        var map = entity.AddComponent<Tilemap>();
+        (map.Image, map.Columns, map.Rows, map.MoreTilesets) = ("a.png", 2, 2, ["b.png 2x1"]);
+        map.SetTile(0, 0, 1);
+        map.SetTile(1, 0, 101);
+
+        var draws = SceneRenderer.TileDraws(entity, map).ToList();
+
+        Assert.Equal(["a.png", "b.png"], draws.Select(d => d.Image));
+        Assert.Equal([new Vector4(0.5f, 0, 0.5f, 0.5f), new Vector4(0.5f, 0, 0.5f, 1)], draws.Select(d => d.Source));
+    }
+
+    [Fact]
+    public void TileNumberFields_ReachTilesInLaterTilesets()
+    {
+        var map = new Tilemap { BackgroundTiles = "100-103", LadderTiles = "250", OneWayTiles = "3", Tiles = ["3"] };
+
+        Assert.True(map.IsBackground(102));
+        Assert.False(map.IsBackground(104));
+        Assert.True(map.IsLadder(250));
+        Assert.True(map.IsOneWay(3));
+        Assert.False(map.IsOneWay(-1));
+        Assert.Equal([116], Tilemap.ParseAutoTiles("116-131"));
+    }
+
+    [Fact]
+    public void Tiles_PastTheFirst62_SaveAsThemselves_AndRoundTrip()
+    {
+        var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+        var scene = new Scene();
+        var entity = new Entity("Level");
+        var map = entity.AddComponent<Tilemap>();
+        map.MoreTilesets = ["Tiles/props.png 4x4"];
+        map.SetTile(0, 0, 1);
+        map.SetTile(1, 0, 104);
+        map.SetTile(2, 0, 600);
+        scene.Add(entity);
+
+        var json = serializer.SaveToString(scene);
+        var loaded = serializer.LoadFromString(json).Roots[0].GetComponent<Tilemap>()!;
+
+        Assert.Contains($"\"1{Tilemap.CharOf(104)}{Tilemap.CharOf(600)}\"", json);
+        Assert.Contains("\"Tiles/props.png 4x4\"", json);
+        Assert.Equal(map.Tiles, loaded.Tiles);
+        Assert.Equal(104, loaded.GetTile(1, 0));
+        Assert.Equal(map.MoreTilesets, loaded.MoreTilesets);
+    }
+
+    [Fact]
     public void Tiles_SaveOneRowPerLine_AndRoundTrip()
     {
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());

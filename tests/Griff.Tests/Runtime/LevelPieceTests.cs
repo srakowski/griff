@@ -356,7 +356,7 @@ public class LevelPieceTests
     [InlineData("16-31", new[] { 16 })]
     [InlineData("0, 16", new[] { 0, 16 })]
     [InlineData("16-30", new int[0])]   // not 16 long
-    [InlineData("50", new int[0])]      // doesn't fit in 62 tiles
+    [InlineData("21440", new int[0])]  // runs past the highest tile number
     [InlineData("x, 46-61", new[] { 46 })]
     public void AutoTiles_Parse(string text, int[] firsts) => Assert.Equal(firsts, Tilemap.ParseAutoTiles(text));
 }

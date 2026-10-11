@@ -630,12 +630,13 @@ public static partial class SceneRenderer
         // the background show between them as the camera moves. The image is stretched, not extended, so nothing bleeds in.
         const float seamless = 1.004f;
         var size = Matrix4x4.CreateScale(tilemap.TileSize * seamless, tilemap.TileSize * seamless, 1);
-        var image = string.IsNullOrEmpty(tilemap.Image) ? null : tilemap.Image;
         foreach (var (x, y, tile) in cull is { } view ? CellsIn(tilemap, world, view) : tilemap.Cells())
         {
             var center = tilemap.CellCenter(x, y);
             var matrix = size * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
-            yield return new SpriteDraw(matrix, image, tilemap.Tint, entity) { Source = image is null ? new Vector4(0, 0, 1, 1) : tilemap.TileRect(tilemap.ShownTile(x, y, tile)) };
+            var shown = tilemap.ShownTile(x, y, tile);
+            var tileset = tilemap.TilesetOf(shown);
+            yield return new SpriteDraw(matrix, tileset.Image, tilemap.Tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) };
         }
     }
 

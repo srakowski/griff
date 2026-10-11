@@ -45,14 +45,14 @@ public class TileCollisionTests
     [InlineData("3", new[] { 3 })]
     [InlineData("7-9, 1", new[] { 1, 7, 8, 9 })]
     [InlineData(" 5 ;2-2  x 9-7 ", new[] { 2, 5, 7, 8, 9 })]
-    [InlineData("60-99", new[] { 60, 61 })]
+    [InlineData("21450-21499", new[] { 21450, 21451 })]
     [InlineData("", new int[0])]
     [InlineData(null, new int[0])]
     public void ParseTileSet_ReadsNumbersAndRanges(string? text, int[] expected)
     {
         var set = Tilemap.ParseTileSet(text);
 
-        Assert.Equal(expected, Enumerable.Range(0, Tilemap.MaxTiles).Where(t => set[t]));
+        Assert.Equal(expected, Enumerable.Range(0, Tilemap.MaxTiles).Where(t => Tilemap.InSet(set, t)));
     }
 
     [Fact]

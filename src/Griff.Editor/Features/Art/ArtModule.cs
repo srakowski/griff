@@ -1,5 +1,6 @@
 using Griff.Art;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
@@ -22,6 +23,7 @@ public sealed class ArtModule : IEditorModule
             .AddCommand<NewSpriteCommand>()
             .AddCommand<NewTilesetCommand>()
             .AddCommand<PaintSelectedCommand>()
+            .AddCommand<AddTilesetCommand>()
             .AddCommand<OpenClipEditorCommand>();
     }
 }
@@ -85,6 +87,42 @@ public sealed class PaintSelectedCommand(EditorArt art, ISelection selection) : 
 }
 
 /// <summary>
+/// Adds a tileset to the selected tilemap, so it paints with more tiles than one picture holds: the submenu lists the
+/// project's images. A picture painted in Griff keeps its own tiles across and down; any other is cut into tiles the
+/// size of the map's first tileset's (16 pixels without one). The new tileset's tiles are numbered from the next
+/// hundred, and the Scene view's palette switches to it. A map with no image yet takes it as its first.
+/// </summary>
+public sealed class AddTilesetCommand(EditorArt art, SceneView.SceneViewModel scene, IDialogService dialogs) : EditorCommand
+{
+    public override string Id => "Art.AddTileset";
+    public override string Text => "Add _Tileset to Tilemap";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 1);
+    public override IReadOnlyList<string>? Choices => art.Images();
+
+    protected override bool CanExecuteCore() => scene.PaintTarget is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        var images = art.Images();
+        var image = dialogs.Prompt("Add Tileset", "Image (in Assets)", images.FirstOrDefault(i => i.StartsWith("Tiles/", StringComparison.OrdinalIgnoreCase)) ?? images.FirstOrDefault() ?? "",
+            text => art.Resolve(text) is null ? "There's no such image in Assets." : null);
+        return image is null ? Task.CompletedTask : ChooseCoreAsync(image);
+    }
+
+    protected override Task ChooseCoreAsync(string choice)
+    {
+        if (scene.PaintTarget is not { } tilemap)
+            throw new InvalidOperationException("Select a tilemap (and nothing else) to add a tileset to it.");
+        if (art.Resolve(choice) is null)
+            throw new ArgumentException($"There's no image \"{choice}\" in Assets.", nameof(choice));
+        var (columns, rows) = art.TileGrid(choice, tilemap);
+        scene.AddTileset(choice, columns, rows);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// Opens the Clip Editor: the selected entity's animation clips, with the one picked playing in a preview. Clips are
 /// added, renamed, removed and picked to start with there, and given their frames (picked off the sprite sheet), speed
 /// and looping. It follows the selection.
@@ -94,7 +132,7 @@ public sealed class OpenClipEditorCommand(ClipEditor clips, IWorkspace workspace
     public override string Id => "Art.Clips";
     public override string Text => "Animation _Clips...";
     public override string? Icon => Icons.Play;
-    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 1);
+    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 2);
 
     protected override bool CanExecuteCore() => workspace.Project is not null;
 

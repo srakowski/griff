@@ -120,8 +120,8 @@ public static partial class SceneRenderer
                 var center = Game.CellWorld(map, at.X, at.Y);
                 var blocks = map.Entity.GetComponent<Blocks>();
                 var tile = blocks?.TileOf(builder.Item) ?? -1;
-                if (tile >= 0 && !string.IsNullOrEmpty(map.Image))
-                    yield return new SpriteDraw(Matrix4x4.CreateScale(cell.X, cell.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), map.Image,
+                if (tile >= 0 && map.ImageOf(tile) is { } tileImage)
+                    yield return new SpriteDraw(Matrix4x4.CreateScale(cell.X, cell.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), tileImage,
                         new Color(1, 1, 1, 0.4f), ScreenEntity) { Source = map.TileRect(tile) };
                 foreach (var line in Outline(center, cell, thickness, builder.Highlight with { A = builder.Highlight.A * 0.6f }))
                     yield return line;
@@ -340,9 +340,9 @@ public static partial class SceneRenderer
     private static IEnumerable<SpriteDraw> ItemIcon(Tilemap? world, Hotbar? hotbar, string item, Vector2 center, float size)
     {
         var tile = world?.Entity?.GetComponent<Blocks>()?.TileOf(item) ?? -1;
-        if (tile >= 0 && !string.IsNullOrEmpty(world!.Image))
+        if (tile >= 0 && world!.ImageOf(tile) is { } image)
         {
-            yield return new SpriteDraw(Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), world.Image,
+            yield return new SpriteDraw(Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), image,
                 world.Tint, ScreenEntity) { Source = world.TileRect(tile) };
             yield break;
         }

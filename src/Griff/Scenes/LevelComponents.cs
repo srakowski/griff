@@ -499,16 +499,24 @@ public enum DialogueStart
 }
 
 /// <summary>
-/// Lines of talk shown one after another in a dialogue box, with no code. Interact (E, Enter, the gamepad's Y) finishes the
-/// line being typed, then moves on. The <see cref="Box"/> is shown while talking and hidden otherwise; put a
-/// <see cref="Typewriter"/> next to its text to type the lines out. Needs a collider, usually a trigger.
+/// Lines of talk shown one after another in a dialogue box, with choices that branch it, and no code. Interact (E, Enter,
+/// the gamepad's Y) finishes the line being typed, then moves on. Rows starting with "&gt;" are choices offered under the
+/// line before them, picked with the arrow keys, D-pad, number keys or mouse and Interact, and they can go to other parts
+/// of the lines (see <see cref="Lines"/>). The <see cref="Box"/> is shown while talking and hidden otherwise; put a <see cref="Typewriter"/>
+/// next to its text to type the lines out. Needs a collider, usually a trigger.
 /// </summary>
 [Category("Story")]
 [Requires(typeof(Collider), Note = "usually a trigger")]
 [ComponentName("Griff.Dialogue")]
 public sealed class Dialogue : Component
 {
-    /// <summary>What's said, one line per row.</summary>
+    /// <summary>
+    /// What's said, one line per row. A row starting with "&gt;" is a choice offered under the line before it, and one
+    /// ending in "-&gt; Name" goes to the row "# Name" when it's picked ("&gt; Buy a sword -&gt; Shop"); a choice
+    /// without one goes on after the choices. "# Name" starts a part that's only reached that way: the lines before it
+    /// end there. A row "-&gt; Name" goes there by itself, and "-&gt; End" ends. Start a row with "\" to say it as it
+    /// is, "&gt;" or "#" and all.
+    /// </summary>
     public IReadOnlyList<string> Lines { get; set; } = ["Hello!"];
 
     /// <summary>The name of the dialogue box entity; its <see cref="Text"/> (or the first one inside it) shows the lines.</summary>
@@ -548,8 +556,19 @@ public sealed class Dialogue : Component
     [DoNotSerialize]
     public bool IsDone { get; internal set; }
 
+    /// <summary>The choices offered under the line showing, empty when there are none.</summary>
+    [DoNotSerialize]
+    public IReadOnlyList<string> Choices { get; internal set; } = [];
+
+    /// <summary>The choice the arrow keys or mouse are on, from 0, while there are <see cref="Choices"/>; Interact picks it.</summary>
+    [DoNotSerialize]
+    public int Picked { get; internal set; }
+
     /// <summary>Raised as each line is shown, with its number.</summary>
     public event Action<int>? LineShown;
+
+    /// <summary>Raised when a choice is picked, with its number in <see cref="Choices"/> (before the talk moves on).</summary>
+    public event Action<int>? Chosen;
 
     /// <summary>Raised when the last line is done.</summary>
     public event Action? Finished;
@@ -563,5 +582,68 @@ public sealed class Dialogue : Component
 
     internal void RaiseLineShown() => LineShown?.Invoke(Line);
 
+    internal void RaiseChosen(int index) => Chosen?.Invoke(index);
+
     internal void RaiseFinished() => Finished?.Invoke();
+
+    /// <summary>What a row of <see cref="Lines"/> is.</summary>
+    internal enum RowKind
+    {
+        Said,
+        Choice,
+        Part,
+        GoTo,
+    }
+
+    /// <summary>
+    /// Reads row <paramref name="row"/>: what it is, the text to show (a line's or a choice's), and where it goes (a
+    /// choice's or a go-to's), or the name of the part it starts.
+    /// </summary>
+    internal (RowKind Kind, string Text, string? To) Row(int row)
+    {
+        var raw = Lines[row] ?? "";
+        var trimmed = raw.TrimStart();
+        if (trimmed.StartsWith('\\'))
+            return (RowKind.Said, trimmed[1..], null);
+        if (trimmed.StartsWith("->", StringComparison.Ordinal))
+            return (RowKind.GoTo, "", trimmed[2..].Trim());
+        if (trimmed.StartsWith('#'))
+            return (RowKind.Part, "", trimmed[1..].Trim());
+        if (!trimmed.StartsWith('>'))
+            return (RowKind.Said, raw, null);
+
+        var choice = trimmed[1..];
+        var arrow = choice.LastIndexOf("->", StringComparison.Ordinal);
+        return arrow < 0
+            ? (RowKind.Choice, choice.Trim(), null)
+            : (RowKind.Choice, choice[..arrow].Trim(), choice[(arrow + 2)..].Trim());
+    }
+
+    /// <summary>
+    /// The row just after "# <paramref name="name"/>", or null for "End" (when no part is called that). Throws when
+    /// there's no such part.
+    /// </summary>
+    internal int? RowAfterPart(string name)
+    {
+        for (var row = 0; row < Lines.Count; row++)
+        {
+            if (Row(row) is (RowKind.Part, _, var part) && string.Equals(part, name, StringComparison.OrdinalIgnoreCase))
+                return row + 1;
+        }
+
+        if (string.Equals(name, "End", StringComparison.OrdinalIgnoreCase))
+            return null;
+        throw new InvalidOperationException(
+            $"The dialogue on \"{Entity?.Name}\" goes to \"{name}\", but none of its lines is \"# {name}\" (or \"-> End\" to end).");
+    }
+
+    /// <summary>Throws if any choice or go-to names a part that isn't there, so a typo shows as soon as it's said.</summary>
+    internal void CheckParts()
+    {
+        for (var row = 0; row < Lines.Count; row++)
+        {
+            if (Row(row) is (RowKind.Choice or RowKind.GoTo, _, { Length: > 0 } to))
+                RowAfterPart(to);
+        }
+    }
 }

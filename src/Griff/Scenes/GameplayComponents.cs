@@ -489,6 +489,7 @@ public sealed class Typewriter : Component
     private int _shown;
     private float _time;
     private bool _running;
+    private bool _nextAtOnce;
 
     /// <summary>Letters per second; 0 shows everything at once.</summary>
     public float Speed { get; set; } = 30;
@@ -523,6 +524,9 @@ public sealed class Typewriter : Component
     /// <summary>Types the text out again from the start.</summary>
     public void Restart() => (_shown, _time) = (0, 0);
 
+    /// <summary>Shows the next change to the text all at once instead of typing it, e.g. a dialogue choice picked.</summary>
+    internal void ShowNextAtOnce() => _nextAtOnce = true;
+
     /// <summary>The part of <paramref name="text"/> to draw now.</summary>
     public string? Visible(string? text) =>
         !_running || text is null || text != _typing ? text : text[..Math.Min(_shown, text.Length)];
@@ -536,6 +540,9 @@ public sealed class Typewriter : Component
             _running = true;
             _typing = value;
             Restart();
+            if (_nextAtOnce)
+                _shown = _typing?.Length ?? 0;
+            _nextAtOnce = false;
         }
 
         if (_typing is null || _shown >= _typing.Length)

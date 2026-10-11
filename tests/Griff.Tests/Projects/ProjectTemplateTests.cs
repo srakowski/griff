@@ -563,6 +563,45 @@ public sealed class ProjectTemplateTests : IDisposable
     }
 
     [Fact]
+    public async Task TopDown_TheGuide_AnswersWhatThePlayerPicks_AndAsksAgain()
+    {
+        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var game = NewGame(project, scene, input, registry);
+        var guide = game.Find("Guide")!.GetComponent<Dialogue>()!;
+        var text = game.Find("Dialogue Box")!.GetComponent<Text>()!;
+        game.Find("Player")!.Transform.Position = game.Find("Guide")!.Transform.Position;
+        Run(game, input, 0.2);
+
+        void Press(Key key)
+        {
+            input.SetKey(key, true);
+            Run(game, input, Frame);
+            input.SetKey(key, false);
+            Run(game, input, Frame);
+        }
+
+        // The first press starts it or finishes typing the line; the second moves on.
+        Press(Key.E);
+        Assert.StartsWith("Hello!", text.Value);
+        Press(Key.E);
+        Press(Key.E);
+        Assert.Equal(["The bats", "The key", "The crate", "Nothing, thanks"], guide.Choices);
+
+        Press(Key.E); // finish typing
+        Press(Key.Down);
+        Press(Key.E);
+        Assert.StartsWith("There's a key about.", text.Value);
+        Press(Key.E);
+        Press(Key.E);
+        Assert.Equal(4, guide.Choices.Count);
+
+        Press(Key.E);
+        Press(Key.D4);
+        Assert.False(guide.IsTalking);
+        Assert.True(guide.IsDone);
+    }
+
+    [Fact]
     public async Task TopDown_IsADimDungeon_LitByTorchesAndTheLantern_WithTheHudUndarkened()
     {
         var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);

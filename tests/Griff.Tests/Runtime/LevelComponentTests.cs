@@ -875,6 +875,177 @@ public class LevelComponentTests
         Assert.Equal("A cutscene line.", text.Value);
     }
 
+    // ---- Dialogue choices ----
+
+    private void Click(Vector2 at)
+    {
+        _input.MouseWorld = at;
+        _input.SetMouseButton(MouseButton.Left, true);
+        _game.Tick(Step);
+        _input.EndFrame();
+        _input.SetMouseButton(MouseButton.Left, false);
+        _game.Tick(Step);
+        _input.EndFrame();
+    }
+
+    [Fact]
+    public void DialogueChoices_ShowUnderTheLine_AndGoToTheirPart()
+    {
+        var (dialogue, _, text) = AddTalker(Vector2.Zero,
+            "Want a sword?", "> Yes -> Buy", "> No -> Bye",
+            "# Buy", "Ten gold, please.", "-> End",
+            "# Bye", "Safe travels.");
+        dialogue.Message = "Talked";
+        var heard = 0;
+        _game.On("Talked", _ => heard++);
+        var chosen = new List<string>();
+        dialogue.Chosen += i => chosen.Add(dialogue.Choices[i]);
+        AddPlayer(Vector2.Zero);
+        Run(0.1f);
+
+        Press(Key.E);
+        Assert.Equal(["Yes", "No"], dialogue.Choices);
+        Assert.Equal(0, dialogue.Picked);
+        Assert.Equal("Want a sword?\n> Yes <\nNo", text.Value);
+
+        Press(Key.Down);
+        Assert.Equal(1, dialogue.Picked);
+        Assert.Equal("Want a sword?\nYes\n> No <", text.Value);
+        Press(Key.Down);
+        Assert.Equal(0, dialogue.Picked); // round to the top again
+        Press(Key.Up);
+
+        Press(Key.E);
+        Assert.Equal(["No"], chosen);
+        Assert.Equal("Safe travels.", text.Value);
+        Assert.Empty(dialogue.Choices);
+
+        Press(Key.E);
+        Assert.False(dialogue.IsTalking);
+        Assert.True(dialogue.IsDone);
+        Assert.Equal(1, heard);
+    }
+
+    [Fact]
+    public void DialogueChoices_WithNowhereToGo_GoOnAfterTheChoices_AndAPartEndsTheLinesBeforeIt()
+    {
+        var (dialogue, _, text) = AddTalker(Vector2.Zero,
+            "Hi.", "> Tell me more", "> Bye -> End", "There's more to tell.", "# Secret", "Never said.");
+        AddPlayer(Vector2.Zero);
+        Run(0.1f);
+
+        Press(Key.E);
+        Press(Key.E);
+        Assert.Equal("There's more to tell.", text.Value);
+
+        Press(Key.E);
+        Assert.False(dialogue.IsTalking);
+        Assert.True(dialogue.IsDone);
+        Assert.Equal("There's more to tell.", text.Value);
+    }
+
+    [Fact]
+    public void DialogueChoices_GoingBackToAPart_AsksAgain_UntilEndIsPicked()
+    {
+        var (dialogue, _, text) = AddTalker(Vector2.Zero,
+            "# Ask", "What now?", "> Again -> Ask", "> Done -> End");
+        AddPlayer(Vector2.Zero);
+        Run(0.1f);
+
+        Press(Key.E);
+        Assert.Equal(1, dialogue.Line);
+        Press(Key.E);
+        Assert.True(dialogue.IsTalking);
+        // Left-aligned text keeps the choices lined up instead.
+        text.Align = TextAlign.Left;
+        Press(Key.Down);
+        Assert.Equal("What now?\n   Again\n> Done", text.Value);
+        Press(Key.Up);
+
+        Press(Key.D2);
+        Assert.False(dialogue.IsTalking);
+        Assert.True(dialogue.IsDone);
+    }
+
+    [Fact]
+    public void DialogueChoices_ThePointedAtOne_IsPicked_AndAClickPicksIt()
+    {
+        // The box's text is 1 high and three lines here, centered on (0, -4): the choices are its two bottom rows.
+        var (dialogue, _, text) = AddTalker(Vector2.Zero, "Which way?", "> Left", "> Right", "Off you go.");
+        var picked = -1;
+        dialogue.Chosen += i => picked = i;
+        AddPlayer(Vector2.Zero);
+        _input.MouseWorld = new Vector2(20, 20);
+        Run(0.1f);
+        Press(Key.E);
+
+        _input.MouseWorld = new Vector2(0, -5);
+        Run(Step);
+        Assert.Equal(1, dialogue.Picked);
+        _input.MouseWorld = new Vector2(0, -4);
+        Run(Step);
+        Assert.Equal(0, dialogue.Picked);
+
+        // A click on the line itself picks nothing.
+        Click(new Vector2(0, -3));
+        Assert.Equal(-1, picked);
+
+        Click(new Vector2(0.5f, -5.2f));
+        Assert.Equal(1, picked);
+        Assert.Equal("Off you go.", text.Value);
+    }
+
+    [Fact]
+    public void DialogueChoices_WaitForTheLineToTypeOut_AndPickingAnother_DoesntTypeItAgain()
+    {
+        var (dialogue, _, text) = AddTalker(Vector2.Zero, "A long question, typed slowly?", "> Yes", "> No");
+        var typewriter = text.Entity!.AddComponent<Typewriter>();
+        typewriter.Speed = 5;
+        AddPlayer(Vector2.Zero);
+        Run(0.1f);
+
+        Press(Key.E);
+        Press(Key.Down);
+        Assert.Equal(0, dialogue.Picked);
+
+        Press(Key.E);
+        Assert.True(typewriter.IsDone);
+        Press(Key.Down);
+        Assert.Equal(1, dialogue.Picked);
+        Assert.True(typewriter.IsDone);
+        Assert.Equal(text.Value!.Length, typewriter.Shown);
+    }
+
+    [Fact]
+    public void DialogueChoices_FromAScript_AndRowsSaidAsTheyAre()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0),
+            "\\> Not a choice", "\\# Not a part either", "> Fine -> Then", "# Then", "Done.");
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Assert.Equal("> Not a choice", text.Value);
+        Assert.Empty(dialogue.Choices);
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("# Not a part either\n> Fine <", text.Value);
+
+        _game.ChooseDialogue(dialogue, 5);
+        Assert.Equal(["Fine"], dialogue.Choices);
+        _game.ChooseDialogue(dialogue, 0);
+        Assert.Equal("Done.", text.Value);
+    }
+
+    [Fact]
+    public void DialogueChoices_ToAPartThatIsntThere_SayWhichAsItStarts()
+    {
+        var (dialogue, _, _) = AddTalker(Vector2.Zero, "Hm?", "> Go -> Nowhere");
+        Run(Step);
+
+        var error = Assert.Throws<InvalidOperationException>(() => _game.StartDialogue(dialogue));
+        Assert.Contains("\"Nowhere\"", error.Message);
+        Assert.Null(_game.Talking);
+    }
+
     // ---- Saving ----
 
     [Fact]

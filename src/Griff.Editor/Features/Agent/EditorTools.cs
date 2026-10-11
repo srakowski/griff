@@ -59,7 +59,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Description = "Plays the running game (start it with Game_Play): presses keys as a player would, in steps. Each step can " +
                 "\"hold\" keys for \"seconds\", \"tap\" keys (pressed for one frame) or just \"wait\" seconds. Keys are names like Right, " +
                 "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact. " +
-                "Afterwards it reports where \"watch\"ed entities are (default: Player). The game runs on between calls unless \"pause_after\" " +
+                "Afterwards it reports where \"watch\"ed entities are (default: Player), and any dialogue being said with its choices. The game runs on between calls unless \"pause_after\" " +
                 "freezes it, so nothing happens while you decide the next move; the next game_input resumes it. The editor window has to be on screen for the game to run.",
             InputSchema = Schema.Object([
                 ("steps", Schema.Array(Schema.Map("{\"hold\": [\"Right\"], \"seconds\": 1} or {\"tap\": [\"Jump\"]} or {\"wait\": 0.5}"), "What to do, in order.")),
@@ -308,6 +308,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             log.AppendLine(line.ToString());
         }
 
+        if (Playtesting.Talking(game) is { } talking)
+            log.AppendLine(talking);
         return ToolResult.Ok(log.ToString().TrimEnd());
     }
 
@@ -319,7 +321,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var keys = new List<Key>();
         foreach (var keyName in names)
         {
-            if (Enum.TryParse<Key>(keyName, ignoreCase: true, out var key))
+            if (Playtesting.KeyNamed(keyName) is { } key)
                 keys.Add(key);
             else if (input.BindingsOf(keyName).FirstOrDefault(b => b.Key is not null).Key is { } bound)
                 keys.Add(bound);

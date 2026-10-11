@@ -371,12 +371,25 @@ public static partial class ProjectTemplates
         bonus.GetComponent<Pickup>()!.Amount = 3;
         scene.Add(bonus);
 
+        // The guide answers what the player asks about, then asks again until they're done.
         var guide = AddSign(scene, new Vector2(3, 4),
-            "Hello! Gems are a point each.",
+            "Hello! Gems are a point each, and the portals take you across the room.",
+            "-> Ask",
+            "# Ask",
+            "What would you like to know about?",
+            "> The bats -> Bats",
+            "> The key -> Key",
+            "> The crate -> Crate",
+            "> Nothing, thanks -> End",
+            "# Bats",
             "Bats chase you once they see you. Get far enough away and they give up, or swing your sword with X.",
-            "The portals take you across the room.",
+            "-> Ask",
+            "# Key",
             "There's a key about. It opens the vault next to me.",
-            "Push the crate onto the plate down there, and see what turns up.");
+            "-> Ask",
+            "# Crate",
+            "Push the crate onto the plate down there, and see what turns up.",
+            "-> Ask");
         guide.Name = "Guide";
         var guideSprite = guide.GetComponent<Sprite>()!;
         guideSprite.Size = new Vector2(0.8f, 0.8f);

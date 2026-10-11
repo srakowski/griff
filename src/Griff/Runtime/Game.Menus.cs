@@ -58,7 +58,8 @@ public sealed partial class Game
         var choices = active.SelectMany(e => e.GetComponents<Choice>()).ToList();
         var controls = buttons.Where(b => b.Navigable).Cast<Component>().Concat(sliders.Where(s => s.Navigable)).ToList();
 
-        var direction = ReadDirection(controls.Count > 0);
+        // The arrows pick a dialogue's choices while it offers them, not the buttons behind it.
+        var direction = ReadDirection(controls.Count > 0 && _talking is not { Choices.Count: > 0 });
         var mouseMoved = MouseMovedOverView();
         foreach (var button in allButtons.Where(b => !b.IsUsable))
             (button.IsHovered, button.IsPressed, button.IsFocused) = (false, false, false);

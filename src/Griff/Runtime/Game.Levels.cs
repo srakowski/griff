@@ -21,6 +21,11 @@ public sealed partial class Game
     private bool _talkJustStarted;
     private float? _scaleBeforeTalk;
 
+    // The rows of the choices offered now, and where the mouse and stick were last frame (to notice them move).
+    private readonly List<int> _choiceRows = [];
+    private Vector2? _lastMouseOnChoices;
+    private int _lastChoiceStick;
+
     /// <summary>The <see cref="Dialogue"/> being said right now, if any.</summary>
     public Dialogue? Talking => _talking;
 
@@ -442,7 +447,7 @@ public sealed partial class Game
         {
             if (talking.Entity?.Scene != Scene)
                 EndDialogue(finished: false);
-            else if (!_talkJustStarted && Input.WasPressed("Interact"))
+            else if (!_talkJustStarted && !RunChoices(talking) && Input.WasPressed("Interact"))
                 AdvanceDialogue(talking);
             _talkJustStarted = false;
             return;
@@ -487,6 +492,7 @@ public sealed partial class Game
     {
         if (_talking is not null || dialogue.Lines.Count == 0 || dialogue.Entity?.Scene != Scene)
             return;
+        dialogue.CheckParts();
         _talking = dialogue;
         _talkJustStarted = true;
         dialogue.IsTalking = true;
@@ -500,12 +506,13 @@ public sealed partial class Game
             Time.Scale = 0;
         }
 
-        ShowLine(dialogue);
+        // "# Name" on the first row just names the start.
+        SayFrom(dialogue, dialogue.Row(0).Kind == Dialogue.RowKind.Part ? 1 : 0);
     }
 
     /// <summary>
-    /// Moves a dialogue on, as Interact does: finishes typing the line if it's still typing, else shows the next one (or
-    /// ends it after the last).
+    /// Moves a dialogue on, as Interact does: finishes typing the line if it's still typing, else picks the choice the
+    /// player is on (see <see cref="Dialogue.Picked"/>), or shows the next line (or ends it after the last).
     /// </summary>
     public void AdvanceDialogue(Dialogue dialogue)
     {
@@ -517,22 +524,187 @@ public sealed partial class Game
             return;
         }
 
-        dialogue.Line++;
-        if (dialogue.Line >= dialogue.Lines.Count)
-            EndDialogue(finished: true);
+        if (dialogue.Choices.Count > 0)
+            ChooseDialogue(dialogue, dialogue.Picked);
         else
-            ShowLine(dialogue);
+            SayFrom(dialogue, dialogue.Line + 1);
     }
 
-    private void ShowLine(Dialogue dialogue)
+    /// <summary>
+    /// Picks choice <paramref name="choice"/> (from 0) of those <paramref name="dialogue"/> offers now, as the player
+    /// would, and goes where it leads. Does nothing when it isn't being said or offers no such choice.
+    /// </summary>
+    public void ChooseDialogue(Dialogue dialogue, int choice)
     {
+        if (_talking != dialogue || choice < 0 || choice >= _choiceRows.Count)
+            return;
+        var (_, _, to) = dialogue.Row(_choiceRows[choice]);
+        var after = _choiceRows[^1] + 1;
+        dialogue.Picked = choice;
+        dialogue.RaiseChosen(choice);
+        if (_talking != dialogue)
+            return;
+
+        if (string.IsNullOrEmpty(to))
+            SayFrom(dialogue, after);
+        else if (dialogue.RowAfterPart(to) is { } next)
+            SayFrom(dialogue, next);
+        else
+            EndDialogue(finished: true);
+    }
+
+    // Shows the first line from row on, going where go-tos say; the end of the lines or the start of another part ends it.
+    private void SayFrom(Dialogue dialogue, int row)
+    {
+        for (var steps = 0; steps <= dialogue.Lines.Count; steps++)
+        {
+            if (row >= dialogue.Lines.Count)
+            {
+                EndDialogue(finished: true);
+                return;
+            }
+
+            var (kind, _, to) = dialogue.Row(row);
+            if (kind is Dialogue.RowKind.Said or Dialogue.RowKind.Choice)
+            {
+                ShowLine(dialogue, row);
+                return;
+            }
+
+            if (kind == Dialogue.RowKind.Part || string.IsNullOrEmpty(to) || dialogue.RowAfterPart(to) is not { } next)
+            {
+                EndDialogue(finished: true);
+                return;
+            }
+
+            row = next;
+        }
+
+        throw new InvalidOperationException($"The dialogue on \"{dialogue.Entity?.Name}\" goes round in circles without saying anything.");
+    }
+
+    // A line, with the choices under it; choices with no line before them are shown on their own.
+    private void ShowLine(Dialogue dialogue, int row)
+    {
+        dialogue.Line = row;
+        _choiceRows.Clear();
+        var start = dialogue.Row(row).Kind == Dialogue.RowKind.Choice ? row : row + 1;
+        for (var next = start; next < dialogue.Lines.Count && dialogue.Row(next).Kind == Dialogue.RowKind.Choice; next++)
+            _choiceRows.Add(next);
+        dialogue.Choices = _choiceRows.Select(r => dialogue.Row(r).Text).ToList();
+        dialogue.Picked = 0;
+        _lastMouseOnChoices = null;
+        _lastChoiceStick = ChoiceStick;
+
         if (LineText(dialogue) is { } text)
         {
-            text.Value = dialogue.Lines[dialogue.Line];
+            _lastMouseOnChoices = MouseOn(text);
+            text.Value = LineWithChoices(dialogue, text.Align);
             text.Entity!.GetComponent<Typewriter>()?.Restart();
         }
 
         dialogue.RaiseLineShown();
+    }
+
+    // The line showing and its choices under it, the one picked with arrows by it that keep the rows lined up.
+    private static string LineWithChoices(Dialogue dialogue, TextAlign align)
+    {
+        var (kind, said, _) = dialogue.Row(dialogue.Line);
+        var rows = dialogue.Choices.Select((choice, i) => (i == dialogue.Picked, align) switch
+        {
+            (true, TextAlign.Left) => "> " + choice,
+            (true, TextAlign.Right) => choice + " <",
+            (true, _) => "> " + choice + " <",
+            (false, TextAlign.Left) => "   " + choice,
+            (false, TextAlign.Right) => choice + "   ",
+            _ => choice,
+        });
+        return string.Join("\n", kind == Dialogue.RowKind.Choice ? rows : rows.Prepend(said));
+    }
+
+    // Choosing with the arrow keys, D-pad or stick, the number keys and the mouse, once the line has typed out. Interact
+    // picks too, through AdvanceDialogue. True if one was picked here.
+    private bool RunChoices(Dialogue dialogue)
+    {
+        if (dialogue.Choices.Count == 0 || LineText(dialogue) is not { } text ||
+            text.Entity!.GetComponent<Typewriter>() is { IsDone: false })
+            return false;
+
+        var count = dialogue.Choices.Count;
+        var stick = ChoiceStick;
+        var up = Input.WasPressed(Key.Up) || Input.WasPressed(Key.W) || Input.WasPressed(GamepadButton.DPadUp) ||
+                 (stick > 0 && _lastChoiceStick <= 0);
+        var down = Input.WasPressed(Key.Down) || Input.WasPressed(Key.S) || Input.WasPressed(GamepadButton.DPadDown) ||
+                   (stick < 0 && _lastChoiceStick >= 0);
+        _lastChoiceStick = stick;
+        var picked = dialogue.Picked;
+        if (up)
+            picked = (picked + count - 1) % count;
+        if (down)
+            picked = (picked + 1) % count;
+
+        // The mouse picks what it moves onto, so a mouse left where it was doesn't fight the keys.
+        var hovered = ChoiceUnderMouse(dialogue, text);
+        var onText = MouseOn(text);
+        var mouseMoved = _lastMouseOnChoices is { } last && Vector2.DistanceSquared(last, onText) > 1e-8f;
+        _lastMouseOnChoices = onText;
+        if (hovered is { } under && mouseMoved)
+            picked = under;
+
+        if (picked != dialogue.Picked)
+        {
+            dialogue.Picked = picked;
+            text.Entity.GetComponent<Typewriter>()?.ShowNextAtOnce();
+            text.Value = LineWithChoices(dialogue, text.Align);
+        }
+
+        for (var i = 0; i < Math.Min(count, 9); i++)
+        {
+            if (Input.WasPressed(Key.D1 + i) || Input.WasPressed(Key.NumPad1 + i))
+            {
+                ChooseDialogue(dialogue, i);
+                return true;
+            }
+        }
+
+        if (hovered is { } clicked && Input.WasPressed(MouseButton.Left))
+        {
+            ChooseDialogue(dialogue, clicked);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Where the mouse is from the text: the box moves with the camera, so the mouse only counts as moving over it.
+    private Vector2 MouseOn(Text text) => Input.MouseWorld - Flat(text.Entity!.Transform.WorldPosition);
+
+    // The stick pushed up (1), down (-1) or neither: each push moves one choice.
+    private int ChoiceStick => Input.LeftStick.Y > NavigateStick ? 1 : Input.LeftStick.Y < -NavigateStick ? -1 : 0;
+
+    // The choice whose row the mouse is over, if any: each row is a line of the text's size, the block centered on its
+    // entity, and as wide as the box's sprite when it has one.
+    private int? ChoiceUnderMouse(Dialogue dialogue, Text text)
+    {
+        if (!Input.IsMouseInView)
+            return null;
+        var world = text.Entity!.Transform.WorldMatrix;
+        var height = text.Size * new Vector2(world.M21, world.M22).Length();
+        if (!(height > 0))
+            return null;
+        if (BoxOf(dialogue) is { } box && box.GetComponent<Sprite>() is { } sprite)
+        {
+            var boxWorld = box.Transform.WorldMatrix;
+            var halfWidth = MathF.Abs(sprite.Size.X) * new Vector2(boxWorld.M11, boxWorld.M12).Length() / 2;
+            if (MathF.Abs(Input.MouseWorld.X - boxWorld.M41) > halfWidth)
+                return null;
+        }
+
+        var lines = (text.Value ?? "").Count(c => c == '\n') + 1;
+        var top = world.M42 + height * lines / 2;
+        var line = (int)MathF.Floor((top - Input.MouseWorld.Y) / height);
+        var choice = line - (lines - dialogue.Choices.Count);
+        return line >= 0 && line < lines && choice >= 0 ? choice : null;
     }
 
     private void EndDialogue(bool finished)
@@ -541,6 +713,8 @@ public sealed partial class Game
             return;
         _talking = null;
         dialogue.IsTalking = false;
+        dialogue.Choices = [];
+        _choiceRows.Clear();
         if (dialogue.Entity?.Scene == Scene && BoxOf(dialogue) is { } box)
             box.IsEnabled = false;
         if (_scaleBeforeTalk is { } scale)

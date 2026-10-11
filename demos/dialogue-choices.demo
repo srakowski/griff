@@ -1,0 +1,58 @@
+﻿title: Dialogue choices
+intro: Choices inside dialogue that branch the talk to different lines, with no code.
+project: TopDown | Choices
+
+chapter: The guide asks | The Top-down template's guide
+select: Guide
+explain: field:Dialogue.Lines | Lines | The guide's lines now ask the player something. A row starting with a greater-than sign is a choice, offered under the line before it.
+explain: field:Dialogue.Lines | Parts | Each choice goes to a part of the talk: a row starting with a hash names it. Arrow rows go somewhere by themselves, here back to the question, so the guide asks again until the player is done.
+select: Player
+set: Transform.Position = 3, 3, 0
+play
+wait: 0.5
+tap: E
+wait: 3
+tap: E
+wait: 3
+explain: game | Choices | The question comes with its choices under it. The arrow keys, the D-pad or the stick move between them.
+tap: Down
+wait: 0.5
+tap: Down
+wait: 0.5
+explain: game | Picked | The picked one has arrows round it. Interact picks it.
+tap: E
+wait: 3
+expectvalue: Dialogue Box.Text.Value = Push the crate onto the plate down there, and see what turns up.
+explain: game | The crate | And the guide answers about the crate.
+tap: E
+wait: 3
+explain: game | Number keys | Back at the question, a number key picks straight away: four is Nothing, thanks.
+tap: D4
+wait: 1
+stop
+
+chapter: A shopkeeper of your own | Lines, choices and parts
+deselect
+create: Sprite
+rename: Shopkeeper
+set: Transform.Position = -3, 4, 0
+set: Sprite.Tint = #4C9AFF
+add: BoxCollider
+set: BoxCollider.Size = 1.8, 1.4
+set: BoxCollider.IsTrigger = true
+add: Dialogue
+set: Dialogue.Lines = Want a sword?\n> Yes -> Buy\n> No -> Bye\n# Buy\nThat'll be ten gold.\n-> End\n# Bye\nSafe travels!
+explain: field:Dialogue.Lines | A shop | A shopkeeper takes eight rows. Yes goes to the Buy part, No to the Bye part, and arrow End stops after the price, so the two answers never run into each other.
+select: Player
+set: Transform.Position = -3, 3, 0
+play
+wait: 0.5
+tap: E
+wait: 2
+gameclick: Dialogue Box + 0, -0.4
+wait: 2
+expectvalue: Dialogue Box.Text.Value = Safe travels!
+explain: game | Clicked | The mouse works too: clicking No goes straight to the Bye part.
+tap: E
+wait: 1
+stop

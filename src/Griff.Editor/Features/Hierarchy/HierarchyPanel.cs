@@ -185,7 +185,7 @@ public sealed class HierarchyPanel : ToolPanel
 
         var name = node.EditName.Trim();
         if (_document is not null && name.Length > 0 && name != node.Entity.Name)
-            _document.Execute(new RenameEntityEdit(node.Entity, name));
+            _document.Execute(EntityReferences.Rename(node.Entity, name, _workspace.Components));
     }
 
     public void CancelRename(EntityNode node) => node.IsEditing = false;

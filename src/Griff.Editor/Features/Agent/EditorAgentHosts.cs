@@ -37,6 +37,9 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
         return new SceneSerializer(workspace.Components).LoadPrefabFromString(File.ReadAllText(path));
     }
 
+    public IReadOnlyCollection<string> PrefabNames =>
+        workspace.Project?.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
+
     private SceneDocument Document => workspace.Scene ?? throw new AgentException("No scene is open.");
 }
 

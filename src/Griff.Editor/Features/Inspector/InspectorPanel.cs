@@ -125,6 +125,12 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     internal void Execute(IEdit edit) => _document?.Execute(edit);
 
+    /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
+    internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _workspace.Components));
+
+    /// <summary>The project's prefabs' names, read as the selection changes: fields can name them as well as entities.</summary>
+    public IReadOnlyCollection<string> PrefabNames { get; private set; } = [];
+
     public void SetValues(IReadOnlyList<Component> components, PropertyDescriptor property, IReadOnlyList<object?> values)
     {
         if (SetPropertiesEdit.For(components, property, values) is { } edit)
@@ -194,6 +200,8 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         if (entities.Count == 0)
             return;
 
+        PrefabNames = _workspace.Project?.FindPrefabs().Select(System.IO.Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
+
         foreach (var components in Shared(entities))
             Components.Add(new ComponentSection(components, this, _workspace.Components));
         if (entities.Any(e => e.Components.Count != Components.Count))
@@ -249,7 +257,7 @@ public sealed class EntityHeader(IReadOnlyList<Entity> entities, InspectorPanel 
         {
             var name = value.Trim();
             if (!IsSeveral && name.Length > 0 && name != entities[0].Name)
-                owner.Execute(new RenameEntityEdit(entities[0], name));
+                owner.Rename(entities[0], name);
             OnPropertyChanged();
         }
     }
@@ -621,6 +629,23 @@ public sealed class PropertyField : ObservableObject
         return choices;
     }
 
+    /// <summary>
+    /// For an entity field: the names it holds that match nothing, no entity it can name and no prefab (shown in red).
+    /// Empty when they all match, or with several selected whose values differ.
+    /// </summary>
+    public IReadOnlyList<string> UnmatchedNames => _unmatched ??=
+        Kind == FieldKind.Entity && !IsMixed ? EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames) : [];
+
+    private IReadOnlyList<string>? _unmatched;
+
+    public bool IsUnmatched => UnmatchedNames.Count > 0;
+
+    /// <summary>Says which names match nothing, e.g. "Nothing in the scene is called "Playr"".</summary>
+    public string? UnmatchedTip => IsUnmatched
+        ? $"Nothing {(_property.EntityName!.Inside ? $"inside {_components[0].Entity?.Name}" : "in the scene")} is called " +
+          string.Join(" or ", UnmatchedNames.Select(n => $"\"{n}\""))
+        : null;
+
     /// <summary>True when the field names <paramref name="name"/>: on every selected entity, when there are several.</summary>
     public bool Names(string name) => _components.All(c => SplitNames(_property.GetValue(c)).Contains(name));
 
@@ -819,6 +844,7 @@ public sealed class PropertyField : ObservableObject
 
     public void Refresh()
     {
+        _unmatched = null;
         OnPropertyChanged(string.Empty);
         foreach (var axis in Axes)
             axis.Refresh();
@@ -904,4 +930,7 @@ public interface IPropertyHost
 
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     void Seal();
+
+    /// <summary>The project's prefabs' names: an entity field naming one isn't flagged as matching nothing.</summary>
+    IReadOnlyCollection<string> PrefabNames => [];
 }

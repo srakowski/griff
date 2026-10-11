@@ -51,6 +51,7 @@ build: standalone
 | `distance: <Component>.<Property> = <value>` | With Distance handles out (`menu: View > Distance Handles`), drag the knob of one of the primary selection's distances straight out or in to where it's that many world units: `distance: Light.Radius = 6`. `distance: Ctrl+Chase.Range = 4` holds Ctrl (snapping to half units). |
 | `expectat: <entity> = <x>, <y>` | Fail unless the entity is at that world position (within a tenth of a unit). |
 | `expectmixed: <Component>.<Field>[.<Axis>]` | Fail unless the Inspector shows that field (or one axis of it, `Transform.Position.Y`) as mixed: the selected entities' values differ. |
+| `expectflagged: <Component>.<Field> = <names>` | Fail unless the Inspector flags that field as naming something that isn't there: exactly those names (comma-separated), or `none`. |
 | `expectvalue: <entity>.<Component>.<Field>[.<Axis>] = <value>` | Fail unless the (first) entity with that name has that value, e.g. `expectvalue: Red Gem.Sprite.Tint = #FFEC27`, or one axis of a vector, `expectvalue: Plank.Transform.Rotation.Z = 45`. Colors compare as colors and numbers as numbers. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |

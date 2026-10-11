@@ -34,6 +34,9 @@ public interface IAgentScene
 
     /// <summary>A new entity from the project's prefab called <paramref name="name"/>, or null if there's none.</summary>
     Entity? InstantiatePrefab(string name);
+
+    /// <summary>The names of the project's prefabs, which fields that name entities can name too.</summary>
+    IReadOnlyCollection<string> PrefabNames => [];
 }
 
 /// <summary>
@@ -117,7 +120,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             Name = "entity_update",
             Title = "Update Entities",
-            Description = "Changes entities, as one undo step: rename, enable, lock (\"locked\": the Scene view clicks through it), move in the hierarchy (\"parent\": a name, or null for " +
+            Description = "Changes entities, as one undo step: rename (fields that name it, a Switch's Targets or a camera's Follow target, are renamed too), enable, lock (\"locked\": the Scene view clicks through it), move in the hierarchy (\"parent\": a name, or null for " +
                 "the top level; \"index\": its place among siblings), place (\"position\", \"rotation\", \"scale\"), and set component " +
                 "properties with \"components\": {\"Light\": {\"radius\": 6}} (a component it doesn't have yet is added, with what it needs; " +
                 "\"Weapon#2\" is its second Weapon). \"remove\": [\"Patrol\"] takes components off.",
@@ -210,6 +213,15 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         IEnumerable<Entity> roots = args.OptionalString("under") is { } under ? [Resolve(scene, under)] : scene.Roots;
         foreach (var root in roots)
             Outline(text, root, 0, depth);
+        var unmatched = EntityReferences.UnmatchedIn(scene, host.Components, host.PrefabNames).ToList();
+        if (unmatched.Count > 0)
+        {
+            text.AppendLine("Names that match nothing in the scene (fields that name entities, flagged in the Inspector):");
+            foreach (var (reference, names) in unmatched)
+                text.Append($"- {reference.Component.Entity!.Name} #{AgentValues.ShortId(reference.Component.Entity.Id)} {reference.Label}: ")
+                    .AppendLine(string.Join(", ", names.Select(n => $"\"{n}\"")));
+        }
+
         return ToolResult.Ok(text.ToString());
     }
 
@@ -279,6 +291,16 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         }
 
         result["components"] = components;
+        var unmatched = EntityReferences.On(entity, host.Components)
+            .Select(r => (Reference: r, Names: EntityReferences.Unmatched(r, host.PrefabNames)))
+            .Where(r => r.Names.Count > 0)
+            .ToList();
+        if (unmatched.Count > 0)
+        {
+            result["unmatched"] = new JsonObject(unmatched.Select(u =>
+                KeyValuePair.Create(u.Reference.Label, (JsonNode?)$"Nothing {(u.Reference.Kind.Inside ? "inside it" : "in the scene")} is called {string.Join(" or ", u.Names.Select(n => $"\"{n}\""))}.")));
+        }
+
         if (entity.Children.Count > 0)
         {
             result["children"] = fullChildren
@@ -463,7 +485,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             throw new AgentException("\"changes\" should be an object.");
 
         if (Prop(changes, "name") is { ValueKind: JsonValueKind.String } name && name.GetString() != entity.Name)
-            host.Execute(new RenameEntityEdit(entity, name.GetString()!));
+        {
+            var rename = EntityReferences.Rename(entity, name.GetString()!, host.Components);
+            host.Execute(rename);
+            if (rename is CompositeEdit { Edits: var edits })
+                notes.Add($"Renamed it in the fields that named it too: {string.Join(", ", edits.OfType<SetPropertyEdit>().Select(e => $"{e.Component.Entity?.Name}'s {e.Component.GetType().Name}.{e.Property.Name}"))}.");
+        }
         if (Prop(changes, "enabled") is { } enabled && (enabled.ValueKind != JsonValueKind.False) != entity.IsEnabled)
             host.Execute(new SetEntityEnabledEdit(entity, enabled.ValueKind != JsonValueKind.False));
         if (Prop(changes, "locked") is { } locked && (locked.ValueKind == JsonValueKind.True) != entity.IsLocked)

@@ -116,8 +116,27 @@
                     ToolTip="Choose an entity from the scene, or drag one here from the Hierarchy">
                 <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
             </Button>
-            <controls:CommitTextBox Text="{Binding TextValue}" />
+            <!-- A name that matches nothing in the scene: a warning sign, saying which -->
+            <TextBlock x:Name="Unmatched"
+                       Margin="4,0,2,0"
+                       VerticalAlignment="Center"
+                       Background="Transparent"
+                       DockPanel.Dock="Right"
+                       Foreground="{DynamicResource Brush.Status.Warning}"
+                       Style="{StaticResource Style.Icon}"
+                       Tag="entity:unmatched"
+                       Text="{x:Static theme:Icons.Warning}"
+                       ToolTip="{Binding UnmatchedTip}"
+                       Visibility="Collapsed" />
+            <controls:CommitTextBox x:Name="Name" Text="{Binding TextValue}" />
         </DockPanel>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsUnmatched}" Value="True">
+                <Setter TargetName="Unmatched" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                <Setter TargetName="Name" Property="ToolTip" Value="{Binding UnmatchedTip}" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- Lists of strings, one per line (tilemap rows): monospace so columns line up -->

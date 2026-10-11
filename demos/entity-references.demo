@@ -1,0 +1,43 @@
+title: Renames that follow
+intro: Renaming an entity now renames it in every field that names it, and a name that matches nothing is flagged.
+project: Platformer | Renames
+
+chapter: Rename, and the fields follow | F2 in the Hierarchy
+select: Main Camera
+explain: field:Follow.Target | Follows the player | The camera follows whatever its Target names. Right now, that's the player.
+select: Player
+say: Let's give the player a proper name. Press F2 and type it.
+key: F2
+type: Hero\n
+expectvalue: Main Camera.Follow.Target = Hero
+expectvalue: Health Bar.Bar.Track = Hero
+select: Main Camera
+explain: field:Follow.Target | Renamed here too | The camera's Target changed along with it, and so did the health bar's, so nothing loses track of the hero.
+say: It's one undo step, too. Undo puts the old name back everywhere at once.
+
+chapter: Its own, or someone else's | Names inside come first
+select: Hint
+say: The lever and the sign each have a hint called Hint, shown when you walk up to them. Let's rename the lever's.
+key: F2
+type: Lever Hint\n
+expectvalue: Lever.Switch.Prompt = Lever Hint
+expectvalue: Sign.Dialogue.Prompt = Hint
+select: Lever
+explain: field:Switch.Prompt | Its own hint | The lever's Prompt follows its own hint. The sign's still names the sign's, just the way the game finds them.
+
+chapter: Names that match nothing | Flagged in the Inspector
+select: Main Camera
+set: Follow.Target = Heroo
+expectflagged: Follow.Target = Heroo
+explain: field:Follow.Target | Nothing by that name | A typo. Nothing in the scene is called that, so the field turns amber with a warning sign, and its tip says which name it can't find.
+pickentity: Follow.Target = Hero
+expectflagged: Follow.Target = none
+say: Pick the right one, and the warning goes away.
+select: Bridge
+say: Deleting something leaves the fields that named it pointing at nothing.
+key: Delete
+select: Lever
+expectflagged: Switch.Targets = Bridge
+explain: field:Switch.Targets | The bridge is gone | The lever still names the bridge, so it's flagged. Undo brings the bridge back, and the warning goes with it.
+key: Ctrl+Z
+expectflagged: Switch.Targets = none

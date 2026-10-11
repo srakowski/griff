@@ -250,6 +250,49 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Rename_RenamesItInTheFieldsThatNameIt_AndSaysSo()
+    {
+        Run("entity_create", """
+            {"entities": [{"name": "Player"}, {"name": "Bridge"},
+              {"name": "Camera", "components": {"Follow": {"target": "Player"}}},
+              {"name": "Lever", "components": {"Switch": {"targets": "Bridge, Player"}}}]}
+            """);
+
+        var result = Run("entity_update", """{"entity": "Player", "changes": {"name": "Hero"}}""");
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("Hero", Named("Camera").GetComponent<Follow>()!.Target);
+        Assert.Equal("Bridge, Hero", Named("Lever").GetComponent<Switch>()!.Targets);
+        Assert.Contains("Camera's Follow.Target, Lever's Switch.Targets", result.Text);
+        _host.History.Undo();
+        Assert.Equal("Player", Named("Camera").GetComponent<Follow>()!.Target);
+        Assert.NotNull(Named("Player"));
+    }
+
+    [Fact]
+    public void NamesThatMatchNothing_ShowInTheTreeAndOnTheEntity()
+    {
+        Run("entity_create", """
+            {"entities": [{"name": "Player"}, {"name": "Camera", "components": {"Follow": {"target": "Playr"}}},
+              {"name": "Lever", "components": {"Switch": {"targets": "Gate, Player"}}}]}
+            """);
+
+        var tree = Run("scene_tree", "{}").Text;
+        Assert.Contains("Names that match nothing", tree);
+        Assert.Contains("Follow.Target: \"Playr\"", tree);
+        Assert.Contains("Switch.Targets: \"Gate\"", tree);
+
+        var camera = Run("entity_get", """{"entity": "Camera"}""").Text;
+        Assert.Contains("\"unmatched\"", camera);
+        Assert.Contains("Nothing in the scene is called", camera);
+        Assert.Contains("Playr", camera);
+        Assert.DoesNotContain("unmatched", Run("entity_get", """{"entity": "Player"}""").Text);
+
+        Run("entity_update", """{"entity": "Camera", "changes": {"components": {"Follow": {"target": "Player"}}}}""");
+        Assert.DoesNotContain("Follow.Target", Run("scene_tree", "{}").Text);
+    }
+
+    [Fact]
     public void ListComponents_ByCategoryAndSearch()
     {
         Assert.Contains("## Movement", Run("components_list", "{}").Text);

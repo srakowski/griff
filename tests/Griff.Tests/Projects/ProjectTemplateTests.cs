@@ -46,6 +46,32 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.DoesNotContain(entities.SelectMany(e => e.Components), c => c is MissingComponent);
     }
 
+    // The Inspector flags a field that names something not in the scene; a template's scenes should have none.
+    [Theory]
+    [InlineData(ProjectTemplate.Empty)]
+    [InlineData(ProjectTemplate.Platformer)]
+    [InlineData(ProjectTemplate.TopDown)]
+    [InlineData(ProjectTemplate.Arcade)]
+    [InlineData(ProjectTemplate.Strategy)]
+    [InlineData(ProjectTemplate.Shooter)]
+    [InlineData(ProjectTemplate.Sandbox)]
+    [InlineData(ProjectTemplate.Contraption)]
+    [InlineData(ProjectTemplate.Multiplayer)]
+    public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
+    {
+        var (project, _, _, registry) = await CreateAndLoad(template);
+        var serializer = new SceneSerializer(registry);
+        var prefabs = project.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet();
+
+        foreach (var path in project.FindScenes())
+        {
+            var scene = serializer.LoadFromString(await File.ReadAllTextAsync(path));
+            var unmatched = Griff.Editing.EntityReferences.UnmatchedIn(scene, registry, prefabs)
+                .Select(u => $"{Path.GetFileName(path)}: {u.Reference.Component.Entity!.Name} {u.Reference.Label} = {string.Join(", ", u.Names)}");
+            Assert.Empty(unmatched);
+        }
+    }
+
     [Theory]
     [InlineData(ProjectTemplate.Platformer)]
     [InlineData(ProjectTemplate.TopDown)]

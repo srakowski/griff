@@ -208,6 +208,8 @@ Tilemaps now only draw the tiles in view, so worlds can be big.
 
 In the **Inspector**, drag any number's label sideways to scrub it (Shift for fine steps, Ctrl for coarse). While the game is playing, typing in the Inspector doesn't reach the game; click the game to give it the keyboard back.
 
+**Naming entities.** Fields that name another entity (a Follow's **Target**, a Dialogue's **Box**, a Wire's **From**, a door's **Prompt**) have a button listing the scene's entities, indented as in the Hierarchy: pick one to name it, or drag an entity from the Hierarchy onto the field. Fields that name several, separated by commas (a Switch's **Targets** and **Hides**), add each one picked or dropped, and picking a ticked one takes it out again; with several switches selected each keeps its own other names. An attack's **Hitbox** and a panel's **First** control list only what's inside the entity. Typing a name still works, for something that isn't in the scene yet.
+
 **Editing several at once.** With several entities selected, the Inspector shows the components they all have (a note says when some are left out) and changes all of them together, as one undo step. A value they don't share shows as `—` (a check box half-filled, a list blank) until you set it. A vector's axes are separate, so typing an X lines them all up across while each keeps its own Y. The checkbox by the name enables or disables them all; **Add Component** and the remove button add and remove a component on every one of them. Names stay one per entity.
 
 In the **Assets** panel:
@@ -223,7 +225,7 @@ While the editor is open it runs a [Model Context Protocol](https://modelcontext
 
 - **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity` (or `select` several first: Delete, Duplicate, Cut and Copy act on all of them); a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
 - **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
-- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection, moving, rotating, scaling and resizing (its `Handles` mode, `ResizeShape`), dragging distances (`Distances`, `DragDistance`), the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
+- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection, moving, rotating, scaling and resizing (its `Handles` mode, `ResizeShape`), dragging distances (`Distances`, `DragDistance`), the Inspector editing several entities at once, picking entities for its fields (`PickEntity`)...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
 - **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
 - **Checking work**: `editor_screenshot` shows the game or the editor, `game_input` plays the running game with keys (and can pause it between moves), `editor_state` and `output_read` say what's going on.
 
@@ -286,6 +288,10 @@ public class Creeper : Behavior
     /// <summary>How close it gets before exploding, in world units.</summary>
     [Distance]                                         // drawn as a circle around it in the Scene view, with a handle
     public float FuseRange { get; set; } = 1.5f;
+
+    /// <summary>What it walks toward.</summary>
+    [EntityName]                                       // picked from the scene's entities in the Inspector (Many = true for a list)
+    public string? Target { get; set; } = "Player";
 }
 ```
 
@@ -561,6 +567,7 @@ Griff is young. Known gaps:
 - Panels are resizable but not dockable.
 - The Scene view's handles resize sprites, box and circle colliders and distances (light radii, ranges, sight) only on the entity picked last, even with several selected, and distances of 0 have no handle until they're set in the Inspector.
 - Dragging rows in the Hierarchy moves one at a time, even with several selected.
+- Fields that name entities hold their names: renaming an entity doesn't update them, and a name that matches nothing isn't flagged.
 - Strategy games' units only walk (no flying or water), and the fog of war is drawn in squares.
 - Multiplayer connects directly: to play over the internet, the host forwards their port (7777 by default) on their router; there's no matchmaking, relay or lobby server yet. Players' own machines move their own characters, which suits friends better than strangers (pick **Host** movement where cheating matters), and shots are judged where the host sees things, without rewinding for lag. Rewinding in the editor works with one player, and a network game can't hit-stop or slow down (it's everyone's).
 - Block worlds are side-on (Terraria style); in first person, digging works on the flat map's walls. Water and lava don't flow, and light from glowing blocks casts no shadows.

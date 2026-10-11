@@ -42,9 +42,11 @@ public sealed class Switch : Component
     /// slides back when it's switched off again), a <see cref="Spawner"/> or <see cref="Shooter"/> runs, particles emit,
     /// an animation plays, a <see cref="Door"/> unlocks; anything else appears.
     /// </summary>
+    [EntityName(Many = true)]
     public string? Targets { get; set; }
 
     /// <summary>What it hides while it's on, by name, separated by commas: a barrier, a locked block (even itself).</summary>
+    [EntityName(Many = true)]
     public string? Hides { get; set; }
 
     /// <summary>The collision layers that work it, e.g. "Player" or "Player, Crate". Empty lets anything with a <see cref="Body"/>.</summary>
@@ -78,6 +80,7 @@ public sealed class Switch : Component
     /// The name of an entity to show only while it can be worked with Interact, e.g. a "Press E" hint above a lever. It's
     /// hidden the rest of the time.
     /// </summary>
+    [EntityName]
     public string? Prompt { get; set; }
 
     /// <summary>Raised when it turns on or off, with whether it's now on.</summary>

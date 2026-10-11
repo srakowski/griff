@@ -168,6 +168,34 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
     }
 
     /// <summary>
+    /// A drag the editor turns into a drag-and-drop (a Hierarchy row onto an Inspector field). Windows holds the UI thread
+    /// in its drag loop until the button comes up, so the moves and the release run on another thread; otherwise they
+    /// wait on the UI thread and the drag never ends.
+    /// </summary>
+    public async Task DragAndDrop(Point from, IReadOnlyList<Point> path, double msPerSegment = 350, int holdMs = 60)
+    {
+        await MoveTo(from);
+        await Pause(80);
+        overlay.Ripple(from);
+        Mouse(LeftDown);
+        await Task.Delay(60);
+        await Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var point in path)
+                    await MoveTo(point, msPerSegment);
+                await Task.Delay(holdMs);
+            }
+            finally
+            {
+                Mouse(LeftUp);
+            }
+        });
+        await Pause(150);
+    }
+
+    /// <summary>
     /// Moves the mouse <paramref name="dx"/>, <paramref name="dy"/> pixels (screen pixels, down is positive) over
     /// <paramref name="ms"/>, as relative movement the way a hand moves it: for turning a first-person game that holds the mouse.
     /// </summary>

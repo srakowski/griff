@@ -121,6 +121,7 @@ public sealed class Button : Component
     public float Fade { get; set; }
 
     /// <summary>For <see cref="ButtonAction.OpenPanel"/>: the name of the panel's entity, e.g. "Options".</summary>
+    [EntityName]
     public string? Panel { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
@@ -255,6 +256,7 @@ public sealed class Bar : Component
     /// The name of an entity whose <see cref="Health"/> the bar shows, e.g. "Player" or "Boss": its Current out of its
     /// Max, every frame. Once that entity is gone the bar shows empty.
     /// </summary>
+    [EntityName]
     public string? Track { get; set; }
 
     /// <summary>World units before the transform's scale, centered on the entity.</summary>
@@ -471,6 +473,7 @@ public sealed class Panel : Component
     public bool CloseOnBack { get; set; } = true;
 
     /// <summary>The name of the control to pick as it opens, e.g. "Resume". Empty picks its top one.</summary>
+    [EntityName(Inside = true)]
     public string? First { get; set; }
 
     /// <summary>A sound played as it opens, e.g. "Sounds/open.wav".</summary>

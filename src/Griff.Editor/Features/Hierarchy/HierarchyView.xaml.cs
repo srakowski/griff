@@ -17,6 +17,7 @@ public partial class HierarchyView : UserControl
     private readonly CommandRegistry _commands;
     private Point _dragStart;
     private EntityNode? _dragCandidate;
+    private (EntityNode Node, bool Control, bool Shift)? _pressed;
 
     public HierarchyView(CommandRegistry commands)
     {
@@ -77,31 +78,38 @@ public partial class HierarchyView : UserControl
             Panel.Select(node);
     }
 
-    // Clicks on a row go to the panel, which knows Ctrl and Shift; the tree itself only selects one row.
-    private bool SelectOnClick(MouseButtonEventArgs e)
+    // Clicks on a row go to the panel, which knows Ctrl and Shift; the tree itself only selects one row. A row is
+    // selected as the button comes up rather than as it goes down, so pressing on one to drag it (onto an Inspector
+    // field naming entities) leaves the selection, and the Inspector, as they were.
+    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (FindItem(e.OriginalSource) is not { DataContext: EntityNode { IsEditing: false } node } item || IsInside<ToggleButton>(e.OriginalSource))
-            return false;
+        _dragStart = e.GetPosition(Tree);
+        _dragCandidate = FindItem(e.OriginalSource)?.DataContext as EntityNode;
+        _pressed = null;
+        if (FindItem(e.OriginalSource) is not { DataContext: EntityNode { IsEditing: false } node } || IsInside<ToggleButton>(e.OriginalSource))
+            return;
 
         var modifiers = Keyboard.Modifiers;
-        Panel.Click(node, modifiers.HasFlag(ModifierKeys.Control), modifiers.HasFlag(ModifierKeys.Shift));
+        _pressed = (node, modifiers.HasFlag(ModifierKeys.Control), modifiers.HasFlag(ModifierKeys.Shift));
+        e.Handled = true;
+    }
+
+    private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_pressed is not var (node, control, shift) || FindItem(e.OriginalSource) is not { } item || item.DataContext != node)
+            return;
+
+        _pressed = null;
+        Panel.Click(node, control, shift);
         // Focusing a row selects it in the tree, so only focus the primary one.
         if (node.IsPrimary)
             item.Focus();
         else
             Tree.Focus();
-        return true;
+        e.Handled = true;
     }
 
     // ----- Drag and drop -----
-
-    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _dragStart = e.GetPosition(Tree);
-        _dragCandidate = FindItem(e.OriginalSource)?.DataContext as EntityNode;
-        if (SelectOnClick(e))
-            e.Handled = true;
-    }
 
     private void OnPreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -114,7 +122,9 @@ public partial class HierarchyView : UserControl
             return;
 
         _dragCandidate = null;
-        DragDrop.DoDragDrop(Tree, new DataObject(typeof(EntityNode), node), DragDropEffects.Move);
+        _pressed = null;
+        // Move within the Hierarchy; Link onto an Inspector field that names entities.
+        DragDrop.DoDragDrop(Tree, new DataObject(typeof(EntityNode), node), DragDropEffects.Move | DragDropEffects.Link);
         ClearDropHints();
     }
 

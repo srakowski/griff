@@ -22,6 +22,7 @@ namespace Griff.Scenes;
 public sealed class FirstPersonView : Component
 {
     /// <summary>The name of the entity to look through, e.g. "Player". Empty looks through the camera's own entity.</summary>
+    [EntityName]
     public string? Viewer { get; set; } = "Player";
 
     /// <summary>How wide the view is, in degrees across the screen. 60 to 90 suits most games.</summary>

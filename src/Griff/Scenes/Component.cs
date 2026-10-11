@@ -78,3 +78,17 @@ public sealed class DistanceAttribute : Attribute
     /// </summary>
     public string? When { get; init; }
 }
+
+/// <summary>
+/// Marks a string property as naming an entity, e.g. what a camera follows or what a switch turns on: the editor's
+/// Inspector lets you pick one from a list of the scene's entities or drop one on it from the Hierarchy.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class EntityNameAttribute : Attribute
+{
+    /// <summary>It names several, separated by commas (a switch's Targets): picking one adds it, or takes it out again.</summary>
+    public bool Many { get; init; }
+
+    /// <summary>It names one inside the entity (an attack's Hitbox, a panel's First control), so those are the ones listed.</summary>
+    public bool Inside { get; init; }
+}

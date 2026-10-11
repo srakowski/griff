@@ -46,6 +46,7 @@
                       DragOver="OnDragOver"
                       Drop="OnDrop"
                       PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                      PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
                       PreviewMouseMove="OnPreviewMouseMove"
                       PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown">
                 <TreeView.ItemContainerStyle>

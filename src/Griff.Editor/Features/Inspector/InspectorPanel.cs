@@ -361,6 +361,12 @@ public enum FieldKind
 
     /// <summary>An image file: a preview and the path, with buttons to pick one from the project or paint one.</summary>
     Image,
+
+    /// <summary>
+    /// The name of an entity (or several, separated by commas): text, with a button to pick one from the scene's
+    /// entities, and entities can be dropped on it from the Hierarchy.
+    /// </summary>
+    Entity,
 }
 
 /// <summary>
@@ -397,6 +403,7 @@ public sealed class PropertyField : ObservableObject
             : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
             : type == typeof(string) && IsSoundName(property.Name) ? FieldKind.Sound
             : type == typeof(string) && IsImageName(property.Name) ? FieldKind.Image
+            : property.EntityName is not null ? FieldKind.Entity
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
@@ -590,6 +597,121 @@ public sealed class PropertyField : ObservableObject
         menu.IsOpen = true;
     }
 
+    /// <summary>For an entity field: whether it names several, separated by commas, so picking one adds it (or takes it out).</summary>
+    public bool NamesMany => _property.EntityName?.Many == true;
+
+    /// <summary>
+    /// For an entity field: the entities it can name, in Hierarchy order, each with how deep it is. One that names an
+    /// entity inside its own (an attack's hitbox) lists what's inside the primary selected entity.
+    /// </summary>
+    public IReadOnlyList<EntityChoice> EntityChoices()
+    {
+        if (_property.EntityName is not { } entityName || _components[0].Entity is not { } owner)
+            return [];
+        var choices = new List<EntityChoice>();
+        void Add(Entity entity, int depth)
+        {
+            choices.Add(new EntityChoice(entity, depth, Names(entity.Name)));
+            foreach (var child in entity.Children)
+                Add(child, depth + 1);
+        }
+
+        foreach (var root in entityName.Inside ? owner.Children : owner.Scene?.Roots ?? [])
+            Add(root, 0);
+        return choices;
+    }
+
+    /// <summary>True when the field names <paramref name="name"/>: on every selected entity, when there are several.</summary>
+    public bool Names(string name) => _components.All(c => SplitNames(_property.GetValue(c)).Contains(name));
+
+    /// <summary>
+    /// Picks an entity by name: names it, or on a field that names several, adds it (to those that don't have it yet)
+    /// or takes it out again (when they all have it).
+    /// </summary>
+    public void PickEntity(string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0)
+            return;
+        if (!NamesMany)
+            Value = name;
+        else if (Names(name))
+            SetEach(names => names.Remove(name));
+        else
+            SetEach(names => names.Add(name));
+        _owner.Seal();
+    }
+
+    /// <summary>
+    /// An entity dropped on the field from the Hierarchy: names it, or on a field that names several, adds it to those
+    /// that don't have it yet.
+    /// </summary>
+    public void DropEntity(Entity entity)
+    {
+        if (NamesMany)
+            SetEach(names => names.Add(entity.Name));
+        else
+            Value = entity.Name;
+        _owner.Seal();
+    }
+
+    // Changes each component's own list of names, so several selected switches keep their other targets.
+    private void SetEach(Action<List<string>> change) => _owner.SetValues(_components, _property, [.. _components.Select(c =>
+    {
+        var names = SplitNames(_property.GetValue(c));
+        var had = names.ToList();
+        change(names);
+        names = [.. names.Distinct()];
+        return names.SequenceEqual(had) ? _property.GetValue(c) : names.Count == 0 ? null : (object)string.Join(", ", names);
+    })]);
+
+    private static List<string> SplitNames(object? value) =>
+        [.. (value as string ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    /// <summary>Shows the entities the field can name in a menu under the button that asked; picking one names it.</summary>
+    public IRelayCommand<FrameworkElement> ChooseEntityCommand => _chooseEntity ??= new RelayCommand<FrameworkElement>(ChooseEntity);
+
+    private IRelayCommand<FrameworkElement>? _chooseEntity;
+
+    private void ChooseEntity(FrameworkElement? anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        var choices = EntityChoices();
+        foreach (var choice in choices)
+        {
+            var item = new MenuItem
+            {
+                // Indented like the Hierarchy, so children show under their parents.
+                Header = new TextBlock { Text = choice.Entity.Name, Margin = new Thickness(choice.Depth * 12, 0, 0, 0) },
+                Tag = choice.Entity.Name,
+                IsCheckable = true,
+                IsChecked = choice.IsNamed,
+                // Several can be ticked in turn without opening it again.
+                StaysOpenOnClick = NamesMany,
+            };
+            var name = choice.Entity.Name;
+            item.Click += (_, _) =>
+            {
+                PickEntity(name);
+                foreach (var other in menu.Items.OfType<MenuItem>().Where(i => Equals(i.Tag, name)))
+                    other.IsChecked = Names(name);
+            };
+            menu.Items.Add(item);
+        }
+
+        if (choices.Count == 0)
+            menu.Items.Add(new MenuItem { Header = _property.EntityName?.Inside == true ? "Nothing inside this entity yet" : "No entities in the scene", IsEnabled = false });
+        if (!string.IsNullOrEmpty(Value as string) || IsMixed)
+        {
+            menu.Items.Add(new Separator());
+            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
+            clear.Click += (_, _) => TextValue = null;
+            menu.Items.Add(clear);
+        }
+
+        menu.IsOpen = true;
+    }
+
     public bool IsInteger => _property.Type == typeof(int);
 
     public Array? EnumValues { get; }
@@ -728,6 +850,22 @@ public sealed class PropertyField : ObservableObject
         : type == typeof(Vector3) ? new Vector3(v[0], v[1], v[2])
         : type == typeof(Vector4) ? new Vector4(v[0], v[1], v[2], v[3])
         : new Quaternion(v[0], v[1], v[2], v[3]);
+}
+
+/// <summary>An entity an entity field can name, how deep it is in the Hierarchy, and whether the field names it now.</summary>
+public sealed record EntityChoice(Entity Entity, int Depth, bool IsNamed)
+{
+    /// <summary>Where it is ("Gate/Hint"), and whether it's named now: what agents see of it in a list.</summary>
+    public string Label
+    {
+        get
+        {
+            var path = Entity.Name;
+            for (var parent = Entity.Parent; parent is not null; parent = parent.Parent)
+                path = $"{parent.Name}/{path}";
+            return IsNamed ? $"{path} (named)" : path;
+        }
+    }
 }
 
 /// <summary>One component (X, Y, Z or W) of a vector property.</summary>

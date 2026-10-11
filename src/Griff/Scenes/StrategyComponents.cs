@@ -522,9 +522,11 @@ public sealed class Commander : Component
     public bool Hud { get; set; } = true;
 
     /// <summary>A panel opened when every other team is beaten, e.g. "Victory".</summary>
+    [EntityName]
     public string? VictoryPanel { get; set; } = "Victory";
 
     /// <summary>A panel opened when the player's team is beaten, e.g. "Defeat".</summary>
+    [EntityName]
     public string? DefeatPanel { get; set; } = "Defeat";
 
     /// <summary>A sound played when the player gives an order, e.g. "Sounds/select.wav".</summary>

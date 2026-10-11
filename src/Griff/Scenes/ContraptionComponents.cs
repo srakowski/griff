@@ -96,6 +96,7 @@ public sealed class SandboxTools : Component
 public sealed class Weld : Component
 {
     /// <summary>The entity it's welded to, by name. The nearest one with that name is used.</summary>
+    [EntityName]
     public string? To { get; set; }
 
     // Who it was welded to, when the weld tool made it: names can repeat.
@@ -111,6 +112,7 @@ public sealed class Weld : Component
 public sealed class Rope : Component
 {
     /// <summary>The entity at the other end, by name. The nearest one with that name is used.</summary>
+    [EntityName]
     public string? To { get; set; }
 
     /// <summary>How long the rope is, in world units. 0 is as far apart as the two ends start.</summary>
@@ -360,6 +362,7 @@ public sealed class Wire : Component
     public string? Input { get; set; } = "Power";
 
     /// <summary>The entity it comes from, by name. The nearest one with that name is used.</summary>
+    [EntityName]
     public string? From { get; set; }
 
     /// <summary>The output it carries from there, e.g. "On" or "Out".</summary>

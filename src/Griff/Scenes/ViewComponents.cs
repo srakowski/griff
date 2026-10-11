@@ -22,6 +22,7 @@ public sealed class Follow : Component
     private (Vector2 From, float Elapsed, float Seconds)? _slide;
 
     /// <summary>The name of the entity to follow, e.g. "Player".</summary>
+    [EntityName]
     public string? Target { get; set; } = "Player";
 
     /// <summary>How quickly it catches up: higher is snappier, 0 sticks exactly to the target.</summary>
@@ -43,6 +44,7 @@ public sealed class Follow : Component
     /// The name of an entity whose area the follower stays inside: a tilemap's grid, a box collider, or a sprite. On a
     /// camera the whole view stays inside, so the game never shows past the level's edges.
     /// </summary>
+    [EntityName]
     public string? StayInside { get; set; }
 
     /// <summary>The entity being followed. Set it from a script to follow something without looking it up by name.</summary>

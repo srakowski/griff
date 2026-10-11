@@ -241,7 +241,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public static T? Find<T>(Func<T, bool> match) where T : DependencyObject =>
         Roots().SelectMany(Descendants<T>).FirstOrDefault(e => e is not UIElement { IsVisible: false } && match(e));
 
-    public static string HeaderText(object? header) => (header as string ?? "").Replace("_", "");
+    public static string HeaderText(object? header) => ((header as TextBlock)?.Text ?? header as string ?? "").Replace("_", "");
 
     public static MenuItem? MenuItem(string text) => Find<MenuItem>(m => HeaderText(m.Header) == text);
 

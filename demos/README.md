@@ -80,6 +80,8 @@ build: standalone
 | `slide: <Setting> = <value>` | Drag a Sound Maker slider to a value, e.g. `slide: Slide = 0.4`, `slide: Tempo = 110`. |
 | `name: <text>` | Type the Sound Maker's file name (Save puts it in `Sounds/` or `Music/`). |
 | `pick: <Component>.<Field> = <sound>` | Choose a sound from a sound field's list of the project's sounds, e.g. `pick: Health.HurtSound = Sounds/hit.wav`. |
+| `pickentity: <Component>.<Field> = <entity>` | Choose an entity from the list by a field that names entities, e.g. `pickentity: Switch.Targets = Lift`. On a field that names several, it adds it, or takes it out when it's already there. |
+| `dropentity: <entity> > <Component>.<Field>` | Drag an entity's row from the Hierarchy onto a field that names entities, with the real mouse, e.g. `dropentity: Slime > Follow.Target`. |
 | `expectfile: <path>` | Fail unless the file (relative to Assets) exists: checks a Save really saved. |
 | `painter` | Wait for the Sprite Painter to open (after `menu: Art > New Sprite...` or an image field's Paint button). |
 | `paint: <x>,<y> [> <x>,<y> ...] [\| right]` | Paint on the Sprite Painter's canvas with the real mouse, through those pixels of the frame (from 0, 0 at its top left), with the selected tool: one pixel is a click. `\| right` drags with the right button, which erases. |
@@ -132,7 +134,7 @@ In the Sprite Painter: `painter` (the window), `painter:tool:Fill`, `painter:col
 `painter:removeframe`, `painter:mirror`, `painter:onion`, `painter:outline`, `painter:save`, `painter:close`,
 `painter:name`, `painter:palette`, `painter:swatches`, `painter:hex`, `painter:current`, `painter:fps`, `painter:tools`,
 `painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. An image field's buttons in the Inspector:
-`image:Sprite.Image:choose` and `image:Sprite.Image:paint`.
+`image:Sprite.Image:choose` and `image:Sprite.Image:paint`. A field naming entities has its list button, `pick:Switch.Targets`.
 
 In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),
 `controls:addaction`, `controls:move`, `controls:name`, `controls:builtin`, `controls:usedby`, `controls:keys`,

@@ -217,6 +217,7 @@ public sealed class Chase : Component
     private Entity? _target;
 
     /// <summary>The name of the entity to chase, e.g. "Player".</summary>
+    [EntityName]
     public string? Target { get; set; } = "Player";
 
     /// <summary>World units per second.</summary>
@@ -240,6 +241,7 @@ public sealed class Chase : Component
     /// The name of a tilemap to find a way around the walls of, e.g. "Level" (bodies without gravity only). Empty heads
     /// straight for the target.
     /// </summary>
+    [EntityName]
     public string? Around { get; set; }
 
     /// <summary>Flip its sprite to face the way it's going (art should face right).</summary>
@@ -292,6 +294,7 @@ public sealed class Shooter : Component
     public float Speed { get; set; } = 8;
 
     /// <summary>The name of an entity to aim at, e.g. "Player". Empty fires in <see cref="Direction"/>.</summary>
+    [EntityName]
     public string? Target { get; set; }
 
     /// <summary>Which way to fire without a target (or an aim, for the player).</summary>
@@ -420,6 +423,7 @@ public sealed class Door : Component
     public string? Scene { get; set; }
 
     /// <summary>The name of an entity in this scene to go to, e.g. "CaveExit", when there's no <see cref="Scene"/>.</summary>
+    [EntityName]
     public string? Target { get; set; }
 
     /// <summary>Seconds to fade the screen out (and as long back in) around the trip. 0 cuts straight there.</summary>
@@ -438,6 +442,7 @@ public sealed class Door : Component
     /// The name of an entity to show only while something is touching it, e.g. a "Press E" hint above the door. It's
     /// hidden the rest of the time.
     /// </summary>
+    [EntityName]
     public string? Prompt { get; set; }
 
     /// <summary>Nobody can use it while it's locked. <see cref="Switch"/>es lock and unlock it.</summary>
@@ -486,6 +491,7 @@ public sealed class Dialogue : Component
     public IReadOnlyList<string> Lines { get; set; } = ["Hello!"];
 
     /// <summary>The name of the dialogue box entity; its <see cref="Text"/> (or the first one inside it) shows the lines.</summary>
+    [EntityName]
     public string? Box { get; set; } = "Dialogue Box";
 
     public DialogueStart Start { get; set; }
@@ -506,6 +512,7 @@ public sealed class Dialogue : Component
     /// The name of an entity to show only while it can be started, e.g. a "Press E" hint above someone. It's hidden the
     /// rest of the time.
     /// </summary>
+    [EntityName]
     public string? Prompt { get; set; }
 
     /// <summary>True while it's being said.</summary>

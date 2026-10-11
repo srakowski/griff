@@ -1,0 +1,32 @@
+title: Pick entities in the Inspector
+intro: Fields that name another entity now list the scene's entities to pick from, and take one dragged from the Hierarchy.
+project: Platformer | Entity Pickers
+
+chapter: Pick from the scene | A list by every field that names an entity
+select: Lever
+say: This lever brings out the bridge. Its Targets field names what it turns on.
+explain: pick:Switch.Targets | The entity list | Fields that name entities now have a button that lists everything in the scene, laid out like the Hierarchy.
+say: Let's have the lever start the lift too. The lift sits inside the Level group, so it's indented under it.
+pickentity: Switch.Targets = Lift
+expectvalue: Lever.Switch.Targets = Bridge, Lift
+explain: field:Switch.Targets | Added, not replaced | Targets names several things, so picking one adds it to the list, with the comma put in for you.
+say: Picking one that's already ticked takes it out again.
+pickentity: Switch.Targets = Lift
+expectvalue: Lever.Switch.Targets = Bridge
+say: No more typing names and hoping they match.
+
+chapter: Drag from the Hierarchy | Drop an entity on the field
+select: Main Camera
+explain: field:Follow.Target | Follows the player | The camera follows whatever its Target names: the player.
+say: Drag the slime's row from the Hierarchy onto the field.
+dropentity: Slime > Follow.Target
+expectvalue: Main Camera.Follow.Target = Slime
+expectselected: Main Camera
+explain: panel:Inspector | Still on the camera | Pressing on a row to drag it doesn't select it, so the Inspector stays on the camera you're editing.
+play
+wait: 3
+explain: game | Following the slime | Now the camera rides along with the slime.
+stop
+dropentity: Player > Follow.Target
+expectvalue: Main Camera.Follow.Target = Player
+say: Drag the player back, and it's as it was. Every pick and drop is one undo step.

@@ -78,12 +78,14 @@ public sealed class WorldGenerator : Component
     /// tunnels show instead of the sky. Give it the same position and tileset, no collisions (untick Solid), a darker
     /// tint, and a lower Order.
     /// </summary>
+    [EntityName]
     public string? Walls { get; set; }
 
     /// <summary>
     /// Entities to stand on the ground in the middle of the world once it's made, by name, separated by commas, e.g.
     /// "Player".
     /// </summary>
+    [EntityName(Many = true)]
     public string? Spawn { get; set; } = "Player";
 
     /// <summary>The seed the world was last made from: the one picked when <see cref="Seed"/> is 0.</summary>
@@ -317,6 +319,7 @@ public sealed class BlockBuilder : Component
     public string? Item { get; set; } = "Dirt";
 
     /// <summary>The name of the world's entity. Empty uses the first <see cref="Blocks"/> map in the scene.</summary>
+    [EntityName]
     public string? World { get; set; }
 
     /// <summary>The color of the outline around the block it's pointing at. Transparent hides it.</summary>

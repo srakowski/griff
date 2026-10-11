@@ -240,6 +240,16 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Describe_SaysWhichPropertiesNameEntities()
+    {
+        var text = Run("component_describe", """{"component": "Switch"}""").Text.Split('\n');
+
+        Assert.Contains("(Names entities: their names, separated by commas.)", text.Single(l => l.StartsWith("- targets:", StringComparison.Ordinal)));
+        Assert.Contains("(Names an entity.)", text.Single(l => l.StartsWith("- prompt:", StringComparison.Ordinal)));
+        Assert.DoesNotContain("(Names", text.Single(l => l.StartsWith("- key:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void ListComponents_ByCategoryAndSearch()
     {
         Assert.Contains("## Movement", Run("components_list", "{}").Text);

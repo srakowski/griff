@@ -28,6 +28,7 @@ public sealed class Multiplayer : Component
     /// The entity each player plays as: one in the scene (the host plays that one, everyone else a copy) or a prefab.
     /// Empty gives players no character, as in a strategy game where each player commands a <see cref="Faction"/>.
     /// </summary>
+    [EntityName]
     public string? Player { get; set; } = "Player";
 
     /// <summary>

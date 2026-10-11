@@ -24,6 +24,7 @@ public sealed class Attack : Component
     public string? Action { get; set; } = "Attack";
 
     /// <summary>The name of the child entity that does the damage while the attack is out.</summary>
+    [EntityName(Inside = true)]
     public string? Hitbox { get; set; } = "Hitbox";
 
     /// <summary>Seconds between the swing starting and the hitbox coming out: a heavy hammer's wind-up, or an enemy's tell.</summary>
@@ -45,6 +46,7 @@ public sealed class Attack : Component
     public string? Sound { get; set; }
 
     /// <summary>For an enemy with no <see cref="Action"/>: the name of what it attacks, e.g. "Player".</summary>
+    [EntityName]
     public string? Target { get; set; } = "Player";
 
     /// <summary>For an enemy: how close its target has to be before it swings, in world units.</summary>

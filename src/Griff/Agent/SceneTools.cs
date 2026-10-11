@@ -636,6 +636,13 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 text.Append(". ").Append(meaning);
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
+            if (property.EntityName is { } entityName)
+                text.Append(entityName switch
+                {
+                    { Many: true } => " (Names entities: their names, separated by commas.)",
+                    { Inside: true } => " (Names an entity inside this one.)",
+                    _ => " (Names an entity.)",
+                });
             text.AppendLine();
         }
 

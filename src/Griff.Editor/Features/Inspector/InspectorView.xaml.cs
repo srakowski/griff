@@ -50,38 +50,45 @@ public partial class InspectorView : UserControl
 
     private void OnCatalogClicked(object sender, RoutedEventArgs e) => OpenCatalog();
 
-    // ----- Dropping assets on fields: a sound from the Assets panel onto a sound field, any asset onto a text field.
+    // ----- Dropping on fields: a sound from the Assets panel onto a sound field, any asset onto a text field, and an
+    // entity from the Hierarchy onto a field that names entities.
 
     private void OnPreviewDragOver(object sender, DragEventArgs e)
     {
         if (DropTarget(e) is not null)
         {
-            e.Effects = DragDropEffects.Copy;
+            e.Effects = e.Data.GetDataPresent(typeof(Hierarchy.EntityNode)) ? DragDropEffects.Link : DragDropEffects.Copy;
             e.Handled = true;
         }
     }
 
     private void OnPreviewDrop(object sender, DragEventArgs e)
     {
-        if (DropTarget(e) is not { } field || e.Data.GetData(Assets.AssetNode.DataFormat) is not string path)
+        if (DropTarget(e) is not { } field)
             return;
-        field.TextValue = path;
+        if (e.Data.GetData(typeof(Hierarchy.EntityNode)) is Hierarchy.EntityNode node)
+            field.DropEntity(node.Entity);
+        else if (e.Data.GetData(Assets.AssetNode.DataFormat) is string path)
+            field.TextValue = path;
         e.Handled = true;
     }
 
     private static PropertyField? DropTarget(DragEventArgs e)
     {
-        if (e.Data.GetData(Assets.AssetNode.DataFormat) is not string path)
+        var path = e.Data.GetData(Assets.AssetNode.DataFormat) as string;
+        var isEntity = e.Data.GetDataPresent(typeof(Hierarchy.EntityNode));
+        if (path is null && !isEntity)
             return null;
         for (var element = e.OriginalSource as DependencyObject; element is not null; element = VisualTreeHelper.GetParent(element))
         {
             if (element is FrameworkElement { DataContext: PropertyField field })
             {
-                var isSound = Audio.EditorAudio.Extensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
+                var isSound = path is not null && Audio.EditorAudio.Extensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
                 return field.Kind switch
                 {
+                    FieldKind.Entity when isEntity => field,
                     FieldKind.Sound when isSound => field,
-                    FieldKind.Text => field,
+                    FieldKind.Text when path is not null => field,
                     _ => null,
                 };
             }
@@ -137,6 +144,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Lines { get; set; }
     public DataTemplate? Sound { get; set; }
     public DataTemplate? Image { get; set; }
+    public DataTemplate? Entity { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
@@ -150,6 +158,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Lines => Lines,
             FieldKind.Sound => Sound,
             FieldKind.Image => Image,
+            FieldKind.Entity => Entity,
             _ => null,
         };
 }

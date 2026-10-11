@@ -80,6 +80,62 @@ public static class PrefabCopies
         return edit is CompositeEdit composite ? composite.Edits.Count : 1;
     }
 
+    /// <summary>
+    /// One undo step linking every copy of the prefab at <paramref name="oldPath"/> in <paramref name="scene"/> (copies
+    /// inside other copies too) to <paramref name="newPath"/>, where its file was renamed or moved. Null if there are none.
+    /// </summary>
+    public static IEdit? Relink(Scene scene, string oldPath, string newPath)
+    {
+        var copies = Linked(scene, oldPath);
+        if (copies.Count == 0)
+            return null;
+        return new CompositeEdit($"Relink {(copies.Count == 1 ? "a copy" : $"{copies.Count} copies")} of {NameOf(newPath)}",
+            [new SetEntitiesPrefabEdit(copies, Normalize(newPath))]);
+    }
+
+    // Every copy of the prefab, copies inside other copies too.
+    private static List<Entity> Linked(Scene scene, string prefabPath) => scene.Entities.Where(e => IsCopyOf(e, prefabPath)).ToList();
+
+    /// <summary>
+    /// Links the copies of the prefab at <paramref name="oldPath"/> in the scene file at <paramref name="scenePath"/> to
+    /// <paramref name="newPath"/>, rewriting the file only if it has any.
+    /// </summary>
+    /// <returns>How many copies were relinked.</returns>
+    /// <exception cref="InvalidDataException">The scene can't be read.</exception>
+    public static int RelinkFile(string scenePath, string oldPath, string newPath, SceneSerializer serializer)
+    {
+        var scene = serializer.LoadFromString(File.ReadAllText(scenePath));
+        return Relink(scene, scenePath, oldPath, newPath, () => serializer.SaveToString(scene));
+    }
+
+    /// <summary>
+    /// Links the copies of the prefab at <paramref name="oldPath"/> placed inside the prefab file at
+    /// <paramref name="prefabFile"/> to <paramref name="newPath"/>, rewriting the file only if it has any.
+    /// </summary>
+    /// <returns>How many copies were relinked.</returns>
+    /// <exception cref="InvalidDataException">The prefab can't be read.</exception>
+    public static int RelinkPrefabFile(string prefabFile, string oldPath, string newPath, SceneSerializer serializer)
+    {
+        var scene = new Scene();
+        var root = serializer.LoadPrefabFromString(File.ReadAllText(prefabFile));
+        scene.Add(root);
+        return Relink(scene, prefabFile, oldPath, newPath, () => serializer.SavePrefabToString(root));
+    }
+
+    // Relinks a file's copies and writes it (through a temporary file, so a failed save never truncates the real one).
+    private static int Relink(Scene scene, string file, string oldPath, string newPath, Func<string> text)
+    {
+        var copies = Linked(scene, oldPath);
+        if (copies.Count == 0)
+            return 0;
+        foreach (var copy in copies)
+            copy.Prefab = Normalize(newPath);
+        var temp = file + ".saving";
+        File.WriteAllText(temp, text());
+        File.Move(temp, file, overwrite: true);
+        return copies.Count;
+    }
+
     // The prefab as it was, or null if that isn't known or can't be read: then copies just take the new one.
     private static Entity? Old(string? json, SceneSerializer serializer)
     {

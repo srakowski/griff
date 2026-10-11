@@ -53,6 +53,16 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
 {
     public string? AssetsPath => workspace.Project?.AssetsPath;
 
+    // A prefab moved keeps its copies, everywhere they are.
+    public Task<AssetFeedback?> AssetMovedAsync(string fromPath, string toPath)
+    {
+        var update = PrefabFiles.Relink(workspace, fromPath, toPath);
+        var problems = update.Problems.Count > 0 ? "\nNot relinked: " + string.Join("; ", update.Problems) : "";
+        return Task.FromResult<AssetFeedback?>(update.Copies > 0 || problems.Length > 0
+            ? new AssetFeedback((update.Describe("Relinked") + problems).Trim(), IsError: update.Problems.Count > 0)
+            : null);
+    }
+
     public Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null)
     {
         if (assetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))

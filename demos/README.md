@@ -60,6 +60,10 @@ build: standalone
 | `expectoverrides: <entity> = <changes>` | Fail unless a prefab copy changes exactly these from its prefab, as agents see them (`expectoverrides: Gem 3 = Sprite.Tint, Pickup.Amount`, `added Light`, `Shine: Light.Radius` for something inside it), or `none`. |
 | `revertfield: <Component>.<Field>` / `applyfield: <Component>.<Field>` | Click the mark by a field the selected copy changed from its prefab, then Revert to Prefab (or Apply to Prefab), e.g. `revertfield: Pickup.Amount`. |
 | `answer: <button>` | Click a button on the message box the editor is showing, e.g. `answer: Yes` after `menu: Entity > Save as Prefab` asks before saving over a prefab. |
+| `prompt: <text>` | Type into the prompt the editor is showing (a name to rename to, a new folder's) and press Enter. |
+| `assetmenu: <path> > <item>` | Right-click an asset's row in the Assets panel (its path in Assets, opening the folders it's in) and pick an item from its menu, e.g. `assetmenu: Prefabs/Gem.prefab > Rename...`, then `prompt: Blue Gem`. |
+| `assetdrop: <path> > <folder>` | Drag an asset's row onto a folder's row in the Assets panel with the real mouse, e.g. `assetdrop: Prefabs/Gem.prefab > Pickups`. |
+| `expectlinked: <entity> = <path>` | Fail unless the entity is a copy of the prefab at that path in Assets, e.g. `expectlinked: Gem 2 = Pickups/Gem.prefab`. |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component, e.g. `add: Health`. |
 | `catalog` | Open the component catalog with the Inspector's Catalog button. |
@@ -142,7 +146,7 @@ In the Sprite Painter: `painter` (the window), `painter:tool:Fill`, `painter:col
 `painter:removeframe`, `painter:mirror`, `painter:onion`, `painter:outline`, `painter:save`, `painter:close`,
 `painter:name`, `painter:palette`, `painter:swatches`, `painter:hex`, `painter:current`, `painter:fps`, `painter:tools`,
 `painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. An image field's buttons in the Inspector:
-`image:Sprite.Image:choose` and `image:Sprite.Image:paint`. A field naming entities has its list button, `pick:Switch.Targets`.
+`image:Sprite.Image:choose` and `image:Sprite.Image:paint`. A field naming entities has its list button, `pick:Switch.Targets`. An asset's row in the Assets panel is `asset:Prefabs/Gem.prefab` (the folders it's in are opened).
 
 In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),
 `controls:addaction`, `controls:move`, `controls:name`, `controls:builtin`, `controls:usedby`, `controls:keys`,

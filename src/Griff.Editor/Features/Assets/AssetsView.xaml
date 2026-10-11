@@ -14,6 +14,9 @@
                   PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
                   PreviewMouseMove="OnPreviewMouseMove"
                   PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown"
+                  AllowDrop="True"
+                  DragOver="OnDragOver"
+                  Drop="OnDrop"
                   Visibility="{Binding HasProject, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">

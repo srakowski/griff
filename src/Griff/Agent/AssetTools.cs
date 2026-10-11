@@ -15,6 +15,12 @@ public interface IAgentProject
     /// it, like how a script compiled.
     /// </summary>
     Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null);
+
+    /// <summary>
+    /// Called after an agent renames or moves a prefab (paths under Assets, with '/'), so its copies stay linked to it.
+    /// Returns anything the agent should hear about it, like how many copies were relinked.
+    /// </summary>
+    Task<AssetFeedback?> AssetMovedAsync(string fromPath, string toPath) => Task.FromResult<AssetFeedback?>(null);
 }
 
 /// <summary>What came of writing a file: e.g. a script's compile errors (<see cref="IsError"/>) or "compiled".</summary>
@@ -79,6 +85,21 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             Description = "Deletes a file (or an empty folder) from Assets.",
             InputSchema = Schema.Object([("path", Schema.String("The path under Assets."))], "path"),
             Invoke = DeleteAsync,
+        };
+
+        yield return new AgentTool
+        {
+            Name = "asset_move",
+            Title = "Move Asset",
+            Destructive = true,
+            Description = "Renames or moves a prefab within Assets (making folders as needed). Every placed copy stays linked to it: " +
+                "in every scene, inside other prefabs, and in the open scene and prefab tabs. Its name is what Game.Spawn and " +
+                "fields like a Spawner's Prefab use, so renaming it means changing those too.",
+            InputSchema = Schema.Object([
+                ("from", Schema.String("The prefab's path under Assets, e.g. \"Prefabs/Coin.prefab\".")),
+                ("to", Schema.String("Its new path, e.g. \"Prefabs/Pickups/Gold Coin.prefab\".")),
+            ], "from", "to"),
+            Invoke = MoveAsync,
         };
     }
 
@@ -172,6 +193,24 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             throw new AgentException($"There's no file (or empty folder) {args.String("path")}.");
         var feedback = await project.AssetChangedAsync(AssetPathOf(full));
         return ToolResult.Ok($"Deleted {AssetPathOf(full)}.{(feedback is null ? "" : "\n" + feedback.Message)}");
+    }
+
+    private async Task<ToolResult> MoveAsync(ToolArgs args)
+    {
+        var from = FullPath(args.String("from"));
+        var to = FullPath(args.String("to"));
+        if (!File.Exists(from))
+            throw new AgentException($"There's no file {args.String("from")}.");
+        if (!from.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) || !to.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            throw new AgentException("Only prefabs can be moved, to a path ending in .prefab.");
+        if (File.Exists(to) && !string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
+            throw new AgentException($"There's already a file at {AssetPathOf(to)}.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+        File.Move(from, to);
+        var feedback = await project.AssetMovedAsync(AssetPathOf(from), AssetPathOf(to));
+        var result = $"Moved {AssetPathOf(from)} to {AssetPathOf(to)}.{(feedback is null ? "" : "\n" + feedback.Message)}";
+        return feedback is { IsError: true } ? ToolResult.Error(result) : ToolResult.Ok(result);
     }
 
     private static bool LooksBinary(string path)

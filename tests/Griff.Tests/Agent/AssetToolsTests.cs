@@ -18,6 +18,36 @@ public sealed class AssetToolsTests : IDisposable
             Previous.Add(previousText);
             return Task.FromResult(assetPath.EndsWith(".cs") ? new AssetFeedback("Broken.cs(1,1): error", IsError: true) : null);
         }
+
+        public List<(string From, string To)> Moved { get; } = [];
+
+        public Task<AssetFeedback?> AssetMovedAsync(string fromPath, string toPath)
+        {
+            Moved.Add((fromPath, toPath));
+            return Task.FromResult<AssetFeedback?>(new AssetFeedback("Relinked 2 copies in Level."));
+        }
+    }
+
+    [Fact]
+    public void Move_RenamesAPrefab_AndTellsTheEditorSoCopiesStayLinked()
+    {
+        Run("asset_write", """{"path": "Prefabs/Coin.prefab", "text": "{}"}""");
+        Run("asset_write", """{"path": "Sprites/coin.png", "base64": "AAAA"}""");
+
+        var moved = Run("asset_move", """{"from": "Prefabs/Coin.prefab", "to": "Prefabs/Money/Gold Coin.prefab"}""");
+
+        Assert.False(moved.IsError, moved.Text);
+        Assert.Contains("Relinked 2 copies", moved.Text);
+        Assert.True(File.Exists(Path.Combine(_root, "Prefabs", "Money", "Gold Coin.prefab")));
+        Assert.False(File.Exists(Path.Combine(_root, "Prefabs", "Coin.prefab")));
+        Assert.Equal([("Prefabs/Coin.prefab", "Prefabs/Money/Gold Coin.prefab")], _project.Moved);
+
+        // Only prefabs, and never over another file.
+        Run("asset_write", """{"path": "Prefabs/Gem.prefab", "text": "{}"}""");
+        Assert.Throws<AgentException>(() => Run("asset_move", """{"from": "Sprites/coin.png", "to": "Sprites/gold.png"}"""));
+        Assert.Throws<AgentException>(() => Run("asset_move", """{"from": "Prefabs/Gem.prefab", "to": "Prefabs/Money/Gold Coin.prefab"}"""));
+        Assert.Throws<AgentException>(() => Run("asset_move", """{"from": "Prefabs/Gem.prefab", "to": "../Gem.prefab"}"""));
+        Assert.True(File.Exists(Path.Combine(_root, "Prefabs", "Gem.prefab")));
     }
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-asset-tools-" + Guid.NewGuid().ToString("N"));

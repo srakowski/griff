@@ -70,6 +70,7 @@ public partial class AssetsView : UserControl
         {
             Add(menu, "Edit Prefab", Icons.Package, async () => await _workspace.OpenPrefabAsync(node.FullPath));
             Add(menu, "Add to Scene", Icons.Add, () => AddPrefabToScene(node));
+            Add(menu, "Rename...", Icons.Rename, () => Panel?.RenamePrefab(node.AssetPath));
             Add(menu, "Open in Another Editor", Icons.Open, () => OpenExternally(node.FullPath));
             menu.Items.Add(new Separator());
         }
@@ -109,6 +110,7 @@ public partial class AssetsView : UserControl
         var folder = node is null ? _workspace.Project?.AssetsPath
             : node.Kind == AssetKind.Folder ? node.FullPath
             : Path.GetDirectoryName(node.FullPath);
+        Add(menu, "New Folder...", Icons.Folder, () => Panel?.NewFolder(FolderOf(node)));
         Add(menu, "Show in Explorer", Icons.Folder, () => ShowInExplorer(node?.FullPath ?? folder));
 
         menu.PlacementTarget = Tree;
@@ -155,8 +157,35 @@ public partial class AssetsView : UserControl
         _dragCandidate = null;
         var data = new DataObject(AssetNode.DataFormat, node.AssetPath);
         data.SetData(typeof(AssetNode), node);
-        DragDrop.DoDragDrop(Tree, data, DragDropEffects.Copy);
+        DragDrop.DoDragDrop(Tree, data, DragDropEffects.Copy | DragDropEffects.Move);
     }
+
+    // ----- Drop: a prefab dragged onto a folder (or a file in it, or empty space for Assets) moves there -----
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = DroppedPrefab(e) is { } prefab && Path.GetDirectoryName(prefab.AssetPath)?.Replace('\\', '/') != FolderOf(NodeAt(e.OriginalSource))
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (DroppedPrefab(e) is { } prefab)
+            Panel?.MovePrefab(prefab.AssetPath, FolderOf(NodeAt(e.OriginalSource)));
+    }
+
+    private static AssetNode? DroppedPrefab(DragEventArgs e) =>
+        e.Data.GetData(typeof(AssetNode)) is AssetNode { Kind: AssetKind.Prefab } node ? node : null;
+
+    // The folder a node is (or is in), as a path in Assets; empty for Assets itself.
+    private static string FolderOf(AssetNode? node) => node is null ? ""
+        : node.Kind == AssetKind.Folder ? node.AssetPath
+        : Path.GetDirectoryName(node.AssetPath)?.Replace('\\', '/') ?? "";
+
+    private AssetsPanel? Panel => DataContext as AssetsPanel;
 
     // ----- Helpers -----
 

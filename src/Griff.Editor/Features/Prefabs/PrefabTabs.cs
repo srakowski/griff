@@ -160,6 +160,13 @@ public sealed class PrefabTabs(IWorkspace workspace)
         {
             if (e.PropertyName == nameof(SceneDocument.IsDirty))
                 Update();
+
+            // Renaming the prefab's file renames its tab.
+            if (e.PropertyName == nameof(SceneDocument.Name))
+            {
+                name.Text = prefab.Name;
+                header.ToolTip = $"The {prefab.Name} prefab: saving it updates every copy";
+            }
         };
         header.Loaded += (_, _) => Update();
         Update();

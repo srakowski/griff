@@ -26,6 +26,83 @@ public static class PrefabFiles
         string.Equals(AssetPathOf(project, document.FilePath), PrefabCopies.Normalize(assetPath), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Renames or moves the prefab at <paramref name="fromAssetPath"/> to <paramref name="toAssetPath"/> (both in
+    /// Assets, making folders as needed), keeping every copy of it linked (see <see cref="Relink"/>).
+    /// </summary>
+    /// <exception cref="IOException">There's a file there already, or the prefab can't be moved.</exception>
+    public static PrefabUpdate Move(IWorkspace workspace, string fromAssetPath, string toAssetPath)
+    {
+        if (workspace.Project is not { } project)
+            return new PrefabUpdate(0, [], []);
+        var to = FullPath(project, toAssetPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+        File.Move(FullPath(project, fromAssetPath), to);
+        return Relink(workspace, fromAssetPath, toAssetPath);
+    }
+
+    /// <summary>
+    /// After the prefab at <paramref name="oldAssetPath"/> is renamed or moved to <paramref name="newAssetPath"/>: links
+    /// every copy of it to its new place, in the project's scene and prefab files on disk, and in the open scene and
+    /// prefab tabs (one undo step in each; one with no other changes stays saved, as its file is relinked too). The
+    /// prefab's own tab, if it's open, follows its file.
+    /// </summary>
+    public static PrefabUpdate Relink(IWorkspace workspace, string oldAssetPath, string newAssetPath)
+    {
+        if (workspace.Project is not { } project)
+            return new PrefabUpdate(0, [], []);
+
+        var copies = 0;
+        var places = new List<string>();
+        var problems = new List<string>();
+        var serializer = workspace.Serializer;
+
+        foreach (var tab in workspace.Prefabs.Where(t => IsOwnTab(workspace, t, oldAssetPath)).ToList())
+            tab.MoveTo(FullPath(project, newAssetPath));
+
+        // Open documents count what they hold now, saved or not.
+        var open = new[] { workspace.EditScene }.Concat(workspace.Prefabs).OfType<SceneDocument>().ToList();
+        foreach (var document in open)
+        {
+            var count = document.Scene.Entities.Count(e => PrefabCopies.IsCopyOf(e, oldAssetPath));
+            if (PrefabCopies.Relink(document.Scene, oldAssetPath, newAssetPath) is not { } edit)
+                continue;
+            var saved = !document.IsDirty;
+            document.Execute(edit);
+            if (saved)
+                document.MarkSaved();
+            copies += count;
+            places.Add(document.Name);
+        }
+
+        // Every scene and prefab file on disk, the open ones' too (so their files stay right whether or not they're saved).
+        var openFiles = open.Select(d => Path.GetFullPath(d.FilePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in project.FindScenes().Concat(project.FindPrefabs()))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            try
+            {
+                var count = file.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase)
+                    ? PrefabCopies.RelinkPrefabFile(file, oldAssetPath, newAssetPath, serializer)
+                    : PrefabCopies.RelinkFile(file, oldAssetPath, newAssetPath, serializer);
+                if (count > 0 && !openFiles.Contains(Path.GetFullPath(file)))
+                {
+                    copies += count;
+                    places.Add(name);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"{name}: {ex.Message}");
+            }
+        }
+
+        return new PrefabUpdate(copies, places, problems);
+    }
+
+    private static string FullPath(Griff.Projects.Project project, string assetPath) =>
+        Path.GetFullPath(Path.Combine(project.AssetsPath, PrefabCopies.Normalize(assetPath).Replace('/', Path.DirectorySeparatorChar)));
+
+    /// <summary>
     /// A new copy of the prefab at <paramref name="assetPath"/> (relative to Assets), linked to it so saving the prefab
     /// updates it, or null if it can't be read.
     /// </summary>
@@ -253,10 +330,16 @@ public static class PrefabFiles
     }
 }
 
-/// <summary>What saving a prefab updated: how many copies, in which scenes, and the scenes that couldn't be updated.</summary>
+/// <summary>
+/// What saving (or moving) a prefab updated: how many copies, in which scenes (and prefabs), and the ones that couldn't
+/// be updated.
+/// </summary>
 public sealed record PrefabUpdate(int Copies, IReadOnlyList<string> Scenes, IReadOnlyList<string> Problems)
 {
     /// <summary>"Updated 3 copies in Level 1 and Level 2.", or empty with none.</summary>
-    public string Summary => Copies == 0 ? "" :
-        $"Updated {Copies} cop{(Copies == 1 ? "y" : "ies")} in {(Scenes.Count == 1 ? Scenes[0] : string.Join(", ", Scenes.Take(Scenes.Count - 1)) + " and " + Scenes[^1])}.";
+    public string Summary => Describe("Updated");
+
+    /// <summary>"Relinked 3 copies in Level 1 and Level 2." with "Relinked", or empty with none.</summary>
+    public string Describe(string verb) => Copies == 0 ? "" :
+        $"{verb} {Copies} cop{(Copies == 1 ? "y" : "ies")} in {(Scenes.Count == 1 ? Scenes[0] : string.Join(", ", Scenes.Take(Scenes.Count - 1)) + " and " + Scenes[^1])}.";
 }

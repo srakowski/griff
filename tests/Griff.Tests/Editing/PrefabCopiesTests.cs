@@ -177,6 +177,58 @@ public sealed class PrefabCopiesTests : IDisposable
     }
 
     [Fact]
+    public void Relink_PointsEveryCopyAtTheMovedPrefab_CopiesInsideCopiesToo_AsOneUndoStep()
+    {
+        var scene = new Scene();
+        var outer = Place(scene, CoinPrefab(1), "Coin", Vector3.Zero);
+        var inner = Place(scene, CoinPrefab(1), "Inner Coin", Vector3.One, parent: outer);
+        var other = new Entity("Gem") { Prefab = "Prefabs/Gem.prefab" };
+        scene.Add(other);
+
+        _history.Execute(PrefabCopies.Relink(scene, "prefabs\\coin.prefab", "Prefabs/Money/Gold Coin.prefab")!);
+
+        Assert.Equal("Relink 2 copies of Gold Coin", _history.UndoDescription);
+        Assert.Equal("Prefabs/Money/Gold Coin.prefab", outer.Prefab);
+        Assert.Equal("Prefabs/Money/Gold Coin.prefab", inner.Prefab);
+        Assert.Equal("Prefabs/Gem.prefab", other.Prefab);
+        Assert.Null(PrefabCopies.Relink(scene, CoinPath, "Prefabs/Other.prefab"));
+
+        _history.Undo();
+        Assert.Equal(CoinPath, inner.Prefab);
+    }
+
+    [Fact]
+    public void RelinkFiles_RewriteScenesAndPrefabsHoldingCopies_AndLeaveOthersUntouched()
+    {
+        Directory.CreateDirectory(_root);
+        var level = new Scene();
+        Place(level, CoinPrefab(1), "Coin", new Vector3(4, 0, 0));
+        var levelPath = Path.Combine(_root, "Level.scene");
+        File.WriteAllText(levelPath, _serializer.SaveToString(level));
+
+        // A chest prefab with a coin inside it.
+        var chest = new Scene();
+        var root = new Entity("Chest");
+        chest.Add(root);
+        Place(chest, CoinPrefab(1), "Coin", Vector3.Zero, parent: root);
+        var chestPath = Path.Combine(_root, "Chest.prefab");
+        File.WriteAllText(chestPath, _serializer.SavePrefabToString(root));
+        var gemPath = Path.Combine(_root, "Gem.prefab");
+        File.WriteAllText(gemPath, _serializer.SavePrefabToString(new Entity("Gem")));
+        var gemWritten = File.GetLastWriteTimeUtc(gemPath);
+
+        Assert.Equal(1, PrefabCopies.RelinkFile(levelPath, CoinPath, "Coins/Coin.prefab", _serializer));
+        Assert.Equal(1, PrefabCopies.RelinkPrefabFile(chestPath, CoinPath, "Coins/Coin.prefab", _serializer));
+        Assert.Equal(0, PrefabCopies.RelinkPrefabFile(gemPath, CoinPath, "Coins/Coin.prefab", _serializer));
+
+        var coin = _serializer.LoadFromString(File.ReadAllText(levelPath)).Roots.Single();
+        Assert.Equal("Coins/Coin.prefab", coin.Prefab);
+        Assert.Equal(new Vector3(4, 0, 0), coin.Transform.Position);
+        Assert.Equal("Coins/Coin.prefab", _serializer.LoadPrefabFromString(File.ReadAllText(chestPath)).Children.Single().Prefab);
+        Assert.Equal(gemWritten, File.GetLastWriteTimeUtc(gemPath));
+    }
+
+    [Fact]
     public void SetPrefab_LinksAndUnlinks_AndUndoesEachToItsOwnLink()
     {
         var (a, b) = (new Entity("A"), new Entity("B") { Prefab = "Prefabs/Gem.prefab" });

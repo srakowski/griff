@@ -34,9 +34,17 @@ public sealed class SceneDocument : ObservableObject
 
     public Scene Scene { get; }
 
-    public string FilePath { get; }
+    public string FilePath { get; private set; }
 
     public string Name => Path.GetFileNameWithoutExtension(FilePath);
+
+    /// <summary>Follows its file to where it was renamed or moved.</summary>
+    internal void MoveTo(string filePath)
+    {
+        FilePath = filePath;
+        OnPropertyChanged(nameof(FilePath));
+        OnPropertyChanged(nameof(Name));
+    }
 
     /// <summary>True for a prefab open in its own tab: its scene holds the prefab, and saving writes the prefab file.</summary>
     public bool IsPrefab => FilePath.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase);

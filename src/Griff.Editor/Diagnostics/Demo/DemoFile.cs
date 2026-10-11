@@ -437,6 +437,26 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "answer: Yes": click a button on the message box the editor is showing.
                 await ui.Answer(a);
                 break;
+            case "prompt":
+                // "prompt: Gold Coin": type into the prompt the editor is showing (a name) and press Enter.
+                await ui.Prompt(a);
+                break;
+            case "assetmenu":
+                // "assetmenu: Prefabs/Coin.prefab > Rename...": right-click an asset's row in Assets and pick from its menu.
+                var (menuAsset, menuItem) = Split2(a, '>');
+                await ui.AssetMenu(menuAsset, menuItem);
+                break;
+            case "assetdrop":
+                // "assetdrop: Prefabs/Coin.prefab > Pickups": drag an asset's row onto a folder in Assets.
+                var (dropAsset, dropFolder) = Split2(a, '>');
+                await ui.DropAsset(dropAsset, dropFolder);
+                break;
+            case "expectlinked":
+                // "expectlinked: Gem 2 = Pickups/Gem.prefab": the entity is a copy of the prefab at that path in Assets.
+                var (linkedName, linkedPath) = Split2(a, '=');
+                if (!await Until(() => string.Equals(workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == linkedName)?.Prefab, linkedPath, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected {linkedName} to be linked to {linkedPath}, but it's linked to {workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == linkedName)?.Prefab ?? "nothing"}.");
+                break;
             case "sceneclick":
                 // "sceneclick: Ctrl+Slime" or "sceneclick: 3, 2": a click in the Scene view on an entity or a world point.
                 var (clickAt, clickModifiers) = ParseModifiedName(a);
@@ -1265,7 +1285,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "code" => ui.CodePart(name),
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, pick:, world:, gameworld:, hud:)."),
+            "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
         };
     }
 

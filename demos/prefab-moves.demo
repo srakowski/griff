@@ -1,0 +1,39 @@
+title: Rename and move prefabs
+intro: Prefabs can be renamed and moved between folders in the Assets panel. Every copy stays linked to its prefab, in every scene and inside other prefabs.
+project: Platformer | Prefab Moves
+
+chapter: A gem prefab | Placed twice
+look: 8, -2, 4
+deselect
+create: Sprite
+rename: Gem
+set: Transform.Position = 5, -3, 0
+set: Sprite.Tint = #29ADFF
+set: Sprite.Size = 0.6, 0.6
+menu: Entity > Save as Prefab
+key: Ctrl+D
+rename: Gem 2
+set: Transform.Position = 7.5, -3, 0
+save
+expectlinked: Gem 2 = Prefabs/Gem.prefab
+explain: asset:Prefabs/Gem.prefab | The prefab | Two gems, both copies of the Gem prefab in the Prefabs folder.
+
+chapter: Rename it | Right-click it in Assets
+assetmenu: Prefabs/Gem.prefab > Rename...
+prompt: Blue Gem
+expectfile: Prefabs/Blue Gem.prefab
+expectlinked: Gem = Prefabs/Blue Gem.prefab
+expectlinked: Gem 2 = Prefabs/Blue Gem.prefab
+explain: asset:Prefabs/Blue Gem.prefab | Renamed | Rename on its menu gives the prefab a new name, and every copy stays linked to it.
+select: Gem 2
+explain: prefabnote | Copy of the Blue Gem prefab | So saving the prefab still updates them all.
+
+chapter: Move it | Drag it onto a folder
+assetmenu: Main.scene > New Folder...
+prompt: Pickups
+assetdrop: Prefabs/Blue Gem.prefab > Pickups
+expectfile: Pickups/Blue Gem.prefab
+expectlinked: Gem = Pickups/Blue Gem.prefab
+expectlinked: Gem 2 = Pickups/Blue Gem.prefab
+explain: asset:Pickups/Blue Gem.prefab | Moved | Dragging it onto a folder moves it there, and again its copies follow.
+say: Copies in other scenes and inside other prefabs are relinked too. A script spawns a prefab by its name, so a rename means changing those names as well.

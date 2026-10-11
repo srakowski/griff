@@ -2,7 +2,9 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Panels;
+using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Griff.Projects;
@@ -79,17 +81,24 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
     }
 }
 
-/// <summary>The project's Assets folder as a live tree. Changes on disk show up within a moment.</summary>
+/// <summary>
+/// The project's Assets folder as a live tree. Changes on disk show up within a moment. Prefabs can be renamed and
+/// moved between folders here, keeping every copy of them linked.
+/// </summary>
 public sealed class AssetsPanel : ToolPanel
 {
     private readonly IWorkspace _workspace;
+    private readonly IDialogService _dialogs;
+    private readonly IStatusService _status;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _refresh;
     private FileSystemWatcher? _watcher;
 
-    public AssetsPanel(IWorkspace workspace)
+    public AssetsPanel(IWorkspace workspace, IDialogService dialogs, IStatusService status)
     {
         _workspace = workspace;
+        _dialogs = dialogs;
+        _status = status;
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => Rebuild(), Dispatcher.CurrentDispatcher);
         _refresh.Stop();
         workspace.PropertyChanged += (_, e) =>
@@ -113,6 +122,100 @@ public sealed class AssetsPanel : ToolPanel
     public bool HasProject => _workspace.Project is not null;
 
     public string? AssetsPath => _workspace.Project?.AssetsPath;
+
+    /// <summary>
+    /// Renames a prefab (its path in Assets, "Prefabs/Coin.prefab"), asking for the new name. Every copy stays linked.
+    /// Its name is what Game.Spawn and fields like a Spawner's Prefab use, so those need changing too. Returns what
+    /// happened, or null if cancelled.
+    /// </summary>
+    public string? RenamePrefab(string assetPath)
+    {
+        if (_workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
+            return null;
+        var folder = Path.GetDirectoryName(file)!;
+        var old = Path.GetFileNameWithoutExtension(file);
+        var name = _dialogs.Prompt("Rename Prefab", "Prefab name", old, n =>
+            n.Trim().Length == 0 || n.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? "That can't be a file name."
+            : !string.Equals(n.Trim(), old, StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(folder, n.Trim() + Project.PrefabExtension)) ? $"{n.Trim()} is already a prefab here."
+            : null);
+        if (name is null || name.Trim() == old)
+            return null;
+        return Move(project, file, Path.Combine(folder, name.Trim() + Project.PrefabExtension));
+    }
+
+    /// <summary>
+    /// Moves a prefab (its path in Assets) into a folder (its path in Assets; empty for Assets itself). Every copy stays
+    /// linked. Returns what happened.
+    /// </summary>
+    public string? MovePrefab(string assetPath, string folder)
+    {
+        if (_workspace.Project is not { } project || project.FindPrefab(assetPath) is not { } file)
+            return null;
+        var target = Path.GetFullPath(Path.Combine(project.AssetsPath, folder.Replace('/', Path.DirectorySeparatorChar)));
+        if (!Directory.Exists(target))
+        {
+            _dialogs.ShowError("Move Prefab", $"There's no folder \"{folder}\" in Assets.");
+            return null;
+        }
+
+        var to = Path.Combine(target, Path.GetFileName(file));
+        if (string.Equals(Path.GetFullPath(file), to, StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (File.Exists(to))
+        {
+            _dialogs.ShowError("Move Prefab", $"{Path.GetFileName(file)} is in {folder} already.");
+            return null;
+        }
+
+        return Move(project, file, to);
+    }
+
+    /// <summary>
+    /// Makes a new folder inside <paramref name="parent"/> (its path in Assets; empty for Assets itself), asking for its
+    /// name. Returns its path in Assets, or null if cancelled.
+    /// </summary>
+    public string? NewFolder(string parent)
+    {
+        if (_workspace.Project is not { } project)
+            return null;
+        var inside = Path.Combine(project.AssetsPath, parent.Replace('/', Path.DirectorySeparatorChar));
+        var name = _dialogs.Prompt("New Folder", "Folder name", "New Folder", n =>
+            n.Trim().Length == 0 || n.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? "That can't be a folder name."
+            : Directory.Exists(Path.Combine(inside, n.Trim())) || File.Exists(Path.Combine(inside, n.Trim())) ? $"{n.Trim()} is here already."
+            : null);
+        if (name is null)
+            return null;
+        var path = Path.Combine(inside, name.Trim());
+        Directory.CreateDirectory(path);
+        _expanded.Add(inside);
+        Rebuild();
+        return Path.GetRelativePath(project.AssetsPath, path).Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    // Moves the file and relinks its copies everywhere, saying how that went.
+    private string Move(Project project, string from, string to)
+    {
+        var fromAsset = PrefabFiles.AssetPathOf(project, from);
+        var toAsset = PrefabFiles.AssetPathOf(project, to);
+        PrefabUpdate update;
+        try
+        {
+            update = PrefabFiles.Move(_workspace, fromAsset, toAsset);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.ShowError("Couldn't move the prefab", ex.Message);
+            return ex.Message;
+        }
+
+        if (update.Problems.Count > 0)
+            _dialogs.ShowError("Some copies weren't relinked", string.Join("\n", update.Problems));
+        var message = $"Moved {fromAsset} to {toAsset}. {update.Describe("Relinked")}".Trim();
+        _status.Show(message);
+        _expanded.Add(Path.GetDirectoryName(to)!);
+        Rebuild();
+        return message;
+    }
 
     public void Rebuild()
     {

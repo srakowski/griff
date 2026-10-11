@@ -116,6 +116,9 @@ public partial class App : Application
         services.AddSingleton<SceneViewModel>();
         services.AddSingleton<SceneViewControl>();
         services.AddCommand<FrameSelectionCommand>();
+        services.AddCommand<ScaleHandlesCommand>();
+        services.AddCommand<ResizeHandlesCommand>();
+        services.AddCommand<ColliderHandlesCommand>();
         services.AddSingleton<StartPage>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();

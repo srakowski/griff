@@ -21,8 +21,9 @@ namespace Griff.Editor.Features.SceneView;
 /// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects (Ctrl or Shift adds or takes away); dragging
 /// from empty space selects everything in the box; dragging a selected entity moves the whole selection (Ctrl snaps);
 /// dragging the rotate handle above the primary selection turns the selection around it (Ctrl snaps to 15 degrees);
-/// dragging the square handles on its corners and edges scales it (Shift keeps proportions, Ctrl snaps to tenths);
-/// F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
+/// dragging the square handles on its corners and edges scales it (Shift keeps proportions, Ctrl snaps to tenths), or,
+/// with Resize or Collider handles picked (R and C; S goes back), resizes its sprite or its colliders (Ctrl snaps to
+/// half units); F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
 public sealed class SceneViewControl : FrameworkElement
@@ -74,6 +75,10 @@ public sealed class SceneViewControl : FrameworkElement
     private Vector2 _scaleSpot;
     private Vector2 _scalePress;
     private Vector2? _overScale;
+    private SceneViewModel.ShapeResize? _resize;
+    private Vector2 _resizeSpot;
+    private Vector2 _resizePress;
+    private (Component Shape, Vector2 Spot)? _overResize;
 
     // Tile painting.
     private int _brushTile;
@@ -99,6 +104,11 @@ public sealed class SceneViewControl : FrameworkElement
                 Track(workspace.Scene);
         };
         selection.PropertyChanged += (_, _) => InvalidateVisual();
+        model.PropertyChanged += (_, _) =>
+        {
+            (_overScale, _overResize) = (null, null);
+            InvalidateVisual();
+        };
         workspace.ScriptsReloaded += (_, _) => InvalidateVisual();
         Track(workspace.Scene);
     }
@@ -112,6 +122,7 @@ public sealed class SceneViewControl : FrameworkElement
         Paint,
         Rotate,
         Scale,
+        Resize,
     }
 
     private PropertyDescriptor PositionProperty =>
@@ -723,12 +734,13 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
     }
 
-    // The primary selection's handles: the rotate knob, then the scale squares over the root of its stem.
+    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem.
     private void DrawHandles(DrawingContext dc)
     {
         if (RotateHandle() is var (root, knob))
             DrawRotateHandle(dc, root, knob);
         DrawScaleHandles(dc);
+        DrawResizeHandles(dc);
     }
 
     // A stem out of the top of the primary selection with a knob to drag; while turning, the circle the knob follows and
@@ -787,6 +799,43 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
+    // Squares on the sprite's or colliders' corners and edges (colliders' in their green); while resizing, the size by the
+    // one being dragged.
+    private void DrawResizeHandles(DrawingContext dc)
+    {
+        var color = Brush(_model.Handles == SceneHandles.Collider ? "Brush.Status.Success" : "Brush.Accent");
+        var chrome = Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        Point? dragged = null;
+        foreach (var (shape, spot, point) in ResizeHandles())
+        {
+            var active = _drag == DragMode.Resize
+                ? shape == _resize?.Shape && spot == _resizeSpot
+                : _drag == DragMode.None && _overResize is var (overShape, overSpot) && overShape == shape && overSpot == spot;
+            var half = HandleSquare + (active ? 1 : 0);
+            var square = new Rect(point.X - half, point.Y - half, half * 2, half * 2);
+            dc.DrawRectangle(chrome, halo, square);
+            dc.DrawRectangle(active ? color : chrome, new Pen(color, 1.5), square);
+            if (active && _drag == DragMode.Resize)
+                dragged = point;
+        }
+
+        if (dragged is { } at && _resize?.Shape is { } resizing)
+        {
+            string Number(float value) => value.ToString("0.##", CultureInfo.CurrentCulture);
+            var size = resizing switch
+            {
+                Sprite sprite => sprite.Size,
+                BoxCollider box => box.Size,
+                _ => Vector2.Zero,
+            };
+            var label = Text(resizing is CircleCollider circle ? $"r {Number(circle.Radius)}" : $"{Number(size.X)} × {Number(size.Y)}", "Brush.Text.Primary");
+            var place = new Point(at.X + 12, at.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
     // The box being dragged, and outlines on what it will catch.
     private void DrawBoxSelection(DrawingContext dc)
     {
@@ -799,9 +848,16 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawRectangle(Faded("Brush.Accent", 0.12), new Pen(accent, 1), new Rect(_dragStartScreen, _boxEnd));
     }
 
+    // The zoom, and which handles are out when they aren't the scale ones.
     private void DrawZoomLabel(DrawingContext dc)
     {
-        var text = Text($"{_zoom / 64:P0}", "Brush.Text.Tertiary");
+        var handles = _model.Handles switch
+        {
+            SceneHandles.Resize => "Resize handles  ·  ",
+            SceneHandles.Collider => "Collider handles  ·  ",
+            _ => "",
+        };
+        var text = Text($"{handles}{_zoom / 64:P0}", "Brush.Text.Tertiary");
         dc.DrawText(text, new Point(ActualWidth - text.Width - 10, ActualHeight - text.Height - 8));
     }
 
@@ -869,7 +925,7 @@ public sealed class SceneViewControl : FrameworkElement
     /// </summary>
     private List<(Vector2 Spot, Point Screen)> ScaleHandles()
     {
-        if (HandleFrame() is not { } frame)
+        if (_model.Handles != SceneHandles.Scale || HandleFrame() is not { } frame)
             return [];
         var (width, height) = ((frame[1] - frame[0]).Length, (frame[3] - frame[0]).Length);
         if (Math.Min(width, height) < ScaleHandleRoom)
@@ -888,11 +944,51 @@ public sealed class SceneViewControl : FrameworkElement
             .FirstOrDefault();
 
     // A resize cursor along the line from the frame's middle out through the handle.
-    private Cursor ScaleCursor(Vector2 spot)
+    private Cursor ScaleCursor(Vector2 spot) =>
+        HandleFrame() is { } frame ? SizeCursor(FramePoint(frame, spot) - FramePoint(frame, Vector2.Zero)) : Cursors.SizeAll;
+
+    /// <summary>
+    /// The resize handles on the primary selection's sprite or colliders (see <see cref="SceneViewModel.ResizableShapes"/>),
+    /// in screen space, with their spots on each shape. As with the scale handles, a shape drawn too small to hold them
+    /// clear of its middle gets none until the view zooms in, and edges too short go without a middle one.
+    /// </summary>
+    private List<(Component Shape, Vector2 Spot, Point Screen)> ResizeHandles()
     {
-        if (HandleFrame() is not { } frame)
-            return Cursors.SizeAll;
-        var outward = FramePoint(frame, spot) - FramePoint(frame, Vector2.Zero);
+        if (_model.Handles == SceneHandles.Scale || HandleFrame() is null)
+            return [];
+        var handles = new List<(Component, Vector2, Point)>();
+        foreach (var shape in _model.ResizableShapes())
+        {
+            if (SceneViewModel.ShapeFrame.Of(shape) is not { } frame)
+                continue;
+            Point At(Vector2 spot) => ToScreen(frame.ToWorld(frame.HandleAt(spot)));
+            var (width, height) = ((At(new Vector2(1, 0)) - At(new Vector2(-1, 0))).Length, (At(new Vector2(0, 1)) - At(new Vector2(0, -1))).Length);
+            if (Math.Min(width, height) < ScaleHandleRoom)
+                continue;
+            handles.AddRange(frame.Spots
+                .Where(spot => frame.IsCircle || (spot.X == 0 ? width : spot.Y == 0 ? height : double.MaxValue) >= EdgeHandleRoom)
+                .Select(spot => (shape, spot, At(spot))));
+        }
+
+        return handles;
+    }
+
+    // The resize handle under a point (the nearest, where they crowd), if any.
+    private (Component Shape, Vector2 Spot)? ResizeHandleAt(Point screen) =>
+        ResizeHandles().Where(h => (screen - h.Screen).Length <= HandleSquare + 4)
+            .OrderBy(h => (screen - h.Screen).Length)
+            .Select(h => ((Component, Vector2)?)(h.Shape, h.Spot))
+            .FirstOrDefault();
+
+    // A resize cursor out from the shape's middle through the handle.
+    private Cursor ResizeCursor(Component shape, Vector2 spot) =>
+        SceneViewModel.ShapeFrame.Of(shape) is { } frame
+            ? SizeCursor(ToScreen(frame.ToWorld(frame.HandleAt(spot))) - ToScreen(frame.ToWorld(frame.Center)))
+            : Cursors.SizeAll;
+
+    // The resize cursor closest to a direction on screen (Y down).
+    private static Cursor SizeCursor(Vector outward)
+    {
         var angle = (Math.Atan2(-outward.Y, outward.X) * 180 / Math.PI + 360) % 180;
         return angle switch
         {
@@ -997,6 +1093,14 @@ public sealed class SceneViewControl : FrameworkElement
             _rotateTotal = 0;
             BeginDrag(DragMode.Rotate, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && ResizeHandleAt(position) is var (shape, resizeSpot) && _model.BeginResize(shape) is { } resize)
+        {
+            _resize = resize;
+            _resizeSpot = resizeSpot;
+            _resizePress = ToWorld(position);
+            BeginDrag(DragMode.Resize, position);
+            Cursor = ResizeCursor(shape, resizeSpot);
+        }
         else if (e.ChangedButton == MouseButton.Left && ScaleHandleAt(position) is { } spot && _model.BeginScale() is { } scale)
         {
             _scale = scale;
@@ -1053,11 +1157,16 @@ public sealed class SceneViewControl : FrameworkElement
         {
             var over = IsOverRotateHandle(position);
             var overScale = over ? null : ScaleHandleAt(position);
-            if (over != _overHandle || overScale != _overScale)
+            var overResize = over ? null : ResizeHandleAt(position);
+            if (over != _overHandle || overScale != _overScale || overResize != _overResize)
             {
                 _overHandle = over;
                 _overScale = overScale;
-                Cursor = over ? Cursors.Hand : overScale is { } spot ? ScaleCursor(spot) : null;
+                _overResize = overResize;
+                Cursor = over ? Cursors.Hand
+                    : overScale is { } spot ? ScaleCursor(spot)
+                    : overResize is var (shape, resizeSpot) ? ResizeCursor(shape, resizeSpot)
+                    : null;
                 InvalidateVisual();
             }
 
@@ -1067,6 +1176,15 @@ public sealed class SceneViewControl : FrameworkElement
         if (_drag == DragMode.Scale)
         {
             _scale?.To(ScaleFactor(_scale, ToWorld(position)), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+            return;
+        }
+
+        if (_drag == DragMode.Resize)
+        {
+            // The handle follows the cursor from where it was pressed, so grabbing it a little off doesn't jump.
+            if (_resize?.Frame is { } frame)
+                _resize.Drag(_resizeSpot, frame.HandleAt(_resizeSpot) + frame.ToLocal(ToWorld(position)) - frame.ToLocal(_resizePress),
+                    proportional: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
             return;
         }
 
@@ -1278,6 +1396,14 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
+        // S, R and C pick what the square handles do: scale, resize the sprite, or resize the colliders.
+        if (e.Key is Key.S or Key.R or Key.C && Keyboard.Modifiers == ModifierKeys.None && _drag == DragMode.None)
+        {
+            _model.Handles = e.Key switch { Key.R => SceneHandles.Resize, Key.C => SceneHandles.Collider, _ => SceneHandles.Scale };
+            e.Handled = true;
+            return;
+        }
+
         if (PaintTarget is { } tilemap)
         {
             switch (e.Key)
@@ -1359,6 +1485,14 @@ public sealed class SceneViewControl : FrameworkElement
             _scale?.End();
             _scale = null;
             _overScale = null;
+            InvalidateVisual();
+        }
+
+        if (mode == DragMode.Resize)
+        {
+            _resize?.End();
+            _resize = null;
+            _overResize = null;
             InvalidateVisual();
         }
 

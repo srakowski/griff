@@ -266,6 +266,57 @@ public sealed class ScaleEntitiesEdit : IEdit
     }
 }
 
+/// <summary>
+/// Sets several properties together as one step, e.g. resizing a shape in the Scene view: a sprite's size with its
+/// entity's position, or a collider's size with its offset. Consecutive sets of the same properties merge, so a whole
+/// drag undoes in one go.
+/// </summary>
+public sealed class SetPropertyGroupEdit : IComponentEdit
+{
+    private readonly IReadOnlyList<SetPropertyEdit> _edits;
+
+    public SetPropertyGroupEdit(string description, IReadOnlyList<(Component Component, PropertyDescriptor Property, object? Value)> values)
+        : this(description, values.Select(v => new SetPropertyEdit(v.Component, v.Property, v.Value)).ToList())
+    {
+    }
+
+    private SetPropertyGroupEdit(string description, IReadOnlyList<SetPropertyEdit> edits)
+    {
+        Description = description;
+        _edits = edits;
+    }
+
+    public string Description { get; }
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry) =>
+        _edits.Select(e => e.Remap(replaced, registry)).OfType<SetPropertyEdit>().ToList() is { Count: > 0 } edits
+            ? new SetPropertyGroupEdit(Description, edits)
+            : null;
+
+    public void Apply()
+    {
+        foreach (var edit in _edits)
+            edit.Apply();
+    }
+
+    public void Revert()
+    {
+        for (var i = _edits.Count - 1; i >= 0; i--)
+            _edits[i].Revert();
+    }
+
+    public bool TryMerge(IEdit next)
+    {
+        if (next is not SetPropertyGroupEdit other || other.Description != Description || other._edits.Count != _edits.Count ||
+            _edits.Where((edit, i) => edit.Component != other._edits[i].Component || edit.Property.Name != other._edits[i].Property.Name).Any())
+            return false;
+
+        for (var i = 0; i < _edits.Count; i++)
+            _edits[i].TryMerge(other._edits[i]);
+        return true;
+    }
+}
+
 public sealed class RenameEntityEdit(Entity entity, string name) : IEdit
 {
     private readonly string _oldName = entity.Name;

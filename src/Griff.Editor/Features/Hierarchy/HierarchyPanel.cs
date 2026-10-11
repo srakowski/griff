@@ -306,7 +306,7 @@ public sealed class HierarchyPanel : ToolPanel
 
     private static bool IsPropertyOnly(IEdit edit) => edit switch
     {
-        SetPropertyEdit or SetPropertiesEdit => true,
+        SetPropertyEdit or SetPropertiesEdit or SetPropertyGroupEdit => true,
         CompositeEdit composite => composite.Edits.All(IsPropertyOnly),
         _ => false,
     };

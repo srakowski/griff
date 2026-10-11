@@ -1,4 +1,5 @@
 using System.Numerics;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
 using Griff.Rendering;
@@ -8,16 +9,42 @@ using Transform = Griff.Scenes.Transform;
 
 namespace Griff.Editor.Features.SceneView;
 
+/// <summary>What the Scene view's square handles on the primary selection do.</summary>
+public enum SceneHandles
+{
+    /// <summary>Scale it: its transform's scale, and everything else selected with it.</summary>
+    Scale,
+
+    /// <summary>Resize its sprite: the sprite's size, around the entity's position.</summary>
+    Resize,
+
+    /// <summary>Resize its box and circle colliders: a box's size and offset (its opposite side stays), a circle's radius.</summary>
+    Collider,
+}
+
 /// <summary>
-/// What the Scene view does with the selection: picking everything inside a box, and moving, turning or scaling
-/// everything selected together. The view's drags call these, and agents can too (positions are world units, Y up).
+/// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
+/// selected together, and resizing the primary selection's sprite and colliders. The view's drags call these, and agents
+/// can too (positions are world units, Y up).
 /// </summary>
-public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
+public sealed class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {
     /// <summary>The shape of a camera's frame, as the game's window is.</summary>
     public const double CameraAspect = 16.0 / 9.0;
 
     private const float SnapStep = 0.5f;
+
+    private SceneHandles _handles;
+
+    /// <summary>
+    /// What the square handles on the primary selection do: scale it (the default), resize its sprite, or resize its
+    /// box and circle colliders. View > Scale Handles, Resize Handles and Collider Handles switch it.
+    /// </summary>
+    public SceneHandles Handles
+    {
+        get => _handles;
+        set => SetProperty(ref _handles, value);
+    }
 
     /// <summary>
     /// Selects every entity inside the box between two corners in the world: things that draw (sprites, tilemaps,
@@ -188,6 +215,61 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         var world = primary.Transform.WorldMatrix;
         return new SelectionScale(document, scaling, anchor, Flat(primary.Transform.WorldPosition),
             Flat(Vector3.TransformNormal(Vector3.UnitX, world)), Flat(Vector3.TransformNormal(Vector3.UnitY, world)));
+    }
+
+    /// <summary>
+    /// The primary selection's shapes the square handles resize in the current <see cref="Handles"/> mode: its sprite
+    /// (Resize), or its box and circle colliders (Collider). Empty when scaling, or with nothing selected.
+    /// </summary>
+    public IReadOnlyList<Component> ResizableShapes()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+            return [];
+        return Handles switch
+        {
+            SceneHandles.Resize => primary.Components.OfType<Sprite>().Take(1).ToList<Component>(),
+            SceneHandles.Collider => primary.Components.Where(c => c is BoxCollider or CircleCollider).ToList(),
+            _ => [],
+        };
+    }
+
+    /// <summary>
+    /// Resizes a shape on the primary selection as one undo step: <paramref name="component"/> is "Sprite",
+    /// "BoxCollider" or "CircleCollider" (its first one). <paramref name="size"/> is the new size in its own units, as
+    /// the Inspector shows it (a circle's diameter, as its X); <paramref name="keep"/> is the point of it that stays
+    /// where it is, from -1 to 1 along its own axes: (-1, 0) keeps the left edge, (0, 0) the middle. A box or circle
+    /// keeps it by moving its offset; a sprite by moving its entity, and everything on it (its colliders and children)
+    /// with it, so (0, 0) is usually what a sprite wants, as its handles do.
+    /// </summary>
+    public void ResizeShape(string component, Vector2 size, Vector2 keep)
+    {
+        var shape = selection.Entity?.Components.FirstOrDefault(c => c is Sprite or BoxCollider or CircleCollider &&
+            string.Equals(c.GetType().Name, component.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (shape is null || BeginResize(shape) is not { } resize)
+            return;
+        workspace.Scene!.History.Seal();
+        resize.To(size, keep);
+        resize.End();
+    }
+
+    /// <summary>
+    /// Starts resizing a sprite, box collider or circle collider on the primary selection, for a drag of one of its
+    /// handles: <see cref="ShapeResize.Drag"/> resizes it from where it started, and the whole drag is one undo step.
+    /// Null when it isn't the primary selection's, or its entity is squashed flat.
+    /// </summary>
+    public ShapeResize? BeginResize(Component shape)
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene ||
+            shape.Entity != primary || ShapeFrame.Of(shape) is not { } frame)
+            return null;
+
+        PropertyDescriptor Property(Component c, string name) => workspace.Components.Get(c.GetType()).Properties.Single(p => p.Name == name);
+        return shape switch
+        {
+            Sprite => new ShapeResize(document, shape, frame, Property(shape, nameof(Sprite.Size)), Property(primary.Transform, nameof(Transform.Position))),
+            BoxCollider => new ShapeResize(document, shape, frame, Property(shape, nameof(BoxCollider.Size)), Property(shape, nameof(BoxCollider.Offset))),
+            _ => new ShapeResize(document, shape, frame, Property(shape, nameof(CircleCollider.Radius)), Property(shape, nameof(CircleCollider.Offset))),
+        };
     }
 
     /// <summary>World-space corners of what the entity draws (its sprite, tilemap or camera frame), or null if it draws none of those.</summary>
@@ -423,5 +505,187 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         }
 
         private static Vector2 Direction(Vector2 v) => v.LengthSquared() < 1e-12f ? Vector2.Zero : Vector2.Normalize(v);
+    }
+
+    /// <summary>
+    /// Where a sprite, box collider or circle collider is, in its own units (as the Inspector shows its size): a point
+    /// there is <see cref="Origin"/> plus so much of <see cref="AxisX"/> and <see cref="AxisY"/> in the world. A sprite
+    /// turns and stretches with its entity; colliders ignore rotation, so theirs lie along the world's axes.
+    /// </summary>
+    public readonly record struct ShapeFrame(Vector2 Origin, Vector2 AxisX, Vector2 AxisY, Vector2 Center, Vector2 Size, bool IsCircle)
+    {
+        private static readonly Vector2[] RectangleSpots =
+            [new(-1, -1), new(0, -1), new(1, -1), new(1, 0), new(1, 1), new(0, 1), new(-1, 1), new(-1, 0)];
+
+        private static readonly Vector2[] CircleSpots = [new(0, -1), new(1, 0), new(0, 1), new(-1, 0)];
+
+        /// <summary>
+        /// The frame of a sprite, box collider or circle collider (a circle's size is its diameter, both ways), or null
+        /// for anything else, or when its entity is squashed flat.
+        /// </summary>
+        public static ShapeFrame? Of(Component shape)
+        {
+            if (shape.Entity is not { } entity || shape is not (Sprite or BoxCollider or CircleCollider))
+                return null;
+            var world = entity.Transform.WorldMatrix;
+            var (axisX, axisY) = (Flat(Vector3.TransformNormal(Vector3.UnitX, world)), Flat(Vector3.TransformNormal(Vector3.UnitY, world)));
+            // Colliders are boxes and circles along the world's axes, stretched by the scale (a circle by the larger).
+            var scale = new Vector2(axisX.Length(), axisY.Length());
+            var round = MathF.Max(scale.X, scale.Y);
+            var origin = Flat(entity.Transform.WorldPosition);
+            ShapeFrame frame = shape switch
+            {
+                Sprite sprite => new(origin, axisX, axisY, Vector2.Zero, sprite.Size, false),
+                BoxCollider box => new(origin, new Vector2(scale.X, 0), new Vector2(0, scale.Y), box.Offset, box.Size, false),
+                CircleCollider circle => new(origin, new Vector2(round, 0), new Vector2(0, round), circle.Offset, new Vector2(circle.Radius * 2), true),
+                _ => default,
+            };
+            return MathF.Abs(frame.AxisX.X * frame.AxisY.Y - frame.AxisX.Y * frame.AxisY.X) < 1e-8f ? null : frame;
+        }
+
+        /// <summary>
+        /// Where its handles are, from -1 to 1 along its own axes: corners and edge middles for a rectangle, the four
+        /// edges for a circle.
+        /// </summary>
+        public IReadOnlyList<Vector2> Spots => IsCircle ? CircleSpots : RectangleSpots;
+
+        /// <summary>A world point in the shape's own units.</summary>
+        public Vector2 ToLocal(Vector2 world)
+        {
+            var offset = world - Origin;
+            var det = AxisX.X * AxisY.Y - AxisX.Y * AxisY.X;
+            return new Vector2(offset.X * AxisY.Y - offset.Y * AxisY.X, AxisX.X * offset.Y - AxisX.Y * offset.X) / det;
+        }
+
+        /// <summary>A point in the shape's own units, in the world.</summary>
+        public Vector2 ToWorld(Vector2 local) => Origin + local.X * AxisX + local.Y * AxisY;
+
+        /// <summary>Where the handle at <paramref name="spot"/> is, in the shape's own units.</summary>
+        public Vector2 HandleAt(Vector2 spot) => Center + spot * Size / 2;
+    }
+
+    /// <summary>One resize of a sprite, box collider or circle collider, from <see cref="BeginResize"/>.</summary>
+    public sealed class ShapeResize
+    {
+        /// <summary>The step Ctrl snaps sizes to: half a unit (a circle's radius to a quarter, so it's half a unit across).</summary>
+        public const float SnapStep = 0.5f;
+
+        // Sizes never get smaller than this, and a drag leaves them on multiples of it.
+        private const float RoundStep = 0.01f;
+
+        private readonly SceneDocument _document;
+        private readonly PropertyDescriptor _size;
+        private readonly PropertyDescriptor _center;
+        private readonly Vector3 _position;
+        private readonly Matrix4x4 _parentInverse;
+
+        internal ShapeResize(SceneDocument document, Component shape, ShapeFrame frame, PropertyDescriptor sizeProperty, PropertyDescriptor centerProperty)
+        {
+            _document = document;
+            Shape = shape;
+            Frame = frame;
+            (_size, _center) = (sizeProperty, centerProperty);
+            var entity = shape.Entity!;
+            _position = entity.Transform.Position;
+            _parentInverse = entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse) ? inverse : Matrix4x4.Identity;
+            document.History.Seal();
+        }
+
+        /// <summary>The sprite or collider being resized.</summary>
+        public Component Shape { get; }
+
+        /// <summary>Where it was when the resize started; sizes and points are in its units.</summary>
+        public ShapeFrame Frame { get; }
+
+        private Vector2 Center => Frame.Center;
+
+        private Vector2 Size => Frame.Size;
+
+        /// <summary>
+        /// Drags the handle at <paramref name="spot"/> to <paramref name="to"/> (in the shape's own units): an edge
+        /// resizes one way, a corner both. A sprite grows around its entity's position (the opposite edge moves out as
+        /// much), as typing a new size does, so nothing else on the entity moves; a box keeps its opposite side where it
+        /// is, moving its offset; a circle grows or shrinks around its middle, whichever handle is dragged.
+        /// <paramref name="proportional"/> keeps the shape's proportions; <paramref name="snap"/> puts the size on a
+        /// multiple of <see cref="SnapStep"/>, and otherwise it lands on a hundredth.
+        /// </summary>
+        public void Drag(Vector2 spot, Vector2 to, bool proportional, bool snap)
+        {
+            var step = snap ? SnapStep : RoundStep;
+            if (Shape is CircleCollider)
+            {
+                var radius = Fit((to - Center).Length(), snap ? SnapStep / 2 : RoundStep);
+                Apply(new Vector2(radius * 2), Vector2.Zero);
+                return;
+            }
+
+            // A sprite grows around its entity's position, so nothing else on the entity moves; a box keeps its opposite
+            // side, moving its offset.
+            var aroundMiddle = Shape is Sprite;
+            var pinned = aroundMiddle ? Center : Center - spot * Size / 2;
+            var line = aroundMiddle ? spot * Size / 2 : spot * Size;
+            Vector2 size;
+            if (proportional)
+            {
+                // How far along the line from the pinned point to the handle the cursor is, fitted on the axis it leads
+                // with (X, unless it's the top or bottom edge); the other axis follows.
+                if (line.LengthSquared() < 1e-12f || MathF.Abs(spot.X != 0 ? Size.X : Size.Y) < 1e-6f)
+                    return;
+                var factor = Vector2.Dot(to - pinned, line) / line.LengthSquared();
+                if (spot.X != 0)
+                {
+                    var width = Fit(Size.X * factor, step);
+                    size = new Vector2(width, Fit(Size.Y * width / Size.X, RoundStep));
+                }
+                else
+                {
+                    var height = Fit(Size.Y * factor, step);
+                    size = new Vector2(Fit(Size.X * height / Size.Y, RoundStep), height);
+                }
+            }
+            else
+            {
+                var reach = (to - pinned) * spot * (aroundMiddle ? 2 : 1);
+                size = new Vector2(spot.X == 0 ? Size.X : Fit(reach.X, step), spot.Y == 0 ? Size.Y : Fit(reach.Y, step));
+            }
+
+            Apply(size, aroundMiddle ? Vector2.Zero : -spot);
+        }
+
+        /// <summary>
+        /// Resizes the shape to <paramref name="size"/> (in its own units; a circle's diameter as X), keeping the point
+        /// <paramref name="keep"/> of it (from -1 to 1 along its own axes) where it is. Sizes never reach zero.
+        /// </summary>
+        public void To(Vector2 size, Vector2 keep)
+        {
+            size = Vector2.Max(size, new Vector2(RoundStep));
+            Apply(Shape is CircleCollider ? new Vector2(size.X) : size, Vector2.Clamp(keep, -Vector2.One, Vector2.One));
+        }
+
+        /// <summary>Ends the drag, so the next resize is its own undo step.</summary>
+        public void End() => _document.History.Seal();
+
+        private void Apply(Vector2 size, Vector2 keep)
+        {
+            var center = Center + keep * (Size - size) / 2;
+            List<(Component, PropertyDescriptor, object?)> values = Shape switch
+            {
+                // A sprite is always around its entity's position, so keeping a side moves the entity.
+                Sprite => [(Shape, _size, size), (Shape.Entity!.Transform, _center,
+                    _position + Vector3.TransformNormal(new Vector3(Frame.ToWorld(center) - Frame.ToWorld(Center), 0), _parentInverse))],
+                CircleCollider => [(Shape, _size, size.X / 2), (Shape, _center, center)],
+                _ => [(Shape, _size, size), (Shape, _center, center)],
+            };
+            if (values.All(v => Equals(v.Item2.GetValue(v.Item1), v.Item3)))
+                return;
+            _document.Execute(new SetPropertyGroupEdit($"Resize {Shape.GetType().Name}", values));
+        }
+
+        // A size on a multiple of the step, and at least one step.
+        private static float Fit(float value, float step)
+        {
+            var perUnit = MathF.Round(1 / step);
+            return MathF.Max(step, MathF.Round(value * perUnit) / perUnit);
+        }
     }
 }

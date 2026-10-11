@@ -330,6 +330,31 @@ public class EditHistoryTests
     }
 
     [Fact]
+    public void SetPropertyGroup_SetsTogether_MergesWhileUnsealed_AndUndoesInOneStep()
+    {
+        var entity = new Entity("Plank");
+        var sprite = entity.AddComponent<Sprite>();
+        var size = _registry.Get(typeof(Sprite)).Properties.Single(p => p.Name == nameof(Sprite.Size));
+
+        _history.Seal();
+        _history.Execute(new SetPropertyGroupEdit("Resize Sprite", [(sprite, size, new Vector2(2, 1)), (entity.Transform, PositionProperty, new Vector3(0.5f, 0, 0))]));
+        _history.Execute(new SetPropertyGroupEdit("Resize Sprite", [(sprite, size, new Vector2(3, 1)), (entity.Transform, PositionProperty, new Vector3(1, 0, 0))]));
+        Assert.Equal(new Vector2(3, 1), sprite.Size);
+        Assert.Equal(new Vector3(1, 0, 0), entity.Transform.Position);
+        Assert.Equal("Resize Sprite", _history.UndoDescription);
+
+        // Other properties are their own step.
+        _history.Execute(new SetPropertyGroupEdit("Resize Sprite", [(sprite, size, new Vector2(4, 1))]));
+        _history.Undo();
+        Assert.Equal(new Vector2(3, 1), sprite.Size);
+
+        _history.Undo();
+        Assert.Equal(Vector2.One, sprite.Size);
+        Assert.Equal(Vector3.Zero, entity.Transform.Position);
+        Assert.False(_history.CanUndo);
+    }
+
+    [Fact]
     public void SetProperties_FollowsRebuiltComponents()
     {
         var (a, b) = (new Entity("A"), new Entity("B"));

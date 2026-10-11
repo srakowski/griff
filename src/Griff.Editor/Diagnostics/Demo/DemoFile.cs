@@ -432,6 +432,36 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(handle, scalePivot + ex * along * factors.X + ey * across * factors.Y, scaleModifiers);
                 await DemoUi.Settle();
                 break;
+            case "resize":
+                // "resize: right = 6" (or "BoxCollider.top-right = 2, 1", "Ctrl+CircleCollider.right = 0.75"): drags that
+                // resize handle to where the shape gets that size, in its own units (a circle's radius). One number on a
+                // rectangle sets the size along the handle's axis and keeps the proportions.
+                var (resizeText, resizeModifiers) = ParseModifiedName(a);
+                var (resizeName, sizeText) = Split2(resizeText, '=');
+                var (shape, resizeSpot, resizeFrom) = ui.ResizeHandle(resizeName)
+                    ?? throw new InvalidOperationException($"The {resizeName} resize handle isn't showing: pick Resize or Collider handles and select something with that shape, big enough.");
+                var shapeFrame = SceneViewModel.ShapeFrame.Of(shape)!.Value;
+                System.Numerics.Vector2 resizeTo;
+                if (shapeFrame.IsCircle)
+                    resizeTo = shapeFrame.Center + resizeSpot * float.Parse(sizeText, CultureInfo.InvariantCulture);
+                else
+                {
+                    var current = shapeFrame.Size;
+                    var newSize = sizeText.Contains(',') ? Vector(sizeText) : Proportional(float.Parse(sizeText, CultureInfo.InvariantCulture));
+                    System.Numerics.Vector2 Proportional(float lead) => resizeSpot.X != 0
+                        ? new System.Numerics.Vector2(lead, current.Y * lead / current.X)
+                        : new System.Numerics.Vector2(current.X * lead / current.Y, lead);
+                    // A sprite grows around its middle; a box keeps its opposite side.
+                    resizeTo = shape is Griff.Scenes.Sprite
+                        ? shapeFrame.Center + resizeSpot * newSize / 2
+                        : shapeFrame.Center - resizeSpot * current / 2 + resizeSpot * newSize;
+                    resizeTo = new System.Numerics.Vector2(resizeSpot.X == 0 ? shapeFrame.Center.X : resizeTo.X, resizeSpot.Y == 0 ? shapeFrame.Center.Y : resizeTo.Y);
+                }
+
+                var resizeWorld = shapeFrame.ToWorld(resizeTo);
+                await Input.DragWith(resizeFrom, ui.World(resizeWorld.X, resizeWorld.Y), resizeModifiers);
+                await DemoUi.Settle();
+                break;
             case "expectat":
                 // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
                 var (atName, atText) = Split2(a, '=');
@@ -1126,7 +1156,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             var handle = name.Equals("rotate", StringComparison.OrdinalIgnoreCase)
                 ? ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.")
-                : ui.ScaleHandle(name) ?? throw new InvalidOperationException($"The {name} scale handle isn't showing.");
+                : ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }
 

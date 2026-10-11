@@ -118,7 +118,33 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// </summary>
     public Point? ScaleHandle(string name)
     {
-        var spot = name.Trim().ToLowerInvariant() switch
+        var spot = HandleSpot(name);
+        var handles = (IEnumerable<(Vector2 Spot, Point Screen)>)SceneScaleHandles.Invoke(sceneView, [])!;
+        return handles.Where(h => h.Spot == spot).Select(h => (Point?)sceneView.PointToScreen(h.Screen)).FirstOrDefault();
+    }
+
+    private static readonly MethodInfo SceneResizeHandles = typeof(SceneViewControl).GetMethod("ResizeHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// One of the Scene view's resize handles (with Resize or Collider handles out): the shape it's on, its spot and
+    /// where it is on screen, by its place on the shape ("right", "top-left"...), after the shape's component when
+    /// there's more than one ("CircleCollider.right"). Null when it isn't showing.
+    /// </summary>
+    public (Griff.Scenes.Component Shape, Vector2 Spot, Point Screen)? ResizeHandle(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        var (component, place) = dot < 0 ? (null, name) : (name[..dot].Trim(), name[(dot + 1)..]);
+        var spot = HandleSpot(place);
+        var handles = (IEnumerable<(Griff.Scenes.Component Shape, Vector2 Spot, Point Screen)>)SceneResizeHandles.Invoke(sceneView, [])!;
+        return handles
+            .Where(h => h.Spot == spot && (component is null || h.Shape.GetType().Name.Equals(component, StringComparison.OrdinalIgnoreCase)))
+            .Select(h => ((Griff.Scenes.Component, Vector2, Point)?)(h.Shape, h.Spot, sceneView.PointToScreen(h.Screen)))
+            .FirstOrDefault();
+    }
+
+    // A handle's place on the selection or shape, as its spot from -1 to 1 along its own axes.
+    private static Vector2 HandleSpot(string name) =>
+        name.Trim().ToLowerInvariant() switch
         {
             "top-left" => new Vector2(-1, 1),
             "top" => new Vector2(0, 1),
@@ -128,11 +154,8 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             "bottom" => new Vector2(0, -1),
             "bottom-left" => new Vector2(-1, -1),
             "left" => new Vector2(-1, 0),
-            _ => throw new FormatException($"No scale handle \"{name}\": top-left, top, top-right, right, bottom-right, bottom, bottom-left or left."),
+            _ => throw new FormatException($"No handle \"{name}\": top-left, top, top-right, right, bottom-right, bottom, bottom-left or left."),
         };
-        var handles = (IEnumerable<(Vector2 Spot, Point Screen)>)SceneScaleHandles.Invoke(sceneView, [])!;
-        return handles.Where(h => h.Spot == spot).Select(h => (Point?)sceneView.PointToScreen(h.Screen)).FirstOrDefault();
-    }
 
     private static readonly FieldInfo PanField = typeof(SceneViewControl).GetField("_pan", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly FieldInfo ZoomField = typeof(SceneViewControl).GetField("_zoom", BindingFlags.NonPublic | BindingFlags.Instance)!;

@@ -1,0 +1,51 @@
+title: Resize in the Scene view
+intro: Drag a sprite's edges to change its size, and a collider's to fit it, right in the Scene view.
+project: TopDown | Scene Resize
+
+create: Sprite
+rename: Plank
+set: Transform.Position = 7, 1, 0
+set: Sprite.Size = 2, 0.5
+set: Sprite.Tint = #AB5236
+add: BoxCollider
+set: BoxCollider.Size = 2, 0.5
+deselect
+create: Sprite
+rename: Ball
+set: Transform.Position = 11, 1, 0
+set: Sprite.Tint = #29ADFF
+add: CircleCollider
+deselect
+
+chapter: Resize handles | View > Resize Handles, or R
+select: Plank
+look: 8.5, 1, 3
+say: Here's a plank to walk across. The scale handles would stretch it, and anything on it with it.
+menu: View > Resize Handles
+explain: handle:right | Resize handles | With resize handles out, the same squares change the sprite's size instead.
+resize: Ctrl+right = 4
+expectvalue: Plank.Sprite.Size.X = 4
+expectvalue: Plank.Transform.Scale.X = 1
+expectat: Plank = 7, 1
+explain: field:Sprite.Size | Size, not scale | It grows around its position, so its children and colliders stay where they are. Holding control snaps the size to half units.
+explain: world:5.5, 1.6, 8.5, 0.4 | The collider | But its collider, the green box, is still the old size.
+
+chapter: Collider handles | View > Collider Handles, or C
+menu: View > Collider Handles
+explain: handle:left | Collider handles | Collider handles are green, and sit on the colliders. Dragging one side leaves the other where it is.
+resize: Ctrl+left = 3
+expectvalue: Plank.BoxCollider.Size.X = 3
+expectvalue: Plank.BoxCollider.Offset.X = -0.5
+resize: Ctrl+right = 4
+expectvalue: Plank.BoxCollider.Size.X = 4
+expectvalue: Plank.BoxCollider.Offset.X = 0
+explain: field:BoxCollider.Offset | Size and offset | Its size and offset follow along, and now it fits the plank exactly.
+select: Ball
+say: A circle collider has four handles, and grows around its middle.
+resize: Ctrl+right = 0.75
+expectvalue: Ball.CircleCollider.Radius = 0.75
+explain: field:CircleCollider.Radius | Radius | That sets its radius. Each drag is one step to undo.
+key: Ctrl+Z
+expectvalue: Ball.CircleCollider.Radius = 0.5
+menu: View > Scale Handles
+say: And the scale handles are one key away, whenever you want them back.

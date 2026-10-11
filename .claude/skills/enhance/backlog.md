@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Editor: selection and handles
 
-- [ ] Add Scene-view handles to resize sprites and box and circle colliders.
 - [ ] Add Scene-view handles for radii and distances: light radii, ranges and sight.
 
 ### Editor: references, paths and prefabs
@@ -163,3 +162,4 @@ grows. The headings only group items; build order is top to bottom.
 - [x] Lock entities in the Scene view so clicks and box selections pass through them: a backdrop or a big tilemap stops catching every drag. (2026-10-10) A lock by each Hierarchy row and Entity > Lock; locking is saved in the scene and covers children. Agents set "locked" with entity_create/entity_update, and click the Scene view with SceneViewModel.SelectAt.
 - [x] Add a rotate handle to the Scene view. (2026-10-10) A knob on a stem above the primary selection; several turn around the one picked last, as one undo step, landing on whole degrees (Ctrl snaps to 15). Agents turn the selection with SceneViewModel.RotateSelection. It turns Rotation Z only (the engine is 2D), and colliders still don't rotate in physics. Demos gain rotate:, the handle:rotate target and expectvalue on one axis of a vector.
 - [x] Add scale handles to the Scene view. (2026-10-10) Squares on the primary selection's corners (both axes) and edges (one), scaling around its position along its own axes; several scale around the one picked last, as one undo step. Shift keeps proportions, Ctrl snaps to tenths, otherwise hundredths; scales never reach zero, and dragging past the pivot flips. Handles hide on things drawn smaller than 16 pixels (zoom in). Agents scale with SceneViewModel.ScaleSelection. Others in a multi-selection that are turned differently from the primary scale along their own axes, which is only an approximation. Demos gain scale: and handle:<corner or edge>.
+- [x] Add Scene-view handles to resize sprites and box and circle colliders. (2026-10-10) View > Scale, Resize and Collider Handles (S, R, C in the Scene view) pick what the square handles do. A sprite resizes around its position, so its colliders and children stay put (keeping the opposite edge would move the entity and everything on it); a box collider keeps its opposite side (moving its offset), a circle its middle. Shift keeps proportions, Ctrl snaps to half units, one undo step per drag (SetPropertyGroupEdit). Only the entity picked last resizes. Agents set SceneViewModel.Handles and call ResizeShape. Demos gain resize:.

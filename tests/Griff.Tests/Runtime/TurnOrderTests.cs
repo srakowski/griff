@@ -171,9 +171,12 @@ public class TurnOrderTests
         Assert.True(red.GetComponent<TurnTaker>()!.IsTurn);
         Assert.Equal(["Blue", "Red"], started);
 
-        // Red swings; Blue's actions are back for its next turn.
+        // Red swings; the turn waits for the swing to land, then Blue's actions are back for its next turn.
         Press(Key.X);
-        Run(0.6f);
+        Run(0.1f);
+        Assert.Equal("Red", order.Current);
+        Assert.False(order.IsBetweenTurns);
+        Run(0.7f);
         Assert.Equal("Blue", order.Current);
         Assert.Equal(0, blueTaker.ActionsUsed);
         Assert.True(blueTaker.IsTurn);

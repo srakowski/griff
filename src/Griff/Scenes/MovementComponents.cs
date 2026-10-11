@@ -381,6 +381,9 @@ public sealed class GridMovement : Component
     // Seconds before a chase or a patrol tries again after something blocked its step.
     internal float Rest { get; set; }
 
+    // Taking turns, a chase or a patrol found nowhere to step on its turn this frame: it passes, unless it swings instead.
+    internal bool Idle { get; set; }
+
     // For four-way stepping: which axis was pressed most recently, and the ways pressed last frame on each axis.
     internal bool PreferVertical { get; set; }
 
@@ -391,8 +394,8 @@ public sealed class GridMovement : Component
 /// Steps its <see cref="GridMovement"/> after a <see cref="Target"/> once it's within <see cref="Range"/>, tile by tile
 /// and around walls, with no code: a roguelike's monsters, a maze's ghosts, a dungeon's slimes. It stops next to the
 /// target (see <see cref="StopDistance"/>) and turns to face it, so an <see cref="Attack"/> swings its way. It steps as
-/// fast as its grid movement's Step Time lets it. With a <see cref="GridPatrol"/> too, it walks its route until it spots
-/// the target, and goes back to it once it gives up.
+/// fast as its grid movement's Step Time lets it, or with a <see cref="TurnTaker"/> that has actions, a step an action.
+/// With a <see cref="GridPatrol"/> too, it walks its route until it spots the target, and goes back to it once it gives up.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(GridMovement))]
@@ -477,7 +480,10 @@ public sealed class GridPatrol : Component
     /// <summary>How it goes round its points: there and back, round in a loop, or once.</summary>
     public MoverMode Mode { get; set; }
 
-    /// <summary>Seconds to wait at each point.</summary>
+    /// <summary>
+    /// Seconds to wait at each point. Taking turns (a <see cref="TurnTaker"/> with actions), it waits that many of its
+    /// turns instead, rounded up.
+    /// </summary>
     public float Wait { get; set; } = 0.5f;
 
     /// <summary>Untick it to stop it where it is. <see cref="Switch"/>es tick and untick it.</summary>

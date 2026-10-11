@@ -30,8 +30,12 @@ public sealed partial class Game
     public IInput InputOf(Entity? entity)
     {
         // A turn taker waiting for its turn hears nothing.
-        if (Waiting(entity))
-            return _noInput ??= new NoInput(Input);
+        return Waiting(entity) ? _noInput ??= new NoInput(Input) : ControlsOf(entity);
+    }
+
+    // The controls of whoever plays an entity, whether or not it's its turn.
+    private IInput ControlsOf(Entity? entity)
+    {
         if (!Net.IsOnline || entity is null)
             return Input;
         var owner = Net.OwnerIdOf(entity);
@@ -329,5 +333,6 @@ public sealed partial class Game
     {
         OnNetCommand(StrategyCommand, RunStrategyOrder);
         OnNetCommand(EndTurnCommand, RunEndTurn);
+        OnNetCommand(GridStepCommand, RunGridStep);
     }
 }

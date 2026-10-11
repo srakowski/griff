@@ -1,0 +1,68 @@
+title: Roguelike turns
+intro: Grid movers that take turns, with no code: everything moves when the player moves.
+project: Empty | Crawl
+
+chapter: A dungeon | A grid player and two grid enemies
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111111111\n1............1\n1............1\n1.....11.....1\n1............1\n1............1\n11111111111111
+select: Main Camera
+set: Transform.Position.X = 7
+set: Transform.Position.Y = -3.5
+look: 7, -3.5, 4.5
+deselect
+create: Grid Player
+set: Transform.Position.X = 2.5
+set: Transform.Position.Y = -2.5
+add: Health
+deselect
+create: Grid Enemy
+rename: Slime
+set: Transform.Position.X = 11.5
+set: Transform.Position.Y = -2.5
+set: GridChase.Range = 0
+deselect
+create: Grid Enemy
+rename: Bat
+set: Transform.Position.X = 11.5
+set: Transform.Position.Y = -4.5
+set: GridChase.Range = 3
+say: Here's a small dungeon with a grid player, a slime that comes after the player from anywhere, and a bat that only notices it close up.
+
+chapter: Taking turns | Entity, Create Turn Order
+deselect
+create: Turn Order
+explain: menu:Entity | Entity, Create Turn Order | Create Turn Order makes the game turn-based. In a scene with grid movers, it sets up a roguelike.
+explain: field:TurnOrder.Between | Between | Turns follow straight on, with no gap between them, and its text counts the turns.
+select: Player
+explain: component:TurnTaker | Turn Taker | Every grid mover got a Turn Taker. The player is on the Player side.
+explain: field:TurnTaker.Actions | Actions | With one action, each step the player takes is their whole turn.
+select: Slime
+explain: component:TurnTaker | Enemy side | The slime and the bat are on the Enemy side, also with one action each: one step, or one swing, a turn.
+
+chapter: Everything moves when you move | Step, and the dungeon answers
+play
+wait: 1
+expectat: Slime = 11.5, -2.5
+explain: game | Waiting on you | Nothing moves until the player does.
+tap: Right
+wait: 0.6
+expectat: Player = 3.5, -2.5
+expectat: Slime = 10.5, -2.5
+explain: game | One step each | The player steps, and the slime steps once after them. The bat is too far away to notice, so it passes rather than holding up the turn.
+tap: Right
+wait: 0.6
+tap: Right
+wait: 0.6
+tap: Right
+wait: 0.6
+expectat: Slime = 7.5, -2.5
+expectat: Bat = 11.5, -4.5
+say: Step by step, the slime closes in.
+tap: Tab
+wait: 1.2
+expectvalue: Player.Health.Current = 2
+expectvalue: Turns.TurnOrder.Round = 6
+explain: game | A swing for a turn | Tab waits a turn. Next to the player, the slime swings instead of stepping, and its blow lands before the player can move again.
+stop
+say: That's roguelike turns with no code. Grid patrols wait whole turns at their points, and in network games each player's steps count on the host.

@@ -62,6 +62,55 @@ public sealed class GridEnemyEditorTests : IDisposable
     });
 
     [Fact]
+    public void CreateTurnOrder_InAGridScene_GivesItsGridMoversATurnEach_AndLaterOnesJoinIn() => EditorHost.Run(services =>
+    {
+        var workspace = Open(services);
+        var document = workspace.Scene!;
+        var commands = services.GetRequiredService<CommandRegistry>();
+        var selection = services.GetRequiredService<ISelection>();
+        Entity Create(string id)
+        {
+            selection.Select(null);
+            Wait(commands.Get(id).ExecuteAsync());
+            return selection.Entity!;
+        }
+
+        var player = Create("Entity.CreateGridPlayer");
+        var enemy = Create("Entity.CreateGridEnemy");
+        Assert.Null(player.GetComponent<TurnTaker>());
+
+        var turns = Create("Entity.CreateTurnOrder");
+        var order = turns.GetComponent<TurnOrder>()!;
+        Assert.Equal(0, order.Between);
+        Assert.Equal("Turn {1}", order.Format);
+        Assert.Equal("Wait", Assert.Single(turns.Children).GetComponent<Text>()!.Value);
+        Assert.Equal(("Player", 1), (player.GetComponent<TurnTaker>()!.Side, player.GetComponent<TurnTaker>()!.Actions));
+        Assert.Equal(("Enemy", 1), (enemy.GetComponent<TurnTaker>()!.Side, enemy.GetComponent<TurnTaker>()!.Actions));
+
+        // A grid enemy made now takes turns too.
+        var another = Create("Entity.CreateGridEnemy");
+        Assert.Equal(("Enemy", 1), (another.GetComponent<TurnTaker>()!.Side, another.GetComponent<TurnTaker>()!.Actions));
+
+        // Undoing the turn order takes the turn takers it gave out with it.
+        document.History.Undo();
+        document.History.Undo();
+        Assert.DoesNotContain(turns, document.Scene.Entities);
+        Assert.Null(player.GetComponent<TurnTaker>());
+        Assert.Null(enemy.GetComponent<TurnTaker>());
+    });
+
+    [Fact]
+    public void CreateTurnOrder_WithNoGridMovers_IsTheRealTimeTurnOrder() => EditorHost.Run(services =>
+    {
+        Open(services);
+        Wait(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateTurnOrder").ExecuteAsync());
+
+        var turns = services.GetRequiredService<ISelection>().Entity!;
+        Assert.Equal(0.5f, turns.GetComponent<TurnOrder>()!.Between);
+        Assert.Equal("End Turn", Assert.Single(turns.Children).GetComponent<Text>()!.Value);
+    });
+
+    [Fact]
     public void AGridPatrolsRoute_IsDrawnThroughTheMiddlesOfItsCells() => EditorHost.Run(_ =>
     {
         var scene = new Scene();

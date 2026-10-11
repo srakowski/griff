@@ -172,6 +172,7 @@ public sealed partial class Game
         });
         RunStrategy();
         RunAttacks();
+        PassIdleGridMovers();
         RunTimers();
         RunCoroutines();
         RunTweens();

@@ -7,7 +7,9 @@ namespace Griff.Scenes;
 /// attacks and shooters hold still; everything else (physics, animations, things with no turn taker) runs in real time
 /// as ever, so a turn can be a stretch of real-time play, as in Worms. A turn ends when its side presses End Turn (Tab,
 /// the gamepad's Back, or a button whose Action is End Turn), when its time runs out, or once every turn taker on it has
-/// used its actions. With a <see cref="Text"/> beside it, it shows whose turn it is.
+/// used its actions. With a <see cref="Text"/> beside it, it shows whose turn it is. For a roguelike, where everything
+/// moves when the player moves, give the grid player and the grid enemies turn takers with 1 action and set
+/// <see cref="Between"/> to 0: each step is a turn, and an enemy with nowhere to go passes.
 /// </summary>
 /// <remarks>
 /// One per scene (the first is used). In a network game the host runs it, and with <see cref="Multiplayer.Teams"/> each
@@ -125,8 +127,9 @@ public sealed class TurnOrder : Component
 /// Takes turns in the scene's <see cref="TurnOrder"/>: it acts only on its <see cref="Side"/>'s turn. Off its turn the
 /// player's controls don't reach it (nor scripts on it reading input) and its Patrol, Chase, Grid Chase, Grid Patrol,
 /// Attack and Shooter hold still; it still falls, gets pushed and gets hurt. Give it <see cref="Actions"/> to limit what
-/// it does in a turn: each attack swing and each shot uses one, and once every turn taker on a side has used theirs, the
-/// turn passes.
+/// it does in a turn: each attack swing, each shot and each step of its Grid Movement uses one, and once every turn taker
+/// on a side has used theirs (and their swings have landed), the turn passes. With actions, a Grid Chase or Grid Patrol
+/// steps once an action and passes when it has nowhere to go or nothing to swing at, and a Grid Patrol waits whole turns.
 /// </summary>
 [Category("Gameplay")]
 [WorksWith(typeof(TurnOrder), Note = "the turns it takes, one per scene")]
@@ -140,8 +143,8 @@ public sealed class TurnTaker : Component
     public string? Side { get; set; } = "Player";
 
     /// <summary>
-    /// How many actions it gets each turn: attack swings, shots, or <see cref="Act"/> from a script. Once it has used
-    /// them it waits for its next turn. 0 has no limit, so its side's turn ends some other way.
+    /// How many actions it gets each turn: attack swings, shots, grid steps, or <see cref="Act"/> from a script. Once it
+    /// has used them it waits for its next turn. 0 has no limit, so its side's turn ends some other way.
     /// </summary>
     public int Actions { get; set; }
 

@@ -8,6 +8,7 @@ namespace Griff.Runtime;
 public sealed partial class Game
 {
     private const string EndTurnCommand = "griff.endturn";
+    private const string GridStepCommand = "griff.gridstep";
 
     // The scene's turn order as of this frame, so asking whether something is waiting doesn't look through the scene.
     private TurnOrder? _turnOrder;
@@ -180,7 +181,50 @@ public sealed partial class Game
         if (!sides.Any(s => HasTakers(takers, s)))
             return false;
         var mine = takers.Where(t => TurnOrder.SameSide(SideOf(t), order.Current)).ToList();
-        return mine.Count == 0 || mine.All(t => t.Actions > 0 && t.ActionsUsed >= t.Actions);
+        return mine.Count == 0 || mine.All(t => t.Actions > 0 && t.ActionsUsed >= t.Actions && !Swinging(t.Entity!));
+    }
+
+    // A swing lands before the turn passes, so whoever it's aimed at can't step out of the way on their own turn.
+    private static bool Swinging(Entity entity) =>
+        entity.GetComponents<Attack>().Any(a => a.IsAttacking);
+
+    /// <summary>
+    /// True if <paramref name="entity"/> takes turns a step at a time: it acts for a turn taker with a number of actions,
+    /// in a scene with a turn order. Each grid step it takes uses an action, and a grid chase or patrol with nowhere to go
+    /// on its turn passes.
+    /// </summary>
+    internal bool StepsByTurns(Entity entity) =>
+        _turnOrder is { } order && order.Entity?.Scene == Scene && order.SideList.Count > 0 && TurnTaker.Of(entity) is { Actions: > 0 };
+
+    // True while the computer takes its turn (or is about to).
+    private bool ComputersTurn() => _turnOrder is { Round: > 0 } order && order.IsComputer(order.Current);
+
+    // A player's grid step, taken on their own machine, on the machine that runs the game: it uses one of their
+    // character's actions.
+    private void RunGridStep(NetPlayer? player, object? args)
+    {
+        if (player is null || _turnOrder is not { } order)
+            return;
+        var mover = Scene.Entities.Where(SceneRenderer.IsActive)
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && Net.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } t && Acts(order, t));
+        if (mover is not null)
+            UseAction(mover);
+    }
+
+    // After attacks: a grid chase or patrol that found nowhere to go on its turn passes, using an action, unless it swung
+    // at something instead (or is waiting to swing again).
+    private void PassIdleGridMovers()
+    {
+        if (_turnOrder is null)
+            return;
+        foreach (var m in Active<GridMovement>())
+        {
+            if (!m.Idle)
+                continue;
+            m.Idle = false;
+            if (!m.Entity!.GetComponents<Attack>().Any(a => a.Queued || a.Phase != AttackPhase.Ready))
+                UseAction(m.Entity!);
+        }
     }
 
     private bool HasTakers(List<TurnTaker> takers, string side) => takers.Any(t => TurnOrder.SameSide(SideOf(t), side));

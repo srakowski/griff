@@ -72,6 +72,12 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     /// <summary>Entities to put inside the new one, e.g. an enemy's hitbox. Added in the same undo step.</summary>
     protected virtual IEnumerable<Entity> CreateChildren() => [];
 
+    /// <summary>Changes to what's already in the scene that go with the new entity. Made in the same undo step.</summary>
+    protected virtual IEnumerable<IEdit> EditScene(Scene scene) => [];
+
+    /// <summary>The scene it's created in.</summary>
+    protected Scene? Scene => workspace.Scene?.Scene;
+
     /// <summary>
     /// A draw order for a menu control: at least <paramref name="order"/>, and above anything drawn by the entity it's
     /// created inside (a button made on a panel draws over the panel's backdrop).
@@ -97,11 +103,14 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
         var entity = new Entity(EntityName);
         Configure(entity);
         var children = CreateChildren().ToList();
-        using (children.Count > 0 ? document.History.BeginGroup($"Add {entity.Name}") : null)
+        var edits = EditScene(document.Scene).ToList();
+        using (children.Count + edits.Count > 0 ? document.History.BeginGroup($"Add {entity.Name}") : null)
         {
             document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(selection.Entity)));
             foreach (var child in children)
                 document.Execute(new AddEntityEdit(document.Scene, child, entity));
+            foreach (var edit in edits)
+                document.Execute(edit);
         }
 
         selection.Select(entity);
@@ -411,6 +420,7 @@ public sealed class CreateGridPlayerCommand(IWorkspace workspace, ISelection sel
         CreatePlatformerPlayerCommand.AddPlayerShape(entity, new System.Numerics.Vector2(0.8f, 0.8f));
         entity.AddComponent<Body>().GravityScale = 0;
         entity.AddComponent<GridMovement>();
+        CreateTurnOrderCommand.JoinTurns(Scene, entity);
     }
 }
 
@@ -444,6 +454,7 @@ public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection sele
         // It swings at the player next to it (not diagonally), with a wind-up to see it coming.
         var attack = entity.AddComponent<Attack>();
         (attack.Action, attack.Target, attack.Range, attack.Windup, attack.Cooldown) = ("", "Player", 1.1f, 0.3f, 0.6f);
+        CreateTurnOrderCommand.JoinTurns(Scene, entity);
     }
 
     protected override IEnumerable<Entity> CreateChildren()
@@ -459,7 +470,10 @@ public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection sele
 
 /// <summary>
 /// Creates turn-based play: a <see cref="TurnOrder"/> whose text in the top-right corner says whose turn it is, with an
-/// End Turn button in the bottom-right corner. Give whatever takes turns a <see cref="TurnTaker"/> naming its side.
+/// End Turn button in the bottom-right corner. Give whatever takes turns a <see cref="TurnTaker"/> naming its side. In a
+/// scene with grid movers it sets up a roguelike instead, where everything moves when the player moves: each grid mover
+/// gets a turn taker with one action (players on the Player side, chasers and patrols on the Enemy side), turns follow
+/// straight on, the text counts turns and the button waits a turn. Grid players and enemies created later join in.
 /// </summary>
 public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
@@ -469,13 +483,20 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
     protected override string EntityName => "Turns";
 
+    private bool Grid => Scene is { } scene && GridMovers(scene).Any();
+
     protected override void Configure(Entity entity)
     {
         var anchor = entity.AddComponent<ScreenAnchor>();
         (anchor.Anchor, anchor.Offset) = (Anchor.TopRight, new System.Numerics.Vector2(-0.6f, -0.7f));
         var text = entity.AddComponent<Griff.Scenes.Text>();
         (text.Value, text.Size, text.Align, text.Order) = ("Player's turn", 0.6f, TextAlign.Right, OrderAbove(150));
-        entity.AddComponent<TurnOrder>();
+        var order = entity.AddComponent<TurnOrder>();
+        if (Grid)
+        {
+            (order.Between, order.Format) = (0, "Turn {1}");
+            text.Value = "Turn 1";
+        }
     }
 
     protected override IEnumerable<Entity> CreateChildren()
@@ -487,10 +508,38 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
         var sprite = end.AddComponent<Sprite>();
         (sprite.Size, sprite.Tint, sprite.Order) = (size, Griff.Color.FromBytes(0x3A, 0x3F, 0x4B), OrderAbove(150));
         var label = end.AddComponent<Griff.Scenes.Text>();
-        (label.Value, label.Size, label.Order) = ("End Turn", 0.45f, OrderAbove(150) + 1);
+        (label.Value, label.Size, label.Order) = (Grid ? "Wait" : "End Turn", 0.45f, OrderAbove(150) + 1);
         var button = end.AddComponent<Griff.Scenes.Button>();
         (button.Size, button.Action, button.Navigable) = (size, ButtonAction.EndTurn, false);
         yield return end;
+    }
+
+    // The grid movers that don't take turns yet join in, a step a turn.
+    protected override IEnumerable<IEdit> EditScene(Scene scene) =>
+        GridMovers(scene).Where(e => TurnTaker.Of(e) is null).Select(e => new AddComponentEdit(e, GridTurnTaker(e, null))).ToList();
+
+    /// <summary>
+    /// Gives a grid player or enemy being created a turn taker with one action, if its scene already has a turn order, so
+    /// it takes turns with everything else.
+    /// </summary>
+    internal static void JoinTurns(Scene? scene, Entity entity)
+    {
+        if (scene?.Entities.Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null) is { } order)
+            entity.AddComponent(GridTurnTaker(entity, order));
+    }
+
+    private static IEnumerable<Entity> GridMovers(Scene scene) => scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null);
+
+    // One action a turn, on the first side a person plays if it's a player, or the first the computer plays if it moves on
+    // its own.
+    private static TurnTaker GridTurnTaker(Entity entity, TurnOrder? order)
+    {
+        var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
+        var sides = order?.SideList ?? [];
+        var side = driven
+            ? sides.FirstOrDefault(s => order!.IsComputer(s)) ?? "Enemy"
+            : sides.FirstOrDefault(s => !order!.IsComputer(s)) ?? "Player";
+        return new TurnTaker { Side = side, Actions = 1 };
     }
 }
 

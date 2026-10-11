@@ -38,22 +38,28 @@ public sealed partial class Game
 
         // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run.
         var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
-        // Waiting for their turn, they finish the step under way and go no further.
-        var minds = Runs(entity) && !Waiting(entity);
+        // Waiting for their turn, they finish the step under way and go no further. Taking turns a step at a time, each
+        // step uses an action.
+        var waits = Waiting(entity);
+        var byTurns = StepsByTurns(entity);
+        var minds = Runs(entity) && !waits;
         var chase = minds ? entity.GetComponent<GridChase>() : null;
         var patrol = minds ? entity.GetComponent<GridPatrol>() : null;
         if (chase is not null)
             WatchForTarget(chase);
 
-        var way = m.Controllable && !driven ? GridWay(m, InputOf(entity).Move) : (X: 0, Y: 0);
+        // A player waiting while the computer takes its turn still hears its keys, so a step pressed then is taken as the
+        // turn comes back.
+        var controls = waits && byTurns && ComputersTurn() ? ControlsOf(entity) : InputOf(entity);
+        var way = m.Controllable && !driven ? GridWay(m, controls.Move) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
         m.HeldFor = way == m.Held ? m.HeldFor + Time.Delta : 0;
         m.Held = way;
         if (way != m.BumpedWay)
             m.BumpedWay = (0, 0);
-        if (way != (0, 0))
+        if (way != (0, 0) && !waits)
             m.Facing = new Vector2(way.X, way.Y);
-        if (pressed && m.Stepping)
+        if (pressed && (m.Stepping || waits))
             m.Buffered = way;
 
         var stepTime = Math.Max(0.02f, m.StepTime);
@@ -80,34 +86,43 @@ public sealed partial class Game
         if (patrol is not null)
         {
             CountPatrolSteps(patrol, grid);
-            if (chase is not { IsChasing: true })
+            // Taking turns, it waits turns rather than seconds: one goes by each time it would step.
+            if (chase is not { IsChasing: true } && !byTurns)
                 patrol.WaitLeft = Math.Max(0, patrol.WaitLeft - Time.Delta);
         }
 
         m.Rest = Math.Max(0, m.Rest - Time.Delta);
+        m.Idle = false;
         if (!m.Stepping)
         {
-            // A script's step first, then a way pressed during the last step, then the way held, then where a chase or a
-            // patrol wants to go.
-            var next = m.Queued ?? m.Buffered;
-            if (next is null && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
+            // A script's step first, then a way pressed during the last step (or while it waited for its turn), then the
+            // way held, then where a chase or a patrol wants to go.
+            var next = m.Queued ?? (waits ? null : m.Buffered);
+            if (next is null && !waits && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
                 next = way;
             var decided = false;
-            if (next is null && m.Rest <= 0 && (chase is not null || patrol is not null))
+            var thinks = chase is not null || patrol is not null;
+            if (next is null && thinks && (m.Rest <= 0 || byTurns))
             {
-                next = DrivenStep(m, grid, chase, patrol);
+                if (byTurns && patrol is { WaitLeft: > 0 } && chase is not { IsChasing: true })
+                    patrol.WaitLeft = Math.Max(0, patrol.WaitLeft - 1);
+                next = DrivenStep(m, grid, chase, patrol, byTurns);
                 decided = next is not null;
             }
 
             m.Queued = null;
-            m.Buffered = null;
+            if (!waits)
+                m.Buffered = null;
             if (next is { } step && step != (0, 0))
             {
                 TryGridStep(m, grid, step, Math.Min(spare, stepTime) / stepTime);
                 // Blocked (by the player, another enemy, a closed door): try again in a step's time, not every frame.
-                if (decided && !m.Stepping)
+                if (decided && !m.Stepping && !byTurns)
                     m.Rest = stepTime;
             }
+
+            // Taking turns, a chaser or a patrol with nowhere to go on its turn passes (unless it swings instead).
+            m.Idle = byTurns && thinks && !m.Stepping;
         }
 
         if (m.FlipSprite && MathF.Abs(m.Facing.X) > 0.1f)
@@ -154,6 +169,10 @@ public sealed partial class Game
         m.Stepping = true;
         MoveTo(entity, Vector2.Lerp(m.From, m.To, m.Progress));
         PlayIfSet(m.StepSound);
+        UseAction(entity);
+        // A player's own machine moves their character: the host, running the turns, hears of the step.
+        if (!Runs(entity) && StepsByTurns(entity))
+            Net.SendCommand(GridStepCommand, null);
         m.RaiseStepped(direction);
     }
 
@@ -204,12 +223,12 @@ public sealed partial class Game
     }
 
     // The step a chaser or a patrol takes next, if any: after the target while it's chasing, else round the route.
-    private (int X, int Y)? DrivenStep(GridMovement m, GridCells grid, GridChase? chase, GridPatrol? patrol)
+    private (int X, int Y)? DrivenStep(GridMovement m, GridCells grid, GridChase? chase, GridPatrol? patrol, bool byTurns)
     {
         if (chase is { IsChasing: true, TargetEntity: { } target })
             return ChaseStep(m, grid, chase, target);
         if (patrol is { Running: true })
-            return PatrolStep(m, grid, patrol);
+            return PatrolStep(m, grid, patrol, byTurns);
         return null;
     }
 
@@ -234,8 +253,9 @@ public sealed partial class Game
         return FirstStep(m, grid, theirs, target, closerIfNoWay: true);
     }
 
-    // Toward the point of its route the leg it's on heads for; at it, on to the next leg (after a wait).
-    private (int X, int Y)? PatrolStep(GridMovement m, GridCells grid, GridPatrol patrol)
+    // Toward the point of its route the leg it's on heads for; at it, on to the next leg (after a wait, in whole turns if
+    // it takes turns).
+    private (int X, int Y)? PatrolStep(GridMovement m, GridCells grid, GridPatrol patrol, bool byTurns)
     {
         if (patrol.WaitLeft > 0 || patrol.Path.Count < 2)
             return null;
@@ -261,7 +281,7 @@ public sealed partial class Game
             patrol.Leg++;
             if (goal == m.Cell && patrol.Wait > 0)
             {
-                patrol.WaitLeft = patrol.Wait;
+                patrol.WaitLeft = byTurns ? MathF.Ceiling(patrol.Wait) : patrol.Wait;
                 return null;
             }
         }

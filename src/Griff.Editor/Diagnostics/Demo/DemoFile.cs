@@ -398,6 +398,21 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(ScenePoint(dragFromText), ScenePoint(dragToText), dragModifiers);
                 await DemoUi.Settle();
                 break;
+            case "rotate":
+                // "rotate: Ctrl+45": drags the rotate handle that many degrees counterclockwise around the selection's pivot.
+                var (rotateText, rotateModifiers) = ParseModifiedName(a);
+                var degrees = double.Parse(rotateText, CultureInfo.InvariantCulture);
+                var knob = ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing: select something first.");
+                var pivotEntity = selection.Entity!;
+                var pivot = ui.World(pivotEntity.Transform.WorldPosition.X, pivotEntity.Transform.WorldPosition.Y);
+                // Screen Y points down, so counterclockwise in the world is a falling angle on screen.
+                var (radius, start) = ((knob - pivot).Length, Math.Atan2(knob.Y - pivot.Y, knob.X - pivot.X));
+                var steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(degrees) / 10));
+                var arc = Enumerable.Range(1, steps).Select(i => start - degrees * Math.PI / 180 * i / steps)
+                    .Select(angle => new Point(pivot.X + radius * Math.Cos(angle), pivot.Y + radius * Math.Sin(angle))).ToList();
+                await Input.DragWith(knob, arc, rotateModifiers, Math.Clamp(1400.0 / steps, 40, 250));
+                await DemoUi.Settle();
+                break;
             case "expectat":
                 // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
                 var (atName, atText) = Split2(a, '=');
@@ -419,13 +434,15 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new InvalidOperationException($"Expected {a} to show as mixed.");
                 break;
             case "expectvalue":
-                // "expectvalue: Red Gem.Sprite.Tint = #FFEC27": an entity's property has that value.
+                // "expectvalue: Red Gem.Sprite.Tint = #FFEC27": an entity's property has that value ("Plank.Transform.Rotation.Z
+                // = 45" for one axis of a vector).
                 var (valueTarget, wantValue) = Split2(a, '=');
                 var valueParts = valueTarget.Split('.', StringSplitOptions.TrimEntries);
-                if (valueParts.Length != 3)
-                    throw new FormatException("expectvalue: <Entity>.<Component>.<Field> = <value>");
-                if (!await Until(() => ValueMatches(PropertyText(valueParts[0], valueParts[1], valueParts[2]), wantValue), 3000))
-                    throw new InvalidOperationException($"Expected {valueTarget} = {wantValue}, but it's {PropertyText(valueParts[0], valueParts[1], valueParts[2]) ?? "not there"}.");
+                if (valueParts.Length is not (3 or 4))
+                    throw new FormatException("expectvalue: <Entity>.<Component>.<Field>[.<Axis>] = <value>");
+                string? ValueText() => PropertyText(valueParts[0], valueParts[1], valueParts[2], valueParts.Length == 4 ? valueParts[3] : null);
+                if (!await Until(() => ValueMatches(ValueText(), wantValue), 3000))
+                    throw new InvalidOperationException($"Expected {valueTarget} = {wantValue}, but it's {ValueText() ?? "not there"}.");
                 break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.
@@ -580,18 +597,32 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     }
 
     // A property of the first entity with that name, as text: colors as hex, numbers invariant. Null if it isn't there.
-    private string? PropertyText(string entityName, string componentName, string fieldName)
+    private string? PropertyText(string entityName, string componentName, string fieldName, string? axis = null)
     {
         var component = workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == entityName)?.Components
             .FirstOrDefault(c => c.GetType().Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
         var property = component is null ? null : workspace.Components.Get(component.GetType()).Properties
             .FirstOrDefault(p => p.Name.Equals(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
-        return property?.GetValue(component!) switch
+        var value = property?.GetValue(component!);
+        if (axis is not null)
+        {
+            value = (value, axis.ToUpperInvariant()) switch
+            {
+                (System.Numerics.Vector2 v, "X") => (object)v.X,
+                (System.Numerics.Vector2 v, "Y") => v.Y,
+                (System.Numerics.Vector3 v, "X") => v.X,
+                (System.Numerics.Vector3 v, "Y") => v.Y,
+                (System.Numerics.Vector3 v, "Z") => v.Z,
+                _ => null,
+            };
+        }
+
+        return value switch
         {
             null => null,
             Griff.Color color => color.ToHex(),
-            IFormattable value => value.ToString(null, CultureInfo.InvariantCulture),
-            var value => value.ToString(),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            var other => other.ToString(),
         };
     }
 
@@ -1070,6 +1101,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             var box = Numbers(name, 4);
             return new Rect(GameScreenPoint(new System.Numerics.Vector2((float)box[0], (float)box[1])),
                 GameScreenPoint(new System.Numerics.Vector2((float)box[2], (float)box[3])));
+        }
+
+        if (kind.Equals("handle", StringComparison.OrdinalIgnoreCase) && name.Equals("rotate", StringComparison.OrdinalIgnoreCase))
+        {
+            var knob = ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.");
+            return new Rect(knob.X - 18, knob.Y - 18, 36, 36);
         }
 
         if (!kind.Equals("world", StringComparison.OrdinalIgnoreCase))

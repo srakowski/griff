@@ -178,6 +178,50 @@ public sealed class SetPositionsEdit : IEdit
     }
 }
 
+/// <summary>
+/// Turns one or more entities (dragging the Scene view's rotate handle): each one's rotation, and its position as it
+/// swings around the turn's pivot, as one step. Consecutive turns of the same entities merge, so a whole drag undoes in
+/// one go.
+/// </summary>
+public sealed class RotateEntitiesEdit : IEdit
+{
+    private readonly IReadOnlyList<Transform> _transforms;
+    private readonly (System.Numerics.Vector3 Position, System.Numerics.Vector3 Rotation)[] _old;
+    private (System.Numerics.Vector3 Position, System.Numerics.Vector3 Rotation)[] _new;
+
+    public RotateEntitiesEdit(IReadOnlyList<Transform> transforms, IReadOnlyList<System.Numerics.Vector3> positions, IReadOnlyList<System.Numerics.Vector3> rotations)
+    {
+        if (transforms.Count != positions.Count || transforms.Count != rotations.Count)
+            throw new ArgumentException("One position and one rotation per transform.");
+        _transforms = transforms;
+        _old = transforms.Select(t => (t.Position, t.Rotation)).ToArray();
+        _new = positions.Zip(rotations).ToArray();
+    }
+
+    public string Description => _transforms.Count == 1 ? $"Rotate {_transforms[0].Entity?.Name}" : $"Rotate {_transforms.Count} entities";
+
+    public void Apply()
+    {
+        for (var i = 0; i < _transforms.Count; i++)
+            (_transforms[i].Position, _transforms[i].Rotation) = _new[i];
+    }
+
+    public void Revert()
+    {
+        for (var i = _transforms.Count - 1; i >= 0; i--)
+            (_transforms[i].Position, _transforms[i].Rotation) = _old[i];
+    }
+
+    public bool TryMerge(IEdit next)
+    {
+        if (next is not RotateEntitiesEdit other || !other._transforms.SequenceEqual(_transforms))
+            return false;
+
+        _new = other._new;
+        return true;
+    }
+}
+
 public sealed class RenameEntityEdit(Entity entity, string name) : IEdit
 {
     private readonly string _oldName = entity.Name;

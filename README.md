@@ -38,6 +38,7 @@ In the **Scene view**:
 - Click to select; Ctrl- or Shift-click adds one or takes it away.
 - Drag from empty space to select everything inside the box (hold Ctrl or Shift to add to the selection).
 - Drag to move: everything selected moves together, as one undo step (hold Ctrl to snap the one picked last to the grid).
+- Drag the round handle above the selected entity to rotate it. With several selected, they all turn around the one picked last, as one undo step. Angles land on whole degrees; hold Ctrl to snap to 15 degrees.
 - Press F to frame the selection.
 - Arrow keys nudge everything selected by half a unit (Shift for a tenth).
 - Drop an image to create a sprite, or a prefab to place a copy of it.
@@ -219,7 +220,7 @@ While the editor is open it runs a [Model Context Protocol](https://modelcontext
 
 - **Every command** in the menus and toolbar is a tool, named by its id (`Entity_CreatePlatformerPlayer`, `Game_Play`, `Scene_Save`) and described by its documentation. Commands that act on the selection take an `entity` (or `select` several first: Delete, Duplicate, Cut and Copy act on all of them); a question a command asks (a scene's name, saving changes) comes back to the agent, which answers it with `answers`.
 - **Every component**, Griff's and the project's scripts, can be added and set with `entity_create` and `entity_update` (values as scene files have them), described by `components_list` and `component_describe`. `scene_tree`, `entity_get` and `entity_find` look at the scene, the running game included. Each call is one undo step.
-- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection and moving, the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
+- **Every window, panel and editor service** (the Sprite Painter, the Sound Maker, the Controls window, the workspace, the Scene view's clicks, box selection, moving and rotating, the Inspector editing several entities at once...) can be read and worked with `ui_roots`, `ui_inspect`, `ui_set` and `ui_invoke`. Something picked from a list is given by its name, as a value or an argument: `ui_invoke` the Inspector's `AddComponent` with `["Health"]`.
 - **Files**: `asset_write` writes scripts (compiled at once, errors reported), pictures and sounds; `asset_read` reads them, pictures as images.
 - **Checking work**: `editor_screenshot` shows the game or the editor, `game_input` plays the running game with keys (and can pause it between moves), `editor_state` and `output_read` say what's going on.
 
@@ -554,6 +555,7 @@ Griff is young. Known gaps:
 - Shadows are hard-edged, and come from colliders and tiles rather than sprites' shapes.
 - Tilemaps use one tileset of up to 62 tiles.
 - Panels are resizable but not dockable.
+- The Scene view moves and rotates things, but doesn't scale or resize them yet: set **Scale** and sizes in the Inspector.
 - Dragging rows in the Hierarchy moves one at a time, even with several selected.
 - Strategy games' units only walk (no flying or water), and the fog of war is drawn in squares.
 - Multiplayer connects directly: to play over the internet, the host forwards their port (7777 by default) on their router; there's no matchmaking, relay or lobby server yet. Players' own machines move their own characters, which suits friends better than strangers (pick **Host** movement where cheating matters), and shots are judged where the host sees things, without rewinding for lag. Rewinding in the editor works with one player, and a network game can't hit-stop or slow down (it's everyone's).

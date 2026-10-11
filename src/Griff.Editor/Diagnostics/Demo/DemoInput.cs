@@ -118,7 +118,10 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
     }
 
     /// <summary>Drags from one point to another with modifier keys held (a Shift-drag adding a box to the selection).</summary>
-    public async Task DragWith(Point from, Point to, ModifierKeys modifiers)
+    public Task DragWith(Point from, Point to, ModifierKeys modifiers) => DragWith(from, [to], modifiers, 700);
+
+    /// <summary>Drags from a point through a path with modifier keys held (Ctrl snapping a turn of the rotate handle).</summary>
+    public async Task DragWith(Point from, IReadOnlyList<Point> path, ModifierKeys modifiers, double msPerSegment)
     {
         await MoveTo(from);
         await Gate();
@@ -129,7 +132,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
             Send(VirtualKey(m, down: true));
         try
         {
-            await Drag(from, [to], 700);
+            await Drag(from, path, msPerSegment);
         }
         finally
         {

@@ -11,6 +11,7 @@ using Griff.Rendering;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Point = System.Windows.Point;
+using Vector = System.Windows.Vector;
 using Transform = Griff.Scenes.Transform;
 
 namespace Griff.Editor.Features.SceneView;
@@ -19,6 +20,7 @@ namespace Griff.Editor.Features.SceneView;
 /// 2D view of the open scene. Y is up, one world unit is <see cref="_zoom"/> pixels.
 /// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects (Ctrl or Shift adds or takes away); dragging
 /// from empty space selects everything in the box; dragging a selected entity moves the whole selection (Ctrl snaps);
+/// dragging the rotate handle above the primary selection turns the selection around it (Ctrl snaps to 15 degrees);
 /// F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
@@ -32,6 +34,8 @@ public sealed class SceneViewControl : FrameworkElement
     private const double DragThreshold = 3;
     private const double PaletteCell = 28;
     private const int PaletteColumns = 8;
+    private const double HandleStem = 24;
+    private const double HandleRadius = 5;
 
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
@@ -53,6 +57,10 @@ public sealed class SceneViewControl : FrameworkElement
     private Entity? _pressed;
     private Point _boxEnd;
     private bool _boxAdds;
+    private SceneViewModel.SelectionRotate? _rotate;
+    private double _rotateLast;
+    private double _rotateTotal;
+    private bool _overHandle;
 
     // Tile painting.
     private int _brushTile;
@@ -89,6 +97,7 @@ public sealed class SceneViewControl : FrameworkElement
         Move,
         Box,
         Paint,
+        Rotate,
     }
 
     private PropertyDescriptor PositionProperty =>
@@ -225,6 +234,8 @@ public sealed class SceneViewControl : FrameworkElement
 
         if (_drag == DragMode.Box)
             DrawBoxSelection(dc);
+        else if (RotateHandle() is var (root, knob))
+            DrawRotateHandle(dc, root, knob);
 
         if (PaintTarget is { } painting)
             DrawPaintOverlay(dc, painting);
@@ -698,6 +709,34 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
     }
 
+    // A stem out of the top of the primary selection with a knob to drag; while turning, the circle the knob follows and
+    // the angle it's at.
+    private void DrawRotateHandle(DrawingContext dc, Point root, Point knob)
+    {
+        var accent = Brush("Brush.Accent");
+        var halo = new Pen(Brush("Brush.Surface.Chrome"), 4);
+        if (_drag == DragMode.Rotate && _rotate is not null)
+        {
+            var pivot = ToScreen(_rotate.Pivot);
+            var radius = (knob - pivot).Length;
+            dc.DrawEllipse(null, new Pen(Faded("Brush.Accent", 0.5), 1) { DashStyle = new DashStyle([4, 4], 0) }, pivot, radius, radius);
+        }
+
+        dc.DrawLine(halo, root, knob);
+        dc.DrawLine(new Pen(accent, 1.5), root, knob);
+        var grown = _overHandle || _drag == DragMode.Rotate ? 1.5 : 0;
+        dc.DrawEllipse(Brush("Brush.Surface.Chrome"), halo, knob, HandleRadius + grown, HandleRadius + grown);
+        dc.DrawEllipse(_overHandle || _drag == DragMode.Rotate ? accent : Brush("Brush.Surface.Chrome"), new Pen(accent, 2), knob, HandleRadius + grown, HandleRadius + grown);
+
+        if (_drag == DragMode.Rotate && _selection.Entity is { } turning)
+        {
+            var label = Text($"{turning.Transform.Rotation.Z.ToString("0.#", CultureInfo.CurrentCulture)}°", "Brush.Text.Primary");
+            var at = new Point(knob.X + 12, knob.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(Brush("Brush.Surface.Chrome"), null, new Rect(at.X - 4, at.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, at);
+        }
+    }
+
     // The box being dragged, and outlines on what it will catch.
     private void DrawBoxSelection(DrawingContext dc)
     {
@@ -721,6 +760,39 @@ public sealed class SceneViewControl : FrameworkElement
     /// <summary>Topmost unlocked entity under the point (see <see cref="SceneViewModel.EntityAt"/>); pivots are hit within a few pixels.</summary>
     private Entity? HitTest(Point screen) =>
         _document is null ? null : _model.EntityAt(ToWorld(screen), (float)((MarkerRadius + 3) / _zoom));
+
+    /// <summary>
+    /// Where the rotate handle is, in screen space: a stem from the top edge of the primary selection's outline (or its
+    /// marker) out along its up direction, ending in the knob. Null when there's nothing to turn, or while painting.
+    /// </summary>
+    private (Point Root, Point Knob)? RotateHandle()
+    {
+        if (_document is null || _selection.Entity is not { } entity || entity.Scene != _document.Scene || PaintTarget is not null)
+            return null;
+
+        var world = entity.Transform.WorldMatrix;
+        var up = Vector3.TransformNormal(Vector3.UnitY, world);
+        var direction = new Vector(up.X, -up.Y);
+        if (direction.Length < 1e-6)
+            direction = new Vector(0, -1);
+        direction.Normalize();
+
+        var pivot = ToScreen(ToVector2(entity.Transform.WorldPosition));
+        var root = SceneViewModel.Outline(entity) is { } corners
+            ? ToScreen((corners[2] + corners[3]) / 2)
+            : pivot + direction * (MarkerRadius + 3);
+        return (root, root + direction * HandleStem);
+    }
+
+    private bool IsOverRotateHandle(Point screen) =>
+        RotateHandle() is var (_, knob) && (screen - knob).Length <= HandleRadius + 4;
+
+    // The angle of a point around the turn's pivot, in degrees counterclockwise (the world is Y up).
+    private double AngleAround(Vector2 pivot, Point screen)
+    {
+        var offset = ToWorld(screen) - pivot;
+        return Math.Atan2(offset.Y, offset.X) * 180 / Math.PI;
+    }
 
     // ----- Tile palette -----
 
@@ -780,6 +852,13 @@ public sealed class SceneViewControl : FrameworkElement
         {
             BeginPaint(tilemap, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && IsOverRotateHandle(position) && _model.BeginRotate() is { } rotate)
+        {
+            _rotate = rotate;
+            _rotateLast = AngleAround(rotate.Pivot, position);
+            _rotateTotal = 0;
+            BeginDrag(DragMode.Rotate, position);
+        }
         else if (e.ChangedButton == MouseButton.Left)
         {
             var hit = HitTest(position);
@@ -825,7 +904,29 @@ public sealed class SceneViewControl : FrameworkElement
         }
 
         if (_drag == DragMode.None)
+        {
+            var over = IsOverRotateHandle(position);
+            if (over != _overHandle)
+            {
+                _overHandle = over;
+                Cursor = over ? Cursors.Hand : null;
+                InvalidateVisual();
+            }
+
             return;
+        }
+
+        if (_drag == DragMode.Rotate)
+        {
+            // Add up the small turns between mouse moves, so going round more than once keeps counting.
+            if (_rotate is null || (ToWorld(position) - _rotate.Pivot).Length() < 1e-6f)
+                return;
+            var angle = AngleAround(_rotate.Pivot, position);
+            _rotateTotal += Math.IEEERemainder(angle - _rotateLast, 360);
+            _rotateLast = angle;
+            _rotate.To((float)_rotateTotal, snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+            return;
+        }
 
         if (_drag == DragMode.Pan)
         {
@@ -1089,6 +1190,14 @@ public sealed class SceneViewControl : FrameworkElement
             _move?.End();
             _move = null;
             _pressed = null;
+        }
+
+        if (mode == DragMode.Rotate)
+        {
+            _rotate?.End();
+            _rotate = null;
+            _overHandle = false;
+            InvalidateVisual();
         }
 
         if (mode == DragMode.Box)

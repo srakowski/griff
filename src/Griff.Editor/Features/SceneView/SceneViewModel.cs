@@ -9,8 +9,8 @@ using Transform = Griff.Scenes.Transform;
 namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
-/// What the Scene view does with the selection: picking everything inside a box, and moving everything selected
-/// together. The view's drags call these, and agents can too (positions are world units, Y up).
+/// What the Scene view does with the selection: picking everything inside a box, and moving or turning everything
+/// selected together. The view's drags call these, and agents can too (positions are world units, Y up).
 /// </summary>
 public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
 {
@@ -126,6 +126,37 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         return new SelectionMove(document, moving, anchor, position);
     }
 
+    /// <summary>
+    /// Turns everything selected <paramref name="degrees"/> counterclockwise around the primary selection's position,
+    /// as one undo step: each entity turns by that much and the others swing around with it. One entity just spins in
+    /// place.
+    /// </summary>
+    public void RotateSelection(float degrees)
+    {
+        if (BeginRotate() is not { } rotate)
+            return;
+        workspace.Scene!.History.Seal();
+        rotate.To(degrees, snap: false, round: false);
+        rotate.End();
+    }
+
+    /// <summary>
+    /// Starts turning the selection around the primary's position, for a drag of the rotate handle:
+    /// <see cref="SelectionRotate.To"/> turns everything relative to where it started, and the whole drag is one undo
+    /// step. Null when nothing is selected.
+    /// </summary>
+    public SelectionRotate? BeginRotate()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+            return null;
+        var turning = selection.TopLevel().Where(e => e.Scene == document.Scene).ToList();
+        if (turning.Count == 0)
+            return null;
+        // Snapping lines up the one picked last (or the selected parent it's inside), as moving does.
+        var anchor = turning.FirstOrDefault(e => primary.IsSelfOrDescendantOf(e)) ?? turning[^1];
+        return new SelectionRotate(document, turning, anchor, Flat(primary.Transform.WorldPosition));
+    }
+
     /// <summary>World-space corners of what the entity draws (its sprite, tilemap or camera frame), or null if it draws none of those.</summary>
     public static Vector2[]? Outline(Entity entity)
     {
@@ -203,5 +234,68 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         public void End() => _document.History.Seal();
 
         private static float Snap(float value) => MathF.Round(value / SnapStep) * SnapStep;
+    }
+
+    /// <summary>One drag of the rotate handle, from <see cref="BeginRotate"/>.</summary>
+    public sealed class SelectionRotate
+    {
+        /// <summary>The angle Ctrl snaps to, in degrees.</summary>
+        public const float SnapAngle = 15;
+
+        private readonly SceneDocument _document;
+        private readonly List<(Transform Transform, Vector3 Position, Vector3 Rotation, Vector3 World, Matrix4x4 ParentInverse, float Sign)> _turning;
+        private readonly int _anchor;
+
+        internal SelectionRotate(SceneDocument document, IReadOnlyList<Entity> entities, Entity anchor, Vector2 pivot)
+        {
+            _document = document;
+            Pivot = pivot;
+            _anchor = entities.ToList().IndexOf(anchor);
+            _turning = entities.Select(e =>
+            {
+                var parent = e.Parent?.Transform.WorldMatrix ?? Matrix4x4.Identity;
+                var inverse = Matrix4x4.Invert(parent, out var i) ? i : Matrix4x4.Identity;
+                // Under a flipped parent, turning counterclockwise in the world is turning clockwise in the parent.
+                var sign = parent.M11 * parent.M22 - parent.M12 * parent.M21 < 0 ? -1f : 1f;
+                return (e.Transform, e.Transform.Position, e.Transform.Rotation, e.Transform.WorldPosition, inverse, sign);
+            }).ToList();
+            document.History.Seal();
+        }
+
+        /// <summary>The world point everything turns around.</summary>
+        public Vector2 Pivot { get; }
+
+        /// <summary>
+        /// Turns everything <paramref name="degrees"/> counterclockwise from where it started. <paramref name="snap"/>
+        /// puts the anchor's angle on a multiple of <see cref="SnapAngle"/>; otherwise <paramref name="round"/> puts it
+        /// on a whole degree, so a drag leaves tidy numbers in the Inspector.
+        /// </summary>
+        public void To(float degrees, bool snap, bool round = true)
+        {
+            if (snap || round)
+            {
+                var anchor = _turning[_anchor];
+                var angle = anchor.Rotation.Z + degrees * anchor.Sign;
+                var step = snap ? SnapAngle : 1;
+                degrees = (MathF.Round(angle / step) * step - anchor.Rotation.Z) * anchor.Sign;
+            }
+
+            var turn = Matrix3x2.CreateRotation(degrees * MathF.PI / 180, Pivot);
+            var positions = _turning.Select(t =>
+            {
+                var world = Vector2.Transform(Flat(t.World), turn);
+                var local = Vector3.Transform(new Vector3(world, t.World.Z), t.ParentInverse);
+                // Whoever sits on the pivot stays exactly where it was, without float drift.
+                return Vector2.Distance(Flat(t.World), Pivot) < 1e-6f ? t.Position : local;
+            }).ToList();
+            var rotations = _turning.Select(t => t.Rotation + new Vector3(0, 0, degrees * t.Sign)).ToList();
+
+            if (_turning.Select((t, i) => t.Transform.Position == positions[i] && t.Transform.Rotation == rotations[i]).All(same => same))
+                return;
+            _document.Execute(new RotateEntitiesEdit(_turning.Select(t => t.Transform).ToList(), positions, rotations));
+        }
+
+        /// <summary>Ends the drag, so the next turn is its own undo step.</summary>
+        public void End() => _document.History.Seal();
     }
 }

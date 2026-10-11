@@ -1,0 +1,42 @@
+title: Rotate in the Scene view
+intro: Drag the round handle above the selection to turn it, right in the Scene view.
+project: TopDown | Scene Rotate
+
+create: Sprite
+rename: Post
+set: Transform.Position = 6, 1, 0
+set: Sprite.Size = 0.6, 0.6
+set: Sprite.Tint = #5F574F
+deselect
+create: Sprite
+rename: Plank
+set: Transform.Position = 8, 1, 0
+set: Sprite.Size = 3, 0.4
+set: Sprite.Tint = #AB5236
+
+chapter: The rotate handle | Drag the knob to turn
+look: 7, 1.5, 3.5
+say: Here's a plank to put in the dungeon. Turning it used to mean typing an angle into the Inspector.
+explain: handle:rotate | Rotate handle | Now the selection has a round handle sticking out of its top. Drag it around to turn.
+rotate: Ctrl+30
+expectvalue: Plank.Transform.Rotation.Z = 30
+explain: field:Transform.Rotation | Snapped | Holding control snaps to fifteen degrees, so this is exactly thirty.
+rotate: 20
+explain: handle:rotate | Whole degrees | Without control it turns freely, but lands on whole degrees, so the Inspector keeps tidy numbers.
+say: Each turn is one step to undo.
+key: Ctrl+Z
+expectvalue: Plank.Transform.Rotation.Z = 30
+
+chapter: Turning several | Around the one picked last
+select: Plank
+select: Ctrl+Post
+expectselected: Plank, Post
+say: With several selected, the handle sits on the one picked last, here the post.
+rotate: Ctrl+90
+expectvalue: Post.Transform.Rotation.Z = 90
+expectvalue: Plank.Transform.Rotation.Z = 120
+expectat: Plank = 6, 3
+explain: world:4.2, 4.8, 7.8, 0 | Swung around the post | Everything turns around it together. The plank swung up around the post like a gate, and both turned the same ninety degrees.
+key: Ctrl+Z
+expectat: Plank = 8, 1
+say: And one undo puts them both back.

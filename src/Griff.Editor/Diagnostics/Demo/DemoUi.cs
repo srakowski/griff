@@ -104,6 +104,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         return sceneView.PointToScreen(local);
     }
 
+    private static readonly MethodInfo SceneRotateHandle = typeof(SceneViewControl).GetMethod("RotateHandle", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>Where the Scene view's rotate handle (its knob) is on screen, or null when it isn't showing.</summary>
+    public Point? RotateKnob() =>
+        SceneRotateHandle.Invoke(sceneView, []) is (Point, Point knob) ? sceneView.PointToScreen(knob) : null;
+
     private static readonly FieldInfo PanField = typeof(SceneViewControl).GetField("_pan", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly FieldInfo ZoomField = typeof(SceneViewControl).GetField("_zoom", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly FieldInfo NeedsFitField = typeof(SceneViewControl).GetField("_needsFit", BindingFlags.NonPublic | BindingFlags.Instance)!;

@@ -247,6 +247,34 @@ public class EditHistoryTests
     }
 
     [Fact]
+    public void RotateEntities_TurnsAndSwingsSeveral_MergesWhileUnsealed_AndUndoesInOneStep()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        b.Transform.Position = new Vector3(2, 0, 1);
+        b.Transform.Rotation = new Vector3(0, 0, 10);
+        Transform[] both = [a.Transform, b.Transform];
+
+        _history.Seal();
+        _history.Execute(new RotateEntitiesEdit(both, [Vector3.Zero, new Vector3(0, 2, 1)], [new Vector3(0, 0, 90), new Vector3(0, 0, 100)]));
+        _history.Execute(new RotateEntitiesEdit(both, [Vector3.Zero, new Vector3(-2, 0, 1)], [new Vector3(0, 0, 180), new Vector3(0, 0, 190)]));
+        Assert.Equal(new Vector3(-2, 0, 1), b.Transform.Position);
+        Assert.Equal(new Vector3(0, 0, 190), b.Transform.Rotation);
+        Assert.Equal("Rotate 2 entities", _history.UndoDescription);
+
+        // A different set of entities is its own step.
+        _history.Execute(new RotateEntitiesEdit([a.Transform], [Vector3.Zero], [new Vector3(0, 0, 45)]));
+        Assert.Equal("Rotate A", _history.UndoDescription);
+        _history.Undo();
+        Assert.Equal(new Vector3(0, 0, 180), a.Transform.Rotation);
+
+        _history.Undo();
+        Assert.Equal(Vector3.Zero, a.Transform.Rotation);
+        Assert.Equal(new Vector3(2, 0, 1), b.Transform.Position);
+        Assert.Equal(new Vector3(0, 0, 10), b.Transform.Rotation);
+        Assert.False(_history.CanUndo);
+    }
+
+    [Fact]
     public void SetProperties_SetsSeveral_MergesWhileUnsealed_AndUndoesEachToItsOwnValue()
     {
         var (a, b) = (new Entity("A"), new Entity("B"));

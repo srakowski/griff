@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Editor: selection and handles
 
-- [ ] Add a rotate handle to the Scene view.
 - [ ] Add scale handles to the Scene view.
 - [ ] Add Scene-view handles to resize sprites and box and circle colliders.
 - [ ] Add Scene-view handles for radii and distances: light radii, ranges and sight.
@@ -163,3 +162,4 @@ grows. The headings only group items; build order is top to bottom.
 - [x] Add multi-select in the Scene view: Shift/Ctrl-click and box selection, with dragging moving them all. (2026-10-10) Agents box-select and move the selection through the SceneViewModel service, and View > Frame Selection (F) is now a command. A full-screen backdrop sprite still catches drags that start on it (no locking or picking-through yet).
 - [x] Edit several selected entities in the Inspector at once: the components and fields they share, with mixed values shown as mixed. (2026-10-10) Names stay one per entity (the header shows how many), and the component catalog still checks requirements against the primary entity. Clicking a mixed check box clears it on all of them (WPF goes from in-between to unchecked).
 - [x] Lock entities in the Scene view so clicks and box selections pass through them: a backdrop or a big tilemap stops catching every drag. (2026-10-10) A lock by each Hierarchy row and Entity > Lock; locking is saved in the scene and covers children. Agents set "locked" with entity_create/entity_update, and click the Scene view with SceneViewModel.SelectAt.
+- [x] Add a rotate handle to the Scene view. (2026-10-10) A knob on a stem above the primary selection; several turn around the one picked last, as one undo step, landing on whole degrees (Ctrl snaps to 15). Agents turn the selection with SceneViewModel.RotateSelection. It turns Rotation Z only (the engine is 2D), and colliders still don't rotate in physics. Demos gain rotate:, the handle:rotate target and expectvalue on one axis of a vector.

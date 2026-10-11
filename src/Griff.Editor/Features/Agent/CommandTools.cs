@@ -36,6 +36,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
                     ("answers", Schema.Map("Answers to questions the command asks, by the question's label, e.g. {\"Scene name\": \"Level 2\"}. " +
                         "Call without and it says what it asks.")),
                     ("wait", Schema.Number("Seconds to wait for it to finish (default 5). A command that opens a window returns while it's open.")),
+                    .. command.Choices is null ? [] : new[] { ("choice", Schema.String("Which of its choices to pick, as its submenu does (the description lists them).")) },
                 ]),
                 Invoke = args => RunAsync(command, args),
             };
@@ -69,6 +70,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         text.Append(')');
         if (command.IsChecked is { } on)
             text.Append($" It's an on/off setting, now {(on ? "on" : "off")}.");
+        if (command.Choices is { } choices)
+            text.Append(choices.Count == 0 ? " It has nothing to pick from now." : $" Pick one with \"choice\": {string.Join(", ", choices.Select(c => $"\"{c}\""))}.");
         return text.ToString();
     }
 
@@ -83,14 +86,15 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         // WPF works out what can run lazily; make sure it's up to date with what the agent just did.
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         if (!command.CanExecute())
-            throw new AgentException($"{command.DisplayText.TrimEnd('.')} can't be used right now{WhyNot()}.");
+            throw new AgentException($"{command.DisplayText.TrimEnd('.')} can't be used right now{WhyNot(command)}.");
 
         var before = workspace.Scene?.History.UndoDescription;
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 5), 0, 120));
 
         // Queued rather than called, so a command that opens a modal window doesn't hold this call until it closes.
         var dispatcher = Application.Current.Dispatcher;
-        var run = dispatcher.InvokeAsync(command.ExecuteAsync, DispatcherPriority.Normal).Task.Unwrap();
+        var choice = args.OptionalString("choice");
+        var run = dispatcher.InvokeAsync(() => choice is null ? command.ExecuteAsync() : command.ChooseAsync(choice), DispatcherPriority.Normal).Task.Unwrap();
         var finished = await Task.WhenAny(run, Task.Delay(wait)) == run;
 
         var text = new StringBuilder();
@@ -118,8 +122,9 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         return AgentDialogs.Reported.Count > 0 ? ToolResult.Error(text.ToString()) : ToolResult.Ok(text.ToString());
     }
 
-    private string WhyNot() =>
-        workspace.Project is null ? " (no project is open)"
+    private string WhyNot(EditorCommand command) =>
+        command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
+        : workspace.Project is null ? " (no project is open)"
         : workspace.Scene is null ? " (no scene is open)"
         : selection.Entity is null ? " (perhaps it needs an entity selected: pass \"entity\")"
         : "";

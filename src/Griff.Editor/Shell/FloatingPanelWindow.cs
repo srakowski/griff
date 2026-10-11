@@ -44,7 +44,7 @@ public sealed class FloatingPanelWindow : ChromeWindow
     public void Place()
     {
         var bounds = Floating.Bounds;
-        if (double.IsNaN(bounds.Left) || double.IsNaN(bounds.Top))
+        if (double.IsNaN(bounds.Left) || double.IsNaN(bounds.Top) || !OnScreen(bounds))
         {
             var (left, top) = _main.WindowState == WindowState.Maximized && _main.IsLoaded
                 ? (SystemParameters.WorkArea.Left, SystemParameters.WorkArea.Top)
@@ -74,6 +74,17 @@ public sealed class FloatingPanelWindow : ChromeWindow
         base.OnClosing(e);
         if (!_quiet && !e.Cancel)
             ClosedByUser?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Whether enough of a window's title bar is on the screens to drag it by: a kept layout can put one on a screen
+    /// that's since been unplugged.
+    /// </summary>
+    internal static bool OnScreen(Rect bounds)
+    {
+        var screens = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var titleBar = Rect.Intersect(new Rect(bounds.Left, bounds.Top, bounds.Width, 30), screens);
+        return !titleBar.IsEmpty && titleBar.Width >= 60 && titleBar.Height >= 10;
     }
 
     private void Remember()

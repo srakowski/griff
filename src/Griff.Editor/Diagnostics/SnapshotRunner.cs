@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
+using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Inspector;
@@ -27,6 +28,8 @@ internal static partial class SnapshotRunner
         var outputDir = Environment.GetEnvironmentVariable("GRIFF_SNAPSHOT_DIR");
         if (outputDir is null)
             return false;
+
+        services.GetRequiredService<PanelLayout>().StartOver();
 
         _ = RunAsync(services, main, outputDir);
         return true;

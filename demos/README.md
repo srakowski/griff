@@ -37,7 +37,7 @@ build: standalone
 | `scene: <name>` | Open a scene by name. |
 | `chapter: <title> [\| <subtitle>]` | Start a chapter: a card, a dot on the control bar, a rewind point. |
 | `say: <text>` | Narrate (spoken and captioned). |
-| `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Game > Build Game`. |
+| `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Game > Build Game`, and into submenus: `menu: View > Layouts > Level Building`. |
 | `create: <thing>` | Shorthand for `menu: Entity > Create <thing>`, e.g. `create: Platformer Player`. |
 | `key: <shortcut>` | Press a shortcut, e.g. `key: Ctrl+Shift+B`, `key: F5`. |
 | `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. `select: Ctrl+Sign` Ctrl-clicks its row (adding it to the selection, or taking it out), `select: Shift+Coins` Shift-clicks it (selecting every row from the last one clicked). |

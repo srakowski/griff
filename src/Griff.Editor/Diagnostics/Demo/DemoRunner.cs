@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
@@ -31,6 +32,9 @@ internal static class DemoRunner
         var mode = Environment.GetEnvironmentVariable("GRIFF_DEMO");
         if (string.IsNullOrEmpty(mode) || main is not MainWindow shell)
             return false;
+
+        // Demos start with the panels where they start out, and leave the user's own layout alone.
+        services.GetRequiredService<PanelLayout>().StartOver();
 
         // GRIFF_DEMO=path\to\change.demo plays a demo script; GRIFF_DEMO=1 (or fast) the guided tour.
         var script = mode.EndsWith(".demo", StringComparison.OrdinalIgnoreCase) ? Path.GetFullPath(mode) : null;

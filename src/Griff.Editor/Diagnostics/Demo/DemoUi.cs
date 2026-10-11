@@ -367,17 +367,34 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         await input.MoveTo(Center(element));
     }
 
-    /// <summary>Opens a main-menu menu and clicks an item in it: Menu("Entity", "Create Tilemap").</summary>
+    /// <summary>
+    /// Opens a main-menu menu and clicks an item in it: Menu("Entity", "Create Tilemap"), or in a submenu of it, with
+    /// "&gt;" between: Menu("View", "Layouts > Art").
+    /// </summary>
     public async Task Menu(string top, string item, string? spotlight = null)
     {
         var header = Descendants<MenuItem>(main.MainMenu).First(m => HeaderText(m.Header) == top);
+        var steps = item.Split('>', StringSplitOptions.TrimEntries);
+        item = steps[^1];
         for (var attempt = 0; attempt < 3; attempt++)
         {
             try
             {
                 if (!header.IsSubmenuOpen)
                     await Click(header);
-                var target = await WaitFor(() => MenuItem(item) is { } m && PresentationSource.FromVisual(m) is not null ? m : null, $"menu item {item}", 3000);
+                MenuItem? within = header;
+                foreach (var step in steps[..^1])
+                {
+                    var parent = within;
+                    within = await WaitFor(() => parent.Items.OfType<MenuItem>().FirstOrDefault(m => HeaderText(m.Header) == step) is { } m && PresentationSource.FromVisual(m) is not null ? m : null, $"menu item {step}", 3000);
+                    await Settle(120);
+                    if (!within.IsSubmenuOpen)
+                        await Click(within);
+                }
+
+                var menu = within;
+                var target = await WaitFor(() => (steps.Length == 1 ? MenuItem(item) : menu.Items.OfType<MenuItem>().FirstOrDefault(m => HeaderText(m.Header) == item)) is { } m
+                    && PresentationSource.FromVisual(m) is not null ? m : null, $"menu item {item}", 3000);
                 await Settle(120);
                 if (spotlight is not null && attempt == 0)
                 {
@@ -398,9 +415,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             }
         }
 
-        // Last resort: run the item's command, as clicking it would.
-        var command = header.Items.OfType<MenuItem>().First(m => HeaderText(m.Header) == item).Command;
-        command?.Execute(null);
+        // Last resort: run the item's command, or pick the choice in its submenu, as clicking it would.
+        var first = header.Items.OfType<MenuItem>().First(m => HeaderText(m.Header) == steps[0]);
+        if (steps.Length > 1 && first.Tag is Core.Commands.EditorCommand chooser)
+            await chooser.ChooseAsync(item);
+        else
+            first.Command?.Execute(null);
         Log?.Invoke($"FORCED menu {top} > {item}");
         await Settle(200);
     }

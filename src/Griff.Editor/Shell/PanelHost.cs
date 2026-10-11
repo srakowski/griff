@@ -40,7 +40,18 @@ public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescri
         _main = main;
         _root = root;
         _documents = documents;
-        main.Closed += (_, _) => _closed = true;
+        PlaceMain(main);
+
+        // Where the window is has to be read while it's closing: once closed, it's nowhere.
+        EditorWindowData? placed = null;
+        main.Closing += (_, _) => placed = main.RestoreBounds is { IsEmpty: false } bounds
+            ? new EditorWindowData { Left = bounds.Left, Top = bounds.Top, Width = bounds.Width, Height = bounds.Height, Maximized = main.WindowState == WindowState.Maximized }
+            : null;
+        main.Closed += (_, _) =>
+        {
+            _closed = true;
+            layout.Remember(placed);
+        };
         var drag = new PanelDrag(this);
 
         foreach (var descriptor in descriptors)
@@ -58,6 +69,25 @@ public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescri
         layout.Changed += (_, _) => Rebuild();
         layout.Shown += (_, id) => Show(id);
         Rebuild();
+    }
+
+    // The editor opens where it was when it closed, if that's still on a screen.
+    private void PlaceMain(Window main)
+    {
+        if (layout.EditorWindow is not { Width: > 0, Height: > 0 } placed)
+            return;
+        var bounds = new Rect(placed.Left, placed.Top, placed.Width, placed.Height);
+        if (FloatingPanelWindow.OnScreen(bounds))
+        {
+            main.WindowStartupLocation = WindowStartupLocation.Manual;
+            main.Left = bounds.Left;
+            main.Top = bounds.Top;
+            main.Width = bounds.Width;
+            main.Height = bounds.Height;
+        }
+
+        if (placed.Maximized)
+            main.WindowState = WindowState.Maximized;
     }
 
     /// <summary>A panel's tab, by its id.</summary>
@@ -207,6 +237,14 @@ public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescri
     // A floating window for each floating group: kept while it's there, opened for a new one, closed for one that's gone.
     private void SyncWindows()
     {
+        // A window can't be owned by the editor until the editor is showing (a kept layout can have floating windows).
+        if (!_main!.IsLoaded)
+        {
+            _main.Loaded -= OnMainLoaded;
+            _main.Loaded += OnMainLoaded;
+            return;
+        }
+
         foreach (var gone in _windows.Keys.Except(layout.Floats).ToList())
         {
             var window = _windows[gone];
@@ -229,6 +267,12 @@ public sealed class PanelHost(IServiceProvider services, IEnumerable<PanelDescri
             if (!window.IsVisible)
                 window.Show();
         }
+    }
+
+    private void OnMainLoaded(object sender, RoutedEventArgs e)
+    {
+        _main!.Loaded -= OnMainLoaded;
+        SyncWindows();
     }
 
     // Closing a floating window puts its panels back where they start out (not when the whole editor is closing).

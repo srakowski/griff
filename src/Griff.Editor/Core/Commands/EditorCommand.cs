@@ -38,6 +38,12 @@ public abstract class EditorCommand : ICommand
     /// <summary>For an on/off setting: whether it's on, shown as a tick by its menu item. Null for an ordinary command.</summary>
     public virtual bool? IsChecked => null;
 
+    /// <summary>
+    /// For a command that picks one of several things (a saved layout, say): what it can pick now, shown as a submenu
+    /// of its menu item. Null for an ordinary command. Run without a pick, it asks which.
+    /// </summary>
+    public virtual IReadOnlyList<string>? Choices => null;
+
     public event EventHandler? CanExecuteChanged
     {
         add => CommandManager.RequerySuggested += value;
@@ -46,7 +52,18 @@ public abstract class EditorCommand : ICommand
 
     public bool CanExecute() => !_isExecuting && CanExecuteCore();
 
-    public async Task ExecuteAsync()
+    public Task ExecuteAsync() => RunAsync(ExecuteCoreAsync);
+
+    /// <summary>Runs it with one of its <see cref="Choices"/> picked, as clicking that in its submenu does.</summary>
+    public Task ChooseAsync(string choice) => RunAsync(() => ChooseCoreAsync(choice));
+
+    protected virtual bool CanExecuteCore() => true;
+
+    protected abstract Task ExecuteCoreAsync();
+
+    protected virtual Task ChooseCoreAsync(string choice) => throw new NotSupportedException($"{DisplayText} has nothing to pick.");
+
+    private async Task RunAsync(Func<Task> run)
     {
         if (!CanExecute())
             return;
@@ -56,7 +73,7 @@ public abstract class EditorCommand : ICommand
         CommandManager.InvalidateRequerySuggested();
         try
         {
-            await ExecuteCoreAsync();
+            await run();
         }
         finally
         {
@@ -64,10 +81,6 @@ public abstract class EditorCommand : ICommand
             CommandManager.InvalidateRequerySuggested();
         }
     }
-
-    protected virtual bool CanExecuteCore() => true;
-
-    protected abstract Task ExecuteCoreAsync();
 
     bool ICommand.CanExecute(object? parameter) => CanExecute();
 

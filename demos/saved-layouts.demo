@@ -1,0 +1,25 @@
+title: Saved layouts
+intro: The editor opens with the panels where you left them. Save layouts by name, switch between them, and reset to the start.
+project: Platformer | Saved Layouts
+
+chapter: Save a layout | View > Save Layout...
+say: Say you like the Inspector on the left, with the Output log in a window of its own.
+dock: Inspector > left
+float: Output > 150, -60
+expectlayout: Inspector | Hierarchy | (Documents / Assets); floating: Output
+explain: menu:View | Save it | The View menu saves where the panels are now, under a name of your choosing.
+menu: View > Save Layout...
+prompt: Level Building
+say: Close the editor and it opens again just like this, floating windows and all, at the same size and place on screen. Saved layouts are yours, kept for every project you open.
+
+chapter: Back to the start | View > Reset Layout
+menu: View > Reset Layout
+expectlayout: Hierarchy | (Documents / Assets, Output) | Inspector
+explain: panel:Inspector | Reset | Reset Layout puts every panel back where it starts out, and closes floating windows.
+
+chapter: Switch layouts | View > Layouts
+menu: View > Layouts > Level Building
+expectlayout: Inspector | Hierarchy | (Documents / Assets); floating: Output
+explain: float:Output | Switched back | The Layouts menu lists every layout you've saved. Pick one, and the panels go where it has them.
+menu: View > Delete Layout > Level Building
+say: Delete Layout forgets one you no longer want. Agents can save, load and reset layouts too.

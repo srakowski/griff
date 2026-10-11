@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Text.Json;
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Panels;
+using Griff.Editor.Core.Settings;
 using Griff.Editor.Shell;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -113,6 +116,163 @@ public class PanelLayoutTests
         Assert.Contains("floating", Assert.Throws<InvalidOperationException>(() => layout.Dock("Assets", DockSide.Left, "Output")).Message);
     });
 
+    private static void WithLayout(Action<PanelLayout, ISettingsStore> test) =>
+        EditorHost.Run(services => test(services.GetRequiredService<PanelLayout>(), services.GetRequiredService<ISettingsStore>()));
+
+    // The editor starting again with the same settings.
+    private static PanelLayout NextSession(PanelLayout layout, ISettingsStore settings) => new(layout.Panels, settings);
+
+    [Fact]
+    public void KeepsTheLayoutBetweenSessions() => WithLayout((layout, settings) =>
+    {
+        layout.Dock("Inspector", DockSide.Left);
+        layout.Tab("Assets", "Hierarchy");
+        layout.Float("Output", 100, 120, 300, 200);
+        layout.GroupOf("Hierarchy").Width = 345;
+        Assert.Equal(Start, NextSession(layout, settings).Summary); // Nothing is kept until the editor closes.
+
+        Assert.Null(layout.EditorWindow);
+        layout.Remember(new EditorWindowData { Left = 40, Top = 50, Width = 1200, Height = 800, Maximized = true });
+        var next = NextSession(layout, settings);
+        Assert.Equal("Inspector | Hierarchy, Assets | Documents; floating: Output", next.Summary);
+        Assert.Equal((40.0, 1200.0, true), (next.EditorWindow!.Left, next.EditorWindow.Width, next.EditorWindow.Maximized));
+        Assert.Equal("Assets", next.GroupOf("Hierarchy").Selected);
+        Assert.Equal(345, next.GroupOf("Hierarchy").Width);
+        Assert.Equal(new Rect(100, 120, 300, 200), next.Floats[0].Bounds);
+    });
+
+    [Fact]
+    public void KeptLayoutsSurviveTheSettingsFile() => WithLayout((layout, settings) =>
+    {
+        layout.Float("Output"); // Not placed yet: no position to keep.
+        layout.Dock("Assets", DockSide.Top, "Documents");
+        layout.Remember();
+        layout.Save("Mine");
+
+        var json = JsonSerializer.Serialize(settings.Settings);
+        var read = new TestSettings();
+        read.Settings.PanelLayout = JsonSerializer.Deserialize<EditorSettings>(json)!.PanelLayout;
+        var next = NextSession(layout, read);
+        Assert.Equal(layout.Summary, next.Summary);
+        Assert.True(double.IsNaN(next.Floats[0].Bounds.Left));
+        Assert.Equal(["Mine"], JsonSerializer.Deserialize<EditorSettings>(json)!.Layouts.Select(l => l.Name));
+    });
+
+    [Fact]
+    public void SavesAndLoadsLayoutsByName() => WithLayout(layout =>
+    {
+        layout.Tab("Inspector", "Hierarchy");
+        layout.Save("Narrow");
+        layout.Reset();
+        layout.Float("Assets", 10, 10, 300, 300);
+        layout.Save("Floaty");
+        Assert.Equal(["Narrow", "Floaty"], layout.SavedLayouts);
+
+        var changes = 0;
+        layout.Changed += (_, _) => changes++;
+        layout.Load(" narrow ");
+        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output)", layout.Summary);
+        Assert.Empty(layout.Floats);
+        Assert.Equal(1, changes);
+
+        layout.Load("Floaty");
+        Assert.Equal("Hierarchy | (Documents / Output) | Inspector; floating: Assets", layout.Summary);
+
+        // Saving under a name that's taken saves over it, keeping its place in the list.
+        layout.Save("NARROW");
+        Assert.Equal(["NARROW", "Floaty"], layout.SavedLayouts);
+        layout.Reset();
+        layout.Load("Narrow");
+        Assert.Equal("Hierarchy | (Documents / Output) | Inspector; floating: Assets", layout.Summary);
+
+        layout.Delete("floaty");
+        Assert.Equal(["NARROW"], layout.SavedLayouts);
+        Assert.Contains("Saved layouts: NARROW", Assert.Throws<InvalidOperationException>(() => layout.Load("Floaty")).Message);
+        Assert.Throws<InvalidOperationException>(() => layout.Save("  "));
+    });
+
+    [Fact]
+    public void DemosStartOverAndKeepNothing() => WithLayout((layout, settings) =>
+    {
+        layout.Tab("Inspector", "Hierarchy");
+        layout.Save("Mine");
+        layout.Remember(new EditorWindowData { Width = 900, Height = 700 });
+        var demo = NextSession(layout, settings);
+        demo.StartOver();
+        Assert.Equal(Start, demo.Summary);
+        Assert.Null(demo.EditorWindow);
+
+        Assert.Empty(demo.SavedLayouts);
+
+        demo.Float("Output");
+        demo.Save("Demo");
+        demo.Remember();
+        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output)", NextSession(layout, settings).Summary);
+        Assert.Equal(["Mine"], settings.Settings.Layouts.Select(l => l.Name));
+    });
+
+    [Fact]
+    public void ResetPutsEveryPanelBack() => WithLayout(layout =>
+    {
+        layout.Dock("Inspector", DockSide.Bottom);
+        layout.Float("Output");
+        layout.Tab("Hierarchy", "Output");
+        layout.Reset();
+        Assert.Equal(Start, layout.Summary);
+        Assert.Empty(layout.Floats);
+    });
+
+    [Fact]
+    public void KeptLayoutsMakeRoomForNewPanelsAndDropOldOnes() => WithLayout((layout, settings) =>
+    {
+        // Kept before Output existed, and with a panel that's gone since.
+        settings.Settings.PanelLayout = new PanelLayoutData
+        {
+            Root = Part.Split(true,
+                Part.Tabs("Inspector", "Hierarchy"),
+                Part.Split(false, new PanelLayoutPart { Kind = PanelLayoutPart.DocumentsKind }, Part.Tabs("Console")),
+                Part.Tabs("Assets")),
+        };
+        Assert.Equal("Inspector, Hierarchy | Documents | Assets, Output", NextSession(layout, settings).Summary);
+
+        // Without the document area it isn't used.
+        settings.Settings.PanelLayout = new PanelLayoutData { Root = Part.Tabs("Hierarchy") };
+        Assert.Equal(Start, NextSession(layout, settings).Summary);
+        settings.Settings.Layouts.Add(new PanelLayoutData { Name = "Broken", Root = Part.Tabs("Hierarchy") });
+        Assert.Contains("no document area", Assert.Throws<InvalidOperationException>(() => layout.Load("Broken")).Message);
+    });
+
+    private static class Part
+    {
+        public static PanelLayoutPart Tabs(params string[] panels) => new() { Kind = PanelLayoutPart.TabsKind, Panels = [.. panels] };
+
+        public static PanelLayoutPart Split(bool horizontal, params PanelLayoutPart[] children) =>
+            new() { Kind = PanelLayoutPart.SplitKind, Horizontal = horizontal, Children = [.. children] };
+    }
+
+    [Fact]
+    public void LayoutCommandsPickFromTheSavedLayouts() => EditorHost.Run(services =>
+    {
+        var layout = services.GetRequiredService<PanelLayout>();
+        var commands = services.GetRequiredService<CommandRegistry>();
+        var load = commands.All.Single(c => c.Id == "View.Layouts");
+        var delete = commands.All.Single(c => c.Id == "View.DeleteLayout");
+        Assert.Empty(load.Choices!);
+        Assert.False(load.CanExecute());
+
+        layout.Tab("Output", "Inspector");
+        layout.Save("Wide");
+        commands.All.Single(c => c.Id == "View.ResetLayout").ExecuteAsync().GetAwaiter().GetResult();
+        Assert.Equal(Start, layout.Summary);
+
+        Assert.Equal(["Wide"], load.Choices!);
+        load.ChooseAsync("Wide").GetAwaiter().GetResult();
+        Assert.Equal("Hierarchy | (Documents / Assets) | Inspector, Output", layout.Summary);
+
+        delete.ChooseAsync("Wide").GetAwaiter().GetResult();
+        Assert.Empty(layout.SavedLayouts);
+    });
+
     // The editor's dock area is 1000 x 600 at 0,0: Hierarchy's group at 0..280 (tabs 28 high), the documents beside it.
     private static readonly Rect Workspace = new(0, 0, 1000, 600);
 
@@ -205,7 +365,7 @@ public class PanelLayoutTests
     {
         var services = new ServiceCollection()
             .AddPanel<Tree, Border>().AddPanel<Details, Border>().AddPanel<Files, Border>().AddPanel<Log, Border>()
-            .AddSingleton<PanelLayout>().AddSingleton<PanelHost>()
+            .AddSingleton<ISettingsStore, TestSettings>().AddSingleton<PanelLayout>().AddSingleton<PanelHost>()
             .BuildServiceProvider();
         var layout = services.GetRequiredService<PanelLayout>();
         var host = services.GetRequiredService<PanelHost>();

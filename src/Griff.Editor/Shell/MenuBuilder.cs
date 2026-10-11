@@ -36,7 +36,8 @@ public sealed class MenuBuilder(CommandRegistry commands, IEnumerable<MenuDefini
                     topLevel.Items.Add(new MenuItem
                     {
                         Header = command.Text,
-                        Command = command,
+                        // A command with choices opens a submenu of them instead of running.
+                        Command = command.Choices is null ? command : null,
                         InputGestureText = command.GestureText,
                         Icon = command.Icon is { } icon ? Icons.Create(icon) : null,
                         IsCheckable = false,
@@ -46,16 +47,33 @@ public sealed class MenuBuilder(CommandRegistry commands, IEnumerable<MenuDefini
                 }
             }
 
-            // On/off settings show their tick as the menu opens.
-            topLevel.SubmenuOpened += (_, _) =>
+            // On/off settings show their tick as the menu opens, and commands with choices list what they can pick now.
+            topLevel.SubmenuOpened += (_, e) =>
             {
+                if (e.OriginalSource != topLevel)
+                    return;
                 foreach (var item in topLevel.Items.OfType<MenuItem>())
                 {
                     if (item.Tag is EditorCommand { IsChecked: { } on })
                         item.IsChecked = on;
+                    if (item.Tag is EditorCommand { Choices: { } choices } chooser)
+                        FillChoices(item, chooser, choices);
                 }
             };
             menu.Items.Add(topLevel);
+        }
+    }
+
+    private static void FillChoices(MenuItem item, EditorCommand command, IReadOnlyList<string> choices)
+    {
+        item.Items.Clear();
+        item.IsEnabled = choices.Count > 0 && command.CanExecute();
+        foreach (var choice in choices)
+        {
+            var entry = new MenuItem { Header = choice.Replace("_", "__") };
+            // Exceptions surface through Application.DispatcherUnhandledException, as a command's do.
+            entry.Click += async (_, _) => await command.ChooseAsync(choice);
+            item.Items.Add(entry);
         }
     }
 }

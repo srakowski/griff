@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Griff.Editor.Core.Panels;
 using Microsoft.Extensions.Logging;
 
 namespace Griff.Editor.Core.Settings;
@@ -14,6 +15,12 @@ public sealed class EditorSettings
 
     /// <summary>Whether the MCP server (for agents like Claude Code) runs while the editor is open.</summary>
     public bool AgentServer { get; set; } = true;
+
+    /// <summary>Where the panels were when the editor last closed; it starts with them there again.</summary>
+    public PanelLayoutData? PanelLayout { get; set; }
+
+    /// <summary>Panel layouts saved by name (View > Save Layout...), in the order they were first saved.</summary>
+    public List<PanelLayoutData> Layouts { get; set; } = [];
 }
 
 public interface ISettingsStore

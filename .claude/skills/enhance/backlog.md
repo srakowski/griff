@@ -8,7 +8,8 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Editor: references, paths and prefabs
 
-- [ ] Keep prefab links through renaming and moving prefab files in Assets, and update copies nested inside other prefabs when the inner prefab is saved.
+- [ ] Rename and move prefab files in Assets (and with an agent's asset_move), keeping every copy linked: in scenes, inside other prefabs and in open tabs.
+- [ ] Update copies nested inside other prefabs when the inner prefab is saved.
 
 ### Editor: panels, animation and tilemaps
 

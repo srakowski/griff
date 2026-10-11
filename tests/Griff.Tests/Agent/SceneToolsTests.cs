@@ -169,6 +169,17 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Get_SaysWhichMapATilemapIsALayerOf()
+    {
+        Run("entity_create", """{"entity": {"name": "Level", "components": {"Tilemap": {"image": "Tiles/ground.png", "tiles": ["00"]}}}}""");
+        Run("entity_create", """{"parent": "Level", "entity": {"name": "Decor", "components": {"Tilemap": {"solid": false, "tiles": ["11"]}}}}""");
+
+        Assert.Same(Named("Level").GetComponent<Tilemap>(), Named("Decor").GetComponent<Tilemap>()!.LayerOf);
+        Assert.Contains("\"note\": \"A layer of Level", Run("entity_get", """{"entity": "Decor"}""").Text);
+        Assert.DoesNotContain("\"note\"", Run("entity_get", """{"entity": "Level"}""").Text);
+    }
+
+    [Fact]
     public void Select_PicksSeveral_AddsToThem_AndClears()
     {
         Run("entity_create", """{"entities": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}""");

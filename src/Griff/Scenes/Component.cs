@@ -9,6 +9,15 @@ public abstract class Component
 {
     /// <summary>The entity this component is attached to, or null while detached.</summary>
     public Entity? Entity { get; internal set; }
+
+    /// <summary>
+    /// False for a property this component doesn't use as it's set up now (a tilemap layer's tileset settings, which
+    /// come from its map), so the Inspector hides it. True by default.
+    /// </summary>
+    public virtual bool Uses(string property) => true;
+
+    /// <summary>A line on how it's set up, shown in the Inspector above its fields (a tilemap layer names its map); null for none.</summary>
+    public virtual string? SetupNote() => null;
 }
 
 /// <summary>Excludes a public read/write property from scene files and the inspector.</summary>

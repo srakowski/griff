@@ -295,6 +295,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             var descriptor = host.Components.Get(component.GetType());
             var fresh = all ? null : descriptor.CreateInstance();
             var data = new JsonObject { ["type"] = descriptor.DisplayName };
+            // How it's set up, as the Inspector says it (a tilemap layer names its map).
+            if (component.SetupNote() is { } note)
+                data["note"] = note;
             foreach (var property in descriptor.Properties)
             {
                 var value = property.GetValue(component);

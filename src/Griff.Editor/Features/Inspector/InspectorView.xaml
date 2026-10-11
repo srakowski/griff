@@ -132,6 +132,13 @@
                                                TextWrapping="Wrap" />
                                 </DockPanel>
 
+                                <!-- How it's set up (a tilemap layer names its map) -->
+                                <TextBlock Margin="12,6,10,0"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Text="{Binding SetupNote}"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasSetupNote, Converter={StaticResource Visible}}" />
+
                                 <!-- Properties -->
                                 <ItemsControl Margin="12,6,10,8"
                                               Grid.IsSharedSizeScope="True"

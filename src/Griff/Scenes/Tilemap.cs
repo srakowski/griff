@@ -6,6 +6,10 @@ namespace Griff.Scenes;
 /// A grid of tiles from one or more tileset images, drawn and (optionally) collided with as a whole. The grid starts
 /// at the entity's position and runs right and down. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
 /// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
+/// A tilemap with no <see cref="Image"/> on an entity inside another tilemap's is one of its layers (see
+/// <see cref="LayerOf"/>), painted on its own: it uses that map's tilesets, tile size and tile settings, while its
+/// <see cref="Tiles"/>, <see cref="Tint"/>, <see cref="Order"/> and collision (<see cref="Solid"/>, <see cref="Layer"/>,
+/// <see cref="IgnoreLayers"/>) are its own.
 /// </summary>
 /// <remarks>
 /// Each row of <see cref="Tiles"/> is a line of characters, one per cell, top row first: <c>.</c> is empty and
@@ -45,10 +49,77 @@ public sealed class Tilemap : Component
     private IReadOnlyList<int> _autoGroups = [];
     private string[] _moreTilesets = [];
     private TilesetCache? _tilesets;
+    private float _tileSize = 1f;
+
+    // Bumped when a tile setting the collision caches depend on changes, so a layer's caches see its base map's changes.
+    private int _settingsVersion;
+    private (Tilemap Base, int Version)? _cachedFor;
+
+    /// <summary>
+    /// The tilemap this one is a layer of, or null when it isn't one. A tilemap with no <see cref="Image"/> of its own
+    /// on an entity inside another tilemap's entity is a layer of that map: it's drawn with that map's tilesets,
+    /// <see cref="TileSize"/> and tile settings (Background, One Way, Ladder, Slope, Animated and Auto Tiles), while
+    /// its <see cref="Tiles"/>, <see cref="Tint"/>, <see cref="Order"/> and collision (<see cref="Solid"/>,
+    /// <see cref="Layer"/>, <see cref="IgnoreLayers"/>) are its own. Giving it an Image makes it a map of its own again.
+    /// Art > Add Layer to Tilemap adds one.
+    /// </summary>
+    public Tilemap? LayerOf => string.IsNullOrWhiteSpace(Image) ? Entity?.Parent?.GetComponent<Tilemap>() : null;
+
+    /// <summary>
+    /// The map whose tilesets and tile settings this one uses: itself, or for a layer the map it's a layer of (the
+    /// bottom one, for a layer of a layer).
+    /// </summary>
+    public Tilemap BaseMap
+    {
+        get
+        {
+            var map = this;
+            while (map.LayerOf is { } owner)
+                map = owner;
+            return map;
+        }
+    }
+
+    /// <summary>
+    /// The layers this map belongs to: its <see cref="BaseMap"/> first, then every layer of it (and layers of those), in
+    /// the order of the Hierarchy. Just this map when it has no layers.
+    /// </summary>
+    public IReadOnlyList<Tilemap> Layers()
+    {
+        var layers = new List<Tilemap>();
+        Add(BaseMap);
+        return layers;
+
+        void Add(Tilemap map)
+        {
+            layers.Add(map);
+            foreach (var child in map.Entity?.Children ?? [])
+            {
+                if (child.GetComponent<Tilemap>() is { } layer && layer.LayerOf == map)
+                    Add(layer);
+            }
+        }
+    }
+
+    /// <summary>On a layer, the tileset settings it takes from its map aren't its own, so the Inspector hides them.</summary>
+    public override bool Uses(string property) => LayerOf is null || !TilesetSettings.Contains(property);
+
+    /// <summary>On a layer, which map it's a layer of.</summary>
+    public override string? SetupNote() => LayerOf is { } owner
+        ? $"A layer of {owner.Entity?.Name ?? "its tilemap"}: drawn with its tilesets, tile size and tile settings."
+        : null;
+
+    // What a layer takes from its base map.
+    private static readonly HashSet<string> TilesetSettings =
+    [
+        nameof(Columns), nameof(Rows), nameof(MoreTilesets), nameof(TileSize), nameof(BackgroundTiles), nameof(OneWayTiles),
+        nameof(AnimatedTiles), nameof(LadderTiles), nameof(SlopeUpTiles), nameof(SlopeDownTiles), nameof(AutoTiles),
+    ];
 
     /// <summary>
     /// The first tileset's image, relative to Assets: tiles 0 on. Without one, its tiles draw as solid squares of
-    /// <see cref="Tint"/>. <see cref="MoreTilesets"/> adds others.
+    /// <see cref="Tint"/>, or inside another tilemap's entity, it's a layer of that map (see <see cref="LayerOf"/>).
+    /// <see cref="MoreTilesets"/> adds others.
     /// </summary>
     public string? Image { get; set; }
 
@@ -71,8 +142,12 @@ public sealed class Tilemap : Component
         set => _moreTilesets = value?.ToArray() ?? [];
     }
 
-    /// <summary>Width and height of one cell in world units, before the transform's scale.</summary>
-    public float TileSize { get; set; } = 1f;
+    /// <summary>Width and height of one cell in world units, before the transform's scale. A layer's is its map's (see <see cref="LayerOf"/>).</summary>
+    public float TileSize
+    {
+        get => LayerOf is { } owner ? owner.TileSize : _tileSize;
+        set => _tileSize = value;
+    }
 
     public Color Tint { get; set; } = Color.White;
 
@@ -92,7 +167,7 @@ public sealed class Tilemap : Component
         {
             _backgroundTiles = value;
             _background = ParseTileSet(value);
-            _collisionRuns = null;
+            _settingsVersion++;
         }
     }
 
@@ -107,7 +182,7 @@ public sealed class Tilemap : Component
         {
             _oneWayTiles = value;
             _oneWay = ParseTileSet(value);
-            _collisionRuns = null;
+            _settingsVersion++;
         }
     }
 
@@ -138,7 +213,7 @@ public sealed class Tilemap : Component
         {
             _ladderTiles = value;
             _ladder = ParseTileSet(value);
-            _collisionRuns = null;
+            _settingsVersion++;
         }
     }
 
@@ -153,8 +228,7 @@ public sealed class Tilemap : Component
         {
             _slopeUpTiles = value;
             _slopeUp = ParseTileSet(value);
-            _collisionRuns = null;
-            _slopes = null;
+            _settingsVersion++;
         }
     }
 
@@ -166,18 +240,34 @@ public sealed class Tilemap : Component
         {
             _slopeDownTiles = value;
             _slopeDown = ParseTileSet(value);
-            _collisionRuns = null;
-            _slopes = null;
+            _settingsVersion++;
         }
     }
 
     /// <summary>1 for a tile that's a slope rising to the right, -1 for one falling to the right, 0 for anything else.</summary>
-    public int SlopeOf(int tile) =>
-        InSet(_background, tile) ? 0 : InSet(_slopeUp, tile) ? 1 : InSet(_slopeDown, tile) ? -1 : 0;
+    public int SlopeOf(int tile)
+    {
+        var map = BaseMap;
+        return InSet(map._background, tile) ? 0 : InSet(map._slopeUp, tile) ? 1 : InSet(map._slopeDown, tile) ? -1 : 0;
+    }
 
     /// <summary>The cells painted with slope tiles and which way each rises. Cached until the tiles or tile settings change.</summary>
-    public IReadOnlyList<(int X, int Y, bool Rising)> SlopeCells() =>
-        _slopes ??= Cells().Where(c => SlopeOf(c.Tile) != 0).Select(c => (c.X, c.Y, SlopeOf(c.Tile) > 0)).ToList();
+    public IReadOnlyList<(int X, int Y, bool Rising)> SlopeCells()
+    {
+        CheckCaches();
+        return _slopes ??= Cells().Where(c => SlopeOf(c.Tile) != 0).Select(c => (c.X, c.Y, SlopeOf(c.Tile) > 0)).ToList();
+    }
+
+    // Drops the caches that depend on the tile settings when they (or the map they come from) have changed.
+    private void CheckCaches()
+    {
+        var map = BaseMap;
+        if (_cachedFor is var (cachedBase, version) && cachedBase == map && version == map._settingsVersion)
+            return;
+        _collisionRuns = null;
+        _slopes = null;
+        _cachedFor = (map, map._settingsVersion);
+    }
 
     /// <summary>
     /// Runs of 16 tiles in the tileset that fit themselves to their neighbors: paint with any tile of a run and each cell
@@ -394,6 +484,8 @@ public sealed class Tilemap : Component
     /// </summary>
     public IReadOnlyList<Tileset> Tilesets()
     {
+        if (LayerOf is { } owner)
+            return owner.Tilesets();
         if (_tilesets is { } cached && cached.Image == Image && cached.Columns == Columns && cached.Rows == Rows && cached.More == _moreTilesets)
             return cached.Tilesets;
 
@@ -434,7 +526,7 @@ public sealed class Tilemap : Component
     /// </summary>
     public int ShownTile(int tile)
     {
-        foreach (var animation in _animations)
+        foreach (var animation in BaseMap._animations)
         {
             if (tile < animation.First || tile > animation.Last)
                 continue;
@@ -452,26 +544,27 @@ public sealed class Tilemap : Component
     /// </summary>
     public int ShownTile(int x, int y, int tile)
     {
-        var group = AutoGroupOf(tile);
+        var groups = BaseMap._autoGroups;
+        var group = AutoGroupOf(groups, tile);
         if (group >= 0)
         {
             var mask = (Joins(x, y - 1) ? 1 : 0) | (Joins(x + 1, y) ? 2 : 0) | (Joins(x, y + 1) ? 4 : 0) | (Joins(x - 1, y) ? 8 : 0);
-            tile = _autoGroups[group] + mask;
+            tile = groups[group] + mask;
         }
 
         return ShownTile(tile);
 
-        bool Joins(int cx, int cy) => AutoGroupOf(GetTile(cx, cy)) == group;
+        bool Joins(int cx, int cy) => AutoGroupOf(groups, GetTile(cx, cy)) == group;
     }
 
     // Which AutoTiles run a tile belongs to, or -1.
-    private int AutoGroupOf(int tile)
+    private static int AutoGroupOf(IReadOnlyList<int> groups, int tile)
     {
         if (tile < 0)
             return -1;
-        for (var i = 0; i < _autoGroups.Count; i++)
+        for (var i = 0; i < groups.Count; i++)
         {
-            if (tile >= _autoGroups[i] && tile < _autoGroups[i] + 16)
+            if (tile >= groups[i] && tile < groups[i] + 16)
                 return i;
         }
 
@@ -479,7 +572,7 @@ public sealed class Tilemap : Component
     }
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="LadderTiles"/>.</summary>
-    public bool IsLadder(int tile) => InSet(_ladder, tile);
+    public bool IsLadder(int tile) => InSet(BaseMap._ladder, tile);
 
     /// <summary>
     /// The ladder cell containing <paramref name="world"/>, a world position, as the world X of its middle; null if there's
@@ -516,9 +609,12 @@ public sealed class Tilemap : Component
     /// Horizontal runs of tiles that collide, split where solid tiles meet one-way tiles. Background tiles are left out.
     /// Cached until the tiles or tile settings change.
     /// </summary>
-    public IReadOnlyList<(int X, int Y, int Length, bool OneWay)> CollisionRuns() =>
-        _collisionRuns ??= FindRuns(_tiles, c => CollisionOf(TileOf(c)))
+    public IReadOnlyList<(int X, int Y, int Length, bool OneWay)> CollisionRuns()
+    {
+        CheckCaches();
+        return _collisionRuns ??= FindRuns(_tiles, c => CollisionOf(TileOf(c)))
             .Select(r => (r.X, r.Y, r.Length, r.Kind == 1)).ToList();
+    }
 
     /// <summary>
     /// True if cell (<paramref name="x"/>, <paramref name="y"/>) is a wall for <see cref="FindPath"/>: a solid tile on a
@@ -661,10 +757,10 @@ public sealed class Tilemap : Component
     }
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="BackgroundTiles"/>.</summary>
-    public bool IsBackground(int tile) => InSet(_background, tile);
+    public bool IsBackground(int tile) => InSet(BaseMap._background, tile);
 
     /// <summary>True if <paramref name="tile"/> is listed in <see cref="OneWayTiles"/> (and not as a background tile).</summary>
-    public bool IsOneWay(int tile) => InSet(_oneWay, tile) && !InSet(_background, tile);
+    public bool IsOneWay(int tile) => InSet(BaseMap._oneWay, tile) && !IsBackground(tile);
 
     /// <summary>
     /// Reads a list of tile numbers and ranges like "3, 7-9", as flags by tile number up to the highest one listed (look

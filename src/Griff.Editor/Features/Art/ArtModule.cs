@@ -24,6 +24,7 @@ public sealed class ArtModule : IEditorModule
             .AddCommand<NewTilesetCommand>()
             .AddCommand<PaintSelectedCommand>()
             .AddCommand<AddTilesetCommand>()
+            .AddCommand<AddTilemapLayerCommand>()
             .AddCommand<OpenClipEditorCommand>();
     }
 }
@@ -82,8 +83,9 @@ public sealed class PaintSelectedCommand(EditorArt art, ISelection selection) : 
         return Task.CompletedTask;
     }
 
+    // A tilemap layer paints its map's tileset: a picture of its own would make it a map of its own.
     private Component? Target() =>
-        (Component?)selection.Entity?.GetComponent<Tilemap>() ?? selection.Entity?.GetComponent<Sprite>();
+        (Component?)selection.Entity?.GetComponent<Tilemap>()?.BaseMap ?? selection.Entity?.GetComponent<Sprite>();
 }
 
 /// <summary>
@@ -116,8 +118,30 @@ public sealed class AddTilesetCommand(EditorArt art, SceneView.SceneViewModel sc
             throw new InvalidOperationException("Select a tilemap (and nothing else) to add a tileset to it.");
         if (art.Resolve(choice) is null)
             throw new ArgumentException($"There's no image \"{choice}\" in Assets.", nameof(choice));
-        var (columns, rows) = art.TileGrid(choice, tilemap);
+        var (columns, rows) = art.TileGrid(choice, tilemap.BaseMap);
         scene.AddTileset(choice, columns, rows);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Adds a layer to the selected tilemap: another grid on top of it, painted on its own, with its own collision (Solid,
+/// Layer, Ignore Layers) and draw order, using the map's tilesets. It's an entity inside the map's, named after it
+/// ("Level Layer 2"), and is selected so painting goes there; the Scene view's palette lists the layers to switch
+/// between. It draws over the others and doesn't collide until Solid is turned on.
+/// </summary>
+public sealed class AddTilemapLayerCommand(SceneView.SceneViewModel scene) : EditorCommand
+{
+    public override string Id => "Art.AddTilemapLayer";
+    public override string Text => "Add _Layer to Tilemap";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 2);
+
+    protected override bool CanExecuteCore() => scene.PaintTarget is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        scene.AddLayer();
         return Task.CompletedTask;
     }
 }
@@ -132,7 +156,7 @@ public sealed class OpenClipEditorCommand(ClipEditor clips, IWorkspace workspace
     public override string Id => "Art.Clips";
     public override string Text => "Animation _Clips...";
     public override string? Icon => Icons.Play;
-    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 2);
+    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 3);
 
     protected override bool CanExecuteCore() => workspace.Project is not null;
 

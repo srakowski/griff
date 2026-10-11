@@ -79,15 +79,77 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
+    /// The layers of the tilemap being painted (see <see cref="Tilemap.Layers"/>), by their entities' names: its base map
+    /// first, then its layers in the order of the Hierarchy. Empty with nothing to paint.
+    /// </summary>
+    public IReadOnlyList<string> PaintLayers => PaintTarget?.Layers().Select(l => l.Entity!.Name).ToList() ?? [];
+
+    /// <summary>Which of <see cref="PaintLayers"/> is being painted, or -1 with nothing to paint.</summary>
+    public int PaintLayer => PaintTarget is { } tilemap ? IndexOf(tilemap.Layers(), tilemap) : -1;
+
+    private static int IndexOf(IReadOnlyList<Tilemap> layers, Tilemap layer)
+    {
+        for (var i = 0; i < layers.Count; i++)
+        {
+            if (layers[i] == layer)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Paints another layer of the tilemap being painted, by its place in <see cref="PaintLayers"/> (0 is the base map):
+    /// selects its entity, so painting goes there and the Inspector shows its settings.
+    /// </summary>
+    public void ShowLayer(int index)
+    {
+        var layers = (PaintTarget ?? throw NothingToPaint()).Layers();
+        if (index < 0 || index >= layers.Count)
+            throw new ArgumentOutOfRangeException(nameof(index), $"The tilemap has {layers.Count} layer{(layers.Count == 1 ? "" : "s")}, numbered from 0.");
+        selection.Select(layers[index].Entity);
+    }
+
+    /// <summary>
+    /// Adds a layer to the tilemap being painted, as one undo step: an entity inside the base map's, named after it
+    /// ("Level Layer 2"), holding a tilemap with no image of its own, so it paints with the base map's tilesets (see
+    /// <see cref="Tilemap.LayerOf"/>). It draws over the other layers and doesn't collide (turn Solid on for walls).
+    /// The new layer is selected, so painting goes there. Returns its name.
+    /// </summary>
+    public string AddLayer()
+    {
+        var target = PaintTarget ?? throw NothingToPaint();
+        if (workspace.Scene is not { } document)
+            throw NothingToPaint();
+        var baseMap = target.BaseMap;
+        var layers = target.Layers();
+        var owner = baseMap.Entity!;
+        var names = document.Scene.Entities.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var number = layers.Count + 1;
+        while (names.Contains($"{owner.Name} Layer {number}"))
+            number++;
+
+        var entity = new Entity($"{owner.Name} Layer {number}");
+        var layer = entity.AddComponent<Tilemap>();
+        (layer.Order, layer.Solid, layer.Tint) = (layers.Max(l => l.Order) + 1, false, baseMap.Tint);
+        document.History.Seal();
+        document.Execute(new AddEntityEdit(document.Scene, entity, owner));
+        document.History.Seal();
+        selection.Select(entity);
+        return entity.Name;
+    }
+
+    /// <summary>
     /// Adds a tileset to the selected tilemap, as one undo step: <paramref name="image"/> (relative to Assets) cut into
     /// <paramref name="columns"/> by <paramref name="rows"/> tiles. A map with no image yet takes it as its first
     /// (<see cref="Tilemap.Image"/>); otherwise it goes on the end of <see cref="Tilemap.MoreTilesets"/>, numbered from
-    /// the next hundred. An image the map already uses isn't added again. Either way the palette shows it after.
+    /// the next hundred. An image the map already uses isn't added again. Either way the palette shows it after. On a
+    /// layer it goes on the map the layer is part of (<see cref="Tilemap.BaseMap"/>), so every layer paints with it.
     /// Returns its first tile.
     /// </summary>
     public int AddTileset(string image, int columns, int rows)
     {
-        var tilemap = PaintTarget ?? throw NothingToPaint();
+        var tilemap = (PaintTarget ?? throw NothingToPaint()).BaseMap;
         if (string.IsNullOrWhiteSpace(image))
             throw new ArgumentException("Name an image in the project's Assets, like Tiles/props.png.", nameof(image));
         if (workspace.Scene is not { } document)
@@ -186,7 +248,7 @@ public sealed partial class SceneViewModel
         return count;
     }
 
-    /// <summary>Makes the tile in a cell of the selected tilemap the <see cref="BrushTile"/>; false (and no change) for an empty cell.</summary>
+    /// <summary>Makes the tile in a cell of the selected tilemap (the layer being painted) the <see cref="BrushTile"/>; false (and no change) for an empty cell.</summary>
     public bool PickTile(int x, int y)
     {
         var tilemap = PaintTarget ?? throw NothingToPaint();
@@ -292,8 +354,12 @@ public sealed partial class SceneViewModel
             if (shiftX == 0 && shiftY == 0)
                 return;
             var transform = tilemap.Entity!.Transform;
-            var offset = Vector3.TransformNormal(new Vector3(-shiftX * tilemap.TileSize, shiftY * tilemap.TileSize, 0), transform.LocalMatrix);
-            document.Execute(new SetPropertyEdit(transform, positionProperty, transform.Position + offset));
+            var shift = new Vector3(-shiftX * tilemap.TileSize, shiftY * tilemap.TileSize, 0);
+            document.Execute(new SetPropertyEdit(transform, positionProperty, transform.Position + Vector3.TransformNormal(shift, transform.LocalMatrix)));
+
+            // What's inside it (its layers, and anything else) stays where it was, so the layers stay lined up.
+            foreach (var child in tilemap.Entity.Children)
+                document.Execute(new SetPropertyEdit(child.Transform, positionProperty, child.Transform.Position - shift));
         }
     }
 }

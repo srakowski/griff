@@ -234,7 +234,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private void OnDocumentChanged(object? sender, EditEventArgs e)
     {
-        if (ChangesComponents(e.Edit) || PrefabsChanged())
+        if (ChangesComponents(e.Edit) || PrefabsChanged() || Components.Any(c => c.IsOutOfDate))
             Rebuild();
         else
             Refresh();
@@ -440,9 +440,29 @@ public sealed class ComponentSection : ObservableObject
 
         var descriptor = registry.Get(component.GetType());
         Title = descriptor.DisplayName;
-        Properties = descriptor.Properties.Select(p => new PropertyField(components, p, owner)).ToList();
+        _descriptor = descriptor;
+        Properties = Used().Select(p => new PropertyField(components, p, owner)).ToList();
+        SetupNote = component.SetupNote();
         IsAddedToCopy = components.Any(owner.IsAddedToCopy);
     }
+
+    private readonly ComponentDescriptor? _descriptor;
+
+    // The properties every one of the components uses as it's set up now (a tilemap layer leaves out its map's settings).
+    private IEnumerable<PropertyDescriptor> Used() =>
+        _descriptor?.Properties.Where(p => _components.All(c => c.Uses(p.Name))) ?? [];
+
+    /// <summary>
+    /// True when what the components use or say about how they're set up has changed since the section was made (a
+    /// tilemap became a layer, or stopped being one), so the Inspector makes it again.
+    /// </summary>
+    public bool IsOutOfDate =>
+        !Used().Select(p => p.Name).SequenceEqual(Properties.Select(p => p.PropertyName)) || Component.SetupNote() != SetupNote;
+
+    /// <summary>A line on how the component is set up, shown above its fields (see <see cref="Component.SetupNote"/>).</summary>
+    public string? SetupNote { get; }
+
+    public bool HasSetupNote => SetupNote is not null;
 
     /// <summary>On a placed copy of a prefab (or inside one), added there: the prefab doesn't have it.</summary>
     public bool IsAddedToCopy { get; }
@@ -562,6 +582,9 @@ public sealed class PropertyField : ObservableObject
     }
 
     public string Label { get; }
+
+    /// <summary>The property's name in code ("TileSize").</summary>
+    public string PropertyName => _property.Name;
 
     public FieldKind Kind { get; }
 

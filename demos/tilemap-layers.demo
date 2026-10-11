@@ -1,0 +1,38 @@
+title: Tilemap layers
+intro: A tilemap can now have layers: grids painted one at a time, each colliding its own way, all from the map's tilesets.
+project: Shooter | Layers
+
+chapter: Add a layer | Under the tile palette
+select: Walls
+look: 8, -4, 6
+say: The Shooter's level is one tilemap, and everything painted on it is a wall. To paint floor markings, or trim that the player walks over, we want another layer.
+explain: tiles:layer:Walls | Layers | Under the tools there's now a row with a button for each of the map's layers. So far there's only the map itself.
+click: tiles:layer:+
+expectselected: Walls Layer 2
+explain: entity:Walls Layer 2 | A new layer | Plus Layer adds one on top, and painting switches to it. Art, Add Layer to Tilemap does the same. The layer is an entity inside the map, so it can be renamed, reordered or turned off in the Hierarchy.
+explain: component:Tilemap | Its own settings | The Inspector says it's a layer of Walls. It paints with the walls' tilesets and tile settings, so those are left out here. Its tiles, draw order and collision are its own.
+
+chapter: Paint on it | Markings that don't block
+say: Let's paint hazard stripes across the start room, in front of the player.
+click: tiles:Rectangle
+click: tiles:6
+scenedrag: 5.5, -1.5 > 5.5, -5.5
+expecttile: Walls Layer 2 5, 3 = 6
+expecttile: Walls 5, 3 = -1
+explain: world:0, 0, 8, -7 | The other layers fade | While one layer is painted, the map's other layers fade back, so it's clear what's being painted.
+explain: field:Tilemap.Solid | Solid is off | A new layer doesn't collide, so these stripes are just paint on the floor.
+play
+hold: W 1.5
+say: In the game, the player walks straight over them and out through the door.
+stop
+
+chapter: Its own collision | Solid, Layer and Ignore Layers
+select: Walls Layer 2
+set: Tilemap.Solid = true
+explain: field:Tilemap.Solid | Solid | Turn Solid on, and the same stripes become a barrier.
+play
+hold: W 1.5
+expectat: Player = 4.72, -3.5
+say: Now the stripes are a wall of hazard blocks, and the player stops at them. Each layer collides its own way, and its Layer and Ignore Layers say who it stops, so a barrier could let ghosts through.
+stop
+say: Agents add layers with the same Art menu command, or by creating a tilemap inside a tilemap, and switch between them through the Scene view's view model.

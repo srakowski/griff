@@ -410,7 +410,9 @@ public sealed class SceneViewControl : FrameworkElement
         var bleed = 0.5 / _zoom;
         var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
         dc.PushTransform(new MatrixTransform(ScreenMatrix(entity.Transform.WorldMatrix)));
-        dc.PushOpacity(tilemap.Tint.A);
+        // While one layer of a map is painted, its other layers fade back.
+        var otherLayer = PaintTarget is { } painting && painting != tilemap && painting.BaseMap == tilemap.BaseMap;
+        dc.PushOpacity(tilemap.Tint.A * (otherLayer ? 0.35 : 1));
 
         foreach (var (x, y, tile) in tilemap.Cells())
         {
@@ -884,13 +886,26 @@ public sealed class SceneViewControl : FrameworkElement
             dc.DrawText(label, new Point(button.X + (button.Width - label.Width) / 2, button.Y + (button.Height - label.Height) / 2));
         }
 
+        // The map's layers under the tools, the one being painted picked out, and + Layer to add one.
+        foreach (var (box, layer) in palette.LayerButtons)
+        {
+            var picked = layer == tilemap;
+            dc.DrawRoundedRectangle(picked ? accent : Brush("Brush.Surface.Chrome"), new Pen(picked ? accent : Brush("Brush.Border.Default"), 1), box, 3, 3);
+            var label = Text(layer.Entity!.Name, picked ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(label, new Point(box.X + (box.Width - label.Width) / 2, box.Y + (box.Height - label.Height) / 2));
+        }
+
+        dc.DrawRoundedRectangle(Brush("Brush.Surface.Chrome"), new Pen(Brush("Brush.Border.Default"), 1), palette.AddLayer, 3, 3);
+        var addLayer = Text(AddLayerLabel, "Brush.Text.Primary");
+        dc.DrawText(addLayer, new Point(palette.AddLayer.X + (palette.AddLayer.Width - addLayer.Width) / 2, palette.AddLayer.Y + (palette.AddLayer.Height - addLayer.Height) / 2));
+
         var hint = Text(_model.TileTool switch
         {
             TileTool.Rectangle => "Rectangle: drag a box to fill · Shift erase · Ctrl pick · [ ] tile · Esc done",
             TileTool.Fill => "Fill: click an area to fill it · Shift erase · Ctrl pick · [ ] tile · Esc done",
             _ => "Brush: drag to paint · Shift erase · Ctrl pick · [ ] tile · Esc done",
         }, "Brush.Text.Secondary");
-        dc.DrawText(hint, new Point(panel.Left + 6, palette.ToolBounds(TileTool.Brush).Bottom + 4));
+        dc.DrawText(hint, new Point(panel.Left + 6, palette.AddLayer.Bottom + 4));
     }
 
     private void DrawMarker(DrawingContext dc, Entity entity)
@@ -1409,10 +1424,10 @@ public sealed class SceneViewControl : FrameworkElement
     /// <summary>
     /// Where the palette's parts go: a tab for each of the map's tilesets (and a + to add one) along the top, the tiles
     /// of the one <see cref="Shown"/> under them in rows (scrolled down <see cref="Scroll"/> rows when they don't all
-    /// fit), and the tools below.
+    /// fit), the tools below, and a button for each of the map's layers (and + Layer) under those.
     /// </summary>
     private sealed record PaletteLayout(Tileset Shown, int Count, int Scroll, int VisibleRows, Rect Panel, double CellsTop,
-        IReadOnlyList<(Rect Box, Tileset Tileset)> Tabs, Rect AddTab)
+        IReadOnlyList<(Rect Box, Tileset Tileset)> Tabs, Rect AddTab, IReadOnlyList<(Rect Box, Tilemap Layer)> LayerButtons, Rect AddLayer)
     {
         public int Rows => (Count + PaletteColumns - 1) / PaletteColumns;
 
@@ -1430,6 +1445,7 @@ public sealed class SceneViewControl : FrameworkElement
     }
 
     private const double TabHeight = 20;
+    private const string AddLayerLabel = "+ Layer";
 
     private int _paletteScroll;
     private int? _paletteScrollOf;
@@ -1451,16 +1467,27 @@ public sealed class SceneViewControl : FrameworkElement
         var add = new Rect(x, 12, TabHeight + 4, TabHeight);
         var cellsTop = 12 + TabHeight + 4;
 
-        // As many rows as fit above the tools and hint; the rest scroll with the mouse wheel.
+        // As many rows as fit above the tools, layers and hint; the rest scroll with the mouse wheel.
         var rows = (count + PaletteColumns - 1) / PaletteColumns;
-        var visible = Math.Min(rows, Math.Max(2, (int)((ActualHeight - cellsTop - 64) / PaletteCell)));
+        var visible = Math.Min(rows, Math.Max(2, (int)((ActualHeight - cellsTop - 90) / PaletteCell)));
         if (_paletteScrollOf != shown.First)
             (_paletteScroll, _paletteScrollOf) = ((_model.BrushTile - shown.First) / PaletteColumns - visible / 2, shown.First);
         _paletteScroll = Math.Clamp(_paletteScroll, 0, rows - visible);
 
         var panelWidth = Math.Max(Math.Min(count, PaletteColumns) * PaletteCell, add.Right - 12) + 8;
         var panel = new Rect(8, 8, panelWidth, cellsTop - 8 + visible * PaletteCell + 4);
-        return new PaletteLayout(shown, count, _paletteScroll, visible, panel, cellsTop, tabs, add);
+
+        var layerButtons = new List<(Rect, Tilemap)>();
+        var (layerX, layerY) = (8.0, panel.Bottom + 4 + 22 + 4);
+        foreach (var layer in tilemap.Layers())
+        {
+            var width = Text(layer.Entity!.Name, "Brush.Text.Primary").Width + 14;
+            layerButtons.Add((new Rect(layerX, layerY, width, 22), layer));
+            layerX += width + 4;
+        }
+
+        var addLayer = new Rect(layerX, layerY, Text(AddLayerLabel, "Brush.Text.Primary").Width + 14, 22);
+        return new PaletteLayout(shown, count, _paletteScroll, visible, panel, cellsTop, tabs, add, layerButtons, addLayer);
     }
 
     // Scrolls the palette to show the brush's tile, when it's from the tileset shown.
@@ -1492,6 +1519,19 @@ public sealed class SceneViewControl : FrameworkElement
         return Enum.GetValues<TileTool>().Cast<TileTool?>().FirstOrDefault(t => palette.ToolBounds(t!.Value).Contains(screen));
     }
 
+    // Which layer button is at a point: its place in the map's layers, the count of them for + Layer, or null.
+    private int? LayerButtonAt(Tilemap tilemap, Point screen)
+    {
+        var palette = Palette(tilemap);
+        for (var i = 0; i < palette.LayerButtons.Count; i++)
+        {
+            if (palette.LayerButtons[i].Box.Contains(screen))
+                return i;
+        }
+
+        return palette.AddLayer.Contains(screen) ? palette.LayerButtons.Count : null;
+    }
+
     // The + tab lists the project's images to add as a tileset, as Art > Add Tileset to Tilemap does.
     private void ShowAddTilesetMenu(Rect tab)
     {
@@ -1519,8 +1559,9 @@ public sealed class SceneViewControl : FrameworkElement
 
     /// <summary>
     /// The screen box of a part of the tile painting overlay, for demos to point at: a tool's button ("Rectangle"), a
-    /// tile of the tileset the palette shows by its number ("3", "104"), a tileset's tab by its name ("props"), or the
-    /// + tab that adds one ("+"). Null when nothing is being painted (or the tile is scrolled out of sight).
+    /// tile of the tileset the palette shows by its number ("3", "104"), a tileset's tab by its name ("props"), the
+    /// + tab that adds one ("+"), a layer's button by its entity's name ("layer:Level Layer 2"), or the button that adds
+    /// one ("layer:+"). Null when nothing is being painted (or the tile is scrolled out of sight).
     /// </summary>
     internal Rect? PaintOverlayBounds(string part)
     {
@@ -1532,6 +1573,14 @@ public sealed class SceneViewControl : FrameworkElement
             return palette.ToolBounds(tool);
         if (part.Trim() == "+")
             return palette.AddTab;
+        if (part.Trim().StartsWith("layer:", StringComparison.OrdinalIgnoreCase))
+        {
+            var name = part.Trim()["layer:".Length..].Trim();
+            return name == "+"
+                ? palette.AddLayer
+                : palette.LayerButtons.Where(l => l.Layer.Entity!.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(l => (Rect?)l.Box).FirstOrDefault();
+        }
+
         if (int.TryParse(part, out var tile))
             return palette.CellBounds(tile);
         return palette.Tabs.Where(t => t.Tileset.Name.Equals(part.Trim(), StringComparison.OrdinalIgnoreCase)).Select(t => (Rect?)t.Box).FirstOrDefault();
@@ -1786,6 +1835,15 @@ public sealed class SceneViewControl : FrameworkElement
             return;
         }
 
+        if (LayerButtonAt(tilemap, position) is { } layer)
+        {
+            if (layer < tilemap.Layers().Count)
+                _model.ShowLayer(layer);
+            else
+                _model.AddLayer();
+            return;
+        }
+
         var palette = Palette(tilemap);
         if (palette.AddTab.Contains(position))
         {
@@ -1856,7 +1914,8 @@ public sealed class SceneViewControl : FrameworkElement
 
     private void UpdateHoverCell(Tilemap tilemap, Point position)
     {
-        var overPalette = _drag == DragMode.None && (PaletteTileAt(tilemap, position) is not null || ToolButtonAt(tilemap, position) is not null);
+        var overPalette = _drag == DragMode.None &&
+            (PaletteTileAt(tilemap, position) is not null || ToolButtonAt(tilemap, position) is not null || LayerButtonAt(tilemap, position) is not null);
         var cell = overPalette ? null : CellUnder(tilemap, position);
         if (cell != _hoverCell)
         {

@@ -222,6 +222,50 @@ public sealed class RotateEntitiesEdit : IEdit
     }
 }
 
+/// <summary>
+/// Scales one or more entities (dragging the Scene view's scale handles): each one's scale, and its position as it
+/// moves toward or away from the pivot, as one step. Consecutive scales of the same entities merge, so a whole drag
+/// undoes in one go.
+/// </summary>
+public sealed class ScaleEntitiesEdit : IEdit
+{
+    private readonly IReadOnlyList<Transform> _transforms;
+    private readonly (System.Numerics.Vector3 Position, System.Numerics.Vector3 Scale)[] _old;
+    private (System.Numerics.Vector3 Position, System.Numerics.Vector3 Scale)[] _new;
+
+    public ScaleEntitiesEdit(IReadOnlyList<Transform> transforms, IReadOnlyList<System.Numerics.Vector3> positions, IReadOnlyList<System.Numerics.Vector3> scales)
+    {
+        if (transforms.Count != positions.Count || transforms.Count != scales.Count)
+            throw new ArgumentException("One position and one scale per transform.");
+        _transforms = transforms;
+        _old = transforms.Select(t => (t.Position, t.Scale)).ToArray();
+        _new = positions.Zip(scales).ToArray();
+    }
+
+    public string Description => _transforms.Count == 1 ? $"Scale {_transforms[0].Entity?.Name}" : $"Scale {_transforms.Count} entities";
+
+    public void Apply()
+    {
+        for (var i = 0; i < _transforms.Count; i++)
+            (_transforms[i].Position, _transforms[i].Scale) = _new[i];
+    }
+
+    public void Revert()
+    {
+        for (var i = _transforms.Count - 1; i >= 0; i--)
+            (_transforms[i].Position, _transforms[i].Scale) = _old[i];
+    }
+
+    public bool TryMerge(IEdit next)
+    {
+        if (next is not ScaleEntitiesEdit other || !other._transforms.SequenceEqual(_transforms))
+            return false;
+
+        _new = other._new;
+        return true;
+    }
+}
+
 public sealed class RenameEntityEdit(Entity entity, string name) : IEdit
 {
     private readonly string _oldName = entity.Name;

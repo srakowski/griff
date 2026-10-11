@@ -9,8 +9,8 @@ using Transform = Griff.Scenes.Transform;
 namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
-/// What the Scene view does with the selection: picking everything inside a box, and moving or turning everything
-/// selected together. The view's drags call these, and agents can too (positions are world units, Y up).
+/// What the Scene view does with the selection: picking everything inside a box, and moving, turning or scaling
+/// everything selected together. The view's drags call these, and agents can too (positions are world units, Y up).
 /// </summary>
 public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
 {
@@ -157,6 +157,39 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
         return new SelectionRotate(document, turning, anchor, Flat(primary.Transform.WorldPosition));
     }
 
+    /// <summary>
+    /// Scales everything selected by <paramref name="factor"/> (2, 1 doubles the width) along the primary selection's
+    /// own axes, around its position, as one undo step: each entity's scale is multiplied by it and the others move
+    /// toward or away from the primary with it. One entity just grows or shrinks in place.
+    /// </summary>
+    public void ScaleSelection(Vector2 factor)
+    {
+        if (BeginScale() is not { } scale)
+            return;
+        workspace.Scene!.History.Seal();
+        scale.To(factor, snap: false, round: false);
+        scale.End();
+    }
+
+    /// <summary>
+    /// Starts scaling the selection around the primary's position, for a drag of a scale handle:
+    /// <see cref="SelectionScale.To"/> scales everything relative to where it started, and the whole drag is one undo
+    /// step. Null when nothing is selected.
+    /// </summary>
+    public SelectionScale? BeginScale()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } primary || primary.Scene != document.Scene)
+            return null;
+        var scaling = selection.TopLevel().Where(e => e.Scene == document.Scene).ToList();
+        if (scaling.Count == 0)
+            return null;
+        // Rounding and snapping line up the one picked last (or the selected parent it's inside), as moving does.
+        var anchor = scaling.FirstOrDefault(e => primary.IsSelfOrDescendantOf(e)) ?? scaling[^1];
+        var world = primary.Transform.WorldMatrix;
+        return new SelectionScale(document, scaling, anchor, Flat(primary.Transform.WorldPosition),
+            Flat(Vector3.TransformNormal(Vector3.UnitX, world)), Flat(Vector3.TransformNormal(Vector3.UnitY, world)));
+    }
+
     /// <summary>World-space corners of what the entity draws (its sprite, tilemap or camera frame), or null if it draws none of those.</summary>
     public static Vector2[]? Outline(Entity entity)
     {
@@ -297,5 +330,98 @@ public sealed class SceneViewModel(IWorkspace workspace, ISelection selection)
 
         /// <summary>Ends the drag, so the next turn is its own undo step.</summary>
         public void End() => _document.History.Seal();
+    }
+
+    /// <summary>One drag of a scale handle, from <see cref="BeginScale"/>.</summary>
+    public sealed class SelectionScale
+    {
+        /// <summary>The step Ctrl snaps the anchor's scale to.</summary>
+        public const float SnapStep = 0.1f;
+
+        private readonly SceneDocument _document;
+        private readonly List<(Transform Transform, Vector3 Position, Vector3 Scale, Vector3 World, Matrix4x4 ParentInverse)> _scaling;
+        private readonly int _anchor;
+
+        internal SelectionScale(SceneDocument document, IReadOnlyList<Entity> entities, Entity anchor, Vector2 pivot, Vector2 axisX, Vector2 axisY)
+        {
+            _document = document;
+            Pivot = pivot;
+            // A squashed-flat or skewed-flat primary has no axes to scale along; fall back to the world's.
+            var (x, y) = (Direction(axisX), Direction(axisY));
+            (AxisX, AxisY) = MathF.Abs(x.X * y.Y - x.Y * y.X) < 1e-4f ? (Vector2.UnitX, Vector2.UnitY) : (x, y);
+            _anchor = entities.ToList().IndexOf(anchor);
+            _scaling = entities.Select(e => (e.Transform, e.Transform.Position, e.Transform.Scale, e.Transform.WorldPosition,
+                e.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse) ? inverse : Matrix4x4.Identity)).ToList();
+            document.History.Seal();
+        }
+
+        /// <summary>The world point everything scales around: the primary selection's position.</summary>
+        public Vector2 Pivot { get; }
+
+        /// <summary>The primary selection's own right in the world: the first factor scales along it.</summary>
+        public Vector2 AxisX { get; }
+
+        /// <summary>The primary selection's own up in the world: the second factor scales along it.</summary>
+        public Vector2 AxisY { get; }
+
+        /// <summary>A world point as distances from <see cref="Pivot"/> along <see cref="AxisX"/> and <see cref="AxisY"/>.</summary>
+        public Vector2 Along(Vector2 world)
+        {
+            var offset = world - Pivot;
+            var det = AxisX.X * AxisY.Y - AxisX.Y * AxisY.X;
+            return new Vector2(offset.X * AxisY.Y - offset.Y * AxisY.X, AxisX.X * offset.Y - AxisX.Y * offset.X) / det;
+        }
+
+        /// <summary>
+        /// Scales everything by <paramref name="factor"/> from where it started. <paramref name="snap"/> puts the
+        /// anchor's scale on a multiple of <see cref="SnapStep"/>; otherwise <paramref name="round"/> puts it on a
+        /// hundredth, so a drag leaves tidy numbers in the Inspector. An axis the factor leaves alone (1) isn't
+        /// rounded, and no scale reaches zero.
+        /// </summary>
+        public void To(Vector2 factor, bool snap, bool round = true)
+        {
+            var start = _scaling[_anchor].Scale;
+            Vector2? exact = null;
+            if (snap || round)
+            {
+                var perUnit = snap ? 1 / SnapStep : 100;
+                var fitted = new Vector2(Fit(start.X, factor.X, perUnit), Fit(start.Y, factor.Y, perUnit));
+                factor = new Vector2(start.X == 0 ? factor.X : fitted.X / start.X, start.Y == 0 ? factor.Y : fitted.Y / start.Y);
+                exact = fitted;
+            }
+
+            var positions = _scaling.Select(s =>
+            {
+                // Whoever sits on the pivot stays exactly where it was, without float drift.
+                if (Vector2.Distance(Flat(s.World), Pivot) < 1e-6f)
+                    return s.Position;
+                var along = Along(Flat(s.World)) * factor;
+                var world = Pivot + along.X * AxisX + along.Y * AxisY;
+                return Vector3.Transform(new Vector3(world, s.World.Z), s.ParentInverse);
+            }).ToList();
+            var scales = _scaling.Select(s => s.Scale * new Vector3(factor, 1)).ToList();
+            if (exact is { } anchorScale)
+                scales[_anchor] = new Vector3(anchorScale, start.Z);
+
+            if (_scaling.Select((s, i) => s.Transform.Position == positions[i] && s.Transform.Scale == scales[i]).All(same => same))
+                return;
+            _document.Execute(new ScaleEntitiesEdit(_scaling.Select(s => s.Transform).ToList(), positions, scales));
+        }
+
+        /// <summary>Ends the drag, so the next scale is its own undo step.</summary>
+        public void End() => _document.History.Seal();
+
+        // The scale an axis lands on: rounded to 1/perUnit, never zero (it keeps the sign it would have had), and left
+        // as it is when the factor doesn't touch it.
+        private static float Fit(float start, float factor, float perUnit)
+        {
+            var scaled = start * factor;
+            if (factor == 1 || start == 0)
+                return scaled;
+            var fitted = MathF.Round(scaled * perUnit) / perUnit;
+            return fitted != 0 ? fitted : MathF.CopySign(1 / perUnit, scaled == 0 ? start : scaled);
+        }
+
+        private static Vector2 Direction(Vector2 v) => v.LengthSquared() < 1e-12f ? Vector2.Zero : Vector2.Normalize(v);
     }
 }

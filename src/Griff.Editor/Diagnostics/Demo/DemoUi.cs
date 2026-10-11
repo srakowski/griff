@@ -110,6 +110,30 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public Point? RotateKnob() =>
         SceneRotateHandle.Invoke(sceneView, []) is (Point, Point knob) ? sceneView.PointToScreen(knob) : null;
 
+    private static readonly MethodInfo SceneScaleHandles = typeof(SceneViewControl).GetMethod("ScaleHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    /// <summary>
+    /// Where one of the Scene view's scale handles is on screen, by its place on the selection ("top-left", "top",
+    /// "right"...), or null when it isn't showing.
+    /// </summary>
+    public Point? ScaleHandle(string name)
+    {
+        var spot = name.Trim().ToLowerInvariant() switch
+        {
+            "top-left" => new Vector2(-1, 1),
+            "top" => new Vector2(0, 1),
+            "top-right" => new Vector2(1, 1),
+            "right" => new Vector2(1, 0),
+            "bottom-right" => new Vector2(1, -1),
+            "bottom" => new Vector2(0, -1),
+            "bottom-left" => new Vector2(-1, -1),
+            "left" => new Vector2(-1, 0),
+            _ => throw new FormatException($"No scale handle \"{name}\": top-left, top, top-right, right, bottom-right, bottom, bottom-left or left."),
+        };
+        var handles = (IEnumerable<(Vector2 Spot, Point Screen)>)SceneScaleHandles.Invoke(sceneView, [])!;
+        return handles.Where(h => h.Spot == spot).Select(h => (Point?)sceneView.PointToScreen(h.Screen)).FirstOrDefault();
+    }
+
     private static readonly FieldInfo PanField = typeof(SceneViewControl).GetField("_pan", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly FieldInfo ZoomField = typeof(SceneViewControl).GetField("_zoom", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly FieldInfo NeedsFitField = typeof(SceneViewControl).GetField("_needsFit", BindingFlags.NonPublic | BindingFlags.Instance)!;

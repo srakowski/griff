@@ -275,6 +275,34 @@ public class EditHistoryTests
     }
 
     [Fact]
+    public void ScaleEntities_ScalesAndMovesSeveral_MergesWhileUnsealed_AndUndoesInOneStep()
+    {
+        var (a, b) = (new Entity("A"), new Entity("B"));
+        b.Transform.Position = new Vector3(2, 0, 1);
+        b.Transform.Scale = new Vector3(1, 3, 1);
+        Transform[] both = [a.Transform, b.Transform];
+
+        _history.Seal();
+        _history.Execute(new ScaleEntitiesEdit(both, [Vector3.Zero, new Vector3(3, 0, 1)], [new Vector3(1.5f, 1, 1), new Vector3(1.5f, 3, 1)]));
+        _history.Execute(new ScaleEntitiesEdit(both, [Vector3.Zero, new Vector3(4, 0, 1)], [new Vector3(2, 1, 1), new Vector3(2, 3, 1)]));
+        Assert.Equal(new Vector3(4, 0, 1), b.Transform.Position);
+        Assert.Equal(new Vector3(2, 3, 1), b.Transform.Scale);
+        Assert.Equal("Scale 2 entities", _history.UndoDescription);
+
+        // A different set of entities is its own step.
+        _history.Execute(new ScaleEntitiesEdit([a.Transform], [Vector3.Zero], [new Vector3(5, 1, 1)]));
+        Assert.Equal("Scale A", _history.UndoDescription);
+        _history.Undo();
+        Assert.Equal(new Vector3(2, 1, 1), a.Transform.Scale);
+
+        _history.Undo();
+        Assert.Equal(Vector3.One, a.Transform.Scale);
+        Assert.Equal(new Vector3(2, 0, 1), b.Transform.Position);
+        Assert.Equal(new Vector3(1, 3, 1), b.Transform.Scale);
+        Assert.False(_history.CanUndo);
+    }
+
+    [Fact]
     public void SetProperties_SetsSeveral_MergesWhileUnsealed_AndUndoesEachToItsOwnValue()
     {
         var (a, b) = (new Entity("A"), new Entity("B"));

@@ -1,0 +1,45 @@
+title: Scale in the Scene view
+intro: Drag the square handles on the selection's corners and edges to scale it, right in the Scene view.
+project: TopDown | Scene Scale
+
+create: Sprite
+rename: Rug
+set: Transform.Position = 7, 1, 0
+set: Sprite.Tint = #7E2553
+deselect
+create: Sprite
+rename: Lamp
+set: Transform.Position = 9.5, 1, 0
+set: Sprite.Size = 0.5, 0.5
+set: Sprite.Tint = #FFEC27
+
+chapter: Scale handles | Drag an edge or a corner
+select: Rug
+look: 8.5, 1.5, 3.5
+say: Here's a rug to lay in the dungeon. Making it bigger used to mean typing numbers into the Scale field.
+explain: handle:right | Scale handles | Now the selection has square handles on its corners and edges. An edge stretches it one way.
+scale: Ctrl+right = 3
+expectvalue: Rug.Transform.Scale.X = 3
+expectvalue: Rug.Transform.Scale.Y = 1
+explain: field:Transform.Scale | Snapped | Holding control snaps the scale to tenths, so this is exactly three wide.
+explain: handle:top-right | Corners | A corner scales both ways at once. Holding shift keeps the proportions.
+scale: Ctrl+Shift+top-right = 0.5
+expectvalue: Rug.Transform.Scale.X = 1.5
+expectvalue: Rug.Transform.Scale.Y = 0.5
+say: Without control it scales freely, landing on hundredths. Each drag is one step to undo.
+key: Ctrl+Z
+expectvalue: Rug.Transform.Scale.X = 3
+
+chapter: Scaling several | Around the one picked last
+select: Lamp
+select: Ctrl+Rug
+expectselected: Lamp, Rug
+say: With several selected, the handles sit on the one picked last, here the rug.
+scale: Ctrl+Shift+top-right = 2
+expectvalue: Rug.Transform.Scale.X = 6
+expectvalue: Lamp.Transform.Scale.X = 2
+expectat: Lamp = 12, 1
+explain: world:3.5, 3, 12.8, -1 | Grown together | Everything grows around the rug together: the lamp doubled too, and moved out to stay beside it.
+key: Ctrl+Z
+expectat: Lamp = 9.5, 1
+say: And one undo puts them both back.

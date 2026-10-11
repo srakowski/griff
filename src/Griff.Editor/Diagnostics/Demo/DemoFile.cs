@@ -413,6 +413,25 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(knob, arc, rotateModifiers, Math.Clamp(1400.0 / steps, 40, 250));
                 await DemoUi.Settle();
                 break;
+            case "scale":
+                // "scale: top-right = 2, 1.5" (or "Shift+top-right = 2"): drags that scale handle to where it scales the
+                // selection by that much along its own axes (one number for both).
+                var (scaleText, scaleModifiers) = ParseModifiedName(a);
+                var (handleName, factorText) = Split2(scaleText, '=');
+                var factors = factorText.Contains(',') ? Vector(factorText) : new System.Numerics.Vector2(float.Parse(factorText, CultureInfo.InvariantCulture));
+                var handle = ui.ScaleHandle(handleName) ?? throw new InvalidOperationException($"The {handleName} scale handle isn't showing: select something big enough first.");
+                var scaled = selection.Entity!.Transform;
+                var scalePivot = ui.World(scaled.WorldPosition.X, scaled.WorldPosition.Y);
+                // The handle's offset from the pivot along the entity's own axes on screen (Y down), each axis stretched.
+                var right = System.Numerics.Vector3.TransformNormal(System.Numerics.Vector3.UnitX, scaled.WorldMatrix);
+                var up = System.Numerics.Vector3.TransformNormal(System.Numerics.Vector3.UnitY, scaled.WorldMatrix);
+                var (ex, ey) = (new Vector(right.X, -right.Y), new Vector(up.X, -up.Y));
+                var offset = handle - scalePivot;
+                var det = ex.X * ey.Y - ex.Y * ey.X;
+                var (along, across) = ((offset.X * ey.Y - offset.Y * ey.X) / det, (ex.X * offset.Y - ex.Y * offset.X) / det);
+                await Input.DragWith(handle, scalePivot + ex * along * factors.X + ey * across * factors.Y, scaleModifiers);
+                await DemoUi.Settle();
+                break;
             case "expectat":
                 // "expectat: Slime = 6, 1": the entity is (within a tenth of a unit) at that world position.
                 var (atName, atText) = Split2(a, '=');
@@ -1103,10 +1122,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 GameScreenPoint(new System.Numerics.Vector2((float)box[2], (float)box[3])));
         }
 
-        if (kind.Equals("handle", StringComparison.OrdinalIgnoreCase) && name.Equals("rotate", StringComparison.OrdinalIgnoreCase))
+        if (kind.Equals("handle", StringComparison.OrdinalIgnoreCase))
         {
-            var knob = ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.");
-            return new Rect(knob.X - 18, knob.Y - 18, 36, 36);
+            var handle = name.Equals("rotate", StringComparison.OrdinalIgnoreCase)
+                ? ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.")
+                : ui.ScaleHandle(name) ?? throw new InvalidOperationException($"The {name} scale handle isn't showing.");
+            return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }
 
         if (!kind.Equals("world", StringComparison.OrdinalIgnoreCase))

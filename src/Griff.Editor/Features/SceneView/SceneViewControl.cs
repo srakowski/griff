@@ -21,6 +21,7 @@ namespace Griff.Editor.Features.SceneView;
 /// Wheel zooms at the cursor; middle/right/Alt-drag pans; click selects (Ctrl or Shift adds or takes away); dragging
 /// from empty space selects everything in the box; dragging a selected entity moves the whole selection (Ctrl snaps);
 /// dragging the rotate handle above the primary selection turns the selection around it (Ctrl snaps to 15 degrees);
+/// dragging the square handles on its corners and edges scales it (Shift keeps proportions, Ctrl snaps to tenths);
 /// F frames. The selection's actions live in <see cref="SceneViewModel"/>, where agents reach them too.
 /// With a tilemap selected, left-drag paints tiles instead (Shift erases, Ctrl picks, [ and ] change tile, Esc stops).
 /// </summary>
@@ -36,6 +37,14 @@ public sealed class SceneViewControl : FrameworkElement
     private const int PaletteColumns = 8;
     private const double HandleStem = 24;
     private const double HandleRadius = 5;
+    private const double HandleSquare = 3.5;
+    private const double MarkerFrame = MarkerRadius + 8;
+    private const double EdgeHandleRoom = 28;
+    private const double ScaleHandleRoom = 16;
+
+    // Where the scale handles sit on the primary selection's frame, in its own axes: corners and edge middles.
+    private static readonly Vector2[] ScaleSpots =
+        [new(-1, -1), new(0, -1), new(1, -1), new(1, 0), new(1, 1), new(0, 1), new(-1, 1), new(-1, 0)];
 
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
@@ -61,6 +70,10 @@ public sealed class SceneViewControl : FrameworkElement
     private double _rotateLast;
     private double _rotateTotal;
     private bool _overHandle;
+    private SceneViewModel.SelectionScale? _scale;
+    private Vector2 _scaleSpot;
+    private Vector2 _scalePress;
+    private Vector2? _overScale;
 
     // Tile painting.
     private int _brushTile;
@@ -98,6 +111,7 @@ public sealed class SceneViewControl : FrameworkElement
         Box,
         Paint,
         Rotate,
+        Scale,
     }
 
     private PropertyDescriptor PositionProperty =>
@@ -234,8 +248,8 @@ public sealed class SceneViewControl : FrameworkElement
 
         if (_drag == DragMode.Box)
             DrawBoxSelection(dc);
-        else if (RotateHandle() is var (root, knob))
-            DrawRotateHandle(dc, root, knob);
+        else
+            DrawHandles(dc);
 
         if (PaintTarget is { } painting)
             DrawPaintOverlay(dc, painting);
@@ -709,6 +723,14 @@ public sealed class SceneViewControl : FrameworkElement
         dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
     }
 
+    // The primary selection's handles: the rotate knob, then the scale squares over the root of its stem.
+    private void DrawHandles(DrawingContext dc)
+    {
+        if (RotateHandle() is var (root, knob))
+            DrawRotateHandle(dc, root, knob);
+        DrawScaleHandles(dc);
+    }
+
     // A stem out of the top of the primary selection with a knob to drag; while turning, the circle the knob follows and
     // the angle it's at.
     private void DrawRotateHandle(DrawingContext dc, Point root, Point knob)
@@ -737,6 +759,34 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
+    // Squares on the corners and edges of the primary selection; while scaling, its scale by the one being dragged.
+    private void DrawScaleHandles(DrawingContext dc)
+    {
+        var accent = Brush("Brush.Accent");
+        var chrome = Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        Point? dragged = null;
+        foreach (var (spot, point) in ScaleHandles())
+        {
+            var active = _drag == DragMode.Scale ? spot == _scaleSpot : _drag == DragMode.None && spot == _overScale;
+            var half = HandleSquare + (active ? 1 : 0);
+            var square = new Rect(point.X - half, point.Y - half, half * 2, half * 2);
+            dc.DrawRectangle(chrome, halo, square);
+            dc.DrawRectangle(active ? accent : chrome, new Pen(accent, 1.5), square);
+            if (active && _drag == DragMode.Scale)
+                dragged = point;
+        }
+
+        if (dragged is { } at && _selection.Entity is { } scaling)
+        {
+            var scale = scaling.Transform.Scale;
+            var label = Text($"{scale.X.ToString("0.##", CultureInfo.CurrentCulture)} × {scale.Y.ToString("0.##", CultureInfo.CurrentCulture)}", "Brush.Text.Primary");
+            var place = new Point(at.X + 12, at.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
     // The box being dragged, and outlines on what it will catch.
     private void DrawBoxSelection(DrawingContext dc)
     {
@@ -762,30 +812,118 @@ public sealed class SceneViewControl : FrameworkElement
         _document is null ? null : _model.EntityAt(ToWorld(screen), (float)((MarkerRadius + 3) / _zoom));
 
     /// <summary>
-    /// Where the rotate handle is, in screen space: a stem from the top edge of the primary selection's outline (or its
-    /// marker) out along its up direction, ending in the knob. Null when there's nothing to turn, or while painting.
+    /// The frame the primary selection's handles sit on, in screen space: its outline's corners, or a box around its
+    /// marker, as (-1, -1), (1, -1), (1, 1) and (-1, 1) in its own axes. Null when there's nothing to handle, or while
+    /// painting.
     /// </summary>
-    private (Point Root, Point Knob)? RotateHandle()
+    private Point[]? HandleFrame()
     {
         if (_document is null || _selection.Entity is not { } entity || entity.Scene != _document.Scene || PaintTarget is not null)
             return null;
+        if (SceneViewModel.Outline(entity) is { } corners)
+            return corners.Select(c => ToScreen(c)).ToArray();
 
         var world = entity.Transform.WorldMatrix;
-        var up = Vector3.TransformNormal(Vector3.UnitY, world);
-        var direction = new Vector(up.X, -up.Y);
-        if (direction.Length < 1e-6)
-            direction = new Vector(0, -1);
-        direction.Normalize();
-
+        var right = ScreenDirection(Vector3.UnitX, world, new Vector(1, 0)) * MarkerFrame;
+        var up = ScreenDirection(Vector3.UnitY, world, new Vector(0, -1)) * MarkerFrame;
         var pivot = ToScreen(ToVector2(entity.Transform.WorldPosition));
-        var root = SceneViewModel.Outline(entity) is { } corners
-            ? ToScreen((corners[2] + corners[3]) / 2)
-            : pivot + direction * (MarkerRadius + 3);
-        return (root, root + direction * HandleStem);
+        return [pivot - right - up, pivot + right - up, pivot + right + up, pivot - right + up];
+    }
+
+    // A point on the frame from its spot in the entity's own axes, each from -1 to 1.
+    private static Point FramePoint(Point[] frame, Vector2 spot)
+    {
+        var (u, v) = ((spot.X + 1) / 2, (spot.Y + 1) / 2);
+        var bottom = frame[0] + (frame[1] - frame[0]) * u;
+        var top = frame[3] + (frame[2] - frame[3]) * u;
+        return bottom + (top - bottom) * v;
+    }
+
+    // Which way one of an entity's own axes points on screen (Y down), or the fallback when it's squashed flat.
+    private static Vector ScreenDirection(Vector3 axis, Matrix4x4 world, Vector fallback)
+    {
+        var v = Vector3.TransformNormal(axis, world);
+        var direction = new Vector(v.X, -v.Y);
+        if (direction.Length < 1e-6)
+            return fallback;
+        direction.Normalize();
+        return direction;
+    }
+
+    /// <summary>
+    /// Where the rotate handle is, in screen space: a stem from the top edge of the primary selection's frame out along
+    /// its up direction, ending in the knob. Null when there's nothing to turn, or while painting.
+    /// </summary>
+    private (Point Root, Point Knob)? RotateHandle()
+    {
+        if (HandleFrame() is not { } frame)
+            return null;
+        var root = FramePoint(frame, new Vector2(0, 1));
+        return (root, root + ScreenDirection(Vector3.UnitY, _selection.Entity!.Transform.WorldMatrix, new Vector(0, -1)) * HandleStem);
+    }
+
+    /// <summary>
+    /// The scale handles, in screen space, with their spots on the frame (see <see cref="ScaleSpots"/>). Edges too short
+    /// to hold a handle in their middle go without, and something drawn too small for handles to stay clear of the
+    /// middle, where it's grabbed to move it, gets none until the view zooms in.
+    /// </summary>
+    private List<(Vector2 Spot, Point Screen)> ScaleHandles()
+    {
+        if (HandleFrame() is not { } frame)
+            return [];
+        var (width, height) = ((frame[1] - frame[0]).Length, (frame[3] - frame[0]).Length);
+        if (Math.Min(width, height) < ScaleHandleRoom)
+            return [];
+        return ScaleSpots
+            .Where(spot => (spot.X == 0 ? width : spot.Y == 0 ? height : double.MaxValue) >= EdgeHandleRoom)
+            .Select(spot => (spot, FramePoint(frame, spot)))
+            .ToList();
+    }
+
+    // The scale handle under a point (the nearest, where they crowd), if any.
+    private Vector2? ScaleHandleAt(Point screen) =>
+        ScaleHandles().Where(h => (screen - h.Screen).Length <= HandleSquare + 4)
+            .OrderBy(h => (screen - h.Screen).Length)
+            .Select(h => (Vector2?)h.Spot)
+            .FirstOrDefault();
+
+    // A resize cursor along the line from the frame's middle out through the handle.
+    private Cursor ScaleCursor(Vector2 spot)
+    {
+        if (HandleFrame() is not { } frame)
+            return Cursors.SizeAll;
+        var outward = FramePoint(frame, spot) - FramePoint(frame, Vector2.Zero);
+        var angle = (Math.Atan2(-outward.Y, outward.X) * 180 / Math.PI + 360) % 180;
+        return angle switch
+        {
+            < 22.5 or >= 157.5 => Cursors.SizeWE,
+            < 67.5 => Cursors.SizeNESW,
+            < 112.5 => Cursors.SizeNS,
+            _ => Cursors.SizeNWSE,
+        };
     }
 
     private bool IsOverRotateHandle(Point screen) =>
         RotateHandle() is var (_, knob) && (screen - knob).Length <= HandleRadius + 4;
+
+    // How much a drag of a scale handle, from where it was pressed to the cursor, scales by along the primary's own
+    // axes: a corner scales both, an edge one. With Shift both scale alike, by how far the cursor has gone along the
+    // line from the pivot through the handle, so proportions stay.
+    private Vector2 ScaleFactor(SceneViewModel.SelectionScale scale, Vector2 cursor)
+    {
+        var from = scale.Along(_scalePress);
+        var to = scale.Along(cursor);
+        // A handle pressed right on the pivot can't say how much; it leaves that axis alone.
+        var near = (float)(4 / _zoom);
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            var line = new Vector2(_scaleSpot.X == 0 ? 0 : from.X, _scaleSpot.Y == 0 ? 0 : from.Y);
+            return new Vector2(line.Length() < near ? 1 : Vector2.Dot(to, line) / line.LengthSquared());
+        }
+
+        float Ratio(float start, float now) => MathF.Abs(start) < near ? 1 : now / start;
+        return new Vector2(_scaleSpot.X == 0 ? 1 : Ratio(from.X, to.X), _scaleSpot.Y == 0 ? 1 : Ratio(from.Y, to.Y));
+    }
 
     // The angle of a point around the turn's pivot, in degrees counterclockwise (the world is Y up).
     private double AngleAround(Vector2 pivot, Point screen)
@@ -859,6 +997,14 @@ public sealed class SceneViewControl : FrameworkElement
             _rotateTotal = 0;
             BeginDrag(DragMode.Rotate, position);
         }
+        else if (e.ChangedButton == MouseButton.Left && ScaleHandleAt(position) is { } spot && _model.BeginScale() is { } scale)
+        {
+            _scale = scale;
+            _scaleSpot = spot;
+            _scalePress = ToWorld(position);
+            BeginDrag(DragMode.Scale, position);
+            Cursor = ScaleCursor(spot);
+        }
         else if (e.ChangedButton == MouseButton.Left)
         {
             var hit = HitTest(position);
@@ -906,13 +1052,21 @@ public sealed class SceneViewControl : FrameworkElement
         if (_drag == DragMode.None)
         {
             var over = IsOverRotateHandle(position);
-            if (over != _overHandle)
+            var overScale = over ? null : ScaleHandleAt(position);
+            if (over != _overHandle || overScale != _overScale)
             {
                 _overHandle = over;
-                Cursor = over ? Cursors.Hand : null;
+                _overScale = overScale;
+                Cursor = over ? Cursors.Hand : overScale is { } spot ? ScaleCursor(spot) : null;
                 InvalidateVisual();
             }
 
+            return;
+        }
+
+        if (_drag == DragMode.Scale)
+        {
+            _scale?.To(ScaleFactor(_scale, ToWorld(position)), snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
             return;
         }
 
@@ -1197,6 +1351,14 @@ public sealed class SceneViewControl : FrameworkElement
             _rotate?.End();
             _rotate = null;
             _overHandle = false;
+            InvalidateVisual();
+        }
+
+        if (mode == DragMode.Scale)
+        {
+            _scale?.End();
+            _scale = null;
+            _overScale = null;
             InvalidateVisual();
         }
 

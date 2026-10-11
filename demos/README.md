@@ -46,6 +46,7 @@ build: standalone
 | `sceneclick: <point>` | Click in the Scene view at an entity (by name, `Slime`) or a world point (`3, 2`). `sceneclick: Ctrl+Slime` (or `Shift+`) adds it to the selection, or takes it out. |
 | `scenedrag: <point> > <point>` | Drag in the Scene view between two points, as `sceneclick` takes them: from an entity to move the selection, from empty space to draw a selection box. `scenedrag: Shift+-2, 3 > 4, -1` holds Shift, adding the box to the selection. |
 | `rotate: <degrees>` | Drag the Scene view's rotate handle that many degrees counterclockwise (negative for clockwise) around the selection's pivot. `rotate: Ctrl+45` holds Ctrl, snapping to 15 degrees. |
+| `scale: <handle> = <factor>[, <factor>]` | Drag one of the Scene view's scale handles (`top-left`, `top`, `top-right`, `right`, `bottom-right`, `bottom`, `bottom-left`, `left`) to where it scales the selection by that much along its own axes: `scale: right = 3` triples the width, `scale: top-right = 2, 1.5` sets both. `scale: Ctrl+Shift+top-right = 2` holds Ctrl (snapping to tenths) and Shift (keeping proportions). |
 | `expectat: <entity> = <x>, <y>` | Fail unless the entity is at that world position (within a tenth of a unit). |
 | `expectmixed: <Component>.<Field>[.<Axis>]` | Fail unless the Inspector shows that field (or one axis of it, `Transform.Position.Y`) as mixed: the selected entities' values differ. |
 | `expectvalue: <entity>.<Component>.<Field>[.<Axis>] = <value>` | Fail unless the (first) entity with that name has that value, e.g. `expectvalue: Red Gem.Sprite.Tint = #FFEC27`, or one axis of a vector, `expectvalue: Plank.Transform.Rotation.Z = 45`. Colors compare as colors and numbers as numbers. |
@@ -108,7 +109,7 @@ The waits that watch the running game fail when their time runs out, logging how
 while they wait (`%TEMP%\griff-demos\demo.log`).
 
 Targets: `panel:Inspector` (or `Hierarchy`, `Assets`, `Output`), `logo` (the griffin in the title bar), `scene`, `game`, `player:2` (a player's window, or the Game tab for 1), `toolbar:Game.Play`
-(a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `lock:Backdrop` (the lock button on a Hierarchy row), `handle:rotate` (the Scene view's rotate handle), `menu:Game`, and
+(a command id), `field:Health.Max`, `component:Health`, `entity:Player`, `lock:Backdrop` (the lock button on a Hierarchy row), `handle:rotate` (the Scene view's rotate handle), `handle:top-right` (a scale handle, named as `scale:` names them), `menu:Game`, and
 `world:left,top,right,bottom` for a box in the Scene view, `gameworld:left,top,right,bottom` for a box in the running
 game's world, and `hud:minimap`, `hud:card`, `hud:selection` or `hud:resources` for the parts of a strategy game's HUD, and `hud:hotbar`, `hud:crafting`, `hud:tools`, `hud:props` or `hud:ports` for a sandbox game's.
 In the component catalog: `catalog:button` (the

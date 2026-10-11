@@ -162,6 +162,42 @@ public class AnimationTests
         Assert.Equal(6, sprite.Frame);
     }
 
+    [Fact]
+    public void FormatClips_WritesWhatParseClipsReadsBack()
+    {
+        var text = "Idle 0-3, Run 4-9 @12.5, Jump 10, Die 11-15 @8 once, Spin 16-17 loop";
+        var clips = Animation.ParseClips(text);
+
+        Assert.Equal(text, Animation.FormatClips(clips));
+        Assert.Equal(clips, Animation.ParseClips(Animation.FormatClips(clips)));
+        Assert.Equal("Idle 4", Animation.FormatClips([new AnimationClip("Idle", 4, 1)]));
+        Assert.Equal("", Animation.FormatClips([]));
+    }
+
+    [Theory]
+    [InlineData(0f, 0)]
+    [InlineData(0.15f, 1)]
+    [InlineData(0.45f, 0)]
+    public void FrameAt_GoesRoundALoopingClip(float time, int frame) => Assert.Equal(frame, Animation.FrameAt(time, 4, 10, loop: true));
+
+    [Fact]
+    public void FrameAt_StaysOnTheLastFrameOfAClipThatPlaysOnce()
+    {
+        Assert.Equal(3, Animation.FrameAt(5, 4, 10, loop: false));
+        Assert.Equal(0, Animation.FrameAt(5, 0, 10, loop: true));
+    }
+
+    [Fact]
+    public void ClipSettings_FillsInTheAnimationsSpeedAndLooping()
+    {
+        var animation = new Animation { FirstFrame = 2, FrameCount = 3, FramesPerSecond = 6, Loop = true, Clips = "Run 4-9 @12, Die 11-15 once" };
+
+        Assert.Equal((4, 6, 12f, true), animation.ClipSettings("run"));
+        Assert.Equal((11, 5, 6f, false), animation.ClipSettings("Die"));
+        Assert.Equal((2, 3, 6f, true), animation.ClipSettings(null));
+        Assert.Equal((2, 3, 6f, true), animation.ClipSettings("Missing"));
+    }
+
     private static (Game Game, Sprite Sprite, Animation Animation) Setup()
     {
         var scene = new Scene();

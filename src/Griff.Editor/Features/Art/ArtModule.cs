@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Art;
 
-// Art menu: the Sprite Painter, for sprites and tilesets.
+// Art menu: the Sprite Painter, for sprites and tilesets, and the Clip Editor, for the clips of their animations.
 public sealed class ArtModule : IEditorModule
 {
     public const string Menu = "Art";
@@ -16,11 +16,13 @@ public sealed class ArtModule : IEditorModule
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<EditorArt>();
+        services.AddSingleton<ClipEditor>();
         services.AddMenu(Menu, "A_rt", order: 6);
         services
             .AddCommand<NewSpriteCommand>()
             .AddCommand<NewTilesetCommand>()
-            .AddCommand<PaintSelectedCommand>();
+            .AddCommand<PaintSelectedCommand>()
+            .AddCommand<OpenClipEditorCommand>();
     }
 }
 
@@ -80,4 +82,24 @@ public sealed class PaintSelectedCommand(EditorArt art, ISelection selection) : 
 
     private Component? Target() =>
         (Component?)selection.Entity?.GetComponent<Tilemap>() ?? selection.Entity?.GetComponent<Sprite>();
+}
+
+/// <summary>
+/// Opens the Clip Editor: the selected entity's animation clips, with the one picked playing in a preview. Clips are
+/// added, renamed, removed and picked to start with there. It follows the selection.
+/// </summary>
+public sealed class OpenClipEditorCommand(ClipEditor clips, IWorkspace workspace) : EditorCommand
+{
+    public override string Id => "Art.Clips";
+    public override string Text => "Animation _Clips...";
+    public override string? Icon => Icons.Play;
+    public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 1);
+
+    protected override bool CanExecuteCore() => workspace.Project is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        clips.Open();
+        return Task.CompletedTask;
+    }
 }

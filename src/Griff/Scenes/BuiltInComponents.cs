@@ -346,10 +346,35 @@ public sealed class Animation : Component
         if (Playing)
             Time += seconds;
 
-        var index = (int)(Time * fps);
-        index = loop ? index % count : Math.Min(index, count - 1);
-        sprite.Frame = first + Math.Max(0, index);
+        sprite.Frame = first + FrameAt(Time, count, fps, loop);
     }
+
+    /// <summary>
+    /// Which of a clip's <paramref name="count"/> frames shows <paramref name="time"/> seconds in, counting from 0: a
+    /// looping clip goes round again, one that plays once stays on its last frame.
+    /// </summary>
+    public static int FrameAt(float time, int count, float framesPerSecond, bool loop)
+    {
+        if (count <= 0)
+            return 0;
+        var index = (int)(time * framesPerSecond);
+        return Math.Max(0, loop ? index % count : Math.Min(index, count - 1));
+    }
+
+    /// <summary>
+    /// Writes clips the way <see cref="Clips"/> holds them, e.g. <c>Idle 0-3, Run 4-9 @12, Die 11-15 once</c>: what
+    /// <see cref="ParseClips"/> reads back.
+    /// </summary>
+    public static string FormatClips(IEnumerable<AnimationClip> clips) => string.Join(", ", clips.Select(clip =>
+    {
+        var last = clip.FirstFrame + Math.Max(1, clip.FrameCount) - 1;
+        var text = last == clip.FirstFrame ? $"{clip.Name} {clip.FirstFrame}" : $"{clip.Name} {clip.FirstFrame}-{last}";
+        if (clip.FramesPerSecond is { } fps)
+            text += " @" + fps.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        if (clip.Loop is { } loop)
+            text += loop ? " loop" : " once";
+        return text;
+    }));
 
     /// <summary>
     /// Reads clips written like <see cref="Clips"/>. Entries that don't make sense (no name, or no frames) are skipped,
@@ -398,18 +423,25 @@ public sealed class Animation : Component
         return true;
     }
 
-    // The frames, speed and looping in effect: the current clip's, or the animation's own.
-    private (int First, int Count, float Fps, bool Loop) Current()
+    /// <summary>
+    /// The frames, speed and looping the clip called <paramref name="clip"/> plays with: its own, with the animation's
+    /// speed and looping where it leaves them out. With no clip of that name (or none named), the animation's own
+    /// <see cref="FirstFrame"/> and <see cref="FrameCount"/>.
+    /// </summary>
+    public (int First, int Count, float FramesPerSecond, bool Loop) ClipSettings(string? clip)
     {
-        if (!string.IsNullOrEmpty(Clip))
+        if (!string.IsNullOrEmpty(clip))
         {
-            foreach (var clip in _parsed)
+            foreach (var c in _parsed)
             {
-                if (string.Equals(clip.Name, Clip, StringComparison.OrdinalIgnoreCase))
-                    return (clip.FirstFrame, clip.FrameCount, clip.FramesPerSecond ?? FramesPerSecond, clip.Loop ?? Loop);
+                if (string.Equals(c.Name, clip, StringComparison.OrdinalIgnoreCase))
+                    return (c.FirstFrame, c.FrameCount, c.FramesPerSecond ?? FramesPerSecond, c.Loop ?? Loop);
             }
         }
 
         return (FirstFrame, FrameCount, FramesPerSecond, Loop);
     }
+
+    // The frames, speed and looping in effect: the current clip's, or the animation's own.
+    private (int First, int Count, float Fps, bool Loop) Current() => ClipSettings(Clip);
 }

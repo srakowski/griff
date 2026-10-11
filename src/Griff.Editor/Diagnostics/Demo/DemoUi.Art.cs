@@ -73,6 +73,54 @@ internal sealed partial class DemoUi
         };
     }
 
+    /// <summary>The open Clip Editor, if any.</summary>
+    public static ClipEditorWindow? ClipEditor =>
+        Application.Current.Windows.OfType<ClipEditorWindow>().FirstOrDefault(w => w.IsVisible);
+
+    /// <summary>Waits for the Clip Editor to open (after Art > Animation Clips).</summary>
+    public async Task<ClipEditorWindow> WaitForClipEditor()
+    {
+        var window = await WaitFor(() => ClipEditor, "the Clip Editor");
+        await Settle(400);
+        return window;
+    }
+
+    /// <summary>
+    /// A part of the open Clip Editor: clip:Run (a row in the list), frame:3 (a frame in the strip, by its sheet frame),
+    /// list, preview, frames, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation,
+    /// entity; or the whole window.
+    /// </summary>
+    public static FrameworkElement ClipsPart(string part)
+    {
+        var window = ClipEditor ?? throw new InvalidOperationException("The Clip Editor isn't open.");
+        var (kind, name) = part.IndexOf(':') is var at and >= 0 ? (part[..at].Trim(), part[(at + 1)..].Trim()) : (part.Trim(), "");
+        FrameworkElement Named(string x) => (FrameworkElement)window.FindName(x);
+        return kind.ToLowerInvariant() switch
+        {
+            "" or "window" => (FrameworkElement)window.Content,
+            "clip" => Descendants<ListBoxItem>(window).FirstOrDefault(i => i.DataContext is ClipRow c && c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException($"No clip {name} in the Clip Editor."),
+            "frame" => Descendants<Button>(Named("FrameStrip")).FirstOrDefault(b => b.DataContext is ClipFrame f && f.SheetFrame.ToString() == name)
+                ?? throw new InvalidOperationException($"No frame {name} in the strip."),
+            "list" => Named("ClipList"),
+            "preview" => Named("Preview"),
+            "frames" => Named("FrameStrip"),
+            "play" => Named("PlayButton"),
+            "back" => Named("StepBackButton"),
+            "forward" => Named("StepForwardButton"),
+            "position" => Named("FrameText"),
+            "add" => Named("AddClipButton"),
+            "rename" => Named("RenameClipButton"),
+            "remove" => Named("RemoveClipButton"),
+            "start" => Named("StartWithButton"),
+            "buttons" => Named("ClipButtons"),
+            "notice" => Named("NoticeBar"),
+            "addanimation" => Named("AddAnimationButton"),
+            "entity" => Named("EntityName"),
+            _ => throw new FormatException($"Unknown Clip Editor part \"{part}\" (clip:, frame:, list, preview, frames, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation, entity)."),
+        };
+    }
+
     /// <summary>
     /// Paints on the Sprite Painter's canvas with the real mouse: presses on the first pixel and drags through the
     /// rest (one pixel is a click), with the right button to erase.

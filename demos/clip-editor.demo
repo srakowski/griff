@@ -1,0 +1,58 @@
+title: The Clip Editor
+intro: See a sprite's animation clips play, and add, rename and pick them, without leaving the scene.
+project: Platformer | Clip Kit
+
+# Give the slime a four-frame sheet to animate: the painter's creature breathing, then two frames wearing a hat.
+select: Slime
+look: -8, 2.65, 3
+click: image:Sprite.Image:paint
+painter
+click: painter:idea:Creature
+click: painter:frame:2
+click: painter:addframe
+click: painter:color:10
+paint: 4,1 > 11,1
+click: painter:addframe
+paint: 4,0 > 11,0
+artname: slime
+click: painter:save
+expectart: Sprites/slime.png | 4
+click: painter:close
+
+chapter: Watch it play | Art, Animation Clips
+say: The slime has a sprite sheet now, four frames, and an Animation to play them. To see what it plays, open the Clip Editor from the Art menu.
+menu: Art > Animation Clips...
+clips
+explain: clips:entity | Follows the selection | It shows the clips of whatever is selected, so it can stay open beside the scene.
+explain: clips:clip:(own frames) | Own frames | With no clips yet, the animation plays its own frames, all four of them. That's what the game starts with.
+explain: clips:preview | Preview | The preview plays it the way the game will, at the same speed, cut from the sheet the same way.
+click: clips:play
+explain: clips:frames | Every frame | Pause it, and the strip underneath shows each frame. Step through them with the arrows, or click one.
+click: clips:forward
+click: clips:frame:2
+explain: clips:position | Where it is | Frame three of four, which is frame two on the sheet.
+
+chapter: Make clips | Add, rename, start with
+say: A real character has a few animations on one sheet: standing, walking, getting hurt. Those are clips.
+click: clips:add
+prompt: Idle
+explain: clips:clip:Idle | The first clip | Add makes one. The first takes the animation's own frames, and becomes the clip the game starts with.
+expectvalue: Slime.Animation.Clip = Idle
+say: A clip's frames are typed in the Inspector for now. Picking them from the sheet here comes next. Two frames of breathing, and the two hat frames as a clip that plays once.
+set: Animation.Clips = Idle 0-1, Hat 2-3 @4 once
+explain: clips:list | Straight away | The list follows the Inspector, and undo, as you change things.
+click: clips:clip:Hat
+wait: 1.5
+explain: clips:preview | Plays once | A clip that plays once stops on its last frame. Play starts it over.
+click: clips:play
+wait: 1
+click: clips:rename
+prompt: Party
+expectvalue: Slime.Animation.Clips = Idle 0-1, Party 2-3 @4 once
+click: clips:start
+expectvalue: Slime.Animation.Clip = Party
+explain: clips:start | Start with this | Start With This makes it the clip the game starts playing. Each change is one undo step.
+say: Here's the slime in the game, wearing its hat.
+play
+wait: 3
+stop

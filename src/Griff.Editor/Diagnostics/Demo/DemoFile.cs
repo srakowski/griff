@@ -668,6 +668,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "painter":
                 await ui.WaitForPainter();
                 break;
+            case "clips":
+                await ui.WaitForClipEditor();
+                break;
             case "paint":
                 // "paint: 3,4 > 12,4 > 12,10" drags through those pixels of the frame; "| right" erases.
                 var (paintPath, paintButton) = Split2(a);
@@ -1298,6 +1301,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "maker" => DemoUi.MakerPart(name),
             "controls" => DemoUi.ControlsPart(name),
             "painter" => DemoUi.PainterPart(name),
+            "clips" => DemoUi.ClipsPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "pick" when name.Split('.', 2) is [var component, var field] =>
@@ -1308,7 +1312,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, entity:, lock:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:)."),
         };
     }
 

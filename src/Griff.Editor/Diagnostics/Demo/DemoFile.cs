@@ -671,6 +671,16 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "clips":
                 await ui.WaitForClipEditor();
                 break;
+            case "clipframes":
+                // "clipframes: 2 > 5" drags across the Clip Editor's sheet; "clipframes: 3" clicks one; "Shift+6" stretches to it.
+                var (clipFramesText, clipFramesModifiers) = ParseModifiedName(a);
+                var (clipFrom, clipTo) = clipFramesText.Contains('>') ? Split2(clipFramesText, '>') : (clipFramesText, clipFramesText);
+                await ui.PickClipFrames(int.Parse(clipFrom, CultureInfo.InvariantCulture), int.Parse(clipTo, CultureInfo.InvariantCulture), clipFramesModifiers);
+                break;
+            case "clipspeed":
+                await ui.WaitForClipEditor();
+                await ui.EditBox((TextBox)DemoUi.ClipsPart("speed"), a);
+                break;
             case "paint":
                 // "paint: 3,4 > 12,4 > 12,10" drags through those pixels of the frame; "| right" erases.
                 var (paintPath, paintButton) = Split2(a);

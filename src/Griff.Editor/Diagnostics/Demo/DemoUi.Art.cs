@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Inspector;
 using Point = System.Windows.Point;
@@ -87,8 +88,8 @@ internal sealed partial class DemoUi
 
     /// <summary>
     /// A part of the open Clip Editor: clip:Run (a row in the list), frame:3 (a frame in the strip, by its sheet frame),
-    /// list, preview, frames, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation,
-    /// entity; or the whole window.
+    /// sheet:3 (a frame on the sheet), list, preview, frames, sheet, settings, speed, loop, note, play, back, forward,
+    /// position, add, rename, remove, start, buttons, notice, addanimation, entity; or the whole window.
     /// </summary>
     public static FrameworkElement ClipsPart(string part)
     {
@@ -102,6 +103,12 @@ internal sealed partial class DemoUi
                 ?? throw new InvalidOperationException($"No clip {name} in the Clip Editor."),
             "frame" => Descendants<Button>(Named("FrameStrip")).FirstOrDefault(b => b.DataContext is ClipFrame f && f.SheetFrame.ToString() == name)
                 ?? throw new InvalidOperationException($"No frame {name} in the strip."),
+            "sheet" when name.Length > 0 => SheetCellOf(window, int.Parse(name)),
+            "sheet" => Named("SheetPanel"),
+            "settings" => Named("Settings"),
+            "speed" => Named("SpeedBox"),
+            "loop" => Named("LoopBox"),
+            "note" => Named("SettingsNote"),
             "list" => Named("ClipList"),
             "preview" => Named("Preview"),
             "frames" => Named("FrameStrip"),
@@ -117,8 +124,48 @@ internal sealed partial class DemoUi
             "notice" => Named("NoticeBar"),
             "addanimation" => Named("AddAnimationButton"),
             "entity" => Named("EntityName"),
-            _ => throw new FormatException($"Unknown Clip Editor part \"{part}\" (clip:, frame:, list, preview, frames, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation, entity)."),
+            _ => throw new FormatException($"Unknown Clip Editor part \"{part}\" (clip:, frame:, sheet:, list, preview, frames, sheet, settings, speed, loop, note, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation, entity)."),
         };
+    }
+
+    private static FrameworkElement SheetCellOf(ClipEditorWindow window, int frame) =>
+        Descendants<Border>((FrameworkElement)window.FindName("SheetGrid")).FirstOrDefault(b => b.DataContext is SheetCell c && c.Index == frame)
+        ?? throw new InvalidOperationException($"No frame {frame} on the Clip Editor's sheet.");
+
+    /// <summary>
+    /// Picks the previewed clip's frames on the Clip Editor's sheet with the real mouse: drags from one frame to another
+    /// (one frame is a click), or clicks with modifiers held (Shift stretches the clip to reach the frame).
+    /// </summary>
+    public async Task PickClipFrames(int first, int last, ModifierKeys modifiers)
+    {
+        var window = await WaitForClipEditor();
+        var model = window.Model;
+        var (from, to) = (SheetCellOf(window, first), SheetCellOf(window, last));
+        to.BringIntoView();
+        await Settle(30);
+
+        var before = model.Selected;
+        if (modifiers != ModifierKeys.None)
+            await input.ClickWith(Center(to), modifiers);
+        else if (first == last)
+            await input.Click(Center(to));
+        else
+            await input.Drag(Center(from), [Center(to)], 600);
+        await Settle(120);
+
+        // A pick that missed (the window lost the mouse): make it the same way through the model.
+        if (before is { } clip && model.Selected is { } now && now.First == clip.First && now.Count == clip.Count)
+        {
+            var (a, b) = modifiers.HasFlag(ModifierKeys.Shift)
+                ? (last < clip.First ? clip.First + clip.Count - 1 : clip.First, last)
+                : (first, last);
+            if (Math.Min(a, b) != clip.First || Math.Abs(b - a) + 1 != clip.Count)
+            {
+                model.SetFrames(a, b);
+                Log?.Invoke($"FORCED clipframes {first} > {last}");
+                await Settle();
+            }
+        }
     }
 
     /// <summary>

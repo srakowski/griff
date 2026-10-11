@@ -97,7 +97,16 @@ public static partial class ObjectSurface
         if (property.SetMethod?.IsPublic != true)
             throw new AgentException($"{owner.GetType().Name}.{property.Name} can't be changed.");
 
-        property.SetValue(owner, Convert(owner, value, property.PropertyType, except: property));
+        try
+        {
+            property.SetValue(owner, Convert(owner, value, property.PropertyType, except: property));
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            // A setter that refuses the value says why.
+            throw ex.InnerException is AgentException agent ? agent : new AgentException($"{property.Name} can't be {value}: {ex.InnerException.Message}");
+        }
+
         return TryGet(property, owner, out var now) ? Shown(now) : null;
     }
 

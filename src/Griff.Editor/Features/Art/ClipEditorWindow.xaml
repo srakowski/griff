@@ -10,10 +10,10 @@
                        mc:Ignorable="d"
                        d:DataContext="{d:DesignInstance Type=art:ClipEditor}"
                        Title="Clip Editor"
-                       Width="760"
-                       Height="520"
-                       MinWidth="560"
-                       MinHeight="400"
+                       Width="860"
+                       Height="700"
+                       MinWidth="640"
+                       MinHeight="540"
                        ShowInTaskbar="False"
                        WindowStartupLocation="CenterOwner">
 
@@ -127,6 +127,89 @@
             <!-- The clip playing -->
             <DockPanel Grid.Column="2">
                 <TextBlock DockPanel.Dock="Top" Style="{StaticResource Heading}" Text="Preview" />
+
+                <!-- Its speed and looping -->
+                <DockPanel x:Name="Settings" Margin="0,0,0,8" DockPanel.Dock="Top">
+                    <TextBlock VerticalAlignment="Center" Text="Speed" />
+                    <TextBox x:Name="SpeedBox"
+                             Width="56"
+                             Margin="8,0,4,0"
+                             VerticalAlignment="Center"
+                             KeyDown="OnSpeedKeyDown"
+                             Text="{Binding Speed, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.###}}"
+                             ToolTip="Frames a second (0 holds the first frame)" />
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="fps" />
+                    <CheckBox x:Name="LoopBox" Margin="16,0,0,0" VerticalAlignment="Center" Content="Loops" IsChecked="{Binding Loops}" ToolTip="Loop, or play once and stop on the last frame" />
+                    <TextBlock x:Name="SettingsNote"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource Style.Text.Secondary}"
+                               Text="{Binding SettingsNote}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding SettingsNote}" />
+                </DockPanel>
+
+                <!-- The sprite sheet, to pick its frames from -->
+                <DockPanel x:Name="SheetPanel" Margin="0,10,0,0" DockPanel.Dock="Bottom">
+                    <DockPanel DockPanel.Dock="Top">
+                        <TextBlock Style="{StaticResource Heading}" Text="Sheet" />
+                        <TextBlock Margin="10,0,0,6"
+                                   VerticalAlignment="Bottom"
+                                   Style="{StaticResource Style.Text.Secondary}"
+                                   Text="Drag across frames to play them; Shift-click to stretch to a frame."
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="SheetGrid"
+                                      Background="Transparent"
+                                      Cursor="Hand"
+                                      ItemsSource="{Binding Sheet}"
+                                      MouseLeftButtonDown="OnSheetDown"
+                                      MouseLeftButtonUp="OnSheetUp"
+                                      MouseMove="OnSheetMove"
+                                      LostMouseCapture="OnSheetLostCapture">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid HorizontalAlignment="Left" VerticalAlignment="Top" Columns="{Binding SheetColumns}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="art:SheetCell">
+                                    <Border x:Name="Cell"
+                                            Width="48"
+                                            Height="54"
+                                            Margin="0,0,3,3"
+                                            Background="{DynamicResource Brush.Surface.Document}"
+                                            BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource Radius.Small}"
+                                            ToolTip="{Binding Index}"
+                                            ToolTipService.InitialShowDelay="600">
+                                        <DockPanel>
+                                            <TextBlock x:Name="Number" Margin="0,0,0,1" HorizontalAlignment="Center" DockPanel.Dock="Bottom" FontSize="11" Style="{StaticResource Style.Text.Mono}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Index}" />
+                                            <Image Margin="5,5,5,1" RenderOptions.BitmapScalingMode="NearestNeighbor" Source="{Binding Image}" Stretch="Uniform" />
+                                        </DockPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding InClip}" Value="True">
+                                            <Setter TargetName="Cell" Property="Background" Value="{DynamicResource Brush.Selection}" />
+                                            <Setter TargetName="Cell" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                            <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsPicking}" Value="True">
+                                            <Setter TargetName="Cell" Property="Background" Value="{DynamicResource Brush.Item.Hover}" />
+                                            <Setter TargetName="Cell" Property="BorderBrush" Value="{DynamicResource Brush.Border.Focus}" />
+                                            <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="Cell" Property="BorderThickness" Value="2" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
 
                 <!-- Its frames -->
                 <ScrollViewer Margin="0,8,0,0" DockPanel.Dock="Bottom" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">

@@ -15,8 +15,9 @@ namespace Griff.Editor.Features.Art;
 
 /// <summary>
 /// The Clip Editor: the selected entity's animation clips, listed with their frames, speed and looping, and the one
-/// picked playing in a preview the way the game plays it. Clips are added, renamed and removed here, and one is picked
-/// for the game to start with, each as one undo step. It follows the selection, so it stays open beside the scene.
+/// picked playing in a preview the way the game plays it. Clips are added, renamed and removed here, one is picked for
+/// the game to start with, and the one picked gets its frames from the sprite sheet shown beside it and its speed and
+/// looping set, each as one undo step. It follows the selection, so it stays open beside the scene.
 /// </summary>
 public sealed class ClipEditor : ObservableObject
 {
@@ -24,6 +25,8 @@ public sealed class ClipEditor : ObservableObject
     public const string OwnFrames = "(own frames)";
 
     private const int MaxStrip = 100;
+
+    private const int MaxSheet = 1024;
 
     private static readonly string[] SuggestedNames = ["Idle", "Run", "Jump", "Fall", "Attack", "Hurt", "Die"];
 
@@ -42,6 +45,7 @@ public sealed class ClipEditor : ObservableObject
     private bool _isPlaying = true;
     private double _time;
     private int _frame;
+    private (int First, int Last)? _highlight;
     private ClipEditorWindow? _window;
 
     public ClipEditor(IWorkspace workspace, ISelection selection, EditorArt art, IDialogService dialogs)
@@ -102,6 +106,7 @@ public sealed class ClipEditor : ObservableObject
             if (!SetProperty(ref _selected, value))
                 return;
             OnPropertyChanged(nameof(HasSelected));
+            NotifySettings();
             Restart();
             UpdateCommands();
         }
@@ -155,6 +160,43 @@ public sealed class ClipEditor : ObservableObject
 
     /// <summary>Where the preview is, e.g. "Frame 2 of 4 (sheet frame 5)".</summary>
     public string FrameText => Selected is { } clip ? $"Frame {_frame + 1} of {clip.Count} (sheet frame {SheetFrame})" : "";
+
+    /// <summary>
+    /// Every frame of the sprite sheet, cut the way the sprite cuts it, in order, to pick the previewed clip's frames
+    /// from. Those it plays are marked, and so is the one showing.
+    /// </summary>
+    public ObservableCollection<SheetCell> Sheet { get; } = [];
+
+    /// <summary>How many frames across the sheet is (the sprite's Columns).</summary>
+    public int SheetColumns => Sprite is { } sprite ? Math.Max(1, sprite.Columns) : 1;
+
+    /// <summary>
+    /// How many frames a second the previewed clip plays. Setting it gives the clip a speed of its own (or, for the
+    /// animation's own frames, sets the animation's, which clips without their own use too), as one undo step.
+    /// </summary>
+    public float Speed
+    {
+        get => Selected?.FramesPerSecond ?? 0;
+        set => SetSpeed(value);
+    }
+
+    /// <summary>Whether the previewed clip loops (or plays once and stops on its last frame). Setting it is one undo step.</summary>
+    public bool Loops
+    {
+        get => Selected?.Loop ?? false;
+        set => SetLoop(value);
+    }
+
+    /// <summary>Where the previewed clip's speed and looping come from, e.g. "Speed and looping from the animation".</summary>
+    public string SettingsNote => Selected switch
+    {
+        null => "",
+        { IsOwnFrames: true } => "Clips without a speed or looping of their own use these too.",
+        { HasOwnSpeed: true, HasOwnLoop: true } => "",
+        { HasOwnSpeed: false, HasOwnLoop: false } => "Speed and looping from the animation, until set here.",
+        { HasOwnSpeed: false } => "Speed from the animation, until set here.",
+        _ => "Looping from the animation, until set here.",
+    };
 
     public IRelayCommand PlayCommand { get; }
 
@@ -303,6 +345,93 @@ public sealed class ClipEditor : ObservableObject
         Change(row.IsOwnFrames ? "Start Without a Clip" : $"Start With {row.Name}", animation.ClipList, row.IsOwnFrames ? null : row.Name);
     }
 
+    /// <summary>
+    /// Makes the previewed clip play the sheet's frames <paramref name="first"/> to <paramref name="last"/> (either way
+    /// round; the same for one frame), as one undo step. For the animation's own frames, sets its First Frame and Frame Count.
+    /// </summary>
+    public void SetFrames(int first, int last)
+    {
+        _highlight = null;
+        if (Selected is not { } row)
+            return;
+        (first, last) = (Math.Min(first, last), Math.Max(first, last));
+        if (first < 0)
+            throw new InvalidOperationException("Sheet frames count from 0.");
+        if (SheetFrames > 1 && last >= SheetFrames)
+            throw new InvalidOperationException($"The sheet has {SheetFrames} frames, 0 to {SheetFrames - 1}.");
+        var count = last - first + 1;
+        if (first == row.First && count == row.Count)
+        {
+            MarkSheet();
+            return;
+        }
+
+        var frames = count == 1 ? $"Frame {first}" : $"Frames {first}-{last}";
+        if (row.IsOwnFrames)
+            SetAnimation($"Set Frames to {frames}", (nameof(Griff.Scenes.Animation.FirstFrame), first), (nameof(Griff.Scenes.Animation.FrameCount), count));
+        else
+            ChangeClip($"Set {row.Name} to {frames}", clip => clip with { FirstFrame = first, FrameCount = count });
+    }
+
+    /// <summary>
+    /// Shift-clicking the sheet: stretches the previewed clip to reach <paramref name="frame"/>, from its first frame
+    /// (or, for a frame before it, from its last).
+    /// </summary>
+    public void ExtendFrames(int frame)
+    {
+        if (Selected is not { } row)
+            return;
+        SetFrames(frame < row.First ? row.First + row.Count - 1 : row.First, frame);
+    }
+
+    /// <summary>Marks the sheet's frames <paramref name="first"/> to <paramref name="last"/> while a drag picks them, without changing anything.</summary>
+    public void HighlightFrames(int first, int last)
+    {
+        _highlight = (Math.Min(first, last), Math.Max(first, last));
+        MarkSheet();
+    }
+
+    /// <summary>Stops marking frames being picked (a drag called off).</summary>
+    public void ClearHighlight()
+    {
+        _highlight = null;
+        MarkSheet();
+    }
+
+    /// <summary>Sets how many frames a second the previewed clip plays (see <see cref="Speed"/>), as one undo step.</summary>
+    public void SetSpeed(float framesPerSecond)
+    {
+        if (Selected is not { } row)
+            return;
+        if (!float.IsFinite(framesPerSecond) || framesPerSecond < 0)
+            throw new InvalidOperationException("A clip's speed is frames a second, 0 or more (0 holds its first frame).");
+        framesPerSecond = MathF.Round(framesPerSecond, 3);
+        var text = framesPerSecond.ToString("0.###", CultureInfo.InvariantCulture);
+        if (row.IsOwnFrames)
+        {
+            if (framesPerSecond != row.FramesPerSecond)
+                SetAnimation($"Set Speed to {text} fps", (nameof(Griff.Scenes.Animation.FramesPerSecond), framesPerSecond));
+        }
+        else if (!row.HasOwnSpeed || framesPerSecond != row.FramesPerSecond)
+            ChangeClip($"Set {row.Name} Speed to {text} fps", clip => clip with { FramesPerSecond = framesPerSecond });
+        NotifySettings();
+    }
+
+    /// <summary>Sets whether the previewed clip loops (see <see cref="Loops"/>), as one undo step.</summary>
+    public void SetLoop(bool loop)
+    {
+        if (Selected is not { } row)
+            return;
+        if (row.IsOwnFrames)
+        {
+            if (loop != row.Loop)
+                SetAnimation(loop ? "Loop" : "Play Once", (nameof(Griff.Scenes.Animation.Loop), loop));
+        }
+        else if (!row.HasOwnLoop || loop != row.Loop)
+            ChangeClip(loop ? $"Loop {row.Name}" : $"Play {row.Name} Once", clip => clip with { Loop = loop });
+        NotifySettings();
+    }
+
     /// <summary>Gives the selected entity an Animation to play its sprite sheet's frames.</summary>
     public void AddAnimation()
     {
@@ -363,7 +492,15 @@ public sealed class ClipEditor : ObservableObject
         }
 
         _sheetRead = false;
+        _highlight = null;
         Notice = NoticeFor(animation);
+        Sheet.Clear();
+        if (animation is not null && Sprite is not null)
+        {
+            for (var i = 0; i < Math.Min(SheetFrames, MaxSheet); i++)
+                Sheet.Add(new SheetCell(i, SheetImage(i)));
+        }
+
         _selected = (keep is null ? null : Find(keep)) ?? Clips.FirstOrDefault(c => c.IsStart) ?? Clips.FirstOrDefault();
         OnPropertyChanged(nameof(Selected));
         OnPropertyChanged(nameof(HasSelected));
@@ -372,6 +509,8 @@ public sealed class ClipEditor : ObservableObject
         OnPropertyChanged(nameof(Sprite));
         OnPropertyChanged(nameof(HasAnimation));
         OnPropertyChanged(nameof(CanAddAnimation));
+        OnPropertyChanged(nameof(SheetColumns));
+        NotifySettings();
         // The same clip carries on where it was (its frames may have changed, or the picture); another starts over.
         Restart(keepTime: keep is not null && Same(keep, _selected?.Name));
         UpdateCommands();
@@ -416,6 +555,7 @@ public sealed class ClipEditor : ObservableObject
                 Frames.Add(new ClipFrame(i, clip.First + i, SheetImage(clip.First + i)));
         }
 
+        MarkSheet();
         Show();
     }
 
@@ -428,6 +568,9 @@ public sealed class ClipEditor : ObservableObject
         for (var i = 0; i < Frames.Count; i++)
             Frames[i].IsCurrent = i == index;
         FrameImage = Selected is { } clip ? SheetImage(clip.First + index) : null;
+        var showing = Selected is null ? -1 : SheetFrame;
+        foreach (var cell in Sheet)
+            cell.IsCurrent = cell.Index == showing;
         OnPropertyChanged(nameof(Time));
         OnPropertyChanged(nameof(Frame));
         OnPropertyChanged(nameof(SheetFrame));
@@ -463,25 +606,59 @@ public sealed class ClipEditor : ObservableObject
         return _frameImages[frame] = cut;
     }
 
+    // Marks the sheet's frames the previewed clip plays, and those a drag is picking.
+    private void MarkSheet()
+    {
+        var (first, last) = Selected is { } clip ? (clip.First, clip.First + clip.Count - 1) : (-1, -2);
+        foreach (var cell in Sheet)
+        {
+            // While a drag picks frames, only those it's picking are marked.
+            cell.InClip = _highlight is null && cell.Index >= first && cell.Index <= last;
+            cell.IsPicking = _highlight is var (from, to) && cell.Index >= from && cell.Index <= to;
+        }
+    }
+
     // ----- Changing the clips
 
     // Sets the animation's Clips (and Clip, the one it starts with) as one undo step.
     private void Change(string description, IReadOnlyList<AnimationClip> clips, string? start)
     {
-        if (Animation is not { } animation || _document is not { } document)
+        if (Animation is not { } animation)
+            return;
+        var text = clips.Count == 0 ? null : Griff.Scenes.Animation.FormatClips(clips);
+        var changes = new List<(string, object?)>();
+        if (text != animation.Clips)
+            changes.Add((nameof(Griff.Scenes.Animation.Clips), text));
+        if (!string.Equals(start ?? "", animation.Clip ?? "", StringComparison.Ordinal))
+            changes.Add((nameof(Griff.Scenes.Animation.Clip), start));
+        SetAnimation(description, [.. changes]);
+    }
+
+    // Changes the previewed clip in the animation's Clips, as one undo step.
+    private void ChangeClip(string description, Func<AnimationClip, AnimationClip> change)
+    {
+        if (Animation is not { } animation || Selected is not { IsOwnFrames: false } row)
+            return;
+        Change(description, animation.ClipList.Select(c => Same(c.Name, row.Name) ? change(c) : c).ToList(), animation.Clip);
+    }
+
+    // Sets properties of the animation, as one undo step.
+    private void SetAnimation(string description, params (string Property, object? Value)[] changes)
+    {
+        if (Animation is not { } animation || _document is not { } document || changes.Length == 0)
             return;
         var properties = _workspace.Components.Get(typeof(Animation)).Properties;
-        var text = clips.Count == 0 ? null : Griff.Scenes.Animation.FormatClips(clips);
-        var edits = new List<IEdit>();
-        if (text != animation.Clips)
-            edits.Add(new SetPropertyEdit(animation, properties.Single(p => p.Name == nameof(Griff.Scenes.Animation.Clips)), text));
-        if (!string.Equals(start ?? "", animation.Clip ?? "", StringComparison.Ordinal))
-            edits.Add(new SetPropertyEdit(animation, properties.Single(p => p.Name == nameof(Griff.Scenes.Animation.Clip)), start));
-        if (edits.Count == 0)
-            return;
+        var edits = changes.Select(c => (IEdit)new SetPropertyEdit(animation, properties.Single(p => p.Name == c.Property), c.Value)).ToList();
         document.History.Seal();
         document.Execute(new CompositeEdit(description, edits));
         document.History.Seal();
+    }
+
+    private void NotifySettings()
+    {
+        OnPropertyChanged(nameof(Speed));
+        OnPropertyChanged(nameof(Loops));
+        OnPropertyChanged(nameof(SettingsNote));
     }
 
     /// <summary>What's wrong with <paramref name="name"/> as a clip's name (renaming <paramref name="renaming"/>), or null.</summary>
@@ -562,6 +739,49 @@ public sealed class ClipFrame(int index, int sheetFrame, ImageSource? image) : O
     public int SheetFrame { get; } = sheetFrame;
 
     public ImageSource? Image { get; } = image;
+
+    /// <summary>What agents see it as, e.g. "Sheet frame 5, showing".</summary>
+    public string Label => $"Sheet frame {SheetFrame}{(IsCurrent ? ", showing" : "")}";
+
+    /// <summary>True for the frame the preview is showing.</summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set => SetProperty(ref _isCurrent, value);
+    }
+}
+
+/// <summary>
+/// One frame of the sprite sheet in the Clip Editor, to pick the clip's frames from: marked when the clip plays it,
+/// while a drag is picking it, and while the preview shows it.
+/// </summary>
+public sealed class SheetCell(int index, ImageSource? image) : ObservableObject
+{
+    private bool _inClip;
+    private bool _isPicking;
+    private bool _isCurrent;
+
+    /// <summary>Which frame of the sheet, counting from 0 (what a clip's frames are numbered by).</summary>
+    public int Index { get; } = index;
+
+    public ImageSource? Image { get; } = image;
+
+    /// <summary>What agents see it as, e.g. "Frame 3, in the clip, showing".</summary>
+    public string Label => $"Frame {Index}{(InClip ? ", in the clip" : "")}{(IsPicking ? ", being picked" : "")}{(IsCurrent ? ", showing" : "")}";
+
+    /// <summary>True when the clip picked plays this frame.</summary>
+    public bool InClip
+    {
+        get => _inClip;
+        set => SetProperty(ref _inClip, value);
+    }
+
+    /// <summary>True while a drag across the sheet is picking this frame.</summary>
+    public bool IsPicking
+    {
+        get => _isPicking;
+        set => SetProperty(ref _isPicking, value);
+    }
 
     /// <summary>True for the frame the preview is showing.</summary>
     public bool IsCurrent

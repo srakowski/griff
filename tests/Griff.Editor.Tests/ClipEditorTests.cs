@@ -255,6 +255,136 @@ public sealed class ClipEditorTests : IDisposable
     });
 
     [Fact]
+    public void TheSheetShowsEveryFrame_MarkingTheClipsAndTheOneShowing() => EditorHost.Run(services =>
+    {
+        var (_, _, clips) = Open(services);
+        clips.SelectClip("Run");
+        clips.ShowFrame(1);
+
+        Assert.Equal(4, clips.SheetColumns);
+        Assert.Equal(Enumerable.Range(0, 12), clips.Sheet.Select(c => c.Index));
+        Assert.Equal([2, 3, 4, 5], clips.Sheet.Where(c => c.InClip).Select(c => c.Index));
+        Assert.Equal([3], clips.Sheet.Where(c => c.IsCurrent).Select(c => c.Index));
+        Assert.Equal("Frame 3, in the clip, showing", clips.Sheet[3].Label);
+
+        // While a drag picks frames, only those are marked.
+        clips.HighlightFrames(9, 7);
+        Assert.Equal([7, 8, 9], clips.Sheet.Where(c => c.IsPicking).Select(c => c.Index));
+        Assert.DoesNotContain(clips.Sheet, c => c.InClip);
+        clips.ClearHighlight();
+        Assert.DoesNotContain(clips.Sheet, c => c.IsPicking);
+        Assert.Equal(4, clips.Sheet.Count(c => c.InClip));
+    });
+
+    [Fact]
+    public void PickingFramesOnTheSheetSetsTheClips_AsOneUndoStep() => EditorHost.Run(services =>
+    {
+        var (document, _, clips) = Open(services);
+        var animation = AnimationOf(document);
+        clips.SelectClip("Run");
+
+        clips.HighlightFrames(10, 8);
+        clips.SetFrames(10, 8);
+        Assert.Equal("Idle 0-1, Run 8-10 @12, Die 6-7 once", animation.Clips);
+        Assert.Equal("Set Run to Frames 8-10", document.History.UndoDescription);
+        Assert.Equal("Run", clips.Selected!.Name);
+        Assert.Equal([8, 9, 10], clips.Frames.Select(f => f.SheetFrame));
+        Assert.Equal([8, 9, 10], clips.Sheet.Where(c => c.InClip).Select(c => c.Index));
+        Assert.DoesNotContain(clips.Sheet, c => c.IsPicking);
+
+        // Shift-clicking stretches it: from its first frame, or from its last to one before it.
+        clips.ExtendFrames(11);
+        Assert.Equal("Idle 0-1, Run 8-11 @12, Die 6-7 once", animation.Clips);
+        clips.ExtendFrames(4);
+        Assert.Equal("Idle 0-1, Run 4-11 @12, Die 6-7 once", animation.Clips);
+
+        clips.SetFrames(3, 3);
+        Assert.Equal("Idle 0-1, Run 3 @12, Die 6-7 once", animation.Clips);
+
+        Assert.Throws<InvalidOperationException>(() => clips.SetFrames(10, 12));
+        document.History.Undo();
+        document.History.Undo();
+        document.History.Undo();
+        document.History.Undo();
+        Assert.Equal("Idle 0-1, Run 2-5 @12, Die 6-7 once", animation.Clips);
+        Assert.False(document.History.CanUndo);
+    });
+
+    [Fact]
+    public void PickingTheAnimationsOwnFramesSetsItsFirstFrameAndFrameCount() => EditorHost.Run(services =>
+    {
+        var (document, _, clips) = Open(services, start: null);
+        var animation = AnimationOf(document);
+        Assert.True(clips.Selected!.IsOwnFrames);
+
+        clips.SetFrames(6, 11);
+        Assert.Equal(6, animation.FirstFrame);
+        Assert.Equal(6, animation.FrameCount);
+        Assert.Equal("Idle 0-1, Run 2-5 @12, Die 6-7 once", animation.Clips);
+        Assert.True(clips.Selected!.IsOwnFrames);
+        Assert.Equal("frames 6–11 · 10 fps · loops", clips.Selected.Summary);
+
+        document.History.Undo();
+        Assert.Equal(0, animation.FirstFrame);
+        Assert.Equal(4, animation.FrameCount);
+    });
+
+    [Fact]
+    public void SpeedAndLoopingAreSetForTheClip_EachAsOneUndoStep() => EditorHost.Run(services =>
+    {
+        var (document, _, clips) = Open(services);
+        var animation = AnimationOf(document);
+
+        // Idle uses the animation's speed and looping until it's given its own.
+        Assert.Equal(10, clips.Speed);
+        Assert.True(clips.Loops);
+        Assert.Equal("Speed and looping from the animation, until set here.", clips.SettingsNote);
+        clips.Speed = 6;
+        Assert.Equal("Idle 0-1 @6, Run 2-5 @12, Die 6-7 once", animation.Clips);
+        Assert.Equal("Set Idle Speed to 6 fps", document.History.UndoDescription);
+        Assert.Equal(6, clips.Speed);
+        Assert.Equal("Looping from the animation, until set here.", clips.SettingsNote);
+
+        // Setting the looping it already has makes it its own, too.
+        clips.Loops = true;
+        Assert.Equal("Idle 0-1 @6 loop, Run 2-5 @12, Die 6-7 once", animation.Clips);
+        Assert.Equal("", clips.SettingsNote);
+
+        clips.SelectClip("Die");
+        Assert.False(clips.Loops);
+        clips.SetLoop(true);
+        clips.SetSpeed(7.5f);
+        Assert.Equal("Idle 0-1 @6 loop, Run 2-5 @12, Die 6-7 @7.5 loop", animation.Clips);
+        Assert.True(clips.Selected!.Loop);
+        Assert.Throws<InvalidOperationException>(() => clips.SetSpeed(-1));
+
+        document.History.Undo();
+        document.History.Undo();
+        document.History.Undo();
+        document.History.Undo();
+        Assert.Equal("Idle 0-1, Run 2-5 @12, Die 6-7 once", animation.Clips);
+        Assert.False(document.History.CanUndo);
+    });
+
+    [Fact]
+    public void TheAnimationsOwnSpeedAndLoopingAreSetOnTheAnimation() => EditorHost.Run(services =>
+    {
+        var (document, _, clips) = Open(services, start: null);
+        var animation = AnimationOf(document);
+
+        Assert.Equal("Clips without a speed or looping of their own use these too.", clips.SettingsNote);
+        clips.SetSpeed(4);
+        clips.SetLoop(false);
+        Assert.Equal(4, animation.FramesPerSecond);
+        Assert.False(animation.Loop);
+        Assert.Equal("Play Once", document.History.UndoDescription);
+        Assert.Equal("Idle 0-1, Run 2-5 @12, Die 6-7 once", animation.Clips);
+
+        // Idle has no speed or looping of its own, so it follows.
+        Assert.Equal("frames 0–1 · 4 fps · once", clips.Clips.Single(c => c.Name == "Idle").Summary);
+    });
+
+    [Fact]
     public void TheArtMenuOpensIt_AndAgentsReachIt() => EditorHost.Run(services =>
     {
         var command = services.GetRequiredService<CommandRegistry>().Get("Art.Clips");

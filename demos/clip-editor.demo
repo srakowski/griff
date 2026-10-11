@@ -1,5 +1,5 @@
 title: The Clip Editor
-intro: See a sprite's animation clips play, and add, rename and pick them, without leaving the scene.
+intro: See a sprite's animation clips play, pick their frames off the sprite sheet, and set how fast they go, without leaving the scene.
 project: Platformer | Clip Kit
 
 # Give the slime a four-frame sheet to animate: the painter's creature breathing, then two frames wearing a hat.
@@ -32,26 +32,37 @@ click: clips:forward
 click: clips:frame:2
 explain: clips:position | Where it is | Frame three of four, which is frame two on the sheet.
 
-chapter: Make clips | Add, rename, start with
+chapter: Make clips | Frames, speed and looping
 say: A real character has a few animations on one sheet: standing, walking, getting hurt. Those are clips.
 click: clips:add
 prompt: Idle
 explain: clips:clip:Idle | The first clip | Add makes one. The first takes the animation's own frames, and becomes the clip the game starts with.
 expectvalue: Slime.Animation.Clip = Idle
-say: A clip's frames are typed in the Inspector for now. Picking them from the sheet here comes next. Two frames of breathing, and the two hat frames as a clip that plays once.
-set: Animation.Clips = Idle 0-1, Hat 2-3 @4 once
-explain: clips:list | Straight away | The list follows the Inspector, and undo, as you change things.
-click: clips:clip:Hat
-wait: 1.5
+explain: clips:sheet | The whole sheet | Underneath is the whole sprite sheet, with the frames this clip plays marked. Idle should only be the two breathing frames.
+clipframes: 0 > 1
+expectvalue: Slime.Animation.Clips = Idle 0-1
+explain: clips:sheet:1 | Drag across them | Dragging across frames makes the clip play just those. Clicking one picks one.
+click: clips:add
+prompt: Hat
+explain: clips:sheet:2 | The next frame | A new clip starts on the frame after the last clip's. The hat takes two frames, so Shift-click the last one to stretch the clip to reach it.
+clipframes: Shift+3
+expectvalue: Slime.Animation.Clips = Idle 0-1, Hat 2-3
+explain: clips:note | From the animation | It plays at the animation's speed, and loops like the animation, until it's given its own.
+clipspeed: 4
+click: clips:loop
+expectvalue: Slime.Animation.Clips = Idle 0-1, Hat 2-3 @4 once
+explain: clips:settings | Its own speed | Four frames a second, and it plays once instead of looping.
+explain: field:Animation.Clips | Written for you | The Inspector shows the clips as text, written as you go. Each change is one undo step.
+wait: 1
 explain: clips:preview | Plays once | A clip that plays once stops on its last frame. Play starts it over.
 click: clips:play
-wait: 1
+wait: 1.5
 click: clips:rename
 prompt: Party
 expectvalue: Slime.Animation.Clips = Idle 0-1, Party 2-3 @4 once
 click: clips:start
 expectvalue: Slime.Animation.Clip = Party
-explain: clips:start | Start with this | Start With This makes it the clip the game starts playing. Each change is one undo step.
+explain: clips:start | Start with this | Rename gives it a better name, and Start With This makes it the clip the game starts playing.
 say: Here's the slime in the game, wearing its hat.
 play
 wait: 3

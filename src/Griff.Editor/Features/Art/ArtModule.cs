@@ -86,7 +86,8 @@ public sealed class PaintSelectedCommand(EditorArt art, ISelection selection) : 
 
 /// <summary>
 /// Opens the Clip Editor: the selected entity's animation clips, with the one picked playing in a preview. Clips are
-/// added, renamed, removed and picked to start with there. It follows the selection.
+/// added, renamed, removed and picked to start with there, and given their frames (picked off the sprite sheet), speed
+/// and looping. It follows the selection.
 /// </summary>
 public sealed class OpenClipEditorCommand(ClipEditor clips, IWorkspace workspace) : EditorCommand
 {

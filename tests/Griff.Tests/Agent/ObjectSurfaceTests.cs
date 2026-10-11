@@ -39,7 +39,11 @@ public class ObjectSurfaceTests
 
         public string Name { get; set; } = "";
 
-        public double Tempo { get; set; } = 120;
+        public double Tempo
+        {
+            get;
+            set => field = value >= 0 ? value : throw new InvalidOperationException("A tempo is 0 or more.");
+        } = 120;
 
         public Mood Mood { get; set; }
 
@@ -106,6 +110,11 @@ public class ObjectSurfaceTests
         Assert.Equal(new Vector2(2, 3), maker.Size);
         Assert.Throws<AgentException>(() => ObjectSurface.Set(maker, "Applied", Json("\"x\"")));
         Assert.Throws<AgentException>(() => ObjectSurface.Set(maker, "Nope", Json("1")));
+
+        // A setter that refuses a value says why.
+        var refused = Assert.Throws<AgentException>(() => ObjectSurface.Set(maker, "Tempo", Json("-5")));
+        Assert.Equal("Tempo can't be -5: A tempo is 0 or more.", refused.Message);
+        Assert.Equal(140, maker.Tempo);
     }
 
     [Fact]

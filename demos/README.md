@@ -104,6 +104,8 @@ build: standalone
 | `artname: <text>` | Type the Sprite Painter's file name (Save puts it in `Sprites/` or `Tiles/`). |
 | `pickimage: <Component>.<Field> = <image>` | Choose an image from an image field's list of the project's pictures, e.g. `pickimage: Tilemap.Image = Tiles/cave.png`. |
 | `clips` | Wait for the Clip Editor to open (after `menu: Art > Animation Clips...`). |
+| `clipframes: <first> > <last>` | Drag across the Clip Editor's sheet with the real mouse, from one frame to another (by sheet frame), making them the picked clip's frames: `clipframes: 2 > 5`. One frame clicks it (`clipframes: 3`); `clipframes: Shift+6` Shift-clicks, stretching the clip to reach it. |
+| `clipspeed: <fps>` | Type the picked clip's Speed into the Clip Editor (frames a second). Its looping is `click: clips:loop`. |
 | `expectart: <path> [\| <frames>]` | Fail unless the picture (relative to Assets) was saved by the Sprite Painter, with that many frames or tiles. |
 | `controls` | Wait for the Controls window to open (after `menu: Game > Controls...`). |
 | `action: <name>` | Pick an action in the Controls window, e.g. `action: Jump`. |
@@ -150,7 +152,7 @@ In the Sprite Painter: `painter` (the window), `painter:tool:Fill`, `painter:col
 `painter:mode:Tileset`, `painter:another`, `painter:canvas`, `painter:preview`, `painter:frames`, `painter:addframe`,
 `painter:removeframe`, `painter:mirror`, `painter:onion`, `painter:outline`, `painter:save`, `painter:close`,
 `painter:name`, `painter:palette`, `painter:swatches`, `painter:hex`, `painter:current`, `painter:fps`, `painter:tools`,
-`painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. In the Clip Editor: `clips` (the window), `clips:clip:Run` (a clip in the list, or `clips:clip:(own frames)`), `clips:frame:2` (a frame in the strip, by its sheet frame), `clips:list`, `clips:preview`, `clips:frames`, `clips:play`, `clips:back`, `clips:forward`, `clips:position` (which frame is showing), `clips:add`, `clips:rename`, `clips:remove`, `clips:start`, `clips:buttons`, `clips:notice`, `clips:addanimation` and `clips:entity`. An image field's buttons in the Inspector:
+`painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. In the Clip Editor: `clips` (the window), `clips:clip:Run` (a clip in the list, or `clips:clip:(own frames)`), `clips:frame:2` (a frame in the strip, by its sheet frame), `clips:sheet:2` (a frame on the sheet), `clips:sheet` (the sheet), `clips:settings` (Speed and Loops), `clips:speed`, `clips:loop`, `clips:note` (where the speed and looping come from), `clips:list`, `clips:preview`, `clips:frames`, `clips:play`, `clips:back`, `clips:forward`, `clips:position` (which frame is showing), `clips:add`, `clips:rename`, `clips:remove`, `clips:start`, `clips:buttons`, `clips:notice`, `clips:addanimation` and `clips:entity`. An image field's buttons in the Inspector:
 `image:Sprite.Image:choose` and `image:Sprite.Image:paint`. A field naming entities has its list button, `pick:Switch.Targets`. An asset's row in the Assets panel is `asset:Prefabs/Gem.prefab` (the folders it's in are opened).
 
 In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),

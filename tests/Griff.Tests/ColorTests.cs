@@ -38,4 +38,40 @@ public class ColorTests
     {
         Assert.Equal("#FF0000FF", new Color(2f, -1f, 0f).ToHex());
     }
+
+    [Theory]
+    [InlineData(0, 1, 1, "#FF0000FF")]
+    [InlineData(120, 1, 1, "#00FF00FF")]
+    [InlineData(240, 1, 1, "#0000FFFF")]
+    [InlineData(60, 1, 1, "#FFFF00FF")]
+    [InlineData(300, 0.5, 0.5, "#804080FF")]
+    [InlineData(720, 1, 1, "#FF0000FF")]
+    [InlineData(-120, 1, 1, "#0000FFFF")]
+    [InlineData(200, 0, 0.5, "#808080FF")]
+    public void FromHsv_GoesRoundTheColorWheel(float hue, float saturation, float value, string hex)
+    {
+        Assert.Equal(hex, Color.FromHsv(hue, saturation, value).ToHex());
+    }
+
+    [Theory]
+    [InlineData("#FF004DFF")]
+    [InlineData("#29ADFFFF")]
+    [InlineData("#5F574F80")]
+    [InlineData("#000000FF")]
+    [InlineData("#FFFFFFFF")]
+    public void ToHsv_RoundTripsThroughFromHsv(string hex)
+    {
+        Assert.True(Color.TryParse(hex, out var color));
+        var (hue, saturation, value) = color.ToHsv();
+
+        Assert.InRange(hue, 0, 360);
+        Assert.Equal(hex, Color.FromHsv(hue, saturation, value, color.A).ToHex());
+    }
+
+    [Fact]
+    public void ToHsv_GivesGraysNoHueOrSaturation()
+    {
+        Assert.Equal((0f, 0f, 0.5f), new Color(0.5f, 0.5f, 0.5f).ToHsv());
+        Assert.Equal((0f, 0f, 0f), Color.Black.ToHsv());
+    }
 }

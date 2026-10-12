@@ -60,7 +60,8 @@ public sealed partial class SpritePainterViewModel : ObservableObject
     {
         _art = art;
         _sheet = new PixelSheet(layout);
-        _color = _palette.Colors[8];
+        _palette = art.Palette;
+        _color = _palette.Colors[Math.Min(8, _palette.Colors.Count - 1)];
         _animate = new DispatcherTimer(DispatcherPriority.Background, Dispatcher.CurrentDispatcher);
         _animate.Tick += (_, _) => AdvancePreview();
 
@@ -275,7 +276,10 @@ public sealed partial class SpritePainterViewModel : ObservableObject
         set
         {
             if (value is not null && SetProperty(ref _palette, value))
+            {
+                _art.Palette = value;
                 RebuildSwatches();
+            }
         }
     }
 

@@ -523,7 +523,8 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
-            var field = Descendants<NumberField>(row).First(f => axis is null || f.Label == axis);
+            // A vector's boxes by their axis (a 2D rotation's one box has no letter on it).
+            var field = Descendants<NumberField>(row).First(f => axis is null || (f.DataContext as AxisField)?.Label == axis);
             var box = Descendants<TextBox>(field).First();
             await EditBox(box, Format(value), attempt == 0 ? note : null);
             await Settle(40);

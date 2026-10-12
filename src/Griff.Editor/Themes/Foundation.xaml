@@ -41,6 +41,16 @@
     <SolidColorBrush x:Key="Brush.Surface.Document" Color="{StaticResource Color.Gray.900}" />
     <SolidColorBrush x:Key="Brush.Surface.Flyout" Color="{StaticResource Color.Gray.800}" />
 
+    <!-- Checks behind see-through colors, so their alpha shows -->
+    <DrawingBrush x:Key="Brush.Checker" TileMode="Tile" Viewport="0,0,8,8" ViewportUnits="Absolute">
+        <DrawingBrush.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF9A9A9A" Geometry="M0,0 H2 V2 H0Z" />
+                <GeometryDrawing Brush="#FF5E5E5E" Geometry="M0,0 H1 V1 H0Z M1,1 H2 V2 H1Z" />
+            </DrawingGroup>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
+
     <!-- Interactive controls -->
     <SolidColorBrush x:Key="Brush.Control.Background" Color="{StaticResource Color.Gray.750}" />
     <SolidColorBrush x:Key="Brush.Control.Hover" Color="{StaticResource Color.Gray.700}" />

@@ -218,6 +218,30 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => FoldOf(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
                     throw new InvalidOperationException($"Expected {foldName} to be {(wantFolded ? "folded shut" : "open")}.");
                 break;
+            case "colordrag":
+                // "colordrag: hue = 200", "colordrag: square = 0.8, 0.6", "colordrag: alpha = 0.5": drags in the open color picker.
+                var (colorStrip, colorTo) = Split2(a, '=');
+                await ui.ColorDrag(colorStrip, Numbers(colorTo, colorStrip.Equals("square", StringComparison.OrdinalIgnoreCase) ? 2 : 1));
+                break;
+            case "expectaxes":
+                // "expectaxes: Transform.Position = X, Y": the axes the Inspector shows for a vector (a 2D rotation shows just Z).
+                var (axesName, axesWant) = Split2(a, '=');
+                if (axesName.Split('.', 2) is not [var axesComponent, var axesField])
+                    throw new InvalidOperationException($"expectaxes needs Component.Field, not {axesName}.");
+                var wantAxes = string.Join(", ", axesWant.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+                string? ShownAxes() => ui.InspectorRow(axesComponent, Label(axesField)) is { DataContext: PropertyField f }
+                    ? string.Join(", ", f.Axes.Where(x => x.IsShown).Select(x => x.Label))
+                    : null;
+                if (!await Until(() => ShownAxes() == wantAxes, 3000))
+                    throw new InvalidOperationException($"Expected {axesName} to show {wantAxes}, but it shows {ShownAxes() ?? "nothing"}.");
+                break;
+            case "expectmatches":
+                // "expectmatches: fields = 4" or "entities = 9": how many the Inspector's or Hierarchy's filter lets through.
+                var (matchesWhich, matchesWant) = Split2(a, '=');
+                var wantMatches = int.Parse(matchesWant, CultureInfo.InvariantCulture);
+                if (!await Until(() => ui.FilterMatches(matchesWhich) == wantMatches, 3000))
+                    throw new InvalidOperationException($"Expected the {matchesWhich} filter to let {wantMatches} through, but it lets {ui.FilterMatches(matchesWhich)} through.");
+                break;
             case "expectfaded":
                 // "expectfaded: PlatformerMovement.DashSpeed = true": the field is faded, unused while what it needs is off.
                 var (fadedName, fadedWant) = Split2(a, '=');
@@ -894,17 +918,31 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.SetNumber(component, label, double.Parse(value, CultureInfo.InvariantCulture));
                 break;
             case FieldKind.Vector when axis is not null:
-                await ui.SetNumber(component, label, double.Parse(value, CultureInfo.InvariantCulture), axis);
+                await SetAxis(component, label, field.Axes.First(x => x.Label == axis), double.Parse(value, CultureInfo.InvariantCulture));
                 break;
             case FieldKind.Vector:
                 var numbers = Numbers(value, field.Axes.Count);
                 for (var i = 0; i < numbers.Length; i++)
-                    await ui.SetNumber(component, label, numbers[i], field.Axes[i].Label);
+                    await SetAxis(component, label, field.Axes[i], numbers[i]);
                 break;
             default:
                 await ui.SetText(component, label, value.Replace("\\n", "\n"));
                 break;
         }
+    }
+
+    // Types one axis of a vector. One a 2D Transform hides (a position's Z) is left alone when it already has the value,
+    // and can't be typed otherwise: the demo switches on 3D first (click: transform:3d).
+    private async Task SetAxis(string component, string label, AxisField axis, double value)
+    {
+        if (!axis.IsShown)
+        {
+            if (Math.Abs(axis.Value - value) < 1e-3)
+                return;
+            throw new InvalidOperationException($"{component}.{label}.{axis.Label} is hidden while the Transform shows in 2D: click: transform:3d first.");
+        }
+
+        await ui.SetNumber(component, label, value, axis.Label);
     }
 
     // A property of the first entity with that name, as text: colors as hex, numbers invariant. Null if it isn't there.
@@ -1414,6 +1452,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "clips" => DemoUi.ClipsPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
+            "color" => ui.ColorPart(name),
+            "transform" => ui.TransformPart(name),
+            "filter" => ui.FilterBox(name),
             "pick" when name.Split('.', 2) is [var component, var field] =>
                 ui.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
@@ -1422,7 +1463,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

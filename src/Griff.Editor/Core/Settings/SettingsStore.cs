@@ -27,6 +27,15 @@ public sealed class EditorSettings
     /// opened again.
     /// </summary>
     public List<string> CollapsedComponents { get; set; } = [];
+
+    /// <summary>Colors last picked in color fields' pickers, as hex ("#FF004DFF"), most recent first.</summary>
+    public List<string> RecentColors { get; set; } = [];
+
+    /// <summary>
+    /// Whether the Inspector shows Transforms in 3D (Position, Rotation and Scale in X, Y and Z) rather than 2D (X and Y,
+    /// and one rotation angle).
+    /// </summary>
+    public bool Transform3D { get; set; }
 }
 
 public interface ISettingsStore

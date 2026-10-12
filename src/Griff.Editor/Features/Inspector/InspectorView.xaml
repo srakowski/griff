@@ -75,11 +75,23 @@
                            TextWrapping="Wrap"
                            Visibility="{Binding HasHiddenNote, Converter={StaticResource Visible}}" />
 
+                <!-- Filter: only fields whose names have what's typed (Escape empties it) -->
+                <controls:FilterBox x:Name="FieldFilter"
+                                    Margin="10,0,10,8"
+                                    Placeholder="Filter fields"
+                                    Tag="filter:fields"
+                                    Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="Show only the fields whose names have this in them" />
+                <TextBlock Margin="10,0,10,8"
+                           Style="{StaticResource Style.Text.Caption}"
+                           Text="{Binding FilterNote}"
+                           Visibility="{Binding HasFilterNote, Converter={StaticResource Visible}}" />
+
                 <!-- Components -->
                 <ItemsControl ItemsSource="{Binding Components}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="inspector:ComponentSection">
-                            <StackPanel>
+                            <StackPanel x:Name="SectionRoot">
                                 <!-- Section header: right-click for Reset, Copy and Paste Values, Move Up and Down -->
                                 <Border x:Name="SectionHeader"
                                         Padding="4,0,4,0"
@@ -110,6 +122,18 @@
                                                 Visibility="{Binding IsScript, Converter={StaticResource Visible}}">
                                             <TextBlock FontSize="12" Foreground="{DynamicResource Brush.Accent}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Code}" />
                                         </Button>
+                                        <!-- The Transform: 2D (X and Y, one angle) or 3D, for every entity -->
+                                        <ToggleButton x:Name="ThreeDToggle"
+                                                      Margin="0,0,4,0"
+                                                      Padding="6,0"
+                                                      VerticalAlignment="Center"
+                                                      Content="3D"
+                                                      DockPanel.Dock="Right"
+                                                      FontSize="{StaticResource FontSize.Caption}"
+                                                      IsChecked="{Binding Is3D}"
+                                                      Tag="transform:3d"
+                                                      ToolTip="Show the Transform in 3D: Position, Rotation and Scale in X, Y and Z. Off, it shows X and Y and one rotation angle."
+                                                      Visibility="{Binding IsTransform, Converter={StaticResource Visible}}" />
                                         <!-- On a prefab copy: added there, the prefab doesn't have it -->
                                         <TextBlock x:Name="AddedMark"
                                                    Margin="0,0,6,0"
@@ -212,12 +236,22 @@
                                            TextWrapping="Wrap"
                                            Visibility="{Binding HasSetupNote, Converter={StaticResource Visible}}" />
 
+                                <!-- A 2D Transform with values only 3D shows: which -->
+                                <TextBlock x:Name="HiddenAxesNote"
+                                           Margin="12,6,10,0"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Tag="transform:hidden"
+                                           Text="{Binding HiddenAxesNote}"
+                                           TextWrapping="Wrap"
+                                           ToolTip="These still count (a position's Z orders what's drawn). Switch on 3D to change them."
+                                           Visibility="{Binding HasHiddenAxesNote, Converter={StaticResource Visible}}" />
+
                                 <!-- Properties, with subheadings between them -->
                                 <ItemsControl x:Name="FieldRows"
                                               Margin="12,6,10,8"
                                               Grid.IsSharedSizeScope="True"
                                               ItemsSource="{Binding Rows}"
-                                              Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}">
+                                              Visibility="{Binding ShowsFields, Converter={StaticResource Visible}}">
                                     <ItemsControl.Resources>
                                         <!-- A subheading ([Group]): folds the fields under it -->
                                         <DataTemplate DataType="{x:Type inspector:FieldGroup}">
@@ -250,6 +284,9 @@
                                             <DataTemplate.Triggers>
                                                 <DataTrigger Binding="{Binding IsFaded}" Value="True">
                                                     <Setter TargetName="GroupName" Property="Opacity" Value="0.55" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsFilteredOut}" Value="True">
+                                                    <Setter TargetName="GroupRow" Property="Visibility" Value="Collapsed" />
                                                 </DataTrigger>
                                             </DataTemplate.Triggers>
                                         </DataTemplate>
@@ -308,7 +345,7 @@
                                                 <DataTrigger Binding="{Binding IsFaded}" Value="True">
                                                     <Setter TargetName="FieldRow" Property="Opacity" Value="0.45" />
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsFolded}" Value="True">
+                                                <DataTrigger Binding="{Binding IsHiddenRow}" Value="True">
                                                     <Setter TargetName="FieldRow" Property="Visibility" Value="Collapsed" />
                                                 </DataTrigger>
                                             </DataTemplate.Triggers>
@@ -321,6 +358,10 @@
                                 <DataTrigger Binding="{Binding IsPartial}" Value="True">
                                     <Setter TargetName="SectionTitle" Property="Opacity" Value="0.5" />
                                     <Setter TargetName="FieldRows" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <!-- Nothing in it matches the filter -->
+                                <DataTrigger Binding="{Binding IsFilteredOut}" Value="True">
+                                    <Setter TargetName="SectionRoot" Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>
                         </DataTemplate>

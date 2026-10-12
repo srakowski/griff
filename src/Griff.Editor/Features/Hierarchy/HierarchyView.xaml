@@ -39,6 +39,27 @@
                 </DockPanel>
             </Border>
 
+            <!-- Filter: only entities whose names have what's typed, with what they're inside -->
+            <controls:FilterBox x:Name="Filter"
+                                Margin="6,6,6,4"
+                                DockPanel.Dock="Top"
+                                Placeholder="Filter entities"
+                                Tag="filter:entities"
+                                Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                                ToolTip="Show only the entities whose names have this in them" />
+            <TextBlock Margin="10,4"
+                       DockPanel.Dock="Top"
+                       Style="{StaticResource Style.Text.Caption}"
+                       Text="{Binding FilterNote}">
+                <TextBlock.Visibility>
+                    <Binding Path="HasFilterNote">
+                        <Binding.Converter>
+                            <converters:BoolToVisibilityConverter />
+                        </Binding.Converter>
+                    </Binding>
+                </TextBlock.Visibility>
+            </TextBlock>
+
             <TreeView x:Name="Tree"
                       AllowDrop="True"
                       ItemsSource="{Binding Roots}"
@@ -56,6 +77,11 @@
                         <!-- The tree's own selection is the primary entity; every selected row is highlighted. -->
                         <Setter Property="IsSelected" Value="{Binding IsPrimary, Mode=TwoWay}" />
                         <Setter Property="controls:TreeSelection.IsSelected" Value="{Binding IsSelected}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsFilteredOut}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
                     </Style>
                 </TreeView.ItemContainerStyle>
                 <TreeView.ItemTemplate>
@@ -196,6 +222,10 @@
                                 <Setter TargetName="HideToggle" Property="ToolTip" Value="Hidden in the Scene view: click to show" />
                                 <Setter TargetName="HideToggle" Property="Tag" Value="{x:Static theme:Icons.Hide}" />
                                 <Setter TargetName="Label" Property="Opacity" Value="0.6" />
+                            </DataTrigger>
+                            <!-- Shown only for a match inside it -->
+                            <DataTrigger Binding="{Binding IsFilterContext}" Value="True">
+                                <Setter TargetName="Label" Property="Opacity" Value="0.5" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsEditing}" Value="True">
                                 <Setter TargetName="Label" Property="Visibility" Value="Hidden" />

@@ -3,7 +3,10 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
                     xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
-                    xmlns:theme="clr-namespace:Griff.Editor.Themes">
+                    xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                    xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters">
+
+    <converters:BoolToVisibilityConverter x:Key="Field.Visible" />
 
     <DataTemplate x:Key="Field.Bool" DataType="inspector:PropertyField">
         <CheckBox HorizontalAlignment="Left" IsChecked="{Binding BoolValue}" />
@@ -199,15 +202,36 @@
         </ComboBox>
     </DataTemplate>
 
+    <!-- Colors: the swatch opens the picker (hue and value, alpha, palette, recent colors); the hex can be typed -->
     <DataTemplate x:Key="Field.Color" DataType="inspector:PropertyField">
-        <DockPanel>
-            <Border Width="22" Height="22"
+        <DockPanel x:Name="Row">
+            <inspector:ColorPickerPopup PlacementTarget="{Binding ElementName=Row}" />
+            <Button Width="22" Height="22"
+                    MinWidth="0" MinHeight="0"
                     Margin="0,0,6,0"
-                    Background="{Binding ColorBrush}"
-                    BorderBrush="{DynamicResource Brush.Border.Default}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius.Small}"
-                    DockPanel.Dock="Left" />
+                    Padding="0"
+                    Command="{Binding ToggleColorCommand}"
+                    Cursor="Hand"
+                    DockPanel.Dock="Left"
+                    Tag="color:swatch"
+                    ToolTip="Pick a color: hue and brightness, see-through, the palette, and colors used lately">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Frame"
+                                Background="{StaticResource Brush.Checker}"
+                                BorderBrush="{DynamicResource Brush.Border.Default}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource Radius.Small}">
+                            <Border Background="{Binding ColorBrush}" CornerRadius="1" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Brush.Border.Strong}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
             <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Text="{Binding ColorHex}" />
         </DockPanel>
     </DataTemplate>
@@ -219,9 +243,15 @@
                     <UniformGrid Rows="1" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
+            <!-- A 2D Transform hides Z (and a rotation's X and Y): those boxes go, and the rest share the row -->
+            <ItemsControl.ItemContainerStyle>
+                <Style TargetType="ContentPresenter">
+                    <Setter Property="Visibility" Value="{Binding IsShown, Converter={StaticResource Field.Visible}}" />
+                </Style>
+            </ItemsControl.ItemContainerStyle>
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="inspector:AxisField">
-                    <controls:NumberField x:Name="Field" Margin="0,0,3,0" IsMixed="{Binding IsMixed, Mode=OneWay}" Label="{Binding Label, Mode=OneTime}" Value="{Binding Value}" />
+                    <controls:NumberField x:Name="Field" Margin="0,0,3,0" IsMixed="{Binding IsMixed, Mode=OneWay}" Label="{Binding ShownLabel, Mode=OneWay}" Value="{Binding Value}" />
                     <DataTemplate.Triggers>
                         <DataTrigger Binding="{Binding Label}" Value="X">
                             <Setter TargetName="Field" Property="LabelBrush" Value="{DynamicResource Brush.Axis.X}" />

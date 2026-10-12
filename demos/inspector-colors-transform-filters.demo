@@ -1,0 +1,55 @@
+title: Colors, 2D Transforms and filters
+intro: A color picker on every color field, the Transform in 2D, and filters to find a field or an entity fast.
+project: Platformer | Inspector Tools
+
+chapter: Filters | Find a field, or an entity, by typing
+select: Player
+say: The player has seven components and nearly fifty fields. Say you want its speeds.
+click: filter:fields
+type: speed
+expectmatches: fields = 6
+explain: panel:Inspector | Speeds | Type in the filter at the top of the Inspector, and only the fields with speed in their names are left, under their subheadings, folded or not.
+say: It stays as you pick other entities, so you can compare one field across them. Escape clears it.
+key: Escape
+click: filter:entities
+type: coin
+expectmatches: entities = 9
+explain: panel:Hierarchy | Coins | The Hierarchy has one too. Every coin shows, with what it sits inside opened and drawn faintly, so you can see where each one is.
+key: Escape
+say: Clear it, and the tree goes back the way it was.
+
+chapter: Transforms in 2D | X and Y, and one angle
+expectaxes: Transform.Position = X, Y
+expectaxes: Transform.Rotation = Z
+explain: component:Transform | Transform | Griff games are mostly flat, so the Transform shows position and scale in X and Y, and rotation as one angle.
+set: Transform.Rotation.Z = 15
+expectvalue: Player.Transform.Rotation.Z = 15
+set: Transform.Rotation.Z = 0
+explain: transform:3d | 3D | Making something in 3D? This switch shows Z as well, on every entity, and the editor remembers it.
+click: transform:3d
+expectaxes: Transform.Position = X, Y, Z
+expectaxes: Transform.Rotation = X, Y, Z
+wait: 1
+click: transform:3d
+expectaxes: Transform.Position = X, Y
+
+chapter: Colors | A picker on every color field
+explain: color:Sprite.Tint | Tint | Color fields used to take a hex code and nothing else. Now the swatch opens a picker.
+click: color:Sprite.Tint
+explain: color:square | Strength and brightness | Drag across the square for how strong the color is, and up it for how bright.
+colordrag: hue = 200
+say: The strip below picks the hue. The player changes as you drag.
+colordrag: square = 0.75, 0.9
+colordrag: alpha = 0.6
+say: And this one makes it see through.
+explain: color:swatches | Palette | Underneath is the Sprite Painter's palette, so your sprites and tints come from the same colors.
+click: color:pick:#29ADFF
+expectvalue: Player.Sprite.Tint = #29ADFF
+click: color:Sprite.Tint
+select: Slime
+click: color:Sprite.Tint
+explain: color:recent | Recent | And colors you picked lately are kept, in every color field, for next time.
+click: color:pick:#29ADFF
+expectvalue: Slime.Sprite.Tint = #29ADFF
+click: color:Sprite.Tint
+say: Each drag or pick is one undo step, and it works on everything selected at once. Agents get the same picker, filters and 3D switch through the Inspector.

@@ -25,7 +25,9 @@ namespace Griff.Editor.Features.Inspector;
 /// with Add to All. Right-clicking a component's header resets it, copies and pastes its values, or moves it up or
 /// down. On placed copies of prefabs, fields set differently from the
 /// prefab are marked, each with Revert and Apply to Prefab. Each field's name explains it (its documentation as a
-/// tooltip), and a section folded shut stays shut for that component on every entity, and next time.
+/// tooltip), and a section folded shut stays shut for that component on every entity, and next time. A filter at the
+/// top narrows the fields to those whose names have what's typed; Transforms show in 2D (X and Y, one rotation angle)
+/// unless 3D is switched on; and color fields open a picker from their swatch.
 /// </summary>
 public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 {
@@ -34,6 +36,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private readonly Scripts.ScriptEditors _scripts;
     private readonly Core.Dialogs.IDialogService _dialogs;
     private readonly Core.Status.IStatusService _status;
+    private readonly Art.EditorArt _art;
     private Core.Settings.ISettingsStore _settings;
     // For the selection: each component of a prefab copy (or of something inside one) and the prefab's own, the
     // components a copy added, and the prefab files read for them, with when each was written.
@@ -50,6 +53,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings)
     {
         _settings = settings;
+        _art = art;
         _workspace = workspace;
         _selection = selection;
         _scripts = scripts;
@@ -408,6 +412,94 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
             Components.Add(new ComponentSection(components, this, _workspace.Components, lacking));
         if (entities.Count > 1 && entities.Any(e => e.Components.Any(c => c is MissingComponent)))
             HiddenNote = "Components whose type couldn't be found are left out.";
+        ApplyFilter();
+    }
+
+    // ----- Filtering fields
+
+    private string _filter = "";
+
+    /// <summary>
+    /// What's typed in the filter at the top: only fields whose names have it show (all of a component's, or a
+    /// subheading's, when its name has it), folded or not, and components with none are left out. It stays as the
+    /// selection changes; empty shows everything.
+    /// </summary>
+    public string Filter
+    {
+        get => _filter;
+        set
+        {
+            if (SetProperty(ref _filter, value ?? ""))
+                ApplyFilter();
+        }
+    }
+
+    /// <summary>True while the filter has something typed in it.</summary>
+    public bool IsFiltering => Filter.Trim().Length > 0;
+
+    /// <summary>How many fields the filter lets through, across the components shown.</summary>
+    public int FilterMatches => Components.Sum(c => c.Properties.Count(p => !p.IsFilteredOut));
+
+    /// <summary>"No fields match "spd"" when the filter hides everything; otherwise null.</summary>
+    public string? FilterNote => IsFiltering && Components.All(c => c.IsFilteredOut) ? $"No fields match \"{Filter.Trim()}\"" : null;
+
+    public bool HasFilterNote => FilterNote is not null;
+
+    private void ApplyFilter()
+    {
+        var text = Filter.Trim();
+        foreach (var section in Components)
+            section.ApplyFilter(text);
+        OnPropertyChanged(nameof(IsFiltering));
+        OnPropertyChanged(nameof(FilterMatches));
+        OnPropertyChanged(nameof(FilterNote));
+        OnPropertyChanged(nameof(HasFilterNote));
+    }
+
+    // ----- Transforms in 2D or 3D
+
+    /// <summary>
+    /// Whether Transforms show in 3D: Position, Rotation and Scale in X, Y and Z. Off (the start), they show in 2D: X and
+    /// Y, and one rotation angle. Kept in the user's settings.
+    /// </summary>
+    public bool Transform3D
+    {
+        get => _settings.Settings.Transform3D;
+        set
+        {
+            if (value == Transform3D)
+                return;
+            _settings.Settings.Transform3D = value;
+            _settings.Save();
+            OnPropertyChanged();
+            foreach (var section in Components.Where(c => c.IsTransform))
+                section.Refresh();
+        }
+    }
+
+    // ----- Colors
+
+    /// <summary>The palette color fields' pickers offer: the Sprite Painter's, which choosing another in a picker changes too.</summary>
+    public Griff.Art.Palette Palette
+    {
+        get => _art.Palette;
+        set => _art.Palette = value;
+    }
+
+    /// <summary>Colors picked lately in color fields' pickers, most recent first, kept in the user's settings.</summary>
+    public IReadOnlyList<Color> RecentColors =>
+        [.. _settings.Settings.RecentColors.Select(h => Color.TryParse(h, out var c) ? c : (Color?)null).OfType<Color>()];
+
+    /// <summary>Puts a color first in <see cref="RecentColors"/>.</summary>
+    public void RememberColor(Color color)
+    {
+        var list = _settings.Settings.RecentColors;
+        var hex = color.ToHex();
+        list.RemoveAll(h => string.Equals(h, hex, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, hex);
+        if (list.Count > ColorPicker.RecentCount)
+            list.RemoveRange(ColorPicker.RecentCount, list.Count - ColorPicker.RecentCount);
+        _settings.Save();
     }
 
     // Pairs each of the entity's components with its prefab's, if it's a copy or inside one.
@@ -956,10 +1048,71 @@ public sealed class ComponentSection : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(nameof(IsExpanded));
+        OnPropertyChanged(nameof(ShowsFields));
         foreach (var group in Groups)
             group.Refresh();
         foreach (var property in Properties)
             property.Refresh();
+        if (IsTransform)
+        {
+            OnPropertyChanged(nameof(Is3D));
+            OnPropertyChanged(nameof(HiddenAxesNote));
+            OnPropertyChanged(nameof(HasHiddenAxesNote));
+        }
+    }
+
+    // ----- Transforms
+
+    /// <summary>True for the Transform, which shows in 2D or 3D.</summary>
+    public bool IsTransform => Component is Transform && !IsPartial;
+
+    /// <summary>
+    /// Whether Transforms show in 3D (X, Y and Z) rather than 2D (X and Y, one rotation angle): the switch on the
+    /// Transform's header, the same for every entity, and kept next time.
+    /// </summary>
+    public bool Is3D
+    {
+        get => _owner.Transform3D;
+        set => _owner.Transform3D = value;
+    }
+
+    /// <summary>
+    /// In 2D, says which values 3D would show that aren't at rest ("Also set in 3D: Position Z 2"), as they still count
+    /// (a position's Z orders what's drawn); otherwise null.
+    /// </summary>
+    public string? HiddenAxesNote => IsTransform && Properties.SelectMany(p => p.HiddenAxisValues()).ToList() is { Count: > 0 } hidden
+        ? $"Also set in 3D: {string.Join(", ", hidden)}"
+        : null;
+
+    public bool HasHiddenAxesNote => HiddenAxesNote is not null;
+
+    // ----- Filtering
+
+    private bool _filteredOut;
+
+    /// <summary>True while the Inspector's filter leaves the component out: neither it nor any of its fields match.</summary>
+    public bool IsFilteredOut
+    {
+        get => _filteredOut;
+        private set => SetProperty(ref _filteredOut, value);
+    }
+
+    /// <summary>Whether its fields show: while it's open, or while a filter shows what matches in it.</summary>
+    public bool ShowsFields => IsExpanded || _owner.IsFiltering;
+
+    /// <summary>
+    /// Narrows its fields to those whose names have <paramref name="text"/> (all of them when the component's name has
+    /// it, or a subheading's when that has it); empty shows them all.
+    /// </summary>
+    internal void ApplyFilter(string text)
+    {
+        var all = text.Length == 0 || Title.Contains(text, StringComparison.OrdinalIgnoreCase) || TypeName.Contains(text, StringComparison.OrdinalIgnoreCase);
+        foreach (var field in Properties)
+            field.IsFilteredOut = !all && !field.Matches(text) && field.Group?.Name.Contains(text, StringComparison.OrdinalIgnoreCase) != true;
+        foreach (var group in Groups)
+            group.Refresh();
+        IsFilteredOut = !all && Properties.All(p => p.IsFilteredOut);
+        OnPropertyChanged(nameof(ShowsFields));
     }
 
     // From every selected entity, as one undo step; asks first when something needs it.
@@ -1001,6 +1154,9 @@ public sealed class FieldGroup : ObservableObject
 
     /// <summary>True when every field under it is faded, as a dash's are with Dash off (see <see cref="PropertyField.IsFaded"/>).</summary>
     public bool IsFaded => Fields.All(f => f.IsFaded);
+
+    /// <summary>True while the Inspector's filter hides every field under it, which hides the subheading too.</summary>
+    public bool IsFilteredOut => Fields.All(f => f.IsFilteredOut);
 
     /// <summary>Says what folding does, and when it's shut, how many fields it hides.</summary>
     public string Tip => IsExpanded ? $"Fold {Name} shut" : $"Open {Name}: {Fields.Count} field{(Fields.Count == 1 ? "" : "s")}";
@@ -1626,18 +1782,51 @@ public sealed class PropertyField : ObservableObject
         }
     }
 
-    public Brush ColorBrush
+    public Brush ColorBrush => IsMixed ? Brushes.Transparent : ColorPicker.BrushOf(Value is Color c ? c : Color.Black);
+
+    private ColorPicker? _colorPicker;
+    private long _colorClosedAt;
+    private IRelayCommand? _toggleColor;
+
+    /// <summary>
+    /// The color field's picker while it's open (null when it's shut): hue and value, alpha, the Sprite Painter's palette
+    /// and recent colors. Open it with <see cref="IsColorOpen"/>.
+    /// </summary>
+    public ColorPicker? ColorPicker
     {
-        get
+        get => _colorPicker;
+        private set => SetProperty(ref _colorPicker, value);
+    }
+
+    /// <summary>Whether the color field's picker is open. Shutting it ends the undo step its drags made.</summary>
+    public bool IsColorOpen
+    {
+        get => ColorPicker is not null;
+        set
         {
-            if (IsMixed)
-                return Brushes.Transparent;
-            var color = Value is Color c ? c : Color.Black;
-            var brush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(color.AByte, color.RByte, color.GByte, color.BByte));
-            brush.Freeze();
-            return brush;
+            if (value == IsColorOpen || (value && Kind != FieldKind.Color))
+                return;
+            if (!value)
+            {
+                _colorClosedAt = Environment.TickCount64;
+                ColorPicker!.Commit();
+            }
+
+            ColorPicker = value
+                ? new ColorPicker(() => Value is Color c ? c : Color.Black, color => Value = color, color =>
+                {
+                    _owner.Seal();
+                    _owner.RememberColor(color);
+                }, () => _owner.RecentColors, () => _owner.Palette, palette => _owner.Palette = palette)
+                : null;
+            OnPropertyChanged();
         }
     }
+
+    /// <summary>Opens the color picker (clicking the swatch), or shuts it.</summary>
+    public IRelayCommand ToggleColorCommand => _toggleColor ??= new RelayCommand(() =>
+        // A click on the swatch while the picker is open shuts it (as the mouse goes down outside it).
+        IsColorOpen = !IsColorOpen && Environment.TickCount64 - _colorClosedAt > 250);
 
     /// <summary>
     /// True when a selected copy of a prefab (or something inside one) has this field set differently from its prefab.
@@ -1717,6 +1906,62 @@ public sealed class PropertyField : ObservableObject
         OnPropertyChanged(string.Empty);
         foreach (var axis in Axes)
             axis.Refresh();
+        ColorPicker?.Sync();
+    }
+
+    // ----- Filtering
+
+    private bool _filteredOut;
+
+    /// <summary>True while the Inspector's filter is hiding it: neither its name nor its component's or subheading's has what's typed.</summary>
+    public bool IsFilteredOut
+    {
+        get => _filteredOut;
+        internal set
+        {
+            if (SetProperty(ref _filteredOut, value))
+                OnPropertyChanged(nameof(IsHiddenRow));
+        }
+    }
+
+    /// <summary>True when its name, as shown or in code, has <paramref name="text"/> in it.</summary>
+    public bool Matches(string text) =>
+        Label.Contains(text, StringComparison.OrdinalIgnoreCase) || PropertyName.Contains(text, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when its row is hidden: filtered out, or folded under its subheading (a filter shows what matches, folded or
+    /// not).
+    /// </summary>
+    public bool IsHiddenRow => IsFilteredOut || (IsFolded && !_owner.IsFiltering);
+
+    // ----- Vectors
+
+    /// <summary>
+    /// True for a Transform's Position, Rotation or Scale shown in 2D: X and Y, and one rotation angle (Z), with the
+    /// rest behind the Inspector's 3D switch.
+    /// </summary>
+    public bool Is2D => !_owner.Transform3D && _components[0] is Transform && Kind == FieldKind.Vector;
+
+    /// <summary>Whether a vector's axis shows: in 2D, a position's or scale's X and Y, and a rotation's Z.</summary>
+    internal bool IsAxisShown(int index) => !Is2D || (PropertyName == nameof(Transform.Rotation) ? index == 2 : index < 2);
+
+    /// <summary>
+    /// The axes a 2D Transform hides that aren't at their resting value on a selected entity, e.g. "Position Z 2":
+    /// they still count, and show in 3D.
+    /// </summary>
+    internal IEnumerable<string> HiddenAxisValues()
+    {
+        if (!Is2D)
+            yield break;
+        var rest = PropertyName == nameof(Transform.Scale) ? 1f : 0f;
+        for (var i = 0; i < Axes.Count; i++)
+        {
+            if (IsAxisShown(i))
+                continue;
+            var values = _components.Select(c => ToFloats(_property.GetValue(c))[i]).Where(v => v != rest).Distinct().ToList();
+            if (values.Count > 0)
+                yield return $"{Label} {AxisNames[i]} {(values.Count == 1 ? values[0].ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "mixed")}";
+        }
     }
 
     internal float GetAxis(int index) => ToFloats(Value)[index];
@@ -1780,6 +2025,12 @@ public sealed class AxisField(PropertyField owner, int index, string label) : Ob
 {
     public string Label { get; } = label;
 
+    /// <summary>Whether it shows: a 2D Transform hides Z, and a rotation's X and Y (see <see cref="PropertyField.Is2D"/>).</summary>
+    public bool IsShown => owner.IsAxisShown(index);
+
+    /// <summary>The letter on its box; none for a 2D rotation's one angle, which the field's name drags.</summary>
+    public string? ShownLabel => owner.Is2D && owner.PropertyName == nameof(Transform.Rotation) ? null : Label;
+
     public double Value
     {
         get => owner.GetAxis(index);
@@ -1789,11 +2040,7 @@ public sealed class AxisField(PropertyField owner, int index, string label) : Ob
     /// <summary>True when the selected entities differ on this axis.</summary>
     public bool IsMixed => owner.IsAxisMixed(index);
 
-    public void Refresh()
-    {
-        OnPropertyChanged(nameof(Value));
-        OnPropertyChanged(nameof(IsMixed));
-    }
+    public void Refresh() => OnPropertyChanged(string.Empty);
 }
 
 /// <summary>What a <see cref="PropertyField"/> edits through: it applies changes as undoable edits and ends undo steps.</summary>
@@ -1831,4 +2078,25 @@ public interface IPropertyHost
     void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)
     {
     }
+
+    /// <summary>Colors picked lately in color fields' pickers, most recent first.</summary>
+    IReadOnlyList<Color> RecentColors => [];
+
+    /// <summary>Puts a color picked in a color field's picker first in <see cref="RecentColors"/>.</summary>
+    void RememberColor(Color color)
+    {
+    }
+
+    /// <summary>The palette color pickers offer: the Sprite Painter's, which choosing another in a picker changes too.</summary>
+    Griff.Art.Palette Palette
+    {
+        get => Griff.Art.Palette.Jam;
+        set { }
+    }
+
+    /// <summary>Whether Transforms show in 3D (X, Y and Z) rather than 2D (X and Y, and one rotation angle).</summary>
+    bool Transform3D => true;
+
+    /// <summary>True while a filter narrows the fields shown: folded ones that match show anyway.</summary>
+    bool IsFiltering => false;
 }

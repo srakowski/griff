@@ -124,9 +124,31 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
         get => _dropHint;
         set => SetProperty(ref _dropHint, value);
     }
+
+    private bool _isFilteredOut, _isFilterContext;
+
+    /// <summary>True while the Hierarchy's filter hides the row: neither it nor anything inside it has what's typed in its name.</summary>
+    public bool IsFilteredOut
+    {
+        get => _isFilteredOut;
+        internal set => SetProperty(ref _isFilteredOut, value);
+    }
+
+    /// <summary>
+    /// True while the filter shows the row only because something inside it matches: it's drawn faint, to show where
+    /// the match is.
+    /// </summary>
+    public bool IsFilterContext
+    {
+        get => _isFilterContext;
+        internal set => SetProperty(ref _isFilterContext, value);
+    }
 }
 
-/// <summary>The open scene's entities as a tree. Structural changes rebuild it; expansion and selection survive.</summary>
+/// <summary>
+/// The open scene's entities as a tree. Structural changes rebuild it; expansion and selection survive. A filter at the
+/// top narrows it to the entities whose names have what's typed, with what they're inside.
+/// </summary>
 public sealed class HierarchyPanel : ToolPanel
 {
     private readonly IWorkspace _workspace;
@@ -137,6 +159,9 @@ public sealed class HierarchyPanel : ToolPanel
     private bool _syncingSelection;
     private long _builtVersion;
     private Entity? _anchor;
+    private string _filter = "";
+    // What was open before a filter opened the rows its matches are in; put back when it's emptied.
+    private HashSet<Guid>? _expandedBeforeFilter;
 
     public HierarchyPanel(IWorkspace workspace, ISelection selection)
     {
@@ -158,6 +183,72 @@ public sealed class HierarchyPanel : ToolPanel
     public string? SceneName => _document?.Name;
 
     public bool HasScene => _document is not null;
+
+    /// <summary>
+    /// What's typed in the filter at the top: only entities whose names have it show, with the entities they're inside
+    /// (faint, and opened to show them). Emptying it puts the tree back as it was. It stays as the scene changes.
+    /// </summary>
+    public string Filter
+    {
+        get => _filter;
+        set
+        {
+            value ??= "";
+            if (!SetProperty(ref _filter, value))
+                return;
+            var filtering = value.Trim().Length > 0;
+            if (filtering && _expandedBeforeFilter is null)
+                _expandedBeforeFilter = [.. _expanded];
+            else if (!filtering && _expandedBeforeFilter is { } before)
+            {
+                _expandedBeforeFilter = null;
+                foreach (var node in _nodes.Values)
+                    node.IsExpanded = before.Contains(node.Entity.Id);
+                _expanded.Clear();
+                _expanded.UnionWith(before);
+            }
+
+            ApplyFilter();
+            // Keep the selection in sight.
+            SyncSelectionToTree();
+        }
+    }
+
+    /// <summary>True while the filter has something typed in it.</summary>
+    public bool IsFiltering => Filter.Trim().Length > 0;
+
+    /// <summary>The entities whose names match the filter, top to bottom (all of them when it's empty).</summary>
+    public IReadOnlyList<Entity> FilterMatches => [.. _nodes.Values.Where(n => !n.IsFilteredOut && !n.IsFilterContext).Select(n => n.Entity)];
+
+    /// <summary>"No entities match "sl"" when the filter hides everything; otherwise null.</summary>
+    public string? FilterNote => IsFiltering && Roots.All(r => r.IsFilteredOut) ? $"No entities match \"{Filter.Trim()}\"" : null;
+
+    public bool HasFilterNote => FilterNote is not null;
+
+    // Shows the rows whose names have the filter's text and the rows they're inside (opened), and hides the rest.
+    private void ApplyFilter()
+    {
+        var text = Filter.Trim();
+        bool Apply(EntityNode node)
+        {
+            var inside = false;
+            foreach (var child in node.Children)
+                inside |= Apply(child);
+            var match = text.Length == 0 || node.Entity.Name.Contains(text, StringComparison.OrdinalIgnoreCase);
+            node.IsFilteredOut = !match && !inside;
+            node.IsFilterContext = !match && inside;
+            if (text.Length > 0 && inside)
+                node.IsExpanded = true;
+            return match || inside;
+        }
+
+        foreach (var root in Roots)
+            Apply(root);
+        OnPropertyChanged(nameof(IsFiltering));
+        OnPropertyChanged(nameof(FilterMatches));
+        OnPropertyChanged(nameof(FilterNote));
+        OnPropertyChanged(nameof(HasFilterNote));
+    }
 
     public void Select(EntityNode? node)
     {
@@ -273,13 +364,15 @@ public sealed class HierarchyPanel : ToolPanel
             Select(node);
     }
 
-    /// <summary>The entities whose rows can be seen (every ancestor expanded), top to bottom.</summary>
+    /// <summary>The entities whose rows can be seen (every ancestor expanded, and not filtered out), top to bottom.</summary>
     private IEnumerable<Entity> VisibleEntities()
     {
         return Roots.SelectMany(Visible);
 
         static IEnumerable<Entity> Visible(EntityNode node) =>
-            node.IsExpanded ? node.Children.SelectMany(Visible).Prepend(node.Entity) : [node.Entity];
+            node.IsFilteredOut ? []
+            : node.IsExpanded ? node.Children.SelectMany(Visible).Prepend(node.Entity)
+            : [node.Entity];
     }
 
     internal void OnExpandedChanged(EntityNode node)
@@ -314,7 +407,11 @@ public sealed class HierarchyPanel : ToolPanel
         }
 
         if (!keepExpansion)
+        {
             _expanded.Clear();
+            _expandedBeforeFilter?.Clear();
+        }
+
         Rebuild();
         OnPropertyChanged(nameof(SceneName));
         OnPropertyChanged(nameof(HasScene));
@@ -351,6 +448,7 @@ public sealed class HierarchyPanel : ToolPanel
         _builtVersion = _document.Scene.Version;
         foreach (var root in _document.Scene.Roots)
             Roots.Add(CreateNode(root));
+        ApplyFilter();
         SyncSelectionToTree();
     }
 

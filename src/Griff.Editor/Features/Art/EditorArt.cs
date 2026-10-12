@@ -32,6 +32,12 @@ public sealed class EditorArt
 
     public string? AssetsPath => _workspace.Project?.AssetsPath;
 
+    /// <summary>
+    /// The palette last picked in the Sprite Painter (or in a color field's picker, which offers the same ones): each
+    /// starts on it.
+    /// </summary>
+    public Palette Palette { get; set; } = Palette.Jam;
+
     /// <summary>Raised with the asset path of each picture the Sprite Painter saves, so previews of it catch up.</summary>
     public event EventHandler<string>? ImageSaved;
 

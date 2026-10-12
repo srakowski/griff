@@ -255,7 +255,8 @@ public class NumberField : Control
 
     /// <summary>
     /// The number field an element beside it drags: the only one inside the nearest of its parents that holds any (a few
-    /// levels up at most). Null when that parent holds several, or none is near.
+    /// levels up at most), counting only those showing (a 2D rotation's one angle). Null when that parent holds several,
+    /// or none is near.
     /// </summary>
     public static NumberField? FieldNear(DependencyObject element)
     {
@@ -275,6 +276,8 @@ public class NumberField : Control
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is UIElement { Visibility: not Visibility.Visible })
+                continue;
             if (child is NumberField field)
                 yield return field;
             else

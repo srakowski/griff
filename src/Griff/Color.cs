@@ -32,6 +32,43 @@ public readonly record struct Color(float R, float G, float B, float A = 1f)
         a.B + (b.B - a.B) * t,
         a.A + (b.A - a.A) * t);
 
+    /// <summary>
+    /// The color with hue <paramref name="hue"/> (degrees round the color wheel: 0 red, 120 green, 240 blue), saturation
+    /// <paramref name="saturation"/> (0 gray to 1 full) and value <paramref name="value"/> (0 black to 1 bright).
+    /// </summary>
+    public static Color FromHsv(float hue, float saturation, float value, float alpha = 1f)
+    {
+        hue = ((hue % 360f) + 360f) % 360f / 60f;
+        saturation = Math.Clamp(saturation, 0f, 1f);
+        value = Math.Clamp(value, 0f, 1f);
+        var chroma = value * saturation;
+        var x = chroma * (1f - MathF.Abs(hue % 2f - 1f));
+        var (r, g, b) = (int)hue switch
+        {
+            0 => (chroma, x, 0f),
+            1 => (x, chroma, 0f),
+            2 => (0f, chroma, x),
+            3 => (0f, x, chroma),
+            4 => (x, 0f, chroma),
+            _ => (chroma, 0f, x),
+        };
+        var m = value - chroma;
+        return new Color(r + m, g + m, b + m, alpha);
+    }
+
+    /// <summary>The color's hue (0 to 360 degrees, 0 for grays), saturation and value (each 0 to 1); see <see cref="FromHsv"/>.</summary>
+    public (float Hue, float Saturation, float Value) ToHsv()
+    {
+        var (r, g, b) = (Math.Clamp(R, 0f, 1f), Math.Clamp(G, 0f, 1f), Math.Clamp(B, 0f, 1f));
+        var max = MathF.Max(r, MathF.Max(g, b));
+        var chroma = max - MathF.Min(r, MathF.Min(g, b));
+        var hue = chroma == 0 ? 0
+            : max == r ? 60f * ((g - b) / chroma % 6f)
+            : max == g ? 60f * ((b - r) / chroma + 2f)
+            : 60f * ((r - g) / chroma + 4f);
+        return (hue < 0 ? hue + 360f : hue, max == 0 ? 0 : chroma / max, max);
+    }
+
     public string ToHex() => $"#{RByte:X2}{GByte:X2}{BByte:X2}{AByte:X2}";
 
     /// <summary>Parses "#RGB", "#RRGGBB" or "#RRGGBBAA" (the # is optional).</summary>

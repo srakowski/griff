@@ -45,6 +45,8 @@ public sealed class ComponentRegistry
         registry.Register<DialogueBox>();
         registry.Register<Switch>();
         registry.Register<Inventory>();
+        registry.Register<Draggable>();
+        registry.Register<DropTarget>();
         registry.Register<Trail>();
         registry.Register<Panel>();
         registry.Register<Choice>();

@@ -56,9 +56,13 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         {
             Name = "game_input",
             Title = "Game Input",
-            Description = "Plays the running game (start it with Game_Play): presses keys as a player would, in steps. Each step can " +
+            Description = "Plays the running game (start it with Game_Play): presses keys and uses the mouse as a player would, in steps. Each step can " +
                 "\"hold\" keys for \"seconds\", \"tap\" keys (pressed for one frame) or just \"wait\" seconds. Keys are names like Right, " +
                 "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact. " +
+                "The mouse: \"point\" moves it to a point, \"click\" clicks there (\"button\": \"Right\" for the right button), and \"drag\" presses " +
+                "at \"from\", moves to \"to\" over \"seconds\" (default 0.5) and lets go, e.g. {\"drag\": {\"from\": \"Card\", \"to\": \"Slot\"}} " +
+                "(with \"release\": false in it, it keeps holding, to see what's held over what, until a {\"release\": true} step lets go). " +
+                "A point is [x, y] in world units or an entity's name (its middle). The real mouse takes over again once it moves over the game. " +
                 "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
                 "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
                 "freezes it, so nothing happens while you decide the next move; the next game_input resumes it. The editor window has to be on screen for the game to run.",
@@ -66,7 +70,12 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 ("steps", Schema.Array(Schema.Map("{\"hold\": [\"Right\"], \"seconds\": 1} or {\"tap\": [\"Jump\"]} or {\"wait\": 0.5}"), "What to do, in order.")),
                 ("hold", Schema.Array(Schema.String("key"), "One step: keys to hold for \"seconds\".")),
                 ("tap", Schema.Array(Schema.String("key"), "One step: keys to tap.")),
-                ("seconds", Schema.Number("How long to hold (default 0.5).")),
+                ("seconds", Schema.Number("How long to hold, or to drag for (default 0.5).")),
+                ("point", Schema.Any("One step: move the mouse to [x, y] or an entity's name.")),
+                ("click", Schema.Any("One step: click at [x, y] or an entity's name.")),
+                ("drag", Schema.Map("One step: {\"from\": point, \"to\": point}, pressing at from and letting go at to (unless \"release\": false).")),
+                ("release", Schema.Bool("One step: let go of the mouse button a drag kept holding.")),
+                ("button", Schema.String("The mouse button for click and drag: Left (default), Right or Middle.")),
                 ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
                 ("flags", Schema.Map("Dialogue flags to set (true) or clear (false) before the steps, e.g. {\"HasKey\": true}.")),
@@ -258,6 +267,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             steps.Add(args.Root);
 
         var log = new StringBuilder();
+        _usedMouse = false;
         var startTime = game.Time.Total;
         var flags = new Dictionary<string, bool>();
         void FlagChanged(string name, bool on) => flags[name] = on;
@@ -288,6 +298,17 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             var seconds = step.TryGetProperty("seconds", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetDouble()
                 : step.TryGetProperty("wait", out var w) && w.ValueKind == JsonValueKind.Number ? w.GetDouble()
                 : hold.Count > 0 ? 0.5 : 0;
+
+            if (await MouseStepAsync(game, input, step))
+            {
+                if (play.Game != game)
+                {
+                    log.AppendLine("The game stopped.");
+                    return ToolResult.Ok(log.ToString());
+                }
+
+                continue;
+            }
 
             foreach (var key in hold.Concat(tap))
                 input.SetKey(key, true);
@@ -331,8 +352,12 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 line.Append($", health {health.Current}/{health.Max}{(health.IsDead ? " (dead)" : "")}");
             if (entity.GetComponent<Inventory>() is { } inventory && inventory.Items.Count > 0)
                 line.Append($", carrying {string.Join(", ", inventory.Items)}");
+            line.Append(Playtesting.Dragging(entity));
             log.AppendLine(line.ToString());
         }
+
+        if (_usedMouse)
+            log.AppendLine(Playtesting.Mouse(game));
 
         if (Playtesting.Talking(game) is { } talking)
             log.AppendLine(talking);
@@ -340,6 +365,74 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             log.AppendLine(changed);
         return ToolResult.Ok(log.ToString().TrimEnd());
     }
+
+    // Whether this call's steps used the mouse, to report where it is.
+    private bool _usedMouse;
+
+    // A "point", "click" or "drag" step, played with the mouse pointed where it says; false for any other step.
+    private async Task<bool> MouseStepAsync(Griff.Runtime.Game game, InputState input, JsonElement step)
+    {
+        if (step.ValueKind != JsonValueKind.Object)
+            return false;
+        var button = MouseButton.Left;
+        if (step.TryGetProperty("button", out var named) && !Enum.TryParse(named.GetString(), ignoreCase: true, out button))
+            throw new AgentException($"\"{named.GetString()}\" isn't a mouse button: Left, Right or Middle.");
+
+        if (step.TryGetProperty("point", out var point))
+        {
+            _usedMouse = true;
+            play.PointAt(Playtesting.PointOf(point, game.Scene));
+            await FramesAsync(2);
+            return true;
+        }
+
+        if (step.TryGetProperty("click", out var click))
+        {
+            _usedMouse = true;
+            play.PointAt(Playtesting.PointOf(click, game.Scene));
+            await FramesAsync(1);
+            input.SetMouseButton(button, true);
+            await FramesAsync(2);
+            input.SetMouseButton(button, false);
+            await FramesAsync(2);
+            return true;
+        }
+
+        if (step.TryGetProperty("release", out var release) && release.ValueKind == JsonValueKind.True)
+        {
+            input.SetMouseButton(button, false);
+            await FramesAsync(Settle);
+            return true;
+        }
+
+        if (!step.TryGetProperty("drag", out var drag))
+            return false;
+        if (drag.ValueKind != JsonValueKind.Object || !drag.TryGetProperty("from", out var fromValue) || !drag.TryGetProperty("to", out var toValue))
+            throw new AgentException("A drag is {\"from\": point, \"to\": point}, each [x, y] or an entity's name.");
+        _usedMouse = true;
+        var from = Playtesting.PointOf(fromValue, game.Scene);
+        var to = Playtesting.PointOf(toValue, game.Scene);
+        var seconds = step.TryGetProperty("seconds", out var s) && s.ValueKind == JsonValueKind.Number ? Math.Clamp(s.GetDouble(), 0.05, 10) : 0.5;
+        play.PointAt(from);
+        await FramesAsync(1);
+        input.SetMouseButton(button, true);
+        await FramesAsync(2);
+        var moves = Math.Clamp((int)(seconds * 30), 3, 300);
+        for (var i = 1; i <= moves && play.Game == game; i++)
+        {
+            play.PointAt(Vector2.Lerp(from, to, (float)i / moves));
+            await FramesAsync(2);
+        }
+
+        if (drag.TryGetProperty("release", out var letGo) && letGo.ValueKind == JsonValueKind.False)
+            return true;
+        input.SetMouseButton(button, false);
+        await FramesAsync(Settle);
+        return true;
+    }
+
+    // Frames to let what was dropped slide into place before saying where it is.
+    private const int Settle = 15;
 
     private static List<Key> Keys(JsonElement step, string name, InputState input)
     {

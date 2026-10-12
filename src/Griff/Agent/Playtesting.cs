@@ -1,9 +1,11 @@
+using System.Numerics;
+using System.Text.Json;
 using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Agent;
 
-/// <summary>Playing the game through an agent: the keys it names, and what's reported besides where things are.</summary>
+/// <summary>Playing the game through an agent: the keys and points it names, and what's reported besides where things are.</summary>
 public static class Playtesting
 {
     /// <summary>
@@ -17,6 +19,47 @@ public static class Playtesting
             return Key.D0 + (name[0] - '0');
         // Enum.TryParse takes numbers as values too ("3" would be the C key), so only names count.
         return name.Length > 0 && !char.IsAsciiDigit(name[0]) && Enum.TryParse<Key>(name, ignoreCase: true, out var key) ? key : null;
+    }
+
+    /// <summary>
+    /// The point in the world an agent names for the mouse: <c>[x, y]</c> in world units, or an entity's name for its
+    /// middle (its collider's, if it has one). Throws an <see cref="AgentException"/> saying what's wrong otherwise.
+    /// </summary>
+    public static Vector2 PointOf(JsonElement value, Scene scene)
+    {
+        if (value.ValueKind == JsonValueKind.Array && value.GetArrayLength() == 2 &&
+            value.EnumerateArray().All(v => v.ValueKind == JsonValueKind.Number))
+            return new Vector2(value[0].GetSingle(), value[1].GetSingle());
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            var name = value.GetString()!;
+            var entity = scene.FindNamed(name, activeOnly: true) ?? scene.FindNamed(name)
+                         ?? throw new AgentException($"There's no \"{name}\" in the game to point at.");
+            return Game.CenterOf(entity);
+        }
+
+        throw new AgentException($"A point is [x, y] in world units or an entity's name, not {value.GetRawText()}.");
+    }
+
+    /// <summary>
+    /// What <paramref name="entity"/>'s drag and drop is doing, to add to where it is: <c>, held</c>, <c>, on Slot 2</c>, or
+    /// for a drop target <c>, holding Card, Gem (full)</c>. Empty for anything else.
+    /// </summary>
+    public static string Dragging(Entity entity)
+    {
+        var text = "";
+        if (entity.GetComponent<Draggable>() is { } thing)
+            text += thing.IsHeld ? ", held" : thing.Target is { } target ? $", on {target.Name}" : "";
+        if (entity.GetComponent<DropTarget>() is { } slot)
+            text += slot.Contents.Count == 0 ? ", empty" : $", holding {string.Join(", ", slot.Contents.Select(e => e.Name))}{(slot.IsFull ? " (full)" : "")}";
+        return text;
+    }
+
+    /// <summary>Where the mouse is and what it's holding, e.g. <c>Mouse: at (2.5, 1), holding Card.</c></summary>
+    public static string Mouse(Game game)
+    {
+        var at = game.Input.MouseWorld;
+        return $"Mouse: at ({at.X:0.##}, {at.Y:0.##}){(game.Held is { } held ? $", holding {held.Name}" : "")}.";
     }
 
     /// <summary>

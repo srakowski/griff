@@ -360,7 +360,8 @@ public static partial class SceneRenderer
 
     /// <summary>
     /// Drawable entities back to front: Order, then Z (higher is closer), then hierarchy order. With the camera's
-    /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order.
+    /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order. A
+    /// <see cref="Draggable"/> being held (and what's inside it) draws over everything else.
     /// </summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene)
     {
@@ -368,11 +369,24 @@ public static partial class SceneRenderer
         return scene.Entities
             .Where(e => OrderOf(e) is not null && IsActive(e))
             .Select((entity, index) => (entity, index))
-            .OrderBy(x => OrderOf(x.entity))
+            .OrderBy(x => IsLifted(x.entity))
+            .ThenBy(x => OrderOf(x.entity))
             .ThenBy(x => x.entity.Transform.WorldPosition.Z)
             .ThenByDescending(x => sortByY ? x.entity.Transform.WorldPosition.Y : 0)
             .ThenBy(x => x.index)
             .Select(x => x.entity);
+    }
+
+    // Held by the mouse, or inside something that is.
+    private static bool IsLifted(Entity entity)
+    {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<Draggable>() is { IsHeld: true })
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

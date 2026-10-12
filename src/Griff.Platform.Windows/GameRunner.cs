@@ -61,6 +61,12 @@ public sealed class GameRunner : IDisposable
 
     public bool IsPaused { get; set; }
 
+    /// <summary>
+    /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
+    /// (and over the view) rather than wherever the real one is. Moving the real mouse over the game clears it.
+    /// </summary>
+    public Vector2? PointerOverride { get; set; }
+
     public void Start()
     {
         if (IsRunning)
@@ -156,6 +162,12 @@ public sealed class GameRunner : IDisposable
 
     private void UpdateMouseWorld()
     {
+        if (PointerOverride is { } pointed)
+        {
+            (_input.MouseWorld, _input.IsMouseInView) = (pointed, true);
+            return;
+        }
+
         if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
         {
             var world = Vector4.Transform(new Vector4(_mouseNdc, 0, 1), inverse);
@@ -252,6 +264,8 @@ public sealed class GameRunner : IDisposable
         // Held, the mouse's movement is measured each frame from the middle of the view instead.
         if (_lockCenter is null && _mousePixel is { } last)
             _input.AddMouseDelta(new Vector2((float)(pixel.X - last.X), (float)(last.Y - pixel.Y)));
+        if (_mousePixel != pixel)
+            PointerOverride = null;
         _mousePixel = pixel;
         var ndc = _surface.ToNdc(pixel);
         if (ndc != _mouseNdc)

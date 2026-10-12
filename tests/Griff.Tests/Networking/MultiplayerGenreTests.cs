@@ -437,6 +437,54 @@ public sealed class MultiplayerGenreTests
         Assert.Equal(new Vector3(42, 7, 0), back.Transform.Position);
     }
 
+    // ----- Drag and drop -----
+
+    private static Scene Table()
+    {
+        var scene = new Scene();
+        Settings(scene);
+        foreach (var (name, x) in new[] { ("Ace", -3f), ("King", 3f) })
+        {
+            var card = new Entity(name);
+            card.Transform.Position = new Vector3(x, 0, 0);
+            card.AddComponent<Sprite>();
+            card.AddComponent<Draggable>().SlideTime = 0;
+            scene.Add(card);
+        }
+
+        var slot = new Entity("Slot");
+        slot.Transform.Position = new Vector3(0, 4, 0);
+        slot.AddComponent<Sprite>().Size = new Vector2(1.5f);
+        slot.AddComponent<DropTarget>();
+        scene.Add(slot);
+        return scene;
+    }
+
+    [Fact]
+    public void A_player_drags_a_card_with_their_own_mouse_and_everyone_sees_it_land()
+    {
+        var world = new NetWorld(Table);
+        var keys = NetWorld.Keys(world.Client);
+        keys.MouseWorld = new Vector2(3, 0);
+        keys.SetMouseButton(MouseButton.Left, true);
+        world.Run(0.2);
+        foreach (var y in new[] { 1f, 2f, 3f, 4f })
+        {
+            keys.MouseWorld = new Vector2(3 - 0.75f * y, y);
+            world.Run(NetWorld.Frame * 3);
+        }
+
+        Assert.True(Named(world.Host, "King").Single().GetComponent<Draggable>()!.IsHeld, "the host carries it for them");
+        keys.SetMouseButton(MouseButton.Left, false);
+        world.Run(0.5);
+
+        var king = Named(world.Host, "King").Single();
+        Assert.Equal(new Vector3(0, 4, 0), king.Transform.Position);
+        Assert.Equal([king], Named(world.Host, "Slot").Single().GetComponent<DropTarget>()!.Contents);
+        Assert.Equal(new Vector3(0, 4, 0), Named(world.Client, "King").Single().Transform.Position);
+        Assert.Equal(new Vector3(-3, 0, 0), Named(world.Client, "Ace").Single().Transform.Position);
+    }
+
     // ----- Every kind of game -----
 
     [Fact]

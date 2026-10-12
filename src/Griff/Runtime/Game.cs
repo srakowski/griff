@@ -170,6 +170,7 @@ public sealed partial class Game
             RunBlockPlayers();
             RunTools();
         });
+        RunDragging();
         RunStrategy();
         RunAttacks();
         PassIdleGridMovers();
@@ -690,6 +691,7 @@ public sealed partial class Game
         _controlsSeen.RemoveWhere(c => c.Entity?.Scene != next);
         ForgetLevelState();
         ForgetPuzzleState();
+        ForgetDragState();
         ForgetPanelState();
         Rts = new StrategyState();
         Fps = new FirstPersonState();

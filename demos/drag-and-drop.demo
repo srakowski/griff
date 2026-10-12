@@ -1,0 +1,78 @@
+title: Drag and drop
+intro: Things the player picks up with the mouse, and places to drop them that take only the right kind, snap them into place and say when every one is filled. No code.
+project: Empty | Gem Sorter
+
+chapter: Gems and holes | A Draggable and a Drop Target
+create: Sprite
+rename: Red Hole
+set: Transform.Position.X = 3
+set: Transform.Position.Y = 1.5
+set: Sprite.Size = 1.4, 1.4
+set: Sprite.Tint = #5A2A2A
+add: DropTarget
+set: DropTarget.Accepts = Red
+set: DropTarget.AllFullMessage = Solved
+explain: component:DropTarget | Drop Target | A Drop Target is a place to drop things: a hole a piece fits, a card's place on the table, an inventory slot.
+explain: field:DropTarget.Accepts | Accepts | It takes only the kinds named here, so this hole takes red gems and nothing else.
+explain: field:DropTarget.Capacity | Capacity, Snap and Swap | It holds one at a time, pulls what lands on it into its middle, and with Swap, dropping on a full slot swaps the two, as in an inventory.
+deselect
+create: Sprite
+rename: Blue Hole
+set: Transform.Position.X = 3
+set: Transform.Position.Y = -1.5
+set: Sprite.Size = 1.4, 1.4
+set: Sprite.Tint = #2A2A5A
+add: DropTarget
+set: DropTarget.Accepts = Blue
+set: DropTarget.AllFullMessage = Solved
+say: A blue hole below it, with the same All Full Message.
+deselect
+create: Sprite
+rename: Red Gem
+set: Transform.Position.X = -4
+set: Transform.Position.Y = 1.5
+set: Sprite.Tint = #E04848
+set: Sprite.Order = 2
+add: Draggable
+set: Draggable.Kind = Red
+set: Draggable.OnlyOnTargets = true
+explain: component:Draggable | Draggable | A Draggable is something the player picks up with the mouse: press on it, carry it, let go.
+explain: field:Draggable.Kind | Kind | Its kind is what the holes check.
+explain: field:Draggable.OnlyOnTargets | Only On Targets | And with this ticked, let go anywhere but a hole that takes it, it slides back where it came from.
+deselect
+create: Sprite
+rename: Blue Gem
+set: Transform.Position.X = -4
+set: Transform.Position.Y = -1.5
+set: Sprite.Tint = #4870E0
+set: Sprite.Order = 2
+add: Draggable
+set: Draggable.Kind = Blue
+set: Draggable.OnlyOnTargets = true
+say: And a blue gem.
+deselect
+create: Text
+rename: Solved
+set: Transform.Position.Y = 3.5
+add: Counter
+set: Counter.Message = Solved
+set: Counter.Format = Solved: {0}
+say: Last, a counter that counts the Solved message, so we can see it arrive.
+
+chapter: Sorting them | Wrong holes turn gems away
+play
+wait: 0.5
+gamedrag: Red Gem > Blue Hole
+wait: 0.5
+expectat: Red Gem = -4, 1.5
+explain: game | Turned away | The blue hole doesn't take red gems, so it slides back.
+gamedrag: Red Gem > Red Hole + 0.3, 0.3
+wait: 0.5
+expectat: Red Gem = 3, 1.5
+say: Dropped near the red hole's middle, it snaps right into it.
+gamedrag: Blue Gem > Blue Hole
+wait: 0.5
+expectat: Blue Gem = 3, -1.5
+explain: game | Solved | Both holes are full now, so they send their All Full Message, once, and the counter shows it. Holes also send a message when something lands on them or is taken off, and gems when they're picked up and let go.
+stop
+say: That's drag and drop with the mouse: cards, jigsaw pieces, inventories and sorting puzzles, with no code. Things can snap to a grid off the targets too, and in a network game each player drags with their own mouse.

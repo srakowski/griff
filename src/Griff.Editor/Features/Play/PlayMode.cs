@@ -86,6 +86,16 @@ public sealed class PlayMode : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Points the Game tab's mouse at <paramref name="world"/> (in world units) for an agent playtesting the game, whatever
+    /// the real mouse is doing, until the real one moves over the game; null gives it back.
+    /// </summary>
+    internal void PointAt(System.Numerics.Vector2? world)
+    {
+        if (_runner is not null)
+            _runner.PointerOverride = world;
+    }
+
     /// <summary>Player <paramref name="number"/>'s game (1 is the Game tab's), for diagnostics.</summary>
     internal Game? PlayerGame(int number) => number == 1 ? Game : _players.FirstOrDefault(p => p.Number == number)?.Runner.Game;
 

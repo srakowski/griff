@@ -17,6 +17,22 @@ public class PanelLayoutTests
     private static void WithLayout(Action<PanelLayout> test) => EditorHost.Run(services => test(services.GetRequiredService<PanelLayout>()));
 
     [Fact]
+    public void OnlyTheTabDragsAPanel_NotPressesInIt() => EditorHost.Run(_ =>
+    {
+        // Dragging a number's name in the Inspector used to start dragging the Inspector's tab, taking the mouse.
+        var name = new TextBlock { Text = "Acceleration" };
+        var view = new StackPanel();
+        view.Children.Add(name);
+        var header = new TextBlock { Text = "Inspector" };
+        var tab = new TabItem { Header = header, Content = view };
+
+        Assert.True(PanelDrag.InContent(tab, name));
+        Assert.True(PanelDrag.InContent(tab, view));
+        Assert.False(PanelDrag.InContent(tab, header));
+        Assert.False(PanelDrag.InContent(tab, tab));
+    });
+
+    [Fact]
     public void StartsWithEachPanelOnItsSide() => WithLayout(layout =>
     {
         Assert.Equal(Start, layout.Summary);

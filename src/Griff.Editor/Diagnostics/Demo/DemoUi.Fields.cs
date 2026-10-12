@@ -65,10 +65,14 @@ internal sealed partial class DemoUi
         try
         {
             var direction = Math.Sign(value - Current());
-            for (var steps = 0; steps < 400 && Math.Sign(value - Current()) == direction && direction != 0; steps++)
+            // Stops if the value stops following the mouse (the drag was lost), rather than crawling on.
+            var last = Current();
+            for (int steps = 0, still = 0; steps < 400 && still < 12 && Math.Sign(value - Current()) == direction && direction != 0; steps++)
             {
                 at.X += 3 * direction;
                 await input.MoveTo(at, 60);
+                still = Current() == last ? still + 1 : 0;
+                last = Current();
             }
 
             // Overshot: back a pixel at a time.

@@ -24,7 +24,9 @@ public sealed class PanelDrag(PanelHost host)
     {
         tab.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            _tab = tab;
+            // Only the tab itself drags the panel: a press in the panel (dragging a number in the Inspector) is the
+            // panel's own, though it reaches the tab on its way.
+            _tab = InContent(tab, e.OriginalSource as DependencyObject) ? null : tab;
             _start = Screen(e.GetPosition(tab), tab);
         };
         tab.PreviewMouseMove += (_, e) => OnMove(tab, e);
@@ -51,6 +53,18 @@ public sealed class PanelDrag(PanelHost host)
                 Finish(drop: false);
             }
         };
+    }
+
+    /// <summary>True when <paramref name="element"/> is in the panel the tab shows, rather than on the tab.</summary>
+    internal static bool InContent(TabItem tab, DependencyObject? element)
+    {
+        for (var e = element; e is not null && e != tab; e = e is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(e) ?? LogicalTreeHelper.GetParent(e) : LogicalTreeHelper.GetParent(e))
+        {
+            if (ReferenceEquals(e, tab.Content))
+                return true;
+        }
+
+        return false;
     }
 
     private void OnMove(TabItem tab, MouseEventArgs e)

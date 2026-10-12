@@ -117,6 +117,7 @@ public sealed class Crumble : Component
     public string? Effect { get; set; }
 
     /// <summary>True while it's gone (its entity is hidden). Saved, so it stays gone when the game rewinds.</summary>
+    [Group("State")]
     public bool Crumbled { get; set; }
 
     /// <summary>True while it's shaking, about to go.</summary>

@@ -61,6 +61,7 @@ public sealed class Mover : Component
     /// Seconds into its trip. Set it in the Inspector to start part of the way round, so a row of platforms don't all move
     /// together.
     /// </summary>
+    [Group("State")]
     public float Time { get; set; }
 
     /// <summary>
@@ -208,6 +209,7 @@ public sealed class Patrol : Component
     /// are measured from. The game keeps it up to date as it walks or is knocked about; set it to start part of the way
     /// along.
     /// </summary>
+    [Group("State")]
     public float Walked { get; set; }
 
     // Where it was last frame, along X in its parent's space, to add how far it went to Walked. Not saved: a restored game
@@ -250,6 +252,7 @@ public sealed class Chase : Component
     public float Range { get; set; } = 6;
 
     /// <summary>Once chasing, it gives up when the target gets this much further away than <see cref="Range"/>.</summary>
+    [ShownWhen(nameof(Range))]
     public float GiveUp { get; set; } = 2;
 
     /// <summary>Stop this close to the target, e.g. for an enemy that shoots from a distance.</summary>
@@ -318,6 +321,7 @@ public sealed class Shooter : Component
 
     /// <summary>The name of an entity to aim at, e.g. "Player". Empty fires in <see cref="Direction"/>.</summary>
     [EntityName]
+    [Group("Aim")]
     public string? Target { get; set; }
 
     /// <summary>Which way to fire without a target (or an aim, for the player).</summary>
@@ -325,12 +329,15 @@ public sealed class Shooter : Component
 
     /// <summary>With a <see cref="Target"/>, only fire when it's this close. 0 fires at any distance.</summary>
     [Distance(When = nameof(Target))]
+    [ShownWhen(nameof(Target))]
     public float Range { get; set; } = 10;
 
     /// <summary>With a <see cref="Target"/>, only fire when nothing solid is in the way: no shooting through walls.</summary>
+    [ShownWhen(nameof(Target))]
     public bool NeedsSight { get; set; }
 
     /// <summary>Shots in each volley, fanned out across <see cref="Spread"/>.</summary>
+    [Group("Volley")]
     public int Count { get; set; } = 1;
 
     /// <summary>Degrees the volley fans across; with one shot, how far off aim it may randomly go.</summary>
@@ -340,6 +347,7 @@ public sealed class Shooter : Component
     public Vector2 Offset { get; set; }
 
     /// <summary>A sound played with each volley, e.g. "Sounds/shoot.wav".</summary>
+    [Group("Sound")]
     public string? Sound { get; set; }
 
     /// <summary>
@@ -347,6 +355,7 @@ public sealed class Shooter : Component
     /// (or <see cref="Direction"/> when neither aims anywhere). Empty fires by itself.
     /// </summary>
     [Names(NameKind.Action)]
+    [Group("Control")]
     public string? Action { get; set; }
 
     /// <summary>Untick it to hold fire. <see cref="Switch"/>es tick and untick it.</summary>

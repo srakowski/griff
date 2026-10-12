@@ -26,6 +26,7 @@ public sealed class WorldGenerator : Component
     public bool GenerateOnPlay { get; set; } = true;
 
     /// <summary>Cells across.</summary>
+    [Group("Size and Shape")]
     public int Width { get; set; } = 120;
 
     /// <summary>Cells down, sky included.</summary>
@@ -41,6 +42,7 @@ public sealed class WorldGenerator : Component
     public float HillWidth { get; set; } = 28;
 
     /// <summary>The tile on top of the ground.</summary>
+    [Group("Ground")]
     public int GrassTile { get; set; } = 0;
 
     /// <summary>The tile under the grass, <see cref="DirtDepth"/> cells deep.</summary>
@@ -53,6 +55,7 @@ public sealed class WorldGenerator : Component
     public int DirtDepth { get; set; } = 5;
 
     /// <summary>How much of the underground is caves, from 0 (solid) to 1 (mostly hollow). 0.3 is plenty.</summary>
+    [Group("Underground")]
     public float Caves { get; set; } = 0.3f;
 
     /// <summary>
@@ -62,6 +65,7 @@ public sealed class WorldGenerator : Component
     public string? Ores { get; set; } = "3 6%, 4 3%";
 
     /// <summary>Patches of sand along the surface, from 0 (none) to 1 (everywhere).</summary>
+    [Group("Sand and Trees")]
     public float Sand { get; set; } = 0.15f;
 
     /// <summary>The tile for patches of sand; -1 for none.</summary>
@@ -77,6 +81,7 @@ public sealed class WorldGenerator : Component
     public int LeavesTile { get; set; } = -1;
 
     /// <summary>A tile for the bottom row, usually one that's unbreakable (see <see cref="Blocks.Unbreakable"/>).</summary>
+    [Group("More")]
     public int BottomTile { get; set; } = -1;
 
     /// <summary>
@@ -218,6 +223,7 @@ public sealed class Blocks : Component
     }
 
     /// <summary>How far the light of a glowing tile reaches, in world units.</summary>
+    [Group("Light")]
     public float GlowRadius { get; set; } = 5;
 
     /// <summary>The color of the light glowing tiles give off.</summary>
@@ -237,10 +243,12 @@ public sealed class Blocks : Component
     /// A name to keep the world under in the game's save data, e.g. "World": what was dug and built comes back next time
     /// the game runs, instead of a new world. Empty starts over each time.
     /// </summary>
+    [Group("Saving")]
     public string? SaveAs { get; set; }
 
     /// <summary>A prefab spawned where a block breaks, e.g. a puff of dust.</summary>
     [Names(NameKind.Prefab)]
+    [Group("Sounds and Effects")]
     public string? BreakEffect { get; set; }
 
     /// <summary>A sound played while digging, each time a block cracks a little more.</summary>
@@ -449,6 +457,7 @@ public sealed class Crafting : Component
     public float StationReach { get; set; } = 4;
 
     /// <summary>True while the list is open.</summary>
+    [Group("State")]
     public bool IsOpen { get; set; }
 
     /// <summary>A sound played when something is made.</summary>

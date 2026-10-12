@@ -33,15 +33,18 @@ public sealed class Health : Component
     public float Current { get; set; } = 3;
 
     /// <summary>Seconds after a hit during which further damage is ignored. 0 lets every hit land.</summary>
+    [Group("When Hit")]
     public float InvincibleTime { get; set; } = 0.5f;
 
     /// <summary>Flash the entity's sprites white when hit.</summary>
     public bool FlashOnHit { get; set; } = true;
 
     /// <summary>Blink the entity's sprites while it can't be hurt.</summary>
+    [ShownWhen(nameof(InvincibleTime))]
     public bool BlinkWhileInvincible { get; set; } = true;
 
     /// <summary>Destroy the entity when it dies. Turn off to play a death animation first, and destroy it from a script.</summary>
+    [Group("Death")]
     public bool DestroyOnDeath { get; set; } = true;
 
     /// <summary>A message sent with <c>Game.Send</c> when it dies, with the entity as its data, e.g. "PlayerDied" or "EnemyDied".</summary>
@@ -55,9 +58,11 @@ public sealed class Health : Component
     public bool Respawn { get; set; }
 
     /// <summary>Seconds it stays gone before it comes back (see <see cref="Respawn"/>).</summary>
+    [ShownWhen(nameof(Respawn))]
     public float RespawnDelay { get; set; } = 1;
 
     /// <summary>Plays when damage lands but doesn't kill, from where it is. Make one with Audio &gt; New Sound (Hit).</summary>
+    [Group("Sounds")]
     public string? HurtSound { get; set; }
 
     /// <summary>Plays when it dies, from where it is: an explosion, a last cry.</summary>
@@ -291,6 +296,7 @@ public sealed class Pickup : Component
     public string? Effect { get; set; }
 
     /// <summary>Gives the <see cref="Effect"/>'s particles this entity's sprite color, so one sparkle suits every pickup.</summary>
+    [ShownWhen(nameof(Effect))]
     public bool TintEffect { get; set; } = true;
 
     /// <summary>Degrees per second it turns while waiting to be collected. 0 keeps it still.</summary>
@@ -511,6 +517,7 @@ public sealed class Typewriter : Component
     public string? Sound { get; set; }
 
     /// <summary>Play <see cref="Sound"/> every this many letters.</summary>
+    [ShownWhen(nameof(Sound))]
     public int SoundEvery { get; set; } = 2;
 
     /// <summary>How many letters are showing.</summary>

@@ -182,14 +182,48 @@
                                            TextWrapping="Wrap"
                                            Visibility="{Binding HasSetupNote, Converter={StaticResource Visible}}" />
 
-                                <!-- Properties -->
+                                <!-- Properties, with subheadings between them -->
                                 <ItemsControl Margin="12,6,10,8"
                                               Grid.IsSharedSizeScope="True"
-                                              ItemsSource="{Binding Properties}"
+                                              ItemsSource="{Binding Rows}"
                                               Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="inspector:PropertyField">
-                                            <Grid Margin="0,2">
+                                    <ItemsControl.Resources>
+                                        <!-- A subheading ([Group]): folds the fields under it -->
+                                        <DataTemplate DataType="{x:Type inspector:FieldGroup}">
+                                            <DockPanel x:Name="GroupRow"
+                                                       Margin="-6,8,0,2"
+                                                       Background="Transparent"
+                                                       Tag="group"
+                                                       ToolTip="{Binding Tip}">
+                                                <ToggleButton Width="18"
+                                                              DockPanel.Dock="Left"
+                                                              IsChecked="{Binding IsExpanded}"
+                                                              Style="{StaticResource Style.TreeView.Expander}" />
+                                                <TextBlock x:Name="GroupName"
+                                                           Margin="2,0,8,0"
+                                                           VerticalAlignment="Center"
+                                                           DockPanel.Dock="Left"
+                                                           FontWeight="SemiBold"
+                                                           Style="{StaticResource Style.Text.Caption}"
+                                                           Background="Transparent"
+                                                           Cursor="Hand"
+                                                           Text="{Binding Name}">
+                                                    <TextBlock.InputBindings>
+                                                        <MouseBinding Command="{Binding ToggleCommand}" Gesture="LeftClick" />
+                                                    </TextBlock.InputBindings>
+                                                </TextBlock>
+                                                <Border Height="1"
+                                                        VerticalAlignment="Center"
+                                                        Background="{DynamicResource Brush.Border.Subtle}" />
+                                            </DockPanel>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsFaded}" Value="True">
+                                                    <Setter TargetName="GroupName" Property="Opacity" Value="0.55" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                        <DataTemplate DataType="{x:Type inspector:PropertyField}">
+                                            <Grid x:Name="FieldRow" Margin="0,2">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="Label" />
                                                     <ColumnDefinition Width="*" />
@@ -239,9 +273,16 @@
                                                     <Setter TargetName="FieldLabel" Property="FontWeight" Value="SemiBold" />
                                                     <Setter TargetName="FieldLabel" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
                                                 </DataTrigger>
+                                                <!-- Only used with something that's off ([ShownWhen]): faded, still editable -->
+                                                <DataTrigger Binding="{Binding IsFaded}" Value="True">
+                                                    <Setter TargetName="FieldRow" Property="Opacity" Value="0.45" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsFolded}" Value="True">
+                                                    <Setter TargetName="FieldRow" Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
                                             </DataTemplate.Triggers>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
+                                    </ItemsControl.Resources>
                                 </ItemsControl>
                             </StackPanel>
                         </DataTemplate>

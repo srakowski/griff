@@ -63,7 +63,21 @@ public sealed class ComponentDescriptor
             }
         }
 
-        return properties.Select(p => new PropertyDescriptor(p)).ToList();
+        // A group runs on from its [Group] to the next one in the same class.
+        var descriptors = new List<PropertyDescriptor>();
+        string? group = null;
+        Type? declaring = null;
+        foreach (var property in properties)
+        {
+            if (property.DeclaringType != declaring)
+                (group, declaring) = (null, property.DeclaringType);
+            group = property.GetCustomAttribute<GroupAttribute>()?.Name ?? group;
+            descriptors.Add(new PropertyDescriptor(property, group));
+        }
+
+        foreach (var descriptor in descriptors)
+            descriptor.Condition = descriptor.ShownWhen is { } shownWhen ? descriptors.FirstOrDefault(d => d.Name == shownWhen.Property) : null;
+        return descriptors;
     }
 
     private static int InheritanceDepth(Type type)
@@ -89,9 +103,11 @@ public sealed class PropertyDescriptor
 {
     private readonly PropertyInfo _property;
 
-    internal PropertyDescriptor(PropertyInfo property)
+    internal PropertyDescriptor(PropertyInfo property, string? group = null)
     {
         _property = property;
+        Group = group;
+        ShownWhen = property.GetCustomAttribute<ShownWhenAttribute>();
         SerializedName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
@@ -118,6 +134,59 @@ public sealed class PropertyDescriptor
     /// message, which the Inspector picks from a list of the project's.
     /// </summary>
     public NamesAttribute? Names { get; }
+
+    /// <summary>The subheading the Inspector shows it under, from the <see cref="GroupAttribute"/> on it or before it; null for none.</summary>
+    public string? Group { get; }
+
+    /// <summary>From <see cref="ShownWhenAttribute"/>: the property it's only used with, which fades it in the Inspector while off.</summary>
+    public ShownWhenAttribute? ShownWhen { get; }
+
+    /// <summary>The property <see cref="ShownWhen"/> names, or null when there's none (or it names no property of the component).</summary>
+    public PropertyDescriptor? Condition { get; internal set; }
+
+    /// <summary>
+    /// False while the property <see cref="ShownWhen"/> names is off on <paramref name="component"/> (false, zero or
+    /// empty; for an enum, not one of the <see cref="ShownWhenAttribute.Is"/> values, or its first value without them),
+    /// so this one isn't used. True otherwise.
+    /// </summary>
+    public bool IsShown(Component component)
+    {
+        if (Condition is null)
+            return true;
+        return Condition.GetValue(component) switch
+        {
+            Enum choice when ShownWhen!.Is is { Length: > 0 } values => values.Any(v => Equals(v, choice)),
+            Enum choice => !Equals(choice, Enum.GetValues(choice.GetType()).GetValue(0)),
+            null => false,
+            string text => !string.IsNullOrWhiteSpace(text),
+            bool on => on,
+            float number => number != 0,
+            int number => number != 0,
+            double number => number != 0,
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// What has to be so for it to be used, e.g. "Dash is on", "Action is LoadScene or Quit" or "Target is set", with the
+    /// other property's name written by <paramref name="property"/> and an enum's values by <paramref name="value"/> (as
+    /// they are in code by default); null without <see cref="ShownWhen"/>.
+    /// </summary>
+    public string? ShownWhenText(Func<string, string>? property = null, Func<string, string>? value = null)
+    {
+        if (Condition is not { } condition)
+            return null;
+        value ??= v => v;
+        var other = property?.Invoke(condition.Name) ?? condition.Name;
+        return condition.Type.IsEnum && ShownWhen!.Is is { Length: > 0 } values ? $"{other} is {Words(values.Select(v => value(v.ToString()!)).ToList())}"
+            : condition.Type.IsEnum ? $"{other} isn't {value(Enum.GetValues(condition.Type).GetValue(0)!.ToString()!)}"
+            : condition.Type == typeof(bool) ? $"{other} is on"
+            : $"{other} is set";
+    }
+
+    // "A", "A or B", "A, B or C".
+    private static string Words(List<string> values) =>
+        values.Count == 1 ? values[0] : $"{string.Join(", ", values.Take(values.Count - 1))} or {values[^1]}";
 
     public object? GetValue(Component component) => _property.GetValue(component);
 

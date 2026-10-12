@@ -727,13 +727,21 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             // Documented without defaults.
         }
 
-        foreach (var property in descriptor.Properties)
+        // Listed as the Inspector lists them: ungrouped first, then under each group's heading.
+        var ordered = descriptor.Properties.Where(p => p.Group is null)
+            .Concat(descriptor.Properties.Where(p => p.Group is not null).GroupBy(p => p.Group).SelectMany(g => g));
+        string? heading = null;
+        foreach (var property in ordered)
         {
+            if (property.Group is { } group && group != heading)
+                text.AppendLine($"## {heading = group}");
             var fallback = sample is null ? "?" : AgentValues.ToJson(property.GetValue(sample))?.ToJsonString() ?? "null";
             var meaning = docs.TryGetValue(property.Name, out var doc) && !doc.Doc.IsEmpty ? doc.Doc.PlainText.Replace("\n\n", " ") : "";
             text.Append($"- {property.SerializedName}: {AgentValues.Describe(property.Type)} = {fallback}");
             if (meaning.Length > 0)
                 text.Append(". ").Append(meaning);
+            if (property.ShownWhenText(property: p => descriptor.Properties.First(d => d.Name == p).SerializedName) is { } shownWhen)
+                text.Append($" (Only used when {shownWhen}.)");
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
             if (property.EntityName is { } entityName)

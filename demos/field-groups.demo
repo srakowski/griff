@@ -1,0 +1,31 @@
+title: Fields in groups
+intro: Big components put their fields under subheadings that fold, and fields fade while what they need is off.
+project: Platformer | Field Groups
+
+chapter: Subheadings | Big components, in sections you can fold
+select: Player
+say: Platformer Movement has twenty six fields. They used to be one long list. Now they sit under subheadings.
+explain: group:PlatformerMovement.Jump | Jump | Everything about jumping is under Jump: how high, air jumps, coyote time, and how it falls.
+explain: group:PlatformerMovement.Dash | Dash | The dash has its own subheading, and so do walls, ladders, control, and sounds.
+say: Not making a game with a dash? Fold it shut.
+click: fold:PlatformerMovement.Dash
+expectfolded: PlatformerMovement.Dash = true
+say: It stays folded on every entity with Platformer Movement, and next time the editor starts, until you open it again.
+
+chapter: Fields that wait | Faded until what they need is on
+click: fold:PlatformerMovement.Dash
+expectfolded: PlatformerMovement.Dash = false
+expectfaded: PlatformerMovement.DashSpeed = false
+say: This player can dash, so its dash speed, time and cooldown are in use.
+set: PlatformerMovement.Dash = false
+expectvalue: Player.PlatformerMovement.Dash = false
+expectfaded: PlatformerMovement.DashSpeed = true
+explain: field:PlatformerMovement.DashSpeed | Faded | Untick Dash, and its fields fade. They do nothing until it's back on.
+tip: label:PlatformerMovement.DashSpeed
+say: Its name says what it's waiting for. You can still set it ahead of time.
+set: PlatformerMovement.Dash = true
+expectfaded: PlatformerMovement.DashSpeed = false
+say: Tick Dash again, and they come back.
+expectfaded: PlatformerMovement.WallSlideSpeed = true
+explain: field:PlatformerMovement.WallSlideSpeed | Wall Slide Speed | Wall slide speed waits for Wall Slide the same way. Buttons do it too: a button's scene only lights up when its action loads one.
+say: Subheadings to find things, and faded fields to show what's in use. Agents see the same groups when they describe a component.

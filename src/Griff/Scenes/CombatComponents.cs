@@ -29,6 +29,7 @@ public sealed class Attack : Component
     public string? Hitbox { get; set; } = "Hitbox";
 
     /// <summary>Seconds between the swing starting and the hitbox coming out: a heavy hammer's wind-up, or an enemy's tell.</summary>
+    [Group("Timing")]
     public float Windup { get; set; } = 0.05f;
 
     /// <summary>Seconds the hitbox is out.</summary>
@@ -44,10 +45,12 @@ public sealed class Attack : Component
     public float HitStop { get; set; } = 0.05f;
 
     /// <summary>A sound played as the hitbox comes out, e.g. "Sounds/swing.wav".</summary>
+    [Group("Sound")]
     public string? Sound { get; set; }
 
     /// <summary>For an enemy with no <see cref="Action"/>: the name of what it attacks, e.g. "Player".</summary>
     [EntityName]
+    [Group("For Enemies")]
     public string? Target { get; set; } = "Player";
 
     /// <summary>For an enemy: how close its target has to be before it swings, in world units.</summary>

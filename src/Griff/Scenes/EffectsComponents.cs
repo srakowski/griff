@@ -30,6 +30,7 @@ public enum ScreenPalette
 public sealed class ScreenEffects : Component
 {
     /// <summary>How much the corners and edges darken, from 0 (not at all) to 1 (a spyglass). 0.4 frames a scene softly.</summary>
+    [Group("Screen")]
     public float Vignette { get; set; } = 0.4f;
 
     /// <summary>How dark an old TV's lines across the screen are, from 0 (none) to 1 (black).</summary>
@@ -48,6 +49,7 @@ public sealed class ScreenEffects : Component
     public float Aberration { get; set; }
 
     /// <summary>How colorful it is: 1 as drawn, 0 black and white, more than 1 vivid.</summary>
+    [Group("Color")]
     public float Saturation { get; set; } = 1;
 
     /// <summary>1 as drawn; more makes darks darker and lights lighter, less washes it out.</summary>
@@ -120,6 +122,7 @@ public sealed class Weather : Component
     public bool Storm { get; set; }
 
     /// <summary>Played a moment after each lightning flash, at a slightly different pitch each time.</summary>
+    [ShownWhen(nameof(Storm))]
     public string? ThunderSound { get; set; }
 
     /// <summary>The drops, flakes, leaves or sparks there are now. The game moves them while it runs.</summary>

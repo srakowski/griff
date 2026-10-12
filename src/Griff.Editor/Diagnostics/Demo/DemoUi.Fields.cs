@@ -23,6 +23,15 @@ internal sealed partial class DemoUi
     public ToggleButton? FoldButton(string component) =>
         ComponentHeader(component) is { } header ? Descendants<ToggleButton>(header).FirstOrDefault() : null;
 
+    /// <summary>A subheading in a component's section, "Dash" in Platformer Movement's.</summary>
+    public FrameworkElement? GroupRow(string component, string group) =>
+        Descendants<DockPanel>(Inspector).FirstOrDefault(d => d.Name == "GroupRow" && d.DataContext is FieldGroup g &&
+            g.Name.Equals(group, StringComparison.OrdinalIgnoreCase) && Section(d)?.IsNamed(component) == true);
+
+    /// <summary>The arrow on a subheading that folds the fields under it shut or opens them.</summary>
+    public ToggleButton? GroupFoldButton(string component, string group) =>
+        GroupRow(component, group) is { } row ? Descendants<ToggleButton>(row).FirstOrDefault() : null;
+
     /// <summary>Rests the mouse on <paramref name="element"/> until its tooltip shows.</summary>
     public async Task ShowTip(FrameworkElement element)
     {

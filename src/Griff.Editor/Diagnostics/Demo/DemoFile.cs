@@ -198,11 +198,22 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.ShowTip(Target(a));
                 break;
             case "expectfolded":
-                // "expectfolded: Transform = true": its section in the Inspector is folded shut (false: open).
+                // "expectfolded: Transform = true": its section in the Inspector is folded shut (false: open);
+                // "expectfolded: PlatformerMovement.Dash = true", a subheading in it.
                 var (foldName, foldWant) = Split2(a, '=');
                 var wantFolded = bool.Parse(foldWant);
-                if (!await Until(() => ui.FoldButton(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
-                    throw new InvalidOperationException($"Expected {foldName}'s section to be {(wantFolded ? "folded shut" : "open")}.");
+                System.Windows.Controls.Primitives.ToggleButton? FoldOf(string name) => name.Split('.', 2) is [var component, var group] ? ui.GroupFoldButton(component, group) : ui.FoldButton(name);
+                if (!await Until(() => FoldOf(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
+                    throw new InvalidOperationException($"Expected {foldName} to be {(wantFolded ? "folded shut" : "open")}.");
+                break;
+            case "expectfaded":
+                // "expectfaded: PlatformerMovement.DashSpeed = true": the field is faded, unused while what it needs is off.
+                var (fadedName, fadedWant) = Split2(a, '=');
+                var wantFaded = bool.Parse(fadedWant);
+                if (fadedName.Split('.', 2) is not [var fadedComponent, var fadedField])
+                    throw new InvalidOperationException($"expectfaded needs Component.Field, not {fadedName}.");
+                if (!await Until(() => ui.InspectorRow(fadedComponent, Label(fadedField)) is { DataContext: PropertyField f } && f.IsFaded == wantFaded, 3000))
+                    throw new InvalidOperationException($"Expected {fadedName} to be {(wantFaded ? "faded" : "not faded")}.");
                 break;
             case "rename":
                 var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(ui.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
@@ -1361,7 +1372,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 ui.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "heading" => ui.ComponentHeading(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "fold" when name.Split('.', 2) is [var component, var group] =>
+                ui.GroupFoldButton(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
             "fold" => ui.FoldButton(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "group" when name.Split('.', 2) is [var component, var group] =>
+                ui.GroupRow(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
             "remove" => ui.RemoveButton(name) ?? throw new InvalidOperationException($"No remove button on {name} in the Inspector."),
             "need" => (name.Split('.', 2) is [var needer, var needed] ? ui.NeedRow(needer, needed) : ui.NeedRow(name))
                 ?? throw new InvalidOperationException($"{name} isn't flagged as needing something in the Inspector."),

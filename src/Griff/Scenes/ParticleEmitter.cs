@@ -31,12 +31,14 @@ public sealed class ParticleEmitter : Component
     public bool Emitting { get; set; } = true;
 
     /// <summary>Particles per second while <see cref="Emitting"/>.</summary>
+    [ShownWhen(nameof(Emitting))]
     public float Rate { get; set; } = 20;
 
     /// <summary>Particles emitted at once when the game first runs this emitter (e.g. for an explosion prefab).</summary>
     public int BurstOnStart { get; set; }
 
     /// <summary>Seconds each particle lives.</summary>
+    [Group("Motion")]
     public float Lifetime { get; set; } = 1;
 
     /// <summary>Starting speed in world units per second.</summary>
@@ -55,6 +57,7 @@ public sealed class ParticleEmitter : Component
     public float GravityScale { get; set; }
 
     /// <summary>Width and height in world units at birth.</summary>
+    [Group("Look")]
     public float StartSize { get; set; } = 0.3f;
 
     /// <summary>Width and height in world units at the end of its life.</summary>
@@ -70,6 +73,7 @@ public sealed class ParticleEmitter : Component
     public int Order { get; set; }
 
     /// <summary>Removes the entity once it has stopped emitting and its last particle is gone.</summary>
+    [Group("Limits")]
     public bool DestroyWhenFinished { get; set; }
 
     /// <summary>The oldest particles make room for new ones beyond this many.</summary>

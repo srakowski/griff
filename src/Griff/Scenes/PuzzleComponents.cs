@@ -52,6 +52,7 @@ public sealed class Switch : Component
 
     /// <summary>The collision layers that work it, e.g. "Player" or "Player, Crate". Empty lets anything with a <see cref="Body"/>.</summary>
     [Names(NameKind.Layer, Many = true)]
+    [Group("Working It")]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>
@@ -64,6 +65,7 @@ public sealed class Switch : Component
     public float OnTime { get; set; }
 
     /// <summary>A sound played when it turns on or off, e.g. "Sounds/click.wav".</summary>
+    [Group("Sound and Messages")]
     public string? Sound { get; set; }
 
     /// <summary>A message sent with <c>Game.Send</c> when it turns on, with this entity as its data.</summary>
@@ -75,6 +77,7 @@ public sealed class Switch : Component
     public string? OffMessage { get; set; }
 
     /// <summary>The color its sprite turns while it's on. Transparent leaves it alone.</summary>
+    [Group("Look")]
     public Color OnTint { get; set; } = Color.FromBytes(0x57, 0xAB, 0x5A);
 
     /// <summary>The sprite-sheet frame its sprite shows while it's on (a lever pulled the other way). -1 leaves it alone.</summary>
@@ -85,6 +88,7 @@ public sealed class Switch : Component
     /// hidden the rest of the time.
     /// </summary>
     [EntityName]
+    [Group("Working It")]
     public string? Prompt { get; set; }
 
     /// <summary>Raised when it turns on or off, with whether it's now on.</summary>

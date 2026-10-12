@@ -177,6 +177,7 @@ public sealed class Sprite : Component
     public int Order { get; set; }
 
     /// <summary>For sprite sheets: frames across the image. 1 for a single image.</summary>
+    [Group("Sprite Sheet")]
     public int Columns { get; set; } = 1;
 
     /// <summary>For sprite sheets: frames down the image.</summary>
@@ -190,9 +191,11 @@ public sealed class Sprite : Component
     /// is border at each edge. Corners then keep their shape at any <see cref="Size"/>, edges stretch one way and the
     /// middle fills the rest. 0 stretches the whole image.
     /// </summary>
+    [Group("Stretching")]
     public float Slice { get; set; }
 
     /// <summary>With <see cref="Slice"/>: how big the border is drawn, in world units (never more than half the sprite).</summary>
+    [ShownWhen(nameof(Slice))]
     public float SliceSize { get; set; } = 0.25f;
 
     /// <summary>The part of the image to show for <see cref="Frame"/>: (u, v, width, height) in 0–1 image space.</summary>

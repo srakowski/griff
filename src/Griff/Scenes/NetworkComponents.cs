@@ -36,9 +36,11 @@ public sealed class Multiplayer : Component
     /// team, and can't hurt each other unless <see cref="FriendlyFire"/> is on. In a strategy game they're the
     /// <see cref="Faction"/> teams players take: "Player, Enemy". Empty is everyone for themselves.
     /// </summary>
+    [Group("Teams")]
     public string? Teams { get; set; }
 
     /// <summary>Players on the same team can hurt each other.</summary>
+    [ShownWhen(nameof(Teams))]
     public bool FriendlyFire { get; set; }
 
     /// <summary>
@@ -51,6 +53,7 @@ public sealed class Multiplayer : Component
     public bool ScoreKills { get; set; } = true;
 
     /// <summary>How many times a second the host sends what changed. More is smoother, and uses more of the connection.</summary>
+    [Group("Network")]
     public float SendRate { get; set; } = 30;
 
     /// <summary>

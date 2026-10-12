@@ -34,12 +34,14 @@ public sealed class TurnOrder : Component
     public string? ComputerSides { get; set; } = "Enemy";
 
     /// <summary>Seconds a person's turn lasts before it passes by itself, e.g. 30 for a timer as in Worms. 0 lasts until they end it.</summary>
+    [Group("Turns")]
     public float TurnTime { get; set; }
 
     /// <summary>
     /// Seconds a computer side's turn lasts at most: how long its patrols, chases and shooters get to act. 0 lasts until
     /// its turn takers have used their actions.
     /// </summary>
+    [ShownWhen(nameof(ComputerSides))]
     public float ComputerTurnTime { get; set; } = 2;
 
     /// <summary>Seconds between one turn and the next, while nobody acts: a last shot lands, a swing finishes.</summary>
@@ -56,6 +58,7 @@ public sealed class TurnOrder : Component
     /// What its <see cref="Text"/> says: {0} is the side whose turn it is, {1} the round and {2} the seconds left of a
     /// timed turn, e.g. "{0}'s turn ({2})".
     /// </summary>
+    [Group("Messages")]
     public string? Format { get; set; } = "{0}'s turn";
 
     /// <summary>
@@ -72,6 +75,7 @@ public sealed class TurnOrder : Component
     /// The side whose turn it is. Empty starts with the first side; set it to start with another, or from a script to hand
     /// the turn straight to a side (its turn starts afresh).
     /// </summary>
+    [Group("State")]
     public string? Current { get; set; }
 
     /// <summary>How many times the turns have come round, from 1. The game counts it; it's 0 until the game starts.</summary>
@@ -151,6 +155,7 @@ public sealed class TurnTaker : Component
     public int Actions { get; set; }
 
     /// <summary>How many of its actions it has used this turn. The game sets it back to 0 as each of its side's turns starts.</summary>
+    [Group("State")]
     public int ActionsUsed { get; set; }
 
     /// <summary>How many actions it has left this turn; -1 with no limit.</summary>

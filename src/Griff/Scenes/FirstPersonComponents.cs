@@ -29,6 +29,7 @@ public sealed class FirstPersonView : Component
     public float FieldOfView { get; set; } = 70;
 
     /// <summary>How tall walls are, in world units. With 1-unit tiles, 1 makes each a cube.</summary>
+    [Group("Shape")]
     public float WallHeight { get; set; } = 1;
 
     /// <summary>How high the viewer's eyes are off the floor, in world units: half the <see cref="WallHeight"/> looks straight across.</summary>
@@ -38,6 +39,7 @@ public sealed class FirstPersonView : Component
     public int Columns { get; set; } = 360;
 
     /// <summary>The floor's color, close up. It fades into <see cref="Fog"/> in the distance.</summary>
+    [Group("Colors and Fog")]
     public Color Floor { get; set; } = Color.FromBytes(0x3A, 0x34, 0x30);
 
     /// <summary>The ceiling's (or sky's) color, close up.</summary>
@@ -53,6 +55,7 @@ public sealed class FirstPersonView : Component
     public bool ShadeSides { get; set; } = true;
 
     /// <summary>How much the view (and the weapon) bob as the viewer walks. 0 keeps it steady.</summary>
+    [Group("Screen")]
     public float Bob { get; set; } = 1;
 
     /// <summary>The crosshair's color. Transparent for none.</summary>
@@ -88,24 +91,29 @@ public sealed class FirstPersonMovement : Component
     public float Acceleration { get; set; } = 40;
 
     /// <summary>Degrees per second the arrow keys (and the right stick, all the way over) turn it.</summary>
+    [Group("Turning")]
     public float TurnSpeed { get; set; } = 150;
 
     /// <summary>Turn with the mouse. The game takes the mouse when it's clicked, and gives it back with Esc.</summary>
     public bool MouseLook { get; set; } = true;
 
     /// <summary>Degrees turned for each pixel the mouse moves.</summary>
+    [ShownWhen(nameof(MouseLook))]
     public float MouseSensitivity { get; set; } = 0.15f;
 
     /// <summary>Let the mouse (and the right stick) look up and down a little, as well as turn.</summary>
     public bool LookUpDown { get; set; } = true;
 
     /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input.</summary>
+    [Group("Control")]
     public bool Controllable { get; set; } = true;
 
     /// <summary>A footstep sound, played every <see cref="StepLength"/> units walked.</summary>
+    [Group("Footsteps")]
     public string? StepSound { get; set; }
 
     /// <summary>World units between footsteps.</summary>
+    [ShownWhen(nameof(StepSound))]
     public float StepLength { get; set; } = 1.6f;
 
     /// <summary>Degrees it's looking up (positive) or down (negative), with <see cref="LookUpDown"/>.</summary>
@@ -161,6 +169,7 @@ public sealed class Weapon : Component
     public string? Action { get; set; } = "Fire";
 
     /// <summary>Hit points each bullet (or pellet) takes away.</summary>
+    [Group("Firing")]
     public float Damage { get; set; } = 1;
 
     /// <summary>Shots a second, at most.</summary>
@@ -183,6 +192,7 @@ public sealed class Weapon : Component
     public float Knockback { get; set; } = 2;
 
     /// <summary>The <see cref="Inventory"/> item each shot uses up, e.g. "Bullets". Empty never runs out.</summary>
+    [Group("Ammo and Items")]
     public string? Ammo { get; set; }
 
     /// <summary>An item the player must have to use it, e.g. "Shotgun", given by a <see cref="Pickup"/>. Empty is always ready.</summary>
@@ -190,22 +200,27 @@ public sealed class Weapon : Component
 
     /// <summary>A prefab to launch instead of hitting straight away, e.g. "Rocket" or "Plasma". It needs a <see cref="Body"/> to fly.</summary>
     [Names(NameKind.Prefab)]
+    [Group("Projectile")]
     public string? Projectile { get; set; }
 
     /// <summary>How fast a <see cref="Projectile"/> flies, in world units per second.</summary>
+    [ShownWhen(nameof(Projectile))]
     public float ProjectileSpeed { get; set; } = 12;
 
     /// <summary>A prefab spawned where a bullet hits, e.g. "Puff": sparks off a wall, a splash on an enemy.</summary>
     [Names(NameKind.Prefab)]
+    [Group("Sounds and Effects")]
     public string? ImpactEffect { get; set; }
 
     /// <summary>The sound of a shot, e.g. "Sounds/shoot.wav".</summary>
     public string? Sound { get; set; }
 
     /// <summary>A click when it's out of ammo.</summary>
+    [ShownWhen(nameof(Ammo))]
     public string? EmptySound { get; set; }
 
     /// <summary>The picture of the weapon in hand, drawn at the bottom of the screen. Without one it's drawn as a simple gun in <see cref="Color"/>.</summary>
+    [Group("Look")]
     public string? Image { get; set; }
 
     /// <summary>The picture shown for a moment as it fires, e.g. with a flash at the muzzle. Empty uses <see cref="Image"/>.</summary>
@@ -262,6 +277,7 @@ public sealed class Billboard : Component
     public float Bob { get; set; }
 
     /// <summary>Bobs a second.</summary>
+    [ShownWhen(nameof(Bob))]
     public float BobSpeed { get; set; } = 1;
 
     /// <summary>Sprite size multiplier in first person, so the top-down map can use a different size.</summary>

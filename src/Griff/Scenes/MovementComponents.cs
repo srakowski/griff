@@ -30,6 +30,7 @@ public sealed class PlatformerMovement : Component
     public float AirControl { get; set; } = 0.8f;
 
     /// <summary>How high a full jump goes, in world units.</summary>
+    [Group("Jump")]
     public float JumpHeight { get; set; } = 3.4f;
 
     /// <summary>Extra jumps in the air before landing again: 1 is a double jump.</summary>
@@ -51,45 +52,55 @@ public sealed class PlatformerMovement : Component
     public float MaxFallSpeed { get; set; } = 20;
 
     /// <summary>Pushing into a wall while falling slides down it slowly, at <see cref="WallSlideSpeed"/>.</summary>
+    [Group("Walls")]
     public bool WallSlide { get; set; }
 
     /// <summary>How fast it slides down a wall, in units per second.</summary>
+    [ShownWhen(nameof(WallSlide))]
     public float WallSlideSpeed { get; set; } = 3;
 
     /// <summary>Jump while against a wall in the air to kick off it, away from the wall.</summary>
     public bool WallJump { get; set; }
 
     /// <summary>The Dash action (Left Shift, K or the gamepad's B) bursts forward, once in the air until landing again.</summary>
+    [Group("Dash")]
     public bool Dash { get; set; }
 
     /// <summary>Dash speed, in units per second.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashSpeed { get; set; } = 20;
 
     /// <summary>Seconds a dash lasts.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashTime { get; set; } = 0.15f;
 
     /// <summary>Seconds after a dash before the next.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashCooldown { get; set; } = 0.35f;
 
     /// <summary>Climbing speed on ladders, in units per second.</summary>
+    [Group("Ladders and Platforms")]
     public float ClimbSpeed { get; set; } = 4;
 
     /// <summary>Down and Jump on a one-way platform drops through it.</summary>
     public bool DropThrough { get; set; } = true;
 
     /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input; it still falls and lands.</summary>
+    [Group("Control")]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face the way it's going (art should face right).</summary>
     public bool FlipSprite { get; set; } = true;
 
     /// <summary>A sound played on every jump, e.g. "Sounds/jump.wav".</summary>
+    [Group("Sounds and Effects")]
     public string? JumpSound { get; set; }
 
     /// <summary>A sound played on landing from a fall.</summary>
     public string? LandSound { get; set; }
 
     /// <summary>A sound played with each dash.</summary>
+    [ShownWhen(nameof(Dash))]
     public string? DashSound { get; set; }
 
     /// <summary>A prefab spawned at its feet on jumping and landing, e.g. a puff of "Dust".</summary>
@@ -204,24 +215,31 @@ public sealed class TopDownMovement : Component
     public bool FourWay { get; set; }
 
     /// <summary>The Dash action (Left Shift, K or the gamepad's B) bursts the way it's moving, or facing.</summary>
+    [Group("Dash")]
     public bool Dash { get; set; }
 
     /// <summary>Dash speed, in units per second.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashSpeed { get; set; } = 18;
 
     /// <summary>Seconds a dash lasts.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashTime { get; set; } = 0.15f;
 
     /// <summary>Seconds after a dash before the next.</summary>
+    [ShownWhen(nameof(Dash))]
     public float DashCooldown { get; set; } = 0.35f;
 
     /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input.</summary>
+    [Group("Control")]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>
     public bool FlipSprite { get; set; } = true;
 
     /// <summary>A sound played with each dash.</summary>
+    [Group("Dash")]
+    [ShownWhen(nameof(Dash))]
     public string? DashSound { get; set; }
 
     /// <summary>The way it last moved, as a unit vector: down to start with.</summary>
@@ -285,6 +303,7 @@ public sealed class GridMovement : Component
     /// Seconds a way has to be held, after the first step, before it keeps walking: 0 walks straight on, about 0.25 lets
     /// a puzzle's careful single steps come easily.
     /// </summary>
+    [ShownWhen(nameof(Repeat))]
     public float RepeatDelay { get; set; }
 
     /// <summary>Steps diagonally too, when two ways are held. It never cuts a wall's corner.</summary>
@@ -297,12 +316,14 @@ public sealed class GridMovement : Component
     /// Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works. Something
     /// with a <see cref="GridChase"/> or a <see cref="GridPatrol"/> never takes the player's input.
     /// </summary>
+    [Group("Control")]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>
     public bool FlipSprite { get; set; } = true;
 
     /// <summary>A sound played with each step, e.g. "Sounds/step.wav".</summary>
+    [Group("Sounds")]
     public string? StepSound { get; set; }
 
     /// <summary>A sound played on trying to step into a wall, once per press.</summary>
@@ -416,6 +437,7 @@ public sealed class GridChase : Component
     public float Range { get; set; } = 6;
 
     /// <summary>Once chasing, it gives up when the target gets this much further away than <see cref="Range"/>.</summary>
+    [ShownWhen(nameof(Range))]
     public float GiveUp { get; set; } = 2;
 
     /// <summary>Only notice the target when nothing solid is in the way.</summary>
@@ -496,6 +518,7 @@ public sealed class GridPatrol : Component
     /// Which stretch of its route it's walking, from 0 (the start to the first point). The game keeps it up to date; set
     /// it to start part of the way round, so a row of guards don't all walk together.
     /// </summary>
+    [Group("State")]
     public int Leg { get; set; }
 
     /// <summary>

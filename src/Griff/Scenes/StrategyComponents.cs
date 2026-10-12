@@ -296,21 +296,25 @@ public sealed class Building : Component
     public float Sight { get; set; } = 7;
 
     /// <summary>What it costs to build, e.g. "150 Gold, 50 Wood".</summary>
+    [Group("Building It")]
     public string? Cost { get; set; } = "150 Gold";
 
     /// <summary>Seconds a worker takes to put it up.</summary>
     public float BuildTime { get; set; } = 10;
 
     /// <summary>The supply it provides its team once it's up: farms and houses.</summary>
+    [Group("What It Gives")]
     public int Supply { get; set; }
 
     /// <summary>Whether workers bring gathered resources back here: a town hall.</summary>
     public bool Depot { get; set; }
 
     /// <summary>The key that builds it, e.g. "B". Empty uses its first letter.</summary>
+    [Group("Building It")]
     public string? Hotkey { get; set; }
 
     /// <summary>How far along it is, from 0 (just placed) to 1 (finished). Buildings in a scene start finished.</summary>
+    [Group("State")]
     public float Progress { get; set; } = 1;
 
     /// <summary>True once it's finished: only then does it train, take resources, provide supply or shoot.</summary>
@@ -467,6 +471,7 @@ public sealed class Fighter : Component
     public string? Projectile { get; set; }
 
     /// <summary>How fast its projectile flies, in world units per second.</summary>
+    [ShownWhen(nameof(Projectile))]
     public float ProjectileSpeed { get; set; } = 12;
 
     /// <summary>A sound played with each hit or shot, e.g. "Sounds/swing.wav".</summary>
@@ -505,6 +510,7 @@ public sealed class Commander : Component
     public string? Team { get; set; } = "Player";
 
     /// <summary>The middle of the map, in world units. The camera, minimap and pathfinding stay within the map.</summary>
+    [Group("Map and Camera")]
     public Vector2 MapCenter { get; set; }
 
     /// <summary>How big the map is, in world units.</summary>
@@ -523,6 +529,7 @@ public sealed class Commander : Component
     public float MaxZoom { get; set; } = 13;
 
     /// <summary>Whether to show the resources bar, selection, command card and minimap.</summary>
+    [Group("Screens")]
     public bool Hud { get; set; } = true;
 
     /// <summary>A panel opened when every other team is beaten, e.g. "Victory".</summary>
@@ -534,6 +541,7 @@ public sealed class Commander : Component
     public string? DefeatPanel { get; set; } = "Defeat";
 
     /// <summary>A sound played when the player gives an order, e.g. "Sounds/select.wav".</summary>
+    [Group("Sounds")]
     public string? OrderSound { get; set; }
 
     /// <summary>A sound played when something's finished: a unit trained, a building up.</summary>

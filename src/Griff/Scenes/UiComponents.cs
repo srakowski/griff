@@ -124,23 +124,28 @@ public sealed class Button : Component
     /// to go to afterwards (empty stays).
     /// </summary>
     [Names(NameKind.Scene)]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.HostGame, ButtonAction.LeaveGame])]
     public string? Scene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame])]
     public float Fade { get; set; }
 
     /// <summary>For <see cref="ButtonAction.OpenPanel"/>: the name of the panel's entity, e.g. "Options".</summary>
     [EntityName]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.OpenPanel])]
     public string? Panel { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
     [Names(NameKind.Action)]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.Rebind])]
     public string? InputAction { get; set; }
 
     /// <summary>
     /// Whether it can be clicked. A button that can't is drawn faded, ignores the mouse and its shortcut, and is skipped
     /// by the arrow keys. Scripts can set it, e.g. a Buy button while the player can't afford it.
     /// </summary>
+    [Group("Control")]
     public bool Interactable { get; set; } = true;
 
     /// <summary>
@@ -153,6 +158,7 @@ public sealed class Button : Component
     public Runtime.Key Shortcut { get; set; }
 
     /// <summary>Plays when it's clicked, e.g. "Sounds/select.wav".</summary>
+    [Group("Feel")]
     public string? Sound { get; set; }
 
     /// <summary>How much lighter the button's sprite and text get under the mouse, from 0 (not at all) to 1 (white).</summary>
@@ -162,6 +168,7 @@ public sealed class Button : Component
     /// Whether the arrow keys, D-pad and stick can move to this button (see <see cref="IsFocused"/>). Turn it off for a
     /// button on a HUD during play, so moving the player doesn't pick it.
     /// </summary>
+    [Group("Control")]
     public bool Navigable { get; set; } = true;
 
     /// <summary>True while the mouse is over the button.</summary>
@@ -359,6 +366,7 @@ public sealed class Slider : Component
     /// A setting of the game it changes, like the music volume. While set, the slider always shows that setting: a volume
     /// from 0 to 1 fills it from <see cref="Min"/> to <see cref="Max"/>, so a slider from 0 to 10 works too.
     /// </summary>
+    [Group("Setting and Saving")]
     public GameSetting Setting { get; set; }
 
     /// <summary>
@@ -368,12 +376,14 @@ public sealed class Slider : Component
     public string? SaveAs { get; set; }
 
     /// <summary>A sound played as the value changes, e.g. "Sounds/blip.wav": with the sound volume, you hear how loud it is.</summary>
+    [Group("Control")]
     public string? Sound { get; set; }
 
     /// <summary>Whether the arrow keys, D-pad and stick can move to it, like <see cref="Button.Navigable"/>.</summary>
     public bool Navigable { get; set; } = true;
 
     /// <summary>World units before the transform's scale, centered on the entity. It's dragged along its width.</summary>
+    [Group("Look")]
     public Vector2 Size { get; set; } = new(4, 0.5f);
 
     /// <summary>The color of the part up to the handle.</summary>

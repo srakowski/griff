@@ -148,3 +148,28 @@ public sealed class NamesAttribute(NameKind kind) : Attribute
     /// <summary>For a message: it's heard (a counter adds up the message), so it's flagged when nothing sends it, not when nothing hears it.</summary>
     public bool Hears { get; init; }
 }
+
+/// <summary>
+/// Starts a subheading in the editor's Inspector, e.g. <c>[Group("Dash")]</c>: this property and the ones declared
+/// after it in the same class, up to the next <see cref="GroupAttribute"/>, go under it, and fold shut together.
+/// Properties before the first one stay at the top.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class GroupAttribute(string name) : Attribute
+{
+    public string Name { get; } = name;
+}
+
+/// <summary>
+/// Says a property is only used while another is on, e.g. <c>[ShownWhen(nameof(Dash))]</c> on a dash's speed: the
+/// editor's Inspector fades it while the other is off (false, zero or empty), and it can still be set ahead of time.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class ShownWhenAttribute(string property) : Attribute
+{
+    /// <summary>The property it depends on, in the same component.</summary>
+    public string Property { get; } = property;
+
+    /// <summary>For an enum: the values the other has to be one of, rather than any but its first.</summary>
+    public object[]? Is { get; init; }
+}

@@ -252,6 +252,22 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Describe_ListsPropertiesUnderTheirGroups_AndSaysWhatTheyNeed()
+    {
+        var text = Run("component_describe", """{"component": "PlatformerMovement"}""").Text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+
+        var dash = text.IndexOf("## Dash");
+        Assert.True(dash > text.FindIndex(l => l.StartsWith("- speed:", StringComparison.Ordinal)));
+        Assert.StartsWith("- dash:", text[dash + 1]);
+        Assert.StartsWith("- dashSpeed:", text[dash + 2]);
+        Assert.Contains("(Only used when dash is on.)", text[dash + 2]);
+        Assert.Contains("## Sounds and Effects", text);
+
+        var button = Run("component_describe", """{"component": "Button"}""").Text;
+        Assert.Contains("(Only used when action is OpenPanel.)", button);
+    }
+
+    [Fact]
     public void Describe_SaysWhichPropertiesAreDistances()
     {
         var text = Run("component_describe", """{"component": "Unit"}""").Text.Split('\n');

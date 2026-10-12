@@ -451,7 +451,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>How many things the one selected copy changes from its prefab.</summary>
     internal int OverrideCount(Entity copy) => _overrideCount ??= OverridesOf(copy).Count;
 
-    /// <summary>True when the component's section is folded shut (on every entity), by its type's saved name.</summary>
+    /// <summary>
+    /// True when the component's section is folded shut (on every entity), by its type's saved name; or one of its
+    /// subheadings, by "Type/Group".
+    /// </summary>
     internal bool IsCollapsed(string type) => _settings.Settings.CollapsedComponents.Contains(type);
 
     /// <summary>Folds the component's sections shut or opens them, on every entity, kept in the user's settings.</summary>
@@ -465,7 +468,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         else
             list.Remove(type);
         _settings.Save();
-        foreach (var section in Components.Where(s => s.TypeKey == type))
+        foreach (var section in Components.Where(s => s.TypeKey == type.Split('/')[0]))
             section.Refresh();
     }
 
@@ -596,6 +599,7 @@ public sealed class ComponentSection : ObservableObject
         Tip = summary.IsEmpty ? null : summary.PlainText;
         _descriptor = descriptor;
         Properties = Used().Select(p => new PropertyField(components, p, owner)).ToList();
+        (Groups, Rows) = Arrange(Properties);
         SetupNote = component.SetupNote();
         IsAddedToCopy = components.Any(owner.IsAddedToCopy);
         Needs = descriptor.Requires
@@ -669,6 +673,33 @@ public sealed class ComponentSection : ObservableObject
 
     public IReadOnlyList<PropertyField> Properties { get; }
 
+    /// <summary>The component's subheadings ([Group]), in order, each with its fields; empty when it has none.</summary>
+    public IReadOnlyList<FieldGroup> Groups { get; } = [];
+
+    /// <summary>What the section lists: the fields with no group first, then each group's heading followed by its fields.</summary>
+    public IReadOnlyList<object> Rows { get; } = [];
+
+    /// <summary>The subheading called <paramref name="name"/>, or null.</summary>
+    public FieldGroup? Group(string name) => Groups.FirstOrDefault(g => g.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    // Groups gather their fields wherever they're declared (a script's base class may add to one), in the order each
+    // group first comes up; ungrouped fields go first.
+    private (IReadOnlyList<FieldGroup>, IReadOnlyList<object>) Arrange(IReadOnlyList<PropertyField> fields)
+    {
+        if (fields.All(f => f.GroupName is null))
+            return ([], [.. fields]);
+        var groups = fields.Where(f => f.GroupName is not null).GroupBy(f => f.GroupName!)
+            .Select(g => new FieldGroup(g.Key, [.. g], this, _owner)).ToList();
+        var rows = new List<object>(fields.Where(f => f.GroupName is null));
+        foreach (var group in groups)
+        {
+            rows.Add(group);
+            rows.AddRange(group.Fields);
+        }
+
+        return (groups, rows);
+    }
+
     public IRelayCommand RemoveCommand { get; }
 
     /// <summary>
@@ -684,12 +715,61 @@ public sealed class ComponentSection : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(nameof(IsExpanded));
+        foreach (var group in Groups)
+            group.Refresh();
         foreach (var property in Properties)
             property.Refresh();
     }
 
     // From every selected entity, as one undo step; asks first when something needs it.
     private void Remove() => _owner.RemoveComponents(_components, Title);
+}
+
+/// <summary>
+/// A subheading in a component's section (from <see cref="GroupAttribute"/>), "Dash" or "Wall", over the fields that
+/// go under it. Folding it shut hides them, for that component on every entity, and it's remembered next time.
+/// </summary>
+public sealed class FieldGroup : ObservableObject
+{
+    private readonly ComponentSection _section;
+    private readonly InspectorPanel _owner;
+
+    public FieldGroup(string name, IReadOnlyList<PropertyField> fields, ComponentSection section, InspectorPanel owner)
+    {
+        Name = name;
+        Fields = fields;
+        _section = section;
+        _owner = owner;
+        foreach (var field in fields)
+            field.Group = this;
+    }
+
+    public string Name { get; }
+
+    public IReadOnlyList<PropertyField> Fields { get; }
+
+    // Kept with the components' folded sections, under "Type/Group", which no type's name can be.
+    private string Key => $"{_section.TypeKey}/{Name}";
+
+    /// <summary>Open, showing its fields.</summary>
+    public bool IsExpanded
+    {
+        get => !_owner.IsCollapsed(Key);
+        set => _owner.SetCollapsed(Key, !value);
+    }
+
+    /// <summary>True when every field under it is faded, as a dash's are with Dash off (see <see cref="PropertyField.IsFaded"/>).</summary>
+    public bool IsFaded => Fields.All(f => f.IsFaded);
+
+    /// <summary>Says what folding does, and when it's shut, how many fields it hides.</summary>
+    public string Tip => IsExpanded ? $"Fold {Name} shut" : $"Open {Name}: {Fields.Count} field{(Fields.Count == 1 ? "" : "s")}";
+
+    /// <summary>Folds it shut, or opens it: clicking its name.</summary>
+    public IRelayCommand ToggleCommand => _toggle ??= new RelayCommand(() => IsExpanded = !IsExpanded);
+
+    private IRelayCommand? _toggle;
+
+    public void Refresh() => OnPropertyChanged(string.Empty);
 }
 
 /// <summary>
@@ -831,10 +911,28 @@ public sealed class PropertyField : ObservableObject
     {
         get
         {
-            var tip = string.Join("\n\n", new[] { OverrideTip, Summary, Kind == FieldKind.Number ? DragTip : null }.OfType<string>());
+            var tip = string.Join("\n\n", new[] { OverrideTip, FadeTip, Summary, Kind == FieldKind.Number ? DragTip : null }.OfType<string>());
             return tip.Length > 0 ? tip : null;
         }
     }
+
+    /// <summary>The subheading it's listed under ([Group]), or null.</summary>
+    public string? GroupName => _property.Group;
+
+    /// <summary>The subheading it's listed under, set by it.</summary>
+    public FieldGroup? Group { get; internal set; }
+
+    /// <summary>True while its subheading is folded shut, which hides it.</summary>
+    public bool IsFolded => Group is { IsExpanded: false };
+
+    /// <summary>
+    /// True while what it depends on is off ([ShownWhen]: a dash's speed with Dash off), on every selected entity, so it
+    /// isn't used: it's drawn faded, and can still be set ahead of time.
+    /// </summary>
+    public bool IsFaded => _components.All(c => !_property.IsShown(c));
+
+    /// <summary>For a faded field: "Only used when Dash is on."; otherwise null.</summary>
+    public string? FadeTip => IsFaded ? $"Only used when {_property.ShownWhenText(InspectorPanel.Humanize, InspectorPanel.Humanize)}." : null;
 
     private const string DragTip = "Drag the name sideways to change it (Shift: fine, Ctrl: coarse), or press Up and Down while typing.";
 
@@ -965,7 +1063,7 @@ public sealed class PropertyField : ObservableObject
     /// prefab; for one naming a prefab, scene, input action, layer or message, none the project has (see
     /// <see cref="KnownNames"/>). Empty when they all match, or with several selected whose values differ.
     /// </summary>
-    public IReadOnlyList<string> UnmatchedNames => _unmatched ??= IsMixed ? [] : Kind switch
+    public IReadOnlyList<string> UnmatchedNames => _unmatched ??= IsMixed || IsFaded ? [] : Kind switch
     {
         FieldKind.Entity => EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames, _owner.InPrefab),
         FieldKind.Name => _owner.Names?.Unmatched(_components[0], _property) ?? [],

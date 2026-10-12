@@ -418,4 +418,35 @@ public class PanelTests
         Assert.Equal([restored], rewound.OpenPanels);
         Assert.True(rewound.IsPaused);
     }
+
+    [Fact]
+    public void Panel_OpensOnItsMessage_UnlessWhatItsInIsHidden()
+    {
+        var solved = AddPanel("Solved");
+        solved.OpenMessage = "Solved";
+        var room = new Entity("Room");
+        _scene.Add(room);
+        var inner = AddPanel("Inner", room);
+        inner.OpenMessage = "Solved";
+        AddButton("Next", Vector2.Zero, solved.Entity);
+        var game = CreateGame();
+        Tick(game);
+        room.IsEnabled = false;
+        Assert.False(solved.Entity!.IsEnabled);
+
+        Assert.Equal(0, game.Send("Other"));
+        Tick(game);
+        Assert.False(solved.Entity.IsEnabled);
+
+        Assert.Equal(1, game.Send("Solved"));
+        Tick(game);
+        Assert.True(solved.Entity.IsEnabled);
+        Assert.True(game.IsPaused);
+        Assert.Equal(solved, game.TopPanel);
+        Assert.Equal("Next", game.Focused!.Entity!.Name);
+        Assert.False(inner.Entity!.IsEnabled);
+
+        // Once it's open, sending it again opens nothing more.
+        Assert.Equal(0, game.Send("Solved"));
+    }
 }

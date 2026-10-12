@@ -1,0 +1,62 @@
+title: The Puzzle template
+intro: Sokoban with no code: four levels of crates to push onto their marks, each opening once the one before is solved.
+
+project: Puzzle | Crate Works
+
+chapter: A menu of levels | Each one opens once the one before is solved
+scene: Main
+say: The Puzzle template starts on a menu with a button for each level.
+select: Level 2
+explain: field:Button.NeedsSaved | Needs Saved | Level two's button needs level one saved as solved. Until then it's faded and can't be picked.
+expectvalue: Level 2.Button.NeedsSaved = solved-level1
+deselect
+
+chapter: A level | A tilemap, a worker, crates and the marks they go on
+scene: Level1
+say: Each level is its own scene, built from the grid pieces with no scripts.
+select: Level
+explain: field:Tilemap.BackgroundTiles | Background Tiles | The walls are a tilemap. The floor is a background tile, so it's drawn but never blocks.
+explain: component:MoveHistory | Move History | And a Move History lets the player take moves back with Z, and start over with R.
+select: Goal
+explain: field:Goal.AllCoveredMessage | All Covered Message | Every mark is a goal. Once all of them have a crate on, they send Solved.
+select: Solved
+explain: field:Panel.OpenMessage | Open Message | This panel opens on that message by itself. Open Message is new: any panel can open when a message is sent.
+expectvalue: Solved.Panel.OpenMessage = Solved
+select: Progress
+explain: component:Counter | Progress | And this counter hears Solved too, and saves it, which is what the next level's button needs.
+deselect
+
+chapter: Solve it | Push both crates home
+play
+wait: 0.6
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.4
+expectat: Crate = 2, 1
+say: Two pushes, and the first crate is on its mark. It turns green.
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Down
+wait: 0.3
+tap: Down
+wait: 0.3
+say: Round to the other crate.
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.8
+expectvalue: Moves.Text.Value = Moves: 10
+expectvalue: Crate Count.Text.Value = Crates: 2 / 2
+explain: game | Solved | Both crates home, and the Solved panel opens, with how many moves it took.
+tap: Enter
+wait: 1.2
+say: Enter goes on to the next level.
+stop
+say: That's the Puzzle template. Duplicate a level scene and repaint it to make more.

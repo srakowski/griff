@@ -439,7 +439,14 @@ public sealed partial class Game
             .Where(p => p.Message?.Trim() == message).ToList();
         foreach (var player in players)
             Play(player);
-        return heard + counters.Count + players.Count;
+
+        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing.
+        var panels = Scene.Entities.SelectMany(e => e.GetComponents<Panel>())
+            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || Rendering.SceneRenderer.IsActive(p.Entity.Parent)))
+            .ToList();
+        foreach (var panel in panels)
+            OpenPanel(panel);
+        return heard + counters.Count + players.Count + panels.Count;
     }
 
     private static int CountOf(object? data) => data switch

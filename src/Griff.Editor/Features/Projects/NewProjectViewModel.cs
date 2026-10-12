@@ -78,6 +78,7 @@ public sealed class NewProjectViewModel : ObservableObject
         new(ProjectTemplate.Shooter, "Shooter", ProjectTemplates.Describe(ProjectTemplate.Shooter)),
         new(ProjectTemplate.Sandbox, "Sandbox", ProjectTemplates.Describe(ProjectTemplate.Sandbox)),
         new(ProjectTemplate.Contraption, "Contraption", ProjectTemplates.Describe(ProjectTemplate.Contraption)),
+        new(ProjectTemplate.Puzzle, "Puzzle", ProjectTemplates.Describe(ProjectTemplate.Puzzle)),
         new(ProjectTemplate.Multiplayer, "Multiplayer", ProjectTemplates.Describe(ProjectTemplate.Multiplayer)),
         new(ProjectTemplate.Empty, "Empty", ProjectTemplates.Describe(ProjectTemplate.Empty)),
     ];

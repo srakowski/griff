@@ -29,6 +29,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Sandbox)]
     [InlineData(ProjectTemplate.Contraption)]
     [InlineData(ProjectTemplate.Multiplayer)]
+    [InlineData(ProjectTemplate.Puzzle)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -57,6 +58,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Sandbox)]
     [InlineData(ProjectTemplate.Contraption)]
     [InlineData(ProjectTemplate.Multiplayer)]
+    [InlineData(ProjectTemplate.Puzzle)]
     public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -81,6 +83,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Sandbox)]
     [InlineData(ProjectTemplate.Contraption)]
     [InlineData(ProjectTemplate.Multiplayer)]
+    [InlineData(ProjectTemplate.Puzzle)]
     public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -787,11 +790,14 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Platformer)]
     [InlineData(ProjectTemplate.TopDown)]
     [InlineData(ProjectTemplate.Arcade)]
+    [InlineData(ProjectTemplate.Puzzle)]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(ProjectTemplate template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
         if (template == ProjectTemplate.Arcade)
             scene = GameLoader.LoadScene(project, registry, "Game");
+        if (template == ProjectTemplate.Puzzle)
+            scene = GameLoader.LoadScene(project, registry, "Level1");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);

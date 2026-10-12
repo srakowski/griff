@@ -71,6 +71,7 @@ internal static class TemplateSounds
         ProjectTemplate.Sandbox => MusicRecipe.ForMood(MusicMood.Chill, seed: 6) with { Volume = 0.55f },
         ProjectTemplate.Contraption => MusicRecipe.ForMood(MusicMood.Bright, seed: 7) with { Volume = 0.5f },
         ProjectTemplate.Multiplayer => MusicRecipe.ForMood(MusicMood.Tense, seed: 11) with { Volume = 0.55f },
+        ProjectTemplate.Puzzle => MusicRecipe.ForMood(MusicMood.Chill, seed: 9) with { Volume = 0.5f },
         _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
     };
 

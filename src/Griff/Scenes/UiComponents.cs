@@ -470,8 +470,8 @@ public sealed class Toggle : Component
 /// entity is showing; while it is, the mouse, keyboard and gamepad only reach controls on it (not the HUD or a panel
 /// underneath), its top control is picked straight away, and Esc or the gamepad's B closes it. Closing it gives the
 /// keyboard back to whatever was picked before. Open one with a <see cref="ButtonAction.OpenPanel"/> button, with
-/// <see cref="OpenOn"/> (a pause menu opens on "Pause"), or from scripts with <c>Game.OpenPanel</c> (or by showing its
-/// entity).
+/// <see cref="OpenOn"/> (a pause menu opens on "Pause"), with <see cref="OpenMessage"/> (a puzzle's "Solved" screen), or
+/// from scripts with <c>Game.OpenPanel</c> (or by showing its entity).
 /// </summary>
 /// <remarks>Panels are hidden when the game starts unless <see cref="Open"/> is ticked, so they can be laid out in the Scene view.</remarks>
 [Category("UI")]
@@ -496,6 +496,13 @@ public sealed class Panel : Component
     /// </summary>
     [Names(NameKind.Action)]
     public string? OpenOn { get; set; }
+
+    /// <summary>
+    /// A message that opens it, with no code: "Solved" (a puzzle's goals all covered), "GameOver", or anything a pickup,
+    /// switch or script sends. Empty opens it only from a button, its <see cref="OpenOn"/> action or a script.
+    /// </summary>
+    [Names(NameKind.Message, Hears = true)]
+    public string? OpenMessage { get; set; }
 
     /// <summary>
     /// Whether Esc and the gamepad's B close it. If it has a button whose Shortcut is Esc, they click that instead. Untick

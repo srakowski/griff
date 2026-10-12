@@ -6,6 +6,17 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Inspector
+
+Each item bundles related Inspector fixes so one session covers more; split one only if it can't be finished in a session.
+
+- [ ] Make component fields explain themselves and change quicker: each field's doc summary (units included) as its label's tooltip; drag any number by its label, not only vector axes, with a step that scales with the value (Acceleration 70 shouldn't take 400 px to reach 90), and the wheel or Up/Down to nudge; humanized component headers and enum choices ("Platformer Movement", not "PlatformerMovement"); and collapsed sections that stay collapsed, per component type, across selections and restarts.
+- [ ] Make Add Component a searchable list grouped by category (type to filter, Enter adds) that adds what a component requires, as the Catalog does; flag a section whose required component is missing (PlatformerMovement without Body), with a button to add it; and say what depends on a component before removing it.
+- [ ] Turn fields that name prefabs (Spawner, Shooter, Effect, Projectile), scenes (Door), input actions (Attack, Shooter), collision layers (several) and messages into pickers like entity fields, each flagged when it matches nothing (messages list the names the project sends and listens for). Give every field picker, images, sounds and entities too, type-to-filter.
+- [ ] Group and switch fields in big components: collapsible subheadings ([Group]) and fields that fade while the toggle they depend on is off ([ShownWhen]: Dash Speed with Dash off, Wall Slide Speed with Wall Slide off), applied across the built-in components, PlatformerMovement's 27 fields first; runtime state like Facing goes under its own heading.
+- [ ] Add a menu on a component's header (right-click): Reset to Defaults, Copy and Paste Values, Move Up and Move Down. With several entities selected, show the components only some of them have, greyed with "on 2 of 3", and Add to All.
+- [ ] Add a color picker to color swatches (hue and value, alpha, the Sprite Painter's palette and recent colors); show Transform in 2D (Position X/Y, one Rotation angle, Scale X/Y, with Z behind a 3D toggle); and add filter boxes for fields at the top of the Inspector and for entities in the Hierarchy.
+
 ### Gameplay foundations
 
 - [ ] Add dialogue flags: lines that set flags and lines shown only when a flag is set, kept in save data.

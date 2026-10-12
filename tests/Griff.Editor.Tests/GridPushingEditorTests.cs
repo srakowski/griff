@@ -59,6 +59,11 @@ public sealed class GridPushingEditorTests : IDisposable
         Assert.True(goal.GetComponent<Sprite>()!.Order < 0);
         Assert.Null(goal.GetComponent<Collider>());
 
+        // The first goal brings undo and restart along; the next doesn't add another.
+        Assert.NotNull(goal.GetComponent<MoveHistory>());
+        Assert.Null(Create("Entity.CreateGoal").GetComponent<MoveHistory>());
+        workspace.Scene!.History.Undo();
+
         Create("Entity.CreateTurnOrder");
         Assert.NotNull(player.GetComponent<TurnTaker>());
         Assert.Null(crate.GetComponent<TurnTaker>());

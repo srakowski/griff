@@ -163,14 +163,10 @@ public sealed partial class Game
             free = walls.IsFree((m.Cell.X + offset.X, m.Cell.Y)) && walls.IsFree((m.Cell.X, m.Cell.Y + offset.Y));
 
         // A crate in the way (straight ahead, never diagonally) is pushed a cell along first, if it can go.
-        if (!free && (offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay &&
-            CratesPushed(entity, way, inTheWay) is { } row)
-        {
-            Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
-            free = true;
-        }
-
-        if (!free)
+        var row = !free && (offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay
+            ? CratesPushed(entity, way, inTheWay)
+            : null;
+        if (!free && row is null)
         {
             if (m.BumpedWay != way)
             {
@@ -182,6 +178,10 @@ public sealed partial class Game
             return;
         }
 
+        // A player's step is a move to undo, remembered before anything goes.
+        RecordMove(entity);
+        if (row is not null)
+            Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
         StartGridStep(m, grid, target, direction, progress, glide: null);
         UseAction(entity);
         // A player's own machine moves their character: the host, running the turns, hears of the step.

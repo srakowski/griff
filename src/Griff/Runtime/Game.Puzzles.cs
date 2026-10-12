@@ -290,6 +290,119 @@ public sealed partial class Game
         return Vector2.Distance(at, middle) <= size * 0.02f;
     }
 
+    // ----- Undo and restart -----
+
+    // Undo and Restart, pressed by anyone playing (not while a panel pauses the game) or asked for by a script, on the host
+    // (or offline): a player's presses reach it from their machine. A restart and an undo in the same frame just restart.
+    private void RunMoveHistory()
+    {
+        if (Net.IsClient || Net.IsConnecting)
+            return;
+        foreach (var history in Active<MoveHistory>())
+        {
+            history.Begin(Scene);
+            var (undos, restart) = (history.UndoRequests, history.RestartRequested);
+            (history.UndoRequests, history.RestartRequested) = (0, false);
+            if (!PausedThisFrame)
+            {
+                restart |= !string.IsNullOrWhiteSpace(history.RestartAction) && PlayerInputs().Any(i => i.WasPressed(history.RestartAction.Trim()));
+                undos += UndoPresses(history);
+            }
+
+            if (restart)
+            {
+                RestartMoves(history);
+                continue;
+            }
+
+            for (var i = 0; i < undos; i++)
+                UndoMove(history);
+        }
+    }
+
+    // How long Undo has to be held before it repeats, and how often it does then.
+    private const float UndoRepeatDelay = 0.35f;
+    private const float UndoRepeatEvery = 0.08f;
+
+    // One on the frame Undo is pressed, then, held down, one every little while.
+    private int UndoPresses(MoveHistory history)
+    {
+        if (string.IsNullOrWhiteSpace(history.UndoAction))
+            return 0;
+        var action = history.UndoAction.Trim();
+        if (PlayerInputs().Any(i => i.WasPressed(action)))
+        {
+            (history.HeldFor, history.NextRepeat) = (0, UndoRepeatDelay);
+            return 1;
+        }
+
+        if (!history.HoldToRepeat || !PlayerInputs().Any(i => i.IsDown(action)))
+            return 0;
+        history.HeldFor += Time.UnscaledDelta;
+        if (history.HeldFor < history.NextRepeat)
+            return 0;
+        history.NextRepeat += UndoRepeatEvery;
+        return 1;
+    }
+
+    // A grid player's step (with the crates it pushes) is a move: every move history remembers the moment before it.
+    private void RecordMove(Entity mover)
+    {
+        if (Net.IsOnline || mover.GetComponent<GridChase>() is not null || mover.GetComponent<GridPatrol>() is not null ||
+            mover.GetComponent<Pushable>() is not null)
+            return;
+        foreach (var history in Active<MoveHistory>())
+            history.Record();
+    }
+
+    // Back to the moment before the last move. Online there's no undo: everyone's moves are their own.
+    private void UndoMove(MoveHistory history)
+    {
+        if (Net.IsOnline || history.Past.Count == 0)
+            return;
+        var to = history.Past[^1];
+        history.Past.RemoveAt(history.Past.Count - 1);
+        PutBack(history, to);
+        PlayIfSet(history.UndoSound);
+        if (!string.IsNullOrWhiteSpace(history.UndoMessage))
+            Send(history.UndoMessage.Trim(), history.Moves);
+        history.RaiseUndone();
+    }
+
+    // Back to where the level started, as a move Undo can take back; or the scene reloaded (online, for everyone).
+    private void RestartMoves(MoveHistory history)
+    {
+        var reloads = (history.RestartReloads || Net.IsOnline) && SceneLoader is not null && SceneName is not null;
+        if (reloads)
+        {
+            if (IsChangingScene)
+                return;
+            ReloadScene(Math.Max(0, history.Fade));
+        }
+        else
+        {
+            if (Net.IsOnline || history.Moves == 0 || history.Start is not { } start)
+                return;
+            history.Remember(MoveSnapshot.Take(Scene, history.Moves));
+            PutBack(history, start);
+        }
+
+        PlayIfSet(history.RestartSound);
+        if (!string.IsNullOrWhiteSpace(history.RestartMessage))
+            Send(history.RestartMessage.Trim(), history.Entity);
+        history.RaiseRestarted();
+    }
+
+    private void PutBack(MoveHistory history, MoveSnapshot snapshot)
+    {
+        snapshot.Restore(Scene);
+        history.Moves = snapshot.Moves;
+        // Goals the crates are put back on (or off) aren't a change: no sounds or messages, and solving it again counts.
+        foreach (var goal in Showing<Goal>())
+            goal.Seen = false;
+        _allCovered.Clear();
+    }
+
     private void ForgetPuzzleState()
     {
         _switched.Clear();

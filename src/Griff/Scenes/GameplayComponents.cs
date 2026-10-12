@@ -363,6 +363,12 @@ public sealed class Counter : Component
     /// </summary>
     public bool CountGoals { get; set; }
 
+    /// <summary>
+    /// Count the moves taken in a grid puzzle instead of a message: its <see cref="MoveHistory"/>'s, so an undo counts one
+    /// back, e.g. "Moves: {0}".
+    /// </summary>
+    public bool CountMoves { get; set; }
+
     /// <summary>How many goals there are, for a counter that counts them (<c>{2}</c> in <see cref="Format"/>); 0 otherwise.</summary>
     [DoNotSerialize]
     public int Total { get; internal set; }

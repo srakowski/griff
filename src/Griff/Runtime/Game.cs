@@ -150,6 +150,9 @@ public sealed partial class Game
         RunTurns();
         RunBeatClocks();
 
+        // Before anything moves, so a move taken back this frame isn't stepped on from where it was.
+        RunMoveHistory();
+
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
         RunEnemies();
         RunMovement();
@@ -889,6 +892,9 @@ public sealed partial class Game
                 counter.Total = goals.Count;
                 counter.Add(goals.Count(g => g.IsCovered) - counter.Value);
             }
+
+            if (counter.CountMoves && Showing<MoveHistory>().FirstOrDefault() is { } history)
+                counter.Add(history.Moves - counter.Value);
 
             if (counter.Shown is null)
             {

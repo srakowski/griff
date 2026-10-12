@@ -1,0 +1,90 @@
+title: Undo and restart
+intro: Grid puzzles with no code: Z takes a move back, R starts the level over, and a counter shows the moves.
+
+project: Empty | Crate Undo
+
+chapter: A puzzle to get wrong | Create Goal brings a Move History along
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111\n1......1\n1......1\n1......1\n11111111
+select: Main Camera
+set: Transform.Position.X = 4
+set: Transform.Position.Y = -2.5
+look: 4, -2.5, 4
+deselect
+create: Grid Player
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+deselect
+create: Crate
+set: Transform.Position.X = 3.5
+set: Transform.Position.Y = -2.5
+deselect
+create: Goal
+set: Transform.Position.X = 5.5
+set: Transform.Position.Y = -2.5
+say: A room, a grid player, a crate, and a goal to push it onto.
+expectcomponents: Goal = Transform, Sprite, Goal, MoveHistory
+explain: component:MoveHistory | Move History | The first goal in a scene brings a Move History along. Every step the player takes, with any crate it pushes, is a move it can take back.
+explain: field:MoveHistory.UndoAction | Undo | Undo is Z, U or the left shoulder button, and holding it keeps going back.
+explain: field:MoveHistory.RestartAction | Restart | Restart is R or the left trigger. It puts everything back where the level started, and Undo can take that back too.
+explain: field:MoveHistory.RestartReloads | Restart Reloads | Or tick this to reload the whole scene instead, so pickups and scripts start over as well.
+deselect
+create: Text
+rename: Moves
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = TopLeft
+set: ScreenAnchor.Offset = 2.5, -0.7
+add: Counter
+set: Counter.CountMoves = true
+set: Counter.Format = Moves: {0}
+explain: field:Counter.CountMoves | Count Moves | A counter can count the moves, going back down with each undo.
+
+chapter: Take it back | Undo a mistake, restart, and undo the restart
+play
+wait: 0.5
+tap: Down
+wait: 0.3
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.4
+expectat: Crate = 4.5, -2.5
+say: Round behind the crate, and one push towards the goal.
+tap: Up
+wait: 0.3
+tap: Right
+wait: 0.3
+tap: Down
+wait: 0.5
+expectat: Crate = 4.5, -3.5
+expectvalue: Moves.Text.Value = Moves: 6
+explain: game | Stuck | Oops. Pushed down against the wall, the crate can never get back up to the goal.
+tap: Z
+wait: 0.5
+expectat: Crate = 4.5, -2.5
+expectat: Player = 4.5, -1.5
+expectvalue: Moves.Text.Value = Moves: 5
+explain: game | Undo | Z takes the last move back. The crate and the player go back to where they were, and the count goes down.
+tap: Left
+wait: 0.3
+tap: Down
+wait: 0.3
+tap: Right
+wait: 0.5
+expectat: Crate = 5.5, -2.5
+expectvalue: Moves.Text.Value = Moves: 8
+say: This time from the left, and it's home in eight moves.
+tap: R
+wait: 0.5
+expectat: Crate = 3.5, -2.5
+expectat: Player = 1.5, -1.5
+expectvalue: Moves.Text.Value = Moves: 0
+explain: game | Restart | R starts the level over: everything back where it began, and no moves taken.
+tap: Z
+wait: 0.5
+expectat: Crate = 5.5, -2.5
+expectvalue: Moves.Text.Value = Moves: 8
+explain: game | Undo the restart | And a restart is a move too, so Z brings the solved puzzle straight back.
+stop
+say: That's undo and restart for grid puzzles, with no code. Scripts can undo, restart and count moves of their own too.

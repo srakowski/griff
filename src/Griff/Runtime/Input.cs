@@ -273,6 +273,8 @@ public sealed class InputState : IInput
             ["Interact"] = [Key.E, Key.Enter, GamepadButton.Y],
             ["Pause"] = [Key.Escape, Key.P, GamepadButton.Start],
             ["EndTurn"] = [Key.Tab, GamepadButton.Back],
+            ["Undo"] = [Key.Z, Key.U, GamepadButton.LeftShoulder],
+            ["Restart"] = [Key.R, GamepadButton.LeftTrigger],
         };
 
     private readonly Dictionary<string, InputBinding[]> _actions =

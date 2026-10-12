@@ -27,7 +27,8 @@ select: Red Gem
 select: Ctrl+Blue Gem
 select: Ctrl+Green Gem
 expectselected: Red Gem, Blue Gem, Green Gem
-explain: panel:Inspector | Three entities | With all three selected, the Inspector shows them together. Only the green gem has a light, so it shows just the components all three have, and says so.
+explain: panel:Inspector | Three entities | With all three selected, the Inspector shows them together. It edits the components all three have; only the green gem has a light, so that one is greyed, on 1 of 3.
+expectpartial: Light = on 1 of 3
 expectmixed: Sprite.Tint
 explain: field:Sprite.Tint | Mixed | Their colors differ, so the tint shows a dash rather than picking one of them.
 

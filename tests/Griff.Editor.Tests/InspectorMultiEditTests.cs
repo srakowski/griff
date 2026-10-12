@@ -35,13 +35,18 @@ public class InspectorMultiEditTests
         inspector.Components.Single(c => c.Title == component).Properties.Single(p => p.Label == label);
 
     [Fact]
-    public void ShowsOnlyTheComponentsAllSelectedEntitiesHave() => EditorHost.Run(services =>
+    public void EditsTheComponentsAllSelectedEntitiesHave_AndGreysTheRest() => EditorHost.Run(services =>
     {
         var (document, selection, inspector) = Open(services);
         selection.SelectEntities([Named(document, "Red"), Named(document, "Gold")]);
 
-        Assert.Equal(["Transform", "Sprite"], inspector.Components.Select(c => c.Title));
-        Assert.Equal("Only the components all 2 have are shown.", inspector.HiddenNote);
+        Assert.Equal(["Transform", "Sprite", "Body"], inspector.Components.Select(c => c.Title));
+        Assert.Equal([false, false, true], inspector.Components.Select(c => c.IsPartial));
+        var body = inspector.Components[2];
+        Assert.Equal("on 1 of 2", body.PartialNote);
+        Assert.Empty(body.Properties);
+        Assert.Equal([Named(document, "Gold")], body.Lacking);
+        Assert.Null(inspector.HiddenNote);
         Assert.True(inspector.Header!.IsSeveral);
         Assert.Equal("2 entities", inspector.Header.Name);
         Assert.Equal("Gold, Red", inspector.Header.Names);
@@ -139,7 +144,7 @@ public class InspectorMultiEditTests
         var (document, selection, inspector) = Open(services);
         var (red, gold, wall) = (Named(document, "Red"), Named(document, "Gold"), Named(document, "Wall"));
         selection.SelectEntities([red, gold, wall]);
-        Assert.Equal(["Transform"], inspector.Components.Select(c => c.Title));
+        Assert.Equal(["Transform"], inspector.Components.Where(c => !c.IsPartial).Select(c => c.Title));
 
         var registry = services.GetRequiredService<IWorkspace>().Components;
         inspector.AddComponent(registry.Get(typeof(Health)));

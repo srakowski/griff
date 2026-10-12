@@ -80,11 +80,18 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="inspector:ComponentSection">
                             <StackPanel>
-                                <!-- Section header -->
-                                <Border Padding="4,0,4,0"
+                                <!-- Section header: right-click for Reset, Copy and Paste Values, Move Up and Down -->
+                                <Border x:Name="SectionHeader"
+                                        Padding="4,0,4,0"
                                         Background="{DynamicResource Brush.Surface.PanelHeader}"
                                         BorderBrush="{DynamicResource Brush.Border.Subtle}"
-                                        BorderThickness="0,1">
+                                        BorderThickness="0,1"
+                                        Tag="header">
+                                    <Border.InputBindings>
+                                        <MouseBinding Command="{Binding HeaderMenuCommand}"
+                                                      CommandParameter="{Binding ElementName=SectionHeader}"
+                                                      Gesture="RightClick" />
+                                    </Border.InputBindings>
                                     <DockPanel Height="28">
                                         <Button x:Name="RemoveButton"
                                                 Command="{Binding RemoveCommand}"
@@ -114,13 +121,36 @@
                                                    Text="Added"
                                                    ToolTip="Added to this copy: the prefab doesn't have it. Save as Prefab adds it to the prefab."
                                                    Visibility="{Binding IsAddedToCopy, Converter={StaticResource Visible}}" />
-                                        <ToggleButton Width="20"
-                                                      IsChecked="{Binding IsExpanded}"
-                                                      Style="{StaticResource Style.TreeView.Expander}" />
-                                        <TextBlock Margin="4,0,0,0"
+                                        <!-- Only some of the selection have it: how many, and a button that adds it to the rest -->
+                                        <Button x:Name="AddToAllButton"
+                                                Margin="0,0,4,0"
+                                                Padding="6,1"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding AddToAllCommand}"
+                                                Content="Add to All"
+                                                DockPanel.Dock="Right"
+                                                Tag="addall"
+                                                ToolTip="{Binding PartialTip}"
+                                                Visibility="{Binding IsPartial, Converter={StaticResource Visible}}" />
+                                        <TextBlock x:Name="PartialNote"
+                                                   Margin="0,0,8,0"
+                                                   VerticalAlignment="Center"
+                                                   DockPanel.Dock="Right"
+                                                   Style="{StaticResource Style.Text.Caption}"
+                                                   Text="{Binding PartialNote}"
+                                                   ToolTip="{Binding PartialTip}"
+                                                   Visibility="{Binding IsPartial, Converter={StaticResource Visible}}" />
+                                        <Grid Width="20">
+                                            <ToggleButton IsChecked="{Binding IsExpanded}"
+                                                          Style="{StaticResource Style.TreeView.Expander}"
+                                                          Visibility="{Binding IsPartial, Converter={StaticResource Hidden}}" />
+                                        </Grid>
+                                        <TextBlock x:Name="SectionTitle"
+                                                   Margin="4,0,0,0"
                                                    VerticalAlignment="Center"
                                                    Style="{StaticResource Style.Text.Subtitle}"
                                                    Text="{Binding Title}"
+                                                   TextTrimming="CharacterEllipsis"
                                                    ToolTip="{Binding Tip}"
                                                    ToolTipService.ShowDuration="60000" />
                                     </DockPanel>
@@ -183,7 +213,8 @@
                                            Visibility="{Binding HasSetupNote, Converter={StaticResource Visible}}" />
 
                                 <!-- Properties, with subheadings between them -->
-                                <ItemsControl Margin="12,6,10,8"
+                                <ItemsControl x:Name="FieldRows"
+                                              Margin="12,6,10,8"
                                               Grid.IsSharedSizeScope="True"
                                               ItemsSource="{Binding Rows}"
                                               Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}">
@@ -285,6 +316,13 @@
                                     </ItemsControl.Resources>
                                 </ItemsControl>
                             </StackPanel>
+                            <DataTemplate.Triggers>
+                                <!-- Only some of the selection have it: just its name, greyed -->
+                                <DataTrigger Binding="{Binding IsPartial}" Value="True">
+                                    <Setter TargetName="SectionTitle" Property="Opacity" Value="0.5" />
+                                    <Setter TargetName="FieldRows" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

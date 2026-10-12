@@ -1,0 +1,64 @@
+title: A component's menu
+intro: Right-click a component in the Inspector to reset it, copy and paste its values, or move it. With several entities selected, components only some of them have show greyed, with Add to All.
+project: Empty | Component Menu
+
+# Three gems you can pick up; only the green one glows.
+deselect
+create: Sprite
+rename: Red Gem
+set: Sprite.Tint = #FF004D
+set: Transform.Position = -3, 0, 0
+add: Pickup
+deselect
+create: Sprite
+rename: Blue Gem
+set: Sprite.Tint = #29ADFF
+set: Transform.Position = 0, 1, 0
+add: Pickup
+deselect
+create: Sprite
+rename: Green Gem
+set: Sprite.Tint = #00E436
+set: Transform.Position = 3, -1, 0
+add: Light
+set: Light.Color = #00E436
+add: Pickup
+look: 0, 0, 5
+
+chapter: The menu on a component | Right-click its header
+select: Green Gem
+say: The green gem has a light, then a collider and the pickup that collects it.
+componentmenu: Light > Move Down
+expectcomponents: Green Gem = Transform, Sprite, BoxCollider, Light, Pickup
+explain: component:Light | Move Up and Move Down | Right-click a component's header for its menu. Move Down puts the light below its collider, and Move Up brings it back. The Transform always stays first.
+set: Light.Radius = 7
+componentmenu: Light > Reset to Defaults
+expectvalue: Green Gem.Light.Radius = 4
+expectvalue: Green Gem.Light.Color = #FFD89A
+explain: component:Light | Reset to Defaults | Reset to Defaults puts every value back to what a new light starts with: its radius, and its warm color too.
+say: Each of these is one step to undo.
+key: Ctrl+Z
+expectvalue: Green Gem.Light.Radius = 7
+expectvalue: Green Gem.Light.Color = #00E436
+
+chapter: Copy and paste values | From one component to another of its kind
+set: Pickup.Amount = 5
+componentmenu: Pickup > Copy Values
+select: Red Gem
+componentmenu: Pickup > Paste Pickup Values
+expectvalue: Red Gem.Pickup.Amount = 5
+explain: field:Pickup.Amount | Pasted | Copy Values on the green gem's pickup, then Paste Values on the red one's, and it's worth five points as well. Paste works on several entities at once, too.
+
+chapter: Several at once | What only some of them have
+select: Blue Gem
+select: Ctrl+Red Gem
+select: Ctrl+Green Gem
+expectpartial: Light = on 1 of 3
+expectpartial: Pickup = none
+explain: component:Light | On 1 of 3 | With all three gems selected, the Inspector still lists the light that only the green gem has. It's greyed, and says how many of them have it.
+click: addall:Light
+expectpartial: Light = none
+expectvalue: Red Gem.Light.Radius = 7
+expectvalue: Blue Gem.Light.Color = #00E436
+explain: scene | Every gem glows | Add to All gives the others a copy of it, with the same color and radius, and whatever it needs.
+say: So a whole row of enemies can catch up with the one you tuned, in one step.

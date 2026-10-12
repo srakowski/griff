@@ -168,6 +168,18 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => Has() == string.Join(", ", want), 3000))
                     throw new InvalidOperationException($"Expected {componentsOf} to have {string.Join(", ", want)}, but it has {Has()}.");
                 break;
+            case "componentmenu":
+                // "componentmenu: Health > Move Up": right-click the component's header in the Inspector and pick from its menu.
+                var (menuComponent, menuChoice) = Split2(a, '>');
+                await ui.ComponentMenu(menuComponent, menuChoice);
+                break;
+            case "expectpartial":
+                // "expectpartial: Light = on 1 of 3": only some of the selection have it (or "none": all of them do).
+                var (partialOf, partialWant) = Split2(a, '=');
+                string? Partial() => ui.InspectorSection(partialOf) is { } partialSection ? partialSection.PartialNote ?? "none" : null;
+                if (!await Until(() => string.Equals(Partial(), partialWant, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected {partialOf} to show {partialWant}, but it shows {Partial() ?? "nothing (it isn't in the Inspector)"}.");
+                break;
             case "catalog":
                 await ui.OpenCatalog();
                 break;
@@ -1377,6 +1389,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "fold" => ui.FoldButton(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "group" when name.Split('.', 2) is [var component, var group] =>
                 ui.GroupRow(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
+            "addall" => ui.AddToAllButton(name) ?? throw new InvalidOperationException($"No Add to All on {name} in the Inspector."),
             "remove" => ui.RemoveButton(name) ?? throw new InvalidOperationException($"No remove button on {name} in the Inspector."),
             "need" => (name.Split('.', 2) is [var needer, var needed] ? ui.NeedRow(needer, needed) : ui.NeedRow(name))
                 ?? throw new InvalidOperationException($"{name} isn't flagged as needing something in the Inspector."),
@@ -1409,7 +1422,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

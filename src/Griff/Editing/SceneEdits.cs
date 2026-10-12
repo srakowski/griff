@@ -492,6 +492,42 @@ public sealed class AddComponentEdit(Entity entity, Component component, int? in
     public void Revert() => Entity.RemoveComponent(Component);
 }
 
+/// <summary>Moves a component up or down its entity's list of components (the Transform stays first).</summary>
+public sealed class MoveComponentEdit : IComponentEdit
+{
+    private readonly int _from;
+    private readonly int _to;
+
+    public MoveComponentEdit(Component component, int index)
+    {
+        Component = component;
+        Entity = component.Entity ?? throw new ArgumentException("The component isn't attached to an entity.", nameof(component));
+        _from = Entity.Components.ToList().IndexOf(component);
+        _to = index;
+    }
+
+    private MoveComponentEdit(Entity entity, Component component, int from, int to)
+    {
+        Entity = entity;
+        Component = component;
+        _from = from;
+        _to = to;
+    }
+
+    public IEdit? Remap(IReadOnlyDictionary<Component, Component> replaced, ComponentRegistry registry) =>
+        replaced.TryGetValue(Component, out var replacement) ? new MoveComponentEdit(Entity, replacement, _from, _to) : this;
+
+    public Entity Entity { get; }
+
+    public Component Component { get; }
+
+    public string Description => $"Move {Component.GetType().Name} {(_to < _from ? "Up" : "Down")}";
+
+    public void Apply() => Entity.MoveComponent(Component, _to);
+
+    public void Revert() => Entity.MoveComponent(Component, _from);
+}
+
 public sealed class RemoveComponentEdit : IComponentEdit
 {
     private readonly int _index;

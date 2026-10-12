@@ -1,0 +1,53 @@
+#if DEBUG
+using System.Windows.Controls;
+using Griff.Editor.Features.Inspector;
+
+namespace Griff.Editor.Diagnostics.Demo;
+
+// A component's menu in the Inspector (right-clicking its header), and Add to All on components only some have.
+internal sealed partial class DemoUi
+{
+    /// <summary>The Add to All button on a component only some of the selection have.</summary>
+    public Button? AddToAllButton(string component) =>
+        ComponentHeader(component) is { } header ? Descendants<Button>(header).FirstOrDefault(b => b.Tag as string == "addall" && b.IsVisible) : null;
+
+    /// <summary>The section showing <paramref name="component"/> in the Inspector, or null.</summary>
+    public ComponentSection? InspectorSection(string component) =>
+        ComponentHeader(component)?.DataContext as ComponentSection;
+
+    /// <summary>Right-clicks a component's header and picks <paramref name="item"/> ("Move Up") from its menu.</summary>
+    public async Task ComponentMenu(string component, string item)
+    {
+        var heading = await WaitFor(() => ComponentHeading(component), $"{component}'s header in the Inspector");
+        heading.BringIntoView();
+        await Settle(200);
+        await Click(heading, right: true);
+        var menuItem = await WaitFor(() => Find<MenuItem>(m => HeaderText(m.Header) == item && m.Tag is string tag && tag.StartsWith("component:") && m.IsVisible),
+            $"{item} on {component}'s menu", 3000);
+        if (!menuItem.IsEnabled)
+            throw new InvalidOperationException($"{item} is greyed out on {component}'s menu.");
+        await Settle(350);
+        await Click(menuItem);
+        await Settle(250);
+        if (Find<ContextMenu>(m => m.IsOpen) is { } open)
+        {
+            // The click missed: close the menu and do what it would have.
+            open.IsOpen = false;
+            var section = InspectorSection(component) ?? throw new InvalidOperationException($"No {component} in the Inspector.");
+            switch (menuItem.Tag as string)
+            {
+                case "component:reset": section.ResetToDefaults(); break;
+                case "component:copy": section.CopyValues(); break;
+                case "component:paste": section.PasteValues(); break;
+                case "component:up": section.MoveUp(); break;
+                case "component:down": section.MoveDown(); break;
+                case "component:addall": section.AddToAll(); break;
+                case "component:remove": section.RemoveCommand.Execute(null); break;
+            }
+
+            Log?.Invoke($"FORCED componentmenu {component} > {item}");
+            await Settle();
+        }
+    }
+}
+#endif

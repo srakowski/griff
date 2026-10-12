@@ -20,8 +20,10 @@ namespace Griff.Editor.Features.Inspector;
 /// <summary>
 /// Shows and edits the selected entities. Component sections are generated from component
 /// descriptors, so any component (including user scripts) gets an inspector for free. With several
-/// entities selected it shows the components they all have: a change sets it on every one of them as
-/// one undo step, and values that differ show as mixed. On placed copies of prefabs, fields set differently from the
+/// entities selected it edits the components they all have: a change sets it on every one of them as
+/// one undo step, and values that differ show as mixed. Components only some of them have show greyed, "on 2 of 3",
+/// with Add to All. Right-clicking a component's header resets it, copies and pastes its values, or moves it up or
+/// down. On placed copies of prefabs, fields set differently from the
 /// prefab are marked, each with Revert and Apply to Prefab. Each field's name explains it (its documentation as a
 /// tooltip), and a section folded shut stays shut for that component on every entity, and next time.
 /// </summary>
@@ -89,7 +91,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     public ObservableCollection<ComponentSection> Components { get; } = [];
 
-    /// <summary>With several entities selected, says that components only some of them have are left out; otherwise null.</summary>
+    /// <summary>With several entities selected, says that components whose type couldn't be found are left out; otherwise null.</summary>
     public string? HiddenNote
     {
         get => _hiddenNote;
@@ -364,7 +366,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private static bool ChangesComponents(IEdit edit) => edit switch
     {
-        AddComponentEdit or RemoveComponentEdit or UpdatePrefabCopyEdit => true,
+        AddComponentEdit or RemoveComponentEdit or MoveComponentEdit or UpdatePrefabCopyEdit => true,
         CompositeEdit composite => composite.Edits.Any(ChangesComponents),
         _ => false,
     };
@@ -402,10 +404,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         foreach (var entity in entities)
             MatchPrefab(entity);
 
-        foreach (var components in Shared(entities))
-            Components.Add(new ComponentSection(components, this, _workspace.Components));
-        if (entities.Any(e => e.Components.Count != Components.Count))
-            HiddenNote = $"Only the components all {entities.Count} have are shown.";
+        foreach (var (components, lacking) in Sections(entities))
+            Components.Add(new ComponentSection(components, this, _workspace.Components, lacking));
+        if (entities.Count > 1 && entities.Any(e => e.Components.Any(c => c is MissingComponent)))
+            HiddenNote = "Components whose type couldn't be found are left out.";
     }
 
     // Pairs each of the entity's components with its prefab's, if it's a copy or inside one.
@@ -423,19 +425,91 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         }
     }
 
-    // Each component of the first entity, with the same component on every other one: the nth of a type matches the
-    // nth of that type. Components some of them lack are left out, and so are missing ones when there are several.
-    private static IEnumerable<IReadOnlyList<Component>> Shared(IReadOnlyList<Entity> entities)
+    // Each component of the first entity, with the same component on every other one (the nth of a type matches the nth
+    // of that type), then those only others have, in the order they come up. A component some of them lack comes with
+    // the entities lacking it. Missing ones are left out when there are several.
+    private static IEnumerable<(IReadOnlyList<Component> Components, IReadOnlyList<Entity> Lacking)> Sections(IReadOnlyList<Entity> entities)
     {
-        var seen = new Dictionary<Type, int>();
-        foreach (var component in entities[0].Components)
+        if (entities.Count == 1)
         {
-            var type = component.GetType();
-            var nth = seen[type] = seen.GetValueOrDefault(type) + 1;
-            var matches = entities.Skip(1).Select(e => e.Components.Where(c => c.GetType() == type).ElementAtOrDefault(nth - 1)).ToList();
-            if (entities.Count == 1 || (component is not MissingComponent && matches.All(m => m is not null)))
-                yield return [component, .. matches!];
+            foreach (var component in entities[0].Components)
+                yield return ([component], []);
+            yield break;
         }
+
+        var keys = new List<(Type Type, int Nth)>();
+        foreach (var entity in entities)
+        {
+            var seen = new Dictionary<Type, int>();
+            foreach (var component in entity.Components.Where(c => c is not MissingComponent))
+            {
+                var type = component.GetType();
+                var key = (type, seen[type] = seen.GetValueOrDefault(type) + 1);
+                if (!keys.Contains(key))
+                    keys.Add(key);
+            }
+        }
+
+        foreach (var (type, nth) in keys)
+        {
+            var matches = entities.Select(e => e.Components.Where(c => c.GetType() == type).ElementAtOrDefault(nth - 1)).ToList();
+            yield return ([.. matches.OfType<Component>()], [.. entities.Where((_, i) => matches[i] is null)]);
+        }
+    }
+
+    private ComponentValues? _copied;
+
+    /// <summary>The values Copy Values took from a component, which Paste Values sets on another of its type; null before.</summary>
+    public ComponentValues? Copied
+    {
+        get => _copied;
+        private set
+        {
+            if (SetProperty(ref _copied, value))
+                OnPropertyChanged(nameof(CopiedType));
+        }
+    }
+
+    /// <summary>The type of component whose values were copied, "Health", or null.</summary>
+    public string? CopiedType => Copied?.TypeName;
+
+    /// <summary>Copies the component's values for Paste Values.</summary>
+    internal void Copy(Component component)
+    {
+        if (ComponentEdits.Copy(_workspace.Components, component) is not { } values)
+            return;
+        Copied = values;
+        _status.Show($"Copied {Humanize(_workspace.Components.Get(values.Type).DisplayName)}'s values.");
+    }
+
+    /// <summary>Sets the components to the copied values (they must be of the copied type), as one undo step.</summary>
+    internal void Paste(IReadOnlyList<Component> components)
+    {
+        if (Copied is { } values && ComponentEdits.Paste(_workspace.Components, values, components) is { } edit)
+            Execute(edit);
+        Seal();
+    }
+
+    /// <summary>Sets the components back to what a new one starts with, as one undo step.</summary>
+    internal void Reset(IReadOnlyList<Component> components)
+    {
+        if (ComponentEdits.Reset(_workspace.Components, components) is { } edit)
+            Execute(edit);
+        Seal();
+    }
+
+    /// <summary>Moves each component along its entity's list (-1 is up), as one undo step.</summary>
+    internal void Move(IReadOnlyList<Component> components, int offset)
+    {
+        if (ComponentEdits.Move(components, offset) is { } edit)
+            Execute(edit);
+    }
+
+    /// <summary>Adds a copy of <paramref name="source"/>, its values too, to each entity in <paramref name="lacking"/>, as one undo step.</summary>
+    internal void AddCopies(Component source, IReadOnlyList<Entity> lacking)
+    {
+        if (ComponentEdits.AddCopies(_workspace.Components, source, lacking) is { } edit)
+            Execute(edit);
     }
 
     private void Refresh()
@@ -574,14 +648,17 @@ public sealed class ComponentSection : ObservableObject
     {
     }
 
-    /// <param name="components">The same component on each selected entity, the primary one's first.</param>
-    public ComponentSection(IReadOnlyList<Component> components, InspectorPanel owner, ComponentRegistry registry)
+    /// <param name="components">The same component on each selected entity that has it, the primary one's first.</param>
+    /// <param name="lacking">The selected entities that don't have it: the section then only shows its name, greyed.</param>
+    public ComponentSection(IReadOnlyList<Component> components, InspectorPanel owner, ComponentRegistry registry, IReadOnlyList<Entity>? lacking = null)
     {
         _owner = owner;
         _components = components;
+        Lacking = lacking ?? [];
         var component = Component = components[0];
         RemoveCommand = new RelayCommand(Remove, () => CanRemove);
         EditScriptCommand = new RelayCommand(() => owner.EditScript(component.GetType()));
+        HeaderMenuCommand = new RelayCommand<FrameworkElement>(HeaderMenu);
 
         if (component is MissingComponent missing)
         {
@@ -598,6 +675,18 @@ public sealed class ComponentSection : ObservableObject
         var summary = Griff.Editing.DocComments.Summary(descriptor.Type);
         Tip = summary.IsEmpty ? null : summary.PlainText;
         _descriptor = descriptor;
+        if (IsPartial)
+        {
+            Properties = [];
+            var count = components.Count + Lacking.Count;
+            PartialNote = $"on {components.Count} of {count}";
+            PartialTip = $"{Join(components.Select(c => c.Entity?.Name ?? ""))} {(components.Count == 1 ? "has" : "have")} it; " +
+                $"{Join(Lacking.Select(e => e.Name))} {(Lacking.Count == 1 ? "doesn't" : "don't")}. Add to All gives {(Lacking.Count == 1 ? "it" : "them")} " +
+                $"{(components.Count == 1 ? "a copy" : $"a copy of {components[0].Entity?.Name}'s")}.";
+            RemoveTip = $"Remove it from the {components.Count} that have it";
+            return;
+        }
+
         Properties = Used().Select(p => new PropertyField(components, p, owner)).ToList();
         (Groups, Rows) = Arrange(Properties);
         SetupNote = component.SetupNote();
@@ -701,6 +790,158 @@ public sealed class ComponentSection : ObservableObject
     }
 
     public IRelayCommand RemoveCommand { get; }
+
+    /// <summary>
+    /// With several entities selected, the ones that don't have this component (empty when they all do). The section
+    /// then shows only its name, greyed, saying how many have it, with Add to All.
+    /// </summary>
+    public IReadOnlyList<Entity> Lacking { get; }
+
+    /// <summary>True when only some of the selected entities have the component.</summary>
+    public bool IsPartial => Lacking.Count > 0;
+
+    /// <summary>"on 2 of 3" when only some of the selected entities have it; otherwise null.</summary>
+    public string? PartialNote { get; }
+
+    /// <summary>Which of the selected entities have it and which don't.</summary>
+    public string? PartialTip { get; }
+
+    /// <summary>
+    /// Adds the component to each selected entity that doesn't have it, as a copy of the one shown (its values too, and
+    /// with what it needs), as one undo step.
+    /// </summary>
+    public void AddToAll()
+    {
+        if (!IsPartial)
+            throw new InvalidOperationException($"Every selected entity has {Title} already.");
+        _owner.AddCopies(Component, Lacking);
+    }
+
+    public IRelayCommand AddToAllCommand => _addToAll ??= new RelayCommand(AddToAll, () => IsPartial);
+
+    private IRelayCommand? _addToAll;
+
+    /// <summary>Whether its values can be reset and copied: not for a component whose type is missing, or only some have.</summary>
+    public bool HasValues => _descriptor is not null && !IsPartial;
+
+    /// <summary>Sets every value back to what a new one starts with (on each selected entity), as one undo step.</summary>
+    public void ResetToDefaults()
+    {
+        CheckValues();
+        _owner.Reset(_components);
+    }
+
+    /// <summary>Copies its values (the primary entity's), for Paste Values on another of its type.</summary>
+    public void CopyValues()
+    {
+        CheckValues();
+        _owner.Copy(Component);
+    }
+
+    /// <summary>True when values copied from a component of its type are waiting to be pasted.</summary>
+    public bool CanPaste => HasValues && _owner.Copied?.Type == Component.GetType();
+
+    /// <summary>Sets the copied values on it (on each selected entity), as one undo step.</summary>
+    public void PasteValues()
+    {
+        CheckValues();
+        if (_owner.Copied is not { } copied)
+            throw new InvalidOperationException("Nothing's been copied yet: Copy Values on a component first.");
+        if (!CanPaste)
+            throw new InvalidOperationException($"The copied values are {Griff.Editing.ComponentCatalog.Article(InspectorPanel.Humanize(copied.TypeName))}'s, not {Griff.Editing.ComponentCatalog.Article(Title)}'s.");
+        _owner.Paste(_components);
+    }
+
+    /// <summary>True when it isn't the first component under the Transform (on one of the selected entities).</summary>
+    public bool CanMoveUp => !IsPartial && Griff.Editing.ComponentEdits.CanMove(_components, -1);
+
+    /// <summary>True when it isn't the last component (on one of the selected entities).</summary>
+    public bool CanMoveDown => !IsPartial && Griff.Editing.ComponentEdits.CanMove(_components, 1);
+
+    /// <summary>Moves it one place up its entity's list of components (each selected entity's), as one undo step.</summary>
+    public void MoveUp()
+    {
+        CheckMove(CanMoveUp, "first, under the Transform");
+        _owner.Move(_components, -1);
+    }
+
+    /// <summary>Moves it one place down its entity's list of components (each selected entity's), as one undo step.</summary>
+    public void MoveDown()
+    {
+        CheckMove(CanMoveDown, "last");
+        _owner.Move(_components, 1);
+    }
+
+    // Says why its values can't be reset, copied or pasted.
+    private void CheckValues()
+    {
+        if (IsPartial)
+            throw new InvalidOperationException($"Only some of the selection have {Title}: select those, or Add to All first.");
+        if (!HasValues)
+            throw new InvalidOperationException($"{Title}'s type couldn't be found, so its values can't be changed.");
+    }
+
+    // Says why it can't move that way.
+    private void CheckMove(bool can, string already)
+    {
+        if (IsPartial)
+            throw new InvalidOperationException($"Only some of the selection have {Title}: select those to move it.");
+        if (Component is Transform)
+            throw new InvalidOperationException("The Transform stays first.");
+        if (!can)
+            throw new InvalidOperationException($"{Title} is already {already}.");
+    }
+
+    /// <summary>
+    /// Shows the component's menu (right-clicking its header): Reset to Defaults, Copy and Paste Values, Move Up and Move
+    /// Down, or Add to All when only some of the selection have it, and Remove Component.
+    /// </summary>
+    public IRelayCommand<FrameworkElement> HeaderMenuCommand { get; }
+
+    private void HeaderMenu(FrameworkElement? anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.MousePoint };
+        void Add(string header, string tag, Action action, bool enabled = true, string? icon = null, string? tip = null)
+        {
+            var item = new MenuItem { Header = header, Tag = $"component:{tag}", IsEnabled = enabled, ToolTip = tip };
+            ToolTipService.SetShowOnDisabled(item, true);
+            if (icon is not null)
+                item.Icon = Icons.Create(icon);
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        if (IsPartial)
+        {
+            Add("Add to All", "addall", AddToAll, icon: Icons.Add, tip: PartialTip);
+        }
+        else
+        {
+            Add("Reset to Defaults", "reset", ResetToDefaults, HasValues, Icons.Undo, "Sets every value back to what a new one starts with");
+            menu.Items.Add(new Separator());
+            Add("Copy Values", "copy", CopyValues, HasValues, Icons.Copy);
+            var copied = _owner.Copied;
+            Add(copied is null ? "Paste Values" : $"Paste {InspectorPanel.Humanize(copied.TypeName)} Values", "paste", PasteValues, CanPaste,
+                tip: copied is null ? "Copy Values on a component first"
+                    : CanPaste ? null
+                    : $"The copied values are {Griff.Editing.ComponentCatalog.Article(InspectorPanel.Humanize(copied.TypeName))}'s");
+            menu.Items.Add(new Separator());
+            Add("Move Up", "up", MoveUp, CanMoveUp);
+            Add("Move Down", "down", MoveDown, CanMoveDown);
+        }
+
+        if (CanRemove)
+        {
+            menu.Items.Add(new Separator());
+            Add("Remove Component", "remove", Remove, icon: Icons.Delete, tip: RemoveTip);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    // "Red Gem and Blue Gem", or for more than three, "4 of them".
+    private static string Join(IEnumerable<string> names) =>
+        names.ToList() is var list && list.Count > 3 ? $"{list.Count} of them" : ComponentCatalogViewModel.Join(list);
 
     /// <summary>
     /// Open, showing its fields. Folding one shut folds that component shut on every entity, until it's opened again, and

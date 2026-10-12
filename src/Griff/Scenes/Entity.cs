@@ -111,6 +111,19 @@ public sealed class Entity
         return true;
     }
 
+    /// <summary>Moves <paramref name="component"/> to <paramref name="index"/> among the components; the Transform stays first.</summary>
+    public void MoveComponent(Component component, int index)
+    {
+        if (component is Transform)
+            throw new InvalidOperationException("The Transform stays first.");
+        var from = _components.IndexOf(component);
+        if (from < 0)
+            throw new InvalidOperationException("The component isn't attached to this entity.");
+
+        _components.RemoveAt(from);
+        _components.Insert(Math.Clamp(index, 1, _components.Count), component);
+    }
+
     /// <summary>Swaps <paramref name="existing"/> for <paramref name="replacement"/> at the same position (used by script reload).</summary>
     public void ReplaceComponent(Component existing, Component replacement)
     {

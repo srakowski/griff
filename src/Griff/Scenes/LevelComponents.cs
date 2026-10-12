@@ -51,6 +51,7 @@ public sealed class Mover : Component
     /// <summary>Seconds to wait at each point.</summary>
     public float Wait { get; set; } = 0.5f;
 
+    /// <summary>What it does at the last point: go back the same way, go round again, or stop.</summary>
     public MoverMode Mode { get; set; }
 
     /// <summary>Ease in and out of each point instead of starting and stopping dead.</summary>
@@ -534,6 +535,7 @@ public sealed class Dialogue : Component
     [EntityName]
     public string? Box { get; set; } = "Dialogue Box";
 
+    /// <summary>Whether the talk starts when the player presses Interact by it, or as soon as they touch it.</summary>
     public DialogueStart Start { get; set; }
 
     /// <summary>The collision layers that can start it, e.g. "Player". Empty lets anything with a <see cref="Body"/>.</summary>

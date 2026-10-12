@@ -26,6 +26,7 @@ public enum Anchor
 [ComponentName("ScreenAnchor")]
 public sealed class ScreenAnchor : Component
 {
+    /// <summary>The corner, edge or middle of the screen it stays by, at its position from there in world units.</summary>
     public Anchor Anchor { get; set; } = Anchor.TopLeft;
 
     /// <summary>
@@ -115,6 +116,7 @@ public sealed class Button : Component
     /// <summary>The clickable area, centered on the entity, in world units before the transform's scale. Rotation is ignored.</summary>
     public Vector2 Size { get; set; } = new(3, 1);
 
+    /// <summary>What clicking it does with no code: load a scene, restart, quit, open or close a panel, rebind a key and so on.</summary>
     public ButtonAction Action { get; set; }
 
     /// <summary>
@@ -254,8 +256,10 @@ public sealed class Bar : Component
     // The lost part lingers this long before it starts draining.
     private const float TrailHold = 0.35f;
 
+    /// <summary>How full it is, out of <see cref="Max"/>.</summary>
     public float Value { get; set; } = 1;
 
+    /// <summary>The value at which it's full.</summary>
     public float Max { get; set; } = 1;
 
     /// <summary>
@@ -268,6 +272,7 @@ public sealed class Bar : Component
     /// <summary>World units before the transform's scale, centered on the entity.</summary>
     public Vector2 Size { get; set; } = new(3, 0.35f);
 
+    /// <summary>The color of the full part.</summary>
     public Color Fill { get; set; } = Color.FromBytes(0x57, 0xAB, 0x5A);
 
     /// <summary>The empty part of the bar.</summary>
@@ -276,6 +281,7 @@ public sealed class Bar : Component
     /// <summary>The part just lost, shown for a moment before it drains away. Transparent for none.</summary>
     public Color Trail { get; set; } = new(1, 1, 1, 0.75f);
 
+    /// <summary>Which way it fills.</summary>
     public BarDirection Direction { get; set; }
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
@@ -332,10 +338,13 @@ public sealed class Bar : Component
 [ComponentName("Slider")]
 public sealed class Slider : Component
 {
+    /// <summary>Where it's set, from <see cref="Min"/> to <see cref="Max"/>.</summary>
     public float Value { get; set; } = 1;
 
+    /// <summary>The value at its left end.</summary>
     public float Min { get; set; }
 
+    /// <summary>The value at its right end.</summary>
     public float Max { get; set; } = 1;
 
     /// <summary>
@@ -365,8 +374,10 @@ public sealed class Slider : Component
     /// <summary>World units before the transform's scale, centered on the entity. It's dragged along its width.</summary>
     public Vector2 Size { get; set; } = new(4, 0.5f);
 
+    /// <summary>The color of the part up to the handle.</summary>
     public Color Fill { get; set; } = Color.FromBytes(0x4C, 0x9A, 0xFF);
 
+    /// <summary>The color of the track past the handle.</summary>
     public Color Background { get; set; } = new(0, 0, 0, 0.5f);
 
     /// <summary>The handle at the end of the filled part. Transparent for none.</summary>
@@ -421,6 +432,7 @@ public sealed class Slider : Component
 [ComponentName("Toggle")]
 public sealed class Toggle : Component
 {
+    /// <summary>Whether it's on now; each click flips it.</summary>
     public bool IsOn { get; set; } = true;
 
     /// <summary>A setting of the game it switches: Sound or Fullscreen. While set, the toggle always shows that setting.</summary>

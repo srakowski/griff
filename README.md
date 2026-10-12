@@ -265,7 +265,7 @@ To change the prefab itself, open it on its own: double-click it in Assets (or r
 
 **Component catalog.** Next to **Add Component** (the quick list), the Inspector's **Catalog** button opens every component by category, searchable, with what it does, what it **Requires** on the same entity (checked against the selected entity, with what's missing marked), what it **Works well with**, what it's **Needed by**, and each property's kind, starting value and description. Names in the text are links to that component. **Add** puts it on the selected entity (on each of them, with several selected) along with any requirement it's missing (a Patrol brings a Body and a BoxCollider), as one undo step. Scripts are listed too, described by their `///` comments.
 
-In the **Inspector**, drag any number's label sideways to scrub it (Shift for fine steps, Ctrl for coarse). While the game is playing, typing in the Inspector doesn't reach the game; click the game to give it the keyboard back.
+In the **Inspector**, components and their choices read as words (**Platformer Movement**, **Ping Pong**), and every field explains itself: hover its name for what it does and in what units (a component's name, and each choice in a list, explain themselves the same way). Drag a number's name sideways to change it, or a vector's X, Y and Z: the further from 0 it is, the faster it goes, so an **Acceleration** of 70 reaches 90 in a short flick while 0.5 still moves by hundredths (Shift for fine steps, Ctrl for coarse; a click without dragging puts you in the box to type). While typing in a number, Up and Down or the mouse wheel nudge it by a tenth of its size (1 for 70, 0.1 for 7), and a run of nudges is one undo step. Fold a component's section shut with the arrow by its name and it stays shut on every entity, and the next time the editor starts, until you open it again. While the game is playing, typing in the Inspector doesn't reach the game; click the game to give it the keyboard back.
 
 **Naming entities.** Fields that name another entity (a Follow's **Target**, a Dialogue's **Box**, a Wire's **From**, a door's **Prompt**) have a button listing the scene's entities, indented as in the Hierarchy: pick one to name it, or drag an entity from the Hierarchy onto the field. Fields that name several, separated by commas (a Switch's **Targets** and **Hides**), add each one picked or dropped, and picking a ticked one takes it out again; with several switches selected each keeps its own other names. An attack's **Hitbox** and a panel's **First** control list only what's inside the entity. Typing a name still works, for something that isn't in the scene yet.
 
@@ -337,7 +337,7 @@ public class PlayerController : Behavior
 }
 ```
 
-Describe a script for the component catalog with a `///` summary over the class and its properties, and say how it fits with other components using attributes:
+Describe a script for the component catalog and the Inspector's tooltips with a `///` summary over the class and its properties (say what units a number is in), and say how it fits with other components using attributes:
 
 ```csharp
 /// <summary>Walks toward the player and explodes next to them.</summary>

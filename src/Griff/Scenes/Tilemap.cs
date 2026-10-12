@@ -149,6 +149,7 @@ public sealed class Tilemap : Component
         set => _tileSize = value;
     }
 
+    /// <summary>Multiplies the tiles' colors: white leaves them as they are, and a lower alpha fades them.</summary>
     public Color Tint { get; set; } = Color.White;
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>

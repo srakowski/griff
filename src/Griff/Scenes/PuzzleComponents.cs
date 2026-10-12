@@ -32,6 +32,7 @@ public enum SwitchMode
 [ComponentName("Griff.Switch")]
 public sealed class Switch : Component
 {
+    /// <summary>How it's switched: a lever flipped with Interact, a plate held down by standing on it, or a button pressed once.</summary>
     public SwitchMode Mode { get; set; }
 
     /// <summary>True while it's on. Tick it to start switched on; scripts can set it too.</summary>

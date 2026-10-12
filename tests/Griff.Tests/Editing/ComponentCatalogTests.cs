@@ -27,6 +27,17 @@ public class ComponentCatalogTests
     }
 
     [Fact]
+    public void EveryBuiltInProperty_SaysWhatItDoes()
+    {
+        // The Inspector shows these as each field's tooltip.
+        var undocumented = _registry.All
+            .SelectMany(d => d.Properties.Where(p => DocComments.Summary(p).IsEmpty).Select(p => $"{d.DisplayName}.{p.Name}"))
+            .ToList();
+
+        Assert.True(undocumented.Count == 0, $"{undocumented.Count} properties have no /// <summary>: " + string.Join(", ", undocumented));
+    }
+
+    [Fact]
     public void Summary_TurnsReferencesIntoLinksToTheirTypes()
     {
         var summary = Entry<Body>().Summary;

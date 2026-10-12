@@ -30,6 +30,7 @@ internal static partial class SnapshotRunner
             return false;
 
         services.GetRequiredService<PanelLayout>().StartOver();
+        services.GetRequiredService<Features.Inspector.InspectorPanel>().StartOver();
 
         _ = RunAsync(services, main, outputDir);
         return true;

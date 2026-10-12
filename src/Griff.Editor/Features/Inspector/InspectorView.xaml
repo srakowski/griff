@@ -115,7 +115,12 @@
                                         <ToggleButton Width="20"
                                                       IsChecked="{Binding IsExpanded}"
                                                       Style="{StaticResource Style.TreeView.Expander}" />
-                                        <TextBlock Margin="4,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Subtitle}" Text="{Binding Title}" />
+                                        <TextBlock Margin="4,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource Style.Text.Subtitle}"
+                                                   Text="{Binding Title}"
+                                                   ToolTip="{Binding Tip}"
+                                                   ToolTipService.ShowDuration="60000" />
                                     </DockPanel>
                                 </Border>
 
@@ -168,11 +173,16 @@
                                                             Visibility="Hidden">
                                                         <Border Width="3" Height="14" Background="{DynamicResource Brush.Accent}" CornerRadius="1.5" />
                                                     </Button>
+                                                    <!-- The name explains the field, and drags a number -->
                                                     <TextBlock x:Name="FieldLabel"
                                                                Margin="0,0,12,0"
                                                                VerticalAlignment="Center"
+                                                               controls:NumberField.DragsField="True"
+                                                               Background="Transparent"
                                                                Style="{StaticResource Style.Text.Secondary}"
-                                                               Text="{Binding Label, Mode=OneTime}">
+                                                               Text="{Binding Label, Mode=OneTime}"
+                                                               ToolTip="{Binding LabelTip}"
+                                                               ToolTipService.ShowDuration="60000">
                                                         <TextBlock.InputBindings>
                                                             <MouseBinding Command="{Binding OverrideMenuCommand}"
                                                                           CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=TextBlock}}"
@@ -190,7 +200,6 @@
                                                     <Setter TargetName="OverrideMark" Property="Visibility" Value="Visible" />
                                                     <Setter TargetName="FieldLabel" Property="FontWeight" Value="SemiBold" />
                                                     <Setter TargetName="FieldLabel" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
-                                                    <Setter TargetName="FieldLabel" Property="ToolTip" Value="{Binding OverrideTip}" />
                                                 </DataTrigger>
                                             </DataTemplate.Triggers>
                                         </DataTemplate>

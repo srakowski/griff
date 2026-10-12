@@ -152,8 +152,15 @@
                                 VerticalScrollBarVisibility="Auto" />
     </DataTemplate>
 
+    <!-- Choices named as they read ("Ping Pong"), each explained in its tooltip -->
     <DataTemplate x:Key="Field.Enum" DataType="inspector:PropertyField">
-        <ComboBox ItemsSource="{Binding EnumValues, Mode=OneTime}" SelectedItem="{Binding EnumValue}" />
+        <ComboBox ItemsSource="{Binding EnumChoices, Mode=OneTime}" SelectedValue="{Binding EnumValue}" SelectedValuePath="Value">
+            <ComboBox.ItemTemplate>
+                <DataTemplate DataType="inspector:EnumChoice">
+                    <TextBlock Text="{Binding Label, Mode=OneTime}" ToolTip="{Binding Tip, Mode=OneTime}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
     </DataTemplate>
 
     <DataTemplate x:Key="Field.Color" DataType="inspector:PropertyField">

@@ -33,8 +33,10 @@ internal static class DemoRunner
         if (string.IsNullOrEmpty(mode) || main is not MainWindow shell)
             return false;
 
-        // Demos start with the panels where they start out, and leave the user's own layout alone.
+        // Demos start with the panels where they start out and every Inspector section open, and leave the user's own
+        // layout and sections alone.
         services.GetRequiredService<PanelLayout>().StartOver();
+        services.GetRequiredService<Features.Inspector.InspectorPanel>().StartOver();
 
         // GRIFF_DEMO=path\to\change.demo plays a demo script; GRIFF_DEMO=1 (or fast) the guided tour.
         var script = mode.EndsWith(".demo", StringComparison.OrdinalIgnoreCase) ? Path.GetFullPath(mode) : null;

@@ -1,0 +1,40 @@
+title: Fields that explain themselves
+intro: Inspector fields say what they do, read as words, change quickly, and stay folded.
+project: Platformer | Quick Fields
+
+chapter: What a field means | Hover a field's name
+select: Player
+say: The Inspector now reads like words. Platformer Movement, not one long word run together.
+explain: heading:PlatformerMovement | Platformer Movement | Component names read as words, and hovering one says what the component does.
+tip: heading:PlatformerMovement
+wait: 1.5
+say: Every field explains itself too. Hover a field's name, and it says what it does, and in what units.
+tip: label:PlatformerMovement.Acceleration
+say: Acceleration is how quickly the player gets up to speed, in units per second per second. No more guessing what a number means.
+wait: 1
+
+chapter: Changing numbers quickly | Drag the name, or press Up and Down
+say: To change a number, drag its name sideways. The step grows with the value, so seventy reaches ninety in a short flick, instead of a long drag across the screen.
+scrub: PlatformerMovement.Acceleration = 90
+expectvalue: Player.PlatformerMovement.Acceleration = 90
+say: Ninety. Hold Shift for fine steps, or Control for big ones.
+say: While typing in a number, the Up and Down keys nudge it by a tenth of its size. Speed is seven, so each press adds a tenth.
+nudge: PlatformerMovement.Speed = up 3
+expectvalue: Player.PlatformerMovement.Speed = 7.3
+say: Seven point three. The mouse wheel does the same while you're typing.
+
+chapter: Choices and folding | Lists read as words, and folded sections stay folded
+select: Lift
+say: Choices read as words as well. The lift's mover goes ping pong, back and forth. Let's make it loop round instead.
+set: Mover.Mode = Loop
+expectvalue: Lift.Mover.Mode = Loop
+say: Every choice in the list explains itself when you hover it.
+say: Now, Transform is on everything, and often in the way. Fold it shut.
+click: fold:Transform
+expectfolded: Transform = true
+select: Player
+expectfolded: Transform = true
+explain: component:Transform | Still folded | Pick another entity, and Transform stays folded. It stays folded next time the editor starts, too, until you open it again.
+click: fold:Transform
+expectfolded: Transform = false
+say: Fields that explain themselves, and numbers that change as fast as you want them to.

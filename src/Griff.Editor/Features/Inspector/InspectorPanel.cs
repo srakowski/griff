@@ -22,7 +22,8 @@ namespace Griff.Editor.Features.Inspector;
 /// descriptors, so any component (including user scripts) gets an inspector for free. With several
 /// entities selected it shows the components they all have: a change sets it on every one of them as
 /// one undo step, and values that differ show as mixed. On placed copies of prefabs, fields set differently from the
-/// prefab are marked, each with Revert and Apply to Prefab.
+/// prefab are marked, each with Revert and Apply to Prefab. Each field's name explains it (its documentation as a
+/// tooltip), and a section folded shut stays shut for that component on every entity, and next time.
 /// </summary>
 public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 {
@@ -31,6 +32,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private readonly Scripts.ScriptEditors _scripts;
     private readonly Core.Dialogs.IDialogService _dialogs;
     private readonly Core.Status.IStatusService _status;
+    private Core.Settings.ISettingsStore _settings;
     // For the selection: each component of a prefab copy (or of something inside one) and the prefab's own, the
     // components a copy added, and the prefab files read for them, with when each was written.
     private readonly Dictionary<Component, Component> _prefabParts = [];
@@ -43,8 +45,9 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private int[] _componentCounts = [];
 
     public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
-        Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status)
+        Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings)
     {
+        _settings = settings;
         _workspace = workspace;
         _selection = selection;
         _scripts = scripts;
@@ -329,7 +332,36 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>How many things the one selected copy changes from its prefab.</summary>
     internal int OverrideCount(Entity copy) => _overrideCount ??= OverridesOf(copy).Count;
 
-    internal static string Humanize(string name) => PascalCaseBoundary().Replace(name, " ");
+    /// <summary>True when the component's section is folded shut (on every entity), by its type's saved name.</summary>
+    internal bool IsCollapsed(string type) => _settings.Settings.CollapsedComponents.Contains(type);
+
+    /// <summary>Folds the component's sections shut or opens them, on every entity, kept in the user's settings.</summary>
+    internal void SetCollapsed(string type, bool collapsed)
+    {
+        var list = _settings.Settings.CollapsedComponents;
+        if (list.Contains(type) == collapsed)
+            return;
+        if (collapsed)
+            list.Add(type);
+        else
+            list.Remove(type);
+        _settings.Save();
+        foreach (var section in Components.Where(s => s.TypeKey == type))
+            section.Refresh();
+    }
+
+    /// <summary>
+    /// Opens every section and keeps which are folded in memory from now on: demos and snapshots start the same way every
+    /// time, leaving the user's own alone.
+    /// </summary>
+    internal void StartOver()
+    {
+        _settings = new Core.Settings.MemorySettingsStore();
+        Rebuild();
+    }
+
+    /// <summary>"PlatformerMovement" reads "Platformer Movement".</summary>
+    public static string Humanize(string name) => PascalCaseBoundary().Replace(name, " ");
 
     [GeneratedRegex("(?<=[a-z0-9])(?=[A-Z])")]
     private static partial Regex PascalCaseBoundary();
@@ -414,7 +446,6 @@ public sealed class ComponentSection : ObservableObject
 {
     private readonly InspectorPanel _owner;
     private readonly IReadOnlyList<Component> _components;
-    private bool _isExpanded = true;
 
     public ComponentSection(Component component, InspectorPanel owner, ComponentRegistry registry)
         : this([component], owner, registry)
@@ -432,14 +463,18 @@ public sealed class ComponentSection : ObservableObject
 
         if (component is MissingComponent missing)
         {
-            Title = missing.TypeName;
+            Title = TypeName = TypeKey = missing.TypeName;
             IsMissing = true;
             Properties = [];
             return;
         }
 
         var descriptor = registry.Get(component.GetType());
-        Title = descriptor.DisplayName;
+        TypeName = descriptor.DisplayName;
+        TypeKey = descriptor.Name;
+        Title = InspectorPanel.Humanize(descriptor.DisplayName);
+        var summary = Griff.Editing.DocComments.Summary(descriptor.Type);
+        Tip = summary.IsEmpty ? null : summary.PlainText;
         _descriptor = descriptor;
         Properties = Used().Select(p => new PropertyField(components, p, owner)).ToList();
         SetupNote = component.SetupNote();
@@ -470,7 +505,21 @@ public sealed class ComponentSection : ObservableObject
     /// <summary>The primary entity's component.</summary>
     public Component Component { get; }
 
+    /// <summary>The component's name as the Inspector shows it, "Platformer Movement".</summary>
     public string Title { get; }
+
+    /// <summary>The component's type's name, "PlatformerMovement".</summary>
+    public string TypeName { get; }
+
+    /// <summary>The name its type is saved under, which says whether it's folded shut.</summary>
+    public string TypeKey { get; }
+
+    /// <summary>What the component does (its documentation), shown over its name.</summary>
+    public string? Tip { get; }
+
+    /// <summary>True when <paramref name="name"/> is the component's name, as shown or as its type's.</summary>
+    public bool IsNamed(string name) =>
+        Title.Equals(name, StringComparison.OrdinalIgnoreCase) || TypeName.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     public bool IsMissing { get; }
 
@@ -485,14 +534,19 @@ public sealed class ComponentSection : ObservableObject
 
     public IRelayCommand RemoveCommand { get; }
 
+    /// <summary>
+    /// Open, showing its fields. Folding one shut folds that component shut on every entity, until it's opened again, and
+    /// it's remembered next time.
+    /// </summary>
     public bool IsExpanded
     {
-        get => _isExpanded;
-        set => SetProperty(ref _isExpanded, value);
+        get => !_owner.IsCollapsed(TypeKey);
+        set => _owner.SetCollapsed(TypeKey, !value);
     }
 
     public void Refresh()
     {
+        OnPropertyChanged(nameof(IsExpanded));
         foreach (var property in Properties)
             property.Refresh();
     }
@@ -557,6 +611,8 @@ public sealed class PropertyField : ObservableObject
         _property = property;
         _owner = owner;
         Label = InspectorPanel.Humanize(property.Name);
+        var summary = Griff.Editing.DocComments.Summary(property);
+        Summary = summary.IsEmpty ? null : summary.PlainText;
 
         var type = property.Type;
         Kind = type == typeof(bool) ? FieldKind.Bool
@@ -571,7 +627,10 @@ public sealed class PropertyField : ObservableObject
             : FieldKind.Vector;
 
         if (Kind == FieldKind.Enum)
+        {
             EnumValues = Enum.GetValues(type);
+            EnumChoices = [.. EnumValues.Cast<Enum>().Select(v => new EnumChoice(v))];
+        }
 
         if (Kind == FieldKind.Vector)
         {
@@ -582,6 +641,24 @@ public sealed class PropertyField : ObservableObject
     }
 
     public string Label { get; }
+
+    /// <summary>What the property does, from its documentation (units included), or null if it has none.</summary>
+    public string? Summary { get; }
+
+    /// <summary>
+    /// The tooltip over the field's name: on a field changed from its prefab, what the prefab has; what the field does;
+    /// and for a number, how to drag it.
+    /// </summary>
+    public string? LabelTip
+    {
+        get
+        {
+            var tip = string.Join("\n\n", new[] { OverrideTip, Summary, Kind == FieldKind.Number ? DragTip : null }.OfType<string>());
+            return tip.Length > 0 ? tip : null;
+        }
+    }
+
+    private const string DragTip = "Drag the name sideways to change it (Shift: fine, Ctrl: coarse), or press Up and Down while typing.";
 
     /// <summary>The property's name in code ("TileSize").</summary>
     public string PropertyName => _property.Name;
@@ -896,6 +973,9 @@ public sealed class PropertyField : ObservableObject
 
     public Array? EnumValues { get; }
 
+    /// <summary>For an enum field: its values to pick from, each named as it reads ("Ping Pong") and explained.</summary>
+    public IReadOnlyList<EnumChoice> EnumChoices { get; } = [];
+
     public IReadOnlyList<AxisField> Axes { get; } = [];
 
     /// <summary>The value (the first component's, when several are edited); setting it sets it on all of them.</summary>
@@ -955,12 +1035,22 @@ public sealed class PropertyField : ObservableObject
         }
     }
 
-    /// <summary>Null (nothing picked) when mixed.</summary>
+    /// <summary>
+    /// Null (nothing picked) when mixed. Takes a value, or a choice's name as it reads or as in code ("Ping Pong" or
+    /// "PingPong"), as agents give it.
+    /// </summary>
     public object? EnumValue
     {
         get => IsMixed ? null : Value;
         set
         {
+            if (value is string name)
+            {
+                value = EnumChoices.FirstOrDefault(c => c.Label.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    c.Value.ToString().Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))?.Value
+                    ?? throw new ArgumentException($"There's no {name} choice; the choices are {string.Join(", ", EnumChoices.Select(c => c.Label))}.");
+            }
+
             if (value is null)
                 return;
             Value = value;
@@ -1119,6 +1209,18 @@ public sealed record EntityChoice(Entity Entity, int Depth, bool IsNamed)
             return IsNamed ? $"{path} (named)" : path;
         }
     }
+}
+
+/// <summary>One value of an enum field: as it reads in the list ("Ping Pong"), and what it means (its documentation).</summary>
+public sealed class EnumChoice(Enum value)
+{
+    public Enum Value { get; } = value;
+
+    public string Label { get; } = InspectorPanel.Humanize(value.ToString());
+
+    public string? Tip { get; } = Griff.Editing.DocComments.Summary(value) is { IsEmpty: false } doc ? doc.PlainText : null;
+
+    public override string ToString() => Label;
 }
 
 /// <summary>One component (X, Y, Z or W) of a vector property.</summary>

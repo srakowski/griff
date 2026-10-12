@@ -1,0 +1,112 @@
+#if DEBUG
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using Griff.Editor.Features.Inspector;
+
+namespace Griff.Editor.Diagnostics.Demo;
+
+// Inspector fields worked the quick ways: dragged by their names, nudged with Up and Down, explained by their tooltips,
+// and sections folded shut.
+internal sealed partial class DemoUi
+{
+    /// <summary>A field's name in the Inspector, which explains it and drags a number.</summary>
+    public TextBlock? FieldLabel(string component, string label) =>
+        InspectorRow(component, label) is { } row ? Descendants<TextBlock>(row).FirstOrDefault(t => t.Name == "FieldLabel") : null;
+
+    /// <summary>A component's name on its section's header.</summary>
+    public TextBlock? ComponentHeading(string component) =>
+        ComponentHeader(component) is { } header ? Descendants<TextBlock>(header).FirstOrDefault(t => t.DataContext is ComponentSection && t.Text == ((ComponentSection)t.DataContext).Title) : null;
+
+    /// <summary>The arrow on a component's header that folds its section shut or opens it.</summary>
+    public ToggleButton? FoldButton(string component) =>
+        ComponentHeader(component) is { } header ? Descendants<ToggleButton>(header).FirstOrDefault() : null;
+
+    /// <summary>Rests the mouse on <paramref name="element"/> until its tooltip shows.</summary>
+    public async Task ShowTip(FrameworkElement element)
+    {
+        if (element.ToolTip is null)
+            throw new InvalidOperationException($"{element} has no tooltip.");
+        var opened = false;
+        void Opening(object sender, ToolTipEventArgs e) => opened = true;
+        element.ToolTipOpening += Opening;
+        try
+        {
+            await Hover(element);
+            for (var waited = 0; !opened && waited < 4000; waited += 50)
+                await Task.Delay(50);
+            if (!opened)
+                Log?.Invoke($"no tooltip showed over {element}");
+        }
+        finally
+        {
+            element.ToolTipOpening -= Opening;
+        }
+
+        await Settle(200);
+    }
+
+    /// <summary>
+    /// Drags a number field by its name with the real mouse, a few pixels at a time, until it reads <paramref name="value"/>
+    /// (then a pixel at a time to land on it).
+    /// </summary>
+    public async Task Scrub(string component, string label, double value)
+    {
+        var name = await WaitFor(() => FieldLabel(component, label), $"{component}.{label}");
+        double Current() => (InspectorRow(component, label)?.DataContext as PropertyField)?.NumberValue ?? double.NaN;
+        name.BringIntoView();
+        await Settle(30);
+        var at = Center(name);
+        await input.MoveTo(at);
+        await input.Pause(150);
+        input.Press(at);
+        await Task.Delay(60);
+        try
+        {
+            var direction = Math.Sign(value - Current());
+            for (var steps = 0; steps < 400 && Math.Sign(value - Current()) == direction && direction != 0; steps++)
+            {
+                at.X += 3 * direction;
+                await input.MoveTo(at, 60);
+            }
+
+            // Overshot: back a pixel at a time.
+            for (var steps = 0; steps < 30 && Math.Abs(Current() - value) > 1e-6; steps++)
+            {
+                at.X += Math.Sign(value - Current());
+                await input.MoveTo(at, 30);
+            }
+
+            await input.Pause(150);
+        }
+        finally
+        {
+            input.Release();
+        }
+
+        await Settle(80);
+        if (Math.Abs(Current() - value) > 1e-6 && InspectorRow(component, label)?.DataContext is PropertyField field)
+        {
+            Log?.Invoke($"FORCED scrub {component}.{label} = {value} (it read {Current()})");
+            field.NumberValue = value;
+            ((InspectorPanel)Inspector.DataContext).Seal();
+        }
+    }
+
+    /// <summary>Clicks into a number field and presses Up (or Down) <paramref name="times"/> times.</summary>
+    public async Task Nudge(string component, string label, Key key, int times)
+    {
+        var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
+        var box = Descendants<TextBox>(row).First();
+        await Click(box);
+        for (var i = 0; i < times; i++)
+        {
+            await input.Press(key);
+            await input.Pause(220);
+        }
+
+        await Settle();
+    }
+}
+#endif

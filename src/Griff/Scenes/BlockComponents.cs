@@ -40,10 +40,13 @@ public sealed class WorldGenerator : Component
     /// <summary>About how many cells from one hilltop to the next.</summary>
     public float HillWidth { get; set; } = 28;
 
+    /// <summary>The tile on top of the ground.</summary>
     public int GrassTile { get; set; } = 0;
 
+    /// <summary>The tile under the grass, <see cref="DirtDepth"/> cells deep.</summary>
     public int DirtTile { get; set; } = 1;
 
+    /// <summary>The tile under the dirt, all the way down.</summary>
     public int StoneTile { get; set; } = 2;
 
     /// <summary>How many cells of dirt lie under the grass before the stone starts.</summary>
@@ -61,13 +64,16 @@ public sealed class WorldGenerator : Component
     /// <summary>Patches of sand along the surface, from 0 (none) to 1 (everywhere).</summary>
     public float Sand { get; set; } = 0.15f;
 
+    /// <summary>The tile for patches of sand; -1 for none.</summary>
     public int SandTile { get; set; } = -1;
 
     /// <summary>How often a tree grows on the grass, from 0 (never) to 1 (wherever there's room).</summary>
     public float Trees { get; set; } = 0.15f;
 
+    /// <summary>The tile for tree trunks; -1 for no trees.</summary>
     public int TrunkTile { get; set; } = -1;
 
+    /// <summary>The tile for treetops; -1 for none.</summary>
     public int LeavesTile { get; set; } = -1;
 
     /// <summary>A tile for the bottom row, usually one that's unbreakable (see <see cref="Blocks.Unbreakable"/>).</summary>
@@ -214,6 +220,7 @@ public sealed class Blocks : Component
     /// <summary>How far the light of a glowing tile reaches, in world units.</summary>
     public float GlowRadius { get; set; } = 5;
 
+    /// <summary>The color of the light glowing tiles give off.</summary>
     public Color GlowColor { get; set; } = Color.FromBytes(0xFF, 0xC8, 0x7A);
 
     /// <summary>
@@ -311,8 +318,10 @@ public sealed class BlockBuilder : Component
     /// <summary>How fast it digs: 2 breaks blocks in half the time.</summary>
     public float MineSpeed { get; set; } = 1;
 
+    /// <summary>Whether it can dig blocks out (with Attack).</summary>
     public bool CanMine { get; set; } = true;
 
+    /// <summary>Whether it can put blocks down.</summary>
     public bool CanBuild { get; set; } = true;
 
     /// <summary>The item it puts down. The <see cref="Hotbar"/> sets it to whatever's picked there.</summary>

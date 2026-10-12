@@ -35,7 +35,7 @@ public partial class InspectorView : UserControl
 
         foreach (var descriptor in Panel.AvailableComponents)
         {
-            var item = new MenuItem { Header = descriptor.DisplayName };
+            var item = new MenuItem { Header = InspectorPanel.Humanize(descriptor.DisplayName) };
             item.Click += (_, _) => Panel.AddComponent(descriptor);
             menu.Items.Add(item);
         }

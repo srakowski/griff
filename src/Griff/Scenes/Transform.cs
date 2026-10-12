@@ -10,11 +10,13 @@ namespace Griff.Scenes;
 [ComponentName("Transform")]
 public sealed class Transform : Component
 {
+    /// <summary>Where it is, in world units, from its parent's position (or the world's middle, with none). Y is up.</summary>
     public Vector3 Position { get; set; }
 
     /// <summary>Euler angles in degrees, applied Z, then X, then Y. In 2D, Z is the rotation angle.</summary>
     public Vector3 Rotation { get; set; }
 
+    /// <summary>How many times its own size it's drawn and collides: 2 is twice as big, -1 flips it. Children scale with it.</summary>
     public Vector3 Scale { get; set; } = Vector3.One;
 
     [DoNotSerialize]

@@ -13,6 +13,8 @@
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="HasDropShadow" Value="False" />
+        <!-- Long tips (a field's documentation) wrap rather than run across the screen -->
+        <Setter Property="MaxWidth" Value="380" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
@@ -22,7 +24,13 @@
                             BorderThickness="1"
                             CornerRadius="{StaticResource Radius.Medium}"
                             SnapsToDevicePixels="True">
-                        <ContentPresenter />
+                        <ContentPresenter>
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>

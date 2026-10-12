@@ -60,8 +60,10 @@ public sealed class ParticleEmitter : Component
     /// <summary>Width and height in world units at the end of its life.</summary>
     public float EndSize { get; set; }
 
+    /// <summary>Each particle's color when it's made.</summary>
     public Color StartColor { get; set; } = Color.White;
 
+    /// <summary>Each particle's color at the end of its life, blending from <see cref="StartColor"/>; a clear one fades it out.</summary>
     public Color EndColor { get; set; } = Color.White with { A = 0 };
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>

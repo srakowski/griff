@@ -7,9 +7,11 @@ using System.Windows.Media;
 namespace Griff.Editor.Themes.Controls;
 
 /// <summary>
-/// Numeric input. Type a value (Enter or focus loss commits, Esc reverts), or drag the label
-/// sideways to scrub: Shift for fine steps, Ctrl for coarse. <see cref="EditCompletedEvent"/>
-/// fires once per typed commit or finished drag, so callers can close an undo step.
+/// Numeric input. Type a value (Enter or focus loss commits, Esc reverts), drag the label sideways to scrub, or nudge it
+/// with Up and Down or the wheel while it's being typed in: Shift for fine steps, Ctrl for coarse. Steps grow with the
+/// value, so 70 moves by about as much per pixel, relatively, as 0.7 does. Another element (a field's name beside it) can
+/// scrub it too, with <see cref="DragsFieldProperty"/>. <see cref="EditCompletedEvent"/> fires once per typed commit,
+/// finished drag or run of nudges, so callers can close an undo step.
 /// </summary>
 [TemplatePart(Name = "PART_Label", Type = typeof(FrameworkElement))]
 [TemplatePart(Name = "PART_Input", Type = typeof(TextBox))]
@@ -32,18 +34,30 @@ public class NumberField : Control
     public static readonly DependencyProperty IsMixedProperty = DependencyProperty.Register(
         nameof(IsMixed), typeof(bool), typeof(NumberField), new PropertyMetadata(false, (d, _) => ((NumberField)d).UpdateText()));
 
-    /// <summary>Change in value per pixel of drag.</summary>
+    /// <summary>The least change in value per pixel of drag, near 0; further from 0 it grows with the value.</summary>
     public static readonly DependencyProperty StepProperty = DependencyProperty.Register(
         nameof(Step), typeof(double), typeof(NumberField), new PropertyMetadata(0.05));
+
+    /// <summary>
+    /// Set on an element beside a number field (the name of the field, in the Inspector) to drag the field by it as by
+    /// its own label. It drags the one number field found nearby: none or several (a vector's axes) and it does nothing.
+    /// </summary>
+    public static readonly DependencyProperty DragsFieldProperty = DependencyProperty.RegisterAttached(
+        "DragsField", typeof(bool), typeof(NumberField), new PropertyMetadata(false, OnDragsFieldChanged));
 
     public static readonly RoutedEvent EditCompletedEvent = EventManager.RegisterRoutedEvent(
         "EditCompleted", RoutingStrategy.Bubble, typeof(RoutedEventHandler), typeof(NumberField));
 
+    // A pixel of drag changes the value by this much of itself (Step, near 0): 70 by 0.35 a pixel.
+    private const double DragFraction = 1 / 200.0;
+
     private FrameworkElement? _label;
     private TextBox? _input;
-    private bool _scrubbing;
-    private Point _scrubOrigin;
-    private double _scrubStartValue;
+    private FrameworkElement? _scrubSource;
+    private double _scrubLastX;
+    private double _scrubExact;
+    private bool _scrubMoved;
+    private bool _nudged;
     private string? _shownText;
 
     public NumberField()
@@ -93,21 +107,22 @@ public class NumberField : Control
         set => SetValue(StepProperty, value);
     }
 
+    public static bool GetDragsField(DependencyObject element) => (bool)element.GetValue(DragsFieldProperty);
+
+    public static void SetDragsField(DependencyObject element, bool value) => element.SetValue(DragsFieldProperty, value);
+
     public override void OnApplyTemplate()
     {
         base.OnApplyTemplate();
 
         if (_label is not null)
-        {
             _label.MouseLeftButtonDown -= OnLabelDown;
-            _label.MouseMove -= OnLabelMove;
-            _label.MouseLeftButtonUp -= OnLabelUp;
-            _label.LostMouseCapture -= OnLabelLostCapture;
-        }
 
         if (_input is not null)
         {
-            _input.KeyDown -= OnInputKeyDown;
+            _input.PreviewKeyDown -= OnInputKeyDown;
+            _input.PreviewKeyUp -= OnInputKeyUp;
+            _input.PreviewMouseWheel -= OnInputWheel;
             _input.LostKeyboardFocus -= OnInputLostFocus;
         }
 
@@ -117,16 +132,13 @@ public class NumberField : Control
             CommitTextBox.PassUndoToEditor(_input);
 
         if (_label is not null)
-        {
             _label.MouseLeftButtonDown += OnLabelDown;
-            _label.MouseMove += OnLabelMove;
-            _label.MouseLeftButtonUp += OnLabelUp;
-            _label.LostMouseCapture += OnLabelLostCapture;
-        }
 
         if (_input is not null)
         {
-            _input.KeyDown += OnInputKeyDown;
+            _input.PreviewKeyDown += OnInputKeyDown;
+            _input.PreviewKeyUp += OnInputKeyUp;
+            _input.PreviewMouseWheel += OnInputWheel;
             _input.LostKeyboardFocus += OnInputLostFocus;
         }
 
@@ -135,42 +147,198 @@ public class NumberField : Control
 
     // ----- Scrubbing -----
 
-    private void OnLabelDown(object sender, MouseButtonEventArgs e)
+    private void OnLabelDown(object sender, MouseButtonEventArgs e) => StartScrub((FrameworkElement)sender, e);
+
+    /// <summary>Starts dragging the value by <paramref name="source"/> (the label, or a name beside the field).</summary>
+    public void StartScrub(FrameworkElement source, MouseButtonEventArgs e)
     {
-        _scrubbing = _label!.CaptureMouse();
-        _scrubOrigin = e.GetPosition(this);
-        _scrubStartValue = Value;
+        if (_scrubSource is not null || !source.CaptureMouse())
+            return;
+        _scrubSource = source;
+        _scrubLastX = e.GetPosition(this).X;
+        _scrubExact = Value;
+        _scrubMoved = false;
+        source.MouseMove += OnScrubMove;
+        source.MouseLeftButtonUp += OnScrubUp;
+        source.LostMouseCapture += OnScrubLostCapture;
         e.Handled = true;
     }
 
-    private void OnLabelMove(object sender, MouseEventArgs e)
+    private void OnScrubMove(object sender, MouseEventArgs e)
     {
-        if (!_scrubbing)
+        var x = e.GetPosition(this).X;
+        var dx = x - _scrubLastX;
+        _scrubLastX = x;
+        if (dx == 0)
             return;
-
-        var dx = e.GetPosition(this).X - _scrubOrigin.X;
-        var scale = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 0.1
-            : Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? 10
-            : 1;
-        var step = IsInteger ? Math.Max(Step, 0.2) : Step;
-        SetCommitted(_scrubStartValue + dx * step * scale);
+        _scrubMoved = true;
+        // Step by step, so the further from 0 it gets the faster it goes, and dragging back retraces it.
+        var perPixel = DragStep(_scrubExact, Step, IsInteger) * ModifierScale();
+        _scrubExact += dx * perPixel;
+        SetCommitted(RoundTo(_scrubExact, Increment(perPixel)));
     }
 
-    private void OnLabelUp(object sender, MouseButtonEventArgs e) => _label?.ReleaseMouseCapture();
+    private void OnScrubUp(object sender, MouseButtonEventArgs e) => _scrubSource?.ReleaseMouseCapture();
 
-    private void OnLabelLostCapture(object sender, MouseEventArgs e)
+    private void OnScrubLostCapture(object sender, MouseEventArgs e)
     {
-        if (!_scrubbing)
+        if (_scrubSource is not { } source)
             return;
-        _scrubbing = false;
+        source.MouseMove -= OnScrubMove;
+        source.MouseLeftButtonUp -= OnScrubUp;
+        source.LostMouseCapture -= OnScrubLostCapture;
+        _scrubSource = null;
+        if (_scrubMoved)
+            RaiseEvent(new RoutedEventArgs(EditCompletedEvent, this));
+        else if (_input is not null)
+        {
+            // A click without a drag goes to the box, to type in.
+            _input.Focus();
+            _input.SelectAll();
+        }
+    }
+
+    private static double ModifierScale() =>
+        Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 0.1
+        : Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? 10
+        : 1;
+
+    /// <summary>
+    /// How much a pixel of drag changes <paramref name="value"/>: a 200th of it, but at least <paramref name="step"/> (a
+    /// fifth for whole numbers, so they move every few pixels).
+    /// </summary>
+    public static double DragStep(double value, double step, bool isInteger = false) =>
+        Math.Max(Math.Abs(value) * DragFraction, isInteger ? Math.Max(step, 0.2) : step);
+
+    /// <summary>
+    /// How much Up, Down or a turn of the wheel changes <paramref name="value"/>: a tenth of its order of magnitude (1 for
+    /// 70, 0.1 for 7, 0.01 for 0.5), 0.1 from 0, and at least 1 for whole numbers.
+    /// </summary>
+    public static double NudgeStep(double value, bool isInteger = false)
+    {
+        var step = value == 0 ? 0.1 : Math.Pow(10, Math.Floor(Math.Log10(Math.Abs(value))) - 1);
+        step = Math.Max(step, 0.0001);
+        return isInteger ? Math.Max(1, Math.Round(step)) : step;
+    }
+
+    // What a drag rounds to at this many units a pixel: the next power of ten up (0.35 a pixel lands on whole numbers).
+    private static double Increment(double perPixel) => Math.Pow(10, Math.Ceiling(Math.Log10(perPixel)));
+
+    private static double RoundTo(double value, double increment) =>
+        Math.Round(Math.Round(value / increment) * increment, 6);
+
+    // A name beside a number field: drags it, and shows the sideways arrows when there's one to drag.
+    private static void OnDragsFieldChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not FrameworkElement element)
+            return;
+        element.MouseEnter -= OnOuterLabelEnter;
+        element.MouseLeftButtonDown -= OnOuterLabelDown;
+        if (e.NewValue is true)
+        {
+            element.MouseEnter += OnOuterLabelEnter;
+            element.MouseLeftButtonDown += OnOuterLabelDown;
+        }
+    }
+
+    private static void OnOuterLabelEnter(object sender, MouseEventArgs e)
+    {
+        var label = (FrameworkElement)sender;
+        label.Cursor = FieldNear(label) is { IsEnabled: true } ? Cursors.SizeWE : null;
+    }
+
+    private static void OnOuterLabelDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FieldNear((FrameworkElement)sender) is { IsEnabled: true } field)
+            field.StartScrub((FrameworkElement)sender, e);
+    }
+
+    /// <summary>
+    /// The number field an element beside it drags: the only one inside the nearest of its parents that holds any (a few
+    /// levels up at most). Null when that parent holds several, or none is near.
+    /// </summary>
+    public static NumberField? FieldNear(DependencyObject element)
+    {
+        var parent = VisualTreeHelper.GetParent(element);
+        for (var level = 0; parent is not null && level < 4; level++, parent = VisualTreeHelper.GetParent(parent))
+        {
+            var fields = Inside(parent).Take(2).ToList();
+            if (fields.Count > 0)
+                return fields.Count == 1 ? fields[0] : null;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<NumberField> Inside(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is NumberField field)
+                yield return field;
+            else
+            {
+                foreach (var inner in Inside(child))
+                    yield return inner;
+            }
+        }
+    }
+
+    // ----- Nudging -----
+
+    /// <summary>
+    /// Changes the value by one step up (<paramref name="direction"/> 1) or down (-1), the step growing with the value
+    /// (<see cref="NudgeStep"/>; Shift for a tenth of it, Ctrl ten times). The undo step stays open until the keys are let
+    /// go or the field is left, so a run of nudges undoes at once.
+    /// </summary>
+    public void Nudge(int direction)
+    {
+        // Anything typed but not committed yet is taken first.
+        if (_input is not null && _input.Text != _shownText && TryParse(_input.Text, out var typed))
+            SetCommitted(typed);
+        var step = NudgeStep(Value, IsInteger) * ModifierScale();
+        if (IsInteger)
+            step = Math.Max(1, Math.Round(step));
+        SetCommitted(RoundTo(IsMixed ? Value : Value + direction * step, step));
+        _nudged = true;
+        UpdateText(force: true);
+        _input?.SelectAll();
+    }
+
+    private void EndNudges()
+    {
+        if (!_nudged)
+            return;
+        _nudged = false;
         RaiseEvent(new RoutedEventArgs(EditCompletedEvent, this));
+    }
+
+    private void OnInputKeyUp(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Up or Key.Down)
+            EndNudges();
+    }
+
+    // Only while it's being typed in: otherwise the wheel scrolls the panel as usual.
+    private void OnInputWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_input is not { IsKeyboardFocusWithin: true })
+            return;
+        Nudge(Math.Sign(e.Delta));
+        e.Handled = true;
     }
 
     // ----- Typing -----
 
     private void OnInputKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        if (e.Key is Key.Up or Key.Down)
+        {
+            Nudge(e.Key == Key.Up ? 1 : -1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
         {
             Commit();
             _input?.SelectAll();
@@ -184,7 +352,11 @@ public class NumberField : Control
         }
     }
 
-    private void OnInputLostFocus(object sender, KeyboardFocusChangedEventArgs e) => Commit();
+    private void OnInputLostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        Commit();
+        EndNudges();
+    }
 
     private void Commit()
     {

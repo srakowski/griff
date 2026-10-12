@@ -21,6 +21,12 @@ public sealed class EditorSettings
 
     /// <summary>Panel layouts saved by name (View > Save Layout...), in the order they were first saved.</summary>
     public List<PanelLayoutData> Layouts { get; set; } = [];
+
+    /// <summary>
+    /// The components whose Inspector sections are folded shut, by type name: each stays shut on every entity until it's
+    /// opened again.
+    /// </summary>
+    public List<string> CollapsedComponents { get; set; } = [];
 }
 
 public interface ISettingsStore
@@ -28,6 +34,19 @@ public interface ISettingsStore
     EditorSettings Settings { get; }
 
     void Save();
+}
+
+/// <summary>
+/// Keeps settings in memory only: demos and snapshot runs change it without touching the user's own, and it's gone when
+/// they close.
+/// </summary>
+public sealed class MemorySettingsStore : ISettingsStore
+{
+    public EditorSettings Settings { get; } = new();
+
+    public void Save()
+    {
+    }
 }
 
 /// <summary>Stores settings as JSON in %LOCALAPPDATA%\Griff. A missing or corrupt file falls back to defaults.</summary>

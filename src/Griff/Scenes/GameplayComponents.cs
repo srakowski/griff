@@ -217,6 +217,7 @@ public sealed class Health : Component
 [ComponentName("Griff.DamageOnTouch")]
 public sealed class DamageOnTouch : Component
 {
+    /// <summary>How much health each hit takes.</summary>
     public float Amount { get; set; } = 1;
 
     /// <summary>
@@ -320,6 +321,7 @@ public sealed class Counter : Component
     /// <summary>The message that adds to it, e.g. "Score" for <c>Game.Send("Score", 10)</c>. Empty only counts <see cref="Add"/>.</summary>
     public string? Message { get; set; } = "Score";
 
+    /// <summary>The count now. Set it to start from something other than 0.</summary>
     public int Value { get; set; }
 
     /// <summary>
@@ -385,6 +387,7 @@ public sealed class Counter : Component
 [ComponentName("Griff.Lifetime")]
 public sealed class Lifetime : Component
 {
+    /// <summary>Seconds until the entity is removed.</summary>
     public float Seconds { get; set; } = 2;
 
     /// <summary>Seconds at the end of its life spent fading out (see <c>FadeTo</c>). 0 just disappears.</summary>

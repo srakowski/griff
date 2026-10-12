@@ -320,7 +320,7 @@ public sealed class PanelLayout
     /// </summary>
     internal void StartOver()
     {
-        _settings = new Scratch();
+        _settings = new MemorySettingsStore();
         Reset();
     }
 
@@ -494,15 +494,6 @@ public sealed class PanelLayout
     /// <summary>A panel's title, or "Documents".</summary>
     internal string Title(string name) =>
         name.Trim().Equals(Documents, StringComparison.OrdinalIgnoreCase) ? Documents : _panels.First(p => p.Id == PanelId(name)).Title;
-
-    private sealed class Scratch : ISettingsStore
-    {
-        public EditorSettings Settings { get; } = new();
-
-        public void Save()
-        {
-        }
-    }
 
     private PanelLayoutData Saved(string name) =>
         _settings.Settings.Layouts.FirstOrDefault(l => Matches(l, name.Trim()))

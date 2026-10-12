@@ -44,7 +44,7 @@ internal sealed partial class DemoUi
     }
 
     public Button? EditScriptButton(string component) =>
-        Descendants<Button>(Inspector).FirstOrDefault(b => b.Name == "EditScriptButton" && b.DataContext is ComponentSection s && s.Title == component && b.IsVisible);
+        Descendants<Button>(Inspector).FirstOrDefault(b => b.Name == "EditScriptButton" && b.DataContext is ComponentSection s && s.IsNamed(component) && b.IsVisible);
 
     /// <summary>Clicks in the code to put the caret just after (or before) the first <paramref name="text"/>.</summary>
     public async Task Caret(string text, bool before = false)

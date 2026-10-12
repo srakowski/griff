@@ -53,6 +53,7 @@ public sealed class PlatformerMovement : Component
     /// <summary>Pushing into a wall while falling slides down it slowly, at <see cref="WallSlideSpeed"/>.</summary>
     public bool WallSlide { get; set; }
 
+    /// <summary>How fast it slides down a wall, in units per second.</summary>
     public float WallSlideSpeed { get; set; } = 3;
 
     /// <summary>Jump while against a wall in the air to kick off it, away from the wall.</summary>
@@ -204,6 +205,7 @@ public sealed class TopDownMovement : Component
     /// <summary>The Dash action (Left Shift, K or the gamepad's B) bursts the way it's moving, or facing.</summary>
     public bool Dash { get; set; }
 
+    /// <summary>Dash speed, in units per second.</summary>
     public float DashSpeed { get; set; } = 18;
 
     /// <summary>Seconds a dash lasts.</summary>

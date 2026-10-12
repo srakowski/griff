@@ -162,6 +162,33 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "set":
                 await Set(a);
                 break;
+            case "scrub":
+                // "scrub: PlatformerMovement.Acceleration = 90": drag the field by its name until it reads 90.
+                var (scrubField, scrubValue) = Split2(a, '=');
+                if (scrubField.Split('.', 2, StringSplitOptions.TrimEntries) is not [var scrubComponent, var scrubLabel])
+                    throw new FormatException("scrub: <Component>.<Field> = <value>");
+                await ui.Scrub(scrubComponent, Label(scrubLabel), double.Parse(scrubValue, System.Globalization.CultureInfo.InvariantCulture));
+                break;
+            case "nudge":
+                // "nudge: PlatformerMovement.Speed = up 3": click into the number and press Up three times.
+                var (nudgeField, nudgeHow) = Split2(a, '=');
+                var nudgeWords = nudgeHow.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (nudgeField.Split('.', 2, StringSplitOptions.TrimEntries) is not [var nudgeComponent, var nudgeLabel] ||
+                    nudgeWords.Length is not (1 or 2) || nudgeWords[0].ToLowerInvariant() is not ("up" or "down"))
+                    throw new FormatException("nudge: <Component>.<Field> = up|down [<times>]");
+                await ui.Nudge(nudgeComponent, Label(nudgeLabel), nudgeWords[0].Equals("up", StringComparison.OrdinalIgnoreCase) ? Key.Up : Key.Down,
+                    nudgeWords.Length == 2 ? int.Parse(nudgeWords[1], System.Globalization.CultureInfo.InvariantCulture) : 1);
+                break;
+            case "tip":
+                await ui.ShowTip(Target(a));
+                break;
+            case "expectfolded":
+                // "expectfolded: Transform = true": its section in the Inspector is folded shut (false: open).
+                var (foldName, foldWant) = Split2(a, '=');
+                var wantFolded = bool.Parse(foldWant);
+                if (!await Until(() => ui.FoldButton(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
+                    throw new InvalidOperationException($"Expected {foldName}'s section to be {(wantFolded ? "folded shut" : "open")}.");
+                break;
             case "rename":
                 var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(ui.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
                 await ui.EditBox(box, a);
@@ -1324,6 +1351,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "field" when name.Split('.', 2) is [var component, var field] =>
                 ui.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
             "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "heading" => ui.ComponentHeading(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "fold" => ui.FoldButton(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "label" when name.Split('.', 2) is [var component, var field] =>
+                ui.FieldLabel(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
             "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
             "eye" => (FrameworkElement?)ui.HierarchyEye(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),

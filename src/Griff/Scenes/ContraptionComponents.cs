@@ -124,6 +124,7 @@ public sealed class Rope : Component
     /// <summary>Where the rope is tied on the other entity, from its middle.</summary>
     public Vector2 OtherOffset { get; set; }
 
+    /// <summary>The rope's color.</summary>
     public Color Color { get; set; } = Color.FromBytes(0xC8, 0xA9, 0x6E);
 
     /// <summary>How thick the rope is drawn, in world units.</summary>
@@ -221,6 +222,7 @@ public enum GateKind
 [ComponentName("Griff.WireGate")]
 public sealed class WireGate : Component
 {
+    /// <summary>What it works out from its inputs A and B: logic (And, Or, Not...), sums or comparisons.</summary>
     public GateKind Kind { get; set; }
 
     /// <summary>Input A. Wire something to it, or set it.</summary>
@@ -321,8 +323,10 @@ public sealed class WireLamp : Component
     /// <summary>How brightly it's lit, from 0 to 1. Wire something to its "On", or set it.</summary>
     public float Brightness { get; set; }
 
+    /// <summary>Its color fully lit.</summary>
     public Color OnColor { get; set; } = Color.FromBytes(0xFF, 0xE0, 0x6A);
 
+    /// <summary>Its color when off; it blends to <see cref="OnColor"/> as it brightens.</summary>
     public Color OffColor { get; set; } = Color.FromBytes(0x4A, 0x4D, 0x55);
 
     // The light's own brightness, which the lamp scales.
@@ -368,6 +372,7 @@ public sealed class Wire : Component
     /// <summary>The output it carries from there, e.g. "On" or "Out".</summary>
     public string? Output { get; set; } = "Out";
 
+    /// <summary>The wire's color.</summary>
     public Color Color { get; set; } = Color.FromBytes(0xE3, 0x5B, 0x5B);
 
     /// <summary>Draw the wire. Untick it to hide the wiring behind a finished contraption.</summary>

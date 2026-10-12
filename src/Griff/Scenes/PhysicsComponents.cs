@@ -56,6 +56,7 @@ public static class CollisionLayers
 [ComponentName("BoxCollider")]
 public sealed class BoxCollider : Collider
 {
+    /// <summary>Width and height, in world units before the transform's scale.</summary>
     public Vector2 Size { get; set; } = Vector2.One;
 
     public override Vector2 Offset { get; set; }

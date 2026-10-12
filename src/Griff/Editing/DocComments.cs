@@ -69,6 +69,13 @@ public static partial class DocComments
 
     public static DocText Summary(PropertyInfo property) => Read(property, property.ReflectedType ?? property.DeclaringType!, "summary");
 
+    /// <summary>What a component's saved property does, from its <c>///</c> summary.</summary>
+    public static DocText Summary(Scenes.Serialization.PropertyDescriptor property) => Summary(property.Info);
+
+    /// <summary>What one of an enum's values means, from its <c>///</c> summary.</summary>
+    public static DocText Summary(Enum value) =>
+        value.GetType().GetField(value.ToString()) is { } field ? Read(field, field.DeclaringType!, "summary") : DocText.Empty;
+
     private static DocText Read(MemberInfo member, Type context, string section)
     {
         // Overridden properties often say <inheritdoc/>, or nothing: use what the base says. A type only takes its base
@@ -100,6 +107,7 @@ public static partial class DocComments
         {
             Type type => "T:" + TypeId(type),
             PropertyInfo property => $"P:{TypeId(property.DeclaringType!)}.{property.Name}",
+            FieldInfo field => $"F:{TypeId(field.DeclaringType!)}.{field.Name}",
             _ => null,
         };
         return id is not null ? docs.GetValueOrDefault(id) : null;

@@ -9,6 +9,7 @@ public sealed class Camera : Component
     /// <summary>Half the visible height, in world units. Width follows the window's aspect ratio.</summary>
     public float Size { get; set; } = 5f;
 
+    /// <summary>The color behind everything, where nothing is drawn.</summary>
     public Color Background { get; set; } = Color.FromBytes(0x1E, 0x22, 0x2B);
 
     /// <summary>
@@ -116,11 +117,13 @@ public enum TextAlign
 [ComponentName("Text")]
 public sealed class Text : Component
 {
+    /// <summary>What it says. Several lines are fine.</summary>
     public string? Value { get; set; } = "Text";
 
     /// <summary>Height of one line in world units, before the transform's scale.</summary>
     public float Size { get; set; } = 1f;
 
+    /// <summary>The color of the letters.</summary>
     public Color Color { get; set; } = Color.White;
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
@@ -158,13 +161,16 @@ public sealed class Sprite : Component
     /// <summary>Image path relative to the project's Assets folder, e.g. "Sprites/player.png".</summary>
     public string? Image { get; set; }
 
+    /// <summary>Multiplies the image's colors: white leaves it as it is, and a lower alpha fades it.</summary>
     public Color Tint { get; set; } = Color.White;
 
     /// <summary>Size in world units before the transform's scale.</summary>
     public System.Numerics.Vector2 Size { get; set; } = System.Numerics.Vector2.One;
 
+    /// <summary>Draws the image mirrored left to right (movement components flip it to face the way they go).</summary>
     public bool FlipX { get; set; }
 
+    /// <summary>Draws the image upside down.</summary>
     public bool FlipY { get; set; }
 
     /// <summary>Higher draws on top. Ties are broken by Z position, then hierarchy order.</summary>
@@ -265,14 +271,19 @@ public sealed class Animation : Component
     private string? _clips;
     private IReadOnlyList<AnimationClip> _parsed = [];
 
+    /// <summary>The sheet's frame it starts on, counting from 0 along the top row, then the next.</summary>
     public int FirstFrame { get; set; }
 
+    /// <summary>How many frames it plays, from <see cref="FirstFrame"/> on.</summary>
     public int FrameCount { get; set; } = 4;
 
+    /// <summary>How fast it plays, in frames per second.</summary>
     public float FramesPerSecond { get; set; } = 10;
 
+    /// <summary>Starts over after the last frame; off stops on it.</summary>
     public bool Loop { get; set; } = true;
 
+    /// <summary>Whether it's playing now; off holds the frame it's on.</summary>
     public bool Playing { get; set; } = true;
 
     /// <summary>

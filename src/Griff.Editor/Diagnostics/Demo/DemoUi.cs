@@ -317,12 +317,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public InspectorView Inspector => (InspectorView)PanelContent("Inspector");
 
     public Border? ComponentHeader(string component) =>
-        Descendants<Border>(Inspector).FirstOrDefault(b => b.DataContext is ComponentSection s && s.Title == component && b.Child is DockPanel);
+        Descendants<Border>(Inspector).FirstOrDefault(b => b.DataContext is ComponentSection s && s.IsNamed(component) && b.Child is DockPanel);
 
     /// <summary>The row (label and editor) for a property of a component in the Inspector.</summary>
     public Grid? InspectorRow(string component, string label, int nth = 0) =>
         Descendants<Grid>(Inspector)
-            .Where(g => g.DataContext is PropertyField f && f.Label == label && Section(g)?.Title == component && Descendants<TextBlock>(g).Any(t => t.Text == label))
+            .Where(g => g.DataContext is PropertyField f && f.Label == label && Section(g)?.IsNamed(component) == true && Descendants<TextBlock>(g).Any(t => t.Text == label))
             .Skip(nth)
             .FirstOrDefault();
 
@@ -579,15 +579,17 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
         var combo = Descendants<ComboBox>(row).First();
         await Click(combo);
-        var item = await WaitFor(() => Find<ComboBoxItem>(i => i.Content?.ToString() == value), $"option {value}");
+        // Choices read "Ping Pong"; a demo can name them either way.
+        bool Matches(object? choice) => choice is EnumChoice c ? c.Label == value || c.Value.ToString() == value : choice?.ToString() == value;
+        var item = await WaitFor(() => Find<ComboBoxItem>(i => Matches(i.Content)), $"option {value}");
         await Settle(80);
         await Click(item);
         if (combo.IsDropDownOpen)
             combo.IsDropDownOpen = false;
 
-        if ((InspectorRow(component, label) ?? row).DataContext is PropertyField field && field.EnumValue?.ToString() != value && field.EnumValues is { } values)
+        if ((InspectorRow(component, label) ?? row).DataContext is PropertyField field && !field.EnumChoices.Any(c => Matches(c) && Equals(c.Value, field.EnumValue)))
         {
-            field.EnumValue = values.Cast<object>().First(v => v.ToString() == value);
+            field.EnumValue = field.EnumChoices.First(Matches).Value;
             Log?.Invoke($"FORCED {component}.{label} = {value}");
         }
     }
@@ -630,7 +632,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         {
             var button = (Button)Inspector.FindName("AddComponentButton");
             await Click(button);
-            var item = await WaitFor(() => MenuItem(name), $"component {name} in the list");
+            var item = await WaitFor(() => MenuItem(InspectorPanel.Humanize(name.Replace(" ", ""))), $"component {name} in the list");
             await Settle(120);
             // The list is longer than the screen: scroll it with the wheel until the item shows, then click it. The cursor
             // jumps rather than glides there, since passing over the list's scroll arrows would scroll it again.
@@ -666,12 +668,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
 
         if (!HasSection())
         {
-            panel.AddComponent(panel.AvailableComponents.First(d => d.DisplayName == name));
+            panel.AddComponent(panel.AvailableComponents.First(d => d.DisplayName == name.Replace(" ", "")));
             Log?.Invoke($"FORCED Add Component {name}");
             await Settle(100);
         }
 
-        bool HasSection() => panel.Components.Any(s => s.Title == name);
+        bool HasSection() => panel.Components.Any(s => s.IsNamed(name));
 
         static bool Shows(FrameworkElement viewer, FrameworkElement item)
         {

@@ -874,6 +874,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             null => null,
             Griff.Color color => color.ToHex(),
             IReadOnlyList<string> rows => string.Join(@"\n", rows), // tile rows, as set: takes them
+            string text => text.ReplaceLineEndings(@"\n"), // text of several lines (a dialogue box's), written the same way
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             var other => other.ToString(),
         };

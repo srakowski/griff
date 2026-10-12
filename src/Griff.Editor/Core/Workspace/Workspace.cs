@@ -35,6 +35,12 @@ public interface IWorkspace : INotifyPropertyChanged
 
     SceneSerializer Serializer { get; }
 
+    /// <summary>
+    /// The project's prefabs, scenes, input actions, collision layers and messages as they are now (the open scene's as
+    /// it's being edited, not as last saved), which fields naming them pick from. Null with no project open.
+    /// </summary>
+    Griff.Editing.KnownNames? Names { get; }
+
     IReadOnlyList<string> RecentProjects { get; }
 
     /// <summary>True while a play-mode copy of the scene is open in place of the edit scene.</summary>
@@ -155,6 +161,11 @@ public sealed class Workspace(
     public ComponentRegistry Components { get; } = ComponentRegistry.CreateDefault();
 
     public SceneSerializer Serializer => new(Components);
+
+    private Griff.Editing.KnownNameIndex? _names;
+
+    public Griff.Editing.KnownNames? Names =>
+        Project is { } project ? (_names ??= new(Components)).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
     public ScriptHost Scripts => _scripts ??= new ScriptHost(Components);
 

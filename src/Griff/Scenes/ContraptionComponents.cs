@@ -47,6 +47,7 @@ public sealed class SandboxTools : Component
     public string? Tools { get; set; } = "Grab, Spawn, Weld, Rope, Wire, Remove";
 
     /// <summary>The props the Spawn tool can put down, by prefab name, separated by commas, e.g. "Crate, Ball, Lamp".</summary>
+    [Names(NameKind.Prefab, Many = true)]
     public string? Props { get; set; } = "Crate";
 
     /// <summary>The tool in hand, counting from 0 along <see cref="Tools"/>.</summary>
@@ -299,6 +300,7 @@ public sealed class WireButton : Component
 public sealed class WireSensor : Component
 {
     /// <summary>The collision layers it notices, e.g. "Player". Empty notices anything with a <see cref="Body"/>.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; }
 
     /// <summary>How many things are inside it.</summary>

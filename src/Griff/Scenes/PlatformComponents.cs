@@ -29,6 +29,7 @@ public sealed class Ladder : Component
 public sealed class Pushable : Component
 {
     /// <summary>The collision layers that can push it, e.g. "Player". Empty lets any body push it.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>How fast it goes compared to whoever pushes it: 1 is as fast, 0.5 half as fast (a heavy crate), 0 won't budge.</summary>
@@ -59,6 +60,7 @@ public sealed class Bouncer : Component
     public Vector2 Direction { get; set; } = Vector2.UnitY;
 
     /// <summary>The collision layers it launches, e.g. "Player". Empty launches any body.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; }
 
     /// <summary>A sound played on each bounce, e.g. "Sounds/boing.wav".</summary>
@@ -104,12 +106,14 @@ public sealed class Crumble : Component
     public float Respawn { get; set; } = 3;
 
     /// <summary>The collision layers that set it off by standing on it, e.g. "Player". Empty is any body.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>A sound played as it falls away, e.g. "Sounds/crumble.wav".</summary>
     public string? Sound { get; set; }
 
     /// <summary>A prefab spawned where it was as it falls away, e.g. a burst of "Rubble".</summary>
+    [Names(NameKind.Prefab)]
     public string? Effect { get; set; }
 
     /// <summary>True while it's gone (its entity is hidden). Saved, so it stays gone when the game rewinds.</summary>

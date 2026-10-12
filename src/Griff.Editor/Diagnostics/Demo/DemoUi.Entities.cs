@@ -4,32 +4,57 @@ using Griff.Editor.Features.Inspector;
 
 namespace Griff.Editor.Diagnostics.Demo;
 
-// Fields that name entities: picked from their list, or dropped on from the Hierarchy.
+// Fields with a list to pick from (entities, prefabs, scenes, actions, layers, messages, images and sounds): picked from
+// their list, typed into to narrow it; entities can be dropped on from the Hierarchy too.
 internal sealed partial class DemoUi
 {
-    /// <summary>The button on a field naming entities that lists the scene's entities.</summary>
-    public Button? EntityButton(string component, string label) =>
-        InspectorRow(component, label) is { } row ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == "entity:choose") : null;
+    /// <summary>The ▾ button on a field that opens its list.</summary>
+    public Button? PickerButton(string component, string label) =>
+        InspectorRow(component, label) is { } row
+            ? Descendants<Button>(row).FirstOrDefault(b => b.Tag is string tag && tag.EndsWith(":choose", StringComparison.Ordinal))
+            : null;
 
-    /// <summary>Picks an entity from a field's list: names it, or on a field naming several, adds it or takes it out.</summary>
-    public async Task PickEntity(string component, string label, string entity)
+    /// <summary>The search box of the field list that's open, once it has the keyboard.</summary>
+    public static TextBox? PickerSearch() => Find<TextBox>(t => t.Tag as string == "picker:search" && t.IsVisible && t.IsKeyboardFocusWithin);
+
+    /// <summary>
+    /// Picks from a field's list: opens it, types the start of the name to narrow it, and clicks it there. A field
+    /// naming several ticks it (or unticks it), and the list is shut after.
+    /// </summary>
+    public async Task PickFromList(string component, string label, string name)
     {
         var field = (await WaitFor(() => InspectorRow(component, label), $"{component}.{label}")).DataContext as PropertyField;
-        var wanted = field is null || !field.NamesMany || !field.Names(entity);
-        var button = await WaitFor(() => EntityButton(component, label), $"{component}.{label}'s entity list");
+        var wanted = field is null || !field.NamesMany || !field.Names(name);
+        if (field is { IsPickerOpen: true })
+            field.IsPickerOpen = false;
+        var button = await WaitFor(() => PickerButton(component, label), $"{component}.{label}'s list");
         await Click(button);
-        var item = await WaitFor(() => Find<MenuItem>(m => m.Tag as string == entity && m.IsVisible), $"{entity} in the list", 3000);
-        await Settle(250);
-        await Click(item);
-        await Settle(250);
-        // A list naming several stays open, to tick another.
-        if (Find<ContextMenu>(m => m.IsOpen) is { } open)
-            open.IsOpen = false;
-
-        if (InspectorRow(component, label)?.DataContext is PropertyField after && after.Names(entity) != wanted)
+        try
         {
-            after.PickEntity(entity);
-            Log?.Invoke($"FORCED pickentity {component}.{label} = {entity}");
+            await WaitFor(PickerSearch, $"{component}.{label}'s list", 2000);
+            // Enough of the name to narrow the list: a path's file name, its first few letters.
+            var typed = name.Split('/')[^1];
+            typed = typed[..Math.Min(typed.Length, 4)];
+            await input.Type(typed, msPerChar: 70);
+            await Settle(350);
+            var item = await WaitFor(() => Find<ListBoxItem>(i => i.Tag as string == name && i.IsVisible), $"{name} in the list", 3000);
+            await Click(item);
+            await Settle(300);
+        }
+        catch (TimeoutException)
+        {
+            Log?.Invoke($"{component}.{label}'s list didn't show {name}");
+        }
+
+        if (InspectorRow(component, label)?.DataContext is not PropertyField after)
+            return;
+        // A list naming several stays open, to tick another.
+        after.IsPickerOpen = false;
+        var done = after.Kind is FieldKind.Image or FieldKind.Sound ? after.TextValue == name : after.Names(name) == wanted;
+        if (!done)
+        {
+            after.Pick(name);
+            Log?.Invoke($"FORCED pick {component}.{label} = {name}");
             await Settle();
         }
     }

@@ -230,6 +230,27 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
     internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _workspace.Components));
 
+    private KnownNames? _names;
+    private bool _namesRead;
+
+    /// <summary>
+    /// The project's prefabs, scenes, input actions, layers and messages, read when a field first asks after the
+    /// selection or the scene changes.
+    /// </summary>
+    public KnownNames? Names
+    {
+        get
+        {
+            if (!_namesRead)
+            {
+                _namesRead = true;
+                _names = _workspace.Names;
+            }
+
+            return _names;
+        }
+    }
+
     /// <summary>The project's prefabs' names, read as the selection changes: fields can name them as well as entities.</summary>
     public IReadOnlyCollection<string> PrefabNames { get; private set; } = [];
 
@@ -325,6 +346,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private void OnDocumentChanged(object? sender, EditEventArgs e)
     {
+        _namesRead = false;
         if (ChangesComponents(e.Edit) || PrefabsChanged() || Components.Any(c => c.IsOutOfDate))
             Rebuild();
         else
@@ -353,6 +375,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     private void Rebuild()
     {
+        _namesRead = false;
         Components.Clear();
         _prefabParts.Clear();
         _addedToCopies.Clear();
@@ -729,6 +752,12 @@ public enum FieldKind
     /// entities, and entities can be dropped on it from the Hierarchy.
     /// </summary>
     Entity,
+
+    /// <summary>
+    /// The name of a prefab, scene, input action, collision layer or message (or several, separated by commas): text,
+    /// with a button to pick one of the project's, flagged when it matches none of them.
+    /// </summary>
+    Name,
 }
 
 /// <summary>
@@ -768,6 +797,7 @@ public sealed class PropertyField : ObservableObject
             : type == typeof(string) && IsSoundName(property.Name) ? FieldKind.Sound
             : type == typeof(string) && IsImageName(property.Name) ? FieldKind.Image
             : property.EntityName is not null ? FieldKind.Entity
+            : property.Names is not null ? FieldKind.Name
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
@@ -857,47 +887,7 @@ public sealed class PropertyField : ObservableObject
 
     public IRelayCommand PaintImageCommand => _paintImage ??= new RelayCommand(PaintImage);
 
-    /// <summary>Shows the project's images in a menu under the button that asked; picking one sets it.</summary>
-    public IRelayCommand<FrameworkElement> ChooseImageCommand => _chooseImage ??= new RelayCommand<FrameworkElement>(ChooseImage);
-
     private IRelayCommand? _paintImage;
-    private IRelayCommand<FrameworkElement>? _chooseImage;
-
-    private void ChooseImage(FrameworkElement? anchor)
-    {
-        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
-        var current = IsMixed ? null : Value as string;
-        var art = Art.EditorArt.Current;
-        var images = art?.Images() ?? [];
-        foreach (var image in images)
-        {
-            var item = new MenuItem
-            {
-                Header = image,
-                IsCheckable = true,
-                IsChecked = string.Equals(image, current, StringComparison.OrdinalIgnoreCase),
-                Icon = new System.Windows.Controls.Image { Source = art?.Thumbnail(image), Width = 16, Height = 16, Stretch = Stretch.Uniform },
-            };
-            RenderOptions.SetBitmapScalingMode(item.Icon as DependencyObject, BitmapScalingMode.NearestNeighbor);
-            item.Click += (_, _) => UseChosenImage(image);
-            menu.Items.Add(item);
-        }
-
-        if (images.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "No images in the project yet", IsEnabled = false });
-        menu.Items.Add(new Separator());
-        var paint = new MenuItem { Header = "Paint a New One...", Icon = Icons.Create(Icons.Palette) };
-        paint.Click += (_, _) => PaintImage(fresh: true);
-        menu.Items.Add(paint);
-        if (!string.IsNullOrEmpty(current) || IsMixed)
-        {
-            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
-            clear.Click += (_, _) => TextValue = null;
-            menu.Items.Add(clear);
-        }
-
-        menu.IsOpen = true;
-    }
 
     // A picture painted in Griff brings its frames or tiles along; any other is just set.
     private void UseChosenImage(string image)
@@ -941,52 +931,13 @@ public sealed class PropertyField : ObservableObject
 
     public IRelayCommand MakeSoundCommand => _makeSound ??= new RelayCommand(MakeSound);
 
-    /// <summary>Shows the project's sounds in a menu under the button that asked; picking one sets it.</summary>
-    public IRelayCommand<FrameworkElement> ChooseSoundCommand => _chooseSound ??= new RelayCommand<FrameworkElement>(ChooseSound);
-
     private IRelayCommand? _previewSound, _makeSound;
-    private IRelayCommand<FrameworkElement>? _chooseSound;
 
-    private void ChooseSound(FrameworkElement? anchor)
-    {
-        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
-        var current = IsMixed ? null : Value as string;
-        var sounds = SoundChoices();
-        foreach (var sound in sounds)
-        {
-            var item = new MenuItem
-            {
-                Header = sound,
-                IsCheckable = true,
-                IsChecked = string.Equals(sound, current, StringComparison.OrdinalIgnoreCase),
-                Icon = Icons.Create(sound.StartsWith("Music/", StringComparison.OrdinalIgnoreCase) ? Icons.Music : Icons.Audio),
-            };
-            item.Click += (_, _) =>
-            {
-                TextValue = sound;
-                Audio.EditorAudio.Current?.Preview(sound);
-            };
-            menu.Items.Add(item);
-        }
-
-        if (sounds.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "No sounds in the project yet", IsEnabled = false });
-        menu.Items.Add(new Separator());
-        var make = new MenuItem { Header = IsMusic ? "New Music..." : "New Sound...", Icon = Icons.Create(IsMusic ? Icons.Music : Icons.Audio) };
-        make.Click += (_, _) => Audio.EditorAudio.Current?.OpenMaker(IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect, saved: saved => TextValue = saved);
-        menu.Items.Add(make);
-        if (!string.IsNullOrEmpty(current) || IsMixed)
-        {
-            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
-            clear.Click += (_, _) => TextValue = null;
-            menu.Items.Add(clear);
-        }
-
-        menu.IsOpen = true;
-    }
-
-    /// <summary>For an entity field: whether it names several, separated by commas, so picking one adds it (or takes it out).</summary>
-    public bool NamesMany => _property.EntityName?.Many == true;
+    /// <summary>
+    /// For a field naming entities, layers or the like: whether it names several, separated by commas, so picking one
+    /// adds it (or takes it out).
+    /// </summary>
+    public bool NamesMany => _property.EntityName?.Many == true || _property.Names?.Many == true;
 
     /// <summary>
     /// For an entity field: the entities it can name, in Hierarchy order, each with how deep it is. One that names an
@@ -1010,38 +961,62 @@ public sealed class PropertyField : ObservableObject
     }
 
     /// <summary>
-    /// For an entity field: the names it holds that match nothing, no entity it can name and no prefab (shown in red).
-    /// Empty when they all match, or with several selected whose values differ.
+    /// The names the field holds that match nothing (shown in yellow): for an entity field, no entity it can name and no
+    /// prefab; for one naming a prefab, scene, input action, layer or message, none the project has (see
+    /// <see cref="KnownNames"/>). Empty when they all match, or with several selected whose values differ.
     /// </summary>
-    public IReadOnlyList<string> UnmatchedNames => _unmatched ??=
-        Kind == FieldKind.Entity && !IsMixed ? EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames, _owner.InPrefab) : [];
+    public IReadOnlyList<string> UnmatchedNames => _unmatched ??= IsMixed ? [] : Kind switch
+    {
+        FieldKind.Entity => EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames, _owner.InPrefab),
+        FieldKind.Name => _owner.Names?.Unmatched(_components[0], _property) ?? [],
+        _ => [],
+    };
 
     private IReadOnlyList<string>? _unmatched;
 
     public bool IsUnmatched => UnmatchedNames.Count > 0;
 
-    /// <summary>Says which names match nothing, e.g. "Nothing in the scene is called "Playr"".</summary>
-    public string? UnmatchedTip => IsUnmatched
-        ? $"Nothing {(_property.EntityName!.Inside ? $"inside {_components[0].Entity?.Name}" : "in the scene")} is called " +
-          string.Join(" or ", UnmatchedNames.Select(n => $"\"{n}\""))
-        : null;
+    /// <summary>
+    /// Says which names match nothing, e.g. "Nothing in the scene is called "Playr"" or "There's no prefab called
+    /// "Bulet" in the project".
+    /// </summary>
+    public string? UnmatchedTip => !IsUnmatched ? null
+        : Kind == FieldKind.Name ? KnownNames.Problem(_property.Names!, UnmatchedNames)
+        : $"Nothing {(_property.EntityName!.Inside ? $"inside {_components[0].Entity?.Name}" : "in the scene")} is called " +
+          string.Join(" or ", UnmatchedNames.Select(n => $"\"{n}\""));
 
     /// <summary>True when the field names <paramref name="name"/>: on every selected entity, when there are several.</summary>
-    public bool Names(string name) => _components.All(c => SplitNames(_property.GetValue(c)).Contains(name));
+    public bool Names(string name) => _components.All(c => SplitNames(_property.GetValue(c)).Contains(name, NameComparer));
+
+    // Entities and messages match exactly, as the game matches them; prefabs, scenes, actions and layers whatever their capitals.
+    private StringComparer NameComparer =>
+        _property.Names is { Kind: not NameKind.Message } ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     /// <summary>
-    /// Picks an entity by name: names it, or on a field that names several, adds it (to those that don't have it yet)
-    /// or takes it out again (when they all have it).
+    /// Picks something from the field's list by name, as clicking it there does: an image or sound by its path; on a
+    /// field naming entities, prefabs, layers or the like, names it, or on one naming several, adds it (to those that
+    /// don't have it yet) or takes it out again (when they all have it).
     /// </summary>
-    public void PickEntity(string name)
+    public void Pick(string name)
     {
         name = name.Trim();
         if (name.Length == 0)
             return;
+        switch (Kind)
+        {
+            case FieldKind.Image:
+                UseChosenImage(name);
+                return;
+            case FieldKind.Sound:
+                TextValue = name;
+                Audio.EditorAudio.Current?.Preview(name);
+                return;
+        }
+
         if (!NamesMany)
             Value = name;
         else if (Names(name))
-            SetEach(names => names.Remove(name));
+            SetEach(names => names.RemoveAll(n => NameComparer.Equals(n, name)));
         else
             SetEach(names => names.Add(name));
         _owner.Seal();
@@ -1066,55 +1041,145 @@ public sealed class PropertyField : ObservableObject
         var names = SplitNames(_property.GetValue(c));
         var had = names.ToList();
         change(names);
-        names = [.. names.Distinct()];
+        names = [.. names.Distinct(NameComparer)];
         return names.SequenceEqual(had) ? _property.GetValue(c) : names.Count == 0 ? null : (object)string.Join(", ", names);
     })]);
 
     private static List<string> SplitNames(object? value) =>
         [.. (value as string ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
-    /// <summary>Shows the entities the field can name in a menu under the button that asked; picking one names it.</summary>
-    public IRelayCommand<FrameworkElement> ChooseEntityCommand => _chooseEntity ??= new RelayCommand<FrameworkElement>(ChooseEntity);
+    /// <summary>True for a field with a list to pick from: images, sounds, and names of entities, prefabs, scenes, input actions, layers and messages.</summary>
+    public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name;
 
-    private IRelayCommand<FrameworkElement>? _chooseEntity;
+    /// <summary>For a field naming a prefab, scene, input action, layer or message: "a prefab", "a message".</summary>
+    public string? NameNoun => _property.Names is { } kind ? KnownNames.Noun(kind) : null;
 
-    private void ChooseEntity(FrameworkElement? anchor)
+    /// <summary>The tooltip on the button that opens the field's list.</summary>
+    public string PickerTip => Kind switch
     {
-        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
-        var choices = EntityChoices();
-        foreach (var choice in choices)
+        FieldKind.Image => "Choose an image from the project",
+        FieldKind.Sound => IsMusic ? "Choose music from the project" : "Choose a sound from the project",
+        FieldKind.Entity => _property.EntityName?.Inside == true
+            ? "Choose an entity inside this one, or drag one here from the Hierarchy"
+            : "Choose an entity from the scene, or drag one here from the Hierarchy",
+        _ => _property.Names?.Kind switch
         {
-            var item = new MenuItem
-            {
+            NameKind.Message => "Choose a message the project sends or listens for, or type a new one",
+            NameKind.Layer => "Choose a collision layer something is on, or type a new one",
+            NameKind.Action => "Choose an input action: every game's own, or one from Game > Controls",
+            NameKind.Prefab => "Choose a prefab from the project, or drag one here from the Assets panel",
+            _ => "Choose a scene from the project, or drag one here from the Assets panel",
+        },
+    };
+
+    private FieldPicker? _picker;
+    private long _pickerClosedAt;
+    private IRelayCommand? _togglePicker;
+
+    /// <summary>
+    /// The field's list while it's open (null when it's shut): what it can pick, narrowed by what's typed in its Search.
+    /// Open it with <see cref="IsPickerOpen"/>, and pick with its Pick("Name") or PickSelected.
+    /// </summary>
+    public FieldPicker? Picker
+    {
+        get => _picker;
+        private set => SetProperty(ref _picker, value);
+    }
+
+    /// <summary>Whether the field's list is open. Opening it lists what's there now, with nothing typed.</summary>
+    public bool IsPickerOpen
+    {
+        get => Picker is not null;
+        set
+        {
+            if (value == IsPickerOpen || (value && !HasPicker))
+                return;
+            if (!value)
+                _pickerClosedAt = Environment.TickCount64;
+            Picker = value ? CreatePicker() : null;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Opens the field's list, or shuts it.</summary>
+    public IRelayCommand TogglePickerCommand => _togglePicker ??= new RelayCommand(() =>
+        // A click on the button while the list is open shuts it (as the mouse goes down outside it), rather than
+        // opening it again.
+        IsPickerOpen = !IsPickerOpen && Environment.TickCount64 - _pickerClosedAt > 250);
+
+    private FieldPicker CreatePicker()
+    {
+        var current = IsMixed ? null : Value as string;
+        PickerAction[] none = !string.IsNullOrEmpty(current) || IsMixed ? [new("None", Icons.Clear, "picker:none", () => TextValue = null)] : [];
+        IReadOnlyList<PickerChoice> choices;
+        PickerSetup setup;
+        switch (Kind)
+        {
+            case FieldKind.Image:
+                var art = Art.EditorArt.Current;
+                choices = [.. (art?.Images() ?? []).Select(i => new PickerChoice(i, thumbnail: () => art?.Thumbnail(i)))];
+                setup = new("Type to find an image", "No images in the project yet", false, false,
+                    [new("Paint a New One...", Icons.Palette, "picker:paint", () => PaintImage(fresh: true)), .. none]);
+                break;
+            case FieldKind.Sound:
+                choices = [.. SoundChoices().Select(s => new PickerChoice(s, icon: s.StartsWith("Music/", StringComparison.OrdinalIgnoreCase) ? Icons.Music : Icons.Audio))];
+                var mode = IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect;
+                setup = new(IsMusic ? "Type to find music" : "Type to find a sound", "No sounds in the project yet", false, false,
+                    [new(IsMusic ? "New Music..." : "New Sound...", IsMusic ? Icons.Music : Icons.Audio, "picker:make",
+                        () => Audio.EditorAudio.Current?.OpenMaker(mode, saved: saved => TextValue = saved)), .. none]);
+                break;
+            case FieldKind.Entity:
+                var inside = _property.EntityName?.Inside == true;
                 // Indented like the Hierarchy, so children show under their parents.
-                Header = new TextBlock { Text = choice.Entity.Name, Margin = new Thickness(choice.Depth * 12, 0, 0, 0) },
-                Tag = choice.Entity.Name,
-                IsCheckable = true,
-                IsChecked = choice.IsNamed,
-                // Several can be ticked in turn without opening it again.
-                StaysOpenOnClick = NamesMany,
-            };
-            var name = choice.Entity.Name;
-            item.Click += (_, _) =>
-            {
-                PickEntity(name);
-                foreach (var other in menu.Items.OfType<MenuItem>().Where(i => Equals(i.Tag, name)))
-                    other.IsChecked = Names(name);
-            };
-            menu.Items.Add(item);
+                choices = [.. EntityChoices().Select(c => new PickerChoice(c.Entity.Name, depth: c.Depth))];
+                setup = new(inside ? "Type to find an entity inside this one" : "Type to find an entity",
+                    inside ? "Nothing inside this entity yet" : "No entities in the scene", NamesMany, true, none);
+                break;
+            default:
+                var kind = _property.Names!;
+                choices = [.. (_owner.Names?.Choices(kind) ?? []).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                setup = new($"Type to find {NameNoun}", kind.Kind switch
+                {
+                    NameKind.Prefab => "No prefabs in the project yet",
+                    NameKind.Scene => "No scenes in the project yet",
+                    NameKind.Message => "No messages sent or heard yet: type one to use it",
+                    _ => "None in the project yet: type one to use it",
+                }, NamesMany, true, none);
+                break;
         }
 
-        if (choices.Count == 0)
-            menu.Items.Add(new MenuItem { Header = _property.EntityName?.Inside == true ? "Nothing inside this entity yet" : "No entities in the scene", IsEnabled = false });
-        if (!string.IsNullOrEmpty(Value as string) || IsMixed)
+        bool IsPicked(string name) => Kind is FieldKind.Image or FieldKind.Sound
+            ? string.Equals(name, current, StringComparison.OrdinalIgnoreCase)
+            : Names(name);
+        return new FieldPicker(setup, choices, Pick, IsPicked, () => IsPickerOpen = false);
+    }
+
+    /// <summary>
+    /// True when a file from the Assets panel can be dropped on the field: any on a text field, a prefab on a field
+    /// naming prefabs, a scene on one naming scenes.
+    /// </summary>
+    public bool TakesAsset(string path) => Kind switch
+    {
+        FieldKind.Text => true,
+        FieldKind.Name => _property.Names!.Kind switch
         {
-            menu.Items.Add(new Separator());
-            var clear = new MenuItem { Header = "None", Icon = Icons.Create(Icons.Clear) };
-            clear.Click += (_, _) => TextValue = null;
-            menu.Items.Add(clear);
-        }
+            NameKind.Prefab => path.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase),
+            NameKind.Scene => path.EndsWith(Griff.Projects.Project.SceneExtension, StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        },
+        _ => false,
+    };
 
-        menu.IsOpen = true;
+    /// <summary>
+    /// A file dropped on the field from the Assets panel: a prefab or scene is named (by name, as the field's list
+    /// names it); any other file is set as its path.
+    /// </summary>
+    public void DropAsset(string path)
+    {
+        if (Kind == FieldKind.Name)
+            Pick(System.IO.Path.GetFileNameWithoutExtension(path));
+        else
+            TextValue = path;
     }
 
     public bool IsInteger => _property.Type == typeof(int);
@@ -1413,6 +1478,12 @@ public interface IPropertyHost
 
     /// <summary>True for a prefab on its own: only names of things inside a field's entity can be checked.</summary>
     bool InPrefab => false;
+
+    /// <summary>
+    /// The project's prefabs, scenes, input actions, layers and messages, which fields naming them list and are checked
+    /// against; null when they can't be known (nothing is flagged then).
+    /// </summary>
+    KnownNames? Names => null;
 
     /// <summary>For a component of a placed prefab copy (or of something inside one): the prefab's own, or null.</summary>
     Component? PrefabComponent(Component component) => null;

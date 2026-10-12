@@ -88,7 +88,7 @@ public class InspectorEntityPickerTests
         var camera = Named(document, "Camera");
         selection.Select(camera);
 
-        Field(inspector, "Follow", "Target").PickEntity("Gate");
+        Field(inspector, "Follow", "Target").Pick("Gate");
         Assert.Equal("Gate", camera.GetComponent<Follow>()!.Target);
         Assert.True(Field(inspector, "Follow", "Target").EntityChoices().Single(c => c.Entity.Name == "Gate").IsNamed);
 
@@ -104,11 +104,11 @@ public class InspectorEntityPickerTests
         selection.Select(lever.Entity!);
         var targets = Field(inspector, "Switch", "Targets");
 
-        targets.PickEntity("Gate");
+        targets.Pick("Gate");
         Assert.Equal("Lift, Gate", lever.Targets);
-        targets.PickEntity("Lift");
+        targets.Pick("Lift");
         Assert.Equal("Gate", lever.Targets);
-        targets.PickEntity("Gate");
+        targets.Pick("Gate");
         Assert.Null(lever.Targets);
 
         document.History.Undo();
@@ -124,14 +124,14 @@ public class InspectorEntityPickerTests
         var targets = Field(inspector, "Switch", "Targets");
         Assert.True(targets.IsMixed);
 
-        targets.PickEntity("Gate");
+        targets.Pick("Gate");
         Assert.Equal("Lift, Gate", lever.Targets);
         Assert.Equal("Gate", plate.Targets);
         Assert.True(targets.Names("Gate"));
         Assert.Equal("Change Targets on 2 entities", document.History.UndoDescription);
 
         // Named by all of them: picking it again takes it out of all of them.
-        targets.PickEntity("Gate");
+        targets.Pick("Gate");
         Assert.Equal("Lift", lever.Targets);
         Assert.Null(plate.Targets);
     });
@@ -161,9 +161,9 @@ public class InspectorEntityPickerTests
 
         // What ui_invoke runs (on the UI thread): an item picked by its title, then a field by its label.
         using var gate = System.Text.Json.JsonDocument.Parse("""["Gate"]""");
-        Griff.Agent.ObjectSurface.InvokeAsync(inspector, "Components[Switch].Properties[Targets].PickEntity", gate.RootElement).GetAwaiter().GetResult();
+        Griff.Agent.ObjectSurface.InvokeAsync(inspector, "Components[Switch].Properties[Targets].Pick", gate.RootElement).GetAwaiter().GetResult();
         using var bar = System.Text.Json.JsonDocument.Parse("""["Bar"]""");
-        Griff.Agent.ObjectSurface.InvokeAsync(inspector, "Components[Switch].Properties[Prompt].PickEntity", bar.RootElement).GetAwaiter().GetResult();
+        Griff.Agent.ObjectSurface.InvokeAsync(inspector, "Components[Switch].Properties[Prompt].Pick", bar.RootElement).GetAwaiter().GetResult();
 
         Assert.Equal("Lift, Gate", lever.Targets);
         Assert.Equal("Bar", lever.Prompt);

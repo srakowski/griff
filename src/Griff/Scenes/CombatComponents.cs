@@ -21,6 +21,7 @@ namespace Griff.Scenes;
 public sealed class Attack : Component
 {
     /// <summary>The input action that swings it, e.g. "Attack" (X, L, the right mouse button or the gamepad's X). Empty for an enemy.</summary>
+    [Names(NameKind.Action)]
     public string? Action { get; set; } = "Attack";
 
     /// <summary>The name of the child entity that does the damage while the attack is out.</summary>

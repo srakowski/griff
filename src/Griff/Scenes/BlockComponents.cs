@@ -240,6 +240,7 @@ public sealed class Blocks : Component
     public string? SaveAs { get; set; }
 
     /// <summary>A prefab spawned where a block breaks, e.g. a puff of dust.</summary>
+    [Names(NameKind.Prefab)]
     public string? BreakEffect { get; set; }
 
     /// <summary>A sound played while digging, each time a block cracks a little more.</summary>

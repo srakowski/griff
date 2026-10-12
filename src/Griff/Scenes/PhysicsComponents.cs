@@ -18,12 +18,14 @@ public abstract class Collider : Component
     /// A name for what kind of thing this is, e.g. "Player", "Enemy" or "Bullet", for <see cref="IgnoreLayers"/> and physics
     /// queries. Empty is the "Default" layer.
     /// </summary>
+    [Names(NameKind.Layer, Defines = true)]
     public abstract string? Layer { get; set; }
 
     /// <summary>
     /// Layers this collider passes through, e.g. "Bullet, Enemy": no blocking, no collisions, no triggers. It works both
     /// ways, so only one side has to list the other.
     /// </summary>
+    [Names(NameKind.Layer, Many = true)]
     public abstract string? IgnoreLayers { get; set; }
 }
 

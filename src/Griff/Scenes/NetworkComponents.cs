@@ -72,6 +72,7 @@ public sealed class Multiplayer : Component
     public bool RememberPlayers { get; set; }
 
     /// <summary>The scene to go back to when the connection to the host is lost or the host leaves, e.g. "Menu". Empty restarts this one.</summary>
+    [Names(NameKind.Scene)]
     public string? ExitScene { get; set; }
 }
 

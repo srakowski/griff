@@ -138,6 +138,7 @@ public sealed class Room : Component
     public Color Ambient { get; set; } = Color.Transparent;
 
     /// <summary>A message sent with <c>Game.Send</c> when the room is entered, with the room's entity as its data.</summary>
+    [Names(NameKind.Message)]
     public string? Message { get; set; }
 
     /// <summary>True while it's the room the camera is in.</summary>
@@ -230,6 +231,7 @@ public sealed class SoundPlayer : Component
     public string? Sound { get; set; }
 
     /// <summary>The message that plays it, e.g. "Score". Empty plays it only on start.</summary>
+    [Names(NameKind.Message, Hears = true)]
     public string? Message { get; set; }
 
     /// <summary>Plays it as soon as it appears: a scene's opening sting, a spawned explosion.</summary>

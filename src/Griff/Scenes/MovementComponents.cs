@@ -93,6 +93,7 @@ public sealed class PlatformerMovement : Component
     public string? DashSound { get; set; }
 
     /// <summary>A prefab spawned at its feet on jumping and landing, e.g. a puff of "Dust".</summary>
+    [Names(NameKind.Prefab)]
     public string? DustEffect { get; set; }
 
     /// <summary>Which way it faces: 1 right, -1 left.</summary>

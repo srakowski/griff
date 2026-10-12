@@ -38,6 +38,12 @@ public interface IAgentScene
     /// <summary>The names of the project's prefabs, which fields that name entities can name too.</summary>
     IReadOnlyCollection<string> PrefabNames => [];
 
+    /// <summary>
+    /// The project's prefabs, scenes, input actions, collision layers and messages, which other fields name (see
+    /// <see cref="NamesAttribute"/>): names matching none of them are reported. Null when they can't be known.
+    /// </summary>
+    KnownNames? Names => null;
+
     /// <summary>True while a prefab is open on its own (in its tab) in place of the scene: <see cref="ScenePath"/> is the prefab's.</summary>
     bool IsPrefab => ScenePath?.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -233,8 +239,31 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 text.Append($"- {reference.Component.Entity!.Name} #{AgentValues.ShortId(reference.Component.Entity.Id)} {reference.Label}: ")
                     .AppendLine(string.Join(", ", names.Select(n => $"\"{n}\"")));
         }
+        var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
+        if (unknown.Count > 0)
+        {
+            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers or messages, flagged in the Inspector):");
+            foreach (var (component, label, problem) in unknown)
+                text.AppendLine($"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
+        }
 
         return ToolResult.Ok(text.ToString());
+    }
+
+    // The components' fields naming a prefab, scene, input action, layer or message the project hasn't got, each as
+    // "Shooter.Prefab" and why, as the Inspector flags them.
+    private IEnumerable<(Component Component, string Label, string Problem)> UnmatchedKnown(IEnumerable<Component> components)
+    {
+        if (host.Names is not { } known)
+            yield break;
+        foreach (var component in components.Where(c => host.Components.IsRegistered(c.GetType())))
+        {
+            foreach (var property in host.Components.Get(component.GetType()).Properties.Where(p => p.Names is not null))
+            {
+                if (known.Unmatched(component, property) is { Count: > 0 } names)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", KnownNames.Problem(property.Names!, names) + ".");
+            }
+        }
     }
 
     private static void Outline(StringBuilder text, Entity entity, int level, int depth)
@@ -322,11 +351,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             .Select(r => (Reference: r, Names: EntityReferences.Unmatched(r, host.PrefabNames, host.IsPrefab)))
             .Where(r => r.Names.Count > 0)
             .ToList();
-        if (unmatched.Count > 0)
-        {
-            result["unmatched"] = new JsonObject(unmatched.Select(u =>
-                KeyValuePair.Create(u.Reference.Label, (JsonNode?)$"Nothing {(u.Reference.Kind.Inside ? "inside it" : "in the scene")} is called {string.Join(" or ", u.Names.Select(n => $"\"{n}\""))}.")));
-        }
+        var unmatchedNames = unmatched.Select(u =>
+            KeyValuePair.Create(u.Reference.Label, (JsonNode?)$"Nothing {(u.Reference.Kind.Inside ? "inside it" : "in the scene")} is called {string.Join(" or ", u.Names.Select(n => $"\"{n}\""))}.")).ToList();
+        unmatchedNames.AddRange(UnmatchedKnown(entity.Components).Select(u => KeyValuePair.Create(u.Label, (JsonNode?)u.Problem)));
+
+        if (unmatchedNames.Count > 0)
+            result["unmatched"] = new JsonObject(unmatchedNames);
 
         if (entity.Children.Count > 0)
         {
@@ -712,6 +742,13 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     { Many: true } => " (Names entities: their names, separated by commas.)",
                     { Inside: true } => " (Names an entity inside this one.)",
                     _ => " (Names an entity.)",
+                });
+            if (property.Names is { } names)
+                text.Append(names switch
+                {
+                    { Defines: true } => $" (Names {KnownNames.Noun(names)}: this entity's own, which other fields can name.)",
+                    { Many: true } => $" (Names {KnownNames.Noun(names)[(KnownNames.Noun(names).IndexOf(' ') + 1)..]}s: their names, separated by commas.)",
+                    _ => $" (Names {KnownNames.Noun(names)}.)",
                 });
             text.AppendLine();
         }

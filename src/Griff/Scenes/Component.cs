@@ -107,3 +107,44 @@ public sealed class EntityNameAttribute : Attribute
     /// </summary>
     public string? Unless { get; init; }
 }
+
+/// <summary>What a <see cref="NamesAttribute"/> field names.</summary>
+public enum NameKind
+{
+    /// <summary>A prefab in the project, by name, e.g. "Bullet" (Assets/Prefabs/Bullet.prefab).</summary>
+    Prefab,
+
+    /// <summary>A scene in the project, by name, e.g. "Level2".</summary>
+    Scene,
+
+    /// <summary>An input action: one every game has (Jump, Fire, Attack...) or one of the game's own Controls.</summary>
+    Action,
+
+    /// <summary>A collision layer: what a collider or tilemap says it is, e.g. "Player".</summary>
+    Layer,
+
+    /// <summary>A message sent with <c>Game.Send</c> and heard with <c>On</c>, e.g. "Score".</summary>
+    Message,
+}
+
+/// <summary>
+/// Marks a string property as naming a prefab, scene, input action, collision layer or message: the editor's Inspector
+/// lets you pick one from a list of those the project has, and flags a name that matches none of them.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class NamesAttribute(NameKind kind) : Attribute
+{
+    public NameKind Kind { get; } = kind;
+
+    /// <summary>It names several, separated by commas (a pickup's Layers): picking one adds it, or takes it out again.</summary>
+    public bool Many { get; init; }
+
+    /// <summary>
+    /// It's where the name comes from rather than a use of it: a collider's own Layer, so it's never flagged, and the
+    /// layer it gives is one the others can name.
+    /// </summary>
+    public bool Defines { get; init; }
+
+    /// <summary>For a message: it's heard (a counter adds up the message), so it's flagged when nothing sends it, not when nothing hears it.</summary>
+    public bool Hears { get; init; }
+}

@@ -95,6 +95,7 @@ public sealed class PropertyDescriptor
         SerializedName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
+        Names = property.PropertyType == typeof(string) ? property.GetCustomAttribute<NamesAttribute>() : null;
     }
 
     internal PropertyInfo Info => _property;
@@ -111,6 +112,12 @@ public sealed class PropertyDescriptor
 
     /// <summary>For a string marked <see cref="EntityNameAttribute"/>: it names entities, which the Inspector picks from a list.</summary>
     public EntityNameAttribute? EntityName { get; }
+
+    /// <summary>
+    /// For a string marked <see cref="NamesAttribute"/>: it names a prefab, scene, input action, collision layer or
+    /// message, which the Inspector picks from a list of the project's.
+    /// </summary>
+    public NamesAttribute? Names { get; }
 
     public object? GetValue(Component component) => _property.GetValue(component);
 

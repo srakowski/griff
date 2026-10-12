@@ -49,6 +49,7 @@ public sealed class TurnOrder : Component
     /// The input action that ends a person's turn: "EndTurn" is Tab or the gamepad's Back. Empty ends turns only with an
     /// End Turn button or a script.
     /// </summary>
+    [Names(NameKind.Action)]
     public string? EndAction { get; set; } = "EndTurn";
 
     /// <summary>
@@ -61,6 +62,7 @@ public sealed class TurnOrder : Component
     /// A message sent with <c>Game.Send</c> as each turn starts, with the side's name as its data. {0} in it is the side's
     /// name: "{0}Turn" sends "PlayerTurn", then "EnemyTurn".
     /// </summary>
+    [Names(NameKind.Message)]
     public string? Message { get; set; } = "{0}Turn";
 
     /// <summary>A sound played as each turn starts, e.g. "Sounds/turn.wav".</summary>

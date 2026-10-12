@@ -1,0 +1,37 @@
+title: Pick prefabs, layers and messages
+intro: Fields that name a prefab, a scene, an input action, a collision layer or a message now list what the project has, flag a name it doesn't, and every list narrows as you type.
+project: Platformer | Field Pickers
+
+chapter: Prefabs | The burst a coin leaves behind
+select: Coin
+say: A coin names other things in the project. Its Effect is the prefab it leaves behind when it's collected.
+explain: pick:Pickup.Effect | A list of prefabs | Fields that name a prefab now have a button listing the project's prefabs, like the one by fields that name entities.
+say: Type a name with a slip in it, and the field says so.
+set: Pickup.Effect = Sparkel
+expectflagged: Pickup.Effect = Sparkel
+explain: field:Pickup.Effect | Flagged | Shown in yellow, with a warning that the project has no prefab called that.
+say: Open the list and type the first letters: only the prefabs that match are left. Click one to use it.
+pick: Pickup.Effect = Sparkle
+expectvalue: Coin.Pickup.Effect = Sparkle
+expectflagged: Pickup.Effect = none
+
+chapter: Layers | Who can collect it
+explain: field:Pickup.Layers | Collision layers | Layers lists the collision layers things in the project are on: the player's, the enemies', the sword's.
+say: Let the enemies snatch coins too. Picking a layer adds it to the list.
+pick: Pickup.Layers = Enemy
+expectvalue: Coin.Pickup.Layers = Player, Enemy
+say: Picking it again takes it out.
+pick: Pickup.Layers = Enemy
+expectvalue: Coin.Pickup.Layers = Player
+
+chapter: Messages | A counter and what it counts
+select: Score
+explain: field:Counter.Message | What it counts | The score counter adds up a message. The coins send Score as they're collected.
+set: Counter.Message = Coins
+expectflagged: Counter.Message = Coins
+explain: field:Counter.Message | Nothing sends it | Nothing in the project sends Coins, so the counter would never count. The field says so.
+say: The list shows every message the project sends or listens for, each marked sent or heard.
+pick: Counter.Message = Score
+expectvalue: Score.Counter.Message = Score
+expectflagged: Counter.Message = none
+say: No more names that quietly match nothing.

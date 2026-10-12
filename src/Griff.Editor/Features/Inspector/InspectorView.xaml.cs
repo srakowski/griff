@@ -103,8 +103,8 @@ public partial class InspectorView : UserControl
 
     private void OnCatalogClicked(object sender, RoutedEventArgs e) => OpenCatalog();
 
-    // ----- Dropping on fields: a sound from the Assets panel onto a sound field, any asset onto a text field, and an
-    // entity from the Hierarchy onto a field that names entities.
+    // ----- Dropping on fields: a sound from the Assets panel onto a sound field, a prefab or scene onto a field naming
+    // one, any asset onto a text field, and an entity from the Hierarchy onto a field that names entities.
 
     private void OnPreviewDragOver(object sender, DragEventArgs e)
     {
@@ -122,7 +122,7 @@ public partial class InspectorView : UserControl
         if (e.Data.GetData(typeof(Hierarchy.EntityNode)) is Hierarchy.EntityNode node)
             field.DropEntity(node.Entity);
         else if (e.Data.GetData(Assets.AssetNode.DataFormat) is string path)
-            field.TextValue = path;
+            field.DropAsset(path);
         e.Handled = true;
     }
 
@@ -141,7 +141,7 @@ public partial class InspectorView : UserControl
                 {
                     FieldKind.Entity when isEntity => field,
                     FieldKind.Sound when isSound => field,
-                    FieldKind.Text when path is not null => field,
+                    _ when path is not null && field.TakesAsset(path) => field,
                     _ => null,
                 };
             }
@@ -199,6 +199,9 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Image { get; set; }
     public DataTemplate? Entity { get; set; }
 
+    /// <summary>For <see cref="FieldKind.Name"/>: a prefab, scene, input action, layer or message.</summary>
+    public DataTemplate? Named { get; set; }
+
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
         {
@@ -212,6 +215,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Sound => Sound,
             FieldKind.Image => Image,
             FieldKind.Entity => Entity,
+            FieldKind.Name => Named,
             _ => null,
         };
 }

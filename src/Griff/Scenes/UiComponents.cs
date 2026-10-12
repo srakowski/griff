@@ -123,6 +123,7 @@ public sealed class Button : Component
     /// For <see cref="ButtonAction.LoadScene"/>: the scene's name, e.g. "Level1". For Host Game and Leave Game, the scene
     /// to go to afterwards (empty stays).
     /// </summary>
+    [Names(NameKind.Scene)]
     public string? Scene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
@@ -133,6 +134,7 @@ public sealed class Button : Component
     public string? Panel { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
+    [Names(NameKind.Action)]
     public string? InputAction { get; set; }
 
     /// <summary>
@@ -482,6 +484,7 @@ public sealed class Panel : Component
     /// An input action that opens it when no other panel is open, and closes it again: "Pause" for a pause menu (Esc, P
     /// or Start), or one of your own, like "Map". Empty opens it only from a button or a script.
     /// </summary>
+    [Names(NameKind.Action)]
     public string? OpenOn { get; set; }
 
     /// <summary>

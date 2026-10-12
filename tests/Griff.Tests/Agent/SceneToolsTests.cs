@@ -34,6 +34,8 @@ public class SceneToolsTests
             coin.AddComponent<Sprite>();
             return coin;
         }
+
+        public KnownNames? Names { get; set; }
     }
 
     private readonly FakeHost _host = new();
@@ -286,6 +288,43 @@ public class SceneToolsTests
         _host.History.Undo();
         Assert.Equal("Player", Named("Camera").GetComponent<Follow>()!.Target);
         Assert.NotNull(Named("Player"));
+    }
+
+    [Fact]
+    public void PrefabsLayersAndMessagesThatMatchNothing_ShowInTheTreeAndOnTheEntity()
+    {
+        _host.Names = new KnownNames(["Bullet"], ["Main"], ["Fire"], ["Player"], ["Score"], []);
+        Run("entity_create", """
+            {"entities": [{"name": "Turret", "components": {"Shooter": {"prefab": "Bulet", "action": "Fire"}}},
+              {"name": "Hud", "components": {"Counter": {"message": "Coins"}}},
+              {"name": "Gem", "components": {"Pickup": {"layers": "Player, Hero", "message": "Score"}}}]}
+            """);
+
+        var tree = Run("scene_tree", "{}").Text;
+        Assert.Contains("Names that match nothing in the project", tree);
+        Assert.Contains("Shooter.Prefab: There's no prefab called \"Bulet\" in the project.", tree);
+        Assert.Contains("Counter.Message: Nothing sends \"Coins\"", tree);
+        Assert.Contains("Pickup.Layers: Nothing is on the layer \"Hero\"", tree);
+        Assert.DoesNotContain("Shooter.Action", tree);
+
+        var turret = Run("entity_get", """{"entity": "Turret"}""").Text;
+        Assert.Contains("\"unmatched\"", turret);
+        Assert.Contains("Shooter.Prefab", turret);
+
+        Run("entity_update", """{"entity": "Turret", "changes": {"components": {"Shooter": {"prefab": "Bullet"}}}}""");
+        Assert.DoesNotContain("unmatched", Run("entity_get", """{"entity": "Turret"}""").Text);
+    }
+
+    [Fact]
+    public void Describe_SaysWhatAFieldNames()
+    {
+        var spawner = Run("component_describe", """{"component": "Spawner"}""").Text;
+        Assert.Contains("(Names a prefab.)", spawner);
+        var pickup = Run("component_describe", """{"component": "Pickup"}""").Text;
+        Assert.Contains("(Names collision layers: their names, separated by commas.)", pickup);
+        Assert.Contains("(Names a message.)", pickup);
+        var box = Run("component_describe", """{"component": "BoxCollider"}""").Text;
+        Assert.Contains("(Names a collision layer: this entity's own, which other fields can name.)", box);
     }
 
     [Fact]

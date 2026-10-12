@@ -45,6 +45,7 @@ public sealed class Health : Component
     public bool DestroyOnDeath { get; set; } = true;
 
     /// <summary>A message sent with <c>Game.Send</c> when it dies, with the entity as its data, e.g. "PlayerDied" or "EnemyDied".</summary>
+    [Names(NameKind.Message)]
     public string? DeathMessage { get; set; }
 
     /// <summary>
@@ -224,6 +225,7 @@ public sealed class DamageOnTouch : Component
     /// The collision layers it hurts, e.g. "Player" on spikes and enemies, "Enemy" on the player's bullets. Empty hurts
     /// anything with health.
     /// </summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; }
 
     /// <summary>How hard a hit pushes the target's body away, in units per second. 0 doesn't push.</summary>
@@ -259,9 +261,11 @@ public sealed class DamageOnTouch : Component
 public sealed class Pickup : Component
 {
     /// <summary>The collision layers that can collect it, e.g. "Player". Empty lets anything with a <see cref="Body"/> collect it.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; }
 
     /// <summary>The message sent when it's collected, with <see cref="Amount"/> as its data. Empty sends nothing.</summary>
+    [Names(NameKind.Message)]
     public string? Message { get; set; } = "Score";
 
     /// <summary>How much it's worth: the data sent with its <see cref="Message"/>, and how many of its <see cref="Item"/>.</summary>
@@ -283,6 +287,7 @@ public sealed class Pickup : Component
     public float Heal { get; set; }
 
     /// <summary>A prefab spawned where it was, e.g. "Sparkle": a burst of particles, a score popup.</summary>
+    [Names(NameKind.Prefab)]
     public string? Effect { get; set; }
 
     /// <summary>Gives the <see cref="Effect"/>'s particles this entity's sprite color, so one sparkle suits every pickup.</summary>
@@ -319,6 +324,7 @@ public sealed class Pickup : Component
 public sealed class Counter : Component
 {
     /// <summary>The message that adds to it, e.g. "Score" for <c>Game.Send("Score", 10)</c>. Empty only counts <see cref="Add"/>.</summary>
+    [Names(NameKind.Message, Hears = true)]
     public string? Message { get; set; } = "Score";
 
     /// <summary>The count now. Set it to start from something other than 0.</summary>
@@ -411,6 +417,7 @@ public sealed class Spawner : Component
     private readonly List<Entity> _alive = [];
 
     /// <summary>The prefab to spawn, e.g. "Enemy" (Assets/Prefabs/Enemy.prefab).</summary>
+    [Names(NameKind.Prefab)]
     public string? Prefab { get; set; }
 
     /// <summary>Seconds between spawns.</summary>

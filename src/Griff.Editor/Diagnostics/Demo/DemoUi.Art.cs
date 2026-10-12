@@ -206,24 +206,7 @@ internal sealed partial class DemoUi
     }
 
     /// <summary>Picks an image for a field from its list of the project's images.</summary>
-    public async Task PickImage(string component, string label, string image)
-    {
-        var button = await WaitFor(() => ImageButton(component, label, "choose"), $"{component}.{label}'s image list");
-        await Click(button);
-        var item = await WaitFor(() => MenuItem(image), $"{image} in the list", 3000);
-        await Settle(250);
-        await Click(item);
-        await Settle(150);
-
-        if (InspectorRow(component, label)?.DataContext is PropertyField field && field.TextValue != image)
-        {
-            if (Find<ContextMenu>(m => m.IsOpen) is { } open)
-                open.IsOpen = false;
-            field.TextValue = image;
-            Log?.Invoke($"FORCED pickimage {component}.{label} = {image}");
-            await Settle();
-        }
-    }
+    public Task PickImage(string component, string label, string image) => PickFromList(component, label, image);
 
     /// <summary>One of an image field's buttons in the Inspector: choose or paint.</summary>
     public Button? ImageButton(string component, string label, string which) =>

@@ -157,6 +157,7 @@ public sealed class Weapon : Component
     public int Slot { get; set; } = 1;
 
     /// <summary>The input action that fires it, e.g. "Fire" (the left mouse button, J, or the gamepad's right trigger).</summary>
+    [Names(NameKind.Action)]
     public string? Action { get; set; } = "Fire";
 
     /// <summary>Hit points each bullet (or pellet) takes away.</summary>
@@ -188,12 +189,14 @@ public sealed class Weapon : Component
     public string? NeedsItem { get; set; }
 
     /// <summary>A prefab to launch instead of hitting straight away, e.g. "Rocket" or "Plasma". It needs a <see cref="Body"/> to fly.</summary>
+    [Names(NameKind.Prefab)]
     public string? Projectile { get; set; }
 
     /// <summary>How fast a <see cref="Projectile"/> flies, in world units per second.</summary>
     public float ProjectileSpeed { get; set; } = 12;
 
     /// <summary>A prefab spawned where a bullet hits, e.g. "Puff": sparks off a wall, a splash on an enemy.</summary>
+    [Names(NameKind.Prefab)]
     public string? ImpactEffect { get; set; }
 
     /// <summary>The sound of a shot, e.g. "Sounds/shoot.wav".</summary>

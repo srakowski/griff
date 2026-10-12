@@ -78,6 +78,35 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Arcade)]
     [InlineData(ProjectTemplate.Strategy)]
     [InlineData(ProjectTemplate.Shooter)]
+    [InlineData(ProjectTemplate.Sandbox)]
+    [InlineData(ProjectTemplate.Contraption)]
+    [InlineData(ProjectTemplate.Multiplayer)]
+    public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
+    {
+        var (project, _, _, registry) = await CreateAndLoad(template);
+        var serializer = new SceneSerializer(registry);
+        var names = new Griff.Editing.KnownNameIndex(registry).Get(project);
+        var entities = new List<(string File, Entity Entity)>();
+        foreach (var path in project.FindScenes())
+            entities.AddRange(serializer.LoadFromString(await File.ReadAllTextAsync(path)).Entities.Select(e => (Path.GetFileName(path), e)));
+        foreach (var path in project.FindPrefabs())
+            entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants().Select(e => (Path.GetFileName(path), e)));
+
+        var unmatched = entities
+            .SelectMany(e => e.Entity.Components.Where(c => registry.IsRegistered(c.GetType())).SelectMany(c => registry.Get(c.GetType()).Properties
+                .Where(p => p.Names is not null)
+                .Select(p => (e.File, e.Entity.Name, Field: $"{c.GetType().Name}.{p.Name}", Names: names.Unmatched(c, p)))))
+            .Where(u => u.Names.Count > 0)
+            .Select(u => $"{u.File}: {u.Name} {u.Field} = {string.Join(", ", u.Names)}");
+        Assert.Empty(unmatched);
+    }
+
+    [Theory]
+    [InlineData(ProjectTemplate.Platformer)]
+    [InlineData(ProjectTemplate.TopDown)]
+    [InlineData(ProjectTemplate.Arcade)]
+    [InlineData(ProjectTemplate.Strategy)]
+    [InlineData(ProjectTemplate.Shooter)]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);

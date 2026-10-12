@@ -207,6 +207,19 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
 
     public void Seal() => _scene?.History.Seal();
 
+    private (long At, Griff.Editing.KnownNames? Names)? _names;
+
+    // Read again at most once a second: fields ask whenever they refresh, which while playing is every frame.
+    public Griff.Editing.KnownNames? Names
+    {
+        get
+        {
+            if (_names is not { } known || Environment.TickCount64 - known.At > 1000)
+                _names = known = (Environment.TickCount64, _workspace.Names);
+            return known.Names;
+        }
+    }
+
     // ----- Keeping up -----
 
     private void ReadOutline()

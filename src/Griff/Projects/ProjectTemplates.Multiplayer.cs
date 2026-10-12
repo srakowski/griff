@@ -371,6 +371,8 @@ public static partial class ProjectTemplates
         var pickup = heart.AddComponent<Pickup>();
         pickup.Layers = "Player";
         pickup.Heal = 1;
+        // Hearts heal; points come from defeating things.
+        pickup.Message = null;
         pickup.Effect = "Sparkle";
         pickup.Sound = TemplateSounds.PowerUp;
         return heart;

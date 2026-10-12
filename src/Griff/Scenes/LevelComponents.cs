@@ -304,6 +304,7 @@ public sealed class Shooter : Component
     private float _cooldown = float.NaN;
 
     /// <summary>The prefab to fire, e.g. "Bullet" (Assets/Prefabs/Bullet.prefab). It needs a <see cref="Body"/> to fly.</summary>
+    [Names(NameKind.Prefab)]
     public string? Prefab { get; set; } = "Bullet";
 
     /// <summary>Seconds between shots.</summary>
@@ -345,6 +346,7 @@ public sealed class Shooter : Component
     /// An input action, e.g. "Fire": it then fires only while the player holds it, towards the right stick or the mouse
     /// (or <see cref="Direction"/> when neither aims anywhere). Empty fires by itself.
     /// </summary>
+    [Names(NameKind.Action)]
     public string? Action { get; set; }
 
     /// <summary>Untick it to hold fire. <see cref="Switch"/>es tick and untick it.</summary>
@@ -398,6 +400,7 @@ public sealed class Shooter : Component
 public sealed class Checkpoint : Component
 {
     /// <summary>The collision layers that reach it, e.g. "Player". Empty lets anything with a <see cref="Body"/> reach it.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>
@@ -410,6 +413,7 @@ public sealed class Checkpoint : Component
     public string? Sound { get; set; }
 
     /// <summary>A message sent with <c>Game.Send</c> when it's reached, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
     public string? Message { get; set; }
 
     /// <summary>The color its sprite turns once reached, so players can see it's been reached. Transparent leaves it alone.</summary>
@@ -442,6 +446,7 @@ public sealed class Checkpoint : Component
 public sealed class Door : Component
 {
     /// <summary>The scene to go to, e.g. "Level2". Empty stays in this scene and goes to <see cref="Target"/>.</summary>
+    [Names(NameKind.Scene)]
     public string? Scene { get; set; }
 
     /// <summary>The name of an entity in this scene to go to, e.g. "CaveExit", when there's no <see cref="Scene"/>.</summary>
@@ -455,6 +460,7 @@ public sealed class Door : Component
     public bool NeedsInteract { get; set; }
 
     /// <summary>The collision layers that can use it, e.g. "Player". Empty lets anything with a <see cref="Body"/> use it.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>A sound played when it's used, e.g. "Sounds/door.wav".</summary>
@@ -539,6 +545,7 @@ public sealed class Dialogue : Component
     public DialogueStart Start { get; set; }
 
     /// <summary>The collision layers that can start it, e.g. "Player". Empty lets anything with a <see cref="Body"/>.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>Only ever say it once, e.g. for a cutscene.</summary>
@@ -548,6 +555,7 @@ public sealed class Dialogue : Component
     public bool PauseGame { get; set; } = true;
 
     /// <summary>A message sent with <c>Game.Send</c> when the last line is done, e.g. "TalkedToKing".</summary>
+    [Names(NameKind.Message)]
     public string? Message { get; set; }
 
     /// <summary>

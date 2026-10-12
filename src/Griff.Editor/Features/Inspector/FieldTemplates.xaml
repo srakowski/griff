@@ -19,7 +19,8 @@
 
     <!-- Sounds and music: the file, with buttons to play it, choose one from the project, or make one -->
     <DataTemplate x:Key="Field.Sound" DataType="inspector:PropertyField">
-        <DockPanel>
+        <DockPanel x:Name="Row">
+            <inspector:FieldPickerPopup DockPanel.Dock="Right" PlacementTarget="{Binding ElementName=Row}" />
             <Button x:Name="MakeButton"
                     Width="24"
                     Margin="2,0,0,0"
@@ -32,12 +33,11 @@
             </Button>
             <Button Width="24"
                     Margin="2,0,0,0"
-                    Command="{Binding ChooseSoundCommand}"
-                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                    Command="{Binding TogglePickerCommand}"
                     DockPanel.Dock="Right"
                     Style="{StaticResource Style.Button.Toolbar}"
                     Tag="sound:choose"
-                    ToolTip="Choose a sound from the project">
+                    ToolTip="{Binding PickerTip, Mode=OneTime}">
                 <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
             </Button>
             <Button Width="24"
@@ -64,7 +64,8 @@
 
     <!-- Images: a preview and the file, with buttons to choose one from the project, or paint one -->
     <DataTemplate x:Key="Field.Image" DataType="inspector:PropertyField">
-        <DockPanel>
+        <DockPanel x:Name="Row">
+            <inspector:FieldPickerPopup DockPanel.Dock="Right" PlacementTarget="{Binding ElementName=Row}" />
             <Border Width="22" Height="22"
                     Margin="0,0,6,0"
                     Background="{DynamicResource Brush.Surface.Document}"
@@ -85,12 +86,11 @@
             </Button>
             <Button Width="24"
                     Margin="2,0,0,0"
-                    Command="{Binding ChooseImageCommand}"
-                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                    Command="{Binding TogglePickerCommand}"
                     DockPanel.Dock="Right"
                     Style="{StaticResource Style.Button.Toolbar}"
                     Tag="image:choose"
-                    ToolTip="Choose an image from the project">
+                    ToolTip="{Binding PickerTip, Mode=OneTime}">
                 <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
             </Button>
             <controls:CommitTextBox x:Name="Path" Text="{Binding TextValue}" />
@@ -105,18 +105,18 @@
 
     <!-- Entity names: the name, with a button to pick one from the scene; entities drop on it from the Hierarchy -->
     <DataTemplate x:Key="Field.Entity" DataType="inspector:PropertyField">
-        <DockPanel>
+        <DockPanel x:Name="Row">
+            <inspector:FieldPickerPopup DockPanel.Dock="Right" PlacementTarget="{Binding ElementName=Row}" />
             <Button Width="24"
                     Margin="2,0,0,0"
-                    Command="{Binding ChooseEntityCommand}"
-                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                    Command="{Binding TogglePickerCommand}"
                     DockPanel.Dock="Right"
                     Style="{StaticResource Style.Button.Toolbar}"
                     Tag="entity:choose"
-                    ToolTip="Choose an entity from the scene, or drag one here from the Hierarchy">
+                    ToolTip="{Binding PickerTip, Mode=OneTime}">
                 <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
             </Button>
-            <!-- A name that matches nothing in the scene: a warning sign, saying which -->
+            <!-- A name that matches nothing: a warning sign, saying which -->
             <TextBlock x:Name="Unmatched"
                        Margin="4,0,2,0"
                        VerticalAlignment="Center"
@@ -125,6 +125,42 @@
                        Foreground="{DynamicResource Brush.Status.Warning}"
                        Style="{StaticResource Style.Icon}"
                        Tag="entity:unmatched"
+                       Text="{x:Static theme:Icons.Warning}"
+                       ToolTip="{Binding UnmatchedTip}"
+                       Visibility="Collapsed" />
+            <controls:CommitTextBox x:Name="Name" Text="{Binding TextValue}" />
+        </DockPanel>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsUnmatched}" Value="True">
+                <Setter TargetName="Unmatched" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                <Setter TargetName="Name" Property="ToolTip" Value="{Binding UnmatchedTip}" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- Names of prefabs, scenes, input actions, layers and messages: the name, with a button to pick one of the project's -->
+    <DataTemplate x:Key="Field.Name" DataType="inspector:PropertyField">
+        <DockPanel x:Name="Row">
+            <inspector:FieldPickerPopup DockPanel.Dock="Right" PlacementTarget="{Binding ElementName=Row}" />
+            <Button Width="24"
+                    Margin="2,0,0,0"
+                    Command="{Binding TogglePickerCommand}"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource Style.Button.Toolbar}"
+                    Tag="name:choose"
+                    ToolTip="{Binding PickerTip, Mode=OneTime}">
+                <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChevronDown}" />
+            </Button>
+            <!-- A name that matches nothing: a warning sign, saying which -->
+            <TextBlock x:Name="Unmatched"
+                       Margin="4,0,2,0"
+                       VerticalAlignment="Center"
+                       Background="Transparent"
+                       DockPanel.Dock="Right"
+                       Foreground="{DynamicResource Brush.Status.Warning}"
+                       Style="{StaticResource Style.Icon}"
+                       Tag="name:unmatched"
                        Text="{x:Static theme:Icons.Warning}"
                        ToolTip="{Binding UnmatchedTip}"
                        Visibility="Collapsed" />
@@ -206,6 +242,7 @@
                                      Bool="{StaticResource Field.Bool}"
                                      Color="{StaticResource Field.Color}"
                                      Entity="{StaticResource Field.Entity}"
+                                     Named="{StaticResource Field.Name}"
                                      Enum="{StaticResource Field.Enum}"
                                      Lines="{StaticResource Field.Lines}"
                                      Number="{StaticResource Field.Number}"

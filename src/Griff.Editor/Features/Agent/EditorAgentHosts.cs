@@ -45,6 +45,8 @@ public sealed class EditorAgentScene(IWorkspace workspace, ISelection selection)
     public IReadOnlyCollection<string> PrefabNames =>
         workspace.Project?.FindPrefabs().Select(Path.GetFileNameWithoutExtension).OfType<string>().ToHashSet() ?? [];
 
+    public KnownNames? Names => workspace.Names;
+
     private SceneDocument Document => workspace.Scene ?? throw new AgentException("No scene is open.");
 }
 

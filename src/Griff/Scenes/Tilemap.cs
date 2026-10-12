@@ -291,9 +291,11 @@ public sealed class Tilemap : Component
     public float AnimationTime { get; set; }
 
     /// <summary>The collision layer of the map's tiles, like <see cref="Collider.Layer"/>. Empty is "Default".</summary>
+    [Names(NameKind.Layer, Defines = true)]
     public string? Layer { get; set; }
 
     /// <summary>Layers that pass through the map's tiles, like <see cref="Collider.IgnoreLayers"/>, e.g. "Ghost".</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? IgnoreLayers { get; set; }
 
     /// <summary>The grid, top row first; see the remarks on <see cref="Tilemap"/> for the format.</summary>

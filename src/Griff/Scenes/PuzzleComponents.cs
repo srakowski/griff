@@ -51,6 +51,7 @@ public sealed class Switch : Component
     public string? Hides { get; set; }
 
     /// <summary>The collision layers that work it, e.g. "Player" or "Player, Crate". Empty lets anything with a <see cref="Body"/>.</summary>
+    [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
     /// <summary>
@@ -66,9 +67,11 @@ public sealed class Switch : Component
     public string? Sound { get; set; }
 
     /// <summary>A message sent with <c>Game.Send</c> when it turns on, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
     public string? OnMessage { get; set; }
 
     /// <summary>A message sent with <c>Game.Send</c> when it turns off, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
     public string? OffMessage { get; set; }
 
     /// <summary>The color its sprite turns while it's on. Transparent leaves it alone.</summary>

@@ -101,23 +101,6 @@ internal sealed partial class DemoUi
             : null;
 
     /// <summary>Picks a sound for a field from its list of the project's sounds.</summary>
-    public async Task PickSound(string component, string label, string sound)
-    {
-        var button = await WaitFor(() => SoundButton(component, label, "choose"), $"{component}.{label}'s sound list");
-        await Click(button);
-        var item = await WaitFor(() => MenuItem(sound), $"{sound} in the list", 3000);
-        await Settle(250);
-        await Click(item);
-        await Settle(150);
-
-        if (InspectorRow(component, label)?.DataContext is PropertyField field && field.TextValue != sound)
-        {
-            if (Find<ContextMenu>(m => m.IsOpen) is { } open)
-                open.IsOpen = false;
-            field.TextValue = sound;
-            Log?.Invoke($"FORCED pick {component}.{label} = {sound}");
-            await Settle();
-        }
-    }
+    public Task PickSound(string component, string label, string sound) => PickFromList(component, label, sound);
 }
 #endif

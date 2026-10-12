@@ -407,19 +407,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new FormatException("slide: <Setting> = <value>");
                 await ui.Slide(a[..slideAt].Trim(), double.Parse(a[(slideAt + 1)..].Trim(), CultureInfo.InvariantCulture));
                 break;
-            case "pick":
-                var pickAt = a.IndexOf('=');
-                var pickTarget = pickAt < 0 ? [] : a[..pickAt].Trim().Split('.', 2);
-                if (pickTarget.Length != 2)
-                    throw new FormatException("pick: <Component>.<Field> = <sound>");
-                await ui.PickSound(pickTarget[0], Label(pickTarget[1]), a[(pickAt + 1)..].Trim());
-                break;
-            case "pickentity":
-                // "pickentity: Switch.Targets = Gate": from the field's list of the scene's entities.
-                var (pickEntityField, pickEntityName) = Split2(a, '=');
-                if (pickEntityField.Split('.', 2) is not [var pickEntityComponent, var pickEntityLabel])
-                    throw new FormatException("pickentity: <Component>.<Field> = <entity>");
-                await ui.PickEntity(pickEntityComponent, Label(pickEntityLabel), pickEntityName);
+            case "pick" or "pickentity":
+                // "pick: Spawner.Prefab = Enemy": from the field's list (its entities, prefabs, scenes, actions, layers,
+                // messages, images or sounds), typing the start of it to narrow the list first.
+                var (pickField, pickName) = Split2(a, '=');
+                if (pickField.Split('.', 2) is not [var pickComponent, var pickLabel])
+                    throw new FormatException("pick: <Component>.<Field> = <name>");
+                await ui.PickFromList(pickComponent, Label(pickLabel), pickName);
                 break;
             case "dropentity":
                 // "dropentity: Gate > Switch.Targets": drag its Hierarchy row onto the field.
@@ -1393,7 +1387,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "pick" when name.Split('.', 2) is [var component, var field] =>
-                ui.EntityButton(component, Label(field)) ?? throw new InvalidOperationException($"No entity field {name} in the Inspector."),
+                ui.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 ui.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
             "code" => ui.CodePart(name),

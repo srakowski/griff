@@ -41,6 +41,7 @@ public sealed class Faction : Component
     public int SupplyLimit { get; set; } = 100;
 
     /// <summary>Sent (with the team's name) when it loses its last building.</summary>
+    [Names(NameKind.Message)]
     public string? DefeatMessage { get; set; } = "Defeated";
 
     /// <summary>True once it has no buildings left.</summary>
@@ -343,6 +344,7 @@ public sealed class Building : Component
 public sealed class Producer : Component
 {
     /// <summary>The prefabs it trains, e.g. "Worker" or "Soldier, Archer". Each needs a <see cref="Unit"/>.</summary>
+    [Names(NameKind.Prefab, Many = true)]
     public string? Trains { get; set; } = "Worker";
 
     /// <summary>How many it can have queued up at once.</summary>
@@ -388,6 +390,7 @@ public sealed class Worker : Component
     public float GatherTime { get; set; } = 1.5f;
 
     /// <summary>The building prefabs it can put up, e.g. "Farm, Barracks, Tower". Each needs a <see cref="Building"/>.</summary>
+    [Names(NameKind.Prefab, Many = true)]
     public string? Builds { get; set; } = "Farm, Barracks";
 
     /// <summary>What it's carrying, e.g. "Gold", or empty.</summary>
@@ -460,6 +463,7 @@ public sealed class Fighter : Component
     public float Cooldown { get; set; } = 1;
 
     /// <summary>A prefab it fires at the target, e.g. "Arrow". Empty hits straight away.</summary>
+    [Names(NameKind.Prefab)]
     public string? Projectile { get; set; }
 
     /// <summary>How fast its projectile flies, in world units per second.</summary>
@@ -568,9 +572,11 @@ public sealed class Opponent : Component
     public int Workers { get; set; } = 6;
 
     /// <summary>Buildings it puts up, in order, e.g. "Farm, Barracks". It adds farms as it runs short of supply.</summary>
+    [Names(NameKind.Prefab, Many = true)]
     public string? Builds { get; set; } = "Barracks, Farm";
 
     /// <summary>Units it trains for its army, taking turns, e.g. "Soldier, Archer".</summary>
+    [Names(NameKind.Prefab, Many = true)]
     public string? Army { get; set; } = "Soldier, Archer";
 
     /// <summary>Seconds between the soldiers it starts training: higher is an easier game. 0 trains as fast as it can pay.</summary>

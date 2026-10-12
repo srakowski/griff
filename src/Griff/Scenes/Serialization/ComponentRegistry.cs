@@ -47,6 +47,7 @@ public sealed class ComponentRegistry
         registry.Register<Inventory>();
         registry.Register<Draggable>();
         registry.Register<DropTarget>();
+        registry.Register<Grabber>();
         registry.Register<Trail>();
         registry.Register<Panel>();
         registry.Register<Choice>();

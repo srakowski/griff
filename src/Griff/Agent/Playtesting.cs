@@ -43,7 +43,8 @@ public static class Playtesting
 
     /// <summary>
     /// What <paramref name="entity"/>'s drag and drop is doing, to add to where it is: <c>, held</c>, <c>, on Slot 2</c>, or
-    /// for a drop target <c>, holding Card, Gem (full)</c>. Empty for anything else.
+    /// for a drop target <c>, holding Card, Gem (full)</c>, for a grabber <c>, has Gem in hand</c> or <c>, can reach Gem</c>.
+    /// Empty for anything else.
     /// </summary>
     public static string Dragging(Entity entity)
     {
@@ -52,6 +53,8 @@ public static class Playtesting
             text += thing.IsHeld ? ", held" : thing.Target is { } target ? $", on {target.Name}" : "";
         if (entity.GetComponent<DropTarget>() is { } slot)
             text += slot.Contents.Count == 0 ? ", empty" : $", holding {string.Join(", ", slot.Contents.Select(e => e.Name))}{(slot.IsFull ? " (full)" : "")}";
+        if (entity.GetComponent<Grabber>() is { } grabber)
+            text += grabber.Holding is { } holding ? $", has {holding.Name} in hand" : grabber.InReach is { } reach ? $", can reach {reach.Name}" : ", hands empty";
         return text;
     }
 

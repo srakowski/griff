@@ -1,0 +1,140 @@
+title: Drag and drop with buttons
+intro: A Grabber picks things up and puts them down with a button, so drag and drop works with a controller or the keys: a cursor moved with the stick, or a character who carries things about. No code.
+project: Empty | Controller Sorter
+
+chapter: A cursor that grabs | Gems, holes and a Grabber
+create: Sprite
+rename: Red Hole
+set: Transform.Position.X = 3
+set: Transform.Position.Y = 1
+set: Sprite.Size = 1.4, 1.4
+set: Sprite.Tint = #5A2A2A
+add: DropTarget
+set: DropTarget.Accepts = Red
+deselect
+create: Sprite
+rename: Blue Hole
+set: Transform.Position.X = 3
+set: Transform.Position.Y = -1
+set: Sprite.Size = 1.4, 1.4
+set: Sprite.Tint = #2A2A5A
+add: DropTarget
+set: DropTarget.Accepts = Blue
+say: Two holes, one for red gems and one for blue, as in the mouse's drag and drop.
+deselect
+create: Sprite
+rename: Red Gem
+set: Transform.Position.X = -3
+set: Transform.Position.Y = 1
+set: Sprite.Tint = #E04848
+set: Sprite.Order = 2
+add: Draggable
+set: Draggable.Kind = Red
+deselect
+create: Sprite
+rename: Blue Gem
+set: Transform.Position.X = -3
+set: Transform.Position.Y = -1
+set: Sprite.Tint = #4870E0
+set: Sprite.Order = 2
+add: Draggable
+set: Draggable.Kind = Blue
+say: And a red gem and a blue one to put in them.
+deselect
+create: Sprite
+rename: Cursor
+set: Sprite.Size = 1.2, 1.2
+set: Sprite.Tint = #FFFFFF60
+set: Sprite.Order = 1
+add: Body
+add: BoxCollider
+set: BoxCollider.IsTrigger = true
+add: GridMovement
+set: GridMovement.Repeat = false
+explain: component:GridMovement | A cursor | The cursor is a see-through square with a Grid Movement, so the arrow keys, the D-pad or the stick step it from square to square.
+add: Grabber
+explain: component:Grabber | Grabber | A Grabber picks up the draggable under it when its action is pressed, and puts it down where it's held on the next press.
+explain: field:Grabber.Action | Action | The action is Interact: E or Enter on the keyboard, Y on a controller.
+explain: field:Grabber.Reach | Reach | With nothing right under it, it reaches for the nearest thing within this distance.
+explain: field:Grabber.HoldOffset | Hold Offset | And this is where it holds things. A cursor holds them in its middle; a character might carry a crate over its head, or in front of it.
+
+chapter: Sorting with keys | Picking up, turning away, putting down
+play
+wait: 0.5
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Up
+wait: 0.4
+expectat: Cursor = -3, 1
+explain: game | Highlight | Over the red gem, the gem lights up: that's what a press would pick up.
+tap: E
+wait: 0.4
+say: Press, and the cursor has it.
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Down
+wait: 0.25
+tap: Down
+wait: 0.4
+expectat: Red Gem = 3, -1
+tap: E
+wait: 0.4
+expectat: Red Gem = 3, -1
+explain: game | Turned away | The blue hole doesn't take red gems, so the press does nothing and the cursor keeps holding it, rather than throwing it back across the board.
+tap: Up
+wait: 0.25
+tap: Up
+wait: 0.4
+tap: E
+wait: 0.5
+expectat: Red Gem = 3, 1
+say: Over the red hole, it goes in.
+tap: Left
+wait: 0.25
+tap: Left
+wait: 0.25
+tap: Left
+wait: 0.25
+tap: Left
+wait: 0.25
+tap: Left
+wait: 0.25
+tap: Left
+wait: 0.25
+tap: Down
+wait: 0.25
+tap: Down
+wait: 0.4
+tap: E
+wait: 0.3
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.25
+tap: Right
+wait: 0.4
+tap: E
+wait: 0.5
+expectat: Blue Gem = 3, -1
+stop
+say: That's drag and drop with buttons. Put down on a full slot that swaps, the cursor picks up what was there, so a controller can sort an inventory. Give a top-down or platformer character a Grabber and it carries things about, and in a network game each player's grabber answers to their own controller.

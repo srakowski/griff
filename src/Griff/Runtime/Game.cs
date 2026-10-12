@@ -219,6 +219,7 @@ public sealed partial class Game
         }
 
         RunRopes();
+        CarryHeld();
 
         RunPickups();
         RunCheckpoints();

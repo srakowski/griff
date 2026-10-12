@@ -485,6 +485,44 @@ public sealed class MultiplayerGenreTests
         Assert.Equal(new Vector3(-3, 0, 0), Named(world.Client, "Ace").Single().Transform.Position);
     }
 
+    [Fact]
+    public void A_player_carries_a_card_with_their_own_grabber_and_puts_it_on_a_slot()
+    {
+        var world = new NetWorld(() =>
+        {
+            var scene = Table();
+            var player = new Entity("Player");
+            player.Transform.Position = new Vector3(0, -4, 0);
+            player.AddComponent<Grabber>().Reach = 0.5f;
+            scene.Add(player);
+            return scene;
+        });
+        world.Run(0.3);
+        // Their character, as the host runs it (it has no movement of its own, so the host places it).
+        var theirs = world.Host.Scene.Find(world.Client.Net.LocalPlayer!.Avatar!.Id)!.GetComponent<Grabber>()!;
+        var keys = NetWorld.Keys(world.Client);
+        void Tap()
+        {
+            keys.SetKey(Key.E, true);
+            world.Run(NetWorld.Frame * 3);
+            keys.SetKey(Key.E, false);
+            world.Run(0.2);
+        }
+
+        theirs.Entity!.Transform.Position = new Vector3(3, 0, 0);
+        Tap();
+        Assert.Equal("King", theirs.Holding?.Name);
+        Assert.Null(world.Host.Net.LocalPlayer!.Avatar!.GetComponent<Grabber>()!.Holding);
+
+        theirs.Entity.Transform.Position = new Vector3(0, 4, 0);
+        world.Run(0.1);
+        Tap();
+        var king = Named(world.Host, "King").Single();
+        Assert.Null(theirs.Holding);
+        Assert.Equal([king], Named(world.Host, "Slot").Single().GetComponent<DropTarget>()!.Contents);
+        Assert.Equal(new Vector3(0, 4, 0), Named(world.Client, "King").Single().Transform.Position);
+    }
+
     // ----- Every kind of game -----
 
     [Fact]

@@ -1,10 +1,12 @@
+using System.Numerics;
+
 namespace Griff.Scenes;
 
 /// <summary>
 /// Something the player picks up with the mouse and drops somewhere else: a card, a puzzle piece, an item in an
 /// inventory, a word to put in order. Press on it to pick it up (it's drawn on top while held), let go to drop it. Dropped
 /// on a <see cref="DropTarget"/> that takes it, it lands in the target's middle; dropped on one that doesn't (full, or for
-/// other kinds), it slides back where it came from.
+/// other kinds), it slides back where it came from. With a controller or keys, a <see cref="Grabber"/> picks it up instead.
 /// </summary>
 /// <remarks>
 /// It's picked up by its collider's shape, or its sprite's if it has no collider, and lands by its middle. In a network
@@ -12,6 +14,7 @@ namespace Griff.Scenes;
 /// </remarks>
 [Category("Gameplay")]
 [WorksWith(typeof(DropTarget), Note = "places to drop it")]
+[WorksWith(typeof(Grabber), Note = "picks it up with a button")]
 [ComponentName("Griff.Draggable")]
 public sealed class Draggable : Component
 {
@@ -54,7 +57,7 @@ public sealed class Draggable : Component
     [Names(NameKind.Message)]
     public string? DropMessage { get; set; }
 
-    /// <summary>True while someone holds it with the mouse.</summary>
+    /// <summary>True while someone holds it, with the mouse or a <see cref="Grabber"/>.</summary>
     [DoNotSerialize]
     public bool IsHeld { get; internal set; }
 
@@ -67,6 +70,9 @@ public sealed class Draggable : Component
 
     /// <summary>Raised when it's let go, with the drop target it lands on, or null if it lands anywhere else (or goes back).</summary>
     public event Action<Entity?>? Dropped;
+
+    // Its sprite's color before a grabber lit it up.
+    internal Color? RestingTint { get; set; }
 
     internal void RaisePickedUp() => PickedUp?.Invoke();
 
@@ -159,4 +165,86 @@ public sealed class DropTarget : Component
     internal void RaiseReceived(Entity thing) => Received?.Invoke(thing);
 
     internal void RaiseTaken(Entity thing) => Taken?.Invoke(thing);
+}
+
+/// <summary>
+/// Picks up <see cref="Draggable"/> things with a button and carries them, for games played with a controller or keys: a
+/// cursor moved with the stick or the D-pad (give it a <see cref="TopDownMovement"/> or a <see cref="GridMovement"/>), or
+/// a character who carries things about. Press <see cref="Action"/> to pick up what's under its hand (or else the nearest
+/// thing within <see cref="Reach"/>), and again to put it down where it's held, onto a <see cref="DropTarget"/> as a
+/// mouse would.
+/// </summary>
+/// <remarks>
+/// It holds things by their middle at its hand: its own middle, moved by <see cref="HoldOffset"/>. A drop the mouse would
+/// send back (onto a full target or one for other kinds, or off targets for something that only goes on them) does
+/// nothing, so it keeps holding the thing. Dropped onto a full target that swaps, it picks up what was there. In a network
+/// game each player's grabber answers to its own player.
+/// </remarks>
+[Category("Gameplay")]
+[WorksWith(typeof(Draggable), Note = "things to pick up")]
+[WorksWith(typeof(DropTarget), Note = "places to put them")]
+[ComponentName("Griff.Grabber")]
+public sealed class Grabber : Component
+{
+    /// <summary>The input action that picks things up and puts them down, e.g. "Interact" (E, Enter or the gamepad's Y) or "Jump" (Space or A).</summary>
+    [Names(NameKind.Action)]
+    public string? Action { get; set; } = "Interact";
+
+    /// <summary>
+    /// True if it only carries things while <see cref="Action"/> is held, putting them down when it's let go, as a mouse
+    /// does. Otherwise one press picks up and the next puts down.
+    /// </summary>
+    public bool HoldToCarry { get; set; }
+
+    /// <summary>
+    /// How far from its hand a thing's middle can be and still be picked up, in world units, if nothing is right under its
+    /// hand. 0 only picks up what's under it.
+    /// </summary>
+    [Distance(Center = nameof(HoldOffset))]
+    public float Reach { get; set; } = 1;
+
+    /// <summary>
+    /// Where it holds things, from its middle, in world units: X is how far in front of it (on the side it faces: left or
+    /// right, or up or down in a top-down game), Y how far up. (0, 1) is over a character's head, (0.8, 0) in front of it,
+    /// (0, 0) a cursor's middle.
+    /// </summary>
+    public Vector2 HoldOffset { get; set; }
+
+    /// <summary>The color what it would pick up turns, so the player can see what a press takes. Transparent leaves things alone.</summary>
+    [Group("Look and Messages")]
+    public Color Highlight { get; set; } = Color.FromBytes(0xFF, 0xE0, 0x82);
+
+    /// <summary>A sound played when a press does nothing: nothing in reach, or nowhere to put what it holds.</summary>
+    public string? RefuseSound { get; set; }
+
+    /// <summary>A message sent with <c>Game.Send</c> when it picks something up, with what it picked up as its data.</summary>
+    [Names(NameKind.Message)]
+    public string? PickUpMessage { get; set; }
+
+    /// <summary>A message sent with <c>Game.Send</c> when it puts something down, with what it put down as its data.</summary>
+    [Names(NameKind.Message)]
+    public string? DropMessage { get; set; }
+
+    /// <summary>What it's carrying (a <see cref="Draggable"/>'s entity), or null.</summary>
+    [DoNotSerialize]
+    public Entity? Holding { get; internal set; }
+
+    /// <summary>What a press would pick up now (lit with <see cref="Highlight"/>), or null. Null while it's carrying something.</summary>
+    [DoNotSerialize]
+    public Entity? InReach { get; internal set; }
+
+    /// <summary>Raised when it picks something up, with what it picked up.</summary>
+    public event Action<Entity>? PickedUp;
+
+    /// <summary>Raised when it puts something down, with what it put down and the drop target it landed on (or null).</summary>
+    public event Action<Entity, Entity?>? Dropped;
+
+    /// <summary>Acts as if <see cref="Action"/> were pressed: picks up what's in reach, or puts down what it holds. For scripts.</summary>
+    public void Press() => Pressed = true;
+
+    internal bool Pressed { get; set; }
+
+    internal void RaisePickedUp(Entity thing) => PickedUp?.Invoke(thing);
+
+    internal void RaiseDropped(Entity thing, Entity? target) => Dropped?.Invoke(thing, target);
 }

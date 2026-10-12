@@ -32,8 +32,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Name = "editor_state",
             Title = "Editor State",
             ReadOnly = true,
-            Description = "Where the editor is at: the open project and scene, unsaved changes, whether the game is playing, the " +
-                "selection, what undo and redo would do, open windows and recent problems from the Output panel.",
+            Description = "Where the editor is at: the open project and scene, unsaved changes, whether the game is playing (and the " +
+                "dialogue flags set while it is), the selection, what undo and redo would do, open windows and recent problems from the Output panel.",
             Invoke = _ => Task.FromResult(State()),
         };
 
@@ -59,7 +59,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Description = "Plays the running game (start it with Game_Play): presses keys as a player would, in steps. Each step can " +
                 "\"hold\" keys for \"seconds\", \"tap\" keys (pressed for one frame) or just \"wait\" seconds. Keys are names like Right, " +
                 "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact. " +
-                "Afterwards it reports where \"watch\"ed entities are (default: Player), and any dialogue being said with its choices. The game runs on between calls unless \"pause_after\" " +
+                "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
+                "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
                 "freezes it, so nothing happens while you decide the next move; the next game_input resumes it. The editor window has to be on screen for the game to run.",
             InputSchema = Schema.Object([
                 ("steps", Schema.Array(Schema.Map("{\"hold\": [\"Right\"], \"seconds\": 1} or {\"tap\": [\"Jump\"]} or {\"wait\": 0.5}"), "What to do, in order.")),
@@ -68,6 +69,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 ("seconds", Schema.Number("How long to hold (default 0.5).")),
                 ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
+                ("flags", Schema.Map("Dialogue flags to set (true) or clear (false) before the steps, e.g. {\"HasKey\": true}.")),
             ]),
             Invoke = InputAsync,
         };
@@ -115,6 +117,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         }
 
         text.AppendLine($"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
+        if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
+            text.AppendLine(flags);
         text.AppendLine($"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
         var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();
         if (windows.Count > 0)
@@ -255,6 +259,28 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
         var log = new StringBuilder();
         var startTime = game.Time.Total;
+        var flags = new Dictionary<string, bool>();
+        void FlagChanged(string name, bool on) => flags[name] = on;
+        game.FlagChanged += FlagChanged;
+        try
+        {
+            if (args.TryGet("flags", out var set) && set.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var flag in set.EnumerateObject())
+                    game.SetFlag(flag.Name, flag.Value.ValueKind != JsonValueKind.False);
+            }
+
+            return await PlayStepsAsync(game, input, steps, args, log, startTime, flags);
+        }
+        finally
+        {
+            game.FlagChanged -= FlagChanged;
+        }
+    }
+
+    private async Task<ToolResult> PlayStepsAsync(Griff.Runtime.Game game, InputState input, List<JsonElement> steps, ToolArgs args,
+        StringBuilder log, double startTime, Dictionary<string, bool> flags)
+    {
         foreach (var step in steps)
         {
             var hold = Keys(step, "hold", input);
@@ -310,6 +336,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
         if (Playtesting.Talking(game) is { } talking)
             log.AppendLine(talking);
+        if (Playtesting.Flags(flags) is { } changed)
+            log.AppendLine(changed);
         return ToolResult.Ok(log.ToString().TrimEnd());
     }
 

@@ -1,0 +1,80 @@
+title: Dialogue flags and speakers
+intro: Dialogue that remembers what was said, and shows who is saying it, with no code.
+project: TopDown | Talkers
+
+chapter: The guide remembers you | Flags and speakers in the Top-down template
+select: Guide
+explain: field:Dialogue.Lines | Flags | The guide's first two lines start with tags in square brackets. The first is said only if the Met Guide flag is set. The second only if it isn't, and it sets the flag.
+explain: component:Speaker | Speaker | The guide has a Speaker now: the name and portrait the dialogue box shows over what it says.
+select: Player
+explain: component:Speaker | The player | The player has one too, called You, so a line that starts with You and a colon is the player answering back.
+set: Transform.Position = 3, 3, 0
+play
+wait: 0.5
+tap: E
+wait: 3
+expectvalue: Dialogue Box.Text.Value = Hello! Gems are a point each, and the portals take you across the room.
+expectvalue: Name Tag.Text.Value = Guide
+explain: game | Name and portrait | The box shows the guide's portrait and name above the line. The flag is set as the line is said.
+tap: E
+wait: 3
+tap: D2
+wait: 3
+expectvalue: Dialogue Box.Text.Value = There's a key about. It opens the vault next to me.
+tap: E
+wait: 2
+expectvalue: Name Tag.Text.Value = You
+expectvalue: Dialogue Box.Text.Value = I'll find it!
+explain: game | Answering back | Now the player speaks. The name tag says You, and with no portrait of their own, none shows.
+tap: E
+wait: 3
+tap: D4
+wait: 1
+tap: E
+wait: 3
+expectvalue: Dialogue Box.Text.Value = Welcome back! Still exploring?
+explain: game | Remembered | Talk to the guide again and it remembers. Flags are kept in the game's save data, so it still remembers the next time the game runs.
+tap: E
+wait: 3
+tap: D4
+wait: 1
+stop
+
+chapter: A king of your own | Speakers, flags and choices together
+deselect
+create: Sprite
+rename: King
+set: Transform.Position = -3, 4, 0
+set: Sprite.Tint = #C24E4E
+add: BoxCollider
+set: BoxCollider.Size = 1.8, 1.4
+set: BoxCollider.IsTrigger = true
+add: Speaker
+set: Speaker.Name = King Aldo
+pickimage: Speaker.PortraitImage = Textures/guide.png
+explain: component:Speaker | His name and face | A Speaker with a name and a portrait image. Any picture works, painted in the Sprite Painter or your own.
+add: Dialogue
+set: Dialogue.Lines = [if MetKing] Back again, are we?\n[if not MetKing] [set MetKing] Welcome, stranger.\n> Who are you? -> Who\n> Farewell -> End\n# Who\nI am the king, of course!\nYou: Of course.
+explain: field:Dialogue.Lines | His lines | He greets strangers once, and remembers them after. Asking who he is gets an answer, and the player has the last word.
+select: Player
+set: Transform.Position = -3, 3, 0
+play
+wait: 0.5
+tap: E
+wait: 2
+expectvalue: Name Tag.Text.Value = King Aldo
+tap: D1
+wait: 2
+expectvalue: Dialogue Box.Text.Value = I am the king, of course!
+tap: E
+wait: 2
+expectvalue: Name Tag.Text.Value = You
+tap: E
+wait: 1
+tap: E
+wait: 2
+expectvalue: Dialogue Box.Text.Value = Back again, are we?\n> Who are you? <\nFarewell
+explain: game | He remembers | The second time, he knows you, and the choices under the greetings go with whichever one he says. Game, Clear Save Data forgets every flag while you test.
+tap: D2
+wait: 1
+stop

@@ -26,6 +26,9 @@ public sealed partial class Game
     private Vector2? _lastMouseOnChoices;
     private int _lastChoiceStick;
 
+    // The row after the line showing and the choices under it: where the talk goes on.
+    private int _afterChoices;
+
     /// <summary>The <see cref="Dialogue"/> being said right now, if any.</summary>
     public Dialogue? Talking => _talking;
 
@@ -486,7 +489,8 @@ public sealed partial class Game
 
     /// <summary>
     /// Starts <paramref name="dialogue"/> straight away, as if the player had pressed Interact beside it: from a script, a
-    /// cutscene, a boss appearing. Does nothing while another dialogue is being said, or if it has no lines.
+    /// cutscene, a boss appearing. Does nothing while another dialogue is being said, or if it has no lines; one whose
+    /// flags let none of its lines be said ends straight away.
     /// </summary>
     public void StartDialogue(Dialogue dialogue)
     {
@@ -527,70 +531,205 @@ public sealed partial class Game
         if (dialogue.Choices.Count > 0)
             ChooseDialogue(dialogue, dialogue.Picked);
         else
-            SayFrom(dialogue, dialogue.Line + 1);
+            SayFrom(dialogue, _afterChoices);
     }
 
     /// <summary>
     /// Picks choice <paramref name="choice"/> (from 0) of those <paramref name="dialogue"/> offers now, as the player
-    /// would, and goes where it leads. Does nothing when it isn't being said or offers no such choice.
+    /// would: does its tags and goes where it leads. Does nothing when it isn't being said or offers no such choice.
     /// </summary>
     public void ChooseDialogue(Dialogue dialogue, int choice)
     {
         if (_talking != dialogue || choice < 0 || choice >= _choiceRows.Count)
             return;
-        var (_, _, to) = dialogue.Row(_choiceRows[choice]);
-        var after = _choiceRows[^1] + 1;
+        var picked = dialogue.Row(_choiceRows[choice]);
+        var after = _afterChoices;
         dialogue.Picked = choice;
+        DoTags(dialogue, picked.Tags);
         dialogue.RaiseChosen(choice);
         if (_talking != dialogue)
             return;
 
-        if (string.IsNullOrEmpty(to))
+        if (string.IsNullOrEmpty(picked.To))
             SayFrom(dialogue, after);
-        else if (dialogue.RowAfterPart(to) is { } next)
+        else if (dialogue.RowAfterPart(picked.To) is { } next)
             SayFrom(dialogue, next);
         else
             EndDialogue(finished: true);
     }
 
-    // Shows the first line from row on, going where go-tos say; the end of the lines or the start of another part ends it.
+    /// <summary>
+    /// True if flag <paramref name="name"/> is set: by a dialogue's "[set Name]", by <see cref="SetFlag"/>, or by anything
+    /// else that saved true under that name in <see cref="SaveData"/> (a toggle's Save As). Capitals don't matter.
+    /// </summary>
+    public bool HasFlag(string name) => FlagKey(name) is { } key && SaveData.GetBool(key);
+
+    /// <summary>
+    /// Sets flag <paramref name="name"/> (or clears it, with <paramref name="on"/> false), as a dialogue's "[set Name]"
+    /// does. Flags are kept in <see cref="SaveData"/>, so they're still set the next time the game runs.
+    /// </summary>
+    public void SetFlag(string name, bool on = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var key = FlagKey(name) ?? name.Trim();
+        if (HasFlag(key) == on)
+            return;
+        if (on)
+            SaveData.Set(key, true);
+        else
+            SaveData.Delete(key);
+        FlagChanged?.Invoke(key, on);
+    }
+
+    /// <summary>Raised when a flag is set or cleared, with its name and whether it's set now.</summary>
+    public event Action<string, bool>? FlagChanged;
+
+    // The name a flag is saved under, matched without minding capitals, or null when it's not saved.
+    private string? FlagKey(string name)
+    {
+        name = name.Trim();
+        return SaveData.Has(name) ? name : SaveData.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // What a row's tags do once it's said, its choice picked or its go-to followed: set and clear flags, send messages.
+    private void DoTags(Dialogue dialogue, IReadOnlyList<Dialogue.Tag> tags)
+    {
+        foreach (var tag in tags)
+        {
+            switch (tag.Kind)
+            {
+                case Dialogue.TagKind.Set:
+                    SetFlag(tag.Name);
+                    break;
+                case Dialogue.TagKind.Clear:
+                    SetFlag(tag.Name, on: false);
+                    break;
+                case Dialogue.TagKind.Send:
+                    Send(tag.Name, dialogue.Entity);
+                    break;
+            }
+        }
+    }
+
+    // Shows the first line from row on whose flags let it be said, going where go-tos say and doing rows of tags on the
+    // way; the end of the lines or the start of another part ends it.
     private void SayFrom(Dialogue dialogue, int row)
     {
-        for (var steps = 0; steps <= dialogue.Lines.Count; steps++)
+        // Rows of tags can change what's said on a second time round a loop, so allow a few.
+        for (var steps = 0; steps <= (dialogue.Lines.Count + 1) * 4; steps++)
         {
+            if (_talking != dialogue)
+                return;
             if (row >= dialogue.Lines.Count)
             {
                 EndDialogue(finished: true);
                 return;
             }
 
-            var (kind, _, to) = dialogue.Row(row);
-            if (kind is Dialogue.RowKind.Said or Dialogue.RowKind.Choice)
+            var line = dialogue.Row(row);
+            switch (line.Kind)
             {
-                ShowLine(dialogue, row);
-                return;
-            }
+                case Dialogue.RowKind.Said when line.Holds(HasFlag):
+                    ShowLine(dialogue, row);
+                    return;
+                case Dialogue.RowKind.Said:
+                    row++;
+                    continue;
+                case Dialogue.RowKind.Choice:
+                    // Reached straight after lines that weren't said, the choices go with them; choices on their own are
+                    // passed by when none of them can be picked.
+                    var after = AfterChoices(dialogue, row);
+                    if (!(row > 0 && dialogue.Row(row - 1).Kind == Dialogue.RowKind.Said) && OfferedChoices(dialogue, row, after).Any())
+                    {
+                        ShowLine(dialogue, row);
+                        return;
+                    }
 
-            if (kind == Dialogue.RowKind.Part || string.IsNullOrEmpty(to) || dialogue.RowAfterPart(to) is not { } next)
-            {
-                EndDialogue(finished: true);
-                return;
-            }
+                    row = after;
+                    continue;
+                case Dialogue.RowKind.Tags:
+                    if (line.Holds(HasFlag))
+                        DoTags(dialogue, line.Tags);
+                    row++;
+                    continue;
+                case Dialogue.RowKind.GoTo when !line.Holds(HasFlag):
+                    row++;
+                    continue;
+                case Dialogue.RowKind.GoTo:
+                    DoTags(dialogue, line.Tags);
+                    if (_talking != dialogue)
+                        return;
+                    if (string.IsNullOrEmpty(line.To) || dialogue.RowAfterPart(line.To) is not { } next)
+                    {
+                        EndDialogue(finished: true);
+                        return;
+                    }
 
-            row = next;
+                    row = next;
+                    continue;
+                default:
+                    EndDialogue(finished: true);
+                    return;
+            }
         }
 
         throw new InvalidOperationException($"The dialogue on \"{dialogue.Entity?.Name}\" goes round in circles without saying anything.");
     }
 
-    // A line, with the choices under it; choices with no line before them are shown on their own.
+    // The row after the choices that start at row (row itself when there are none).
+    private static int AfterChoices(Dialogue dialogue, int row)
+    {
+        while (row < dialogue.Lines.Count && dialogue.Row(row).Kind == Dialogue.RowKind.Choice)
+            row++;
+        return row;
+    }
+
+    // Where the choices offered under the line said at row start (row itself when there are none). They're under the last
+    // line said of the lines just above them, so "[if Met] Hi again." and "[if not Met] Hello." share the choices after them.
+    private int ChoicesUnder(Dialogue dialogue, int row)
+    {
+        var next = row + 1;
+        for (; next < dialogue.Lines.Count && dialogue.Row(next) is { Kind: Dialogue.RowKind.Said } later; next++)
+        {
+            if (later.Holds(HasFlag))
+                return row;
+        }
+
+        return next < dialogue.Lines.Count && dialogue.Row(next).Kind == Dialogue.RowKind.Choice ? next : row;
+    }
+
+    // The rows of the choices from start up to after whose flags let them be offered.
+    private IEnumerable<int> OfferedChoices(Dialogue dialogue, int start, int after) =>
+        Enumerable.Range(start, after - start).Where(r => dialogue.Row(r).Holds(HasFlag));
+
+    // A line, with the choices under it that can be picked; choices with no line before them are shown on their own.
+    // Its tags are done first, so a flag it sets can offer a choice under it.
     private void ShowLine(Dialogue dialogue, int row)
     {
+        var line = dialogue.Row(row);
         dialogue.Line = row;
+        var choices = row;
+        if (line.Kind == Dialogue.RowKind.Said)
+        {
+            DoTags(dialogue, line.Tags);
+            if (_talking != dialogue)
+                return;
+            choices = ChoicesUnder(dialogue, row);
+        }
+
+        var hasChoices = choices != row || line.Kind == Dialogue.RowKind.Choice;
+        _afterChoices = hasChoices ? AfterChoices(dialogue, choices) : row + 1;
+
+        // Said by the speaker it starts with ("Guide: ..."), or else the one on the dialogue's own entity.
+        var (who, said) = line.Kind == Dialogue.RowKind.Said && !line.AsIs ? Dialogue.SplitSpeaker(line.Text) : (null, line.Text);
+        var named = who is null ? null : SpeakerNamed(who);
+        dialogue.Speaker = line.Kind == Dialogue.RowKind.Choice ? null : named ?? dialogue.Entity!.GetComponent<Speaker>();
+        dialogue.Said = line.Kind == Dialogue.RowKind.Choice ? null : named is null ? line.Text : said;
+        ShowSpeaker(dialogue);
+
         _choiceRows.Clear();
-        var start = dialogue.Row(row).Kind == Dialogue.RowKind.Choice ? row : row + 1;
-        for (var next = start; next < dialogue.Lines.Count && dialogue.Row(next).Kind == Dialogue.RowKind.Choice; next++)
-            _choiceRows.Add(next);
+        if (hasChoices)
+            _choiceRows.AddRange(OfferedChoices(dialogue, choices, _afterChoices));
         dialogue.Choices = _choiceRows.Select(r => dialogue.Row(r).Text).ToList();
         dialogue.Picked = 0;
         _lastMouseOnChoices = null;
@@ -606,10 +745,40 @@ public sealed partial class Game
         dialogue.RaiseLineShown();
     }
 
+    // The speaker called name (or whose entity is, when it has no name of its own), anywhere in the scene, shown or not.
+    private Speaker? SpeakerNamed(string name) =>
+        Scene.Entities.SelectMany(e => e.GetComponents<Speaker>())
+            .FirstOrDefault(s => string.Equals(s.ShownName, name, StringComparison.OrdinalIgnoreCase));
+
+    // The box's name tag and portrait show who's talking, and hide when nobody is (or they have no portrait).
+    private void ShowSpeaker(Dialogue dialogue)
+    {
+        if (BoxOf(dialogue) is not { } box || box.GetComponent<DialogueBox>() is not { } layout)
+            return;
+        var speaker = dialogue.Speaker;
+        if (Inside(box, layout.NameTag) is { } tag)
+        {
+            tag.IsEnabled = speaker is not null;
+            if (speaker is not null && tag.SelfAndDescendants().SelectMany(e => e.GetComponents<Text>()).FirstOrDefault() is { } name)
+                name.Value = speaker.ShownName;
+        }
+
+        if (Inside(box, layout.Portrait) is { } portrait)
+        {
+            var image = speaker?.PortraitImage is { Length: > 0 } path ? path.Trim() : null;
+            portrait.IsEnabled = image is not null;
+            if (image is not null && portrait.SelfAndDescendants().SelectMany(e => e.GetComponents<Sprite>()).FirstOrDefault() is { } sprite)
+                sprite.Image = image;
+        }
+    }
+
+    // The entity called name inside box (or the box itself).
+    private static Entity? Inside(Entity box, string? name) =>
+        string.IsNullOrWhiteSpace(name) ? null : box.SelfAndDescendants().FirstOrDefault(e => e.Name == name.Trim());
+
     // The line showing and its choices under it, the one picked with arrows by it that keep the rows lined up.
     private static string LineWithChoices(Dialogue dialogue, TextAlign align)
     {
-        var (kind, said, _) = dialogue.Row(dialogue.Line);
         var rows = dialogue.Choices.Select((choice, i) => (i == dialogue.Picked, align) switch
         {
             (true, TextAlign.Left) => "> " + choice,
@@ -619,7 +788,7 @@ public sealed partial class Game
             (false, TextAlign.Right) => choice + "   ",
             _ => choice,
         });
-        return string.Join("\n", kind == Dialogue.RowKind.Choice ? rows : rows.Prepend(said));
+        return string.Join("\n", dialogue.Said is { } said ? rows.Prepend(said) : rows);
     }
 
     // Choosing with the arrow keys, D-pad or stick, the number keys and the mouse, once the line has typed out. Interact
@@ -714,6 +883,7 @@ public sealed partial class Game
         _talking = null;
         dialogue.IsTalking = false;
         dialogue.Choices = [];
+        (dialogue.Speaker, dialogue.Said) = (null, null);
         _choiceRows.Clear();
         if (dialogue.Entity?.Scene == Scene && BoxOf(dialogue) is { } box)
             box.IsEnabled = false;
@@ -731,8 +901,18 @@ public sealed partial class Game
 
     private Entity? BoxOf(Dialogue dialogue) => string.IsNullOrWhiteSpace(dialogue.Box) ? null : Find(dialogue.Box.Trim());
 
-    private Text? LineText(Dialogue dialogue) =>
-        BoxOf(dialogue)?.SelfAndDescendants().SelectMany(e => e.GetComponents<Text>()).FirstOrDefault();
+    /// <summary>True while the line <paramref name="dialogue"/> shows is still typing out (its choices wait for it).</summary>
+    internal bool IsTyping(Dialogue dialogue) => LineText(dialogue)?.Entity?.GetComponent<Typewriter>() is { IsDone: false };
+
+    // The first text in the box that isn't its name tag's.
+    private Text? LineText(Dialogue dialogue)
+    {
+        if (BoxOf(dialogue) is not { } box)
+            return null;
+        var tag = Inside(box, box.GetComponent<DialogueBox>()?.NameTag);
+        var tagged = tag?.SelfAndDescendants().ToHashSet() ?? [];
+        return box.SelfAndDescendants().Where(e => !tagged.Contains(e)).SelectMany(e => e.GetComponents<Text>()).FirstOrDefault();
+    }
 
     // A prompt is looked for inside its owner first, so every copy of a door prefab shows its own "Press E".
     private void ShowPrompt(Entity owner, string? name, bool show)

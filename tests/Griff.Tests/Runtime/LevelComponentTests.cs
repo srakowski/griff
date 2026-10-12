@@ -1046,6 +1046,229 @@ public class LevelComponentTests
         Assert.Null(_game.Talking);
     }
 
+    // ---- Dialogue flags ----
+
+    // Talks to dialogue from a script until it ends, pressing Interact (choosing the picked choice) in between.
+    private List<string?> SayAll(Dialogue dialogue, Text text)
+    {
+        var said = new List<string?>();
+        _game.StartDialogue(dialogue);
+        while (dialogue.IsTalking)
+        {
+            said.Add(text.Value);
+            _game.AdvanceDialogue(dialogue);
+        }
+
+        return said;
+    }
+
+    [Fact]
+    public void DialogueFlags_IfAndIfNot_PickWhatsSaid_AndSetFlagsStaySet()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0),
+            "[if Met] Welcome back.", "[if not Met] [set Met] Hello, stranger.", "Bye.");
+        Run(Step);
+
+        Assert.False(_game.HasFlag("Met"));
+        Assert.Equal(["Hello, stranger.", "Bye."], SayAll(dialogue, text));
+        Assert.True(_game.HasFlag("Met"));
+        Assert.True(_game.SaveData.GetBool("Met"));
+        Assert.True(_game.HasFlag("met")); // capitals don't matter
+
+        Assert.Equal(["Welcome back.", "Bye."], SayAll(dialogue, text));
+    }
+
+    [Fact]
+    public void DialogueFlags_AreKeptInTheSaveFile_SoTheNextRunRemembersThem()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"griff-flags-{Guid.NewGuid():N}", "save.json");
+        try
+        {
+            var (dialogue, _, text) = AddTalker(new Vector2(30, 0), "[set Met] [clear Rude] Hello.");
+            _game.SaveData = new SaveData(path);
+            _game.SetFlag("Rude");
+            var changes = new List<(string, bool)>();
+            _game.FlagChanged += (name, on) => changes.Add((name, on));
+            Run(Step);
+            SayAll(dialogue, text);
+
+            Assert.Equal([("Met", true), ("Rude", false)], changes);
+            var next = new Game(new Scene(), new InputState()) { SaveData = new SaveData(path) };
+            Assert.True(next.HasFlag("Met"));
+            Assert.False(next.HasFlag("Rude"));
+            Assert.False(next.SaveData.Has("Rude"));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DialogueFlags_OnChoices_OfferOnlyThoseThatHold_AndPickingOneDoesItsTags()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0),
+            "Hello.",
+            "> [if HasKey] Open the vault -> Vault",
+            "> [set Asked] What key?",
+            "> Bye -> End",
+            "It's around here somewhere.",
+            "-> End",
+            "# Vault",
+            "[clear HasKey] [send VaultOpened] It opens!");
+        var opened = 0;
+        _game.On("VaultOpened", _ => opened++);
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Assert.Equal(["What key?", "Bye"], dialogue.Choices);
+        _game.ChooseDialogue(dialogue, 0);
+        Assert.True(_game.HasFlag("Asked"));
+        Assert.Equal("It's around here somewhere.", text.Value);
+        _game.AdvanceDialogue(dialogue);
+
+        _game.SetFlag("HasKey");
+        _game.StartDialogue(dialogue);
+        Assert.Equal(["Open the vault", "What key?", "Bye"], dialogue.Choices);
+        _game.ChooseDialogue(dialogue, 0);
+        Assert.Equal("It opens!", text.Value);
+        Assert.False(_game.HasFlag("HasKey"));
+        Assert.Equal(1, opened);
+    }
+
+    [Fact]
+    public void DialogueFlags_GoTosFollowedOnlyWhenTheyHold_RowsOfTagsJustDoThem_AndChoicesUnderNoLineSaidArePassedBy()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0),
+            "> [if Nope] Only choices, none offered",
+            "[if Nope] A question?", "> Yes", "> No",
+            "[if Seen] -> Known",
+            "[set Seen]",
+            "First time.",
+            "# Known",
+            "Known.");
+        Run(Step);
+
+        Assert.Equal(["First time."], SayAll(dialogue, text));
+        Assert.True(_game.HasFlag("Seen"));
+        Assert.Equal(["Known."], SayAll(dialogue, text));
+    }
+
+    [Fact]
+    public void DialogueFlags_ChoicesGoUnderTheLastLineSaidAboveThem_SoGreetingsShareThem()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0),
+            "[if Met] Back again?", "[if not Met] [set Met] Welcome.", "> Hi", "> Bye -> End", "Off you go.");
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Assert.Equal("Welcome.\n> Hi <\nBye", text.Value);
+        _game.ChooseDialogue(dialogue, 1);
+
+        _game.StartDialogue(dialogue);
+        Assert.Equal("Back again?\n> Hi <\nBye", text.Value);
+        _game.ChooseDialogue(dialogue, 0);
+        Assert.Equal("Off you go.", text.Value);
+    }
+
+    [Fact]
+    public void DialogueFlags_OtherBracketsAreSaid_AndABackslashSaysTagsAsTheyAre()
+    {
+        var (dialogue, _, text) = AddTalker(new Vector2(30, 0), "[sighs] Fine.", "\\[if Nope] Said anyway.", "[if] Not a tag.",
+            "[if not] Nor this.");
+        Run(Step);
+
+        Assert.Equal(["[sighs] Fine.", "[if Nope] Said anyway.", "[if] Not a tag.", "[if not] Nor this."], SayAll(dialogue, text));
+    }
+
+    [Fact]
+    public void DialogueFlags_OnAPart_SayWhatsWrongAsItStarts()
+    {
+        var (dialogue, _, _) = AddTalker(new Vector2(30, 0), "Hm?", "-> Next", "[set X] # Next", "Hi.");
+        Run(Step);
+
+        var error = Assert.Throws<InvalidOperationException>(() => _game.StartDialogue(dialogue));
+        Assert.Contains("# Next", error.Message);
+    }
+
+    // ---- Speakers ----
+
+    // A box that shows who's talking: a name tag (inside the box before its line text, which mustn't be taken for it)
+    // and a portrait.
+    private (Dialogue Dialogue, Text Text, Entity NameTag, Entity Portrait) AddSpeakingTalker(params string[] lines)
+    {
+        var box = Add("Dialogue Box", new Vector2(0, -4));
+        box.AddComponent<DialogueBox>();
+        var nameTag = Add("Name Tag", new Vector2(-3, 1), box);
+        nameTag.AddComponent<Text>().Value = "Name";
+        var portrait = Add("Portrait", new Vector2(-6, 1), box);
+        portrait.AddComponent<Sprite>();
+        var text = Add("Label", Vector2.Zero, box).AddComponent<Text>();
+        var npc = AddBox("Npc", new Vector2(30, 0), new Vector2(1, 1), trigger: true);
+        var dialogue = npc.AddComponent<Dialogue>();
+        dialogue.Lines = lines;
+        return (dialogue, text, nameTag, portrait);
+    }
+
+    [Fact]
+    public void Speakers_ShowTheirNameAndPortrait_OverTheirLines_AndLinesStartingWithAName_AreSaidByThem()
+    {
+        var (dialogue, text, nameTag, portrait) = AddSpeakingTalker(
+            "Hello.", "You: Hi!", "Note: nobody's called Note.", "\\Guide: said as it is.");
+        var guide = dialogue.Entity!.AddComponent<Speaker>();
+        (guide.Name, guide.PortraitImage) = ("Guide", "Textures/guide.png");
+        // The player's speaker can be anywhere in the scene, even hidden.
+        var hero = Add("Hero", new Vector2(50, 0));
+        hero.AddComponent<Speaker>().Name = "You";
+        hero.IsEnabled = false;
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Assert.Equal("Hello.", text.Value);
+        Assert.Same(guide, dialogue.Speaker);
+        Assert.True(nameTag.IsEnabled);
+        Assert.Equal("Guide", nameTag.GetComponent<Text>()!.Value);
+        Assert.True(portrait.IsEnabled);
+        Assert.Equal("Textures/guide.png", portrait.GetComponent<Sprite>()!.Image);
+
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("Hi!", text.Value);
+        Assert.Equal("Hi!", dialogue.Said);
+        Assert.Equal("You", nameTag.GetComponent<Text>()!.Value);
+        Assert.False(portrait.IsEnabled);
+
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("Note: nobody's called Note.", text.Value);
+        Assert.Same(guide, dialogue.Speaker);
+
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("Guide: said as it is.", text.Value);
+        _game.AdvanceDialogue(dialogue);
+        Assert.Null(dialogue.Speaker);
+    }
+
+    [Fact]
+    public void Speakers_NameTagAndPortraitHide_WhenNobodyIsSpeaking_AndAnEmptyNameIsTheEntitys()
+    {
+        var (dialogue, text, nameTag, portrait) = AddSpeakingTalker("A sign.", "Npc: The entity's name works too.");
+        Run(Step);
+
+        _game.StartDialogue(dialogue);
+        Assert.Null(dialogue.Speaker);
+        Assert.False(nameTag.IsEnabled);
+        Assert.False(portrait.IsEnabled);
+        Assert.Equal("A sign.", text.Value);
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("Npc: The entity's name works too.", text.Value); // no Speaker yet
+
+        _game.AdvanceDialogue(dialogue);
+        dialogue.Entity!.AddComponent<Speaker>();
+        _game.StartDialogue(dialogue);
+        _game.AdvanceDialogue(dialogue);
+        Assert.Equal("The entity's name works too.", text.Value);
+        Assert.Equal("Npc", nameTag.GetComponent<Text>()!.Value);
+    }
+
     // ---- Saving ----
 
     [Fact]
@@ -1061,6 +1284,8 @@ public class LevelComponentTests
         entity.AddComponent<Checkpoint>().Active = true;
         entity.AddComponent<Door>().Scene = "Level2";
         entity.AddComponent<Dialogue>().Lines = ["One.", "Two."];
+        entity.AddComponent<Speaker>().PortraitImage = "Textures/king.png";
+        entity.AddComponent<DialogueBox>().NameTag = "Tag";
         var health = entity.AddComponent<Health>();
         health.Respawn = true;
         scene.Add(entity);
@@ -1074,6 +1299,8 @@ public class LevelComponentTests
         Assert.True(loaded.GetComponent<Checkpoint>()!.Active);
         Assert.Equal("Level2", loaded.GetComponent<Door>()!.Scene);
         Assert.Equal(["One.", "Two."], loaded.GetComponent<Dialogue>()!.Lines);
+        Assert.Equal("Textures/king.png", loaded.GetComponent<Speaker>()!.PortraitImage);
+        Assert.Equal("Tag", loaded.GetComponent<DialogueBox>()!.NameTag);
         Assert.True(loaded.GetComponent<Health>()!.Respawn);
     }
 

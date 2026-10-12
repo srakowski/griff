@@ -1,8 +1,9 @@
 namespace Griff.Projects;
 
 /// <summary>
-/// The pictures the Shooter, Sandbox and Contraption templates come with, painted in code as small pixel art: a tileset of walls, enemies,
-/// pickups, and the guns held in hand. Saved as PNGs in Textures/, so they open (and can be repainted) in any editor.
+/// The pictures the Top-down, Shooter, Sandbox and Contraption templates come with, painted in code as small pixel art:
+/// a guide's portrait, a tileset of walls, enemies, pickups, and the guns held in hand. Saved as PNGs in Textures/, so
+/// they open (and can be repainted) in any editor.
 /// </summary>
 internal static partial class TemplateArt
 {
@@ -23,6 +24,7 @@ internal static partial class TemplateArt
     public const string PistolFire = "Textures/pistol-fire.png";
     public const string ShotgunView = "Textures/shotgun-view.png";
     public const string ShotgunFire = "Textures/shotgun-fire.png";
+    public const string GuidePortrait = "Textures/guide.png";
 
     /// <summary>The tiles across and down <see cref="Walls"/>.</summary>
     public const int WallColumns = 4, WallRows = 2;
@@ -39,6 +41,8 @@ internal static partial class TemplateArt
             return ContraptionFiles();
         if (template == ProjectTemplate.Multiplayer)
             return ArenaFiles();
+        if (template == ProjectTemplate.TopDown)
+            return new Dictionary<string, byte[]> { [GuidePortrait] = GuideArt().Png() };
         if (template != ProjectTemplate.Shooter)
             return new Dictionary<string, byte[]>();
         return new Dictionary<string, byte[]>
@@ -461,6 +465,29 @@ internal static partial class TemplateArt
         c.Rect(46, 52, 8, 12, Rgb(0xC8, 0x8A, 0x64));
         c.Shade(0.08f);
         c.Outline(Rgb(0x14, 0x12, 0x10));
+        return c;
+    }
+
+    // The Top-down template's guide, framed for the dialogue box: a kindly face under a gold hood.
+    private static Canvas GuideArt()
+    {
+        var c = new Canvas(24, 24, seed: 30);
+        var frame = Rgb(0x2A, 0x2F, 0x3A);
+        c.Fill(frame);
+        c.Rect(2, 2, 20, 20, Rgb(0x3E, 0x48, 0x63));
+        var gold = Rgb(0xE3, 0xB3, 0x41);
+        c.Ellipse(12, 13, 8, 9, gold); // hood
+        c.Rect(4, 18, 16, 4, gold.Times(0.8f)); // shoulders
+        var skin = Rgb(0xE8, 0xB8, 0x8E);
+        c.Ellipse(12, 13, 5, 5, skin);
+        c.Rect(9, 12, 2, 2, Rgb(0x22, 0x1C, 0x1A)); // eyes
+        c.Rect(14, 12, 2, 2, Rgb(0x22, 0x1C, 0x1A));
+        c.Rect(10, 16, 5, 1, Rgb(0xA0, 0x52, 0x48)); // smile
+        c.Set(9, 15, Rgb(0xA0, 0x52, 0x48));
+        c.Set(15, 15, Rgb(0xA0, 0x52, 0x48));
+        c.Rect(8, 7, 9, 2, gold.Times(1.2f)); // light on the hood
+        c.Shade(0.08f);
+        c.Bevel(0, 0, 24, 24, frame.Times(1.6f), frame.Times(0.6f));
         return c;
     }
 

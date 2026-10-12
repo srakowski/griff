@@ -234,7 +234,7 @@ public static partial class ProjectTemplates
             "The lift on the left goes up to a ledge. Mind the slime, or swing your sword at it with X!",
             "Pull the lever up there with E, and see what appears.",
             "Touch the flag, and that's where you come back after losing your hearts.");
-        scene.Add(DialogueBox());
+        AddDialogueBox(scene);
 
         var coins = new Entity("Coins");
         scene.Add(coins);
@@ -260,6 +260,8 @@ public static partial class ProjectTemplates
         player.GetComponent<BoxCollider>()!.Layer = "Player";
         player.AddComponent<Body>().GravityScale = 0;
         player.AddComponent<TopDownMovement>().Dash = true;
+        // Lines starting "You:" in dialogue are the player's.
+        player.AddComponent<Speaker>().Name = "You";
         AddDashTrail(player, minSpeed: 9);
         AddRespawningHealth(player);
         var lantern = player.AddComponent<Light>();
@@ -371,9 +373,11 @@ public static partial class ProjectTemplates
         bonus.GetComponent<Pickup>()!.Amount = 3;
         scene.Add(bonus);
 
-        // The guide answers what the player asks about, then asks again until they're done.
+        // The guide answers what the player asks about, then asks again until they're done. Its MetGuide flag is kept in
+        // the save data, so it greets the player differently from the second time on, even after the game is closed.
         var guide = AddSign(scene, new Vector2(3, 4),
-            "Hello! Gems are a point each, and the portals take you across the room.",
+            "[if MetGuide] Welcome back! Still exploring?",
+            "[if not MetGuide] [set MetGuide] Hello! Gems are a point each, and the portals take you across the room.",
             "-> Ask",
             "# Ask",
             "What would you like to know about?",
@@ -386,15 +390,17 @@ public static partial class ProjectTemplates
             "-> Ask",
             "# Key",
             "There's a key about. It opens the vault next to me.",
+            "You: I'll find it!",
             "-> Ask",
             "# Crate",
             "Push the crate onto the plate down there, and see what turns up.",
             "-> Ask");
         guide.Name = "Guide";
+        guide.AddComponent<Speaker>().PortraitImage = TemplateArt.GuidePortrait;
         var guideSprite = guide.GetComponent<Sprite>()!;
         guideSprite.Size = new Vector2(0.8f, 0.8f);
         guideSprite.Tint = Color.FromBytes(0xE3, 0xB3, 0x41);
-        scene.Add(DialogueBox());
+        AddDialogueBox(scene);
         AddPauseMenu(scene, menuScene: null);
 
         return scene;
@@ -854,10 +860,10 @@ public static partial class ProjectTemplates
     }
 
     /// <summary>
-    /// The panel dialogue is shown in, pinned to the bottom of the screen. It starts hidden (so it isn't in the way in the
-    /// Scene view), and shows while someone talks.
+    /// The panel dialogue is shown in, pinned to the bottom of the screen, with a portrait and name tag above it for
+    /// whoever is talking. It starts hidden (so it isn't in the way in the Scene view), and shows while someone talks.
     /// </summary>
-    private static Entity DialogueBox()
+    private static void AddDialogueBox(Scene scene)
     {
         var entity = new Entity("Dialogue Box") { IsEnabled = false };
         entity.Transform.Position = new Vector3(0, 0, 2);
@@ -873,7 +879,22 @@ public static partial class ProjectTemplates
         text.Size = 0.4f;
         text.Order = 201;
         entity.AddComponent<Typewriter>();
-        return entity;
+        entity.AddComponent<DialogueBox>();
+        scene.Add(entity);
+
+        var portrait = new Entity("Portrait");
+        portrait.Transform.Position = new Vector3(-6.8f, 2.15f, 0);
+        var picture = portrait.AddComponent<Sprite>();
+        (picture.Size, picture.Order) = (new Vector2(2, 2), 201);
+        scene.Add(portrait, entity);
+
+        var tag = new Entity("Name Tag");
+        tag.Transform.Position = new Vector3(-4.1f, 1.45f, 0);
+        var backdrop = tag.AddComponent<Sprite>();
+        (backdrop.Size, backdrop.Tint, backdrop.Order) = (new Vector2(3.2f, 0.7f), panel.Tint, 200);
+        var name = tag.AddComponent<Text>();
+        (name.Value, name.Size, name.Color, name.Order) = ("Name", 0.4f, Color.FromBytes(0xE3, 0xB3, 0x41), 201);
+        scene.Add(tag, entity);
     }
 
     /// <summary>A door to <paramref name="target"/> in the same room, used by walking into it.</summary>

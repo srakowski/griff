@@ -257,7 +257,8 @@ public sealed class CreateBarCommand(IWorkspace workspace, ISelection selection)
 
 /// <summary>
 /// Creates the box a <see cref="Dialogue"/> talks in: a panel pinned to the bottom of the screen whose text types itself
-/// out. It's hidden while the game runs until someone talks.
+/// out, with a name tag and a portrait above it for whoever is talking (see <see cref="Speaker"/>). It's hidden while the
+/// game runs until someone talks.
 /// </summary>
 public sealed class CreateDialogueBoxCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
@@ -281,6 +282,25 @@ public sealed class CreateDialogueBoxCommand(IWorkspace workspace, ISelection se
         text.Size = 0.5f;
         text.Order = 201;
         entity.AddComponent<Typewriter>();
+        entity.AddComponent<DialogueBox>();
+    }
+
+    // A portrait standing on the box's top-left corner, and the speaker's name in a tag beside it.
+    protected override IEnumerable<Entity> CreateChildren()
+    {
+        var portrait = new Entity("Portrait");
+        portrait.Transform.Position = new System.Numerics.Vector3(-5.8f, 2.15f, 0);
+        var picture = portrait.AddComponent<Sprite>();
+        (picture.Size, picture.Order) = (new System.Numerics.Vector2(2, 2), 201);
+        yield return portrait;
+
+        var tag = new Entity("Name Tag");
+        tag.Transform.Position = new System.Numerics.Vector3(-3.1f, 1.45f, 0);
+        var backdrop = tag.AddComponent<Sprite>();
+        (backdrop.Size, backdrop.Tint, backdrop.Order) = (new System.Numerics.Vector2(3.2f, 0.7f), Griff.Color.FromBytes(0x16, 0x19, 0x20) with { A = 0.9f }, 200);
+        var name = tag.AddComponent<Griff.Scenes.Text>();
+        (name.Value, name.Size, name.Color, name.Order) = ("Name", 0.4f, Griff.Color.FromBytes(0xE3, 0xB3, 0x41), 201);
+        yield return tag;
     }
 }
 

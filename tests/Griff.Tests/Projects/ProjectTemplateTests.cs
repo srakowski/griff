@@ -568,7 +568,10 @@ public sealed class ProjectTemplateTests : IDisposable
         var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
         var game = NewGame(project, scene, input, registry);
         var guide = game.Find("Guide")!.GetComponent<Dialogue>()!;
-        var text = game.Find("Dialogue Box")!.GetComponent<Text>()!;
+        var box = game.Find("Dialogue Box")!;
+        var text = box.GetComponent<Text>()!;
+        var nameTag = box.Children.Single(e => e.Name == "Name Tag");
+        var portrait = box.Children.Single(e => e.Name == "Portrait");
         game.Find("Player")!.Transform.Position = game.Find("Guide")!.Transform.Position;
         Run(game, input, 0.2);
 
@@ -580,9 +583,16 @@ public sealed class ProjectTemplateTests : IDisposable
             Run(game, input, Frame);
         }
 
-        // The first press starts it or finishes typing the line; the second moves on.
+        // The first press starts it or finishes typing the line; the second moves on. The guide's name and portrait
+        // show over what it says.
         Press(Key.E);
         Assert.StartsWith("Hello!", text.Value);
+        Assert.True(nameTag.IsEnabled);
+        Assert.Equal("Guide", nameTag.GetComponent<Text>()!.Value);
+        Assert.True(portrait.IsEnabled);
+        Assert.Equal("Textures/guide.png", portrait.GetComponent<Sprite>()!.Image);
+        Assert.True(new FileInfo(Asset(project, "Textures/guide.png")).Length > 100);
+        Assert.True(game.HasFlag("MetGuide"));
         Press(Key.E);
         Press(Key.E);
         Assert.Equal(["The bats", "The key", "The crate", "Nothing, thanks"], guide.Choices);
@@ -593,12 +603,24 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.StartsWith("There's a key about.", text.Value);
         Press(Key.E);
         Press(Key.E);
+
+        // The player answers: their name, and no portrait.
+        Assert.Equal("I'll find it!", text.Value);
+        Assert.Equal("You", nameTag.GetComponent<Text>()!.Value);
+        Assert.False(portrait.IsEnabled);
+        Press(Key.E);
+        Press(Key.E);
         Assert.Equal(4, guide.Choices.Count);
 
         Press(Key.E);
         Press(Key.D4);
         Assert.False(guide.IsTalking);
         Assert.True(guide.IsDone);
+
+        // MetGuide is set now, so it greets the player differently.
+        Run(game, input, 0.2);
+        Press(Key.E);
+        Assert.StartsWith("Welcome back!", text.Value);
     }
 
     [Fact]

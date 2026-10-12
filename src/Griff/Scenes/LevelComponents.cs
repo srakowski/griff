@@ -499,14 +499,18 @@ public enum DialogueStart
 }
 
 /// <summary>
-/// Lines of talk shown one after another in a dialogue box, with choices that branch it, and no code. Interact (E, Enter,
-/// the gamepad's Y) finishes the line being typed, then moves on. Rows starting with "&gt;" are choices offered under the
-/// line before them, picked with the arrow keys, D-pad, number keys or mouse and Interact, and they can go to other parts
-/// of the lines (see <see cref="Lines"/>). The <see cref="Box"/> is shown while talking and hidden otherwise; put a <see cref="Typewriter"/>
-/// next to its text to type the lines out. Needs a collider, usually a trigger.
+/// Lines of talk shown one after another in a dialogue box, with choices that branch it, flags that remember what was
+/// said, and no code. Interact (E, Enter, the gamepad's Y) finishes the line being typed, then moves on. Rows starting
+/// with "&gt;" are choices offered under the line before them, picked with the arrow keys, D-pad, number keys or mouse
+/// and Interact, and they can go to other parts of the lines; rows can set flags and be said only when a flag is set
+/// (see <see cref="Lines"/>). A line starting with a <see cref="Speaker"/>'s name ("Guide: Hello!") is said by them, and
+/// the rest by the Speaker on this entity, if it has one: a <see cref="DialogueBox"/> shows their name and portrait.
+/// The <see cref="Box"/> is shown while talking and hidden otherwise; put a <see cref="Typewriter"/> next to its text to
+/// type the lines out. Needs a collider, usually a trigger.
 /// </summary>
 [Category("Story")]
 [Requires(typeof(Collider), Note = "usually a trigger")]
+[WorksWith(typeof(Speaker), Note = "for a name and portrait over its lines")]
 [ComponentName("Griff.Dialogue")]
 public sealed class Dialogue : Component
 {
@@ -514,12 +518,19 @@ public sealed class Dialogue : Component
     /// What's said, one line per row. A row starting with "&gt;" is a choice offered under the line before it, and one
     /// ending in "-&gt; Name" goes to the row "# Name" when it's picked ("&gt; Buy a sword -&gt; Shop"); a choice
     /// without one goes on after the choices. "# Name" starts a part that's only reached that way: the lines before it
-    /// end there. A row "-&gt; Name" goes there by itself, and "-&gt; End" ends. Start a row with "\" to say it as it
-    /// is, "&gt;" or "#" and all.
+    /// end there. A row "-&gt; Name" goes there by itself, and "-&gt; End" ends. A row can start with tags in square
+    /// brackets: "[if Flag]" or "[if not Flag]" says it (offers the choice, follows the go-to) only when the flag is set
+    /// or isn't; "[set Flag]" and "[clear Flag]" set and clear one, and "[send Message]" sends a message, when the line
+    /// is said or the choice picked. A row of tags alone just does them. Flags are kept in the game's save data, so
+    /// they're still set next time. "Name: ..." is said by the <see cref="Speaker"/> called Name. Start a row with "\"
+    /// to say it as it is, "&gt;", "#", "[" and all.
     /// </summary>
     public IReadOnlyList<string> Lines { get; set; } = ["Hello!"];
 
-    /// <summary>The name of the dialogue box entity; its <see cref="Text"/> (or the first one inside it) shows the lines.</summary>
+    /// <summary>
+    /// The name of the dialogue box entity; its <see cref="Text"/> (or the first one inside it) shows the lines, and its
+    /// <see cref="DialogueBox"/>, if it has one, who's saying them.
+    /// </summary>
     [EntityName]
     public string? Box { get; set; } = "Dialogue Box";
 
@@ -551,6 +562,14 @@ public sealed class Dialogue : Component
     /// <summary>The line showing, from 0, while talking.</summary>
     [DoNotSerialize]
     public int Line { get; internal set; }
+
+    /// <summary>The line showing as it's said, without the speaker's name it starts with; null while only choices show.</summary>
+    [DoNotSerialize]
+    public string? Said { get; internal set; }
+
+    /// <summary>Who is saying the line showing, or null when no <see cref="Griff.Scenes.Speaker"/> is (a sign, say).</summary>
+    [DoNotSerialize]
+    public Speaker? Speaker { get; internal set; }
 
     /// <summary>True once it has been said all the way through.</summary>
     [DoNotSerialize]
@@ -593,30 +612,113 @@ public sealed class Dialogue : Component
         Choice,
         Part,
         GoTo,
+
+        /// <summary>Tags and nothing to say: it does them and goes on.</summary>
+        Tags,
     }
 
+    /// <summary>What a tag at the start of a row does.</summary>
+    internal enum TagKind
+    {
+        If,
+        IfNot,
+        Set,
+        Clear,
+        Send,
+    }
+
+    /// <summary>A tag at the start of a row, like "[set MetKing]".</summary>
+    internal readonly record struct Tag(TagKind Kind, string Name);
+
     /// <summary>
-    /// Reads row <paramref name="row"/>: what it is, the text to show (a line's or a choice's), and where it goes (a
-    /// choice's or a go-to's), or the name of the part it starts.
+    /// A row of <see cref="Lines"/>: what it is, the text to show (a line's or a choice's), where it goes (a choice's or a
+    /// go-to's) or the name of the part it starts, and its tags. A line said as it is (after "\") names no speaker.
     /// </summary>
-    internal (RowKind Kind, string Text, string? To) Row(int row)
+    internal readonly record struct DialogueRow(RowKind Kind, string Text, string? To, IReadOnlyList<Tag> Tags, bool AsIs = false)
+    {
+        /// <summary>True if every "[if]" tag holds, asking <paramref name="isSet"/> about each flag.</summary>
+        public bool Holds(Func<string, bool> isSet) =>
+            Tags.All(t => t.Kind switch
+            {
+                TagKind.If => isSet(t.Name),
+                TagKind.IfNot => !isSet(t.Name),
+                _ => true,
+            });
+    }
+
+    /// <summary>Reads row <paramref name="row"/> of <see cref="Lines"/>.</summary>
+    internal DialogueRow Row(int row)
     {
         var raw = Lines[row] ?? "";
         var trimmed = raw.TrimStart();
         if (trimmed.StartsWith('\\'))
-            return (RowKind.Said, trimmed[1..], null);
-        if (trimmed.StartsWith("->", StringComparison.Ordinal))
-            return (RowKind.GoTo, "", trimmed[2..].Trim());
-        if (trimmed.StartsWith('#'))
-            return (RowKind.Part, "", trimmed[1..].Trim());
-        if (!trimmed.StartsWith('>'))
-            return (RowKind.Said, raw, null);
+            return new(RowKind.Said, trimmed[1..], null, [], AsIs: true);
 
-        var choice = trimmed[1..];
-        var arrow = choice.LastIndexOf("->", StringComparison.Ordinal);
-        return arrow < 0
-            ? (RowKind.Choice, choice.Trim(), null)
-            : (RowKind.Choice, choice[..arrow].Trim(), choice[(arrow + 2)..].Trim());
+        var tags = new List<Tag>();
+        trimmed = TakeTags(trimmed, tags);
+        if (trimmed.StartsWith('\\'))
+            return new(RowKind.Said, trimmed[1..], null, tags, AsIs: true);
+        if (trimmed.StartsWith("->", StringComparison.Ordinal))
+            return new(RowKind.GoTo, "", trimmed[2..].Trim(), tags);
+        if (trimmed.StartsWith('#'))
+            return new(RowKind.Part, "", trimmed[1..].Trim(), tags);
+        if (trimmed.StartsWith('>'))
+        {
+            // Tags can go after the ">" too: "> [if HasKey] Open it".
+            var choice = TakeTags(trimmed[1..].TrimStart(), tags);
+            var arrow = choice.LastIndexOf("->", StringComparison.Ordinal);
+            return arrow < 0
+                ? new(RowKind.Choice, choice.Trim(), null, tags)
+                : new(RowKind.Choice, choice[..arrow].Trim(), choice[(arrow + 2)..].Trim(), tags);
+        }
+
+        if (tags.Count == 0)
+            return new(RowKind.Said, raw, null, tags);
+        return trimmed.Length == 0 ? new(RowKind.Tags, "", null, tags) : new(RowKind.Said, trimmed, null, tags);
+    }
+
+    // Takes the tags off the start of text into tags and returns the rest. Anything else in brackets ("[sighs]") is left
+    // as it is, to be said.
+    private static string TakeTags(string text, List<Tag> tags)
+    {
+        while (text.StartsWith('[') && text.IndexOf(']') is var end and > 0)
+        {
+            var words = text[1..end].Split((char[])[' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (words.Length < 2)
+                break;
+            var (word, name) = (words[0].ToLowerInvariant(), words[1]);
+            // "[if not]" with no flag is left to be said, like "[if]".
+            if (word == "if" && (name.StartsWith("not ", StringComparison.OrdinalIgnoreCase) || name.Equals("not", StringComparison.OrdinalIgnoreCase)))
+                (word, name) = ("if not", name[3..].Trim());
+            TagKind? kind = word switch
+            {
+                "if" => TagKind.If,
+                "if not" => TagKind.IfNot,
+                "set" => TagKind.Set,
+                "clear" => TagKind.Clear,
+                "send" => TagKind.Send,
+                _ => null,
+            };
+            if (kind is null || name.Length == 0)
+                break;
+            tags.Add(new Tag(kind.Value, name));
+            text = text[(end + 1)..].TrimStart();
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Splits "Name: what they say" into the name and what's said, when the line starts that way. The name is only a
+    /// speaker's if a <see cref="Griff.Scenes.Speaker"/> is called it (the game checks); otherwise it's all said.
+    /// </summary>
+    internal static (string? Who, string Said) SplitSpeaker(string text)
+    {
+        var colon = text.IndexOf(':');
+        if (colon <= 0 || colon > 40 || (colon + 1 < text.Length && !char.IsWhiteSpace(text[colon + 1])))
+            return (null, text);
+        var who = text[..colon].Trim();
+        return who.Length == 0 ? (null, text) : (who, text[(colon + 1)..].TrimStart());
     }
 
     /// <summary>
@@ -627,7 +729,7 @@ public sealed class Dialogue : Component
     {
         for (var row = 0; row < Lines.Count; row++)
         {
-            if (Row(row) is (RowKind.Part, _, var part) && string.Equals(part, name, StringComparison.OrdinalIgnoreCase))
+            if (Row(row) is { Kind: RowKind.Part, To: var part } && string.Equals(part, name, StringComparison.OrdinalIgnoreCase))
                 return row + 1;
         }
 
@@ -637,13 +739,58 @@ public sealed class Dialogue : Component
             $"The dialogue on \"{Entity?.Name}\" goes to \"{name}\", but none of its lines is \"# {name}\" (or \"-> End\" to end).");
     }
 
-    /// <summary>Throws if any choice or go-to names a part that isn't there, so a typo shows as soon as it's said.</summary>
+    /// <summary>
+    /// Throws if any choice or go-to names a part that isn't there, or a part has tags, so a mistake shows as soon as it's
+    /// said.
+    /// </summary>
     internal void CheckParts()
     {
         for (var row = 0; row < Lines.Count; row++)
         {
-            if (Row(row) is (RowKind.Choice or RowKind.GoTo, _, { Length: > 0 } to))
+            var line = Row(row);
+            if (line is { Kind: RowKind.Choice or RowKind.GoTo, To: { Length: > 0 } to })
                 RowAfterPart(to);
+            if (line is { Kind: RowKind.Part, Tags.Count: > 0 })
+                throw new InvalidOperationException(
+                    $"The dialogue on \"{Entity?.Name}\" has tags on \"# {line.To}\", but a part can't have them: put them on the row after it.");
         }
     }
+}
+
+/// <summary>
+/// Someone who talks in dialogue: the name shown over what they say and their portrait, in a <see cref="DialogueBox"/>.
+/// A <see cref="Dialogue"/> on the same entity is said by them, and so is a line anywhere that starts with their name
+/// ("Guide: Over here!"), so the player can answer back. Put one on an empty entity for someone who isn't in the level
+/// (a narrator, a voice on the radio).
+/// </summary>
+[Category("Story")]
+[ComponentName("Griff.Speaker")]
+public sealed class Speaker : Component
+{
+    /// <summary>The name shown over what they say, and that lines start with to be said by them. Empty uses the entity's name.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Their picture, shown in the box's portrait while they talk. Empty shows no portrait.</summary>
+    public string? PortraitImage { get; set; }
+
+    /// <summary>The name shown: <see cref="Name"/>, or the entity's when that's empty.</summary>
+    public string ShownName => string.IsNullOrWhiteSpace(Name) ? Entity?.Name ?? "" : Name.Trim();
+}
+
+/// <summary>
+/// Makes an entity a dialogue box that shows who's talking: the <see cref="Speaker"/>'s name in its <see cref="NameTag"/>
+/// and their picture in its <see cref="Portrait"/>, each hidden when there's nothing to show (a sign, someone without a
+/// portrait). A box without one shows the lines only. Entity → Create Dialogue Box makes one with both.
+/// </summary>
+[Category("Story")]
+[ComponentName("Griff.DialogueBox")]
+public sealed class DialogueBox : Component
+{
+    /// <summary>The entity inside the box whose <see cref="Text"/> shows the speaker's name.</summary>
+    [EntityName(Inside = true)]
+    public string? NameTag { get; set; } = "Name Tag";
+
+    /// <summary>The entity inside the box whose <see cref="Sprite"/> shows the speaker's portrait.</summary>
+    [EntityName(Inside = true)]
+    public string? Portrait { get; set; } = "Portrait";
 }

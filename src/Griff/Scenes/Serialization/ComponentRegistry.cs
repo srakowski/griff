@@ -41,6 +41,8 @@ public sealed class ComponentRegistry
         registry.Register<Checkpoint>();
         registry.Register<Door>();
         registry.Register<Dialogue>();
+        registry.Register<Speaker>();
+        registry.Register<DialogueBox>();
         registry.Register<Switch>();
         registry.Register<Inventory>();
         registry.Register<Trail>();

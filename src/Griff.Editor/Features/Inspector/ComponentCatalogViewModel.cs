@@ -59,9 +59,33 @@ public sealed class ComponentCatalogViewModel : ObservableObject
                 return;
             View.Refresh();
             OnPropertyChanged(nameof(HasResults));
-            if (Selected is null || !Matches(Selected))
+            if (_search.Trim().Length > 0)
+                Selected = BestMatch();
+            else if (Selected is null || !Matches(Selected))
                 Selected = View.Cast<CatalogItem>().FirstOrDefault();
         }
+    }
+
+    // What's typed most likely names: the component called that, then one whose name starts with it, then one whose name
+    // has it, then the first listed (it matched on its description).
+    private CatalogItem? BestMatch()
+    {
+        var typed = _search.Replace(" ", "");
+        var shown = View.Cast<CatalogItem>().ToList();
+        return shown.FirstOrDefault(i => i.Name.Equals(typed, StringComparison.OrdinalIgnoreCase))
+            ?? shown.FirstOrDefault(i => i.Name.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+            ?? shown.FirstOrDefault(i => i.Name.Contains(typed, StringComparison.OrdinalIgnoreCase))
+            ?? shown.FirstOrDefault();
+    }
+
+    /// <summary>Selects the item <paramref name="by"/> rows down the list as it shows (up when negative), stopping at its ends.</summary>
+    public void MoveSelection(int by)
+    {
+        var shown = View.Cast<CatalogItem>().ToList();
+        if (shown.Count == 0)
+            return;
+        var at = Selected is null ? -1 : shown.IndexOf(Selected);
+        Selected = shown[Math.Clamp(at < 0 ? (by > 0 ? 0 : shown.Count - 1) : at + by, 0, shown.Count - 1)];
     }
 
     public bool HasResults => !View.IsEmpty;

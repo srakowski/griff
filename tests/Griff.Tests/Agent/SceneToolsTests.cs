@@ -411,4 +411,33 @@ public class SceneToolsTests
         // Where it's placed is its own, not a change.
         Assert.DoesNotContain("Transform.Position", text);
     }
+
+    [Fact]
+    public void Get_SaysWhatAComponentNeedsThatItsEntityLacks()
+    {
+        var player = new Entity("Player");
+        player.AddComponent<PlatformerMovement>();
+        player.AddComponent<Body>();
+        _host.Scene!.Add(player);
+
+        var json = Run("entity_get", """{"entity": "Player"}""").Text;
+
+        Assert.Contains("\"needs\": \"It needs a Collider, which Player doesn't have, and won't work until one is added.\"", json);
+        // Its Body needs one too; nothing else is flagged.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(json, "\"needs\"").Count);
+    }
+
+    [Fact]
+    public void Update_RemovingWhatAnotherNeeds_SaysSo()
+    {
+        Run("entity_create", """{"entity": {"name": "Hero", "components": {"PlatformerMovement": {}, "Sprite": {}}}}""");
+
+        var result = Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["Body"]}}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Note: PlatformerMovement on Hero needs a Body, and won't work until it has one again.", result.Text);
+
+        // Removing what needs it too, or putting another in its place, says nothing.
+        Assert.DoesNotContain("Note:", Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["Sprite"]}}""").Text);
+        Assert.DoesNotContain("Note:", Run("entity_update", """{"entity": "Hero", "changes": {"remove": ["BoxCollider", "PlatformerMovement"]}}""").Text);
+    }
 }

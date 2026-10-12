@@ -1,0 +1,31 @@
+title: Adding components
+intro: Add Component finds what you type, brings along what a component needs, and warns before you break something.
+project: Platformer | Quick Add
+
+chapter: Type to find it | Add Component is a searchable list
+create: Sprite
+rename: Slime
+set: Transform.Position = 4, -3, 0
+say: Here's a new sprite. Let's make it an enemy that walks back and forth.
+addlist
+explain: addlist | Every component | Add Component now opens a list of every component, grouped by what it's for, with a search box ready to type in.
+type: patr
+explain: addlist:list | Found as you type | A few letters is enough. The list narrows as you type, and the best match is picked. Up and down move through the rest.
+explain: addlist:plan | What Enter adds | Underneath, it says what pressing Enter will add. A patrol needs a body and a collider, and the slime has neither, so they come along.
+key: Enter
+expectcomponents: Slime = Transform, Sprite, BoxCollider, Body, Patrol
+explain: panel:Inspector | Everything it needs | The slime now has a box collider, a body and a patrol, added as one undo step. It's ready to walk.
+
+chapter: Nothing breaks quietly | Warnings before and after
+select: Player
+explain: remove:Body | Remove Body | The player's movement needs its body. Hovering the remove button already says so.
+tip: remove:Body
+wait: 1.5
+click: remove:Body
+say: Removing it asks first, and says which component needs it and that it won't work without it.
+answer: Yes
+explain: need:PlatformerMovement | Needs a Body | We removed it anyway, so Platformer Movement is flagged: it needs a body, which the player doesn't have.
+explain: needadd:PlatformerMovement | Add Body | The flag has a button that adds what's missing.
+click: needadd:PlatformerMovement
+explain: component:Body | Back again | One click puts the body back, and the flag goes away. The player can run and jump again.
+say: So Add Component brings what a component needs, and the Inspector tells you whenever something is missing.

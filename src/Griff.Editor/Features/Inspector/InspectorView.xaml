@@ -86,10 +86,12 @@
                                         BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                         BorderThickness="0,1">
                                     <DockPanel Height="28">
-                                        <Button Command="{Binding RemoveCommand}"
+                                        <Button x:Name="RemoveButton"
+                                                Command="{Binding RemoveCommand}"
                                                 DockPanel.Dock="Right"
                                                 Style="{StaticResource Style.Button.Toolbar}"
-                                                ToolTip="Remove component"
+                                                Tag="remove"
+                                                ToolTip="{Binding RemoveTip}"
                                                 Visibility="{Binding CanRemove, Converter={StaticResource Visible}}">
                                             <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.ChromeClose}" />
                                         </Button>
@@ -136,6 +138,42 @@
                                                Text="This component's type couldn't be found. Its data is kept and will be saved unchanged."
                                                TextWrapping="Wrap" />
                                 </DockPanel>
+
+                                <!-- What it needs and the entity doesn't have, each with a button that adds it -->
+                                <ItemsControl Margin="12,8,10,0"
+                                              ItemsSource="{Binding Needs}"
+                                              Visibility="{Binding HasNeeds, Converter={StaticResource Visible}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="inspector:NeedRow">
+                                            <Border Margin="0,0,0,4"
+                                                    Padding="8,6"
+                                                    BorderBrush="{DynamicResource Brush.Status.Warning}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="{StaticResource Radius.Small}"
+                                                    Tag="need">
+                                                <DockPanel>
+                                                    <TextBlock Margin="0,1,8,0"
+                                                               VerticalAlignment="Top"
+                                                               DockPanel.Dock="Left"
+                                                               Foreground="{DynamicResource Brush.Status.Warning}"
+                                                               Style="{StaticResource Style.Icon}"
+                                                               Text="{x:Static theme:Icons.Warning}" />
+                                                    <Button Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Command="{Binding AddCommand}"
+                                                            Content="{Binding AddLabel}"
+                                                            DockPanel.Dock="Right"
+                                                            Tag="need:add"
+                                                            ToolTip="{Binding Tip}" />
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Style="{StaticResource Style.Text.Secondary}"
+                                                               Text="{Binding Message}"
+                                                               TextWrapping="Wrap" />
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
                                 <!-- How it's set up (a tilemap layer names its map) -->
                                 <TextBlock Margin="12,6,10,0"
@@ -216,7 +254,11 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="AddComponentButton" HorizontalAlignment="Stretch" Click="OnAddComponentClicked">
+                    <Button x:Name="AddComponentButton"
+                            HorizontalAlignment="Stretch"
+                            Click="OnAddComponentClicked"
+                            PreviewMouseLeftButtonDown="OnAddComponentPressed"
+                            ToolTip="Pick a component to add: type to find it, Enter adds it with whatever it needs">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Style.Icon}" FontSize="{StaticResource IconSize.Small}" Text="{x:Static theme:Icons.Add}" />
                             <TextBlock Margin="6,0,0,0" Text="Add Component" />
@@ -232,6 +274,109 @@
                             <TextBlock Margin="6,0,0,0" Text="Catalog" />
                         </StackPanel>
                     </Button>
+
+                    <!-- The list: type to filter, Up and Down to move, Enter (or a click) adds it with what it needs -->
+                    <Popup x:Name="AddPopup"
+                           AllowsTransparency="True"
+                           IsOpen="{Binding IsAddOpen, Mode=TwoWay}"
+                           Opened="OnAddPopupOpened"
+                           Placement="Bottom"
+                           PlacementTarget="{Binding ElementName=AddComponentButton}"
+                           PopupAnimation="None"
+                           StaysOpen="False"
+                           VerticalOffset="2">
+                        <Border x:Name="AddPanel"
+                                Width="{Binding ActualWidth, ElementName=AddComponentButton}"
+                                MinWidth="280"
+                                DataContext="{Binding Picker}"
+                                Style="{StaticResource Style.Border.Flyout}">
+                            <DockPanel>
+                                <Grid Margin="6,6,6,4" DockPanel.Dock="Top">
+                                    <TextBox x:Name="AddSearch"
+                                             Padding="24,0,6,0"
+                                             PreviewKeyDown="OnAddSearchKeyDown"
+                                             Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="8,0,0,0"
+                                               HorizontalAlignment="Left"
+                                               VerticalAlignment="Center"
+                                               FontSize="{StaticResource IconSize.Small}"
+                                               Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                               IsHitTestVisible="False"
+                                               Style="{StaticResource Style.Icon}"
+                                               Text="{x:Static theme:Icons.Search}" />
+                                    <TextBlock Margin="25,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                               IsHitTestVisible="False"
+                                               Text="Type to find a component"
+                                               Visibility="{Binding Text.IsEmpty, ElementName=AddSearch, Converter={StaticResource Visible}}" />
+                                </Grid>
+
+                                <!-- Browse the catalog instead -->
+                                <Button x:Name="AddBrowseButton"
+                                        Margin="6,0,6,6"
+                                        HorizontalAlignment="Stretch"
+                                        Click="OnAddBrowseClicked"
+                                        Content="Browse Catalog..."
+                                        DockPanel.Dock="Bottom" />
+
+                                <!-- What Enter does: the component, with what it needs -->
+                                <TextBlock x:Name="AddPlan"
+                                           Margin="10,6,10,6"
+                                           DockPanel.Dock="Bottom"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Text="{Binding PlanText}"
+                                           TextWrapping="Wrap" />
+
+                                <Grid>
+                                    <ListBox x:Name="AddList"
+                                             MaxHeight="340"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Focusable="False"
+                                             ItemsSource="{Binding View}"
+                                             PreviewMouseLeftButtonUp="OnAddListClicked"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             SelectedItem="{Binding Selected}"
+                                             SelectionChanged="OnAddListSelectionChanged"
+                                             VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                                        <ListBox.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="8,8,8,2" Style="{StaticResource Style.Text.Overline}" Text="{Binding Name}" />
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ListBox.GroupStyle>
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                                <Setter Property="Focusable" Value="False" />
+                                                <Setter Property="ToolTip" Value="{Binding Blurb}" />
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="inspector:CatalogItem">
+                                                <DockPanel Margin="2,1">
+                                                    <TextBlock Margin="8,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               DockPanel.Dock="Right"
+                                                               Foreground="{DynamicResource Brush.Status.Info}"
+                                                               Style="{StaticResource Style.Text.Caption}"
+                                                               Text="{Binding NeedsText}" />
+                                                    <TextBlock Text="{Binding Name, Converter={x:Static inspector:HumanizeConverter.Instance}}" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock Margin="10,8"
+                                               Style="{StaticResource Style.Text.Caption}"
+                                               Text="No components match"
+                                               Visibility="{Binding HasResults, Converter={StaticResource Hidden}}" />
+                                </Grid>
+                            </DockPanel>
+                        </Border>
+                    </Popup>
                 </Grid>
             </StackPanel>
         </ScrollViewer>

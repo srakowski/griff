@@ -303,6 +303,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             // How it's set up, as the Inspector says it (a tilemap layer names its map).
             if (component.SetupNote() is { } note)
                 data["note"] = note;
+            // What it needs and the entity doesn't have, as the Inspector flags it: it won't work until one's added.
+            if (ComponentCatalog.Unmet(host.Components, component) is { Count: > 0 } unmet)
+                data["needs"] = $"It needs {string.Join(" and ", unmet.Select(r => ComponentCatalog.Article(r.Type.Name)))}, which {entity.Name} doesn't have, and won't work until one is added.";
             foreach (var property in descriptor.Properties)
             {
                 var value = property.GetValue(component);
@@ -535,6 +538,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
         ApplyPlacement(changes, entity.Transform, (property, value) => host.Execute(new SetPropertyEdit(entity.Transform, property, value)));
 
+        // Whatever works now, to say afterwards what a removal left without something it needs, as the Inspector flags it.
+        var working = entity.Components.Where(c => ComponentCatalog.Unmet(host.Components, c).Count == 0).ToList();
         if (Prop(changes, "remove") is { } remove)
         {
             foreach (var item in remove.ValueKind == JsonValueKind.Array ? remove.EnumerateArray().ToList() : [remove])
@@ -571,6 +576,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 if (!ValueCodec.AreEqual(property.GetValue(component), value))
                     host.Execute(new SetPropertyEdit(component, property, value));
             }
+        }
+
+        foreach (var broken in working.Where(c => c.Entity == entity && ComponentCatalog.Unmet(host.Components, c).Count > 0))
+        {
+            var needs = ComponentCatalog.Unmet(host.Components, broken).Select(r => ComponentCatalog.Article(r.Type.Name));
+            notes.Add($"{host.Components.Get(broken.GetType()).DisplayName} on {entity.Name} needs {string.Join(" and ", needs)}, and won't work until it has one again.");
         }
     }
 

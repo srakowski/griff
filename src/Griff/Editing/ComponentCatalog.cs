@@ -160,6 +160,33 @@ public static class ComponentCatalog
         return edits.Count == 1 ? edits[0] : new CompositeEdit($"Add {descriptor.DisplayName}", edits);
     }
 
+    /// <summary>
+    /// What <paramref name="component"/> needs that its entity doesn't have (a PlatformerMovement's Body), so it won't
+    /// work until one is added. Empty for a component that isn't on an entity, or isn't registered.
+    /// </summary>
+    public static IReadOnlyList<ComponentLink> Unmet(ComponentRegistry registry, Component component) =>
+        component.Entity is { } entity && registry.TryGet(component.GetType()) is { } descriptor
+            ? descriptor.Requires.Where(r => !r.IsMetBy(entity)).ToList()
+            : [];
+
+    /// <summary>
+    /// The components on <paramref name="component"/>'s entity that need it: each requires something it fills, and
+    /// nothing else on the entity fills that too (with two colliders, either can go).
+    /// </summary>
+    public static IReadOnlyList<Component> Dependents(ComponentRegistry registry, Component component)
+    {
+        if (component.Entity is not { } entity)
+            return [];
+        var others = entity.Components.Where(c => c != component).ToList();
+        return others
+            .Where(c => registry.TryGet(c.GetType()) is { } descriptor && descriptor.Requires.Any(r =>
+                r.Type.IsInstanceOfType(component) && !others.Any(r.Type.IsInstanceOfType)))
+            .ToList();
+    }
+
+    /// <summary>"a Body" or "an Inventory": a requirement as a sentence names it.</summary>
+    public static string Article(string name) => ("aeiouAEIOU".Contains(name[0]) ? "an " : "a ") + name;
+
     /// <summary>A friendly name for a property's kind of value.</summary>
     public static string KindOf(Type type) =>
         type == typeof(bool) ? "On/off"

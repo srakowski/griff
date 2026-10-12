@@ -106,9 +106,23 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     public IEnumerable<ComponentDescriptor> AvailableComponents =>
         _workspace.Components.All.Where(d => d.Type != typeof(Transform)).OrderBy(d => d.DisplayName);
 
-    /// <summary>Adds the component to every selected entity, as one undo step.</summary>
+    /// <summary>
+    /// Adds a component, and any components it requires that an entity is missing (a Patrol brings a Body and a
+    /// BoxCollider), to every selected entity, as one undo step.
+    /// </summary>
     public void AddComponent(ComponentDescriptor descriptor) =>
-        ExecuteOnEach($"Add {descriptor.DisplayName}", entity => new AddComponentEdit(entity, descriptor.CreateInstance()));
+        ExecuteOnEach($"Add {descriptor.DisplayName}", entity => Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, descriptor, entity));
+
+    /// <summary>
+    /// Adds the component named <paramref name="component"/> ("Patrol" or "Platformer Movement"), with what it needs, to
+    /// every selected entity, as Add Component does.
+    /// </summary>
+    public void Add(string component)
+    {
+        var name = component.Replace(" ", "");
+        AddComponent(AvailableComponents.FirstOrDefault(d => d.DisplayName.Equals(name, StringComparison.OrdinalIgnoreCase) || d.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"There's no component called {component}."));
+    }
 
     /// <summary>The component catalog, checked against the primary selected entity.</summary>
     public ComponentCatalogViewModel CreateCatalog() => new(_workspace.Components, _selection.Entity);
@@ -116,12 +130,86 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>The primary selected entity, which the catalog checks components against.</summary>
     public Entity? Entity => _selection.Entity;
 
+    private ComponentCatalogViewModel? _picker;
+
     /// <summary>
-    /// Adds a component, and any components it requires that an entity is missing, to every selected entity, as one
-    /// undo step.
+    /// The Add Component list while it's open (null when it's shut): every component by category, filtered by what's
+    /// typed in its Search, with the Selected one's PlanText saying what adding it brings along. Open it with
+    /// <see cref="IsAddOpen"/> and add the selected one with <see cref="AddPicked"/>.
     /// </summary>
-    public void AddWithRequirements(ComponentDescriptor descriptor) =>
-        ExecuteOnEach($"Add {descriptor.DisplayName}", entity => Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, descriptor, entity));
+    public ComponentCatalogViewModel? Picker
+    {
+        get => _picker;
+        private set => SetProperty(ref _picker, value);
+    }
+
+    /// <summary>Whether the Add Component list is open. Opening it starts it afresh, with nothing typed.</summary>
+    public bool IsAddOpen
+    {
+        get => Picker is not null;
+        set
+        {
+            if (value == IsAddOpen)
+                return;
+            Picker = value && HasEntity ? CreateCatalog() : null;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Adds the component picked in the Add Component list (with what it needs) and closes the list.</summary>
+    public void AddPicked()
+    {
+        if (Picker?.Selected is not { } picked)
+            return;
+        IsAddOpen = false;
+        AddComponent(picked.Entry.Descriptor);
+    }
+
+    /// <summary>
+    /// Adds what a component needs (<paramref name="requirement"/>, e.g. its Body) to each of the selected entities
+    /// that doesn't have one, as one undo step.
+    /// </summary>
+    internal void AddRequirement(IReadOnlyList<Component> components, ComponentLink requirement)
+    {
+        if (Griff.Editing.ComponentCatalog.Satisfier(_workspace.Components, requirement.Type) is not { } satisfier)
+            return;
+        var edits = components.Select(c => c.Entity).OfType<Entity>().Where(e => !requirement.IsMetBy(e))
+            .Select(e => Griff.Editing.ComponentCatalog.AddWithRequirements(_workspace.Components, satisfier, e)).ToList();
+        if (edits.Count > 0)
+            Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Add {satisfier.DisplayName} to {edits.Count} entities", edits));
+    }
+
+    /// <summary>
+    /// Removes the components from their entities, as one undo step. When others there need them (a PlatformerMovement
+    /// its Body), asks first, saying which.
+    /// </summary>
+    internal void RemoveComponents(IReadOnlyList<Component> components, string title)
+    {
+        var placed = components.Where(c => c.Entity is not null).ToList();
+        if (placed.Count == 0)
+            return;
+        if (DependentsNote(placed) is { } note && !_dialogs.Confirm($"Remove {title}?", $"{note} Remove it anyway?"))
+            return;
+        var edits = placed.Select(IEdit (c) => new RemoveComponentEdit(c)).ToList();
+        Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Remove {title} from {edits.Count} entities", edits));
+    }
+
+    /// <summary>
+    /// "Platformer Movement needs it on Player, and won't work without it." for components that others on their
+    /// entities need, or null when nothing does.
+    /// </summary>
+    internal string? DependentsNote(IReadOnlyList<Component> components)
+    {
+        var dependents = components
+            .SelectMany(c => Griff.Editing.ComponentCatalog.Dependents(_workspace.Components, c).Select(d => (Entity: c.Entity!, Dependent: d)))
+            .ToList();
+        if (dependents.Count == 0)
+            return null;
+        var names = dependents.Select(d => Humanize(_workspace.Components.Get(d.Dependent.GetType()).DisplayName)).Distinct().ToList();
+        var entities = dependents.Select(d => d.Entity).Distinct().ToList();
+        var where = entities.Count == 1 ? entities[0].Name : $"{entities.Count} entities";
+        return $"{ComponentCatalogViewModel.Join(names)} {(names.Count == 1 ? "needs" : "need")} it on {where}, and won't work without it.";
+    }
 
     // One edit per selected entity, run as one undo step.
     private void ExecuteOnEach(string description, Func<Entity, IEdit?> edit)
@@ -276,6 +364,14 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         _componentCounts = [.. entities.Select(e => e.Components.Count)];
         Header = entities.Count == 0 ? null : new EntityHeader(entities, this);
         HiddenNote = null;
+        if (Picker is not null)
+        {
+            if (entities.Count == 0)
+                IsAddOpen = false;
+            else
+                Picker.Entity = _selection.Entity;
+        }
+
         if (entities.Count == 0)
             return;
 
@@ -479,7 +575,25 @@ public sealed class ComponentSection : ObservableObject
         Properties = Used().Select(p => new PropertyField(components, p, owner)).ToList();
         SetupNote = component.SetupNote();
         IsAddedToCopy = components.Any(owner.IsAddedToCopy);
+        Needs = descriptor.Requires
+            .Select(r => (Link: r, Lacking: components.Count(c => c.Entity is { } e && !r.IsMetBy(e))))
+            .Where(r => r.Lacking > 0)
+            .Select(r => new NeedRow(r.Link, r.Lacking, components, owner, registry))
+            .ToList();
+        var removeNote = owner.DependentsNote(components);
+        RemoveTip = removeNote is null ? "Remove component" : $"Remove component. {removeNote}";
     }
+
+    /// <summary>
+    /// What the component needs on its entity and doesn't have (a PlatformerMovement without a Body), each with a button
+    /// that adds it. Until then it won't work.
+    /// </summary>
+    public IReadOnlyList<NeedRow> Needs { get; } = [];
+
+    public bool HasNeeds => Needs.Count > 0;
+
+    /// <summary>The remove button's tooltip, which says what needs the component (and stops working without it).</summary>
+    public string RemoveTip { get; } = "Remove component";
 
     private readonly ComponentDescriptor? _descriptor;
 
@@ -551,13 +665,47 @@ public sealed class ComponentSection : ObservableObject
             property.Refresh();
     }
 
-    // From every selected entity, as one undo step.
-    private void Remove()
+    // From every selected entity, as one undo step; asks first when something needs it.
+    private void Remove() => _owner.RemoveComponents(_components, Title);
+}
+
+/// <summary>
+/// Something a component needs on its entity and doesn't have: "Needs a Body (what it pushes), which Player doesn't
+/// have", with a button that adds one (with what that needs in turn).
+/// </summary>
+public sealed class NeedRow
+{
+    public NeedRow(ComponentLink requirement, int lacking, IReadOnlyList<Component> components, InspectorPanel owner, ComponentRegistry registry)
     {
-        var edits = _components.Where(c => c.Entity is not null).Select(IEdit (c) => new RemoveComponentEdit(c)).ToList();
-        if (edits.Count > 0)
-            _owner.Execute(edits.Count == 1 ? edits[0] : new CompositeEdit($"Remove {Title} from {edits.Count} entities", edits));
+        Requirement = requirement;
+        var name = requirement.Type.Name;
+        var note = requirement.Note is null ? "" : $" ({requirement.Note})";
+        Message = components.Count == 1
+            ? $"Needs {Griff.Editing.ComponentCatalog.Article(name)}{note}, which {components[0].Entity?.Name} doesn't have."
+            : $"Needs {Griff.Editing.ComponentCatalog.Article(name)}{note}, which {lacking} of the {components.Count} don't have.";
+        var satisfier = Griff.Editing.ComponentCatalog.Satisfier(registry, requirement.Type);
+        AddLabel = satisfier is null ? "" : $"Add {InspectorPanel.Humanize(satisfier.DisplayName)}";
+        var options = Griff.Editing.ComponentCatalog.Options(registry, requirement.Type);
+        Tip = satisfier is null ? null
+            : options.Count > 1 ? $"Any kind of {name} works ({string.Join(" or ", options.Select(o => InspectorPanel.Humanize(o.DisplayName)))}); this adds {Griff.Editing.ComponentCatalog.Article(InspectorPanel.Humanize(satisfier.DisplayName))}."
+            : $"Adds {Griff.Editing.ComponentCatalog.Article(InspectorPanel.Humanize(satisfier.DisplayName))}{(components.Count == 1 ? "" : " to each that doesn't have one")}.";
+        AddCommand = new RelayCommand(() => owner.AddRequirement(components, requirement), () => satisfier is not null);
     }
+
+    /// <summary>The component it needs (a base type, like Collider, takes any kind).</summary>
+    public ComponentLink Requirement { get; }
+
+    /// <summary>The type it needs, by name: what a demo or agent asks for it by.</summary>
+    public string Name => Requirement.Type.Name;
+
+    public string Message { get; }
+
+    /// <summary>"Add Body", or for a kind of thing, the kind it adds ("Add Box Collider").</summary>
+    public string AddLabel { get; }
+
+    public string? Tip { get; }
+
+    public IRelayCommand AddCommand { get; }
 }
 
 public enum FieldKind

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Panels;
@@ -24,28 +25,80 @@ public partial class InspectorView : UserControl
     // A finished drag or typed number closes the undo step, so the next change is separate.
     private void OnEditCompleted(object sender, RoutedEventArgs e) => Panel.Seal();
 
+    // ----- The Add Component list: its state (what's typed, what's picked) is the panel's Picker.
+
+    private bool _wasOpen;
+
+    // A click on the button while the list is open closes it (the list shuts as the mouse goes down outside it), rather
+    // than opening it again.
+    private void OnAddComponentPressed(object sender, MouseButtonEventArgs e) => _wasOpen = Panel.IsAddOpen;
+
     private void OnAddComponentClicked(object sender, RoutedEventArgs e)
     {
-        var menu = new ContextMenu
-        {
-            PlacementTarget = AddComponentButton,
-            Placement = PlacementMode.Bottom,
-            MinWidth = AddComponentButton.ActualWidth,
-        };
+        if (!_wasOpen)
+            Panel.IsAddOpen = true;
+        _wasOpen = false;
+    }
 
-        foreach (var descriptor in Panel.AvailableComponents)
+    private void OnAddPopupOpened(object? sender, EventArgs e)
+    {
+        AddSearch.Focus();
+        Keyboard.Focus(AddSearch);
+        if (Panel.Picker?.Selected is { } selected)
+            AddList.ScrollIntoView(selected);
+    }
+
+    // Typing filters; Up and Down move through the list, Enter adds the picked one and Escape closes it.
+    private void OnAddSearchKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
         {
-            var item = new MenuItem { Header = InspectorPanel.Humanize(descriptor.DisplayName) };
-            item.Click += (_, _) => Panel.AddComponent(descriptor);
-            menu.Items.Add(item);
+            case Key.Down or Key.Up or Key.PageDown or Key.PageUp:
+                Panel.Picker?.MoveSelection(e.Key switch { Key.Down => 1, Key.Up => -1, Key.PageDown => 8, _ => -8 });
+                break;
+            case Key.Enter:
+                Panel.AddPicked();
+                break;
+            case Key.Escape:
+                Panel.IsAddOpen = false;
+                break;
+            default:
+                return;
         }
 
-        menu.Items.Add(new Separator());
-        var browse = new MenuItem { Header = "Browse Catalog..." };
-        browse.Click += (_, _) => OpenCatalog();
-        menu.Items.Add(browse);
+        e.Handled = true;
+    }
 
-        menu.IsOpen = true;
+    private void OnAddListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AddList.SelectedItem is { } selected)
+            AddList.ScrollIntoView(selected);
+    }
+
+    // A click on a component adds it.
+    private void OnAddListClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && ItemsControl.ContainerFromElement(AddList, source) is ListBoxItem { DataContext: CatalogItem item })
+        {
+            Panel.Picker!.Selected = item;
+            Panel.AddPicked();
+            e.Handled = true;
+        }
+    }
+
+    // Opens the catalog on what the list had found.
+    private void OnAddBrowseClicked(object sender, RoutedEventArgs e)
+    {
+        var search = Panel.Picker?.Search;
+        var picked = Panel.Picker?.Selected?.Entry.Descriptor.Type;
+        Panel.IsAddOpen = false;
+        OpenCatalog();
+        if (_catalog?.Model is { } model)
+        {
+            if (!string.IsNullOrWhiteSpace(search))
+                model.Search = search;
+            model.Navigate(picked);
+        }
     }
 
     private void OnCatalogClicked(object sender, RoutedEventArgs e) => OpenCatalog();
@@ -119,7 +172,7 @@ public partial class InspectorView : UserControl
 
         void ComponentsChanged(object? sender, NotifyCollectionChangedEventArgs e) => model.Refresh();
 
-        _catalog = new ComponentCatalogWindow(model, panel.AddWithRequirements) { Owner = Window.GetWindow(this) };
+        _catalog = new ComponentCatalogWindow(model, panel.AddComponent) { Owner = Window.GetWindow(this) };
         panel.PropertyChanged += Follow;
         panel.Components.CollectionChanged += ComponentsChanged;
         _catalog.Closed += (_, _) =>

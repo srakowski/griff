@@ -624,64 +624,105 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         return null;
     }
 
-    /// <summary>Clicks Add Component and picks <paramref name="name"/> from the list.</summary>
+    /// <summary>
+    /// Clicks Add Component, types <paramref name="name"/> to find it and presses Enter, adding it with whatever it needs.
+    /// </summary>
     public async Task AddComponent(string name)
     {
         var panel = (InspectorPanel)Inspector.DataContext;
+        var typed = InspectorPanel.Humanize(name.Replace(" ", ""));
         for (var attempt = 0; attempt < 2 && !HasSection(); attempt++)
         {
-            var button = (Button)Inspector.FindName("AddComponentButton");
-            await Click(button);
-            var item = await WaitFor(() => MenuItem(InspectorPanel.Humanize(name.Replace(" ", ""))), $"component {name} in the list");
-            await Settle(120);
-            // The list is longer than the screen: scroll it with the wheel until the item shows, then click it. The cursor
-            // jumps rather than glides there, since passing over the list's scroll arrows would scroll it again.
-            var menu = ItemsControl.ItemsControlFromItemContainer(item);
-            // The content area, not the whole viewer: its scroll arrows sit over the viewer's ends.
-            var viewer = Descendants<ScrollViewer>(menu).FirstOrDefault() is { } scroller
-                ? Descendants<ScrollContentPresenter>(scroller).FirstOrDefault() ?? (FrameworkElement)scroller
-                : null;
-            if (viewer is not null)
-            {
-                await input.MoveTo(Center(viewer));
-                for (var i = 0; i < 40 && !Shows(viewer, item); i++)
-                {
-                    await input.Scroll(ScreenRect(item).Top > ScreenRect(viewer).Bottom ? -1 : 1);
-                    await Settle(20);
-                }
-
-                if (!Shows(viewer, item))
-                {
-                    item.BringIntoView();
-                    Log?.Invoke($"wheel didn't reach {name}");
-                    await Settle(100);
-                }
-            }
-
-            await input.Click(Center(item), glide: false);
-            await Settle(100);
-            if (Find<ContextMenu>(m => m.IsOpen) is { } open)
-                open.IsOpen = false;
+            await OpenAddList();
+            await input.Type(typed, msPerChar: 55);
+            await Settle(250);
+            if (panel.Picker?.Selected?.Name != name.Replace(" ", ""))
+                Log?.Invoke($"Add Component list picked {panel.Picker?.Selected?.Name} for {name}");
+            await input.Press(Key.Enter, showBadge: false);
+            await Settle(150);
+            panel.IsAddOpen = false;
             if (!HasSection())
                 Log?.Invoke($"retry Add Component {name}");
         }
 
         if (!HasSection())
         {
-            panel.AddComponent(panel.AvailableComponents.First(d => d.DisplayName == name.Replace(" ", "")));
+            panel.Add(name);
             Log?.Invoke($"FORCED Add Component {name}");
             await Settle(100);
         }
 
         bool HasSection() => panel.Components.Any(s => s.IsNamed(name));
-
-        static bool Shows(FrameworkElement viewer, FrameworkElement item)
-        {
-            var view = ScreenRect(viewer);
-            var at = ScreenRect(item);
-            return at.Top >= view.Top - 1 && at.Bottom <= view.Bottom + 1;
-        }
     }
+
+    /// <summary>Whether the Inspector's Add Component list is open.</summary>
+    public bool IsAddListOpen => ((InspectorPanel)Inspector.DataContext).IsAddOpen;
+
+    /// <summary>Opens the Add Component list with its button, with nothing typed yet.</summary>
+    public async Task OpenAddList()
+    {
+        var panel = (InspectorPanel)Inspector.DataContext;
+        if (panel.IsAddOpen)
+            panel.IsAddOpen = false;
+        var button = (Button)Inspector.FindName("AddComponentButton");
+        await Click(button);
+        var opened = false;
+        try
+        {
+            await WaitFor(() => panel.IsAddOpen && ((FrameworkElement)Inspector.FindName("AddSearch")).IsKeyboardFocusWithin ? panel : null, "the Add Component list", 1500);
+            opened = true;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        if (!opened)
+        {
+            panel.IsAddOpen = true;
+            await Settle(150);
+            Keyboard.Focus(AddListPart("search"));
+            Log?.Invoke("FORCED Add Component list open");
+        }
+
+        await Settle(150);
+    }
+
+    /// <summary>
+    /// A part of the open Add Component list: <c>addlist</c> (all of it), <c>search</c>, <c>list</c>, <c>plan</c>,
+    /// <c>browse</c>, or <c>item:Patrol</c> (a row).
+    /// </summary>
+    public FrameworkElement AddListPart(string name)
+    {
+        var popup = (Popup)Inspector.FindName("AddPopup");
+        if (!popup.IsOpen || popup.Child is not FrameworkElement root)
+            throw new InvalidOperationException("The Add Component list isn't open.");
+        var (kind, item) = name.Split(':', 2) is [var k, var i] ? (k, i) : (name, "");
+        return kind.ToLowerInvariant() switch
+        {
+            "" => root,
+            "search" => (FrameworkElement)Inspector.FindName("AddSearch"),
+            "list" => (FrameworkElement)Inspector.FindName("AddList"),
+            "plan" => (FrameworkElement)Inspector.FindName("AddPlan"),
+            "browse" => (FrameworkElement)Inspector.FindName("AddBrowseButton"),
+            "item" => Descendants<ListBoxItem>((FrameworkElement)Inspector.FindName("AddList"))
+                .FirstOrDefault(i => i.DataContext is CatalogItem c && (c.Name == item.Replace(" ", "") || InspectorPanel.Humanize(c.Name) == item))
+                ?? throw new InvalidOperationException($"No {item} showing in the Add Component list."),
+            _ => throw new FormatException($"Unknown part of the Add Component list \"{name}\" (search, list, plan, browse, item:)."),
+        };
+    }
+
+    /// <summary>A section's flag saying what it needs (<c>PlatformerMovement</c>, or <c>PlatformerMovement.Body</c> for one of several).</summary>
+    public FrameworkElement? NeedRow(string component, string? needs = null) =>
+        Descendants<Border>(Inspector).FirstOrDefault(b => b.Tag as string == "need" && b.DataContext is NeedRow row &&
+            (needs is null || row.Name.Equals(needs, StringComparison.OrdinalIgnoreCase)) && Section(b)?.IsNamed(component) == true);
+
+    /// <summary>The button on a section's flag that adds what it needs.</summary>
+    public Button? NeedButton(string component, string? needs = null) =>
+        NeedRow(component, needs) is { } row ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == "need:add") : null;
+
+    /// <summary>A section's remove button.</summary>
+    public Button? RemoveButton(string component) =>
+        ComponentHeader(component) is { } header ? Descendants<Button>(header).FirstOrDefault(b => b.Tag as string == "remove") : null;
 
     // ----- Component catalog -----
 

@@ -145,5 +145,8 @@ public sealed class ComponentRegistry
             ? descriptor
             : throw new InvalidOperationException($"Component type {type.FullName} isn't registered.");
 
+    /// <summary>The type's descriptor, or null if it isn't registered (a script that was removed).</summary>
+    public ComponentDescriptor? TryGet(Type type) => _byType.GetValueOrDefault(type);
+
     public ComponentDescriptor? Find(string name) => _byName.GetValueOrDefault(name);
 }

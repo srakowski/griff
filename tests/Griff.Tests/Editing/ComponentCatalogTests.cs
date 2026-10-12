@@ -162,4 +162,43 @@ public class ComponentCatalogTests
     {
         Assert.Equal("Hit points.", Entry<Health>().Summary.FirstSentence);
     }
+
+    [Fact]
+    public void Unmet_IsWhatAComponentNeedsThatItsEntityLacks()
+    {
+        var player = new Entity("Player");
+        var movement = player.AddComponent<PlatformerMovement>();
+
+        Assert.Equal([typeof(Body), typeof(Collider)], ComponentCatalog.Unmet(_registry, movement).Select(r => r.Type));
+
+        player.AddComponent<Body>();
+        player.AddComponent<CircleCollider>();
+        Assert.Empty(ComponentCatalog.Unmet(_registry, movement));
+        Assert.Empty(ComponentCatalog.Unmet(_registry, new PlatformerMovement())); // On no entity.
+    }
+
+    [Fact]
+    public void Dependents_AreWhatWouldStopWorking_WithoutIt()
+    {
+        var player = new Entity("Player");
+        var body = player.AddComponent<Body>();
+        var box = player.AddComponent<BoxCollider>();
+        var movement = player.AddComponent<PlatformerMovement>();
+        var pickup = player.AddComponent<Pickup>();
+
+        Assert.Equal([movement], ComponentCatalog.Dependents(_registry, body));
+        Assert.Equal([body, movement, pickup], ComponentCatalog.Dependents(_registry, box));
+        Assert.Empty(ComponentCatalog.Dependents(_registry, movement));
+
+        // With a second collider, either can go.
+        player.AddComponent<CircleCollider>();
+        Assert.Empty(ComponentCatalog.Dependents(_registry, box));
+    }
+
+    [Fact]
+    public void Article_ReadsAsASentenceNamesIt()
+    {
+        Assert.Equal("a Body", ComponentCatalog.Article("Body"));
+        Assert.Equal("an Inventory", ComponentCatalog.Article("Inventory"));
+    }
 }

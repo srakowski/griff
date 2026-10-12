@@ -338,7 +338,7 @@ public sealed class Counter : Component
 
     /// <summary>
     /// How the text reads: <c>{0}</c> is the count and <c>{1}</c> the best, e.g. "Score: {0}", "Best: {1}" or
-    /// "{0:000000}". Empty shows just the number.
+    /// "{0:000000}" (and <c>{2}</c> how many goals there are, with <see cref="CountGoals"/>). Empty shows just the number.
     /// </summary>
     public string? Format { get; set; } = "Score: {0}";
 
@@ -356,6 +356,16 @@ public sealed class Counter : Component
     /// (usually the player's) holds.
     /// </summary>
     public string? Item { get; set; }
+
+    /// <summary>
+    /// Count the <see cref="Goal"/>s in the scene that are covered instead of a message, with <c>{2}</c> in
+    /// <see cref="Format"/> for how many goals there are, e.g. "Crates: {0} / {2}".
+    /// </summary>
+    public bool CountGoals { get; set; }
+
+    /// <summary>How many goals there are, for a counter that counts them (<c>{2}</c> in <see cref="Format"/>); 0 otherwise.</summary>
+    [DoNotSerialize]
+    public int Total { get; internal set; }
 
     /// <summary>The best count, from <see cref="SaveBestAs"/> (or this run's, without it).</summary>
     [DoNotSerialize]
@@ -380,7 +390,7 @@ public sealed class Counter : Component
             return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
-            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best);
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best, Total);
         }
         catch (FormatException)
         {

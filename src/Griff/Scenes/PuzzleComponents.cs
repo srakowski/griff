@@ -145,6 +145,77 @@ public sealed class Switch : Component
 }
 
 /// <summary>
+/// A place to push a crate to, for Sokoban-style puzzles, with no code: it's covered while a grid crate (a
+/// <see cref="Pushable"/> with a <see cref="GridMovement"/>) rests in its cell, and once every goal with the same
+/// <see cref="AllCoveredMessage"/> is covered, that message is sent: the puzzle solved. Put it on the floor under where
+/// the crates go; it needs no collider (a solid one would block them). A <see cref="Counter"/> with Count Goals shows how
+/// many are covered.
+/// </summary>
+/// <remarks>
+/// A crate that starts on a goal covers it from the start, without its sound or messages. Only a crate that has finished
+/// gliding into the cell covers it.
+/// </remarks>
+[Category("Level")]
+[WorksWith(typeof(Pushable), Note = "grid crates that cover it")]
+[WorksWith(typeof(Counter), Note = "Count Goals shows how many are covered")]
+[ComponentName("Griff.Goal")]
+public sealed class Goal : Component
+{
+    /// <summary>The kinds of crate that cover it (each a pushable's Kind), separated by commas, e.g. "Red, Blue". Empty takes any crate.</summary>
+    public string? Accepts { get; set; }
+
+    /// <summary>The color a crate turns while it rests on it, so the player sees it's in place. Transparent leaves crates alone.</summary>
+    public Color CoveredTint { get; set; } = Color.FromBytes(0x9C, 0xE0, 0x8A);
+
+    /// <summary>A sound played when a crate covers it, e.g. "Sounds/click.wav".</summary>
+    [Group("Sound and Messages")]
+    public string? Sound { get; set; }
+
+    /// <summary>A message sent with <c>Game.Send</c> when a crate covers it, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
+    public string? CoverMessage { get; set; }
+
+    /// <summary>A message sent with <c>Game.Send</c> when its crate is pushed off it, with this entity as its data.</summary>
+    [Names(NameKind.Message)]
+    public string? UncoverMessage { get; set; }
+
+    /// <summary>
+    /// A message sent once every goal with this same All Covered Message is covered, with this entity as its data: every
+    /// crate home, the level solved. It's sent again if they're all covered again after one is uncovered.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? AllCoveredMessage { get; set; }
+
+    /// <summary>The crate resting on it, or null.</summary>
+    [DoNotSerialize]
+    public Entity? CoveredBy { get; internal set; }
+
+    /// <summary>True while a crate it accepts rests on it.</summary>
+    [DoNotSerialize]
+    public bool IsCovered => CoveredBy is not null;
+
+    /// <summary>Raised when a crate covers it, with the crate.</summary>
+    public event Action<Entity>? Covered;
+
+    /// <summary>Raised when its crate is pushed off it, with the crate.</summary>
+    public event Action<Entity>? Uncovered;
+
+    /// <summary>True if crates of kind <paramref name="kind"/> (a pushable's Kind) cover it.</summary>
+    public bool AcceptsKind(string? kind)
+    {
+        var kinds = (Accepts ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return kinds.Length == 0 || kinds.Contains((kind ?? "").Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    // Whether the game has looked at it yet: what covers it at the start isn't a change.
+    internal bool Seen { get; set; }
+
+    internal void RaiseCovered(Entity crate) => Covered?.Invoke(crate);
+
+    internal void RaiseUncovered(Entity crate) => Uncovered?.Invoke(crate);
+}
+
+/// <summary>
 /// What an entity is carrying: keys, potions, the parts of a machine. A <see cref="Pickup"/> with an
 /// <see cref="Pickup.Item"/> puts things in the inventory of whoever collects it (adding one if they don't have one);
 /// locked <see cref="Door"/>s and <see cref="Switch"/>es use up its keys. A <see cref="Counter"/> with an

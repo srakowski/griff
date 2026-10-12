@@ -274,7 +274,8 @@ public sealed class TopDownMovement : Component
 /// it (it turns to face them instead). It starts on the middle of the cell it's placed in. Plays its
 /// <see cref="Animation"/>'s Idle and Walk (or Run) clips if it has them (and IdleUp, WalkDown and so on, facing that
 /// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity. With a
-/// <see cref="GridChase"/> or a <see cref="GridPatrol"/> it's an enemy or another mover instead, stepping on its own.
+/// <see cref="GridChase"/> or a <see cref="GridPatrol"/> it's an enemy or another mover instead, stepping on its own;
+/// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -283,6 +284,7 @@ public sealed class TopDownMovement : Component
 [WorksWith(typeof(Animation), Note = "plays Idle and Walk clips")]
 [WorksWith(typeof(GridChase), Note = "steps after a target on its own: an enemy")]
 [WorksWith(typeof(GridPatrol), Note = "walks a route of cells on its own")]
+[WorksWith(typeof(Pushable), Note = "a crate pushed a cell at a time")]
 [ComponentName("Griff.GridMovement")]
 public sealed class GridMovement : Component
 {
@@ -314,7 +316,7 @@ public sealed class GridMovement : Component
 
     /// <summary>
     /// Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works. Something
-    /// with a <see cref="GridChase"/> or a <see cref="GridPatrol"/> never takes the player's input.
+    /// with a <see cref="GridChase"/>, a <see cref="GridPatrol"/> or a <see cref="Pushable"/> never takes the player's input.
     /// </summary>
     [Group("Control")]
     public bool Controllable { get; set; } = true;
@@ -387,6 +389,12 @@ public sealed class GridMovement : Component
     internal Vector2 To { get; set; }
 
     internal float Progress { get; set; }
+
+    // Seconds the step under way takes, when it isn't its own Step Time: a pushed crate glides along with its pusher.
+    internal float? Glide { get; set; }
+
+    // The frame it was last pushed in: a crate pushed by a mover that ran before it doesn't glide on again that frame.
+    internal long PushedOnFrame { get; set; } = -1;
 
     internal bool Started { get; set; }
 

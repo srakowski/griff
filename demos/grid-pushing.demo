@@ -1,0 +1,96 @@
+title: Grid pushing
+intro: Sokoban crates with no code: a grid player pushes them a cell at a time, onto goals that count when they're covered.
+project: Empty | Crate Push
+
+chapter: A room with crates | Create Crate on a grid, and Create Goal
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111\n1......1\n1.11...1\n1......1\n11111111
+select: Main Camera
+set: Transform.Position.X = 4
+set: Transform.Position.Y = -2.5
+look: 4, -2.5, 4
+deselect
+create: Grid Player
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+say: A small room on a tilemap, and a grid player in its top left corner.
+deselect
+create: Crate
+rename: Crate A
+set: Transform.Position.X = 3.5
+set: Transform.Position.Y = -1.5
+explain: component:GridMovement | A grid crate | Create Crate in a scene with a grid player makes a grid crate: a Pushable with a Grid Movement of its own, and no gravity.
+explain: group:Pushable.Grid | Pushes Row and Kind | Pushes Row lets it shove the crates behind it along too. Off, as in Sokoban, a crate behind it blocks the push. Kind is for goals that only take some crates.
+deselect
+create: Crate
+rename: Crate B
+set: Transform.Position.X = 2.5
+set: Transform.Position.Y = -3.5
+deselect
+create: Goal
+rename: Goal A
+set: Transform.Position.X = 5.5
+set: Transform.Position.Y = -1.5
+explain: menu:Entity | Entity, Create Goal | Create Goal makes a place to push a crate to: a flat square drawn under the crates.
+explain: component:Goal | Goal | It's covered while a crate rests in its cell. The crate turns its Covered Tint, and it can play a sound and send messages.
+explain: field:Goal.AllCoveredMessage | All Covered Message | Every goal with the same All Covered Message sends it once they're all covered: the level solved.
+deselect
+create: Goal
+rename: Goal B
+set: Transform.Position.X = 4.5
+set: Transform.Position.Y = -3.5
+deselect
+create: Text
+rename: Crates
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = TopLeft
+set: ScreenAnchor.Offset = 2.5, -0.7
+add: Counter
+set: Counter.CountGoals = true
+set: Counter.Format = Crates: {0} / {2}
+explain: field:Counter.CountGoals | Count Goals | And a counter that counts covered goals instead of a message, with how many there are, for the corner of the screen.
+
+chapter: Push them home | One cell a step, stopped by walls
+play
+wait: 0.5
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.4
+expectat: Crate A = 4.5, -1.5
+say: Step into a crate and it slides a cell ahead, gliding along with the player.
+tap: Right
+wait: 0.5
+expectat: Crate A = 5.5, -1.5
+expectvalue: Crates.Text.Value = Crates: 1 / 2
+explain: game | Covered | On its goal it turns green, and the counter goes up.
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Down
+wait: 0.3
+tap: Down
+wait: 0.3
+say: Round the wall in the middle, to get behind the other crate.
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.5
+expectat: Crate B = 4.5, -3.5
+expectvalue: Crates.Text.Value = Crates: 2 / 2
+explain: game | Solved | Both goals are covered, so they send Solved, once. A sound player or a script can hear it and move on to the next level.
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.5
+expectat: Crate B = 6.5, -3.5
+expectat: Player = 5.5, -3.5
+explain: game | Off again | Push a crate off its goal and the count goes down. Against the wall it won't go any further, so the player just bumps it.
+stop
+say: That's grid pushing, with no code. It works with turns too, where a push is the player's step, and in network games.

@@ -42,6 +42,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
+            .AddCommand<CreateGoalCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
@@ -548,7 +549,9 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
             entity.AddComponent(GridTurnTaker(entity, order));
     }
 
-    private static IEnumerable<Entity> GridMovers(Scene scene) => scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null);
+    // Grid players, enemies and other movers: not the crates they push, which don't take turns.
+    internal static IEnumerable<Entity> GridMovers(Scene scene) =>
+        scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null && e.GetComponent<Pushable>() is null);
 
     // One action a turn, on the first side a person plays if it's a player, or the first the computer plays if it moves on
     // its own.
@@ -606,7 +609,11 @@ public sealed class CreateSpringCommand(IWorkspace workspace, ISelection selecti
     }
 }
 
-/// <summary>Creates a crate the player pushes along: a solid box with a <see cref="Body"/> and <see cref="Pushable"/>, on the Crate layer.</summary>
+/// <summary>
+/// Creates a crate the player pushes along: a solid box with a <see cref="Body"/> and <see cref="Pushable"/>, on the Crate
+/// layer. In a scene with grid movers it's a grid crate, pushed a cell at a time: it gets a <see cref="GridMovement"/> and
+/// no gravity.
+/// </summary>
 public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateCrate";
@@ -621,8 +628,36 @@ public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selectio
         sprite.Tint = Griff.Color.FromBytes(0x9C, 0x6B, 0x3C);
         var collider = entity.AddComponent<BoxCollider>();
         collider.Layer = "Crate";
-        entity.AddComponent<Body>();
+        var body = entity.AddComponent<Body>();
         entity.AddComponent<Pushable>();
+        if (Scene is { } scene && CreateTurnOrderCommand.GridMovers(scene).Any())
+        {
+            (sprite.Size, collider.Size) = (new System.Numerics.Vector2(0.9f, 0.9f), new System.Numerics.Vector2(0.9f, 0.9f));
+            body.GravityScale = 0;
+            entity.AddComponent<GridMovement>();
+        }
+    }
+}
+
+/// <summary>
+/// Creates a goal for grid crates: a flat square drawn under them with a <see cref="Goal"/> whose All Covered Message is
+/// "Solved", sent once every goal in the scene has a crate on it.
+/// </summary>
+public sealed class CreateGoalCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateGoal";
+    public override string Text => "Create Goa_l";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    protected override string EntityName => "Goal";
+
+    protected override void Configure(Entity entity)
+    {
+        var sprite = entity.AddComponent<Sprite>();
+        sprite.Size = new System.Numerics.Vector2(0.6f, 0.6f);
+        sprite.Tint = Griff.Color.FromBytes(0xE8, 0xC5, 0x4A, 0xCC);
+        sprite.Order = -1;
+        entity.AddComponent<Goal>().AllCoveredMessage = "Solved";
     }
 }
 

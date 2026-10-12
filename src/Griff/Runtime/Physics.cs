@@ -738,10 +738,12 @@ public sealed class Physics
 
     // A pushable crate's body and collider, if the solid is one that something on this layer can shove along this axis:
     // sideways always, up and down only where it doesn't fall (top-down), so landing on a crate doesn't drive it into the floor.
+    // A crate on a grid is only pushed a cell at a time, by grid movers.
     private (Body Body, Collider Collider, Pushable Pushable)? CanPush(Shape solid, int axis, string? layer)
     {
         if (solid.Collider is not { } collider || solid.Entity.GetComponent<Pushable>() is not { } pushable ||
-            solid.Entity.GetComponent<Body>() is not { } body || !pushable.AcceptsLayer(layer))
+            solid.Entity.GetComponent<Body>() is not { } body || !pushable.AcceptsLayer(layer) ||
+            solid.Entity.GetComponent<GridMovement>() is not null)
             return null;
         if (axis == 1 && body.GravityScale != 0 && Gravity != Vector2.Zero)
             return null;

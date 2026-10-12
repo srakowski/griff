@@ -60,6 +60,7 @@ public sealed class ComponentRegistry
         registry.Register<TurnTaker>();
         registry.Register<Ladder>();
         registry.Register<Pushable>();
+        registry.Register<Goal>();
         registry.Register<Bouncer>();
         registry.Register<Crumble>();
         registry.Register<Light>();

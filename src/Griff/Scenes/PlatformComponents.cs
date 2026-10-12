@@ -20,11 +20,15 @@ public sealed class Ladder : Component
 /// <summary>
 /// A crate that bodies push along by walking into it, with no code: sideways in a platformer, any way in a top-down game
 /// (when its <see cref="Body"/>'s Gravity Scale is 0). It pushes crates in front of it in turn, and stops at walls. Needs
-/// a <see cref="Body"/> and a solid collider. Give it a layer (say "Crate") to have it hold a pressure plate down.
+/// a <see cref="Body"/> and a solid collider. Give it a layer (say "Crate") to have it hold a pressure plate down. With a
+/// <see cref="GridMovement"/> too it's a Sokoban crate: a grid mover stepping into it pushes it a cell (gliding along with
+/// it), unless a wall or another crate is in the way, and resting on a <see cref="Goal"/> covers it.
 /// </summary>
 [Category("Level")]
 [Requires(typeof(Body))]
 [Requires(typeof(Collider), Note = "solid, not a trigger")]
+[WorksWith(typeof(GridMovement), Note = "pushed a cell at a time by grid movers")]
+[WorksWith(typeof(Goal), Note = "places on the grid to push it to")]
 [ComponentName("Griff.Pushable")]
 public sealed class Pushable : Component
 {
@@ -32,8 +36,28 @@ public sealed class Pushable : Component
     [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
 
-    /// <summary>How fast it goes compared to whoever pushes it: 1 is as fast, 0.5 half as fast (a heavy crate), 0 won't budge.</summary>
+    /// <summary>
+    /// How fast it goes compared to whoever pushes it: 1 is as fast, 0.5 half as fast (a heavy crate), 0 won't budge. On a
+    /// grid it always keeps pace with its pusher, and 0 still won't budge.
+    /// </summary>
     public float Speed { get; set; } = 0.6f;
+
+    /// <summary>
+    /// On a grid, pushing it into another crate pushes that one too, so a row slides together. Off, a crate behind it
+    /// blocks it, as in Sokoban.
+    /// </summary>
+    [Group("Grid")]
+    public bool PushesRow { get; set; }
+
+    /// <summary>What kind of crate it is, e.g. "Red": a <see cref="Goal"/>'s Accepts names the kinds that cover it.</summary>
+    public string? Kind { get; set; }
+
+    /// <summary>The goal it rests on, or null. Kept up to date while the game runs.</summary>
+    [DoNotSerialize]
+    public Entity? OnGoal { get; internal set; }
+
+    /// <summary>Raised when a grid mover pushes it a cell, with the pusher and the way it's pushed.</summary>
+    public event Action<Entity, Vector2>? Pushed;
 
     /// <summary>True if something on collision layer <paramref name="layer"/> can push it.</summary>
     public bool AcceptsLayer(string? layer)
@@ -41,6 +65,11 @@ public sealed class Pushable : Component
         var layers = CollisionLayers.Parse(Layers);
         return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
     }
+
+    // The color the goal it rests on turns it, drawn instead of its sprite's own (not saved, so a rewind never keeps it).
+    internal Color? GoalTint { get; set; }
+
+    internal void RaisePushed(Entity pusher, Vector2 way) => Pushed?.Invoke(pusher, way);
 }
 
 /// <summary>

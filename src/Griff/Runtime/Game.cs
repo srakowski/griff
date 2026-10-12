@@ -227,6 +227,7 @@ public sealed partial class Game
         RunDoors();
         RunDialogues();
         RunSwitches();
+        RunGoals();
         RunWiring();
         RunBouncers();
         RunCrumbles();
@@ -882,6 +883,12 @@ public sealed partial class Game
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
                 counter.Add(ItemCount(counter.Item) - counter.Value);
+            if (counter.CountGoals)
+            {
+                var goals = Showing<Goal>().ToList();
+                counter.Total = goals.Count;
+                counter.Add(goals.Count(g => g.IsCovered) - counter.Value);
+            }
 
             if (counter.Shown is null)
             {

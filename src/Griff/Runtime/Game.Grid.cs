@@ -4,8 +4,8 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Things that step tile by tile on a tilemap's grid, blocked by walls: players, and enemies and other movers that chase
-// a target or walk a route on their own.
+// Things that step tile by tile on a tilemap's grid, blocked by walls: players, enemies and other movers that chase a
+// target or walk a route on their own, and the crates they push.
 public sealed partial class Game
 {
     // How far the stick has to lean before it counts as a way.
@@ -14,6 +14,12 @@ public sealed partial class Game
     // How far past the two ends a search for a way goes with no map to keep it in, in cells; and the most cells it looks at.
     private const int GridSearchMargin = 12;
     private const int GridSearchLimit = 250_000;
+
+    // The most crates one step pushes along in a row.
+    private const int GridPushRowLimit = 16;
+
+    // A player's machine asks the host to push a crate the host runs.
+    private const string GridPushCommand = "griff.gridpush";
 
     private void RunGrid(GridMovement m)
     {
@@ -32,12 +38,15 @@ public sealed partial class Game
             // Onto the middle of the cell it's placed in (or that a rewind left it partway into).
             m.Started = true;
             m.Stepping = false;
+            m.Glide = null;
             m.Cell = grid.CellAt(here);
             MoveTo(entity, grid.Center(m.Cell));
         }
 
-        // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run.
-        var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
+        // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run. A
+        // crate only moves when it's pushed.
+        var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null ||
+                     entity.GetComponent<Pushable>() is not null;
         // Waiting for their turn, they finish the step under way and go no further. Taking turns a step at a time, each
         // step uses an action.
         var waits = Waiting(entity);
@@ -64,14 +73,16 @@ public sealed partial class Game
 
         var stepTime = Math.Max(0.02f, m.StepTime);
         var spare = Time.Delta;
-        if (m.Stepping)
+        if (m.Stepping && m.PushedOnFrame != Time.Frame)
         {
-            m.Progress += Time.Delta / stepTime;
+            var glide = Math.Max(0.02f, m.Glide ?? stepTime);
+            m.Progress += Time.Delta / glide;
             spare = 0;
             if (m.Progress >= 1)
             {
-                spare = (m.Progress - 1) * stepTime;
+                spare = (m.Progress - 1) * glide;
                 m.Stepping = false;
+                m.Glide = null;
                 MoveTo(entity, m.To);
             }
             else
@@ -150,6 +161,15 @@ public sealed partial class Game
         var free = walls.IsFree(target);
         if (free && offset.X != 0 && offset.Y != 0)
             free = walls.IsFree((m.Cell.X + offset.X, m.Cell.Y)) && walls.IsFree((m.Cell.X, m.Cell.Y + offset.Y));
+
+        // A crate in the way (straight ahead, never diagonally) is pushed a cell along first, if it can go.
+        if (!free && (offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay &&
+            CratesPushed(entity, way, inTheWay) is { } row)
+        {
+            Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
+            free = true;
+        }
+
         if (!free)
         {
             if (m.BumpedWay != way)
@@ -162,18 +182,91 @@ public sealed partial class Game
             return;
         }
 
-        m.From = grid.Center(m.Cell);
-        m.To = grid.Center(target);
-        m.Cell = target;
-        m.Progress = progress;
-        m.Stepping = true;
-        MoveTo(entity, Vector2.Lerp(m.From, m.To, m.Progress));
-        PlayIfSet(m.StepSound);
+        StartGridStep(m, grid, target, direction, progress, glide: null);
         UseAction(entity);
         // A player's own machine moves their character: the host, running the turns, hears of the step.
         if (!Runs(entity) && StepsByTurns(entity))
             Net.SendCommand(GridStepCommand, null);
+    }
+
+    // Sets off from its cell into the next, over its own Step Time or the glide given.
+    private void StartGridStep(GridMovement m, GridCells grid, (int X, int Y) target, Vector2 direction, float progress, float? glide)
+    {
+        m.From = grid.Center(m.Cell);
+        m.To = grid.Center(target);
+        m.Cell = target;
+        m.Progress = progress;
+        m.Glide = glide;
+        m.Stepping = true;
+        MoveTo(m.Entity!, Vector2.Lerp(m.From, m.To, m.Progress));
+        PlayIfSet(m.StepSound);
         m.RaiseStepped(direction);
+    }
+
+    // ----- Pushing crates -----
+
+    // The grid crates a step into one pushes: it, and the ones behind it that a row pushes along. Null if anything won't
+    // budge: a wall or a crate behind it (unless it pushes rows), a crate still gliding, or one the pusher's layer can't push.
+    private List<GridMovement>? CratesPushed(Entity pusher, (int X, int Y) way, Entity first)
+    {
+        var layer = pusher.GetComponent<Collider>()?.Layer;
+        var offset = GridCells.Offset(way);
+        var row = new List<GridMovement>();
+        for (var crate = first; ;)
+        {
+            if (crate.GetComponent<Pushable>() is not { Speed: > 0 } pushable || !pushable.AcceptsLayer(layer) ||
+                crate.GetComponent<GridMovement>() is not { Stepping: false } m || row.Count >= GridPushRowLimit)
+                return null;
+            row.Add(m);
+            // A crate this machine doesn't run is wherever the host last put it.
+            var grid = GridCells.Of(m.FindMap());
+            var cell = m.Started ? m.Cell : grid.CellAt(Flat(crate.Transform.WorldPosition));
+            var walls = GridWalls.Gather(this, m, grid);
+            var next = (cell.X + offset.X, cell.Y + offset.Y);
+            if (walls.IsWall(next))
+                return null;
+            if (walls.MoverIn(next) is not { } behind)
+                return row;
+            if (!pushable.PushesRow || behind == pusher || row.Any(r => r.Entity == behind))
+                return null;
+            crate = behind;
+        }
+    }
+
+    // Sets each crate gliding a cell along with its pusher. A crate run by the host is pushed there, asked by this machine.
+    private void Push(Entity pusher, List<GridMovement> row, (int X, int Y) way, float progress, float glide)
+    {
+        var direction = new Vector2(way.X, way.Y);
+        if (!Runs(row[0].Entity!))
+        {
+            Net.SendCommand(GridPushCommand, new object?[] { row[0].Entity, direction });
+            return;
+        }
+
+        var offset = GridCells.Offset(way);
+        foreach (var crate in row)
+        {
+            crate.Facing = direction;
+            crate.PushedOnFrame = Time.Frame;
+            var grid = GridCells.Of(crate.FindMap());
+            if (!crate.Started)
+                (crate.Started, crate.Cell) = (true, grid.CellAt(Flat(crate.Entity!.Transform.WorldPosition)));
+            StartGridStep(crate, grid, (crate.Cell.X + offset.X, crate.Cell.Y + offset.Y), direction, progress, glide);
+            crate.Entity!.GetComponent<Pushable>()?.RaisePushed(pusher, direction);
+        }
+    }
+
+    // On the host: a player's character, moved on their own machine, pushed a crate the host runs.
+    private void RunGridPush(NetPlayer? player, object? args)
+    {
+        if (player is null || args is not object?[] { Length: 2 } a || a[0] is not Entity crate || a[1] is not Vector2 direction ||
+            crate.Scene != Scene)
+            return;
+        var pusher = Scene.Entities.Where(SceneRenderer.IsActive)
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && Net.OwnerIdOf(e) == player.Id);
+        (int X, int Y) way = (Math.Sign(direction.X), Math.Sign(direction.Y));
+        if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0) && CratesPushed(pusher, way, crate) is { } row)
+            Push(pusher, row, way, 0, Math.Max(0.02f, mover.StepTime));
     }
 
     // The way pressed as a step: four-way, the axis pressed most recently winning, unless it steps diagonally.

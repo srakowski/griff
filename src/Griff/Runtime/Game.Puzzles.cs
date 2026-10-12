@@ -1,15 +1,19 @@
+using System.Numerics;
 using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Puzzles with no code: switches and what they switch, keys and inventories; and the trails and animated tiles that
-// dress a level up.
+// Puzzles with no code: switches and what they switch, keys and inventories, goals for crates; and the trails and
+// animated tiles that dress a level up.
 public sealed partial class Game
 {
     // What each switched entity was last set to, (entity, true) for one a switch hides, so a switch only takes over a
     // target when it changes and scripts can still run a switched mover themselves in between.
     private readonly Dictionary<(Entity Entity, bool Hidden), bool> _switched = [];
+
+    // The All Covered Messages that were last seen all covered, so each is sent as the last goal is covered.
+    private readonly Dictionary<string, bool> _allCovered = new(StringComparer.Ordinal);
 
     // Before anything runs, so a switched-off turret or spawner can't get a shot off in the first frame (or the frame
     // after a script sets a switch).
@@ -223,5 +227,72 @@ public sealed partial class Game
         }
     }
 
-    private void ForgetPuzzleState() => _switched.Clear();
+    // Goals are covered by the grid crates resting in their cells. On every machine, so a crate on its goal shows it there
+    // too; the sounds and messages come from where the game is run.
+    private void RunGoals()
+    {
+        var crates = Showing<Pushable>().Where(p => p.Entity!.GetComponent<GridMovement>() is not null).ToList();
+        foreach (var crate in crates)
+            (crate.OnGoal, crate.GoalTint) = (null, null);
+        var goals = Showing<Goal>().ToList();
+        foreach (var goal in goals)
+        {
+            var was = goal.CoveredBy;
+            var crate = crates.FirstOrDefault(c => c.OnGoal is null && goal.AcceptsKind(c.Kind) && RestsOn(c.Entity!, goal.Entity!));
+            goal.CoveredBy = crate?.Entity;
+            if (crate is not null)
+                (crate.OnGoal, crate.GoalTint) = (goal.Entity, goal.CoveredTint.A > 0 ? goal.CoveredTint : null);
+
+            // What covers it at the start isn't a change.
+            if (!Runs(goal.Entity!) || !goal.Seen)
+            {
+                goal.Seen = true;
+                continue;
+            }
+
+            if (was == goal.CoveredBy)
+                continue;
+            if (was is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(goal.UncoverMessage))
+                    Send(goal.UncoverMessage.Trim(), goal.Entity);
+                goal.RaiseUncovered(was);
+            }
+
+            if (goal.CoveredBy is { } by)
+            {
+                PlayIfSet(goal.Sound);
+                if (!string.IsNullOrWhiteSpace(goal.CoverMessage))
+                    Send(goal.CoverMessage.Trim(), goal.Entity);
+                goal.RaiseCovered(by);
+            }
+        }
+
+        foreach (var group in goals.Where(g => Runs(g.Entity!) && !string.IsNullOrWhiteSpace(g.AllCoveredMessage)).GroupBy(g => g.AllCoveredMessage!.Trim()))
+        {
+            var all = group.All(g => g.IsCovered);
+            if (_allCovered.TryGetValue(group.Key, out var was) && all && !was)
+                Send(group.Key, group.Last().Entity);
+            _allCovered[group.Key] = all;
+        }
+    }
+
+    // A crate rests on a goal once it's still in the goal's cell of its grid: not partway through a push.
+    private static bool RestsOn(Entity crate, Entity goal)
+    {
+        var grid = GridCells.Of(crate.GetComponent<GridMovement>()!.FindMap());
+        var cell = grid.CellAt(Flat(goal.Transform.WorldPosition));
+        var at = Flat(crate.Transform.WorldPosition);
+        if (grid.CellAt(at) != cell)
+            return false;
+        var middle = grid.Center(cell);
+        var size = Vector2.Distance(middle, grid.Center((cell.X + 1, cell.Y)));
+        return Vector2.Distance(at, middle) <= size * 0.02f;
+    }
+
+    private void ForgetPuzzleState()
+    {
+        _switched.Clear();
+        _allCovered.Clear();
+    }
 }

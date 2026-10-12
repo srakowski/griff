@@ -571,6 +571,9 @@ public static partial class SceneRenderer
         if (entity.GetComponent<Sprite>() is { IsBlinkedOut: false } sprite)
         {
             var tint = button?.Shade(sprite.Tint) ?? sprite.Tint;
+            // A crate resting on a goal turns the goal's color, as faded as it was.
+            if (entity.GetComponent<Pushable>() is { GoalTint: { } onGoal })
+                tint = onGoal with { A = onGoal.A * tint.A };
             foreach (var (world, source) in SpritePieces(entity, sprite))
                 yield return new SpriteDraw(world, sprite.Image, tint, entity) { Source = source, Flash = sprite.FlashOverlay };
         }

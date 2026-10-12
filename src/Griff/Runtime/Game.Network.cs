@@ -334,5 +334,6 @@ public sealed partial class Game
         OnNetCommand(StrategyCommand, RunStrategyOrder);
         OnNetCommand(EndTurnCommand, RunEndTurn);
         OnNetCommand(GridStepCommand, RunGridStep);
+        OnNetCommand(GridPushCommand, RunGridPush);
     }
 }

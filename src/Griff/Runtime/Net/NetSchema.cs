@@ -73,11 +73,11 @@ internal static class NetSchema
     // Moved by the player who controls it, when they move it themselves.
     private static readonly HashSet<Type> MovementComponents = [typeof(PlatformerMovement), typeof(TopDownMovement), typeof(GridMovement), typeof(FirstPersonMovement)];
 
-    // Things each machine keeps for itself: cameras, the HUD, menus, music. Never sent; every machine has its own.
+    // Things each machine keeps for itself: cameras, the HUD, menus, music and its beat. Never sent; every machine has its own.
     private static readonly HashSet<Type> LocalComponents =
     [
         typeof(Camera), typeof(ScreenAnchor), typeof(Panel), typeof(Button), typeof(Slider), typeof(Toggle), typeof(Choice),
-        typeof(Commander), typeof(FogOfWar), typeof(BackgroundMusic), typeof(Weather), typeof(ScreenEffects), typeof(Parallax),
+        typeof(Commander), typeof(FogOfWar), typeof(BackgroundMusic), typeof(BeatClock), typeof(Weather), typeof(ScreenEffects), typeof(Parallax),
         typeof(TextField), typeof(Scoreboard), typeof(Multiplayer),
     ];
 

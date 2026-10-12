@@ -493,8 +493,19 @@ public static partial class SceneRenderer
     }
 
     // A crumbling platform about to go is drawn shaken off its place (with whatever is inside it); its collider stays put.
+    // Something bopping to the beat is drawn bigger about its middle, its children with it.
     private static IEnumerable<SpriteDraw> Shaken(Entity entity, IEnumerable<SpriteDraw> draws)
     {
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e.GetComponent<BeatPulse>() is { Scale: var scale } && scale != 1)
+            {
+                var center = e.Transform.WorldPosition;
+                var about = Matrix4x4.CreateScale(scale, scale, 1, new Vector3(center.X, center.Y, 0));
+                draws = draws.Select(d => d with { World = d.World * about });
+            }
+        }
+
         for (var e = entity; e is not null; e = e.Parent)
         {
             if (e.GetComponent<Crumble>() is { ShakeOffset: var shake } && shake != Vector2.Zero)

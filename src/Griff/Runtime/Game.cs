@@ -148,6 +148,7 @@ public sealed partial class Game
         RunLobby();
         ApplySwitches();
         RunTurns();
+        RunBeatClocks();
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
         RunEnemies();

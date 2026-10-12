@@ -11,6 +11,9 @@ public interface ISoundLibrary
 
     /// <summary>The sound decoded as it plays, for long music; null if there's no such sound.</summary>
     IAudioStream? Stream(string sound) => Load(sound)?.Open();
+
+    /// <summary>The recipe music made in Griff was made from (its tempo and bars), or null.</summary>
+    MusicRecipe? MusicRecipeOf(string sound) => null;
 }
 
 /// <summary>
@@ -30,6 +33,7 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
     private readonly List<(Voice Voice, float From, float Left, float Seconds)> _fadingOut = [];
     private Voice? _music;
     private string? _musicName;
+    private float _musicTempo;
     private float _musicVolume = 0.6f;
     private (float Amount, float Seconds) _musicFade = (1, 0);
     private float _volume = 1, _musicMix = 1, _soundMix = 1;
@@ -77,6 +81,12 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
 
     /// <summary>The music playing (or fading in), by name.</summary>
     public string? Music => _musicName;
+
+    public double MusicTime => _music?.Heard ?? 0;
+
+    public double MusicLength => _music?.Length ?? 0;
+
+    public float MusicTempo => _music is null ? 0 : _musicTempo;
 
     public void Play(string sound, float volume = 1f) => Play(sound, volume, 0, 1);
 
@@ -194,6 +204,7 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         _musicFade = fadeIn > 0 ? (0, fadeIn) : (1, 0);
         _music = mixer.Play(stream, 0, 0, 1, loop);
         _musicName = music;
+        _musicTempo = library.MusicRecipeOf(music.Trim())?.Clamped().Tempo ?? 0;
         UpdateVolumes();
     }
 

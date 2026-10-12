@@ -1,0 +1,35 @@
+title: Keeping the beat
+intro: A Beat Clock keeps time with the music as it's heard, so things can happen, and bop, right on the beat.
+project: Arcade | Beat Check
+
+chapter: Keeping time | Beat Clock
+say: The Arcade template's title screen already plays a theme tune. Let's make things follow its beat.
+select: Music
+add: BeatClock
+expectcomponents: Music = Transform, BackgroundMusic, BeatClock
+explain: component:BeatClock | Beat Clock | A Beat Clock keeps time with whatever music is playing. It counts what has been heard, not what was sent to the sound card a moment earlier, so its beat lands with the drum you hear.
+explain: field:BeatClock.Tempo | Tempo | Music made in Griff says its own tempo, so this can stay at zero. For other music, type the beats a minute here, and an offset if it starts with a lead in.
+explain: field:BeatClock.BeatMessage | Beat and Bar messages | On every beat it sends a Beat message, and on the first beat of every bar a Bar message, so anything that listens for messages can follow along.
+add: SoundPlayer
+set: SoundPlayer.Message = Bar
+pick: SoundPlayer.Sound = Sounds/select.wav
+set: SoundPlayer.Volume = 0.5
+explain: component:SoundPlayer | A tick on every bar | This Sound Player plays a tick on every Bar message: a metronome, with no code.
+expectvalue: Music.SoundPlayer.Message = Bar
+
+chapter: Things that bop | Beat Pulse
+select: Title
+add: BeatPulse
+set: BeatPulse.Size = 0.25
+explain: component:BeatPulse | Beat Pulse | A Beat Pulse makes its entity bop on the beat: it's drawn bigger as each beat lands, and shrinks back before the next. Only how it's drawn changes, not where it is.
+select: Play
+add: BeatPulse
+set: BeatPulse.Size = 0.1
+set: BeatPulse.Every = 4
+explain: field:BeatPulse.Every | Every | Every sets how often. The Play button bops once a bar, on every fourth beat.
+expectvalue: Play.BeatPulse.Every = 4
+say: Let's hear it. Watch the title bop on every beat, and the Play button once a bar, with a tick.
+play
+wait: 7
+stop
+say: Scripts can follow the beat too, with the Beat message or the clock's own beat, bar and how far a press was from the beat. That's the start of rhythm games.

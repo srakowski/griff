@@ -61,6 +61,26 @@ public interface IAudio
     void Advance(float seconds)
     {
     }
+
+    /// <summary>The music playing (or fading in), by name; null with none.</summary>
+    string? Music => null;
+
+    /// <summary>
+    /// Seconds of the music playing that have been heard: how far into it the speakers are, allowing for the sound card's
+    /// delay, so something timed to it lands with what's heard rather than what's mixed. It counts on as the music loops
+    /// (see <see cref="MusicLength"/>), is a moment below 0 just after the music starts, and is 0 with no music.
+    /// <see cref="Scenes.BeatClock"/> turns it into beats and bars.
+    /// </summary>
+    double MusicTime => 0;
+
+    /// <summary>How many seconds the music playing lasts before it loops; 0 with none, or until it's known.</summary>
+    double MusicLength => 0;
+
+    /// <summary>
+    /// The music playing's beats a minute, when it says: music made with Audio &gt; New Music does. 0 when it doesn't (or
+    /// with no music).
+    /// </summary>
+    float MusicTempo => 0;
 }
 
 /// <summary>A sound playing over and over, from <see cref="IAudio.Loop"/>.</summary>
@@ -99,9 +119,14 @@ public sealed class SilentLoop : ISoundLoop
     public void Stop() => IsPlaying = false;
 }
 
-/// <summary>Audio that does nothing: for tests and headless runs. It remembers its volume settings.</summary>
+/// <summary>
+/// Audio that does nothing: for tests and headless runs. It remembers its volume settings, and keeps time for the music it
+/// was asked to play as if it were heard, so beat clocks still count.
+/// </summary>
 public sealed class SilentAudio : IAudio
 {
+    private bool _musicLoops;
+
     public float Volume { get; set; } = 1;
 
     public float MusicVolume { get; set; } = 1;
@@ -114,15 +139,45 @@ public sealed class SilentAudio : IAudio
     {
     }
 
+    public string? Music { get; private set; }
+
+    public double MusicTime { get; private set; }
+
+    /// <summary>How long the music lasts, for a test to pretend; 0 (the default) never ends.</summary>
+    public double MusicLength { get; set; }
+
+    /// <summary>The music's tempo, for a test to pretend.</summary>
+    public float MusicTempo { get; set; }
+
     public void PlayMusic(string music, float volume = 0.6f, bool loop = true)
     {
+        Music = string.IsNullOrWhiteSpace(music) ? null : music;
+        MusicTime = 0;
+        _musicLoops = loop;
     }
+
+    public void CrossfadeMusic(string music, float seconds, float volume = 0.6f, bool loop = true)
+    {
+        if (Music is null || !string.Equals(Music, music, StringComparison.OrdinalIgnoreCase))
+            PlayMusic(music, volume, loop);
+    }
+
+    public void FadeOutMusic(float seconds) => StopMusic();
 
     public void StopMusic()
     {
+        Music = null;
+        MusicTime = 0;
     }
 
-    public void StopAll()
+    public void StopAll() => StopMusic();
+
+    public void Advance(float seconds)
     {
+        if (Music is null)
+            return;
+        MusicTime += seconds;
+        if (!_musicLoops && MusicLength > 0 && MusicTime >= MusicLength)
+            StopMusic();
     }
 }

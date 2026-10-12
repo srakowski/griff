@@ -14,7 +14,7 @@ public class SceneToolsTests
 
         public string? ScenePath => "Scenes/Main.scene";
 
-        public bool IsPlaying => false;
+        public bool IsPlaying { get; set; }
 
         public ComponentRegistry Components { get; } = ComponentRegistry.CreateDefault();
 
@@ -168,6 +168,30 @@ public class SceneToolsTests
         Assert.Contains("\"Hello\"", json);
         Assert.Contains("\"position\": [", json);
         Assert.DoesNotContain("\"scale\"", json); // unchanged from the default
+    }
+
+    [Fact]
+    public void Get_WhilePlaying_ShowsWhatComponentsSayAboutThemselves()
+    {
+        Run("entity_create", """{"entity": {"name": "Music", "components": {"BeatClock": {}, "Spawner": {"prefab": "Coin"}}}}""");
+
+        Assert.DoesNotContain("\"live\"", Run("entity_get", """{"entity": "Music"}""").Text);
+
+        _host.IsPlaying = true;
+        var json = Run("entity_get", """{"entity": "Music"}""").Text;
+
+        Assert.Contains("\"live\": {", json);
+        Assert.Contains("\"isPlaying\": false", json);
+        Assert.Contains("\"beat\": -1", json);
+        Assert.Contains("\"secondsPerBeat\": 0.5", json);
+        Assert.Contains("\"spawned\": 0", json);
+        // Lists aren't values to show.
+        Assert.DoesNotContain("\"alive\"", json);
+
+        // And component_describe says what they mean.
+        var described = Run("component_describe", """{"component": "BeatClock"}""").Text;
+        Assert.Contains("While the game runs", described);
+        Assert.Contains("- beat: a whole number. The beat it's on", described);
     }
 
     [Fact]

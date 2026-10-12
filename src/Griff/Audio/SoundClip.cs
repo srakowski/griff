@@ -13,6 +13,9 @@ public interface IAudioStream : IDisposable
 
     /// <summary>Back to the start, for looping.</summary>
     void Rewind();
+
+    /// <summary>How many frames (samples per channel) it lasts, or -1 when it can't tell before it's played through.</summary>
+    long Frames => -1;
 }
 
 /// <summary>A whole sound in memory: samples from -1 to 1, interleaved when stereo.</summary>
@@ -65,6 +68,8 @@ public sealed class SoundClip(float[] samples, int channels, int sampleRate)
         }
 
         public void Rewind() => _position = 0;
+
+        public long Frames => clip.Frames;
 
         public void Dispose()
         {

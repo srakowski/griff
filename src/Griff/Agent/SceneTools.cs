@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -90,7 +91,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Title = "Get Entity",
             ReadOnly = true,
             Description = "Shows one entity in full: every component with its property values (only the ones changed from the " +
-                "default unless \"all\" is true) and its children. The output is in the same form entity_create takes.",
+                "default unless \"all\" is true) and its children. The output is in the same form entity_create takes. While " +
+                "the game is playing, each component also has \"live\": what it says about itself as it runs and isn't saved " +
+                "(a beat clock's Beat, a spawner's Spawned, whether a pickup IsCollected).",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("A name, id (or the start of one) or path like \"Level/Door\".")),
                 ("all", Schema.Bool("Show every property, defaults too.")),
@@ -343,6 +346,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 data[property.SerializedName] = AgentValues.ToJson(value);
             }
 
+            if (host.IsPlaying && Live(component, descriptor) is { Count: > 0 } live)
+                data["live"] = live;
             components.Add(data);
         }
 
@@ -366,6 +371,40 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         }
 
         return result;
+    }
+
+    // What a component says about itself while the game runs and doesn't save: its public values with no setter of their
+    // own (Spawned, IsCollected, a beat clock's Beat), as simple values. Lists and the like are left out.
+    private static IEnumerable<PropertyInfo> LiveProperties(ComponentDescriptor descriptor)
+    {
+        var saved = descriptor.Properties.Select(p => p.Name).ToHashSet();
+        foreach (var property in descriptor.Type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (saved.Contains(property.Name) || property.DeclaringType == typeof(Component) || property.GetMethod is not { IsPublic: true } ||
+                property.GetIndexParameters().Length > 0)
+                continue;
+            var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+            if (ValueCodec.IsSupported(type) || typeof(Entity).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type))
+                yield return property;
+        }
+    }
+
+    private static JsonObject Live(Component component, ComponentDescriptor descriptor)
+    {
+        var live = new JsonObject();
+        foreach (var property in LiveProperties(descriptor))
+        {
+            try
+            {
+                live[JsonNamingPolicy.CamelCase.ConvertName(property.Name)] = AgentValues.ToJson(property.GetValue(component));
+            }
+            catch (TargetInvocationException)
+            {
+                // A value it can't give right now.
+            }
+        }
+
+        return live;
     }
 
     private ToolResult Find(ToolArgs args)
@@ -759,6 +798,17 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     _ => $" (Names {KnownNames.Noun(names)}.)",
                 });
             text.AppendLine();
+        }
+
+        var live = LiveProperties(descriptor).ToList();
+        if (live.Count > 0)
+        {
+            text.AppendLine().AppendLine("While the game runs (not saved; entity_get shows them as \"live\" while it plays):");
+            foreach (var property in live)
+            {
+                var meaning = DocComments.Summary(property) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
+                text.AppendLine($"- {JsonNamingPolicy.CamelCase.ConvertName(property.Name)}: {AgentValues.Describe(property.PropertyType)}{meaning}");
+            }
         }
 
         return ToolResult.Ok(text.ToString());

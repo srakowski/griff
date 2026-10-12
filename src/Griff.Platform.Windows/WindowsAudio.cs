@@ -29,6 +29,9 @@ public static class AudioOutput
             device.Init(new SampleToWaveProvider(new MixerProvider(mixer)));
             device.Play();
             _device = device;
+            // A block is mixed as a buffer comes free, behind the others still queued, and Windows' own mixing holds about
+            // one more: so about every buffer's worth goes by before it's heard.
+            mixer.OutputLatency = device.BufferMilliseconds * device.NumberOfBuffers / 1000.0;
         }
         catch (Exception ex) when (ex is NAudio.MmException or InvalidOperationException or DllNotFoundException)
         {
@@ -57,6 +60,7 @@ public static class AudioOutput
 public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
 {
     private readonly Dictionary<string, (DateTime Written, SoundClip? Clip)> _clips = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (DateTime Written, MusicRecipe? Recipe)> _recipes = new(StringComparer.OrdinalIgnoreCase);
 
     public SoundClip? Load(string sound)
     {
@@ -90,6 +94,19 @@ public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
         {
             return null;
         }
+    }
+
+    public MusicRecipe? MusicRecipeOf(string sound)
+    {
+        var path = Resolve(sound);
+        if (path is null)
+            return null;
+        var written = File.GetLastWriteTimeUtc(path);
+        if (_recipes.TryGetValue(path, out var cached) && cached.Written == written)
+            return cached.Recipe;
+        var recipe = Wav.ReadMusicRecipe(path);
+        _recipes[path] = (written, recipe);
+        return recipe;
     }
 
     /// <summary>Decodes any supported sound file whole; null if it can't be read.</summary>
@@ -157,6 +174,8 @@ public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
 
         public void Rewind() => _reader.Position = 0;
 
+        public long Frames => _reader.Length / Math.Max(1, _reader.WaveFormat.BlockAlign);
+
         public void Dispose() => _reader.Dispose();
     }
 
@@ -187,6 +206,8 @@ public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
         }
 
         public void Rewind() => _reader.SamplePosition = 0;
+
+        public long Frames => _reader.TotalSamples;
 
         public void Dispose() => _reader.Dispose();
     }

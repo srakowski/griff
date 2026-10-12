@@ -58,6 +58,10 @@ public sealed partial class Game
                     break;
             }
 
+            // On the beat it flips, whoever has worked it.
+            if (@switch.Beats > 0 && OnBeat(@switch.Clock, @switch.Beats, @switch.BeatOffset))
+                @switch.IsOn = !@switch.IsOn;
+
             if (@switch.IsOn && @switch.OnTime > 0 && @switch.Mode != SwitchMode.Plate && @switch.Shown == true)
             {
                 @switch.OnFor += Time.Delta;

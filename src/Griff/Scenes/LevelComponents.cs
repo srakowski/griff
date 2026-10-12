@@ -20,7 +20,8 @@ public enum MoverMode
 /// <summary>
 /// Moves its entity along a path with no code: moving platforms, lifts, saws, patrolling hazards. <see cref="Points"/> are
 /// offsets from where it's placed, e.g. "4 0" (four units right and back) or "4 0; 4 3" (right, then up). Bodies standing
-/// on it ride along. The Scene view draws the path; select it to drag its points.
+/// on it ride along. The Scene view draws the path; select it to drag its points. With <see cref="Beats"/> set, it steps
+/// from point to point on the beat of a <see cref="BeatClock"/>.
 /// </summary>
 [Category("Movement")]
 [ComponentName("Griff.Mover")]
@@ -48,7 +49,7 @@ public sealed class Mover : Component
     /// <summary>World units per second.</summary>
     public float Speed { get; set; } = 2;
 
-    /// <summary>Seconds to wait at each point.</summary>
+    /// <summary>Seconds to wait at each point. Stepping to the <see cref="Beats"/>, it waits for the next step instead.</summary>
     public float Wait { get; set; } = 0.5f;
 
     /// <summary>What it does at the last point: go back the same way, go round again, or stop.</summary>
@@ -69,6 +70,22 @@ public sealed class Mover : Component
     /// closes again. <see cref="Switch"/>es tick and untick it.
     /// </summary>
     public bool Running { get; set; } = true;
+
+    /// <summary>
+    /// Steps to the music of a <see cref="BeatClock"/>: sets off for its next point on every this many beats, getting there at
+    /// <see cref="Speed"/> (or faster, to be there by the next step), and waits there for the step after. 0 goes by seconds.
+    /// </summary>
+    [Group("Beat")]
+    public int Beats { get; set; }
+
+    /// <summary>Steps this many beats later: with two platforms on every 2 beats, one 1 beat later, they take turns.</summary>
+    [ShownWhen(nameof(Beats))]
+    public int BeatOffset { get; set; }
+
+    /// <summary>The entity whose <see cref="BeatClock"/> it steps to. Empty follows the first in the scene.</summary>
+    [EntityName]
+    [ShownWhen(nameof(Beats))]
+    public string? Clock { get; set; }
 
     /// <summary>The path, starting with (0, 0), in the parent's space relative to where it was placed.</summary>
     public IReadOnlyList<Vector2> Path => _path;
@@ -110,8 +127,11 @@ public sealed class Mover : Component
         return legs[^1].To;
     }
 
-    /// <summary>Moves on by <paramref name="seconds"/>. Called by the game before physics, so riders are carried.</summary>
-    internal void Advance(float seconds)
+    /// <summary>
+    /// Moves on by <paramref name="seconds"/>; stepping to the <see cref="Beats"/>, of <paramref name="clock"/> (none holds it
+    /// at its next point). Called by the game before physics, so riders are carried.
+    /// </summary>
+    internal void Advance(float seconds, BeatClock? clock = null)
     {
         var transform = Entity!.Transform;
         var placed = new Vector2(transform.Position.X, transform.Position.Y);
@@ -123,13 +143,52 @@ public sealed class Mover : Component
         else if (placed != _lastPlaced)
             _origin += placed - _lastPlaced;
 
-        if (Running && !IsFinished)
+        if (Running && !IsFinished && Beats > 0)
+            Time = Stepped(seconds, clock?.OnBeat(Beats, BeatOffset) == true, clock is null ? 0 : Beats * clock.SecondsPerBeat);
+        else if (Running && !IsFinished)
             Time += seconds;
         else if (!Running && Mode == MoverMode.Once && Time > 0)
             Time = Math.Max(0, Math.Min(Time, TripSeconds) - seconds);
         var next = _origin.Value + OffsetAt(Time);
         transform.Position = new Vector3(next, transform.Position.Z);
         _lastPlaced = next;
+    }
+
+    // Stepping to the beat, where it is in its trip after this frame. It sets off along a leg on a step, goes along it at its
+    // speed (or faster, to be there by the next step), and holds at its end, where its wait would be, until the step after.
+    // Sitting at a leg's start, it hasn't set off yet, and waits there for a step.
+    private float Stepped(float elapsed, bool step, float stepSeconds)
+    {
+        var legs = Legs().ToList();
+        var trip = TripSeconds;
+        if (legs.Count == 0 || !(Speed > 0) || !(trip > 0))
+            return Time;
+
+        var wait = Math.Max(0, Wait);
+        var time = Mode == MoverMode.Once ? Math.Clamp(Time, 0, trip) : ((Time % trip) + trip) % trip;
+        var (leg, start) = (0, 0f);
+        while (leg < legs.Count - 1 && time >= start + LegSeconds(legs[leg]) + wait)
+            start += LegSeconds(legs[leg++]) + wait;
+
+        if (step && time > start)
+        {
+            // On to the next leg, or round to the first after the last.
+            start += LegSeconds(legs[leg]) + wait;
+            (leg, start) = leg + 1 < legs.Count ? (leg + 1, start) : (0, 0f);
+            if (leg == 0 && Mode == MoverMode.Once)
+                return trip;
+            time = start;
+        }
+        else if (!step && time <= start)
+        {
+            return time;
+        }
+
+        var seconds = LegSeconds(legs[leg]);
+        var arrive = start + seconds;
+        time = Math.Min(time + elapsed * (stepSeconds > 0 ? Math.Max(1, seconds / stepSeconds) : 1), arrive);
+        // A one-way trip is over once it's at the last point.
+        return Mode == MoverMode.Once && leg == legs.Count - 1 && time >= arrive ? trip : time;
     }
 
     // Each stretch of the path, in order: there and back for ping-pong, round to the start for a loop.
@@ -298,7 +357,7 @@ public sealed class Chase : Component
 /// <summary>
 /// Fires copies of a <see cref="Prefab"/> with no code: turrets, cannons, a boss's spread, or the player's own gun (see
 /// <see cref="Action"/>). Each shot's <see cref="Body"/> is sent off at <see cref="Speed"/> and it's turned to face the way
-/// it's going.
+/// it's going. With <see cref="Beats"/> set, it fires on the beat of a <see cref="BeatClock"/>.
 /// </summary>
 [Category("Combat")]
 [ComponentName("Griff.Shooter")]
@@ -310,7 +369,7 @@ public sealed class Shooter : Component
     [Names(NameKind.Prefab)]
     public string? Prefab { get; set; } = "Bullet";
 
-    /// <summary>Seconds between shots.</summary>
+    /// <summary>Seconds between shots (unless it steps to the <see cref="Beats"/>).</summary>
     public float Interval { get; set; } = 1;
 
     /// <summary>Seconds before the first shot.</summary>
@@ -361,17 +420,42 @@ public sealed class Shooter : Component
     /// <summary>Untick it to hold fire. <see cref="Switch"/>es tick and untick it.</summary>
     public bool Running { get; set; } = true;
 
+    /// <summary>
+    /// Steps to the music of a <see cref="BeatClock"/>: fires on every this many beats instead of every <see cref="Interval"/>
+    /// seconds, once <see cref="Delay"/> has passed (and, with an <see cref="Action"/>, while it's held). 0 goes by seconds.
+    /// </summary>
+    [Group("Beat")]
+    public int Beats { get; set; }
+
+    /// <summary>Steps this many beats later: with two turrets on every 2 beats, one 1 beat later, they take turns.</summary>
+    [ShownWhen(nameof(Beats))]
+    public int BeatOffset { get; set; }
+
+    /// <summary>The entity whose <see cref="BeatClock"/> it steps to. Empty follows the first in the scene.</summary>
+    [EntityName]
+    [ShownWhen(nameof(Beats))]
+    public string? Clock { get; set; }
+
     /// <summary>Raised with each shot fired, e.g. to give it a damage or a color.</summary>
     public event Action<Entity>? Fired;
 
     internal void RaiseFired(Entity shot) => Fired?.Invoke(shot);
 
-    /// <summary>Counts down; returns true when a volley is due (and resets the count). Called by the game.</summary>
-    internal bool Ready(float seconds, bool wantsToFire)
+    /// <summary>
+    /// Counts down; returns true when a volley is due (and resets the count). Stepping to the <see cref="Beats"/>, a volley
+    /// is due when <paramref name="onBeat"/> says a beat it steps on has landed. Called by the game.
+    /// </summary>
+    internal bool Ready(float seconds, bool wantsToFire, bool onBeat = false)
     {
         if (float.IsNaN(_cooldown))
             _cooldown = Delay;
         _cooldown -= seconds;
+        if (Beats > 0)
+        {
+            _cooldown = Math.Max(_cooldown, 0);
+            return _cooldown <= 0 && wantsToFire && onBeat;
+        }
+
         if (_cooldown > 0 || !wantsToFire)
         {
             // Holding fire lets the next shot go as soon as it's allowed; letting go doesn't bank shots.

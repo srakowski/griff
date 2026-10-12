@@ -3,7 +3,8 @@ namespace Griff.Scenes;
 /// <summary>
 /// Keeps time with the music: counts its beats and bars as they're heard (allowing for the sound card's delay), and sends
 /// <see cref="BeatMessage"/> on every beat and <see cref="BarMessage"/> on the first beat of every bar, so sound players,
-/// counters, scripts and <see cref="BeatPulse"/>s can follow along. It follows whatever music is playing (a
+/// counters, scripts and <see cref="BeatPulse"/>s can follow along, and <see cref="Spawner"/>s, <see cref="Shooter"/>s,
+/// <see cref="Mover"/>s and <see cref="Switch"/>es with Beats set step to it. It follows whatever music is playing (a
 /// <see cref="BackgroundMusic"/>'s, a room's or a script's) and waits while there's none. Music made with Audio &gt; New Music
 /// says its own tempo; for other music, set <see cref="Tempo"/>.
 /// </summary>
@@ -76,6 +77,23 @@ public sealed class BeatClock : Component
     /// </summary>
     public float SecondsFromBeat => (float)((Counted - Math.Round(Counted)) * SecondsPerBeat);
 
+    /// <summary>
+    /// True in the frame a beat lands that's one of every <paramref name="every"/>, counting from the first, or from
+    /// <paramref name="offset"/> beats later: what <see cref="Spawner"/>s, <see cref="Shooter"/>s, <see cref="Mover"/>s and
+    /// <see cref="Switch"/>es with Beats set step on. For a script: <c>if (clock.OnBeat(2)) Jump();</c>
+    /// </summary>
+    public bool OnBeat(int every = 1, int offset = 0)
+    {
+        every = Math.Max(1, every);
+        for (var beat = Math.Max(LandedFrom, LandedTo - every + 1); beat <= LandedTo; beat++)
+        {
+            if (((beat - offset) % every + every) % every == 0)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Raised on every beat, with its number.</summary>
     public event Action<int>? BeatStarted;
 
@@ -90,6 +108,11 @@ public sealed class BeatClock : Component
     internal string? FollowedMusic { get; set; }
 
     internal double FollowedTime { get; set; }
+
+    // The beats that landed this frame, first to last; none when the second is less than the first.
+    internal long LandedFrom { get; set; }
+
+    internal long LandedTo { get; set; } = -1;
 
     private int PerBar => Math.Max(1, BeatsPerBar);
 

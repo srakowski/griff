@@ -67,7 +67,7 @@ public sealed partial class Game
     private void RunMovers()
     {
         foreach (var mover in Active<Mover>())
-            mover.Advance(Time.Delta);
+            mover.Advance(Time.Delta, mover.Beats > 0 ? ClockFor(mover.Clock) : null);
     }
 
     // Chasers first, so a patrol knows to stand aside while its chase has the target in sight.
@@ -283,7 +283,8 @@ public sealed partial class Game
             // Not while it waits for its turn.
             wantsToFire &= !Waiting(entity);
 
-            if (!shooter.Ready(Time.Delta, wantsToFire) || string.IsNullOrWhiteSpace(shooter.Prefab))
+            var onBeat = shooter.Beats > 0 && OnBeat(shooter.Clock, shooter.Beats, shooter.BeatOffset);
+            if (!shooter.Ready(Time.Delta, wantsToFire, onBeat) || string.IsNullOrWhiteSpace(shooter.Prefab))
                 continue;
 
             aim = aim.LengthSquared() > 1e-8f ? Vector2.Normalize(aim) : Vector2.UnitX;

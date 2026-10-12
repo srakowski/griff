@@ -1,0 +1,43 @@
+title: On the beat
+intro: Spawners, turrets, moving platforms and switches can step to the music's beat instead of counting seconds.
+project: Platformer | Beat Steps
+
+chapter: A clock to step to | Beat Clock
+say: The Platformer template plays a theme tune. A Beat Clock on the music keeps time with it.
+select: Music
+add: BeatClock
+expectcomponents: Music = Transform, BackgroundMusic, BeatClock
+
+chapter: A lift that steps | Mover Beats
+select: Lift
+explain: component:Mover | Mover | The lift is a Mover. It goes up and down at its speed, waiting a second at each end.
+set: Mover.Beats = 4
+set: Mover.Speed = 12
+explain: field:Mover.Beats | Beats | With Beats set, it steps instead: it sets off on every fourth beat, once a bar, gets to its next point, and waits there for the next step.
+expectvalue: Lift.Mover.Beats = 4
+explain: field:Mover.BeatOffset | Beat Offset and Clock | Beat Offset steps it later by that many beats, so two lifts on every other beat can take turns. Clock picks which clock to follow; empty is the scene's first.
+
+chapter: A bridge on the beat | Switch Beats
+select: Lever
+explain: component:Switch | Switch | The lever brings out the bridge while it's on.
+set: Switch.Beats = 2
+explain: field:Switch.Beats | Beats | Now it also flips itself every two beats, so the bridge comes and goes with the music.
+expectvalue: Lever.Switch.Beats = 2
+
+chapter: Sparkles on the beat | Spawner Beats
+create: Empty
+rename: Sparkler
+set: Transform.Position.X = -3
+set: Transform.Position.Y = 4
+add: Spawner
+pick: Spawner.Prefab = Sparkle
+set: Spawner.Beats = 1
+set: Spawner.MaxAlive = 4
+explain: field:Spawner.Beats | Beats | A spawner with Beats spawns on every beat rather than every interval. A shooter works the same way, firing on the beat.
+expectvalue: Sparkler.Spawner.Beats = 1
+say: Let's hear it. Watch the lift set off once a bar, the bridge come and go every two beats, and a sparkle on every beat.
+look: -8, 0, 7
+play
+wait: 8
+stop
+say: Rhythm platformers and bullet patterns that pulse with the soundtrack, with no code.

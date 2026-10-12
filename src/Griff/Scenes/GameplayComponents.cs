@@ -414,7 +414,8 @@ public sealed class Lifetime : Component
 
 /// <summary>
 /// Spawns copies of a prefab every <see cref="Interval"/> seconds at its position, with no code: enemy waves, falling
-/// rocks, collectibles that come back. Limit it with <see cref="Count"/> and <see cref="MaxAlive"/>.
+/// rocks, collectibles that come back. Limit it with <see cref="Count"/> and <see cref="MaxAlive"/>. With
+/// <see cref="Beats"/> set, it spawns on the beat of a <see cref="BeatClock"/> instead.
 /// </summary>
 [Category("Gameplay")]
 [ComponentName("Griff.Spawner")]
@@ -426,7 +427,7 @@ public sealed class Spawner : Component
     [Names(NameKind.Prefab)]
     public string? Prefab { get; set; }
 
-    /// <summary>Seconds between spawns.</summary>
+    /// <summary>Seconds between spawns (unless it steps to the <see cref="Beats"/>).</summary>
     public float Interval { get; set; } = 2;
 
     /// <summary>Seconds before the first spawn.</summary>
@@ -447,6 +448,22 @@ public sealed class Spawner : Component
 
     /// <summary>Untick it to stop spawning for now. <see cref="Switch"/>es tick and untick it.</summary>
     public bool Running { get; set; } = true;
+
+    /// <summary>
+    /// Steps to the music of a <see cref="BeatClock"/>: spawns on every this many beats instead of every <see cref="Interval"/>
+    /// seconds, once <see cref="Delay"/> has passed. A spawn that has no room waits for the next. 0 goes by seconds.
+    /// </summary>
+    [Group("Beat")]
+    public int Beats { get; set; }
+
+    /// <summary>Steps this many beats later: with two spawners on every 2 beats, one 1 beat later, they take turns.</summary>
+    [ShownWhen(nameof(Beats))]
+    public int BeatOffset { get; set; }
+
+    /// <summary>The entity whose <see cref="BeatClock"/> it steps to. Empty follows the first in the scene.</summary>
+    [EntityName]
+    [ShownWhen(nameof(Beats))]
+    public string? Clock { get; set; }
 
     /// <summary>How many it has spawned.</summary>
     [DoNotSerialize]
@@ -472,8 +489,11 @@ public sealed class Spawner : Component
         if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab))
             return;
 
+        // On the beat, the count down is just its Delay, and each spawn waits for a beat it steps on.
         _untilNext -= seconds;
-        if (_untilNext > 0)
+        if (Beats > 0)
+            _untilNext = Math.Max(_untilNext, 0);
+        if (_untilNext > 0 || (Beats > 0 && !game.OnBeat(Clock, Beats, BeatOffset)))
             return;
 
         // Full: wait for room, then spawn straight away (but just the one, not a burst for all the time spent waiting).
@@ -487,7 +507,7 @@ public sealed class Spawner : Component
         var entity = game.Spawn(Prefab, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
         _alive.Add(entity);
         Spawned++;
-        _untilNext = Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
+        _untilNext = Beats > 0 ? 0 : Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
         EntitySpawned?.Invoke(entity);
     }
 }

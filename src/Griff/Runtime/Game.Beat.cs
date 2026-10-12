@@ -1,3 +1,4 @@
+using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -11,6 +12,7 @@ public sealed partial class Game
     {
         foreach (var clock in Showing<BeatClock>())
         {
+            (clock.LandedFrom, clock.LandedTo) = (0, -1);
             if (Audio.Music is not { } music)
             {
                 clock.IsPlaying = clock.Following = false;
@@ -31,10 +33,11 @@ public sealed partial class Game
             (clock.IsPlaying, clock.Following, clock.FollowedMusic, clock.FollowedTime) = (true, true, music, time);
             (clock.CurrentTempo, clock.Position, clock.Counted) = ((float)tempo, (float)position, beats);
 
-            // A frame that skips several beats (a stall) gives just the last.
+            // A frame that skips several beats (a stall) gives just the last, though anything stepping on one of them steps.
             var beat = (long)Math.Floor(beats);
             if (beat < 0 || beat < (long)Math.Floor(before) + 1 || PausedThisFrame)
                 continue;
+            (clock.LandedFrom, clock.LandedTo) = (Math.Max(0, (long)Math.Floor(before) + 1), beat);
             clock.RaiseBeat((int)beat);
             if (!Net.IsClient && !string.IsNullOrWhiteSpace(clock.BeatMessage))
                 Send(clock.BeatMessage.Trim(), (int)beat);
@@ -48,9 +51,7 @@ public sealed partial class Game
 
         foreach (var pulse in Showing<BeatPulse>())
         {
-            var clock = string.IsNullOrWhiteSpace(pulse.Clock)
-                ? Showing<BeatClock>().FirstOrDefault()
-                : Find(pulse.Clock.Trim())?.GetComponent<BeatClock>();
+            var clock = ClockFor(pulse.Clock);
             if (clock is not { IsPlaying: true } || clock.Counted < 0)
             {
                 pulse.Scale = 1;
@@ -63,6 +64,15 @@ public sealed partial class Game
             pulse.Scale = 1 + pulse.Size * (float)(left * left);
         }
     }
+
+    // The clock something names (an entity with a Beat Clock), or the scene's first when it names none.
+    internal BeatClock? ClockFor(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? Scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<BeatClock>()).FirstOrDefault(c => c is not null)
+            : Find(name.Trim())?.GetComponent<BeatClock>();
+
+    // Whether something stepping to a clock every so many beats steps this frame.
+    internal bool OnBeat(string? clock, int every, int offset) => ClockFor(clock)?.OnBeat(every, offset) == true;
 
     /// <summary>
     /// Where <paramref name="time"/> seconds of music is: seconds into this play-through of it, and beats since its first

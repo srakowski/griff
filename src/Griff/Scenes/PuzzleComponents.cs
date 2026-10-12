@@ -91,6 +91,22 @@ public sealed class Switch : Component
     [Group("Working It")]
     public string? Prompt { get; set; }
 
+    /// <summary>
+    /// Steps to the music of a <see cref="BeatClock"/>: flips itself on or off on every this many beats, as well as however
+    /// it's worked (though a plate stays as it's held): spikes that come and go, a gate that opens on the bar. 0 doesn't.
+    /// </summary>
+    [Group("Beat")]
+    public int Beats { get; set; }
+
+    /// <summary>Steps this many beats later: with two on every 2 beats, one 1 beat later, they take turns.</summary>
+    [ShownWhen(nameof(Beats))]
+    public int BeatOffset { get; set; }
+
+    /// <summary>The entity whose <see cref="BeatClock"/> it steps to. Empty follows the first in the scene.</summary>
+    [EntityName]
+    [ShownWhen(nameof(Beats))]
+    public string? Clock { get; set; }
+
     /// <summary>Raised when it turns on or off, with whether it's now on.</summary>
     public event Action<bool>? Changed;
 

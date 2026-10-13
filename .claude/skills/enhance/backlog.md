@@ -11,9 +11,9 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Genres: puzzles
 
-- [ ] Add a Match-3 template: levels with scores, moves and goals, opened one by one from a menu.
-- [ ] Add a falling-block board: pieces fall, rotate and lock, full lines clear, and the speed goes up.
-- [ ] Add a Falling Blocks template.
+- [ ] Finish the puzzle genres in one go: a Match-3 template (levels with scores, moves and goals, opened one by one
+  from a menu), and a falling-block board (pieces fall, rotate and lock, full lines clear, the speed goes up) with a
+  Falling Blocks template. Build all of it in one run; don't split it.
 
 ### Genres: roguelikes and tactics
 

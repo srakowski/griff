@@ -294,6 +294,29 @@ public class DungeonGeneratorTests
     }
 
     [Fact]
+    public void A_counter_with_count_floor_shows_the_floor_even_after_its_panel_was_closed()
+    {
+        var dungeon = AddDungeon();
+        AddEntity("Player");
+        var shown = new Entity("Floor");
+        shown.AddComponent<Text>();
+        var counter = shown.AddComponent<Counter>();
+        (counter.Message, counter.CountFloor, counter.Format) = (null, true, "Floor {0}");
+        _scene.Add(shown);
+        Run(Frame);
+        Assert.Equal("Floor 1", shown.GetComponent<Text>()!.Value);
+
+        shown.IsEnabled = false;
+        dungeon.NextFloor();
+        Run(Frame * 2);
+        dungeon.NextFloor();
+        Run(Frame * 2);
+        shown.IsEnabled = true;
+        Run(Frame);
+        Assert.Equal("Floor 3", shown.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
     public void A_seed_of_0_makes_a_different_dungeon_each_game()
     {
         AddDungeon(d => d.Seed = 0);

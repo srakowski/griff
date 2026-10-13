@@ -378,6 +378,12 @@ public sealed class Counter : Component
     public bool CountScore { get; set; }
 
     /// <summary>
+    /// Count the floor the scene's <see cref="DungeonGenerator"/> is on instead of a message, e.g. "Floor {0}": it reads
+    /// the dungeon, so it's right even in a panel that was closed as the floors went by.
+    /// </summary>
+    public bool CountFloor { get; set; }
+
+    /// <summary>
     /// Count the gems of this kind (a tile number) cleared on the scene's <see cref="MatchBoard"/> instead of a message,
     /// with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}". -1
     /// counts no gems.
@@ -427,7 +433,7 @@ public sealed class Counter : Component
     }
 
     // Counts an item, goals, moves, a board's score or gems rather than its Message.
-    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountGoals || CountMoves || CountScore || CountGem >= 0;
+    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountGoals || CountMoves || CountScore || CountFloor || CountGem >= 0;
 
     // What the game last showed, and the entity's own scale (so a pop springs back to it).
     internal int? Shown { get; set; }

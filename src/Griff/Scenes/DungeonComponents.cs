@@ -17,7 +17,7 @@ namespace Griff.Scenes;
 [Category("Level")]
 [Requires(typeof(Tilemap), Note = "the dungeon it fills")]
 [WorksWith(typeof(GridMovement), Note = "on the players, to step through it tile by tile")]
-[WorksWith(typeof(Counter), Note = "shows the floor (\"Floor\", starting at 1)")]
+[WorksWith(typeof(Counter), Note = "shows the floor (Count Floor)")]
 [ComponentName("Griff.DungeonGenerator")]
 public sealed class DungeonGenerator : Component
 {
@@ -95,8 +95,8 @@ public sealed class DungeonGenerator : Component
     public string? NextFloorMessage { get; set; }
 
     /// <summary>
-    /// A message sent with 1 as its data as each floor after the first is made: a <see cref="Counter"/> listening for it,
-    /// starting at 1, shows the floor.
+    /// A message sent with 1 as its data as each floor after the first is made, e.g. for a sound player. (A
+    /// <see cref="Counter"/> with Count Floor shows the floor.)
     /// </summary>
     [Names(NameKind.Message)]
     public string? FloorMessage { get; set; } = "Floor";

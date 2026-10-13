@@ -32,6 +32,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Puzzle)]
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
+    [InlineData(ProjectTemplate.Roguelike)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -63,6 +64,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Puzzle)]
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
+    [InlineData(ProjectTemplate.Roguelike)]
     public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -90,6 +92,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Puzzle)]
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
+    [InlineData(ProjectTemplate.Roguelike)]
     public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -799,6 +802,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Puzzle)]
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
+    [InlineData(ProjectTemplate.Roguelike)]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(ProjectTemplate template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -808,6 +812,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Level1");
         if (template == ProjectTemplate.FallingBlocks)
             scene = GameLoader.LoadScene(project, registry, "Game");
+        if (template == ProjectTemplate.Roguelike)
+            scene = GameLoader.LoadScene(project, registry, "Crypt");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);

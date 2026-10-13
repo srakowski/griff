@@ -18,6 +18,7 @@ public enum ProjectTemplate
     Puzzle,
     Match3,
     FallingBlocks,
+    Roguelike,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
@@ -36,6 +37,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Puzzle => "Push crates onto the marks on the floor in four Sokoban levels, each opening once the one before is solved. Arrow keys or WASD to walk and push, Z to take a move back, R to start the level over.",
         ProjectTemplate.Match3 => "Swap gems to line up three or more of a kind in four levels, each with a move limit and goals to meet: a score to reach and gems to collect. Each level opens once the one before is won. Drag a gem onto its neighbor (or click one, then the other); with keys, arrows move and Space picks a gem up.",
         ProjectTemplate.FallingBlocks => "Pieces of four blocks fall one after another: slide and turn them to fill rows, which clear, and every ten rows they fall faster, until they stack up to the top. The best score is kept. Left and right to slide, up to turn, down to fall faster, Space to drop.",
+        ProjectTemplate.Roguelike => "Go down through a crypt made anew every game, floor after floor: find the stairs in each, fight the slimes and bats by walking into them, and pick up gold and potions. Everything moves when you move. The deepest floor reached is kept. Arrow keys or WASD to walk and fight, 1 to drink a potion, Tab to wait a turn.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -72,6 +74,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Puzzle => PuzzleMenu(),
         ProjectTemplate.Match3 => MatchMenu(),
         ProjectTemplate.FallingBlocks => FallingMenu(),
+        ProjectTemplate.Roguelike => RogueMenu(),
         _ => Empty(),
     };
 
@@ -92,6 +95,10 @@ public static partial class ProjectTemplates
         ProjectTemplate.FallingBlocks => new Dictionary<string, Scene>
         {
             ["Scenes/Game.scene"] = WithSounds(template, FallingGame()),
+        },
+        ProjectTemplate.Roguelike => new Dictionary<string, Scene>
+        {
+            ["Scenes/Crypt.scene"] = WithSounds(template, RogueGame()),
         },
         _ => new Dictionary<string, Scene>(),
     };
@@ -136,6 +143,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Sandbox => SandboxPrefabs(),
         ProjectTemplate.Contraption => ContraptionPrefabs(),
         ProjectTemplate.Multiplayer => MultiplayerPrefabs(),
+        ProjectTemplate.Roguelike => RoguePrefabs(),
         _ => new Dictionary<string, Entity>(),
     };
 

@@ -1,0 +1,79 @@
+title: The Roguelike template
+intro: A crypt made anew every game, floor after floor, where everything moves when the hero moves. No code.
+project: Roguelike | Crypt Crawl
+
+chapter: The crypt | A dungeon, a hero and a HUD
+scene: Crypt
+say: The Roguelike template is a menu and this crypt, built from no-code pieces.
+select: Crypt
+explain: component:DungeonGenerator | Dungeon Generator | A Dungeon Generator lays out each floor: rooms and corridors of stone walls and flagstones. With a seed of zero, every game is a new crypt.
+explain: field:DungeonGenerator.Spawns | Spawns | It scatters slimes, bats, potions and gold through the rooms, and puts the stairs in the furthest.
+set: DungeonGenerator.Seed = 24
+say: For this demo it gets seed 24, so the crypt is the same each time.
+select: Player
+explain: component:BumpAttack | Bump Attack | The hero steps a cell a turn and fights by walking into monsters.
+explain: field:Inventory.ItemUses | Item Uses | Potions go in the inventory, and the one key drinks one.
+select: Floor
+explain: field:Counter.CountFloor | Count Floor | The HUD shows the floor, and keeps the deepest for the menu.
+select: Game Over
+explain: field:Panel.OpenMessage | Open Message | And this panel opens when the hero falls.
+deselect
+
+chapter: Down the stairs | Walk the crypt, turn by turn
+play
+wait: 0.8
+expectvalue: Crypt.DungeonGenerator.Floor = 1
+explain: game | The first floor | The hero starts in the first room, lit by a lantern. Each step is a turn, and the monsters move after it.
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+tap: Up
+wait: 0.35
+say: Up the corridor. The stairs are in the room the longest walk from the start.
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+tap: Right
+wait: 0.35
+wait: 0.5
+expectvalue: Crypt.DungeonGenerator.Floor = 2
+expectvalue: Floor.Text.Value = Floor 2
+explain: game | Floor two | Down the stairs, a new floor: a new crypt, new monsters and treasure, and the hero keeps their health and potions.
+stop
+say: That's the Roguelike template.

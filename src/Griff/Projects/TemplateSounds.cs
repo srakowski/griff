@@ -74,6 +74,7 @@ internal static class TemplateSounds
         ProjectTemplate.Puzzle => MusicRecipe.ForMood(MusicMood.Chill, seed: 9) with { Volume = 0.5f },
         ProjectTemplate.Match3 => MusicRecipe.ForMood(MusicMood.Bright, seed: 12) with { Volume = 0.5f },
         ProjectTemplate.FallingBlocks => MusicRecipe.ForMood(MusicMood.Tense, seed: 13) with { Volume = 0.5f },
+        ProjectTemplate.Roguelike => MusicRecipe.ForMood(MusicMood.Spooky, seed: 14) with { Volume = 0.5f },
         _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
     };
 
@@ -130,6 +131,15 @@ internal static class TemplateSounds
                     break;
                 case Attack a:
                     Set(a.Sound, s => a.Sound = s, Swing);
+                    break;
+                case BumpAttack b:
+                    Set(b.Sound, s => b.Sound = s, Swing);
+                    break;
+                case Inventory i when i.ItemUses.Count > 0:
+                    Set(i.UseSound, s => i.UseSound = s, PowerUp);
+                    break;
+                case DungeonGenerator d:
+                    Set(d.FloorSound, s => d.FloorSound = s, PowerUp);
                     break;
                 case Shooter s:
                     Set(s.Sound, v => s.Sound = v, Shoot);

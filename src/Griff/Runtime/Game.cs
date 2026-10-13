@@ -911,6 +911,8 @@ public sealed partial class Game
                 counter.Add(goals.Count(g => g.IsCovered) - counter.Value);
             }
 
+            if (counter.CountFloor && Showing<DungeonGenerator>().FirstOrDefault() is { } dungeon)
+                counter.Add(dungeon.Floor - counter.Value);
             if (counter.CountMoves && Showing<MoveHistory>().FirstOrDefault() is { } history)
                 counter.Add(history.Moves - counter.Value);
             else if (counter.CountMoves || counter.CountScore || counter.CountGem >= 0)

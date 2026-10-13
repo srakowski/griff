@@ -11,7 +11,8 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Genres: puzzles
 
-- [ ] Add a Match-3 template: scoring, moves left and level goals.
+- [ ] Add match-3 scoring, moves left and level goals: points for each gem cleared that grow with the chain, a move limit, and goals (a score to reach, so many gems of a kind to clear) that win the level, or lose it when the moves run out.
+- [ ] Add a Match-3 template: levels with scores, moves and goals, opened one by one from a menu.
 - [ ] Add a falling-block board: pieces fall, rotate and lock, full lines clear, and the speed goes up.
 - [ ] Add a Falling Blocks template.
 

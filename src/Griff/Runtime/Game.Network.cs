@@ -49,14 +49,13 @@ public sealed partial class Game
     private NoInput? _noInput;
 
     /// <summary>True if this machine runs <paramref name="entity"/>'s gameplay: everything offline and on the host.</summary>
-    internal static bool Runs(Entity entity) => (entity.NetFlags & NetFlags.Replicated) == 0;
+    internal static bool Runs(Entity entity) => entity.RunsHere;
 
     /// <summary>True if this machine moves <paramref name="entity"/>: what it runs, except other players' own characters.</summary>
-    internal static bool Moves(Entity entity) =>
-        (entity.NetFlags & (NetFlags.Replicated | NetFlags.RemoteMoved)) == 0 || (entity.NetFlags & NetFlags.OwnMoved) != 0;
+    internal static bool Moves(Entity entity) => entity.MovesHere;
 
     /// <summary>A menu that would pause the game is open here: online the game goes on, but this player's keys don't reach it.</summary>
-    internal bool LocalInputBlocked => _openPanels.Any(p => p.Panel.PauseGame);
+    internal bool LocalInputBlocked => _panels.Open.Any(p => p.Panel.PauseGame);
 
     /// <summary>The mouse is over this machine's HUD, so a click there isn't meant for the world.</summary>
     internal bool MouseOnUi =>
@@ -164,8 +163,8 @@ public sealed partial class Game
         {
             if (player.IsLocal || player.Input is null || player.Avatar is null)
                 continue;
-            if (player.Sandbox?.World != _sandbox)
-                player.Sandbox = new SandboxState(_sandbox);
+            if (player.Sandbox?.World != _sandboxes.State)
+                player.Sandbox = new SandboxState(_sandboxes.State);
             (_acting, _actingInput) = (player, player.Input);
             try
             {
@@ -216,8 +215,8 @@ public sealed partial class Game
     internal void ShowSandboxUi(string? notice, float noticeLeft, Entity? picking, IReadOnlyList<string> ports, bool outputs)
     {
         if (notice is not null)
-            (_sandbox.Notice, _sandbox.NoticeLeft) = (notice, noticeLeft);
-        _sandbox.Picking = picking is not null && ports.Count > 0 ? (picking, ports, outputs) : null;
+            (_sandboxes.State.Notice, _sandboxes.State.NoticeLeft) = (notice, noticeLeft);
+        _sandboxes.State.Picking = picking is not null && ports.Count > 0 ? (picking, ports, outputs) : null;
     }
 
     // ----- Helpers for Griff's components -----
@@ -234,7 +233,7 @@ public sealed partial class Game
         var bestDistance = float.PositiveInfinity;
         foreach (var entity in Scene.Entities)
         {
-            if (entity.Name != name || !SceneRenderer.IsActive(entity) || Health.Of(entity) is { IsDead: true })
+            if (entity.Name != name || !entity.IsActive || Health.Of(entity) is { IsDead: true })
                 continue;
             var at = entity.Transform.WorldPosition;
             var distance = Vector2.DistanceSquared(from, new Vector2(at.X, at.Y));

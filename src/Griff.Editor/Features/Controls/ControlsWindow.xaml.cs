@@ -73,7 +73,7 @@ public partial class ControlsWindow : ChromeWindow
             e.Handled = true;
             if (key == WpfKey.Escape)
                 Model.Listening = ListenFor.Nothing;
-            else if (Model.IsListeningForKey && KeyMap.ToGriff(key) is var griff and not Griff.Runtime.Key.None)
+            else if (Model.IsListeningForKey && KeyMap.ToGriff(key) is var griff and not Griff.Input.Key.None)
                 Model.Add(griff);
         }
         else if (key == WpfKey.Enter && e.OriginalSource == NameBox)

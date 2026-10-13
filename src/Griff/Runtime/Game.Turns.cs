@@ -16,10 +16,10 @@ public sealed partial class Game
     // Before anything acts, so a turn taker whose turn has just ended doesn't get another frame.
     private void RunTurns()
     {
-        var order = _turnOrder = Scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
+        var order = _turnOrder = Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
         if (order is not null && order.SideList.Count > 0)
         {
-            var takers = Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<TurnTaker>()).ToList();
+            var takers = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<TurnTaker>()).ToList();
             if (Runs(order.Entity!))
                 TakeTurns(order, takers);
             foreach (var taker in takers)
@@ -224,7 +224,7 @@ public sealed partial class Game
     {
         if (player is null || _turnOrder is not { } order)
             return;
-        var mover = Scene.Entities.Where(SceneRenderer.IsActive)
+        var mover = Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } t && Acts(order, t));
         if (mover is not null)
             UseAction(mover);
@@ -285,7 +285,7 @@ public sealed partial class Game
             return false;
         if (!Net.IsOnline)
             return true;
-        var owners = Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<TurnTaker>())
+        var owners = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<TurnTaker>())
             .Where(t => TurnOrder.SameSide(SideOf(t), order.Current)).Select(t => NetSession.OwnerIdOf(t.Entity)).Where(id => id != 0).ToList();
         return owners.Count == 0 || (player is not null && owners.Contains(player.Id));
     }
@@ -293,7 +293,7 @@ public sealed partial class Game
     // Someone's End Turn (a key or a button), on the machine that runs the game.
     private void RunEndTurn(NetPlayer? player, object? args)
     {
-        var order = Scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
+        var order = Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
         if (order is not null && Runs(order.Entity!) && MayEndTurn(order, player))
             order.EndTurn();
     }

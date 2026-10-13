@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -497,9 +498,9 @@ public static partial class ProjectTemplates
         bestCounter.SaveBestAs = "best";
         scene.Add(best);
 
-        scene.Add(MenuButton("Play", new Vector2(0, -0.1f), Scenes.ButtonAction.LoadScene, "Game", Runtime.Key.Enter, Color.FromBytes(0x4C, 0x9A, 0xFF)));
-        scene.Add(MenuButton("Options", new Vector2(0, -1.4f), Scenes.ButtonAction.LoadScene, "Options", Runtime.Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B)));
-        scene.Add(MenuButton("Quit", new Vector2(0, -2.7f), Scenes.ButtonAction.Quit, null, Runtime.Key.Escape, Color.FromBytes(0x3A, 0x3F, 0x4B)));
+        scene.Add(MenuButton("Play", new Vector2(0, -0.1f), Scenes.ButtonAction.LoadScene, "Game", Key.Enter, Color.FromBytes(0x4C, 0x9A, 0xFF)));
+        scene.Add(MenuButton("Options", new Vector2(0, -1.4f), Scenes.ButtonAction.LoadScene, "Options", Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B)));
+        scene.Add(MenuButton("Quit", new Vector2(0, -2.7f), Scenes.ButtonAction.Quit, null, Key.Escape, Color.FromBytes(0x3A, 0x3F, 0x4B)));
 
         // Pinned to the bottom of the screen, whatever its shape.
         var hint = Label("Hint", Vector2.Zero, "Enter to play  ·  Arrows to choose  ·  Esc to quit", 0.4f, Color.FromBytes(0x7D, 0x83, 0x90));
@@ -530,19 +531,19 @@ public static partial class ProjectTemplates
         scene.Add(ToggleButton("Fullscreen", new Vector2(0, -0.1f), GameSetting.Fullscreen, "Fullscreen: On", "Fullscreen: Off"));
 
         // Left and right pick one; the enemy spawner reads it back with Game.SaveData.GetString("difficulty").
-        var difficulty = MenuButton("Difficulty", new Vector2(0, -1.35f), Scenes.ButtonAction.None, null, Runtime.Key.None, gray);
+        var difficulty = MenuButton("Difficulty", new Vector2(0, -1.35f), Scenes.ButtonAction.None, null, Key.None, gray);
         var choice = difficulty.AddComponent<Choice>();
         choice.Format = "< {0} >";
         choice.SaveAs = "difficulty";
         scene.Add(difficulty);
 
         // Click, then press a key or button: it fires from then on. "{Fire}" always shows what does.
-        var fire = MenuButton("Fire", new Vector2(0, -2.6f), Scenes.ButtonAction.Rebind, null, Runtime.Key.None, gray);
+        var fire = MenuButton("Fire", new Vector2(0, -2.6f), Scenes.ButtonAction.Rebind, null, Key.None, gray);
         fire.GetComponent<Scenes.Button>()!.InputAction = "Fire";
         fire.GetComponent<Text>()!.Value = "Fire: {Fire}";
         scene.Add(fire);
 
-        scene.Add(MenuButton("Back", new Vector2(0, -4.2f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, Color.FromBytes(0x4C, 0x9A, 0xFF)));
+        scene.Add(MenuButton("Back", new Vector2(0, -4.2f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, Color.FromBytes(0x4C, 0x9A, 0xFF)));
         return scene;
 
         // A label on the left and a slider on the right.
@@ -564,7 +565,7 @@ public static partial class ProjectTemplates
     /// <summary>A button that switches a setting on and off, saying which way it's set.</summary>
     private static Entity ToggleButton(string name, Vector2 position, GameSetting setting, string onText, string offText)
     {
-        var entity = MenuButton(name, position, Scenes.ButtonAction.None, null, Runtime.Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B));
+        var entity = MenuButton(name, position, Scenes.ButtonAction.None, null, Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B));
         entity.GetComponent<Text>()!.Value = onText;
         var toggle = entity.AddComponent<Toggle>();
         toggle.Setting = setting;
@@ -649,8 +650,8 @@ public static partial class ProjectTemplates
         var result = Label("Result", new Vector2(0, 0.2f), "", 0.5f, Color.FromBytes(0xB4, 0xB9, 0xC4));
         result.GetComponent<Text>()!.Order = 201;
         scene.Add(result, panel);
-        scene.Add(MenuButton("Retry", new Vector2(-2.2f, -1.6f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.Enter, Color.FromBytes(0x4C, 0x9A, 0xFF), order: 210), panel);
-        scene.Add(MenuButton("Menu", new Vector2(2.2f, -1.6f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 210), panel);
+        scene.Add(MenuButton("Retry", new Vector2(-2.2f, -1.6f), Scenes.ButtonAction.RestartScene, null, Key.Enter, Color.FromBytes(0x4C, 0x9A, 0xFF), order: 210), panel);
+        scene.Add(MenuButton("Menu", new Vector2(2.2f, -1.6f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 210), panel);
 
         AddPauseMenu(scene, menuScene: "Main");
         return scene;
@@ -677,10 +678,10 @@ public static partial class ProjectTemplates
         var heading = Label("Heading", new Vector2(0, top), "Paused", 1, Color.FromBytes(0xF0, 0x8C, 0x2E));
         heading.GetComponent<Text>()!.Order = 301;
         AddChild(heading);
-        AddChild(MenuButton("Resume", new Vector2(0, top - 1.3f), Scenes.ButtonAction.ClosePanel, null, Runtime.Key.None, Color.FromBytes(0x4C, 0x9A, 0xFF), order: 310));
-        AddChild(MenuButton("Restart", new Vector2(0, top - 2.55f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 310));
+        AddChild(MenuButton("Resume", new Vector2(0, top - 1.3f), Scenes.ButtonAction.ClosePanel, null, Key.None, Color.FromBytes(0x4C, 0x9A, 0xFF), order: 310));
+        AddChild(MenuButton("Restart", new Vector2(0, top - 2.55f), Scenes.ButtonAction.RestartScene, null, Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 310));
         if (menuScene is not null)
-            AddChild(MenuButton("Menu", new Vector2(0, top - 3.8f), Scenes.ButtonAction.LoadScene, menuScene, Runtime.Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 310));
+            AddChild(MenuButton("Menu", new Vector2(0, top - 3.8f), Scenes.ButtonAction.LoadScene, menuScene, Key.None, Color.FromBytes(0x3A, 0x3F, 0x4B), order: 310));
 
         // "{Pause}" shows Esc on the keyboard and Start on a gamepad.
         var hint = Label("Hint", new Vector2(0, -backdrop.Size.Y / 2 + 0.45f), "{Pause} to resume", 0.35f, Color.FromBytes(0x7D, 0x83, 0x90));
@@ -748,7 +749,7 @@ public static partial class ProjectTemplates
     }
 
     /// <summary>A button with a colored background and a label, which does <paramref name="action"/> by itself.</summary>
-    private static Entity MenuButton(string label, Vector2 position, Scenes.ButtonAction action, string? scene, Runtime.Key shortcut, Color color, int order = 100)
+    private static Entity MenuButton(string label, Vector2 position, Scenes.ButtonAction action, string? scene, Key shortcut, Color color, int order = 100)
     {
         var size = new Vector2(4, 1.1f);
         var entity = new Entity(label);

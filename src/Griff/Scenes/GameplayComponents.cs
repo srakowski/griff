@@ -138,7 +138,7 @@ public sealed class Health : Component
 
         if (Current > 0)
             Hurt = true;
-        Notify(behavior => behavior.RunDamage(amount, source));
+        Notify(listener => listener.Damaged(amount, source));
         Damaged?.Invoke(amount, source);
         if (IsDead)
             Die();
@@ -184,7 +184,7 @@ public sealed class Health : Component
         _invincibleLeft = 0;
         foreach (var sprite in Sprites())
             sprite.Blink(0);
-        Notify(behavior => behavior.RunDeath());
+        Notify(listener => listener.Died());
         Died?.Invoke();
     }
 
@@ -192,12 +192,13 @@ public sealed class Health : Component
     private IEnumerable<Sprite> Sprites() =>
         Entity is null ? [] : Entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Sprite>());
 
-    private void Notify(Action<Behavior> action)
+    // Tells the entity's scripts (OnDamage, OnDeath).
+    private void Notify(Action<IHealthListener> action)
     {
         if (Entity is null)
             return;
-        foreach (var behavior in Entity.GetComponents<Behavior>().Where(b => b.IsStarted).ToList())
-            action(behavior);
+        foreach (var listener in Entity.Components.OfType<IHealthListener>().ToList())
+            action(listener);
     }
 
     /// <summary>The health that counts for <paramref name="entity"/>: its own, or its nearest ancestor's (a hitbox child's owner).</summary>
@@ -528,7 +529,7 @@ public sealed class Spawner : Component
     private float _untilNext = float.NaN;
 
     /// <summary>Counts down and spawns when due. Called by the game.</summary>
-    internal void Advance(float seconds, Game game)
+    internal void Advance(float seconds, IGameContext game)
     {
         _alive.RemoveAll(e => e.Scene != game.Scene);
         if (float.IsNaN(_untilNext))
@@ -661,4 +662,12 @@ public sealed class Typewriter : Component
         ',' or ';' or ':' => PunctuationPause / 2,
         _ => 0,
     };
+}
+
+/// <summary>A component told when its entity's <see cref="Health"/> is hurt or dies: scripts are, once started.</summary>
+internal interface IHealthListener
+{
+    void Damaged(float amount, Entity? source);
+
+    void Died();
 }

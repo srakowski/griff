@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -12,11 +13,13 @@ public sealed partial class Game
     // How far the view may look up or down, in degrees.
     private const float MaxPitch = 30;
 
-    internal FirstPersonState Fps { get; private set; } = new();
+    private readonly FirstPersonSystem _firstPerson = new();
+
+    internal FirstPersonState Fps => _firstPerson.State;
 
     /// <summary>The camera's <see cref="FirstPersonView"/>, if the game is played in first person.</summary>
     public FirstPersonView? FirstPersonView =>
-        SceneRenderer.FindCamera(Scene)?.GetComponent<FirstPersonView>() is { } view && SceneRenderer.IsActive(view.Entity!) ? view : null;
+        SceneRenderer.FindCamera(Scene)?.GetComponent<FirstPersonView>() is { } view && view.Entity!.IsActive ? view : null;
 
     /// <summary>The entity a <see cref="FirstPersonView"/> looks through (the player), if there is one.</summary>
     public Entity? FirstPersonViewer => FirstPersonView is { } view ? ViewerOf(view) : null;
@@ -325,4 +328,14 @@ internal sealed class FirstPersonState
 
     // The viewer's health last frame, to flash the screen when it drops.
     public float? LastHealth { get; set; }
+}
+
+/// <summary>First-person games: the weapons out, the view's bob and the rest of <see cref="FirstPersonState"/>.</summary>
+internal sealed class FirstPersonSystem : GameSystem
+{
+    public override string Name => "First Person";
+
+    public FirstPersonState State { get; private set; } = new();
+
+    protected override void SceneChanged() => State = new FirstPersonState();
 }

@@ -1,0 +1,32 @@
+title: Game systems and Late Update
+intro: Scripts can now run something every frame for a whole kind of thing at once, in the part of the frame they choose, and act once everything has moved.
+project: Platformer | Windy Peaks
+
+chapter: A system of your own | Wind for the whole level
+say: Until now, a script ran for the one entity it was on. A game system runs once a frame for the whole game, so it can work on every thing of a kind at once.
+write: Scripts/Wind.cs | game-systems/Wind.cs
+code: Assets/Scripts/Wind.cs | Wind.cs
+say: Wind is a system. Its phase says when in the frame it runs: Simulate, after the scripts and before physics. Each frame it pushes every body in the level along.
+say: Windy Level is an ordinary script. It adds the wind when it starts, so the wind lasts as long as its entity does. Adding a second Wind would replace the first, so a level that restarts still blows just once.
+hidecode
+create: Text
+rename: Wind Gauge
+add: WindyLevel
+explain: component:WindyLevel | The script | The script that adds the wind, with its strength.
+set: WindyLevel.Strength = 40
+play
+wait: 2.5
+explain: game | Blown along | The player and the slimes drift right without anyone touching the keys: one system, every body.
+hold: Left 1.5
+say: Walking into it is hard work.
+stop
+
+chapter: Late Update | After everything has moved
+say: The gauge over the player's head is placed in Late Update. That runs after physics has moved the player and the camera has followed, so the gauge sits right on the player in the same frame, never a step behind.
+play
+hold: Right 1.5
+tap: Space
+wait: 1
+explain: game | Right on the player | Wherever the wind and the jumps take the player, the gauge keeps up.
+stop
+say: Every step of Griff's frame now runs in one of eight named phases, in an order that a test pins down, and your systems run after Griff's own in their phase. While a game plays, an agent asking for the editor state sees which systems scripts have added.

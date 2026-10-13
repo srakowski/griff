@@ -1,5 +1,6 @@
 #if DEBUG || DEMO_CHECK
 using System.Numerics;
+using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
 

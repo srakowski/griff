@@ -13,6 +13,7 @@ using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
 using Griff.Editor.Shell;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -34,7 +35,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Title = "Editor State",
             ReadOnly = true,
             Description = "Where the editor is at: the open project and scene, unsaved changes, whether the game is playing (and the " +
-                "dialogue flags set while it is), the selection, what undo and redo would do, open windows and recent problems from the Output panel.",
+                "dialogue flags set and the systems scripts have added while it is), the selection, what undo and redo would do, open windows and " +
+                "recent problems from the Output panel.",
             Invoke = _ => Task.FromResult(State()),
         };
 
@@ -129,6 +131,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
         if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
             text.AppendLine(flags);
+        if (play.Game is { } running && Playtesting.AddedSystems(running) is { } systems)
+            text.AppendLine(systems);
         text.AppendLine(CultureInfo.InvariantCulture, $"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
         var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();
         if (windows.Count > 0)

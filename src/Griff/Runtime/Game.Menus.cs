@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -48,7 +49,7 @@ public sealed partial class Game
             return;
 
         var top = TopPanel;
-        var active = Scene.Entities.Where(SceneRenderer.IsActive).Where(e => top is null || Inside(e, top)).ToList();
+        var active = Scene.Entities.Where(e => e.IsActive).Where(e => top is null || Inside(e, top)).ToList();
         var allButtons = active.SelectMany(e => e.GetComponents<Button>()).ToList();
         foreach (var button in allButtons)
             button.IsMissingSave = !HasWhatItNeeds(button);
@@ -59,7 +60,7 @@ public sealed partial class Game
         var controls = buttons.Where(b => b.Navigable).Cast<Component>().Concat(sliders.Where(s => s.Navigable)).ToList();
 
         // The arrows pick a dialogue's choices while it offers them, not the buttons behind it.
-        var direction = ReadDirection(controls.Count > 0 && _talking is not { Choices.Count: > 0 });
+        var direction = ReadDirection(controls.Count > 0 && _levels.Talking is not { Choices.Count: > 0 });
         var mouseMoved = MouseMovedOverView();
         foreach (var button in allButtons.Where(b => !b.IsUsable))
             (button.IsHovered, button.IsPressed, button.IsFocused) = (false, false, false);
@@ -169,13 +170,13 @@ public sealed partial class Game
                 OpenPanel(button.Panel!);
                 break;
             case ButtonAction.ClosePanel:
-                ClosePanel(_openPanels.Select(p => p.Panel).LastOrDefault(p => Inside(button.Entity!, p)));
+                ClosePanel(_panels.Open.Select(p => p.Panel).LastOrDefault(p => Inside(button.Entity!, p)));
                 break;
             case ButtonAction.Rebind when string.IsNullOrWhiteSpace(button.InputAction):
                 throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" rebinds an action, but its Input Action isn't set.");
             case ButtonAction.Rebind:
                 ListenForBinding(button.InputAction!);
-                _rebindButton = button;
+                _panels.RebindButton = button;
                 button.IsListening = true;
                 break;
             case ButtonAction.ResetControls:

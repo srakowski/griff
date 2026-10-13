@@ -351,12 +351,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "waitfor":
                 var (waitName, waitSeconds) = Split2(a);
                 await WaitInGame($"{waitName} showing", Seconds(waitSeconds),
-                    game => game.Scene.Entities.Any(e => e.Name == waitName && Griff.Rendering.SceneRenderer.IsActive(e)));
+                    game => game.Scene.Entities.Any(e => e.Name == waitName && e.IsActive));
                 break;
             case "waitgone":
                 var (goneName, goneSeconds) = Split2(a);
                 await WaitInGame($"{goneName} gone", Seconds(goneSeconds),
-                    game => !game.Scene.Entities.Any(e => e.Name == goneName && Griff.Rendering.SceneRenderer.IsActive(e)));
+                    game => !game.Scene.Entities.Any(e => e.Name == goneName && e.IsActive));
                 break;
             case "ready":
                 var (readyName, readySeconds) = Split2(a);
@@ -395,6 +395,15 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (file, codeTitle) = Split2(a);
                 var full = Path.IsPathRooted(file) ? file : Path.Combine(workspace.Project!.RootPath, file);
                 await Overlay.TypeCode(CodeCardRect(), codeTitle.Length > 0 ? codeTitle : file, File.ReadAllText(full).ReplaceLineEndings("\n").TrimEnd(), options.Fast ? 2 : 18);
+                break;
+            case "write":
+                // A file kept beside the demo, written into Assets the way an agent's asset_write does: a script compiles at once.
+                var (assetFile, sourceFile) = Split2(a);
+                var written = Path.Combine(workspace.Project!.AssetsPath, assetFile);
+                Directory.CreateDirectory(Path.GetDirectoryName(written)!);
+                File.WriteAllText(written, File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, sourceFile)));
+                if (assetFile.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && workspace.ReloadScripts() is { Success: false } failed)
+                    throw new InvalidOperationException($"{assetFile} doesn't compile: {string.Join("; ", failed.Diagnostics.Where(d => d.IsError))}");
                 break;
             case "hidecode":
                 Overlay.HideCode();
@@ -1016,7 +1025,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         if (CurrentGame?.Input is not Griff.Runtime.InputState input)
             throw new InvalidOperationException("The game isn't playing.");
         // "LeftShift+Right" holds both.
-        var keys = name.Split('+', StringSplitOptions.TrimEntries).Select(k => Enum.Parse<Griff.Runtime.Key>(k, ignoreCase: true)).ToList();
+        var keys = name.Split('+', StringSplitOptions.TrimEntries).Select(k => Enum.Parse<Griff.Input.Key>(k, ignoreCase: true)).ToList();
         Overlay.ShowKeys(name);
         foreach (var key in keys)
             input.SetKey(key, true);
@@ -1190,7 +1199,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var game = RunningGame;
         var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
         // In a network game, a player's name ("Player 1") is their character.
-        var entity = game.Scene.Entities.Where(e => e.Name == name && Griff.Rendering.SceneRenderer.IsActive(e))
+        var entity = game.Scene.Entities.Where(e => e.Name == name && e.IsActive)
             .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
             ?? game.Net.Players.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Avatar
             ?? throw new InvalidOperationException($"No {name} in the running game.");
@@ -1322,7 +1331,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     private static IEnumerable<Griff.Scenes.Entity> PlayersOwn(Griff.Runtime.Game game, string name)
     {
         var team = game.Find<Griff.Scenes.Commander>()?.Team;
-        return game.Scene.Entities.Where(e => e.Name == name && Griff.Rendering.SceneRenderer.IsActive(e) &&
+        return game.Scene.Entities.Where(e => e.Name == name && e.IsActive &&
             (e.GetComponent<Griff.Scenes.Unit>() is { } unit ? Mine(unit.Team, team) :
              e.GetComponent<Griff.Scenes.Building>() is { IsBuilt: true } building && Mine(building.Team, team)));
     }

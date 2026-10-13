@@ -8,12 +8,7 @@ namespace Griff.Runtime;
 // animated tiles that dress a level up.
 public sealed partial class Game
 {
-    // What each switched entity was last set to, (entity, true) for one a switch hides, so a switch only takes over a
-    // target when it changes and scripts can still run a switched mover themselves in between.
-    private readonly Dictionary<(Entity Entity, bool Hidden), bool> _switched = [];
-
-    // The All Covered Messages that were last seen all covered, so each is sent as the last goal is covered.
-    private readonly Dictionary<string, bool> _allCovered = new(StringComparer.Ordinal);
+    private readonly PuzzleSystem _puzzles = new();
 
     // Before anything runs, so a switched-off turret or spawner can't get a shot off in the first frame (or the frame
     // after a script sets a switch).
@@ -27,16 +22,16 @@ public sealed partial class Game
         foreach (var @switch in all)
             @switch.Shown ??= @switch.IsOn;
 
-        foreach (var @switch in all.Where(s => SceneRenderer.IsActive(s.Entity!)))
+        foreach (var @switch in all.Where(s => s.Entity!.IsActive))
         {
             var users = TouchersOf(@switch.Entity!).Where(t => @switch.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
             switch (@switch.Mode)
             {
                 case SwitchMode.Lever:
-                    ShowPrompt(@switch.Entity!, @switch.Prompt, users.Count > 0 && _talking is null);
+                    ShowPrompt(@switch.Entity!, @switch.Prompt, users.Count > 0 && _levels.Talking is null);
 
                     // Not with the press that just started a conversation beside it.
-                    if (users.Count > 0 && _talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
+                    if (users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
                     {
                         if (@switch.IsOn)
                             @switch.IsOn = false;
@@ -141,9 +136,9 @@ public sealed partial class Game
 
         foreach (var ((entity, hidden), on) in wanted)
         {
-            if (_switched.TryGetValue((entity, hidden), out var was) && was == on)
+            if (_puzzles.Switched.TryGetValue((entity, hidden), out var was) && was == on)
                 continue;
-            _switched[(entity, hidden)] = on;
+            _puzzles.Switched[(entity, hidden)] = on;
             if (hidden)
                 entity.IsEnabled = !on;
             else
@@ -214,13 +209,13 @@ public sealed partial class Game
     // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
     private void RunTrails()
     {
-        foreach (var trail in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Trail>()).ToList())
+        foreach (var trail in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Trail>()).ToList())
             trail.Advance(Time.Delta);
     }
 
     private void RunAnimatedTiles()
     {
-        foreach (var tilemap in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
+        foreach (var tilemap in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
         {
             if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
                 tilemap.AnimationTime += Time.Delta;
@@ -271,9 +266,9 @@ public sealed partial class Game
         foreach (var group in goals.Where(g => Runs(g.Entity!) && !string.IsNullOrWhiteSpace(g.AllCoveredMessage)).GroupBy(g => g.AllCoveredMessage!.Trim()))
         {
             var all = group.All(g => g.IsCovered);
-            if (_allCovered.TryGetValue(group.Key, out var was) && all && !was)
+            if (_puzzles.AllCovered.TryGetValue(group.Key, out var was) && all && !was)
                 Send(group.Key, group.Last().Entity);
-            _allCovered[group.Key] = all;
+            _puzzles.AllCovered[group.Key] = all;
         }
     }
 
@@ -400,12 +395,25 @@ public sealed partial class Game
         // Goals the crates are put back on (or off) aren't a change: no sounds or messages, and solving it again counts.
         foreach (var goal in Showing<Goal>())
             goal.Seen = false;
-        _allCovered.Clear();
+        _puzzles.AllCovered.Clear();
     }
+}
 
-    private void ForgetPuzzleState()
+/// <summary>Switches and goals: what each switch last set its targets to, and which goals were last all covered.</summary>
+internal sealed class PuzzleSystem : GameSystem
+{
+    public override string Name => "Puzzles";
+
+    // What each switched entity was last set to, (entity, true) for one a switch hides, so a switch only takes over a
+    // target when it changes and scripts can still run a switched mover themselves in between.
+    public Dictionary<(Entity Entity, bool Hidden), bool> Switched { get; } = [];
+
+    // The All Covered Messages that were last seen all covered, so each is sent as the last goal is covered.
+    public Dictionary<string, bool> AllCovered { get; } = new(StringComparer.Ordinal);
+
+    protected override void SceneChanged()
     {
-        _switched.Clear();
-        _allCovered.Clear();
+        Switched.Clear();
+        AllCovered.Clear();
     }
 }

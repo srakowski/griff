@@ -360,19 +360,19 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     var center = tilemap.CellCenter(x, y);
                     var min = Vector2.Transform(center - half, world);
                     var max = Vector2.Transform(center + half, world);
-                    DrawBox(new Griff.Runtime.Box((min + max) / 2, Vector2.Abs(max - min) / 2), trigger);
+                    DrawBox(new Griff.Box((min + max) / 2, Vector2.Abs(max - min) / 2), trigger);
                 }
             }
         }
 
         // One-way platforms: a solid top (the side that blocks) over a dashed outline.
-        void DrawOneWay(Griff.Runtime.Box box)
+        void DrawOneWay(Griff.Box box)
         {
             DrawBox(box, trigger);
             dc.DrawLine(new Pen(solid.Brush, 3), viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y)), viewport.ToScreen(box.Max));
         }
 
-        void DrawBox(Griff.Runtime.Box box, Pen pen)
+        void DrawBox(Griff.Box box, Pen pen)
         {
             var topLeft = viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y));
             var bottomRight = viewport.ToScreen(new Vector2(box.Max.X, box.Min.Y));

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -28,10 +29,10 @@ public static partial class ProjectTemplates
         AddField(scene, "Name", new Vector2(0, 2.0f), "Your name", TextFieldUse.PlayerName, 16);
         AddField(scene, "Address", new Vector2(0, 0.8f), "Host's address (empty: find one nearby)", TextFieldUse.JoinAddress, 40);
 
-        scene.Add(MenuButton("Host Game", new Vector2(-2.2f, -0.6f), Scenes.ButtonAction.HostGame, "Arena", Runtime.Key.Enter, ArenaBlue));
-        scene.Add(MenuButton("Join Game", new Vector2(2.2f, -0.6f), Scenes.ButtonAction.JoinGame, null, Runtime.Key.None, ArenaBlue));
-        scene.Add(MenuButton("Practice", new Vector2(-2.2f, -1.9f), Scenes.ButtonAction.LoadScene, "Arena", Runtime.Key.None, ArenaGray));
-        scene.Add(MenuButton("Quit", new Vector2(2.2f, -1.9f), Scenes.ButtonAction.Quit, null, Runtime.Key.Escape, ArenaGray));
+        scene.Add(MenuButton("Host Game", new Vector2(-2.2f, -0.6f), Scenes.ButtonAction.HostGame, "Arena", Key.Enter, ArenaBlue));
+        scene.Add(MenuButton("Join Game", new Vector2(2.2f, -0.6f), Scenes.ButtonAction.JoinGame, null, Key.None, ArenaBlue));
+        scene.Add(MenuButton("Practice", new Vector2(-2.2f, -1.9f), Scenes.ButtonAction.LoadScene, "Arena", Key.None, ArenaGray));
+        scene.Add(MenuButton("Quit", new Vector2(2.2f, -1.9f), Scenes.ButtonAction.Quit, null, Key.Escape, ArenaGray));
 
         // Joining's progress: "Joining 192.168.1.5...", or why it didn't work.
         var status = Label("Status", new Vector2(0, -3.2f), "", 0.42f, ArenaLight);
@@ -292,8 +293,8 @@ public static partial class ProjectTemplates
         var heading = Label("Heading", new Vector2(0, 1.6f), "Menu", 1, ArenaOrange);
         heading.GetComponent<Text>()!.Order = 301;
         scene.Add(heading, panel);
-        scene.Add(MenuButton("Resume", new Vector2(0, 0.3f), Scenes.ButtonAction.ClosePanel, null, Runtime.Key.None, ArenaBlue, order: 310), panel);
-        scene.Add(MenuButton("Leave Game", new Vector2(0, -0.95f), Scenes.ButtonAction.LeaveGame, "Main", Runtime.Key.None, ArenaGray, order: 310), panel);
+        scene.Add(MenuButton("Resume", new Vector2(0, 0.3f), Scenes.ButtonAction.ClosePanel, null, Key.None, ArenaBlue, order: 310), panel);
+        scene.Add(MenuButton("Leave Game", new Vector2(0, -0.95f), Scenes.ButtonAction.LeaveGame, "Main", Key.None, ArenaGray, order: 310), panel);
         var hint = Label("Hint", new Vector2(0, -2.15f), "The game goes on while this is open", 0.33f, Color.FromBytes(0x7D, 0x83, 0x90));
         hint.GetComponent<Text>()!.Order = 301;
         scene.Add(hint, panel);

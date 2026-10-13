@@ -17,7 +17,9 @@ public sealed partial class Game
 
     private static readonly Commander DefaultMap = new();
 
-    internal StrategyState Rts { get; private set; } = new();
+    private readonly StrategySystem _strategy = new();
+
+    internal StrategyState Rts => _strategy.State;
 
     /// <summary>Where the strategy HUD (see <see cref="Commander.Hud"/>) has its parts this frame, if it shows: the minimap, the command card.</summary>
     public StrategyHud? StrategyHud => Rts.Hud;
@@ -162,7 +164,7 @@ public sealed partial class Game
             return;
 
         Rts.Clock += Time.UnscaledDelta;
-        Rts.Selected.RemoveAll(e => e.Scene != Scene || !SceneRenderer.IsActive(e) || !IsAlive(e));
+        Rts.Selected.RemoveAll(e => e.Scene != Scene || !e.IsActive || !IsAlive(e));
         SyncSelectionFlags();
 
         UpdateNav();
@@ -311,7 +313,7 @@ public sealed partial class Game
         var signature = new HashCode();
         signature.Add(center);
         signature.Add(size);
-        foreach (var entity in Scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in Scene.Entities.Where(e => e.IsActive))
         {
             if (!IsAlive(entity) || entity.GetComponent<Unit>() is not null || UnitOwner(entity) is not null)
                 continue;
@@ -1228,4 +1230,14 @@ internal sealed class FogGrid
     private int CellX(Vector2 point) => (int)MathF.Floor((point.X - Min.X) / CellSize);
 
     private int CellY(Vector2 point) => (int)MathF.Floor((point.Y - Min.Y) / CellSize);
+}
+
+/// <summary>Strategy games: what's selected, the HUD, fog of war and the rest of <see cref="StrategyState"/>.</summary>
+internal sealed class StrategySystem : GameSystem
+{
+    public override string Name => "Strategy";
+
+    public StrategyState State { get; private set; } = new();
+
+    protected override void SceneChanged() => State = new StrategyState();
 }

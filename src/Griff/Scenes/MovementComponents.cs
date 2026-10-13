@@ -366,7 +366,7 @@ public sealed class GridMovement : Component
         if (Entity?.Scene is not { } scene)
             return null;
         var map = string.IsNullOrWhiteSpace(Map)
-            ? scene.Entities.Where(Rendering.SceneRenderer.IsActive).Select(e => e.GetComponent<Tilemap>()).FirstOrDefault(t => t is { LayerOf: null })
+            ? scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<Tilemap>()).FirstOrDefault(t => t is { LayerOf: null })
             : scene.Entities.FirstOrDefault(e => e.Name == Map.Trim())?.GetComponent<Tilemap>()?.BaseMap;
         return map?.Entity is null ? null : map;
     }

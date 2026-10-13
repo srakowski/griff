@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -45,8 +46,8 @@ public static partial class ProjectTemplates
         scene.Add(Label("Subtitle", new Vector2(0, 2.3f), "Two knights and two archers against an orc warband.", 0.5f, TacticsDim));
         scene.Add(Label("Goal", new Vector2(0, 1.5f), "Beat every orc and goblin on the field.", 0.5f, TacticsDim));
 
-        scene.Add(MenuButton("Play", new Vector2(0, -0.2f), Scenes.ButtonAction.LoadScene, "Battle", Runtime.Key.Enter, TacticsBlue));
-        scene.Add(MenuButton("Quit", new Vector2(0, -1.6f), Scenes.ButtonAction.Quit, null, Runtime.Key.Escape, TacticsGray));
+        scene.Add(MenuButton("Play", new Vector2(0, -0.2f), Scenes.ButtonAction.LoadScene, "Battle", Key.Enter, TacticsBlue));
+        scene.Add(MenuButton("Quit", new Vector2(0, -1.6f), Scenes.ButtonAction.Quit, null, Key.Escape, TacticsGray));
 
         var hint = Label("Hint", Vector2.Zero, "Enter to play  ·  Arrows to choose", 0.4f, TacticsDim);
         var anchor = hint.AddComponent<ScreenAnchor>();
@@ -195,8 +196,8 @@ public static partial class ProjectTemplates
         text.GetComponent<Text>()!.Order = 401;
         WithChild(panel, text);
 
-        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.4f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.Enter, color, order: 410));
-        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.4f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, TacticsGray, order: 410));
+        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.4f), Scenes.ButtonAction.RestartScene, null, Key.Enter, color, order: 410));
+        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.4f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, TacticsGray, order: 410));
         return panel;
     }
 

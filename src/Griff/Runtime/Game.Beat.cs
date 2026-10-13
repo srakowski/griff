@@ -68,11 +68,13 @@ public sealed partial class Game
     // The clock something names (an entity with a Beat Clock), or the scene's first when it names none.
     internal BeatClock? ClockFor(string? name) =>
         string.IsNullOrWhiteSpace(name)
-            ? Scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<BeatClock>()).FirstOrDefault(c => c is not null)
+            ? Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<BeatClock>()).FirstOrDefault(c => c is not null)
             : Find(name.Trim())?.GetComponent<BeatClock>();
 
     // Whether something stepping to a clock every so many beats steps this frame.
     internal bool OnBeat(string? clock, int every, int offset) => ClockFor(clock)?.OnBeat(every, offset) == true;
+
+    bool IGameContext.OnBeat(string? clock, int every, int offset) => OnBeat(clock, every, offset);
 
     /// <summary>
     /// Where <paramref name="time"/> seconds of music is: seconds into this play-through of it, and beats since its first

@@ -11,26 +11,21 @@ public sealed partial class Game
 {
     // What a player's mouse or a grabber holds: the thing, where it's held from (its middle less the mouse or hand), and
     // where it came from. A grabber's grip closes to nothing over the thing's slide time, so it slides into its hand.
-    private sealed record Holding(Draggable Thing, Vector2 Grip, Vector2 From, Entity? FromTarget)
+    internal sealed record Holding(Draggable Thing, Vector2 Grip, Vector2 From, Entity? FromTarget)
     {
         public float Elapsed { get; set; }
     }
 
     // A thing sliding into place after it was let go.
-    private sealed record Slide(Vector2 From, Vector2 To, float Seconds)
+    internal sealed record Slide(Vector2 From, Vector2 To, float Seconds)
     {
         public float Elapsed { get; set; }
     }
 
-    // Keyed by the player whose mouse holds it (0 offline), or the grabber holding it.
-    private readonly Dictionary<object, Holding> _held = [];
-    private readonly Dictionary<Draggable, Slide> _slides = [];
-
-    // The All Full Messages that were last seen full, so each is sent as they fill up rather than every frame.
-    private readonly Dictionary<string, bool> _allFull = new(StringComparer.Ordinal);
+    private readonly DragSystem _drags = new();
 
     /// <summary>What this machine's mouse is holding (a <see cref="Draggable"/>'s entity), or null.</summary>
-    public Entity? Held => _held.GetValueOrDefault(Net.LocalPlayer?.Id ?? 0)?.Thing.Entity;
+    public Entity? Held => _drags.Held.GetValueOrDefault(Net.LocalPlayer?.Id ?? 0)?.Thing.Entity;
 
     // After scripts and before physics, so a held thing with a body is carried this frame and nothing falls from the hand.
     private void RunDragging()
@@ -40,14 +35,14 @@ public sealed partial class Game
         var grabbers = Active<Grabber>().ToList();
 
         // A grabber that goes away puts down what it held where it is.
-        foreach (var (holder, held) in _held.ToList())
+        foreach (var (holder, held) in _drags.Held.ToList())
         {
-            if (held.Thing.Entity?.Scene != Scene || !SceneRenderer.IsActive(held.Thing.Entity) ||
+            if (held.Thing.Entity?.Scene != Scene || !held.Thing.Entity.IsActive ||
                 (holder is Grabber grabber && !grabbers.Contains(grabber)))
                 LetGo(holder, held);
         }
 
-        if (draggables.Count == 0 && targets.Count == 0 && grabbers.Count == 0 && _held.Count == 0)
+        if (draggables.Count == 0 && targets.Count == 0 && grabbers.Count == 0 && _drags.Held.Count == 0)
             return;
 
         if (!Net.IsClient && !PausedThisFrame)
@@ -66,7 +61,7 @@ public sealed partial class Game
 
         ShowReach(draggables, grabbers);
         RunSlides();
-        foreach (var held in _held.Values)
+        foreach (var held in _drags.Held.Values)
         {
             if (held.Thing.Entity!.GetComponent<Body>() is { } body)
                 (body.Velocity, body.FloatThisStep) = (Vector2.Zero, true);
@@ -78,7 +73,7 @@ public sealed partial class Game
     private void Drag(int player, IInput input, List<Draggable> draggables, List<DropTarget> targets)
     {
         var mouse = input.MouseWorld;
-        if (_held.TryGetValue(player, out var held))
+        if (_drags.Held.TryGetValue(player, out var held))
         {
             if (!input.IsDown(MouseButton.Left))
                 Drop(player, held, targets);
@@ -105,7 +100,7 @@ public sealed partial class Game
         var pressed = grabber.Pressed || (!string.IsNullOrEmpty(action) && input.WasPressed(action));
         grabber.Pressed = false;
         var hand = HandOf(grabber);
-        if (_held.TryGetValue(grabber, out var held))
+        if (_drags.Held.TryGetValue(grabber, out var held))
         {
             // Carried to the hand first, so it's put down where the hand is now.
             grabber.InReach = null;
@@ -172,7 +167,7 @@ public sealed partial class Game
     // After physics too, so what's carried keeps up with a grabber that moved this frame.
     private void CarryHeld()
     {
-        foreach (var (holder, held) in _held)
+        foreach (var (holder, held) in _drags.Held)
         {
             if (holder is Grabber grabber && grabber.Entity?.Scene == Scene && held.Thing.Entity?.Scene == Scene)
                 Carry(grabber, held);
@@ -184,8 +179,8 @@ public sealed partial class Game
         var entity = thing.Entity!;
         var at = CenterOf(entity);
         // A thing still sliding home is picked up from where it was headed.
-        var from = _slides.Remove(thing, out var slide) ? slide.To : at;
-        _held[holder] = new Holding(thing, at - point, from, thing.Target);
+        var from = _drags.Slides.Remove(thing, out var slide) ? slide.To : at;
+        _drags.Held[holder] = new Holding(thing, at - point, from, thing.Target);
         thing.IsHeld = true;
         PlayIfSet(thing.PickUpSound);
         if (!string.IsNullOrWhiteSpace(thing.PickUpMessage))
@@ -282,9 +277,9 @@ public sealed partial class Game
         thing.RaiseDropped(landed);
     }
 
-    private void LetGo(object holder, Holding held)
+    internal void LetGo(object holder, Holding held)
     {
-        _held.Remove(holder);
+        _drags.Held.Remove(holder);
         held.Thing.IsHeld = false;
         if (holder is Grabber grabber)
             grabber.Holding = null;
@@ -322,7 +317,7 @@ public sealed partial class Game
     {
         var from = CenterOf(thing.Entity!);
         if (thing.SlideTime > 0 && Vector2.DistanceSquared(from, to) > 1e-8f)
-            _slides[thing] = new Slide(from, to, thing.SlideTime);
+            _drags.Slides[thing] = new Slide(from, to, thing.SlideTime);
         else
             MoveTo(thing.Entity!, to - from + Flat(thing.Entity!.Transform.WorldPosition));
     }
@@ -330,12 +325,12 @@ public sealed partial class Game
     // Eased out, so it settles into place.
     private void RunSlides()
     {
-        foreach (var (thing, slide) in _slides.ToList())
+        foreach (var (thing, slide) in _drags.Slides.ToList())
         {
             var entity = thing.Entity;
             if (entity?.Scene != Scene || thing.IsHeld)
             {
-                _slides.Remove(thing);
+                _drags.Slides.Remove(thing);
                 continue;
             }
 
@@ -347,17 +342,17 @@ public sealed partial class Game
             if (entity.GetComponent<Body>() is { } body)
                 (body.Velocity, body.FloatThisStep) = (Vector2.Zero, true);
             if (t >= 1)
-                _slides.Remove(thing);
+                _drags.Slides.Remove(thing);
         }
     }
 
     // What rests on each target (not held, not sliding), what arrived and left, and how they look.
     private void UpdateDropTargets(List<Draggable> draggables, List<DropTarget> targets)
     {
-        var resting = draggables.Where(d => !d.IsHeld && !_slides.ContainsKey(d)).ToList();
+        var resting = draggables.Where(d => !d.IsHeld && !_drags.Slides.ContainsKey(d)).ToList();
         foreach (var thing in draggables)
         {
-            if (!thing.IsHeld && !_slides.ContainsKey(thing))
+            if (!thing.IsHeld && !_drags.Slides.ContainsKey(thing))
                 thing.Target = TargetAt(CenterOf(thing.Entity!), targets, thing.Entity)?.Entity;
             else if (thing.IsHeld)
                 thing.Target = null;
@@ -394,9 +389,9 @@ public sealed partial class Game
         foreach (var group in targets.Where(t => !string.IsNullOrWhiteSpace(t.AllFullMessage)).GroupBy(t => t.AllFullMessage!.Trim()))
         {
             var full = group.All(t => t.IsFull);
-            if (_allFull.TryGetValue(group.Key, out var was) && full && !was)
+            if (_drags.AllFull.TryGetValue(group.Key, out var was) && full && !was)
                 Send(group.Key, group.Last().Entity);
-            _allFull[group.Key] = full;
+            _drags.AllFull[group.Key] = full;
         }
     }
 
@@ -406,7 +401,7 @@ public sealed partial class Game
         if (target.Entity!.GetComponent<Sprite>() is not { } sprite || target.HoverTint.A <= 0)
             return;
         target.RestingTint ??= sprite.Tint;
-        var hovered = _held.Values.Any(h =>
+        var hovered = _drags.Held.Values.Any(h =>
         {
             var at = CenterOf(h.Thing.Entity!);
             return h.Thing.Entity!.Scene == Scene && Covers(target.Entity!, at) && target.AcceptsKind(h.Thing.Kind) &&
@@ -435,12 +430,26 @@ public sealed partial class Game
         var size = entity.GetComponent<Sprite>()?.Size ?? Vector2.One;
         return new Box(new Vector2(world.M41, world.M42), Vector2.Abs(size) * scale / 2);
     }
+}
 
-    private void ForgetDragState()
+/// <summary>Drag and drop: what each mouse and grabber holds, what's sliding into place, and the slots last all full.</summary>
+internal sealed class DragSystem : GameSystem
+{
+    public override string Name => "Dragging";
+
+    // Keyed by the player whose mouse holds it (0 offline), or the grabber holding it.
+    public Dictionary<object, Game.Holding> Held { get; } = [];
+
+    public Dictionary<Draggable, Game.Slide> Slides { get; } = [];
+
+    // The All Full Messages that were last seen full, so each is sent as they fill up rather than every frame.
+    public Dictionary<string, bool> AllFull { get; } = new(StringComparer.Ordinal);
+
+    protected override void SceneChanged()
     {
-        foreach (var (holder, held) in _held.ToList())
-            LetGo(holder, held);
-        _slides.Clear();
-        _allFull.Clear();
+        foreach (var (holder, held) in Held.ToList())
+            Game.LetGo(holder, held);
+        Slides.Clear();
+        AllFull.Clear();
     }
 }

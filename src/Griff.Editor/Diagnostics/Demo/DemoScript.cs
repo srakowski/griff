@@ -873,9 +873,9 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         if (play.Game?.Input is Griff.Runtime.InputState menuInput)
         {
             Overlay.ShowKeys("Enter");
-            menuInput.SetKey(Griff.Runtime.Key.Enter, true);
+            menuInput.SetKey(Griff.Input.Key.Enter, true);
             await Wait(80);
-            menuInput.SetKey(Griff.Runtime.Key.Enter, false);
+            menuInput.SetKey(Griff.Input.Key.Enter, false);
         }
 
         await WaitUntil(() => play.Game?.SceneName == "Main", 6000);

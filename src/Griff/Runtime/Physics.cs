@@ -4,39 +4,6 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-/// <summary>An axis-aligned rectangle in world space.</summary>
-public readonly record struct Box(Vector2 Center, Vector2 HalfSize)
-{
-    public Vector2 Min => Center - HalfSize;
-
-    public Vector2 Max => Center + HalfSize;
-
-    public bool Overlaps(Box other) =>
-        Min.X < other.Max.X && Max.X > other.Min.X &&
-        Min.Y < other.Max.Y && Max.Y > other.Min.Y;
-
-    public bool Contains(Vector2 point) =>
-        point.X >= Min.X && point.X <= Max.X && point.Y >= Min.Y && point.Y <= Max.Y;
-
-    /// <summary>True if the circle and the box share any area.</summary>
-    public bool Overlaps(Vector2 center, float radius) =>
-        Vector2.DistanceSquared(Vector2.Clamp(center, Min, Max), center) < radius * radius;
-}
-
-/// <summary>A circle in world space.</summary>
-public readonly record struct Circle(Vector2 Center, float Radius)
-{
-    /// <summary>The smallest box around the circle.</summary>
-    public Box Bounds => new(Center, new Vector2(Radius));
-
-    public bool Contains(Vector2 point) => Vector2.DistanceSquared(Center, point) <= Radius * Radius;
-
-    public bool Overlaps(Circle other) =>
-        Vector2.DistanceSquared(Center, other.Center) < (Radius + other.Radius) * (Radius + other.Radius);
-
-    public bool Overlaps(Box box) => box.Overlaps(Center, Radius);
-}
-
 /// <summary>Where a ray first touched a collider or a solid tilemap.</summary>
 /// <param name="Normal">The surface direction at the hit, pointing back toward the ray (e.g. up for a floor).</param>
 /// <param name="Distance">World units from the ray's origin to <paramref name="Point"/>.</param>
@@ -84,13 +51,7 @@ public sealed class Physics
     }
 
     /// <summary>World-space box of a collider, from its entity's position and scale.</summary>
-    public static Box BoundsOf(BoxCollider collider)
-    {
-        var world = collider.Entity!.Transform.WorldMatrix;
-        var scale = ScaleOf(world);
-        var center = new Vector2(world.M41, world.M42) + collider.Offset * scale;
-        return new Box(center, collider.Size * scale / 2);
-    }
+    public static Box BoundsOf(BoxCollider collider) => collider.WorldBox;
 
     /// <summary>World-space circle of a collider. The radius scales with the larger of the entity's X and Y scale.</summary>
     public static Circle BoundsOf(CircleCollider collider)
@@ -233,11 +194,11 @@ public sealed class Physics
         }
 
         var moved = new HashSet<BodyGroup>();
-        foreach (var body in scene.Entities.Where(SceneRenderer.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
+        foreach (var body in scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
         {
             // In a network game, another machine moves this one (a player's own character, or the host's copy of
             // anything): leave it where it's put. On the host, what another player's character touches still counts.
-            if (!Game.Moves(body.Entity!))
+            if (!body.Entity!.MovesHere)
             {
                 if (body.Entity!.NetFlags.HasFlag(NetFlags.RemoteMoved))
                     ReportContacts(body, solids, onCollision);
@@ -277,7 +238,7 @@ public sealed class Physics
             }
 
             // Ride along with whatever it stood on, if that has moved since (a moving platform).
-            if (_grounds.TryGetValue(body, out var ground) && ground.Ground.Scene == scene && SceneRenderer.IsActive(ground.Ground))
+            if (_grounds.TryGetValue(body, out var ground) && ground.Ground.Scene == scene && ground.Ground.IsActive)
             {
                 var carry = PositionOf(ground.Ground) - ground.Position;
                 MoveAxis(body, collider, solids, new Vector2(carry.X, 0), onCollision, carrier: ground.Ground);
@@ -324,7 +285,7 @@ public sealed class Physics
     // welded to), moved together one axis at a time.
     private void StepGroup(BodyGroup group, List<Shape> solids, float dt, Action<Entity, Entity> onCollision)
     {
-        var members = group.Bodies.Where(b => b.Entity is not null && SceneRenderer.IsActive(b.Entity)).ToList();
+        var members = group.Bodies.Where(b => b.Entity is not null && b.Entity.IsActive).ToList();
         foreach (var body in members)
         {
             body.IsGrounded = false;
@@ -675,7 +636,7 @@ public sealed class Physics
     private static IEnumerable<Slope> Slopes(Scene scene, string? layers = null)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        foreach (var tilemap in scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
+        foreach (var tilemap in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
         {
             if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
@@ -823,7 +784,7 @@ public sealed class Physics
     private static IEnumerable<Shape> Shapes(Scene scene, bool includeTriggers, string? layers = null)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        foreach (var entity in scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in scene.Entities.Where(e => e.IsActive))
         {
             foreach (var component in entity.Components)
             {
@@ -843,7 +804,7 @@ public sealed class Physics
     }
 
     private static IEnumerable<Collider> ActiveColliders(Scene scene) =>
-        scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Collider>());
+        scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Collider>());
 
     private static Vector2 ScaleOf(Matrix4x4 world) => new(
         new Vector2(world.M11, world.M12).Length(),

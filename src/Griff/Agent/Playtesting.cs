@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -138,5 +139,15 @@ public static class Playtesting
     {
         var set = game.SaveData.Keys.Where(key => game.SaveData.GetBool(key)).ToList();
         return set.Count == 0 ? null : $"Flags set: {string.Join(", ", set)}.";
+    }
+
+    /// <summary>
+    /// The systems scripts have added to <paramref name="game"/>, each with its phase and the entity it goes with, e.g.
+    /// <c>Systems scripts added: Magnets (Simulate, goes with Level).</c> Null when there are none.
+    /// </summary>
+    public static string? AddedSystems(Game game)
+    {
+        var added = game.AddedSystems.Select(s => s.Owner?.Entity is { } owner ? $"{s.Name} ({s.Phase}, goes with {owner.Name})" : $"{s.Name} ({s.Phase})").ToList();
+        return added.Count == 0 ? null : $"Systems scripts added: {string.Join(", ", added)}.";
     }
 }

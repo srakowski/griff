@@ -224,12 +224,12 @@ public sealed class GameRunner : IDisposable
         var key = KeyMap.ToGriff(wpfKey);
 
         // Typed text comes from here rather than WPF's TextInput, which handling the key would stop.
-        if (key == Runtime.Key.Backspace)
+        if (key == Input.Key.Backspace)
             _input.TypeBackspace();
         else if (TypedText.Of(wpfKey) is { Length: > 0 } text)
             _input.AddText(text);
 
-        if (key == Runtime.Key.None)
+        if (key == Input.Key.None)
             return;
         if (!e.IsRepeat)
             _input.SetKey(key, true);
@@ -239,7 +239,7 @@ public sealed class GameRunner : IDisposable
     private void OnKeyUp(object sender, KeyEventArgs e)
     {
         var key = KeyMap.ToGriff(e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key);
-        if (key == Runtime.Key.None)
+        if (key == Input.Key.None)
             return;
         // Always, so a key let go after focus moves to a text field doesn't stay held in the game.
         _input.SetKey(key, false);

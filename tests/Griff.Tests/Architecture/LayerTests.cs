@@ -6,46 +6,20 @@ namespace Griff.Tests.Architecture;
 
 /// <summary>
 /// Guards the core's layers: Scenes is data (entities, components, serialization), Runtime simulates it and
-/// Rendering draws it, so nothing in Griff.Scenes may use Griff.Runtime or Griff.Rendering. The uses that exist today
-/// are listed below and may only shrink: a new one fails, and so does a listed one that has gone, so the list is
-/// trimmed as they're fixed.
+/// Rendering draws it, so nothing in Griff.Scenes may use Griff.Runtime or Griff.Rendering. What both sides need lives
+/// below them, in Griff (Color, Box, Ease, Rand) and Griff.Input (Key), and a component that needs the game gets an
+/// IGameContext.
 /// </summary>
 public sealed class LayerTests
 {
-    // "<type in Griff.Scenes> -> <type it uses in Griff.Runtime or Griff.Rendering>"
-    private static readonly string[] Allowed =
-    [
-        "Griff.Scenes.Button -> Griff.Runtime.Key",
-        "Griff.Scenes.Crafting -> Griff.Runtime.Key",
-        "Griff.Scenes.Follow -> Griff.Runtime.Box",
-        "Griff.Scenes.Follow -> Griff.Runtime.Physics",
-        "Griff.Scenes.GridMovement -> Griff.Rendering.SceneRenderer",
-        "Griff.Scenes.Health -> Griff.Runtime.Behavior",
-        "Griff.Scenes.Mover -> Griff.Runtime.Ease",
-        "Griff.Scenes.MoveSnapshot -> Griff.Rendering.SceneRenderer",
-        "Griff.Scenes.Multiplayer -> Griff.Runtime.NetSession",
-        "Griff.Scenes.Room -> Griff.Runtime.Box",
-        "Griff.Scenes.SandboxTools -> Griff.Runtime.Key",
-        "Griff.Scenes.Scene -> Griff.Rendering.SceneRenderer",
-        "Griff.Scenes.Scoreboard -> Griff.Runtime.Key",
-        "Griff.Scenes.Shooter -> Griff.Runtime.Rand",
-        "Griff.Scenes.Spawner -> Griff.Runtime.Game",
-        "Griff.Scenes.Spawner -> Griff.Runtime.Rand",
-        "Griff.Scenes.Trail -> Griff.Rendering.SceneRenderer",
-    ];
-
     [Fact]
     public void Scenes_DoesNotUseRuntimeOrRendering()
     {
-        var uses = ScenesUses().ToHashSet();
+        var uses = ScenesUses().Distinct().Order().ToList();
 
-        var added = uses.Except(Allowed).Order().ToList();
-        var gone = Allowed.Except(uses).Order().ToList();
-
-        Assert.True(added.Count == 0,
+        Assert.True(uses.Count == 0,
             "Griff.Scenes is data and mustn't use Griff.Runtime or Griff.Rendering (pass what a component needs in, " +
-            "or move the code up a layer):\n" + string.Join("\n", added));
-        Assert.True(gone.Count == 0, "Fixed, so take these off LayerTests.Allowed:\n" + string.Join("\n", gone));
+            "or move the code up a layer):\n" + string.Join("\n", uses));
     }
 
     // Binds the core's source and finds every Runtime or Rendering symbol named inside a Griff.Scenes type.

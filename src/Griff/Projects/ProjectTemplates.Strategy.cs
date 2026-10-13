@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -359,7 +360,7 @@ public static partial class ProjectTemplates
         var line = Label("Detail", new Vector2(0, 0.1f), detail, 0.5f, Color.FromBytes(0xB4, 0xB9, 0xC4));
         line.GetComponent<Text>()!.Order = 401;
         WithChild(panel, line);
-        WithChild(panel, MenuButton("Play Again", new Vector2(0, -1.6f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.Enter, PlayerBlue, order: 410));
+        WithChild(panel, MenuButton("Play Again", new Vector2(0, -1.6f), Scenes.ButtonAction.RestartScene, null, Key.Enter, PlayerBlue, order: 410));
         return panel;
     }
 }

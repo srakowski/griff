@@ -4,10 +4,11 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Runs a scene: starts and updates behaviors each <see cref="Tick"/>. Spawning and destroying during a
-/// frame are safe; destroys take effect at the end of the frame.
+/// Runs a scene: each <see cref="Tick"/> takes the steps of a <see cref="Frame"/>, phase by phase, from starting new
+/// behaviors through physics to sound. Spawning and destroying during a frame are safe; destroys take effect at the end
+/// of the frame.
 /// </summary>
-public sealed partial class Game
+public sealed partial class Game : IGameContext
 {
     private readonly List<Entity> _pendingDestroy = [];
     private readonly List<GameTimer> _timers = [];
@@ -32,6 +33,7 @@ public sealed partial class Game
         Net = new NetSession(this);
         ListenForCommands();
         Debug = new DebugDraw(Time);
+        BuildFrame();
         (input as InputState)?.UseSaveData(_saveData);
         LoadSettings();
         SyncPanels();
@@ -123,147 +125,6 @@ public sealed partial class Game
     }
 
     private IAudio _audio = new SilentAudio();
-
-    /// <summary>Advances the game by <paramref name="seconds"/>: start new behaviors, update all, apply destroys.</summary>
-    public void Tick(double seconds)
-    {
-        if (_stopped)
-            throw new InvalidOperationException("The game has stopped.");
-
-        // Panels shown or hidden since last frame open or close first, so a pause starts straight away.
-        SyncPanels();
-        _pausedAtStart = Time.IsPaused;
-        Time.Advance(seconds);
-        (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
-        Debug.BeginFrame();
-        Net.BeginFrame(Time.UnscaledDelta);
-
-        // Dungeons are made first, so what starts this frame starts on the floor (spawns included).
-        RunDungeons();
-
-        // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
-        var behaviors = ActiveBehaviors().Where(b => Runs(b.Entity!)).ToList();
-        foreach (var behavior in behaviors.Where(b => !b.IsStarted))
-            behavior.RunStart(this);
-
-        StartWorlds();
-        UpdateMenus();
-        RunLobby();
-        ApplySwitches();
-        RunTurns();
-        RunTactics();
-        RunBeatClocks();
-
-        // Before anything moves, so a move taken back this frame isn't stepped on from where it was.
-        RunMoveHistory();
-
-        // No-code enemies and players go before scripts, so a script can still take over a body this frame.
-        RunEnemies();
-        RunMovement();
-        RunFirstPerson();
-        RunItemUses();
-
-        // While a panel pauses the game, only the scripts on open panels run.
-        foreach (var behavior in behaviors)
-        {
-            if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
-                behavior.RunUpdate();
-        }
-
-        RunSandboxHud();
-        RunBlocks();
-        RunTools();
-        ForEachRemotePlayer(() =>
-        {
-            RunSandboxHud();
-            RunBlockPlayers();
-            RunTools();
-        });
-        RunDragging();
-        RunMatchBoards();
-        RunFallingBoards();
-        RunStrategy();
-        RunAttacks();
-        PassIdleGridMovers();
-        RunTimers();
-        RunCoroutines();
-        RunTweens();
-        RunLifetimes();
-        RunSpawners();
-        RunShooters();
-        RunMovers();
-
-        foreach (var animation in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Animation>()).ToList())
-            animation.Advance(Time.Delta);
-        RunAnimatedTiles();
-
-        foreach (var emitter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<ParticleEmitter>()).ToList())
-        {
-            emitter.Advance(Time.Delta, Physics.Gravity);
-            if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
-                Destroy(emitter.Entity!);
-        }
-
-        foreach (var camera in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Camera>()))
-        {
-            camera.AdvanceShake(Time.UnscaledDelta);
-            camera.AdvanceAmbient(Time.UnscaledDelta);
-        }
-
-        foreach (var sprite in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Sprite>()))
-            sprite.AdvanceEffects(Time.Delta);
-
-        FillPrompts();
-        RunTypewriters();
-        RunPickupSpin();
-
-        RunThrusters();
-        GroupWelds();
-        if (Time.Delta > 0)
-        {
-            Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
-            foreach (var (trigger, other) in Physics.TriggerPairs)
-            {
-                _touches.Add((trigger, other));
-                _touches.Add((other, trigger));
-            }
-        }
-
-        RunRopes();
-        CarryHeld();
-
-        RunPickups();
-        RunCheckpoints();
-        RunDoors();
-        RunDialogues();
-        RunSwitches();
-        RunGoals();
-        RunWiring();
-        RunBouncers();
-        RunCrumbles();
-        RunTouchDamage();
-        RunHealth();
-        RunRespawns();
-        RunBars();
-        RunCounters();
-        AdvanceFade();
-        _screenFlashLeft = Math.Max(0, _screenFlashLeft - Time.UnscaledDelta);
-        FlushDestroys();
-        SwitchSceneIfRequested();
-        RunRooms();
-        RunFollowers();
-        LayOutScreen();
-        RunTrails();
-        RunLights();
-        RunWeather();
-        FillPrompts();
-        RunSoundSources();
-        RunSoundPlayers();
-        CountPatrolWalks();
-        Audio.Advance(Time.UnscaledDelta);
-        SaveSettings();
-        Net.EndFrame(Time.UnscaledDelta);
-    }
 
     /// <summary>
     /// Switches to another scene ("Level2" or "Scenes/Level2.scene") at the end of this frame.
@@ -436,20 +297,20 @@ public sealed partial class Game
         var heard = _messages.Send(message, data, Scene);
 
         // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something else).
-        var counters = Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Counter>())
+        var counters = Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Counter>())
             .Where(c => c.Message?.Trim() == message && !c.CountsOwn).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
 
         // So do sound players.
-        var players = Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>())
+        var players = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>())
             .Where(p => p.Message?.Trim() == message).ToList();
         foreach (var player in players)
             Play(player);
 
         // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing.
         var panels = Scene.Entities.SelectMany(e => e.GetComponents<Panel>())
-            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || Rendering.SceneRenderer.IsActive(p.Entity.Parent)))
+            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive))
             .ToList();
         foreach (var panel in panels)
             OpenPanel(panel);
@@ -714,13 +575,7 @@ public sealed partial class Game
         SceneName = SceneNameOf(name);
         _messages.Prune(next);
         _controlsSeen.RemoveWhere(c => c.Entity?.Scene != next);
-        ForgetLevelState();
-        ForgetPuzzleState();
-        ForgetDragState();
-        ForgetPanelState();
-        Rts = new StrategyState();
-        Fps = new FirstPersonState();
-        Sandbox = new SandboxState();
+        SystemsSceneChanged();
         Physics.Groups = [];
         StopSoundSources();
         _focus = null;
@@ -746,14 +601,14 @@ public sealed partial class Game
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     private void RunFollowers()
     {
-        foreach (var follow in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<Follow>()).ToList())
+        foreach (var follow in Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<Follow>()).ToList())
             follow.Advance(Time.Delta, ViewAspect, Time.UnscaledDelta);
     }
 
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.
     private void LayOutScreen()
     {
-        var anchors = Scene.Entities.Where(Rendering.SceneRenderer.IsActive)
+        var anchors = Scene.Entities.Where(e => e.IsActive)
             .Select(e => e.GetComponent<ScreenAnchor>()).OfType<ScreenAnchor>().ToList();
         if (anchors.Count == 0)
             return;
@@ -793,7 +648,7 @@ public sealed partial class Game
     // Lifetimes run on game time; the fade out is an ordinary FadeTo, so it shows on sprites, text and tilemaps alike.
     private void RunLifetimes()
     {
-        foreach (var lifetime in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
+        foreach (var lifetime in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
         {
             lifetime.Age += Time.Delta;
             if (!lifetime.IsFading && lifetime.FadeOut > 0 && lifetime.Age >= lifetime.Seconds - lifetime.FadeOut)
@@ -809,14 +664,14 @@ public sealed partial class Game
 
     private void RunSpawners()
     {
-        foreach (var spawner in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Spawner>()).ToList())
+        foreach (var spawner in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Spawner>()).ToList())
             spawner.Advance(Time.Delta, this);
     }
 
     // Typewriters run on real time, so dialogue still types out while the game is paused.
     private void RunTypewriters()
     {
-        foreach (var typewriter in Scene.Entities.Where(Rendering.SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Typewriter>()).ToList())
+        foreach (var typewriter in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Typewriter>()).ToList())
         {
             if (typewriter.Advance(Time.UnscaledDelta))
                 Audio.Play(typewriter.Sound!);
@@ -825,7 +680,7 @@ public sealed partial class Game
 
     private void RunPickupSpin()
     {
-        foreach (var pickup in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<Pickup>()))
+        foreach (var pickup in Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<Pickup>()))
         {
             if (pickup.Spin != 0)
                 pickup.Entity!.Transform.Rotation += new Vector3(0, 0, pickup.Spin * Time.Delta);
@@ -892,14 +747,14 @@ public sealed partial class Game
 
     private void RunBars()
     {
-        foreach (var bar in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Bar>()).ToList())
+        foreach (var bar in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Bar>()).ToList())
             bar.Advance(Time.Delta, Scene);
     }
 
     // Counters show their count, keep their best, and pop when the count changes.
     private void RunCounters()
     {
-        foreach (var counter in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Counter>()).ToList())
+        foreach (var counter in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Counter>()).ToList())
         {
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
@@ -1019,7 +874,7 @@ public sealed partial class Game
     // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.
     private void RunHealth()
     {
-        foreach (var health in Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Health>()).ToList())
+        foreach (var health in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Health>()).ToList())
         {
             health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);

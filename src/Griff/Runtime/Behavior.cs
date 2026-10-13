@@ -19,7 +19,7 @@ namespace Griff.Runtime;
 /// }
 /// </code>
 /// </example>
-public abstract class Behavior : Component
+public abstract class Behavior : Component, IHealthListener
 {
     private Game? _game;
 
@@ -50,6 +50,15 @@ public abstract class Behavior : Component
 
     /// <summary>Called every frame while the behavior and its entity are enabled.</summary>
     protected virtual void Update()
+    {
+    }
+
+    /// <summary>
+    /// Called every frame after <see cref="Update"/>, once everything else has moved: physics, pickups and damage, and
+    /// cameras following their targets. Good for a camera of your own, or something that stays by what moved. Screen
+    /// anchors are placed afterwards, so they stay pinned to wherever the camera ends up.
+    /// </summary>
+    protected virtual void LateUpdate()
     {
     }
 
@@ -137,6 +146,14 @@ public abstract class Behavior : Component
     /// <summary>Stops every message listener this behavior started.</summary>
     protected void StopListening() => Game.StopListening(this);
 
+    /// <summary>
+    /// Runs <paramref name="system"/> every frame until this entity is destroyed or left behind by a scene change, or
+    /// the script is reloaded; see <see cref="GameSystem"/>. Add it in <see cref="Start"/>. A system of the same type is
+    /// replaced, so a scene that adds one each time it starts still runs just one.
+    /// </summary>
+    /// <example><code>protected override void Start() => AddSystem(new Magnets());</code></example>
+    protected T AddSystem<T>(T system) where T : GameSystem => Game.AddSystem(system, this);
+
     /// <summary>Yield this from a coroutine to wait <paramref name="seconds"/> of game time.</summary>
     protected static WaitSeconds Wait(float seconds) => new(seconds);
 
@@ -178,6 +195,8 @@ public abstract class Behavior : Component
 
     internal void RunUpdate() => Update();
 
+    internal void RunLateUpdate() => LateUpdate();
+
     internal void RunCollision(Entity other) => OnCollision(other);
 
     internal void RunTrigger(Entity other, bool entered)
@@ -190,9 +209,17 @@ public abstract class Behavior : Component
 
     internal void RunClick() => OnClick();
 
-    internal void RunDamage(float amount, Entity? source) => OnDamage(amount, source);
+    void IHealthListener.Damaged(float amount, Entity? source)
+    {
+        if (IsStarted)
+            OnDamage(amount, source);
+    }
 
-    internal void RunDeath() => OnDeath();
+    void IHealthListener.Died()
+    {
+        if (IsStarted)
+            OnDeath();
+    }
 
     internal void RunPickup(Entity pickup) => OnPickup(pickup);
 

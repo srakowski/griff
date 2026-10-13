@@ -1,4 +1,4 @@
-using GriffKey = Griff.Runtime.Key;
+using GriffKey = Griff.Input.Key;
 using WpfKey = System.Windows.Input.Key;
 
 namespace Griff.Platform.Windows;

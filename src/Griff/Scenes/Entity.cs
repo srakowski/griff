@@ -29,6 +29,21 @@ public sealed class Entity
 
     public bool IsEnabled { get; set; } = true;
 
+    /// <summary>True if this entity and all its parents are <see cref="IsEnabled"/>: the game runs and draws it.</summary>
+    public bool IsActive
+    {
+        get
+        {
+            for (var current = this; current is not null; current = current.Parent)
+            {
+                if (!current.IsEnabled)
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>
     /// Locked in the editor: clicks and box selections in the Scene view pass through it (and everything inside it) to
     /// what's behind, though the Hierarchy still selects it. The game ignores it.
@@ -77,6 +92,13 @@ public sealed class Entity
     /// by this player, or moved by another player (on the host). See <c>Runtime.NetSession</c>.
     /// </summary>
     internal NetFlags NetFlags { get; set; }
+
+    /// <summary>True if this machine runs the entity's gameplay: everything offline, and everything on the host.</summary>
+    internal bool RunsHere => (NetFlags & NetFlags.Replicated) == 0;
+
+    /// <summary>True if this machine moves the entity: what it runs, except other players' own characters, and this player's own.</summary>
+    internal bool MovesHere =>
+        (NetFlags & (NetFlags.Replicated | NetFlags.RemoteMoved)) == 0 || (NetFlags & NetFlags.OwnMoved) != 0;
 
     /// <summary>All components, starting with <see cref="Transform"/>.</summary>
     public IReadOnlyList<Component> Components => _components;

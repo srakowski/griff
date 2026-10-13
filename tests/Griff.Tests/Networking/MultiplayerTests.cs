@@ -1,5 +1,6 @@
 using System.Net;
 using System.Numerics;
+using Griff.Input;
 using Griff.Networking;
 using Griff.Runtime;
 using Griff.Scenes;

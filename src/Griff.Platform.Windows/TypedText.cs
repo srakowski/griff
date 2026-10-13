@@ -10,7 +10,7 @@ public static class TypedText
     private const uint DontChangeKeyboardState = 0x4;
 
     /// <summary>The characters <paramref name="key"/> types right now, or "" for keys that don't type anything.</summary>
-    public static string Of(Key key)
+    public static string Of(System.Windows.Input.Key key)
     {
         try
         {

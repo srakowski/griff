@@ -39,8 +39,8 @@ public sealed partial class Game
     // Before followers move: a follower's target that has crossed into another room takes the camera over to it.
     private void RunRooms()
     {
-        var rooms = Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Room>()).ToList();
-        foreach (var follow in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
+        var rooms = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Room>()).ToList();
+        foreach (var follow in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
         {
             var camera = follow.Entity!.GetComponent<Camera>();
             if (camera is null)
@@ -107,7 +107,7 @@ public sealed partial class Game
     // Sound players that have just appeared play their sound if they're set to; scenes' music starts.
     private void RunSoundPlayers()
     {
-        foreach (var player in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>()))
+        foreach (var player in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>()))
         {
             if (player.Started)
                 continue;
@@ -116,7 +116,7 @@ public sealed partial class Game
                 Play(player);
         }
 
-        foreach (var music in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<BackgroundMusic>()))
+        foreach (var music in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<BackgroundMusic>()))
         {
             if (_startedMusic.Contains(music) || string.IsNullOrWhiteSpace(music.Music))
                 continue;
@@ -183,7 +183,7 @@ public sealed partial class Game
     private void RunSoundSources()
     {
         var live = new HashSet<SoundSource>();
-        foreach (var source in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<SoundSource>()))
+        foreach (var source in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundSource>()))
         {
             if (!source.Playing || string.IsNullOrWhiteSpace(source.Sound))
                 continue;
@@ -225,7 +225,7 @@ public sealed partial class Game
 
     private void RunLights()
     {
-        foreach (var light in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Light>()))
+        foreach (var light in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Light>()))
             light.AdvanceFlicker(Time.Delta);
     }
 }

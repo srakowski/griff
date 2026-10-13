@@ -192,7 +192,7 @@ public sealed class Follow : Component
         if (entity.GetComponent<Tilemap>() is { Width: > 0 } tilemap)
             return Transformed(new Vector2(0, -tilemap.Height * tilemap.TileSize), new Vector2(tilemap.Width * tilemap.TileSize, 0), world);
         if (entity.GetComponent<BoxCollider>() is { } box)
-            return Physics.BoundsOf(box);
+            return box.WorldBox;
         if (entity.GetComponent<Sprite>() is { } sprite)
             return Transformed(-sprite.Size / 2, sprite.Size / 2, world);
         return null;

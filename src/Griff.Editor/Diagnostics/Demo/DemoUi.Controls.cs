@@ -139,7 +139,7 @@ internal sealed partial class DemoUi
     }
 
     // The WPF key that types a Griff key (the demo presses real keys).
-    private static WpfKey DemoKey(Griff.Runtime.Key key) =>
+    private static WpfKey DemoKey(Griff.Input.Key key) =>
         Enum.GetValues<WpfKey>().FirstOrDefault(k => k != WpfKey.None && Griff.Platform.Windows.KeyMap.ToGriff(k) == key) is var wpf and not WpfKey.None
             ? wpf
             : throw new FormatException($"The demo can't press {key}.");

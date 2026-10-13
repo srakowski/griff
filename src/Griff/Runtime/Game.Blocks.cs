@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -13,13 +14,9 @@ public sealed partial class Game
     private const float SaveEvery = 2f;
 
     // The world's, or while the host runs another player's tools for them, that player's own HUD and tool state.
-    internal SandboxState Sandbox
-    {
-        get => _acting?.Sandbox ?? _sandbox;
-        private set => _sandbox = value;
-    }
+    internal SandboxState Sandbox => _acting?.Sandbox ?? _sandboxes.State;
 
-    private SandboxState _sandbox = new();
+    private readonly SandboxSystem _sandboxes = new();
 
     /// <summary>The sandbox HUD's layout for the view as it is now, if anything in the scene shows one.</summary>
     public SandboxHud? SandboxHud => Sandbox.Hud;
@@ -446,7 +443,7 @@ public sealed partial class Game
     private bool IsNear(Entity crafter, string station, float reach)
     {
         var here = CenterOf(crafter);
-        if (Scene.Entities.Any(e => e.Name.Equals(station, StringComparison.OrdinalIgnoreCase) && e != crafter && SceneRenderer.IsActive(e) &&
+        if (Scene.Entities.Any(e => e.Name.Equals(station, StringComparison.OrdinalIgnoreCase) && e != crafter && e.IsActive &&
                                     Vector2.Distance(CenterOf(e), here) <= reach))
             return true;
         foreach (var blocks in Active<Blocks>())
@@ -541,4 +538,14 @@ internal sealed class SandboxState
 
     // What wires last set each generic input to, so a wire only takes over when its signal changes.
     public Dictionary<(Entity Entity, string Port), float> Applied { get; } = [];
+}
+
+/// <summary>Block worlds and contraptions: the HUD, tools, worlds started and the rest of <see cref="SandboxState"/>.</summary>
+internal sealed class SandboxSystem : GameSystem
+{
+    public override string Name => "Sandbox";
+
+    public SandboxState State { get; private set; } = new();
+
+    protected override void SceneChanged() => State = new SandboxState();
 }

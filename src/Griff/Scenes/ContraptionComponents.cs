@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Griff.Input;
 using Griff.Runtime;
 
 namespace Griff.Scenes;

@@ -352,7 +352,7 @@ internal sealed class MoveSnapshot
     public static MoveSnapshot Take(Scene scene, int moves)
     {
         var snapshot = new MoveSnapshot(moves);
-        foreach (var entity in scene.Entities.Where(Rendering.SceneRenderer.IsActive))
+        foreach (var entity in scene.Entities.Where(e => e.IsActive))
         {
             if (entity.GetComponent<GridMovement>() is not { } m)
                 continue;
@@ -619,7 +619,7 @@ public sealed class Trail : Component
             Entity.GetComponent<Sprite>() is not { } sprite)
             return;
         _sinceCopy = 0;
-        foreach (var (world, source) in Rendering.SceneRenderer.SpritePieces(Entity, sprite))
+        foreach (var (world, source) in sprite.Pieces())
             _copies.Add(new TrailCopy(world, source, sprite.Image, sprite.Tint, 0));
     }
 

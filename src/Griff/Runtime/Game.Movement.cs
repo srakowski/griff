@@ -472,7 +472,7 @@ public sealed partial class Game
                 continue;
             }
 
-            if (!SceneRenderer.IsActive(entity))
+            if (!entity.IsActive)
             {
                 crumble.ShakeOffset = Vector2.Zero;
                 continue;

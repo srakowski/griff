@@ -235,7 +235,7 @@ public sealed partial class Game
         bool Hurtable(Entity e) => e != bump.Entity && Health.Of(e) is { IsDead: false } && bump.Hurts(e.GetComponent<Collider>()?.Layer);
         if (walls.MoverIn(cell) is { } mover)
             return Hurtable(mover) ? mover : null;
-        return Scene.Entities.Where(SceneRenderer.IsActive)
+        return Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<GridMovement>() is null && Hurtable(e) && grid.CellAt(Flat(e.Transform.WorldPosition)) == cell);
     }
 
@@ -274,7 +274,7 @@ public sealed partial class Game
     {
         if (player is null || args is not object?[] { Length: 1 } a || a[0] is not Entity victim || victim.Scene != Scene)
             return;
-        var attacker = Scene.Entities.Where(SceneRenderer.IsActive)
+        var attacker = Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && NetSession.OwnerIdOf(e) == player.Id);
         if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer))
             HitWithBump(bump, victim);
@@ -339,7 +339,7 @@ public sealed partial class Game
         if (player is null || args is not object?[] { Length: 2 } a || a[0] is not Entity crate || a[1] is not Vector2 direction ||
             crate.Scene != Scene)
             return;
-        var pusher = Scene.Entities.Where(SceneRenderer.IsActive)
+        var pusher = Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id);
         (int X, int Y) way = (Math.Sign(direction.X), Math.Sign(direction.Y));
         if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0) && CratesPushed(pusher, way, crate) is { } row)
@@ -376,7 +376,7 @@ public sealed partial class Game
 
         var wasChasing = chase.IsChasing;
         var chasing = false;
-        if (target is not null && SceneRenderer.IsActive(target) && Health.Of(target) is not { IsDead: true })
+        if (target is not null && target.IsActive && Health.Of(target) is not { IsDead: true })
         {
             var distance = Vector2.Distance(here, Flat(target.Transform.WorldPosition));
             var reach = wasChasing ? chase.Range + Math.Max(0, chase.GiveUp) : chase.Range;
@@ -631,7 +631,7 @@ public sealed partial class Game
                        (theirs.Length > 0 && CollisionLayers.Contains(theirs, layer));
             }
 
-            foreach (var other in game.Scene.Entities.Where(SceneRenderer.IsActive))
+            foreach (var other in game.Scene.Entities.Where(e => e.IsActive))
             {
                 if (other.IsSelfOrDescendantOf(entity))
                     continue;

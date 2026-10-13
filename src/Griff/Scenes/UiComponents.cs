@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 
 namespace Griff.Scenes;
 
@@ -155,7 +156,7 @@ public sealed class Button : Component
     public string? NeedsSaved { get; set; }
 
     /// <summary>A key that clicks the button too, e.g. Enter for a Play button. None for mouse only.</summary>
-    public Runtime.Key Shortcut { get; set; }
+    public Key Shortcut { get; set; }
 
     /// <summary>Plays when it's clicked, e.g. "Sounds/select.wav".</summary>
     [Group("Feel")]

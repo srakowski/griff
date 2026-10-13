@@ -74,6 +74,17 @@ public sealed class BoxCollider : Collider
 
     /// <inheritdoc/>
     public override string? IgnoreLayers { get; set; }
+
+    /// <summary>The box it covers in the world, from its entity's position and scale (not its rotation).</summary>
+    public Box WorldBox
+    {
+        get
+        {
+            var world = Entity!.Transform.WorldMatrix;
+            var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
+            return new Box(new Vector2(world.M41, world.M42) + Offset * scale, Size * scale / 2);
+        }
+    }
 }
 
 /// <summary>

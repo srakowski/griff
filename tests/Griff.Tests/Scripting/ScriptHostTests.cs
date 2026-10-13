@@ -155,6 +155,53 @@ public class ScriptHostTests
     }
 
     [Fact]
+    public void ScriptsSystems_RunEveryFrame_AndAReloadReplacesThem()
+    {
+        static string Source(string step) => $$"""
+            public class Push : GameSystem
+            {
+                public override FramePhase Phase => FramePhase.Simulate;
+
+                protected override void Update()
+                {
+                    foreach (var ship in Game.FindAll("Ship"))
+                        ship.Transform.Position += new Vector3({{step}}, 0);
+                }
+            }
+
+            public class Level : Behavior
+            {
+                public float CameraY { get; set; }
+
+                protected override void Start() => AddSystem(new Push());
+
+                protected override void LateUpdate() => CameraY = Game.Find("Ship")!.Transform.Position.Y;
+            }
+            """;
+
+        _host.Reload([new ScriptSource("Level.cs", Source("1, 0"))], []);
+        var scene = new Scene();
+        var ship = new Entity("Ship");
+        scene.Add(ship);
+        var level = new Entity("Level");
+        level.AddComponent(_registry.Find("Level")!.CreateInstance());
+        scene.Add(level);
+        var game = new Game(scene, new InputState());
+
+        game.Tick(0.016);
+        Assert.Equal(new Vector3(1, 0, 0), ship.Transform.Position);
+
+        // The new Level starts again and adds the new Push, which takes the old one's place.
+        var result = _host.Reload([new ScriptSource("Level.cs", Source("0, 1"))], [scene]);
+        game.Tick(0.016);
+
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+        Assert.Equal(new Vector3(1, 1, 0), ship.Transform.Position);
+        Assert.Single(game.Systems, s => s.Name == "Push");
+        Assert.Equal(1f, _registry.Find("Level")!.Properties.Single(p => p.Name == "CameraY").GetValue(level.Components[1]));
+    }
+
+    [Fact]
     public void FailedReload_LeavesEverythingRunning()
     {
         _host.Reload([new ScriptSource("Mover.cs", MoverV1)], []);

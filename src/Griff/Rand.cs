@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Griff.Runtime;
+namespace Griff;
 
 /// <summary>
 /// Random numbers for gameplay: spawn points, loot rolls, a little variety in juice.

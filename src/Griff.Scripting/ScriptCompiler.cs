@@ -46,6 +46,7 @@ public static class ScriptCompiler
         global using System.Linq;
         global using System.Numerics;
         global using Griff;
+        global using Griff.Input;
         global using Griff.Runtime;
         global using Griff.Scenes;
         """;

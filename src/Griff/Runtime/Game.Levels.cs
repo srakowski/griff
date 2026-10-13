@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -13,24 +14,10 @@ public sealed partial class Game
     // Within this of a waypoint counts as there.
     private const float WaypointReach = 0.15f;
 
-    // Teleported by a door and still touching one: it can't use a door again until it has stepped off them all.
-    private readonly HashSet<Entity> _arrivedByDoor = [];
-    private readonly HashSet<Dialogue> _dialoguesSeen = [];
-    private readonly HashSet<Dialogue> _dialoguesTouched = [];
-    private Dialogue? _talking;
-    private bool _talkJustStarted;
-    private float? _scaleBeforeTalk;
-
-    // The rows of the choices offered now, and where the mouse and stick were last frame (to notice them move).
-    private readonly List<int> _choiceRows = [];
-    private Vector2? _lastMouseOnChoices;
-    private int _lastChoiceStick;
-
-    // The row after the line showing and the choices under it: where the talk goes on.
-    private int _afterChoices;
+    private readonly LevelSystem _levels = new();
 
     /// <summary>The <see cref="Dialogue"/> being said right now, if any.</summary>
-    public Dialogue? Talking => _talking;
+    public Dialogue? Talking => _levels.Talking;
 
     /// <summary>
     /// Fades the screen to <paramref name="color"/> (black by default) over <paramref name="seconds"/> of real time, calls
@@ -53,15 +40,15 @@ public sealed partial class Game
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
     private List<T> Active<T>() where T : Component =>
-        Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+        Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own.
     private List<T> Moving<T>() where T : Component =>
-        Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+        Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // Everything showing, wherever it's run: for what only changes how things look.
     private List<T> Showing<T>() where T : Component =>
-        Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<T>()).ToList();
+        Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // Movers go before physics, so whatever stands on them is carried along this frame.
     private void RunMovers()
@@ -156,7 +143,7 @@ public sealed partial class Game
         var here = Flat(entity.Transform.WorldPosition);
         var wasChasing = chase.IsChasing;
         var chasing = false;
-        if (target is not null && SceneRenderer.IsActive(target) && Health.Of(target) is not { IsDead: true })
+        if (target is not null && target.IsActive && Health.Of(target) is not { IsDead: true })
         {
             var distance = Vector2.Distance(here, Flat(target.Transform.WorldPosition));
             var reach = wasChasing ? chase.Range + Math.Max(0, chase.GiveUp) : chase.Range;
@@ -267,7 +254,7 @@ public sealed partial class Game
             else if (!string.IsNullOrWhiteSpace(shooter.Target))
             {
                 var target = Nearest(shooter.Target.Trim(), here);
-                wantsToFire = target is not null && SceneRenderer.IsActive(target) && Health.Of(target) is not { IsDead: true };
+                wantsToFire = target is not null && target.IsActive && Health.Of(target) is not { IsDead: true };
                 if (target is not null)
                 {
                     aim = Flat(target.Transform.WorldPosition) - here;
@@ -316,7 +303,7 @@ public sealed partial class Game
     private void RunCheckpoints()
     {
         var all = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Checkpoint>()).ToList();
-        foreach (var checkpoint in all.Where(c => SceneRenderer.IsActive(c.Entity!)))
+        foreach (var checkpoint in all.Where(c => c.Entity!.IsActive))
         {
             if (checkpoint.Active)
                 continue;
@@ -363,7 +350,7 @@ public sealed partial class Game
             if (health.RespawnLeft > 0)
                 continue;
 
-            var checkpoint = Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Checkpoint>()).FirstOrDefault(c => c.Active);
+            var checkpoint = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Checkpoint>()).FirstOrDefault(c => c.Active);
             var position = checkpoint is not null ? Flat(checkpoint.Entity!.Transform.WorldPosition) : health.Home ?? Flat(entity.Transform.WorldPosition);
             entity.IsEnabled = true;
             PlaceAt(entity, position);
@@ -394,7 +381,7 @@ public sealed partial class Game
         {
             var users = TouchersOf(door.Entity!).Where(t => door.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
             touchingAnyDoor.UnionWith(users);
-            var ready = door.Locked ? [] : users.Where(u => !_arrivedByDoor.Contains(u) && CanUnlock(door, u)).ToList();
+            var ready = door.Locked ? [] : users.Where(u => !_levels.ArrivedByDoor.Contains(u) && CanUnlock(door, u)).ToList();
             ShowPrompt(door.Entity!, door.Prompt, ready.Count > 0);
 
             // One trip at a time: not while a scene change or another door's fade is under way.
@@ -408,7 +395,7 @@ public sealed partial class Game
 
         // Physics only reports touches while game time runs; don't forget arrivals during a pause.
         if (Time.Delta > 0)
-            _arrivedByDoor.IntersectWith(touchingAnyDoor);
+            _levels.ArrivedByDoor.IntersectWith(touchingAnyDoor);
     }
 
     private void UseDoor(Door door, Entity user)
@@ -426,7 +413,7 @@ public sealed partial class Game
 
         if (string.IsNullOrWhiteSpace(door.Target) || Find(door.Target.Trim()) is not { } target)
             return;
-        _arrivedByDoor.Add(user);
+        _levels.ArrivedByDoor.Add(user);
 
         // Another player's trip through a door doesn't fade this screen.
         if (Net.IsOnline && !Net.IsMine(user))
@@ -447,13 +434,13 @@ public sealed partial class Game
     {
         if (PausedThisFrame)
             return;
-        if (_talking is { } talking)
+        if (_levels.Talking is { } talking)
         {
             if (talking.Entity?.Scene != Scene)
                 EndDialogue(finished: false);
-            else if (!_talkJustStarted && !RunChoices(talking) && Input.WasPressed("Interact"))
+            else if (!_levels.TalkJustStarted && !RunChoices(talking) && Input.WasPressed("Interact"))
                 AdvanceDialogue(talking);
-            _talkJustStarted = false;
+            _levels.TalkJustStarted = false;
             return;
         }
 
@@ -461,7 +448,7 @@ public sealed partial class Game
         foreach (var dialogue in Showing<Dialogue>())
         {
             // Boxes are hidden until there's something to say.
-            if (_dialoguesSeen.Add(dialogue) && BoxOf(dialogue) is { } box)
+            if (_levels.DialoguesSeen.Add(dialogue) && BoxOf(dialogue) is { } box)
                 box.IsEnabled = false;
 
             var available = !(dialogue.Once && dialogue.IsDone) && dialogue.Lines.Count > 0;
@@ -471,20 +458,20 @@ public sealed partial class Game
                 touched.Add(dialogue);
             ShowPrompt(dialogue.Entity!, dialogue.Prompt, touching && dialogue.Start == DialogueStart.Interact);
 
-            if (!touching || _talking is not null)
+            if (!touching || _levels.Talking is not null)
                 continue;
             var starts = dialogue.Start == DialogueStart.Touch
-                ? !_dialoguesTouched.Contains(dialogue)
+                ? !_levels.DialoguesTouched.Contains(dialogue)
                 : Input.WasPressed("Interact");
             if (starts)
                 StartDialogue(dialogue);
         }
 
         // Touches only come from physics, which a paused game doesn't run: keep the last ones until it runs again.
-        if (Time.Delta > 0 || _talking is not null)
+        if (Time.Delta > 0 || _levels.Talking is not null)
         {
-            _dialoguesTouched.Clear();
-            _dialoguesTouched.UnionWith(touched);
+            _levels.DialoguesTouched.Clear();
+            _levels.DialoguesTouched.UnionWith(touched);
         }
     }
 
@@ -495,11 +482,11 @@ public sealed partial class Game
     /// </summary>
     public void StartDialogue(Dialogue dialogue)
     {
-        if (_talking is not null || dialogue.Lines.Count == 0 || dialogue.Entity?.Scene != Scene)
+        if (_levels.Talking is not null || dialogue.Lines.Count == 0 || dialogue.Entity?.Scene != Scene)
             return;
         dialogue.CheckParts();
-        _talking = dialogue;
-        _talkJustStarted = true;
+        _levels.Talking = dialogue;
+        _levels.TalkJustStarted = true;
         dialogue.IsTalking = true;
         dialogue.Line = 0;
         ShowPrompt(dialogue.Entity!, dialogue.Prompt, false);
@@ -507,7 +494,7 @@ public sealed partial class Game
             box.IsEnabled = true;
         if (dialogue.PauseGame)
         {
-            _scaleBeforeTalk = Time.Scale;
+            _levels.ScaleBeforeTalk = Time.Scale;
             Time.Scale = 0;
         }
 
@@ -521,7 +508,7 @@ public sealed partial class Game
     /// </summary>
     public void AdvanceDialogue(Dialogue dialogue)
     {
-        if (_talking != dialogue)
+        if (_levels.Talking != dialogue)
             return;
         if (LineText(dialogue)?.Entity?.GetComponent<Typewriter>() is { IsDone: false } typewriter)
         {
@@ -532,7 +519,7 @@ public sealed partial class Game
         if (dialogue.Choices.Count > 0)
             ChooseDialogue(dialogue, dialogue.Picked);
         else
-            SayFrom(dialogue, _afterChoices);
+            SayFrom(dialogue, _levels.AfterChoices);
     }
 
     /// <summary>
@@ -541,14 +528,14 @@ public sealed partial class Game
     /// </summary>
     public void ChooseDialogue(Dialogue dialogue, int choice)
     {
-        if (_talking != dialogue || choice < 0 || choice >= _choiceRows.Count)
+        if (_levels.Talking != dialogue || choice < 0 || choice >= _levels.ChoiceRows.Count)
             return;
-        var picked = dialogue.Row(_choiceRows[choice]);
-        var after = _afterChoices;
+        var picked = dialogue.Row(_levels.ChoiceRows[choice]);
+        var after = _levels.AfterChoices;
         dialogue.Picked = choice;
         DoTags(dialogue, picked.Tags);
         dialogue.RaiseChosen(choice);
-        if (_talking != dialogue)
+        if (_levels.Talking != dialogue)
             return;
 
         if (string.IsNullOrEmpty(picked.To))
@@ -619,7 +606,7 @@ public sealed partial class Game
         // Rows of tags can change what's said on a second time round a loop, so allow a few.
         for (var steps = 0; steps <= (dialogue.Lines.Count + 1) * 4; steps++)
         {
-            if (_talking != dialogue)
+            if (_levels.Talking != dialogue)
                 return;
             if (row >= dialogue.Lines.Count)
             {
@@ -658,7 +645,7 @@ public sealed partial class Game
                     continue;
                 case Dialogue.RowKind.GoTo:
                     DoTags(dialogue, line.Tags);
-                    if (_talking != dialogue)
+                    if (_levels.Talking != dialogue)
                         return;
                     if (string.IsNullOrEmpty(line.To) || dialogue.RowAfterPart(line.To) is not { } next)
                     {
@@ -713,13 +700,13 @@ public sealed partial class Game
         if (line.Kind == Dialogue.RowKind.Said)
         {
             DoTags(dialogue, line.Tags);
-            if (_talking != dialogue)
+            if (_levels.Talking != dialogue)
                 return;
             choices = ChoicesUnder(dialogue, row);
         }
 
         var hasChoices = choices != row || line.Kind == Dialogue.RowKind.Choice;
-        _afterChoices = hasChoices ? AfterChoices(dialogue, choices) : row + 1;
+        _levels.AfterChoices = hasChoices ? AfterChoices(dialogue, choices) : row + 1;
 
         // Said by the speaker it starts with ("Guide: ..."), or else the one on the dialogue's own entity.
         var (who, said) = line.Kind == Dialogue.RowKind.Said && !line.AsIs ? Dialogue.SplitSpeaker(line.Text) : (null, line.Text);
@@ -728,17 +715,17 @@ public sealed partial class Game
         dialogue.Said = line.Kind == Dialogue.RowKind.Choice ? null : named is null ? line.Text : said;
         ShowSpeaker(dialogue);
 
-        _choiceRows.Clear();
+        _levels.ChoiceRows.Clear();
         if (hasChoices)
-            _choiceRows.AddRange(OfferedChoices(dialogue, choices, _afterChoices));
-        dialogue.Choices = _choiceRows.Select(r => dialogue.Row(r).Text).ToList();
+            _levels.ChoiceRows.AddRange(OfferedChoices(dialogue, choices, _levels.AfterChoices));
+        dialogue.Choices = _levels.ChoiceRows.Select(r => dialogue.Row(r).Text).ToList();
         dialogue.Picked = 0;
-        _lastMouseOnChoices = null;
-        _lastChoiceStick = ChoiceStick;
+        _levels.LastMouseOnChoices = null;
+        _levels.LastChoiceStick = ChoiceStick;
 
         if (LineText(dialogue) is { } text)
         {
-            _lastMouseOnChoices = MouseOn(text);
+            _levels.LastMouseOnChoices = MouseOn(text);
             text.Value = LineWithChoices(dialogue, text.Align);
             text.Entity!.GetComponent<Typewriter>()?.Restart();
         }
@@ -803,10 +790,10 @@ public sealed partial class Game
         var count = dialogue.Choices.Count;
         var stick = ChoiceStick;
         var up = Input.WasPressed(Key.Up) || Input.WasPressed(Key.W) || Input.WasPressed(GamepadButton.DPadUp) ||
-                 (stick > 0 && _lastChoiceStick <= 0);
+                 (stick > 0 && _levels.LastChoiceStick <= 0);
         var down = Input.WasPressed(Key.Down) || Input.WasPressed(Key.S) || Input.WasPressed(GamepadButton.DPadDown) ||
-                   (stick < 0 && _lastChoiceStick >= 0);
-        _lastChoiceStick = stick;
+                   (stick < 0 && _levels.LastChoiceStick >= 0);
+        _levels.LastChoiceStick = stick;
         var picked = dialogue.Picked;
         if (up)
             picked = (picked + count - 1) % count;
@@ -816,8 +803,8 @@ public sealed partial class Game
         // The mouse picks what it moves onto, so a mouse left where it was doesn't fight the keys.
         var hovered = ChoiceUnderMouse(dialogue, text);
         var onText = MouseOn(text);
-        var mouseMoved = _lastMouseOnChoices is { } last && Vector2.DistanceSquared(last, onText) > 1e-8f;
-        _lastMouseOnChoices = onText;
+        var mouseMoved = _levels.LastMouseOnChoices is { } last && Vector2.DistanceSquared(last, onText) > 1e-8f;
+        _levels.LastMouseOnChoices = onText;
         if (hovered is { } under && mouseMoved)
             picked = under;
 
@@ -877,20 +864,20 @@ public sealed partial class Game
         return line >= 0 && line < lines && choice >= 0 ? choice : null;
     }
 
-    private void EndDialogue(bool finished)
+    internal void EndDialogue(bool finished)
     {
-        if (_talking is not { } dialogue)
+        if (_levels.Talking is not { } dialogue)
             return;
-        _talking = null;
+        _levels.Talking = null;
         dialogue.IsTalking = false;
         dialogue.Choices = [];
         (dialogue.Speaker, dialogue.Said) = (null, null);
-        _choiceRows.Clear();
+        _levels.ChoiceRows.Clear();
         if (dialogue.Entity?.Scene == Scene && BoxOf(dialogue) is { } box)
             box.IsEnabled = false;
-        if (_scaleBeforeTalk is { } scale)
+        if (_levels.ScaleBeforeTalk is { } scale)
             Time.Scale = scale;
-        _scaleBeforeTalk = null;
+        _levels.ScaleBeforeTalk = null;
 
         if (!finished)
             return;
@@ -926,14 +913,43 @@ public sealed partial class Game
             prompt.IsEnabled = show;
     }
 
-    // Leaving a scene leaves its doors and conversations behind.
-    private void ForgetLevelState()
-    {
-        EndDialogue(finished: false);
-        _arrivedByDoor.Clear();
-        _dialoguesSeen.Clear();
-        _dialoguesTouched.Clear();
-    }
-
     private static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
+}
+
+/// <summary>Doors and conversations: who just came through a door, the dialogues seen and touched, and the one being said.</summary>
+internal sealed class LevelSystem : GameSystem
+{
+    public override string Name => "Levels";
+
+    // Teleported by a door and still touching one: it can't use a door again until it has stepped off them all.
+    public HashSet<Entity> ArrivedByDoor { get; } = [];
+
+    public HashSet<Dialogue> DialoguesSeen { get; } = [];
+
+    public HashSet<Dialogue> DialoguesTouched { get; } = [];
+
+    public Dialogue? Talking { get; set; }
+
+    public bool TalkJustStarted { get; set; }
+
+    public float? ScaleBeforeTalk { get; set; }
+
+    // The rows of the choices offered now, and where the mouse and stick were last frame (to notice them move).
+    public List<int> ChoiceRows { get; } = [];
+
+    public Vector2? LastMouseOnChoices { get; set; }
+
+    public int LastChoiceStick { get; set; }
+
+    // The row after the line showing and the choices under it: where the talk goes on.
+    public int AfterChoices { get; set; }
+
+    // Leaving a scene leaves its doors and conversations behind.
+    protected override void SceneChanged()
+    {
+        Game.EndDialogue(finished: false);
+        ArrivedByDoor.Clear();
+        DialoguesSeen.Clear();
+        DialoguesTouched.Clear();
+    }
 }

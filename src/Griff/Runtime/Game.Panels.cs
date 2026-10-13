@@ -1,3 +1,4 @@
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -6,24 +7,20 @@ namespace Griff.Runtime;
 // Panels (pause menus, options, shops) that open over the game, and the controls screen's rebinding.
 public sealed partial class Game
 {
-    // Open panels, oldest first, each with what was picked before it opened (given back as it closes).
-    private readonly List<(Panel Panel, Component? FocusBefore)> _openPanels = [];
-    private readonly HashSet<Panel> _panelsSeen = [];
-    private Button? _rebindButton;
+    private readonly PanelSystem _panels = new();
     private bool _pausedAtStart;
-    private string? _rebinding;
 
     /// <summary>The open <see cref="Panel"/> the player's input goes to (the one opened last), if any.</summary>
-    public Panel? TopPanel => _openPanels.Count > 0 ? _openPanels[^1].Panel : null;
+    public Panel? TopPanel => _panels.Open.Count > 0 ? _panels.Open[^1].Panel : null;
 
     /// <summary>Every open panel, the one underneath the rest first.</summary>
-    public IReadOnlyList<Panel> OpenPanels => _openPanels.Select(p => p.Panel).ToList();
+    public IReadOnlyList<Panel> OpenPanels => _panels.Open.Select(p => p.Panel).ToList();
 
     /// <summary>True while an open panel pauses the game (see <see cref="Panel.PauseGame"/> and <see cref="Time.IsPaused"/>).</summary>
     public bool IsPaused => Time.IsPaused;
 
     /// <summary>The input action waiting for the player to press its new key or button, if any (see <see cref="ListenForBinding"/>).</summary>
-    public string? Rebinding => _rebinding;
+    public string? Rebinding => _panels.Rebinding;
 
     /// <summary>
     /// Opens <paramref name="panel"/> on top of any already open: its entity shows, its top control (or its
@@ -69,8 +66,8 @@ public sealed partial class Game
     public void ListenForBinding(string action)
     {
         _ = Input.BindingsOf(action); // Throws, naming the actions there are, if it's misspelled.
-        StopListening();
-        _rebinding = action.Trim();
+        StopRebinding();
+        _panels.Rebinding = action.Trim();
     }
 
     // Paused at any point this frame: the press that clicks Resume doesn't also jump, or work a lever.
@@ -81,7 +78,7 @@ public sealed partial class Game
 
     private static bool Inside(Entity entity, Panel panel) => panel.Entity is { } owner && entity.IsSelfOrDescendantOf(owner);
 
-    private bool InOpenPanel(Entity entity) => _openPanels.Any(p => Inside(entity, p.Panel));
+    private bool InOpenPanel(Entity entity) => _panels.Open.Any(p => Inside(entity, p.Panel));
 
     // Brings the list of open panels up to date with which are showing (scripts may show and hide them), hiding panels the
     // first time they're seen unless they're meant to start open. Runs at the start of each frame, before anything starts,
@@ -91,18 +88,18 @@ public sealed partial class Game
         var panels = Scene.Entities.SelectMany(e => e.GetComponents<Panel>()).ToList();
         foreach (var panel in panels)
         {
-            if (_panelsSeen.Add(panel) && !panel.Open)
+            if (_panels.Seen.Add(panel) && !panel.Open)
                 panel.Entity!.IsEnabled = false;
         }
 
-        for (var i = _openPanels.Count - 1; i >= 0; i--)
+        for (var i = _panels.Open.Count - 1; i >= 0; i--)
         {
-            var (panel, before) = _openPanels[i];
-            if (panel.Entity is { } entity && entity.Scene == Scene && SceneRenderer.IsActive(entity))
+            var (panel, before) = _panels.Open[i];
+            if (panel.Entity is { } entity && entity.Scene == Scene && entity.IsActive)
                 continue;
 
-            var wasTop = i == _openPanels.Count - 1;
-            _openPanels.RemoveAt(i);
+            var wasTop = i == _panels.Open.Count - 1;
+            _panels.Open.RemoveAt(i);
             panel.IsTop = false;
             if (panel.Entity is { } closed && closed.Scene == Scene)
             {
@@ -112,13 +109,13 @@ public sealed partial class Game
             }
 
             if (wasTop)
-                _focus = before is not null && before.Entity?.Scene == Scene && SceneRenderer.IsActive(before.Entity) ? before : null;
+                _focus = before is not null && before.Entity?.Scene == Scene && before.Entity.IsActive ? before : null;
             panel.RaiseClosed();
         }
 
-        foreach (var panel in panels.Where(p => SceneRenderer.IsActive(p.Entity!) && _openPanels.All(o => o.Panel != p)))
+        foreach (var panel in panels.Where(p => p.Entity!.IsActive && _panels.Open.All(o => o.Panel != p)))
         {
-            _openPanels.Add((panel, _focus));
+            _panels.Open.Add((panel, _focus));
             panel.Open = true;
             _focus = FirstControlOf(panel);
             if (!string.IsNullOrWhiteSpace(panel.Sound))
@@ -126,16 +123,16 @@ public sealed partial class Game
             panel.RaiseOpened();
         }
 
-        foreach (var (panel, _) in _openPanels)
+        foreach (var (panel, _) in _panels.Open)
             panel.IsTop = panel == TopPanel;
         // A network game is shared, so it can't stop for one player's menu (their keys just don't reach it meanwhile).
-        Time.IsPaused = !Net.IsOnline && _openPanels.Any(p => p.Panel.PauseGame);
+        Time.IsPaused = !Net.IsOnline && _panels.Open.Any(p => p.Panel.PauseGame);
     }
 
     // Its First if that names a control on it, else its top control.
     private Component? FirstControlOf(Panel panel)
     {
-        var controls = panel.Entity!.SelfAndDescendants().Where(SceneRenderer.IsActive)
+        var controls = panel.Entity!.SelfAndDescendants().Where(e => e.IsActive)
             .SelectMany(e => e.Components)
             .Where(c => c is Button { Navigable: true, Interactable: true } button && HasWhatItNeeds(button) || c is Slider { Navigable: true })
             .ToList();
@@ -170,7 +167,7 @@ public sealed partial class Game
         {
             if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled)
                 continue;
-            if ((panel.Entity.Parent is null || SceneRenderer.IsActive(panel.Entity.Parent)) && Input.WasPressed(panel.OpenOn))
+            if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && Input.WasPressed(panel.OpenOn))
             {
                 OpenPanel(panel);
                 return;
@@ -182,11 +179,11 @@ public sealed partial class Game
     // ignore input.
     private bool UpdateRebinding()
     {
-        if (_rebinding is not { } action)
+        if (_panels.Rebinding is not { } action)
             return false;
-        if (_rebindButton is not null && (_rebindButton.Entity?.Scene != Scene || !SceneRenderer.IsActive(_rebindButton.Entity)))
+        if (_panels.RebindButton is not null && (_panels.RebindButton.Entity?.Scene != Scene || !_panels.RebindButton.Entity.IsActive))
         {
-            StopListening();
+            StopRebinding();
             return false;
         }
 
@@ -199,34 +196,49 @@ public sealed partial class Game
             Input.Rebind(action, [pressed, .. kept]);
         }
 
-        StopListening();
+        StopRebinding();
         return true;
     }
 
-    private void StopListening()
+    internal void StopRebinding()
     {
-        _rebinding = null;
-        if (_rebindButton is not null)
-            _rebindButton.IsListening = false;
-        _rebindButton = null;
+        _panels.Rebinding = null;
+        if (_panels.RebindButton is not null)
+            _panels.RebindButton.IsListening = false;
+        _panels.RebindButton = null;
     }
 
     // "Press {Interact}" shows the key or button that does it on the device in use.
     private void FillPrompts()
     {
-        foreach (var text in Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<Text>()))
+        foreach (var text in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Text>()))
         {
             if (text.Value is { } value && value.Contains('{'))
-                text.SetShown(InputPrompts.Fill(Input, value, _rebinding));
+                text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));
         }
     }
+}
+
+/// <summary>Panels: those open, those already seen, and the action a controls screen is rebinding.</summary>
+internal sealed class PanelSystem : GameSystem
+{
+    public override string Name => "Panels";
+
+    // Oldest first, each with what was picked before it opened (given back as it closes).
+    public List<(Panel Panel, Component? FocusBefore)> Open { get; } = [];
+
+    public HashSet<Panel> Seen { get; } = [];
+
+    public Button? RebindButton { get; set; }
+
+    public string? Rebinding { get; set; }
 
     // Leaving a scene leaves its panels behind; kept panels are seen afresh in the next.
-    private void ForgetPanelState()
+    protected override void SceneChanged()
     {
-        _openPanels.Clear();
-        _panelsSeen.Clear();
-        StopListening();
+        Open.Clear();
+        Seen.Clear();
+        Game.StopRebinding();
         Time.IsPaused = false;
     }
 }

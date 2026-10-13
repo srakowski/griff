@@ -211,7 +211,7 @@ public static partial class SceneRenderer
     public static IEnumerable<LightDraw> LightDraws(Scene scene)
     {
         List<ShadowEdge>? edges = null;
-        foreach (var light in scene.Entities.Where(IsActive).SelectMany(e => e.GetComponents<Light>()))
+        foreach (var light in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Light>()))
         {
             var intensity = light.CurrentIntensity;
             if (!(light.Radius > 0) || !(intensity > 0))
@@ -275,8 +275,8 @@ public static partial class SceneRenderer
     // What an iris closes in on: the entity called Player, or else the first with no-code movement.
     private static Vector2? IrisCenter(Scene scene)
     {
-        var player = scene.Entities.FirstOrDefault(e => e.Name == "Player" && IsActive(e))
-                     ?? scene.Entities.FirstOrDefault(e => IsActive(e) && (e.GetComponent<PlatformerMovement>() is not null || e.GetComponent<TopDownMovement>() is not null || e.GetComponent<GridMovement>() is not null));
+        var player = scene.Entities.FirstOrDefault(e => e.Name == "Player" && e.IsActive)
+                     ?? scene.Entities.FirstOrDefault(e => e.IsActive && (e.GetComponent<PlatformerMovement>() is not null || e.GetComponent<TopDownMovement>() is not null || e.GetComponent<GridMovement>() is not null));
         if (player is null)
             return null;
         var position = player.Transform.WorldPosition;
@@ -337,7 +337,7 @@ public static partial class SceneRenderer
 
     /// <summary>The first enabled entity with a Camera, in hierarchy order.</summary>
     public static Entity? FindCamera(Scene scene) =>
-        scene.Entities.FirstOrDefault(e => IsActive(e) && e.GetComponent<Camera>() is not null);
+        scene.Entities.FirstOrDefault(e => e.IsActive && e.GetComponent<Camera>() is not null);
 
     /// <summary>
     /// Orthographic projection of the camera's view. <paramref name="size"/> is half the visible height;
@@ -369,7 +369,7 @@ public static partial class SceneRenderer
     {
         var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
         return scene.Entities
-            .Where(e => OrderOf(e) is not null && IsActive(e))
+            .Where(e => OrderOf(e) is not null && e.IsActive)
             .Select((entity, index) => (entity, index))
             .OrderBy(x => IsLifted(x.entity))
             .ThenBy(x => OrderOf(x.entity))
@@ -451,13 +451,13 @@ public static partial class SceneRenderer
 
         // Only the sprite repeats (all nine pieces of a sliced one); the entity's text and particles are drawn once.
         var sprite = (entity.GetComponent<Tilemap>() is { } tilemap ? tilemap.Cells().Count() : 0) + TrailDraws(entity).Count();
-        var pieces = SpritePieces(entity, entity.GetComponent<Sprite>()!).Count();
+        var pieces = entity.GetComponent<Sprite>()!.Pieces().Count();
         if (pieces == 1)
             return draws.SelectMany((d, i) => i == sprite ? Repeated(d, parallax, view) : [d]);
 
         // The pieces repeat together, a whole sprite apart.
         var list = draws.ToList();
-        var whole = list[sprite] with { World = QuadMatrix(entity, entity.GetComponent<Sprite>()!) * Matrix4x4.CreateTranslation(shift.X, shift.Y, 0) };
+        var whole = list[sprite] with { World = entity.GetComponent<Sprite>()!.QuadMatrix * Matrix4x4.CreateTranslation(shift.X, shift.Y, 0) };
         var offsets = Repeated(whole, parallax, view).Select(d => new Vector2(d.World.M41 - whole.World.M41, d.World.M42 - whole.World.M42)).ToList();
         return list.SelectMany((d, i) => i >= sprite && i < sprite + pieces
             ? offsets.Select(o => d with { World = d.World * Matrix4x4.CreateTranslation(o.X, o.Y, 0) })
@@ -580,7 +580,7 @@ public static partial class SceneRenderer
             // A crate resting on a goal turns the goal's color, as faded as it was.
             if (entity.GetComponent<Pushable>() is { GoalTint: { } onGoal })
                 tint = onGoal with { A = onGoal.A * tint.A };
-            foreach (var (world, source) in SpritePieces(entity, sprite))
+            foreach (var (world, source) in sprite.Pieces())
                 yield return new SpriteDraw(world, sprite.Image, tint, entity) { Source = source, Flash = sprite.FlashOverlay };
         }
 
@@ -712,60 +712,4 @@ public static partial class SceneRenderer
     private static SpriteDraw Rect(Entity entity, Vector2 center, Vector2 size, Color color) =>
         new(Matrix4x4.CreateScale(size.X, size.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * entity.Transform.WorldMatrix,
             null, color, entity);
-
-    /// <summary>True if the entity and all its ancestors are enabled.</summary>
-    public static bool IsActive(Entity entity)
-    {
-        for (var e = entity; e is not null; e = e.Parent)
-        {
-            if (!e.IsEnabled)
-                return false;
-        }
-
-        return true;
-    }
-
-    private static bool IsSliced(Sprite sprite) => sprite.Slice > 0 && sprite.SliceSize > 0;
-
-    /// <summary>
-    /// The quads a sprite is drawn with and the part of its image on each: one, or nine for a <see cref="Sprite.Slice"/>d
-    /// sprite (corners, edges, middle; left to right, top to bottom).
-    /// </summary>
-    public static IEnumerable<(Matrix4x4 World, Vector4 Source)> SpritePieces(Entity entity, Sprite sprite)
-    {
-        var frame = sprite.FrameRect;
-        if (!IsSliced(sprite))
-        {
-            yield return (QuadMatrix(entity, sprite), frame);
-            yield break;
-        }
-
-        // Edges of the three columns and rows, in the sprite's own space (-size/2..size/2, Y up) and in the frame (V down).
-        var size = Vector2.Abs(sprite.Size);
-        var border = Vector2.Min(new Vector2(sprite.SliceSize), size / 2);
-        var slice = Math.Min(sprite.Slice, 0.5f);
-        float[] xs = [-size.X / 2, -size.X / 2 + border.X, size.X / 2 - border.X, size.X / 2];
-        float[] ys = [size.Y / 2, size.Y / 2 - border.Y, -size.Y / 2 + border.Y, -size.Y / 2];
-        float[] us = [frame.X, frame.X + frame.Z * slice, frame.X + frame.Z * (1 - slice), frame.X + frame.Z];
-        float[] vs = [frame.Y, frame.Y + frame.W * slice, frame.Y + frame.W * (1 - slice), frame.Y + frame.W];
-        var outside = Matrix4x4.CreateScale(MathF.Sign(sprite.Size.X) * (sprite.FlipX ? -1 : 1), MathF.Sign(sprite.Size.Y) * (sprite.FlipY ? -1 : 1), 1) *
-                      entity.Transform.WorldMatrix;
-        for (var row = 0; row < 3; row++)
-        {
-            for (var column = 0; column < 3; column++)
-            {
-                var width = xs[column + 1] - xs[column];
-                var height = ys[row] - ys[row + 1];
-                if (width <= 0 || height <= 0)
-                    continue;
-                var center = new Vector2(xs[column] + xs[column + 1], ys[row] + ys[row + 1]) / 2;
-                var piece = Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0);
-                yield return (piece * outside, new Vector4(us[column], vs[row], us[column + 1] - us[column], vs[row + 1] - vs[row]));
-            }
-        }
-    }
-
-    private static Matrix4x4 QuadMatrix(Entity entity, Sprite sprite) =>
-        Matrix4x4.CreateScale(sprite.Size.X * (sprite.FlipX ? -1 : 1), sprite.Size.Y * (sprite.FlipY ? -1 : 1), 1) *
-        entity.Transform.WorldMatrix;
 }

@@ -49,7 +49,7 @@ public static class Shadows
     public static List<ShadowEdge> Edges(Scene scene)
     {
         var edges = new List<ShadowEdge>();
-        foreach (var entity in scene.Entities.Where(SceneRenderer.IsActive))
+        foreach (var entity in scene.Entities.Where(e => e.IsActive))
         {
             if (entity.GetComponent<Tilemap>() is { Solid: true } tilemap)
                 AddTiles(edges, tilemap);

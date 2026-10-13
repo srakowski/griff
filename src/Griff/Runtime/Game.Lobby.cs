@@ -1,4 +1,5 @@
 using System.Text;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -32,7 +33,7 @@ public sealed partial class Game
 
     private void RunTextFields()
     {
-        var fields = Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<TextField>()).ToList();
+        var fields = Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<TextField>()).ToList();
         if (fields.Count == 0)
             return;
 
@@ -100,7 +101,7 @@ public sealed partial class Game
 
     private void RunScoreboards()
     {
-        foreach (var board in Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Scoreboard>()))
+        foreach (var board in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Scoreboard>()))
         {
             if (board.Entity!.GetComponent<Text>() is not { } text)
                 continue;

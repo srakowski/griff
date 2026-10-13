@@ -149,13 +149,13 @@ public sealed class Room : Component
     public event Action<Entity>? Entered;
 
     /// <summary>The world-space box the room covers.</summary>
-    public Runtime.Box Area
+    public Box Area
     {
         get
         {
             var world = Entity?.Transform.WorldMatrix ?? Matrix4x4.Identity;
             var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
-            return new Runtime.Box(new Vector2(world.M41, world.M42), Vector2.Abs(Size) * scale / 2);
+            return new Box(new Vector2(world.M41, world.M42), Vector2.Abs(Size) * scale / 2);
         }
     }
 

@@ -154,7 +154,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// Whether the Scene view shows an entity: it's active (it and its parents enabled) and not hidden in the editor
     /// (see <see cref="Entity.IsHiddenInHierarchy"/>). The game shows hidden ones as usual.
     /// </summary>
-    public static bool IsShown(Entity entity) => SceneRenderer.IsActive(entity) && !entity.IsHiddenInHierarchy;
+    public static bool IsShown(Entity entity) => entity.IsActive && !entity.IsHiddenInHierarchy;
 
     /// <summary>Moves everything selected by <paramref name="offset"/> world units, as one undo step.</summary>
     public void MoveSelection(Vector2 offset)

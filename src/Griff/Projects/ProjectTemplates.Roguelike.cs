@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -40,8 +41,8 @@ public static partial class ProjectTemplates
         counter.Format = "Deepest floor: {1}";
         scene.Add(deepest);
 
-        scene.Add(MenuButton("Play", new Vector2(0, -0.2f), Scenes.ButtonAction.LoadScene, "Crypt", Runtime.Key.Enter, RogueRed));
-        scene.Add(MenuButton("Quit", new Vector2(0, -1.6f), Scenes.ButtonAction.Quit, null, Runtime.Key.Escape, RogueGray));
+        scene.Add(MenuButton("Play", new Vector2(0, -0.2f), Scenes.ButtonAction.LoadScene, "Crypt", Key.Enter, RogueRed));
+        scene.Add(MenuButton("Quit", new Vector2(0, -1.6f), Scenes.ButtonAction.Quit, null, Key.Escape, RogueGray));
 
         var hint = Label("Hint", Vector2.Zero, "Enter to play  ·  Arrows to choose", 0.4f, RogueDim);
         var anchor = hint.AddComponent<ScreenAnchor>();
@@ -206,8 +207,8 @@ public static partial class ProjectTemplates
         (deepest.Message, deepest.SaveBestAs, deepest.Format, deepest.Pop) = (null, RogueDeepestKey, "Deepest: {1}", 1);
         WithChild(panel, deepestLine);
 
-        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.6f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.Enter, RogueRed, order: 410));
-        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.6f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, RogueGray, order: 410));
+        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.6f), Scenes.ButtonAction.RestartScene, null, Key.Enter, RogueRed, order: 410));
+        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.6f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, RogueGray, order: 410));
         return panel;
     }
 

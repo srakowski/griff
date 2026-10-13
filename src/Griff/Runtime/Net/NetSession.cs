@@ -59,7 +59,7 @@ internal enum NetMessage : byte
 public sealed partial class NetSession : IDisposable
 {
     /// <summary>The port games are hosted on unless a <see cref="Multiplayer"/> says otherwise.</summary>
-    public const int DefaultPort = 7777;
+    public const int DefaultPort = Multiplayer.DefaultPort;
 
     /// <summary>Where a player's name is kept in <see cref="Game.SaveData"/>.</summary>
     public const string NameSaveKey = "griff.net.name";

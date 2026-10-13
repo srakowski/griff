@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -96,7 +97,7 @@ public static partial class ProjectTemplates
         for (var i = 0; i < MatchLevels.Count; i++)
         {
             var button = MenuButton($"Level {i + 1}", new Vector2(0, 1.9f - i * 1.3f), Scenes.ButtonAction.LoadScene, MatchLevelScene(i),
-                i == 0 ? Runtime.Key.Enter : Runtime.Key.None, i == 0 ? MatchViolet : MatchGray);
+                i == 0 ? Key.Enter : Key.None, i == 0 ? MatchViolet : MatchGray);
             var size = new Vector2(6, 1.1f);
             button.GetComponent<Sprite>()!.Size = size;
             button.GetComponent<Scenes.Button>()!.Size = size;
@@ -106,7 +107,7 @@ public static partial class ProjectTemplates
             scene.Add(button);
         }
 
-        scene.Add(MenuButton("Quit", new Vector2(0, 1.9f - MatchLevels.Count * 1.3f - 0.3f), Scenes.ButtonAction.Quit, null, Runtime.Key.Escape, MatchGray));
+        scene.Add(MenuButton("Quit", new Vector2(0, 1.9f - MatchLevels.Count * 1.3f - 0.3f), Scenes.ButtonAction.Quit, null, Key.Escape, MatchGray));
 
         var hint = Label("Hint", Vector2.Zero, "Enter to play  ·  Arrows to choose  ·  Win a level to open the next", 0.4f, MatchDim);
         var anchor = hint.AddComponent<ScreenAnchor>();
@@ -262,12 +263,12 @@ public static partial class ProjectTemplates
         WithChild(panel, detail);
 
         var next = last
-            ? MenuButton("Menu", new Vector2(-2.2f, -1.2f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Enter, MatchViolet, order: 410)
-            : MenuButton("Next", new Vector2(-2.2f, -0.6f), Scenes.ButtonAction.LoadScene, MatchLevelScene(index + 1), Runtime.Key.Enter, MatchViolet, order: 410);
+            ? MenuButton("Menu", new Vector2(-2.2f, -1.2f), Scenes.ButtonAction.LoadScene, "Main", Key.Enter, MatchViolet, order: 410)
+            : MenuButton("Next", new Vector2(-2.2f, -0.6f), Scenes.ButtonAction.LoadScene, MatchLevelScene(index + 1), Key.Enter, MatchViolet, order: 410);
         WithChild(panel, next);
-        WithChild(panel, MenuButton("Again", new Vector2(2.2f, last ? -1.2f : -0.6f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.R, MatchGray, order: 410));
+        WithChild(panel, MenuButton("Again", new Vector2(2.2f, last ? -1.2f : -0.6f), Scenes.ButtonAction.RestartScene, null, Key.R, MatchGray, order: 410));
         if (!last)
-            WithChild(panel, MenuButton("Menu", new Vector2(0, -1.9f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, MatchGray, order: 410));
+            WithChild(panel, MenuButton("Menu", new Vector2(0, -1.9f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, MatchGray, order: 410));
         return panel;
     }
 
@@ -298,8 +299,8 @@ public static partial class ProjectTemplates
         score.Pop = 1;
         WithChild(panel, detail);
 
-        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.2f), Scenes.ButtonAction.RestartScene, null, Runtime.Key.Enter, MatchViolet, order: 410));
-        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.2f), Scenes.ButtonAction.LoadScene, "Main", Runtime.Key.Escape, MatchGray, order: 410));
+        WithChild(panel, MenuButton("Again", new Vector2(-2.2f, -1.2f), Scenes.ButtonAction.RestartScene, null, Key.Enter, MatchViolet, order: 410));
+        WithChild(panel, MenuButton("Menu", new Vector2(2.2f, -1.2f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, MatchGray, order: 410));
         return panel;
     }
 }

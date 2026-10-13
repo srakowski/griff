@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace Griff.Scenes;
 
 /// <summary>What the game sees. The entity's transform positions the camera; rotation and scale apply too.</summary>
@@ -255,6 +257,50 @@ public sealed class Sprite : Component
         _blinkLeft = Math.Max(0, _blinkLeft - seconds);
         _blinkTime += seconds;
     }
+
+    private bool IsSliced => Slice > 0 && SliceSize > 0;
+
+    /// <summary>
+    /// The quads the sprite is drawn with, in the world, and the part of its image on each: one, or nine for a
+    /// <see cref="Slice"/>d sprite (corners, edges, middle; left to right, top to bottom).
+    /// </summary>
+    public IEnumerable<(Matrix4x4 World, Vector4 Source)> Pieces()
+    {
+        var frame = FrameRect;
+        if (!IsSliced)
+        {
+            yield return (QuadMatrix, frame);
+            yield break;
+        }
+
+        // Edges of the three columns and rows, in the sprite's own space (-size/2..size/2, Y up) and in the frame (V down).
+        var size = Vector2.Abs(Size);
+        var border = Vector2.Min(new Vector2(SliceSize), size / 2);
+        var slice = Math.Min(Slice, 0.5f);
+        float[] xs = [-size.X / 2, -size.X / 2 + border.X, size.X / 2 - border.X, size.X / 2];
+        float[] ys = [size.Y / 2, size.Y / 2 - border.Y, -size.Y / 2 + border.Y, -size.Y / 2];
+        float[] us = [frame.X, frame.X + frame.Z * slice, frame.X + frame.Z * (1 - slice), frame.X + frame.Z];
+        float[] vs = [frame.Y, frame.Y + frame.W * slice, frame.Y + frame.W * (1 - slice), frame.Y + frame.W];
+        var outside = Matrix4x4.CreateScale(MathF.Sign(Size.X) * (FlipX ? -1 : 1), MathF.Sign(Size.Y) * (FlipY ? -1 : 1), 1) *
+                      Entity!.Transform.WorldMatrix;
+        for (var row = 0; row < 3; row++)
+        {
+            for (var column = 0; column < 3; column++)
+            {
+                var width = xs[column + 1] - xs[column];
+                var height = ys[row] - ys[row + 1];
+                if (width <= 0 || height <= 0)
+                    continue;
+                var center = new Vector2(xs[column] + xs[column + 1], ys[row] + ys[row + 1]) / 2;
+                var piece = Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0);
+                yield return (piece * outside, new Vector4(us[column], vs[row], us[column + 1] - us[column], vs[row + 1] - vs[row]));
+            }
+        }
+    }
+
+    // The whole sprite's quad in the world, flips included.
+    internal Matrix4x4 QuadMatrix =>
+        Matrix4x4.CreateScale(Size.X * (FlipX ? -1 : 1), Size.Y * (FlipY ? -1 : 1), 1) * Entity!.Transform.WorldMatrix;
 }
 
 /// <summary>One named animation of an <see cref="Animation"/>'s <see cref="Animation.Clips"/>.</summary>

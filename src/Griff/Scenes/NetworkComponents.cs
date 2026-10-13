@@ -1,3 +1,4 @@
+using Griff.Input;
 using Griff.Runtime;
 
 namespace Griff.Scenes;
@@ -18,11 +19,14 @@ namespace Griff.Scenes;
 [ComponentName("Griff.Multiplayer")]
 public sealed class Multiplayer : Component
 {
+    /// <summary>The port a game is hosted on unless something says otherwise.</summary>
+    public const int DefaultPort = 7777;
+
     /// <summary>The most players in one game, the host included.</summary>
     public int MaxPlayers { get; set; } = 8;
 
     /// <summary>The network port the host listens on. Joining players use it too unless their address names another.</summary>
-    public int Port { get; set; } = NetSession.DefaultPort;
+    public int Port { get; set; } = DefaultPort;
 
     /// <summary>
     /// The entity each player plays as: one in the scene (the host plays that one, everyone else a copy) or a prefab.

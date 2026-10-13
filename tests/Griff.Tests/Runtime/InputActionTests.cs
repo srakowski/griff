@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Runtime;
 
 namespace Griff.Tests.Runtime;

@@ -155,7 +155,7 @@ public sealed partial class Game
     private Entity? TargetInRange(Attack attack)
     {
         var from = attack.Entity!.Transform.WorldPosition;
-        if (string.IsNullOrWhiteSpace(attack.Target) || Nearest(attack.Target.Trim(), new Vector2(from.X, from.Y)) is not { } target || !Rendering.SceneRenderer.IsActive(target))
+        if (string.IsNullOrWhiteSpace(attack.Target) || Nearest(attack.Target.Trim(), new Vector2(from.X, from.Y)) is not { } target || !target.IsActive)
             return null;
         var to = target.Transform.WorldPosition;
         return Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y)) <= attack.Range ? target : null;

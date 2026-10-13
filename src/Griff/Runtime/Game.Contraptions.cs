@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -438,7 +439,7 @@ public sealed partial class Game
             if (other is null || other == host || host.GetComponent<Body>() is null)
                 continue;
             parent.TryAdd(host, host);
-            if (other.GetComponent<Body>() is null || !SceneRenderer.IsActive(other))
+            if (other.GetComponent<Body>() is null || !other.IsActive)
             {
                 anchored.Add(host);
                 continue;

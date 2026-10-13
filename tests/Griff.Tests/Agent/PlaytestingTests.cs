@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 using Griff.Agent;
+using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -114,6 +115,22 @@ public class PlaytestingTests
         game.SaveData.Set("difficulty", "Hard");
         game.SaveData.Set("Muted", false);
         Assert.Equal("Flags set: MetGuide.", Playtesting.FlagsSet(game));
+    }
+
+    [Fact]
+    public void AddedSystems_ListsScriptsSystems_WithTheirPhaseAndEntity()
+    {
+        var scene = new Scene();
+        var level = new Entity("Level");
+        level.AddComponent<Runtime.FrameTests.SystemAdder>();
+        scene.Add(level);
+        var game = new Game(scene, new InputState());
+        Assert.Null(Playtesting.AddedSystems(game));
+
+        game.Tick(0.016);
+        game.AddSystem(new Runtime.FrameTests.OtherRecorder([]));
+
+        Assert.Equal("Systems scripts added: Recorder (Simulate, goes with Level), OtherRecorder (Simulate).", Playtesting.AddedSystems(game));
     }
     [Fact]
     public void PointOf_TakesAPointInTheWorld_OrAnEntitysMiddle()

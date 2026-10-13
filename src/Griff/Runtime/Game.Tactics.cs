@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Input;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -328,7 +329,7 @@ public sealed partial class Game
 
     private bool IsFoe(TacticsUnit unit, Entity other)
     {
-        if (other == unit.Entity || other.Scene != Scene || !SceneRenderer.IsActive(other) || Health.Of(other) is not { IsDead: false })
+        if (other == unit.Entity || other.Scene != Scene || !other.IsActive || Health.Of(other) is not { IsDead: false })
             return false;
         if (CollisionLayers.Parse(unit.Layers).Length > 0)
             return unit.AttacksLayer(other.GetComponent<Collider>()?.Layer);
@@ -357,7 +358,7 @@ public sealed partial class Game
     {
         var view = Tactics;
         var input = Input;
-        if (controls.Selected is { } picked && (picked.Scene != Scene || !SceneRenderer.IsActive(picked) ||
+        if (controls.Selected is { } picked && (picked.Scene != Scene || !picked.IsActive ||
                                                 picked.GetComponent<TacticsUnit>() is not { CanAct: true } still || !MayCommand(still, Net.LocalPlayer)))
             controls.Selected = null;
         var selected = controls.Selected?.GetComponent<TacticsUnit>();

@@ -29,7 +29,7 @@ public sealed class Scene
         Entity? first = null;
         foreach (var entity in Entities)
         {
-            if (entity.Name != name || (activeOnly && !Rendering.SceneRenderer.IsActive(entity)))
+            if (entity.Name != name || (activeOnly && !entity.IsActive))
                 continue;
             if (PreferNamed is null || PreferNamed(entity))
                 return entity;

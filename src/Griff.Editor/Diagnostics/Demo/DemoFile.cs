@@ -855,7 +855,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     private async Task CreateProject(string argument)
     {
         var (templateName, name) = Split2(argument);
-        var template = Enum.Parse<ProjectTemplate>(templateName.Replace("-", "").Replace(" ", ""), ignoreCase: true);
+        var template = ProjectTemplates.Get(templateName);
         name = name.Length > 0 ? name : $"{template} Demo";
         var folder = FreshFolder(name);
         await workspace.CreateProjectAsync(ProjectsRoot, name, template);

@@ -24,7 +24,7 @@ public sealed class RoguelikeTemplateTests : IDisposable
     // The template, with the crypt's generator set as the test needs (its seed, or no monsters in the way).
     private async Task<Game> Create(string? scene = null, Action<DungeonGenerator>? setUp = null)
     {
-        var project = await Project.CreateAsync(_root, "Crypt", ProjectTemplate.Roguelike);
+        var project = await Project.CreateAsync(_root, "Crypt", ProjectTemplates.Get("Roguelike"));
         Scene Load(string name)
         {
             var loaded = GameLoader.LoadScene(project, _registry, name);

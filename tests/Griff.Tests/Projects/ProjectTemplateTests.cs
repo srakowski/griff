@@ -14,29 +14,44 @@ public sealed class ProjectTemplateTests : IDisposable
     private const double Frame = 1 / 60.0;
     private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-templates-" + Guid.NewGuid().ToString("N"));
 
+    // Found, like New Project finds them: a new template is tested without being added here.
+    public static TheoryData<string> EveryTemplate => new(ProjectTemplates.All.Select(t => t.Name));
+
+    public static TheoryData<string> EveryTemplateButEmpty => new(ProjectTemplates.All.Select(t => t.Name).Where(n => n != "Empty"));
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
             Directory.Delete(_root, recursive: true);
     }
 
+    [Fact]
+    public void Templates_AreFound_InNewProjectsOrder()
+    {
+        var all = ProjectTemplates.All;
+
+        Assert.Equal("Platformer", all[0].Name);
+        Assert.Equal("Empty", all[^1].Name);
+        Assert.Equal(all.Count, all.Select(t => t.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(all, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
+        Assert.Contains(all, t => t.Name == "BunnyMark");
+    }
+
     [Theory]
-    [InlineData(ProjectTemplate.Empty)]
-    [InlineData(ProjectTemplate.Platformer)]
-    [InlineData(ProjectTemplate.TopDown)]
-    [InlineData(ProjectTemplate.Arcade)]
-    [InlineData(ProjectTemplate.Strategy)]
-    [InlineData(ProjectTemplate.Shooter)]
-    [InlineData(ProjectTemplate.Sandbox)]
-    [InlineData(ProjectTemplate.Contraption)]
-    [InlineData(ProjectTemplate.Multiplayer)]
-    [InlineData(ProjectTemplate.Puzzle)]
-    [InlineData(ProjectTemplate.Match3)]
-    [InlineData(ProjectTemplate.FallingBlocks)]
-    [InlineData(ProjectTemplate.Roguelike)]
-    [InlineData(ProjectTemplate.Tactics)]
-    [InlineData(ProjectTemplate.BunnyMark)]
-    public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
+    [InlineData("Match3", "Match3")]
+    [InlineData("match-3", "Match3")]
+    [InlineData("Top-down", "TopDown")]
+    [InlineData("falling blocks", "FallingBlocks")]
+    public void Templates_AreFoundByNameOrTitle(string asked, string name)
+    {
+        Assert.Equal(name, ProjectTemplates.Get(asked).Name);
+        Assert.Null(ProjectTemplates.Find("Pinball"));
+        Assert.Contains("Platformer", Assert.Throws<ArgumentException>(() => ProjectTemplates.Get("Pinball")).Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryTemplate))]
+    public async Task Template_Compiles_AndLoadsWithoutMissingComponents(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
 
@@ -55,22 +70,8 @@ public sealed class ProjectTemplateTests : IDisposable
 
     // The Inspector flags a field that names something not in the scene; a template's scenes should have none.
     [Theory]
-    [InlineData(ProjectTemplate.Empty)]
-    [InlineData(ProjectTemplate.Platformer)]
-    [InlineData(ProjectTemplate.TopDown)]
-    [InlineData(ProjectTemplate.Arcade)]
-    [InlineData(ProjectTemplate.Strategy)]
-    [InlineData(ProjectTemplate.Shooter)]
-    [InlineData(ProjectTemplate.Sandbox)]
-    [InlineData(ProjectTemplate.Contraption)]
-    [InlineData(ProjectTemplate.Multiplayer)]
-    [InlineData(ProjectTemplate.Puzzle)]
-    [InlineData(ProjectTemplate.Match3)]
-    [InlineData(ProjectTemplate.FallingBlocks)]
-    [InlineData(ProjectTemplate.Roguelike)]
-    [InlineData(ProjectTemplate.Tactics)]
-    [InlineData(ProjectTemplate.BunnyMark)]
-    public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
+    [MemberData(nameof(EveryTemplate))]
+    public async Task Template_NamesOnlyEntitiesItHas(string template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
         var serializer = new SceneSerializer(registry);
@@ -86,21 +87,8 @@ public sealed class ProjectTemplateTests : IDisposable
     }
 
     [Theory]
-    [InlineData(ProjectTemplate.Platformer)]
-    [InlineData(ProjectTemplate.TopDown)]
-    [InlineData(ProjectTemplate.Arcade)]
-    [InlineData(ProjectTemplate.Strategy)]
-    [InlineData(ProjectTemplate.Shooter)]
-    [InlineData(ProjectTemplate.Sandbox)]
-    [InlineData(ProjectTemplate.Contraption)]
-    [InlineData(ProjectTemplate.Multiplayer)]
-    [InlineData(ProjectTemplate.Puzzle)]
-    [InlineData(ProjectTemplate.Match3)]
-    [InlineData(ProjectTemplate.FallingBlocks)]
-    [InlineData(ProjectTemplate.Roguelike)]
-    [InlineData(ProjectTemplate.Tactics)]
-    [InlineData(ProjectTemplate.BunnyMark)]
-    public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
+    [MemberData(nameof(EveryTemplateButEmpty))]
+    public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(string template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
         var serializer = new SceneSerializer(registry);
@@ -121,12 +109,12 @@ public sealed class ProjectTemplateTests : IDisposable
     }
 
     [Theory]
-    [InlineData(ProjectTemplate.Platformer)]
-    [InlineData(ProjectTemplate.TopDown)]
-    [InlineData(ProjectTemplate.Arcade)]
-    [InlineData(ProjectTemplate.Strategy)]
-    [InlineData(ProjectTemplate.Shooter)]
-    public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(ProjectTemplate template)
+    [InlineData("Platformer")]
+    [InlineData("TopDown")]
+    [InlineData("Arcade")]
+    [InlineData("Strategy")]
+    [InlineData("Shooter")]
+    public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
         var serializer = new SceneSerializer(registry);
@@ -154,7 +142,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task EmptyTemplate_HasNoSounds()
     {
-        var (project, _, _, _) = await CreateAndLoad(ProjectTemplate.Empty);
+        var (project, _, _, _) = await CreateAndLoad("Empty");
 
         Assert.False(Directory.Exists(Asset(project, "Sounds")));
     }
@@ -165,7 +153,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_ClickingPlay_StartsTheGame_AndEnemiesArrive()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, scene, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.1);
 
@@ -186,7 +174,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_ScoreIsPinnedToTheTopLeftCorner()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
         game.ViewAspect = 2;
 
@@ -201,7 +189,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_ShootingAnEnemy_ScoresAPoint()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
         game.Find("Spawner")!.IsEnabled = false;
         Run(game, input, 0.05);
@@ -219,7 +207,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_EnemyReachingTheShip_EndsTheGame_AndRetryStartsOver()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
         game.SceneName = "Game";
         game.Find("Spawner")!.IsEnabled = false;
@@ -252,7 +240,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_KillsSaveTheBest_WhichTheMenuShows()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
         game.Find("Spawner")!.IsEnabled = false;
         Run(game, input, 0.05);
@@ -269,7 +257,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_Options_WorkFromTheKeyboard_AndAreRemembered()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, scene, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.1);
 
@@ -313,7 +301,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_PlayerLandsRunsJumpsAndCollects()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var body = player.GetComponent<Body>()!;
@@ -355,7 +343,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Collecting_SpawnsASparkleInTheCollectiblesColor()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var gem = game.Find("Gem")!;
         var player = game.Find("Player")!;
@@ -377,7 +365,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_PlayerMovesAndIsStoppedByWalls()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
 
@@ -392,7 +380,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task CameraFollow_TracksThePlayer()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
 
         input.SetKey(Key.Right, true);
@@ -406,7 +394,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_CameraNeverShowsPastTheBackdrop()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var camera = game.Find("Main Camera")!;
         var size = camera.GetComponent<Camera>()!.Size;
@@ -440,7 +428,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_LiftCarriesThePlayerUpToTheSlimesLedge_WhereTheSlimeStays()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var lift = game.Find("Lift")!;
@@ -463,7 +451,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_TwoSwordSwings_DefeatTheSlime()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var slime = game.Find("Slime")!;
@@ -488,7 +476,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_LosingAllHearts_RespawnsAtTheCheckpoint()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var flag = game.Find("Checkpoint")!;
@@ -512,7 +500,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_SignReadsItselfOut_WhenThePlayerPressesInteract()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var box = game.Find("Dialogue Box")!;
@@ -538,7 +526,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_SpringLaunchesThePlayerUpToALedge_ThatGivesWay()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var spring = game.Find("Spring")!;
@@ -570,7 +558,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_PlayerDashes()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         Run(game, input, 1);
@@ -586,7 +574,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_PushingTheCrateOntoThePlate_BringsOutTheBonusGem()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var crate = game.Find("Crate")!;
@@ -613,7 +601,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_TheGuide_AnswersWhatThePlayerPicks_AndAsksAgain()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var guide = game.Find("Guide")!.GetComponent<Dialogue>()!;
         var box = game.Find("Dialogue Box")!;
@@ -674,7 +662,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_IsADimDungeon_LitByTorchesAndTheLantern_WithTheHudUndarkened()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.2);
 
@@ -695,7 +683,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_PortalsTakeThePlayerAcrossTheRoom()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
 
@@ -709,7 +697,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_BatChasesThePlayer_OnceItSeesThem()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var bat = game.Find("Bat")!;
@@ -728,7 +716,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_LeverOnTheLedge_BringsOutTheBridge()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var bridge = game.Find("Bridge")!;
@@ -761,7 +749,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task TopDown_KeyOpensTheVault()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.TopDown);
+        var (project, scene, input, registry) = await CreateAndLoad("TopDown");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var door = game.Find("Vault Door")!;
@@ -792,7 +780,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_BulletsLeaveATrail()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, scene, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, scene, input, registry);
 
         var bullet = game.Spawn("Bullet", Vector2.Zero);
@@ -803,26 +791,26 @@ public sealed class ProjectTemplateTests : IDisposable
     }
 
     [Theory]
-    [InlineData(ProjectTemplate.Platformer)]
-    [InlineData(ProjectTemplate.TopDown)]
-    [InlineData(ProjectTemplate.Arcade)]
-    [InlineData(ProjectTemplate.Puzzle)]
-    [InlineData(ProjectTemplate.Match3)]
-    [InlineData(ProjectTemplate.FallingBlocks)]
-    [InlineData(ProjectTemplate.Roguelike)]
-    [InlineData(ProjectTemplate.Tactics)]
-    public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(ProjectTemplate template)
+    [InlineData("Platformer")]
+    [InlineData("TopDown")]
+    [InlineData("Arcade")]
+    [InlineData("Puzzle")]
+    [InlineData("Match3")]
+    [InlineData("FallingBlocks")]
+    [InlineData("Roguelike")]
+    [InlineData("Tactics")]
+    public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
-        if (template == ProjectTemplate.Arcade)
+        if (template == "Arcade")
             scene = GameLoader.LoadScene(project, registry, "Game");
-        if (template is ProjectTemplate.Puzzle or ProjectTemplate.Match3)
+        if (template is "Puzzle" or "Match3")
             scene = GameLoader.LoadScene(project, registry, "Level1");
-        if (template == ProjectTemplate.FallingBlocks)
+        if (template == "FallingBlocks")
             scene = GameLoader.LoadScene(project, registry, "Game");
-        if (template == ProjectTemplate.Roguelike)
+        if (template == "Roguelike")
             scene = GameLoader.LoadScene(project, registry, "Crypt");
-        if (template == ProjectTemplate.Tactics)
+        if (template == "Tactics")
             scene = GameLoader.LoadScene(project, registry, "Battle");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
@@ -861,7 +849,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_PauseMenu_DoesntOpenOverTheGameOverPanel()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Game"), input, registry);
         game.Find("Spawner")!.IsEnabled = false;
         Run(game, input, 0.05);
@@ -878,7 +866,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Arcade_Options_PickADifficulty_AndRebindFire()
     {
-        var (project, _, input, registry) = await CreateAndLoad(ProjectTemplate.Arcade);
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
         var game = NewGame(project, GameLoader.LoadScene(project, registry, "Options"), input, registry);
         Run(game, input, 0.1);
 
@@ -911,7 +899,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Platformer_InteractHints_ShowTheKeyOrTheButton()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Platformer);
+        var (project, scene, input, registry) = await CreateAndLoad("Platformer");
         var game = NewGame(project, scene, input, registry);
         var sign = game.Find("Sign")!;
         game.Find("Player")!.Transform.Position = sign.Transform.WorldPosition;
@@ -928,7 +916,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Strategy_TheComputerPlaysRed_GatheringBuildingAndTraining()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var (project, scene, input, registry) = await CreateAndLoad("Strategy");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(0, 0);
         input.IsMouseInView = false;
@@ -947,7 +935,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Strategy_WorkersGatherGold_AndTheTownHallTrainsMore()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var (project, scene, input, registry) = await CreateAndLoad("Strategy");
         var game = NewGame(project, scene, input, registry);
         input.IsMouseInView = false;
         Run(game, input, 0.1);
@@ -979,7 +967,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Strategy_EscCancelsPlacingFirst_ThenPauses()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Strategy);
+        var (project, scene, input, registry) = await CreateAndLoad("Strategy");
         var game = NewGame(project, scene, input, registry);
         input.IsMouseInView = false;
         Run(game, input, 0.1);
@@ -1005,7 +993,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_ComesWithItsPictures_AsPngs_ThatEverythingUses()
     {
-        var (project, scene, _, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, _, registry) = await CreateAndLoad("Shooter");
         var serializer = new SceneSerializer(registry);
         var entities = scene.Entities.ToList();
         foreach (var path in project.FindPrefabs())
@@ -1029,7 +1017,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_IsSeenInFirstPerson_WithWallsTheGunAndTheHud()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, input, registry) = await CreateAndLoad("Shooter");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.5);
 
@@ -1046,7 +1034,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_WalkingUpToTheHallDoor_SlidesItOpen()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, input, registry) = await CreateAndLoad("Shooter");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var door = game.Find("Hall Door")!;
@@ -1063,7 +1051,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_ThePistol_KillsAGrunt_UsingBullets_AndTheKillCounts()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, input, registry) = await CreateAndLoad("Shooter");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var grunt = game.FindAll("Grunt")[0];
@@ -1087,7 +1075,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_PickingUpTheShotgun_TakesItOut()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, input, registry) = await CreateAndLoad("Shooter");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         Run(game, input, 0.1);
@@ -1102,7 +1090,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Shooter_TheBlueDoor_OnlyOpensWithTheKey_AndTheExitWins()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
+        var (project, scene, input, registry) = await CreateAndLoad("Shooter");
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
         var door = game.Find("Blue Door")!;
@@ -1151,7 +1139,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Sandbox_MakesItsWorld_StandsThePlayerOnIt_AndDiggingFillsTheHotbar()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Sandbox);
+        var (project, scene, input, registry) = await CreateAndLoad("Sandbox");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 1);
 
@@ -1176,7 +1164,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Sandbox_TurnsWoodIntoPlanks_AndAWorkbench_ThenBricksBesideIt()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Sandbox);
+        var (project, scene, input, registry) = await CreateAndLoad("Sandbox");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.5);
         var player = game.Find("Player")!;
@@ -1209,7 +1197,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Sandbox_ComesWithItsBlocks_AsAPng()
     {
-        var (project, _, _, _) = await CreateAndLoad(ProjectTemplate.Sandbox);
+        var (project, _, _, _) = await CreateAndLoad("Sandbox");
 
         Assert.True(new FileInfo(Asset(project, "Textures/blocks.png")).Length > 100);
         Assert.True(Griff.Audio.Wav.Decode(Asset(project, "Sounds/dig.wav")) is { Seconds: > 0 });
@@ -1220,7 +1208,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Contraption_TheLiftButton_SendsTheLiftUp_AndBackDown()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var (project, scene, input, registry) = await CreateAndLoad("Contraption");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.5);
         var plank = game.Find("Lift Plank")!;
@@ -1245,7 +1233,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Contraption_ACrateOnThePlate_OpensTheDoor()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var (project, scene, input, registry) = await CreateAndLoad("Contraption");
         var game = NewGame(project, scene, input, registry);
         Run(game, input, 0.5);
         var wall = game.Find("Gate Wall")!;
@@ -1267,7 +1255,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Contraption_TheClock_BlinksALamp_AndCountsOnTheDisplay()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var (project, scene, input, registry) = await CreateAndLoad("Contraption");
         var game = NewGame(project, scene, input, registry);
         var lit = new HashSet<float>();
         for (var i = 0; i < 120; i++)
@@ -1283,7 +1271,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [Fact]
     public async Task Contraption_EveryPropTheToolsList_IsAPrefab()
     {
-        var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Contraption);
+        var (project, scene, input, registry) = await CreateAndLoad("Contraption");
         var game = NewGame(project, scene, input, registry);
         var props = scene.Entities.Select(e => e.GetComponent<SandboxTools>()).OfType<SandboxTools>().Single().PropList;
 
@@ -1299,9 +1287,9 @@ public sealed class ProjectTemplateTests : IDisposable
             SceneName = Project.DefaultSceneName,
         };
 
-    private async Task<(Project Project, Scene Scene, InputState Input, ComponentRegistry Registry)> CreateAndLoad(ProjectTemplate template)
+    private async Task<(Project Project, Scene Scene, InputState Input, ComponentRegistry Registry)> CreateAndLoad(string template)
     {
-        var project = await Project.CreateAsync(_root, template.ToString(), template);
+        var project = await Project.CreateAsync(_root, template, ProjectTemplates.Get(template));
         var registry = ComponentRegistry.CreateDefault();
         var compiled = new ScriptHost(registry).ReloadFolder(project.AssetsPath, []);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));

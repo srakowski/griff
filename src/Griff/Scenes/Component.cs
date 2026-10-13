@@ -18,6 +18,12 @@ public abstract class Component
 
     /// <summary>A line on how it's set up, shown in the Inspector above its fields (a tilemap layer names its map); null for none.</summary>
     public virtual string? SetupNote() => null;
+
+    /// <summary>
+    /// Saved values this component's type has no property for (from a newer version, or a property since removed), in
+    /// the order they were saved. The serializer writes them back, so loading and saving a scene loses nothing.
+    /// </summary>
+    internal IReadOnlyList<KeyValuePair<string, System.Text.Json.JsonElement>>? Kept { get; set; }
 }
 
 /// <summary>Excludes a public read/write property from scene files and the inspector.</summary>
@@ -25,13 +31,50 @@ public abstract class Component
 public sealed class DoNotSerializeAttribute : Attribute;
 
 /// <summary>
-/// Sets the name a component type is saved under. Defaults to the type's full name;
-/// set this to keep existing scenes loading after renaming or moving the class.
+/// Sets the name a component type is saved under. Defaults to the type's full name; set this to keep the saved name
+/// when renaming or moving the class (or give it a <see cref="FormerNameAttribute"/> to move scenes to the new name).
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class ComponentNameAttribute(string name) : Attribute
 {
     public string Name { get; } = name;
+}
+
+/// <summary>
+/// An earlier name, so scenes saved before a rename keep their values. On a component: the name it was saved under,
+/// e.g. <c>[FormerName("Enemy")]</c> on a class renamed to Foe (a name without a namespace also matches one in the
+/// class's own namespace). On a property: its earlier name in code, e.g. <c>[FormerName("Speed")]</c> on MoveSpeed.
+/// Scenes load under either name and save under the new one. A component or property can have several.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
+public sealed class FormerNameAttribute(string name) : Attribute
+{
+    public string Name { get; } = name;
+}
+
+/// <summary>
+/// The version of a component's saved data, 1 without this. Raise it when what a property means changes (seconds
+/// become frames, two properties merge into one) and add an <see cref="UpgradeFromAttribute"/> step for each earlier
+/// version, so older scenes are brought up to date as they load. A rename alone doesn't need one: use
+/// <see cref="FormerNameAttribute"/>.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class ComponentVersionAttribute(int version) : Attribute
+{
+    public int Version { get; } = version;
+}
+
+/// <summary>
+/// Marks a static method <c>static void Name(SavedData data)</c> on a component as the step that upgrades its saved
+/// data from <see cref="Version"/> to the next (see <see cref="ComponentVersionAttribute"/>), e.g.
+/// <c>[UpgradeFrom(1)] static void SecondsToFrames(SavedData data) => data.Set("Delay", data.Get&lt;float&gt;("Delay") * 60);</c>
+/// Steps run in order, oldest first, before the values are read, and see each property under the name it has now
+/// (values saved under a <see cref="FormerNameAttribute"/> are moved to it first).
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class UpgradeFromAttribute(int version) : Attribute
+{
+    public int Version { get; } = version;
 }
 
 /// <summary>

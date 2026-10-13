@@ -23,7 +23,7 @@ public sealed class FallingBlocksTemplateTests : IDisposable
     // The template, with the board's pieces set (it deals all seven, shuffled, in the template) so the test knows what comes.
     private async Task<(Project Project, Game Game)> Create(string? scene = null, Action<FallingBoard>? setUp = null)
     {
-        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplate.FallingBlocks);
+        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplates.Get("FallingBlocks"));
         Scene Load(string name)
         {
             var loaded = GameLoader.LoadScene(project, _registry, name);
@@ -123,7 +123,7 @@ public sealed class FallingBlocksTemplateTests : IDisposable
     [Fact]
     public async Task TheBoard_AndThePiecesComingNext_FitTheView()
     {
-        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplate.FallingBlocks);
+        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplates.Get("FallingBlocks"));
         var scene = GameLoader.LoadScene(project, _registry, "Game");
         var entity = scene.Entities.Single(e => e.Name == "Board");
         var board = entity.GetComponent<FallingBoard>()!;
@@ -140,7 +140,7 @@ public sealed class FallingBlocksTemplateTests : IDisposable
     [Fact]
     public async Task ComesWithItsPictures_SoundsAndMusic_ThatEverythingUses()
     {
-        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplate.FallingBlocks);
+        var project = await Project.CreateAsync(_root, "Blocks", ProjectTemplates.Get("FallingBlocks"));
         var serializer = new SceneSerializer(_registry);
         Assert.Equal(2, project.FindScenes().Count());
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();

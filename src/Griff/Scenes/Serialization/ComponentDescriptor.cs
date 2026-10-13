@@ -18,7 +18,17 @@ public sealed class ComponentDescriptor
         Category = type.GetCustomAttribute<CategoryAttribute>()?.Name;
         Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
         WorksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
+        FormerNames = type.GetCustomAttributes<FormerNameAttribute>(inherit: false)
+            .SelectMany(a => a.Name.Contains('.') || type.Namespace is null ? [a.Name] : new[] { a.Name, $"{type.Namespace}.{a.Name}" })
+            .Where(n => n != Name)
+            .Distinct()
+            .ToList();
+        Version = type.GetCustomAttribute<ComponentVersionAttribute>()?.Version ?? 1;
+        _upgrades = DiscoverUpgrades(type, Version);
     }
+
+    // The step up from version n is at n - 1.
+    private readonly List<Action<SavedData>> _upgrades;
 
     public Type Type { get; }
 
@@ -40,7 +50,53 @@ public sealed class ComponentDescriptor
     /// <summary>Components that go well with it, from <see cref="WorksWithAttribute"/>.</summary>
     public IReadOnlyList<ComponentLink> WorksWith { get; }
 
+    /// <summary>
+    /// Names it was saved under before, from <see cref="FormerNameAttribute"/> (a short one also with the class's
+    /// namespace in front): scenes that use them still load, and save under <see cref="Name"/>.
+    /// </summary>
+    public IReadOnlyList<string> FormerNames { get; }
+
+    /// <summary>The version of its saved data, from <see cref="ComponentVersionAttribute"/>; 1 without one.</summary>
+    public int Version { get; }
+
     public Component CreateInstance() => (Component)Activator.CreateInstance(Type)!;
+
+    /// <summary>Runs the <see cref="UpgradeFromAttribute"/> steps that bring data saved at <paramref name="from"/> up to <see cref="Version"/>.</summary>
+    internal void Upgrade(SavedData data, int from)
+    {
+        for (var version = Math.Max(from, 1); version < Version; version++)
+            _upgrades[version - 1](data);
+    }
+
+    // One static void (SavedData) step from each version below the current one, no more and no fewer.
+    private static List<Action<SavedData>> DiscoverUpgrades(Type type, int version)
+    {
+        if (version < 1)
+            throw new NotSupportedException($"{type.Name}'s [ComponentVersion] is {version}; versions start at 1.");
+
+        var steps = new Action<SavedData>?[version - 1];
+        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly))
+        {
+            if (method.GetCustomAttribute<UpgradeFromAttribute>() is not { } step)
+                continue;
+            var parameters = method.GetParameters();
+            if (method.ReturnType != typeof(void) || parameters.Length != 1 || parameters[0].ParameterType != typeof(SavedData))
+                throw new NotSupportedException($"{type.Name}.{method.Name} upgrades saved data, so it should be static void {method.Name}(SavedData data).");
+            if (step.Version < 1 || step.Version >= version)
+                throw new NotSupportedException($"{type.Name}.{method.Name} upgrades from version {step.Version}, but {type.Name} is at version {version}. Raise its [ComponentVersion] to {Math.Max(step.Version + 1, 2)}.");
+            if (steps[step.Version - 1] is not null)
+                throw new NotSupportedException($"{type.Name} has two steps that upgrade from version {step.Version}.");
+            steps[step.Version - 1] = method.CreateDelegate<Action<SavedData>>();
+        }
+
+        for (var i = 0; i < steps.Length; i++)
+        {
+            if (steps[i] is null)
+                throw new NotSupportedException($"{type.Name} is at version {version} but has no step that upgrades from version {i + 1}. Add a static method marked [UpgradeFrom({i + 1})].");
+        }
+
+        return steps.Select(s => s!).ToList();
+    }
 
     private static List<PropertyDescriptor> DiscoverProperties(Type type)
     {
@@ -109,6 +165,8 @@ public sealed class PropertyDescriptor
         Group = group;
         ShownWhen = property.GetCustomAttribute<ShownWhenAttribute>();
         SerializedName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+        FormerNames = property.GetCustomAttributes<FormerNameAttribute>().Select(a => a.Name).ToList();
+        FormerSerializedNames = FormerNames.Select(n => JsonNamingPolicy.CamelCase.ConvertName(n)).Where(n => n != SerializedName).Distinct().ToList();
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
         Names = property.PropertyType == typeof(string) ? property.GetCustomAttribute<NamesAttribute>() : null;
@@ -120,6 +178,12 @@ public sealed class PropertyDescriptor
 
     /// <summary>The key written to scene files.</summary>
     public string SerializedName { get; }
+
+    /// <summary>Names it had in code before, from <see cref="FormerNameAttribute"/>: values saved under them still load.</summary>
+    public IReadOnlyList<string> FormerNames { get; }
+
+    /// <summary>The keys <see cref="FormerNames"/> were saved under.</summary>
+    internal IReadOnlyList<string> FormerSerializedNames { get; }
 
     public Type Type => _property.PropertyType;
 

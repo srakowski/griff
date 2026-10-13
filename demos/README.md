@@ -32,7 +32,7 @@ build: standalone
 | Command | What it does |
 | --- | --- |
 | `title: <text>` / `intro: <text>` | The opening card's title and subtitle. |
-| `project: <Template> [\| <Name>]` | A fresh project from a template: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Strategy`, `Shooter`, `Sandbox`, `Contraption`, `Multiplayer`, `Puzzle`, `Match3`, `FallingBlocks`, `Roguelike`, `Tactics` or `BunnyMark`. |
+| `project: <Template> [\| <Name>]` | A fresh project from any template New Project lists, by name or title, ignoring case, spaces and dashes: `Empty`, `Platformer`, `TopDown`, `Arcade`, `Match3` (or `Match-3`), `FallingBlocks` and so on. |
 | `open: <folder>` | A copy of an existing project (the original is never changed). |
 | `scene: <name>` | Open a scene by name. |
 | `chapter: <title> [\| <subtitle>]` | Start a chapter: a card, a dot on the control bar, a rewind point. |

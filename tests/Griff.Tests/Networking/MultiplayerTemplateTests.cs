@@ -20,7 +20,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
 
     private async Task<(Project Project, ComponentRegistry Registry)> Create()
     {
-        var project = await Project.CreateAsync(_root, "Arena", ProjectTemplate.Multiplayer);
+        var project = await Project.CreateAsync(_root, "Arena", ProjectTemplates.Get("Multiplayer"));
         return (project, ComponentRegistry.CreateDefault());
     }
 
@@ -110,9 +110,9 @@ public sealed class MultiplayerTemplateTests : IDisposable
 
     // ----- The other templates, as network games: add a Multiplayer and they're ready -----
 
-    private async Task<(Project Project, ComponentRegistry Registry)> Create(ProjectTemplate template)
+    private async Task<(Project Project, ComponentRegistry Registry)> Create(string template)
     {
-        var project = await Project.CreateAsync(_root, template.ToString(), template);
+        var project = await Project.CreateAsync(_root, template, ProjectTemplates.Get(template));
         return (project, ComponentRegistry.CreateDefault());
     }
 
@@ -129,7 +129,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
     [Fact]
     public async Task The_strategy_template_plays_one_against_one()
     {
-        var (project, registry) = await Create(ProjectTemplate.Strategy);
+        var (project, registry) = await Create("Strategy");
         var world = new NetWorld(WithMultiplayer(project, registry, m => (m.Player, m.Teams) = ("", "Player, Enemy")),
             setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         var client = world.Client;
@@ -162,7 +162,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
     [Fact]
     public async Task The_sandbox_template_is_one_world_for_everyone_to_dig_in()
     {
-        var (project, registry) = await Create(ProjectTemplate.Sandbox);
+        var (project, registry) = await Create("Sandbox");
         var world = new NetWorld(WithMultiplayer(project, registry), setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         world.Run(1.5);
         var client = world.Client;
@@ -190,7 +190,7 @@ public sealed class MultiplayerTemplateTests : IDisposable
     [Fact]
     public async Task The_shooter_template_gives_each_player_their_own_eyes()
     {
-        var (project, registry) = await Create(ProjectTemplate.Shooter);
+        var (project, registry) = await Create("Shooter");
         var world = new NetWorld(WithMultiplayer(project, registry), setUp: Loaders(project, registry), sceneName: Project.DefaultSceneName);
         var client = world.Client;
         var mine = client.Net.LocalPlayer!.Avatar!;

@@ -28,7 +28,7 @@ var save = SaveData.PlayerPath(GameName);
 string? executable = null;
 try
 {
-    var project = await Project.CreateAsync(Path.Combine(root, "Project"), GameName, ProjectTemplate.BunnyMark);
+    var project = await Project.CreateAsync(Path.Combine(root, "Project"), GameName, ProjectTemplates.Get("BunnyMark"));
     var export = GameExporter.Export(project, player, Path.Combine(root, "Build"));
     if (!export.Success)
         return Fail($"The export failed: {export.Error}");

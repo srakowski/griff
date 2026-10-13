@@ -15,7 +15,7 @@ internal static partial class TemplateArt
 
     public const int GrassTile = 0, TreeTile = 1, RockTile = 2;
 
-    private static Dictionary<string, byte[]> TacticsFiles() => new()
+    internal static Dictionary<string, byte[]> TacticsFiles() => new()
     {
         [FieldTiles] = FieldSheet().Png(),
         [Knight] = HeroArt().Png(),

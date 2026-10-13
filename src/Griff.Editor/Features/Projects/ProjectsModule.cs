@@ -23,7 +23,10 @@ public sealed class ProjectsModule : IEditorModule
     }
 }
 
-/// <summary>Opens the New Project window: a name, a folder and a template (Empty, Platformer, Top-down, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3, Falling Blocks, Roguelike, Tactics or BunnyMark) to start from.</summary>
+/// <summary>
+/// Opens the New Project window: a name, a folder and a template to start from. Its Templates lists every one Griff has
+/// (Platformer, Top-down, Match-3...), each with what it is and how to play; set SelectedTemplate to one by its name.
+/// </summary>
 public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
 {
     public override string Id => "Project.New";

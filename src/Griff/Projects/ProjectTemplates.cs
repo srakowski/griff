@@ -1,170 +1,118 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
 namespace Griff.Projects;
 
-public enum ProjectTemplate
-{
-    Empty,
-    Platformer,
-    TopDown,
-    Arcade,
-    Strategy,
-    Shooter,
-    Sandbox,
-    Contraption,
-    Multiplayer,
-    Puzzle,
-    Match3,
-    FallingBlocks,
-    Roguelike,
-    Tactics,
-    BunnyMark,
-}
-
-/// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
+/// <summary>
+/// The templates New Project offers (each a <see cref="ProjectTemplate"/> found in Griff, so none are listed here), and
+/// the scenes, prefabs and scripts they're built from.
+/// </summary>
 public static partial class ProjectTemplates
 {
-    public static string Describe(ProjectTemplate template) => template switch
+    private static readonly Lazy<IReadOnlyList<ProjectTemplate>> Found = new(() => typeof(ProjectTemplate).Assembly.GetTypes()
+        .Where(t => t.IsSubclassOf(typeof(ProjectTemplate)) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
+        .Select(t => (ProjectTemplate)Activator.CreateInstance(t)!)
+        .OrderBy(t => t.Order)
+        .ThenBy(t => t.Name, StringComparer.Ordinal)
+        .ToList());
+
+    /// <summary>Every template, in the order New Project lists them.</summary>
+    public static IReadOnlyList<ProjectTemplate> All => Found.Value;
+
+    /// <summary>The template with nothing in it but a camera.</summary>
+    public static ProjectTemplate Empty => Get(nameof(Empty));
+
+    /// <summary>
+    /// The template called <paramref name="name"/> ("Match3"), by its <see cref="ProjectTemplate.Name"/> or
+    /// <see cref="ProjectTemplate.Title"/>, ignoring case, spaces and dashes ("match-3", "Top-down"); null if there's none.
+    /// </summary>
+    public static ProjectTemplate? Find(string name)
     {
-        ProjectTemplate.Platformer => "Run, jump and dash across platforms collecting coins, ride a lift, bounce off a spring, fight a slime with your sword, and come back at the last checkpoint. Arrow keys or WASD, Space to jump, Shift to dash, X to swing, E to read signs.",
-        ProjectTemplate.TopDown => "Explore a dim, torch-lit dungeon in eight directions collecting gems, with a bat that chases you on sight, a sword to fight it with, portals, a crate to push and someone to talk to. Arrow keys or WASD, Shift to dash, X to swing, E to talk.",
-        ProjectTemplate.Arcade => "Blast waves of enemies in an arena, with three hearts, a menu, options, game over and high score. WASD to fly, mouse to aim, click to fire.",
-        ProjectTemplate.Strategy => "Command an army in real time against the computer: gather gold and wood with workers, put up farms, barracks and towers, train soldiers and archers, and destroy the red base. Click or drag to select, right-click to send, hotkeys on the command card, arrow keys or the minimap to look around.",
-        ProjectTemplate.Shooter => "Fight your way out of a dark base in first person: grunts that charge, robots that throw fireballs, sliding doors, a blue key for the way out and a shotgun in the armory. The level is a tilemap you paint top-down. WASD to move, the mouse or arrows to turn, click to fire, 1 and 2 to change weapon.",
-        ProjectTemplate.Sandbox => "Dig and build in a world of blocks made from a seed: grassy hills, caves, coal, iron and gold, trees and sand that falls. Mine with the left mouse button, build with the right, pick blocks on the hotbar, and craft planks, torches, workbenches, furnaces and glass. A/D to walk, Space to jump, C to craft.",
-        ProjectTemplate.Contraption => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.",
-        ProjectTemplate.Multiplayer => "Play with friends: up to eight players in an arena, on one network or over the internet. Host from the menu and others join with your address (in the editor, Game > Play with 2 Players). Shoot each other and the slimes, grab hearts, and top the scoreboard. WASD to move, the mouse to aim, click to fire, Shift to dash.",
-        ProjectTemplate.Puzzle => "Push crates onto the marks on the floor in four Sokoban levels, each opening once the one before is solved. Arrow keys or WASD to walk and push, Z to take a move back, R to start the level over.",
-        ProjectTemplate.Match3 => "Swap gems to line up three or more of a kind in four levels, each with a move limit and goals to meet: a score to reach and gems to collect. Each level opens once the one before is won. Drag a gem onto its neighbor (or click one, then the other); with keys, arrows move and Space picks a gem up.",
-        ProjectTemplate.FallingBlocks => "Pieces of four blocks fall one after another: slide and turn them to fill rows, which clear, and every ten rows they fall faster, until they stack up to the top. The best score is kept. Left and right to slide, up to turn, down to fall faster, Space to drop.",
-        ProjectTemplate.Roguelike => "Go down through a crypt made anew every game, floor after floor: find the stairs in each, fight the slimes and bats by walking into them, and pick up gold and potions. Everything moves when you move. The deepest floor reached is kept. Arrow keys or WASD to walk and fight, 1 to drink a potion, Tab to wait a turn.",
-        ProjectTemplate.Tactics => "Lead two knights and two archers against an orc warband on a field of trees and rocks, side by side in turns: click a unit to see how far it can walk and hit, send it, and attack. The computer plays the orcs. Click a unit, then a blue cell to walk there and a red foe to attack, right-click to take a walk back, Tab to end your turn.",
-        ProjectTemplate.BunnyMark => "A benchmark: bunnies pour in and bounce about, more and more while the game keeps up 60 frames a second, until it finds how many this computer holds. Each one is an ordinary entity, a sprite and a script. The count is shown and saved, with the best so far. Space to run it again.",
-        _ => "A scene with a camera. Start from scratch.",
-    };
+        var key = Key(name);
+        return All.FirstOrDefault(t => Key(t.Name) == key) ?? All.FirstOrDefault(t => Key(t.Title) == key);
 
-    /// <summary>The start scene for a template. Script components are added as missing components until compiled.</summary>
-    internal static Scene CreateScene(ProjectTemplate template) => WithSounds(template, BuildScene(template));
-
-    /// <summary>Sound and music files (relative to Assets) for a template, as WAV bytes.</summary>
-    internal static IReadOnlyDictionary<string, byte[]> Sounds(ProjectTemplate template) => TemplateSounds.Files(template);
-
-    /// <summary>Image files (relative to Assets) for a template, as PNG bytes.</summary>
-    internal static IReadOnlyDictionary<string, byte[]> Images(ProjectTemplate template) => TemplateArt.Files(template);
-
-    // Templates that come with sounds have them hooked up to everything that makes a noise, and music playing. A benchmark
-    // stays quiet, so it times nothing but itself.
-    private static Scene WithSounds(ProjectTemplate template, Scene scene)
-    {
-        if (template is ProjectTemplate.Empty or ProjectTemplate.BunnyMark)
-            return scene;
-        foreach (var entity in scene.Entities)
-            TemplateSounds.Wire(entity);
-        TemplateSounds.AddMusic(scene);
-        return scene;
+        static string Key(string text) => text.Replace(" ", "").Replace("-", "").ToUpperInvariant();
     }
 
-    private static Scene BuildScene(ProjectTemplate template) => template switch
-    {
-        ProjectTemplate.Platformer => Platformer(),
-        ProjectTemplate.TopDown => TopDown(),
-        ProjectTemplate.Arcade => ArcadeMenu(),
-        ProjectTemplate.Strategy => Strategy(),
-        ProjectTemplate.Shooter => Shooter(),
-        ProjectTemplate.Sandbox => Sandbox(),
-        ProjectTemplate.Contraption => Contraption(),
-        ProjectTemplate.Multiplayer => MultiplayerMenu(),
-        ProjectTemplate.Puzzle => PuzzleMenu(),
-        ProjectTemplate.Match3 => MatchMenu(),
-        ProjectTemplate.FallingBlocks => FallingMenu(),
-        ProjectTemplate.Roguelike => RogueMenu(),
-        ProjectTemplate.Tactics => TacticsMenu(),
-        ProjectTemplate.BunnyMark => BunnyMarkScene(),
-        _ => Empty(),
-    };
+    /// <summary>Like <see cref="Find"/>, but throws if there's no such template.</summary>
+    /// <exception cref="ArgumentException">No template has that name.</exception>
+    public static ProjectTemplate Get(string name) =>
+        Find(name) ?? throw new ArgumentException($"There's no template \"{name}\". Templates: {string.Join(", ", All.Select(t => t.Name))}.", nameof(name));
 
-    /// <summary>Scenes besides the start scene (relative to Assets) for a template.</summary>
-    internal static IReadOnlyDictionary<string, Scene> MoreScenes(ProjectTemplate template) => template switch
+    private sealed class EmptyTemplate : ProjectTemplate
     {
-        ProjectTemplate.Arcade => new Dictionary<string, Scene>
-        {
-            ["Scenes/Game.scene"] = WithSounds(template, ArcadeGame()),
-            ["Scenes/Options.scene"] = WithSounds(template, ArcadeOptions()),
-        },
-        ProjectTemplate.Multiplayer => new Dictionary<string, Scene>
-        {
-            ["Scenes/Arena.scene"] = WithSounds(template, MultiplayerArena()),
-        },
-        ProjectTemplate.Puzzle => PuzzleLevelScenes(template),
-        ProjectTemplate.Match3 => MatchLevelScenes(template),
-        ProjectTemplate.FallingBlocks => new Dictionary<string, Scene>
-        {
-            ["Scenes/Game.scene"] = WithSounds(template, FallingGame()),
-        },
-        ProjectTemplate.Roguelike => new Dictionary<string, Scene>
-        {
-            ["Scenes/Crypt.scene"] = WithSounds(template, RogueGame()),
-        },
-        ProjectTemplate.Tactics => new Dictionary<string, Scene>
-        {
-            ["Scenes/Battle.scene"] = WithSounds(template, TacticsBattle()),
-        },
-        _ => new Dictionary<string, Scene>(),
-    };
+        public override string Description => "A scene with a camera. Start from scratch.";
 
-    /// <summary>Script files (relative to Assets) for a template.</summary>
-    internal static IReadOnlyDictionary<string, string> Scripts(ProjectTemplate template) => template switch
+        public override int Order => 1000;
+
+        protected override bool HasSounds => false;
+
+        protected override Scene BuildStartScene() => ProjectTemplates.EmptyScene();
+    }
+
+    private sealed class PlatformerTemplate : ProjectTemplate
     {
-        ProjectTemplate.Arcade => new Dictionary<string, string>
+        public override string Description => "Run, jump and dash across platforms collecting coins, ride a lift, bounce off a spring, fight a slime with your sword, and come back at the last checkpoint. Arrow keys or WASD, Space to jump, Shift to dash, X to swing, E to read signs.";
+
+        public override int Order => 10;
+
+        protected override Scene BuildStartScene() => Platformer();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => new() { ["Prefabs/Sparkle.prefab"] = Sparkle() };
+    }
+
+    private sealed class TopDownTemplate : ProjectTemplate
+    {
+        public override string Title => "Top-down";
+
+        public override string Description => "Explore a dim, torch-lit dungeon in eight directions collecting gems, with a bat that chases you on sight, a sword to fight it with, portals, a crate to push and someone to talk to. Arrow keys or WASD, Shift to dash, X to swing, E to talk.";
+
+        public override int Order => 20;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Chill, seed: 4) with { Volume = 0.7f };
+
+        protected override Scene BuildStartScene() => TopDown();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => new() { ["Prefabs/Sparkle.prefab"] = Sparkle() };
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.TopDownFiles();
+    }
+
+    private sealed class ArcadeTemplate : ProjectTemplate
+    {
+        public override string Description => "Blast waves of enemies in an arena, with three hearts, a menu, options, game over and high score. WASD to fly, mouse to aim, click to fire.";
+
+        public override int Order => 30;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Tense, seed: 2) with { Volume = 0.7f };
+
+        protected override Scene BuildStartScene() => ArcadeMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => new()
+        {
+            ["Scenes/Game.scene"] = ArcadeGame(),
+            ["Scenes/Options.scene"] = ArcadeOptions(),
+        };
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => new()
+        {
+            ["Prefabs/Sparkle.prefab"] = Sparkle(),
+            ["Prefabs/Bullet.prefab"] = ArcadeBullet(),
+            ["Prefabs/Enemy.prefab"] = ArcadeEnemy(),
+        };
+
+        public override IReadOnlyDictionary<string, string> Scripts() => new Dictionary<string, string>
         {
             ["Scripts/Ship.cs"] = ShipScript,
             ["Scripts/Bullet.cs"] = BulletScript,
             ["Scripts/Enemy.cs"] = EnemyScript,
             ["Scripts/EnemySpawner.cs"] = EnemySpawnerScript,
             ["Scripts/GameOver.cs"] = GameOverScript,
-        },
-        ProjectTemplate.BunnyMark => new Dictionary<string, string>
-        {
-            ["Scripts/Bunny.cs"] = BunnyScript,
-            ["Scripts/BunnyMark.cs"] = BunnyMarkScript,
-        },
-        _ => new Dictionary<string, string>(),
-    };
-
-    /// <summary>Prefab files (relative to Assets) for a template.</summary>
-    internal static IReadOnlyDictionary<string, Entity> Prefabs(ProjectTemplate template)
-    {
-        var prefabs = BuildPrefabs(template);
-        foreach (var entity in prefabs.Values.SelectMany(p => p.SelfAndDescendants()))
-            TemplateSounds.Wire(entity);
-        return prefabs;
+        };
     }
-
-    private static Dictionary<string, Entity> BuildPrefabs(ProjectTemplate template) => template switch
-    {
-        ProjectTemplate.Platformer or ProjectTemplate.TopDown => new Dictionary<string, Entity>
-        {
-            ["Prefabs/Sparkle.prefab"] = Sparkle(),
-        },
-        ProjectTemplate.Arcade => new Dictionary<string, Entity>
-        {
-            ["Prefabs/Sparkle.prefab"] = Sparkle(),
-            ["Prefabs/Bullet.prefab"] = ArcadeBullet(),
-            ["Prefabs/Enemy.prefab"] = ArcadeEnemy(),
-        },
-        ProjectTemplate.Strategy => StrategyPrefabs(),
-        ProjectTemplate.Shooter => ShooterPrefabs(),
-        ProjectTemplate.Sandbox => SandboxPrefabs(),
-        ProjectTemplate.Contraption => ContraptionPrefabs(),
-        ProjectTemplate.Multiplayer => MultiplayerPrefabs(),
-        ProjectTemplate.Roguelike => RoguePrefabs(),
-        ProjectTemplate.Tactics => TacticsPrefabs(),
-        ProjectTemplate.BunnyMark => BunnyMarkPrefabs(),
-        _ => new Dictionary<string, Entity>(),
-    };
 
     // A one-shot burst that cleans itself up; pickups spawn it, in their own color, when collected.
     private static Entity Sparkle()
@@ -184,7 +132,7 @@ public static partial class ProjectTemplates
         return entity;
     }
 
-    private static Scene Empty()
+    private static Scene EmptyScene()
     {
         var scene = new Scene();
         var camera = new Entity("Main Camera");

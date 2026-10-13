@@ -456,6 +456,35 @@ public class SceneToolsTests
         Assert.Contains("Jetpack", Run("components_list", """{"category": "Gameplay"}""").Text);
     }
 
+    // An agent that knew a component or property by its old name still reaches it, and sees what was kept.
+    [Fact]
+    public void FormerNamesVersionsAndKeptValues_ReachAgents()
+    {
+        _host.Components.Register<Griff.Tests.Scenes.Lantern>();
+        _host.Components.Register<Griff.Tests.Scenes.Timer>();
+
+        var described = Run("component_describe", """{"component": "Lamp"}""").Text;
+        var created = Run("entity_create", """{"entity": {"name": "Torch", "components": {"Lantern": {"range": 4}}}}""");
+
+        Assert.StartsWith("# Lantern", described);
+        Assert.Contains("Formerly saved as: ", described);
+        Assert.Contains("(Formerly Range, Reach.)", described);
+        Assert.Contains("Saved data version: 3", Run("component_describe", """{"component": "Timer"}""").Text);
+        Assert.False(created.IsError, created.Text);
+        Assert.Equal(4f, Named("Torch").GetComponent<Griff.Tests.Scenes.Lantern>()!.Radius);
+
+        // A value it has no property for is shown as kept, and the output goes back in as it is.
+        var data = System.Text.Json.JsonDocument.Parse("""{"type": "Griff.Tests.Scenes.Lantern", "radius": 2, "flicker": 0.5}""").RootElement;
+        var lamp = new Entity("Lamp");
+        lamp.AddComponent(new SceneSerializer(_host.Components).DeserializeComponent(data));
+        _host.Scene!.Add(lamp);
+        var shown = Run("entity_get", """{"entity": "Lamp"}""").Text;
+        Assert.Contains("\"kept\": {", shown);
+        Assert.Contains("\"flicker\": 0.5", shown);
+        var again = Run("entity_create", $$"""{"entity": {{shown}}}""");
+        Assert.False(again.IsError, again.Text);
+    }
+
     [Fact]
     public void Locked_IsCreatedShownAndUpdated()
     {

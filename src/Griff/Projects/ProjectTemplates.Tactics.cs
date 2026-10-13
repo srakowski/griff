@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -10,6 +11,23 @@ namespace Griff.Projects;
 // Victory and Defeat panels that open on the turn order's Defeat Message.
 public static partial class ProjectTemplates
 {
+    private sealed class TacticsTemplate : ProjectTemplate
+    {
+        public override string Description => "Lead two knights and two archers against an orc warband on a field of trees and rocks, side by side in turns: click a unit to see how far it can walk and hit, send it, and attack. The computer plays the orcs. Click a unit, then a blue cell to walk there and a red foe to attack, right-click to take a walk back, Tab to end your turn.";
+
+        public override int Order => 120;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Heroic, seed: 15) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => TacticsMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => new() { ["Scenes/Battle.scene"] = TacticsBattle() };
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => TacticsPrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.TacticsFiles();
+    }
+
     private static readonly Color TacticsBlue = Color.FromBytes(0x4C, 0x8D, 0xF0);
     private static readonly Color TacticsRed = Color.FromBytes(0xD8, 0x4A, 0x40);
     private static readonly Color TacticsGray = Color.FromBytes(0x3A, 0x3F, 0x4B);

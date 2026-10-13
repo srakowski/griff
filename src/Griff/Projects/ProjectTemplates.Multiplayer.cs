@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -7,6 +8,23 @@ namespace Griff.Projects;
 // The Multiplayer template: a menu to host or join, and an arena for up to eight players, made only of components.
 public static partial class ProjectTemplates
 {
+    private sealed class MultiplayerTemplate : ProjectTemplate
+    {
+        public override string Description => "Play with friends: up to eight players in an arena, on one network or over the internet. Host from the menu and others join with your address (in the editor, Game > Play with 2 Players). Shoot each other and the slimes, grab hearts, and top the scoreboard. WASD to move, the mouse to aim, click to fire, Shift to dash.";
+
+        public override int Order => 130;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Tense, seed: 11) with { Volume = 0.55f };
+
+        protected override Scene BuildStartScene() => MultiplayerMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => new() { ["Scenes/Arena.scene"] = MultiplayerArena() };
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => MultiplayerPrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.ArenaFiles();
+    }
+
     private static readonly Color ArenaBlue = Color.FromBytes(0x4C, 0x8D, 0xFF);
     private static readonly Color ArenaGray = Color.FromBytes(0x3A, 0x3F, 0x4B);
     private static readonly Color ArenaLight = Color.FromBytes(0xB4, 0xB9, 0xC4);

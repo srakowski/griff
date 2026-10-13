@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -8,6 +9,36 @@ namespace Griff.Projects;
 // of props to build machines from with tools and wires (Garry's Mod and Wiremod). All no-code components.
 public static partial class ProjectTemplates
 {
+    private sealed class SandboxTemplate : ProjectTemplate
+    {
+        public override string Description => "Dig and build in a world of blocks made from a seed: grassy hills, caves, coal, iron and gold, trees and sand that falls. Mine with the left mouse button, build with the right, pick blocks on the hotbar, and craft planks, torches, workbenches, furnaces and glass. A/D to walk, Space to jump, C to craft.";
+
+        public override int Order => 60;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Chill, seed: 6) with { Volume = 0.55f };
+
+        protected override Scene BuildStartScene() => Sandbox();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => SandboxPrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.SandboxFiles();
+    }
+
+    private sealed class ContraptionTemplate : ProjectTemplate
+    {
+        public override string Description => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.";
+
+        public override int Order => 70;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Bright, seed: 7) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => Contraption();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => ContraptionPrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.ContraptionFiles();
+    }
+
     private const int WorldWidth = 160, WorldHeight = 70;
 
     private static Scene Sandbox()

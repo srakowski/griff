@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -10,6 +11,21 @@ namespace Griff.Projects;
 // and a panel that opens on the goals' "Solved".
 public static partial class ProjectTemplates
 {
+    private sealed class PuzzleTemplate : ProjectTemplate
+    {
+        public override string Description => "Push crates onto the marks on the floor in four Sokoban levels, each opening once the one before is solved. Arrow keys or WASD to walk and push, Z to take a move back, R to start the level over.";
+
+        public override int Order => 80;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Chill, seed: 9) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => PuzzleMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => PuzzleLevelScenes();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.PuzzleFiles();
+    }
+
     private static readonly Color PuzzleOrange = Color.FromBytes(0xF0, 0x8C, 0x2E);
     private static readonly Color PuzzleBlue = Color.FromBytes(0x4C, 0x9A, 0xFF);
     private static readonly Color PuzzleGray = Color.FromBytes(0x3A, 0x3F, 0x4B);
@@ -69,8 +85,8 @@ public static partial class ProjectTemplates
     // Solving a level saves this, which opens the next one's button on the menu.
     private static string SolvedKey(int index) => $"solved-{PuzzleLevelScene(index).ToLowerInvariant()}";
 
-    private static Dictionary<string, Scene> PuzzleLevelScenes(ProjectTemplate template) =>
-        Enumerable.Range(0, PuzzleLevels.Count).ToDictionary(i => $"Scenes/{PuzzleLevelScene(i)}.scene", i => WithSounds(template, PuzzleLevel(i)));
+    private static Dictionary<string, Scene> PuzzleLevelScenes() =>
+        Enumerable.Range(0, PuzzleLevels.Count).ToDictionary(i => $"Scenes/{PuzzleLevelScene(i)}.scene", i => PuzzleLevel(i));
 
     // The menu: a title, a button for each level (each but the first opening once the one before is solved), and Quit.
     private static Scene PuzzleMenu()

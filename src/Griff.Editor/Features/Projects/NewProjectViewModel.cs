@@ -69,24 +69,9 @@ public sealed class NewProjectViewModel : ObservableObject
 
     public sealed record TemplateOption(ProjectTemplate Template, string Name, string Description);
 
+    /// <summary>Every template Griff has, in the order they're listed (each says where, with its Order).</summary>
     public IReadOnlyList<TemplateOption> Templates { get; } =
-    [
-        new(ProjectTemplate.Platformer, "Platformer", ProjectTemplates.Describe(ProjectTemplate.Platformer)),
-        new(ProjectTemplate.TopDown, "Top-down", ProjectTemplates.Describe(ProjectTemplate.TopDown)),
-        new(ProjectTemplate.Arcade, "Arcade", ProjectTemplates.Describe(ProjectTemplate.Arcade)),
-        new(ProjectTemplate.Strategy, "Strategy", ProjectTemplates.Describe(ProjectTemplate.Strategy)),
-        new(ProjectTemplate.Shooter, "Shooter", ProjectTemplates.Describe(ProjectTemplate.Shooter)),
-        new(ProjectTemplate.Sandbox, "Sandbox", ProjectTemplates.Describe(ProjectTemplate.Sandbox)),
-        new(ProjectTemplate.Contraption, "Contraption", ProjectTemplates.Describe(ProjectTemplate.Contraption)),
-        new(ProjectTemplate.Puzzle, "Puzzle", ProjectTemplates.Describe(ProjectTemplate.Puzzle)),
-        new(ProjectTemplate.Match3, "Match-3", ProjectTemplates.Describe(ProjectTemplate.Match3)),
-        new(ProjectTemplate.FallingBlocks, "Falling Blocks", ProjectTemplates.Describe(ProjectTemplate.FallingBlocks)),
-        new(ProjectTemplate.Roguelike, "Roguelike", ProjectTemplates.Describe(ProjectTemplate.Roguelike)),
-        new(ProjectTemplate.Tactics, "Tactics", ProjectTemplates.Describe(ProjectTemplate.Tactics)),
-        new(ProjectTemplate.Multiplayer, "Multiplayer", ProjectTemplates.Describe(ProjectTemplate.Multiplayer)),
-        new(ProjectTemplate.BunnyMark, "BunnyMark", ProjectTemplates.Describe(ProjectTemplate.BunnyMark)),
-        new(ProjectTemplate.Empty, "Empty", ProjectTemplates.Describe(ProjectTemplate.Empty)),
-    ];
+        ProjectTemplates.All.Select(t => new TemplateOption(t, t.Title, t.Description)).ToList();
 
     private TemplateOption? _selectedTemplate;
 

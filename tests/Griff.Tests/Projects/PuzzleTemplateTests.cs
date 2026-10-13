@@ -22,7 +22,7 @@ public sealed class PuzzleTemplateTests : IDisposable
 
     private async Task<(Project Project, Game Game)> Create(string? scene = null)
     {
-        var project = await Project.CreateAsync(_root, "Puzzle", ProjectTemplate.Puzzle);
+        var project = await Project.CreateAsync(_root, "Puzzle", ProjectTemplates.Get("Puzzle"));
         var game = new Game(GameLoader.LoadScene(project, _registry, scene ?? Project.DefaultSceneName), _input)
         {
             PrefabLoader = new PrefabLibrary(project, _registry).Instantiate,
@@ -245,7 +245,7 @@ public sealed class PuzzleTemplateTests : IDisposable
     [Fact]
     public async Task ComesWithItsPictures_SoundsAndMusic_ThatEverythingUses()
     {
-        var project = await Project.CreateAsync(_root, "Puzzle", ProjectTemplate.Puzzle);
+        var project = await Project.CreateAsync(_root, "Puzzle", ProjectTemplates.Get("Puzzle"));
         var serializer = new SceneSerializer(_registry);
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();
         Assert.Equal(1 + ProjectTemplates.PuzzleLevels.Count, project.FindScenes().Count());

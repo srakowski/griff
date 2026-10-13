@@ -93,7 +93,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             Description = "Shows one entity in full: every component with its property values (only the ones changed from the " +
                 "default unless \"all\" is true) and its children. The output is in the same form entity_create takes. While " +
                 "the game is playing, each component also has \"live\": what it says about itself as it runs and isn't saved " +
-                "(a beat clock's Beat, a spawner's Spawned, whether a pickup IsCollected).",
+                "(a beat clock's Beat, a spawner's Spawned, whether a pickup IsCollected). A component with saved values it has no " +
+                "property for (one a script no longer has, or from a newer version) lists them as \"kept\": they're saved back as they " +
+                "were, and come back if the property does.",
             InputSchema = Schema.Object([
                 ("entity", Schema.String("A name, id (or the start of one) or path like \"Level/Door\".")),
                 ("all", Schema.Bool("Show every property, defaults too.")),
@@ -345,6 +347,10 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     continue;
                 data[property.SerializedName] = AgentValues.ToJson(value);
             }
+
+            // Saved values it has no property for (one since removed, or from a newer version), written back on save.
+            if (component.Kept is { Count: > 0 } kept)
+                data["kept"] = new JsonObject(kept.Select(k => KeyValuePair.Create(k.Key, JsonNode.Parse(k.Value.GetRawText()))));
 
             if (host.IsPlaying && Live(component, descriptor) is { Count: > 0 } live)
                 data["live"] = live;
@@ -753,6 +759,10 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             text.AppendLine("Works with: " + string.Join("; ", descriptor.WorksWith.Select(r => r.Type.Name + (r.Note is null ? "" : $" ({r.Note})"))));
         if (entry is { RequiredBy.Count: > 0 })
             text.AppendLine("Needed by: " + string.Join(", ", entry.RequiredBy.Select(r => r.DisplayName)));
+        if (descriptor.FormerNames.Count > 0)
+            text.AppendLine("Formerly saved as: " + string.Join(", ", descriptor.FormerNames) + " (scenes that use those names still load).");
+        if (descriptor.Version > 1)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Saved data version: {descriptor.Version} (older scenes are upgraded as they load).");
 
         text.AppendLine().AppendLine("Properties (key: kind = default. meaning):");
         var docs = entry?.Properties.ToDictionary(p => p.Name) ?? [];
@@ -779,6 +789,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             text.Append(CultureInfo.InvariantCulture, $"- {property.SerializedName}: {AgentValues.Describe(property.Type)} = {fallback}");
             if (meaning.Length > 0)
                 text.Append(". ").Append(meaning);
+            if (property.FormerNames.Count > 0)
+                text.Append(CultureInfo.InvariantCulture, $" (Formerly {string.Join(", ", property.FormerNames)}.)");
             if (property.ShownWhenText(property: p => descriptor.Properties.First(d => d.Name == p).SerializedName) is { } shownWhen)
                 text.Append(CultureInfo.InvariantCulture, $" (Only used when {shownWhen}.)");
             if (property.Distance is not null)
@@ -865,7 +877,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var all = host.Components.All;
         var found = all.FirstOrDefault(d => d.DisplayName == name || d.Name == name)
             ?? all.FirstOrDefault(d => d.DisplayName.Equals(name, StringComparison.OrdinalIgnoreCase) || d.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(d => d.DisplayName.Replace(" ", "").Equals(name.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+            ?? all.FirstOrDefault(d => d.DisplayName.Replace(" ", "").Equals(name.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
+            ?? host.Components.Find(name);
         if (found is not null)
             return found;
 
@@ -923,7 +936,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             var property = descriptor.Properties.FirstOrDefault(p => p.SerializedName == entry.Name || p.Name == entry.Name)
                 ?? descriptor.Properties.FirstOrDefault(p => p.Name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase))
                 ?? descriptor.Properties.FirstOrDefault(p => p.Name.Equals(entry.Name.Replace(" ", "").Replace("_", ""), StringComparison.OrdinalIgnoreCase))
-                ?? throw new AgentException($"{descriptor.DisplayName} has no property \"{entry.Name}\". It has: {string.Join(", ", descriptor.Properties.Select(p => p.SerializedName))}.");
+                ?? descriptor.Properties.FirstOrDefault(p => p.FormerNames.Any(n => n.Equals(entry.Name, StringComparison.OrdinalIgnoreCase)));
+            // What entity_get adds that isn't a property (so its output can be given back as it is).
+            if (property is null && entry.Name is "kept" or "live" or "note" or "needs")
+                continue;
+            if (property is null)
+                throw new AgentException($"{descriptor.DisplayName} has no property \"{entry.Name}\". It has: {string.Join(", ", descriptor.Properties.Select(p => p.SerializedName))}.");
 
             object? value;
             try

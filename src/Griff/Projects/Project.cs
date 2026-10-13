@@ -79,7 +79,7 @@ public sealed class Project
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var stream = File.Create(path);
-        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.CreateScene(ProjectTemplate.Empty), stream);
+        new SceneSerializer(ComponentRegistry.CreateDefault()).Save(ProjectTemplates.Empty.StartScene(), stream);
         return path;
     }
 
@@ -121,9 +121,9 @@ public sealed class Project
 
     /// <summary>
     /// Creates a project in a new folder named after it inside <paramref name="parentDirectory"/>.
-    /// An existing empty folder is reused; a non-empty one is refused.
+    /// An existing empty folder is reused; a non-empty one is refused. Without a <paramref name="template"/>, it starts Empty.
     /// </summary>
-    public static async Task<Project> CreateAsync(string parentDirectory, string name, ProjectTemplate template = ProjectTemplate.Empty, CancellationToken cancellationToken = default)
+    public static async Task<Project> CreateAsync(string parentDirectory, string name, ProjectTemplate? template = null, CancellationToken cancellationToken = default)
     {
         if (ProjectNames.Validate(name) is { } error)
             throw new ArgumentException(error, nameof(name));
@@ -140,7 +140,7 @@ public sealed class Project
 
             var startScene = $"{AssetsFolderName}/{DefaultSceneName}{SceneExtension}";
             var project = new Project(root, new ProjectManifest(name.Trim(), ProjectManifest.CurrentFormatVersion, DateTimeOffset.UtcNow, startScene));
-            await WriteTemplateAsync(project, template, startScene, cancellationToken);
+            await WriteTemplateAsync(project, template ?? ProjectTemplates.Empty, startScene, cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "# Griff exports and editor state\nBuild/\n.griff/\n", cancellationToken);
             await using (var stream = File.Create(project.ManifestPath))
                 await JsonSerializer.SerializeAsync(stream, project.Manifest, JsonOptions, cancellationToken);
@@ -199,14 +199,14 @@ public sealed class Project
     // A new project opens to something: the template's scene, scripts and prefabs.
     private static async Task WriteTemplateAsync(Project project, ProjectTemplate template, string startScene, CancellationToken cancellationToken)
     {
-        foreach (var (relative, source) in ProjectTemplates.Scripts(template))
+        foreach (var (relative, source) in template.Scripts())
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, source.ReplaceLineEndings(), cancellationToken);
         }
 
-        foreach (var (relative, bytes) in ProjectTemplates.Sounds(template).Concat(ProjectTemplates.Images(template)))
+        foreach (var (relative, bytes) in template.Sounds().Concat(template.Images()))
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -214,14 +214,14 @@ public sealed class Project
         }
 
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
-        foreach (var (relative, prefab) in ProjectTemplates.Prefabs(template))
+        foreach (var (relative, prefab) in template.Prefabs())
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, serializer.SavePrefabToString(prefab), cancellationToken);
         }
 
-        foreach (var (relative, scene) in ProjectTemplates.MoreScenes(template))
+        foreach (var (relative, scene) in template.MoreScenes())
         {
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -229,7 +229,7 @@ public sealed class Project
         }
 
         await using var stream = File.Create(project.ResolvePath(startScene));
-        serializer.Save(ProjectTemplates.CreateScene(template), stream);
+        serializer.Save(template.StartScene(), stream);
         await stream.FlushAsync(cancellationToken);
     }
 

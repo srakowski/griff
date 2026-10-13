@@ -16,7 +16,7 @@ internal static partial class SnapshotRunner
     private static async Task StrategySnapshots(IServiceProvider services, IWorkspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Strategy", Griff.Projects.ProjectTemplate.Strategy);
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Strategy", Griff.Projects.ProjectTemplates.Get("Strategy"));
         var play = services.GetRequiredService<PlayMode>();
         play.Play();
         await Task.Delay(700);

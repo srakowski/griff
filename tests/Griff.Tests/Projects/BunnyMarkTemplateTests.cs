@@ -24,7 +24,7 @@ public sealed class BunnyMarkTemplateTests : IDisposable
 
     private async Task<(Game Game, Component BunnyMark)> Create()
     {
-        var project = await Project.CreateAsync(_root, "Bunnies", ProjectTemplate.BunnyMark);
+        var project = await Project.CreateAsync(_root, "Bunnies", ProjectTemplates.Get("BunnyMark"));
         var registry = ComponentRegistry.CreateDefault();
         var compiled = new ScriptHost(registry).ReloadFolder(project.AssetsPath, []);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));

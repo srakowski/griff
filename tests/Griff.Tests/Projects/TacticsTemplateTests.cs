@@ -23,7 +23,7 @@ public sealed class TacticsTemplateTests : IDisposable
 
     private async Task<Game> Create(string? scene = null)
     {
-        var project = await Project.CreateAsync(_root, "Skirmish", ProjectTemplate.Tactics);
+        var project = await Project.CreateAsync(_root, "Skirmish", ProjectTemplates.Get("Tactics"));
         Scene Load(string name) => GameLoader.LoadScene(project, _registry, name);
         var game = new Game(Load(scene ?? Project.DefaultSceneName), _input)
         {

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -8,6 +9,19 @@ namespace Griff.Projects;
 // units to train, and the computer playing the red team. All of it no-code components; units and buildings are prefabs.
 public static partial class ProjectTemplates
 {
+    private sealed class StrategyTemplate : ProjectTemplate
+    {
+        public override string Description => "Command an army in real time against the computer: gather gold and wood with workers, put up farms, barracks and towers, train soldiers and archers, and destroy the red base. Click or drag to select, right-click to send, hotkeys on the command card, arrow keys or the minimap to look around.";
+
+        public override int Order => 40;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Heroic, seed: 5) with { Volume = 0.6f };
+
+        protected override Scene BuildStartScene() => Strategy();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => StrategyPrefabs();
+    }
+
     private static readonly Color PlayerBlue = Color.FromBytes(0x4C, 0x9A, 0xFF);
     private static readonly Color EnemyRed = Color.FromBytes(0xE5, 0x53, 0x4B);
     private static readonly Color GoldColor = Color.FromBytes(0xE3, 0xB3, 0x41);

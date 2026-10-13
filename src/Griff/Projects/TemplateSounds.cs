@@ -4,7 +4,7 @@ using Griff.Scenes;
 namespace Griff.Projects;
 
 /// <summary>
-/// The sounds and music the Platformer, Top-down, Arcade, Strategy and Shooter templates come with, made by the Sound Maker's synths
+/// The sounds and music the templates come with (all but Empty and BunnyMark), made by the Sound Maker's synths
 /// (so they open in it to tweak), and hooked up to everything in the template that makes a noise.
 /// </summary>
 internal static class TemplateSounds
@@ -44,12 +44,9 @@ internal static class TemplateSounds
         (Place, SoundPreset.Blip, 13, 0.15f, 0.4f),
     ];
 
-    /// <summary>The sound files for a template (relative to Assets), as WAV bytes.</summary>
-    public static IReadOnlyDictionary<string, byte[]> Files(ProjectTemplate template)
+    /// <summary>The sound effects every template with sounds comes with, plus <paramref name="music"/> (relative to Assets), as WAV bytes.</summary>
+    public static IReadOnlyDictionary<string, byte[]> Files(MusicRecipe music)
     {
-        if (template is ProjectTemplate.Empty or ProjectTemplate.BunnyMark)
-            return new Dictionary<string, byte[]>();
-
         var files = new Dictionary<string, byte[]>();
         foreach (var (path, preset, seed, maxSeconds, volume) in Effects)
         {
@@ -57,27 +54,9 @@ internal static class TemplateSounds
             files[path] = Wav.Encode(SoundSynth.Render(recipe), recipe);
         }
 
-        var music = MusicFor(template);
         files[Music] = Wav.Encode(MusicSynth.Render(music), music: music);
         return files;
     }
-
-    public static MusicRecipe MusicFor(ProjectTemplate template) => template switch
-    {
-        ProjectTemplate.TopDown => MusicRecipe.ForMood(MusicMood.Chill, seed: 4) with { Volume = 0.7f },
-        ProjectTemplate.Arcade => MusicRecipe.ForMood(MusicMood.Tense, seed: 2) with { Volume = 0.7f },
-        ProjectTemplate.Strategy => MusicRecipe.ForMood(MusicMood.Heroic, seed: 5) with { Volume = 0.6f },
-        ProjectTemplate.Shooter => MusicRecipe.ForMood(MusicMood.Tense, seed: 8) with { Volume = 0.5f },
-        ProjectTemplate.Sandbox => MusicRecipe.ForMood(MusicMood.Chill, seed: 6) with { Volume = 0.55f },
-        ProjectTemplate.Contraption => MusicRecipe.ForMood(MusicMood.Bright, seed: 7) with { Volume = 0.5f },
-        ProjectTemplate.Multiplayer => MusicRecipe.ForMood(MusicMood.Tense, seed: 11) with { Volume = 0.55f },
-        ProjectTemplate.Puzzle => MusicRecipe.ForMood(MusicMood.Chill, seed: 9) with { Volume = 0.5f },
-        ProjectTemplate.Match3 => MusicRecipe.ForMood(MusicMood.Bright, seed: 12) with { Volume = 0.5f },
-        ProjectTemplate.FallingBlocks => MusicRecipe.ForMood(MusicMood.Tense, seed: 13) with { Volume = 0.5f },
-        ProjectTemplate.Roguelike => MusicRecipe.ForMood(MusicMood.Spooky, seed: 14) with { Volume = 0.5f },
-        ProjectTemplate.Tactics => MusicRecipe.ForMood(MusicMood.Heroic, seed: 15) with { Volume = 0.5f },
-        _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
-    };
 
     private static SoundRecipe Pick(SoundPreset preset, int seed, float maxSeconds)
     {

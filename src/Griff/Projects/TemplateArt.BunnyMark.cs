@@ -5,7 +5,7 @@ internal static partial class TemplateArt
 {
     public const string Bunny = "Textures/bunny.png";
 
-    private static Dictionary<string, byte[]> BunnyMarkFiles() => new()
+    internal static Dictionary<string, byte[]> BunnyMarkFiles() => new()
     {
         [Bunny] = BunnyArt().Png(),
     };

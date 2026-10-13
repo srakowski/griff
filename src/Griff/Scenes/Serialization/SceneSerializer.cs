@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Griff.Scenes.Serialization;
 
@@ -277,10 +278,24 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         var descriptor = registry.Get(component.GetType());
         writer.WriteStartObject();
         writer.WriteString("type", descriptor.Name);
+        if (descriptor.Version > 1)
+            writer.WriteNumber("version", descriptor.Version);
         foreach (var property in descriptor.Properties)
         {
             writer.WritePropertyName(property.SerializedName);
             ValueCodec.Write(writer, property.GetValue(component));
+        }
+
+        // Values it has no property for go back as they came, after its own (unless it has gained one of that name since).
+        if (component.Kept is { } kept)
+        {
+            foreach (var (key, value) in kept)
+            {
+                if (key is "type" or "version" || descriptor.Properties.Any(p => p.SerializedName == key))
+                    continue;
+                writer.WritePropertyName(key);
+                ValueCodec.WriteKept(writer, value);
+            }
         }
 
         writer.WriteEndObject();
@@ -353,11 +368,42 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             entity.AddComponent(component);
     }
 
+    // Brings older data up to the type's version, reads each property (under its name now or a former one), and keeps
+    // whatever is left over on the component so saving writes it back. Upgrade steps see properties under the names
+    // they have now, whatever they were saved as.
     private static void ReadProperties(Component component, ComponentDescriptor descriptor, JsonElement data, string label, LoadContext context)
     {
+        var version = data.TryGetProperty("version", out var v) && v.TryGetInt32(out var saved) ? saved : 1;
+        if (version > descriptor.Version)
+        {
+            context.Warn($"{label} was saved by a newer version of it ({version}, this is {descriptor.Version}); values it doesn't know were kept.");
+        }
+        else if (version < descriptor.Version)
+        {
+            var json = JsonObject.Create(data.Clone())!;
+            foreach (var property in descriptor.Properties.Where(p => !json.ContainsKey(p.SerializedName)))
+            {
+                if (property.FormerSerializedNames.FirstOrDefault(json.ContainsKey) is { } former && json.Remove(former, out var value))
+                    json[property.SerializedName] = value;
+            }
+
+            try
+            {
+                descriptor.Upgrade(new SavedData(json), version);
+                data = JsonSerializer.SerializeToElement(json);
+            }
+            catch (Exception ex)
+            {
+                context.Warn($"{label} couldn't be upgraded from version {version}: {ex.Message} Its values were read as saved.");
+            }
+        }
+
+        var used = new HashSet<string>(StringComparer.Ordinal) { "type", "version" };
         foreach (var property in descriptor.Properties)
         {
-            if (!data.TryGetProperty(property.SerializedName, out var value))
+            used.UnionWith(property.FormerSerializedNames);
+            used.Add(property.SerializedName);
+            if (!TryGetSaved(data, property, out var value))
                 continue;
 
             try
@@ -369,6 +415,23 @@ public sealed class SceneSerializer(ComponentRegistry registry)
                 context.Warn($"{label}.{property.Name}: {ex.Message} Kept the default.");
             }
         }
+
+        var kept = data.EnumerateObject().Where(p => !used.Contains(p.Name)).Select(p => KeyValuePair.Create(p.Name, p.Value.Clone())).ToList();
+        component.Kept = kept.Count > 0 ? kept : null;
+    }
+
+    // Its value under the name it has now, or else under a name it had before.
+    private static bool TryGetSaved(JsonElement data, PropertyDescriptor property, out JsonElement value)
+    {
+        if (data.TryGetProperty(property.SerializedName, out value))
+            return true;
+        foreach (var former in property.FormerSerializedNames)
+        {
+            if (data.TryGetProperty(former, out value))
+                return true;
+        }
+
+        return false;
     }
 
     private sealed class LoadContext(ICollection<string>? warnings, bool newIds = false)

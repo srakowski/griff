@@ -9,7 +9,7 @@ namespace Griff.Scenes.Serialization;
 /// Saved properties carry over; a type that disappeared becomes a <see cref="MissingComponent"/> and one
 /// that reappears is restored. Entities stay the same objects, so selections and entity references survive.
 /// </summary>
-public static class ComponentMigrator
+public static class ComponentSwap
 {
     public sealed record Snapshot(IReadOnlyList<(Entity Entity, Component Component, JsonElement Data)> Items);
 

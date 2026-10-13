@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Griff.Audio;
 using Griff.Scenes;
 
 namespace Griff.Projects;
@@ -9,6 +10,21 @@ namespace Griff.Projects;
 // opens the way out, and a shotgun waits in the armory. All of it no-code components; the art is painted by TemplateArt.
 public static partial class ProjectTemplates
 {
+    private sealed class ShooterTemplate : ProjectTemplate
+    {
+        public override string Description => "Fight your way out of a dark base in first person: grunts that charge, robots that throw fireballs, sliding doors, a blue key for the way out and a shotgun in the armory. The level is a tilemap you paint top-down. WASD to move, the mouse or arrows to turn, click to fire, 1 and 2 to change weapon.";
+
+        public override int Order => 50;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Tense, seed: 8) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => Shooter();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => ShooterPrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.ShooterFiles();
+    }
+
     private static readonly Color ShooterGreen = Color.FromBytes(0x57, 0xD3, 0x6B);
     private static readonly Color ShooterBlue = Color.FromBytes(0x8C, 0xB8, 0xFF);
     private static readonly Color LampLight = Color.FromBytes(0xFF, 0xC8, 0x80);

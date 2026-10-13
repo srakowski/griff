@@ -15,9 +15,9 @@ internal static partial class TemplateArt
     /// <summary>The tiles across <see cref="PieceTiles"/>: one for each shape, in the order of FallingBoard.AllShapes.</summary>
     public const int PieceColumns = 7;
 
-    private static Dictionary<string, byte[]> MatchFiles() => new() { [GemTiles] = GemSheet().Png() };
+    internal static Dictionary<string, byte[]> MatchFiles() => new() { [GemTiles] = GemSheet().Png() };
 
-    private static Dictionary<string, byte[]> FallingFiles() => new() { [PieceTiles] = PieceSheet().Png() };
+    internal static Dictionary<string, byte[]> FallingFiles() => new() { [PieceTiles] = PieceSheet().Png() };
 
     private static Canvas GemSheet()
     {

@@ -126,7 +126,7 @@ internal static partial class SnapshotRunner
 
             // A Platformer project: template scripts compile on open, text renders on the GPU.
             await workspace.SaveSceneAsync();
-            await workspace.CreateProjectAsync(projectDir, "Snapshot Platformer", Griff.Projects.ProjectTemplate.Platformer);
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Platformer", Griff.Projects.ProjectTemplates.Get("Platformer"));
             var missing = workspace.Scene!.Scene.Entities.SelectMany(e => e.Components).Count(c => c is MissingComponent);
             checks.Add($"platformer scripts resolved: {(missing == 0 ? "ok" : $"FAILED ({missing} missing)")}");
             Render(main, Path.Combine(outputDir, "platformer-editor.png"));
@@ -315,7 +315,7 @@ internal static partial class SnapshotRunner
 
             // The Arcade template: menu buttons, screen anchors at the real window shape, scene names and Quit.
             await workspace.SaveSceneAsync();
-            await workspace.CreateProjectAsync(projectDir, "Snapshot Arcade", Griff.Projects.ProjectTemplate.Arcade);
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Arcade", Griff.Projects.ProjectTemplates.Get("Arcade"));
             var arcadeMissing = workspace.Scene!.Scene.Entities.SelectMany(e => e.Components).Count(c => c is MissingComponent);
             checks.Add($"arcade scripts resolved: {(arcadeMissing == 0 ? "ok" : $"FAILED ({arcadeMissing} missing)")}");
 
@@ -413,7 +413,7 @@ internal static partial class SnapshotRunner
 
             // The Top-down template is a dim dungeon: bright around the player's lantern and the torches, dark elsewhere.
             await workspace.SaveSceneAsync();
-            await workspace.CreateProjectAsync(projectDir, "Snapshot Dungeon", Griff.Projects.ProjectTemplate.TopDown);
+            await workspace.CreateProjectAsync(projectDir, "Snapshot Dungeon", Griff.Projects.ProjectTemplates.Get("TopDown"));
             play.Play();
             await Task.Delay(800);
             var dungeon = play.Game!;

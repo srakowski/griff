@@ -19,9 +19,9 @@ internal static partial class TemplateArt
     public const int GrassBlock = 0, DirtBlock = 1, StoneBlock = 2, CoalBlock = 3, IronBlock = 4, LogBlock = 5, LeavesBlock = 6, SandBlock = 7,
         PlanksBlock = 8, TorchBlock = 9, BedrockBlock = 10, WorkbenchBlock = 11, BricksBlock = 12, GlassBlock = 13, FurnaceBlock = 14, GoldBlock = 15;
 
-    private static Dictionary<string, byte[]> SandboxFiles() => new() { [BlockSheet] = Blocks().Png() };
+    internal static Dictionary<string, byte[]> SandboxFiles() => new() { [BlockSheet] = Blocks().Png() };
 
-    private static Dictionary<string, byte[]> ContraptionFiles() => new()
+    internal static Dictionary<string, byte[]> ContraptionFiles() => new()
     {
         [CrateArt] = Crate().Png(),
         [BallArt] = Ball().Png(),

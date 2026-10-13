@@ -18,7 +18,7 @@ internal static partial class SnapshotRunner
     private static async Task SandboxSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Sandbox", Griff.Projects.ProjectTemplate.Sandbox);
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Sandbox", Griff.Projects.ProjectTemplates.Get("Sandbox"));
         await Task.Delay(500);
         Render(main, Path.Combine(outputDir, "sandbox-editor.png"));
         var play = services.GetRequiredService<PlayMode>();
@@ -71,7 +71,7 @@ internal static partial class SnapshotRunner
     private static async Task ContraptionSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Contraption", Griff.Projects.ProjectTemplate.Contraption);
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Contraption", Griff.Projects.ProjectTemplates.Get("Contraption"));
         await Task.Delay(500);
         Render(main, Path.Combine(outputDir, "contraption-editor.png"));
         var play = services.GetRequiredService<PlayMode>();

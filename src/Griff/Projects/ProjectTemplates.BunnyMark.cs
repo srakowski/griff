@@ -8,6 +8,28 @@ namespace Griff.Projects;
 // is an ordinary entity, a Sprite and a script, so the count says how much an ordinary game can put on screen.
 public static partial class ProjectTemplates
 {
+    // A benchmark stays quiet, so it times nothing but itself.
+    private sealed class BunnyMarkTemplate : ProjectTemplate
+    {
+        public override string Description => "A benchmark: bunnies pour in and bounce about, more and more while the game keeps up 60 frames a second, until it finds how many this computer holds. Each one is an ordinary entity, a sprite and a script. The count is shown and saved, with the best so far. Space to run it again.";
+
+        public override int Order => 140;
+
+        protected override bool HasSounds => false;
+
+        protected override Scene BuildStartScene() => BunnyMarkScene();
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => BunnyMarkPrefabs();
+
+        public override IReadOnlyDictionary<string, string> Scripts() => new Dictionary<string, string>
+        {
+            ["Scripts/Bunny.cs"] = BunnyScript,
+            ["Scripts/BunnyMark.cs"] = BunnyMarkScript,
+        };
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.BunnyMarkFiles();
+    }
+
     private static readonly Color BunnySky = Color.FromBytes(0x1B, 0x22, 0x33);
     private static readonly Color BunnyText = Color.FromBytes(0xF4, 0xF4, 0xF8);
     private static readonly Color BunnyDim = Color.FromBytes(0xA4, 0xAC, 0xC0);

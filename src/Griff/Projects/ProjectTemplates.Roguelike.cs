@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -11,6 +12,23 @@ namespace Griff.Projects;
 // "Game Over".
 public static partial class ProjectTemplates
 {
+    private sealed class RoguelikeTemplate : ProjectTemplate
+    {
+        public override string Description => "Go down through a crypt made anew every game, floor after floor: find the stairs in each, fight the slimes and bats by walking into them, and pick up gold and potions. Everything moves when you move. The deepest floor reached is kept. Arrow keys or WASD to walk and fight, 1 to drink a potion, Tab to wait a turn.";
+
+        public override int Order => 110;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Spooky, seed: 14) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => RogueMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => new() { ["Scenes/Crypt.scene"] = RogueGame() };
+
+        protected override Dictionary<string, Entity> BuildPrefabs() => RoguePrefabs();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.CryptFiles();
+    }
+
     private static readonly Color RogueGold = Color.FromBytes(0xF2, 0xC9, 0x4C);
     private static readonly Color RogueRed = Color.FromBytes(0xB8, 0x3A, 0x48);
     private static readonly Color RogueGray = Color.FromBytes(0x34, 0x32, 0x3E);

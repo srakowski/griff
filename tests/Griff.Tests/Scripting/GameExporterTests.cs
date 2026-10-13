@@ -99,7 +99,7 @@ public sealed class GameExporterTests : IDisposable
     [Fact]
     public async Task ExportedArcade_KnowsItsStartScene_AndPlaysIntoItsGameScene()
     {
-        var project = await Project.CreateAsync(_root, "Arcade Export", ProjectTemplate.Arcade);
+        var project = await Project.CreateAsync(_root, "Arcade Export", ProjectTemplates.Get("Arcade"));
 
         var result = GameExporter.Export(project, _player, _output);
         Assert.True(result.Success, result.Error);

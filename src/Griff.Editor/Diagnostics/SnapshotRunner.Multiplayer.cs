@@ -17,7 +17,7 @@ internal static partial class SnapshotRunner
     private static async Task MultiplayerSnapshots(IServiceProvider services, IWorkspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Arena", Griff.Projects.ProjectTemplate.Multiplayer);
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Arena", Griff.Projects.ProjectTemplates.Get("Multiplayer"));
         Render(System.Windows.Application.Current.MainWindow!, Path.Combine(outputDir, "multiplayer-menu-editor.png"));
         await workspace.OpenSceneAsync(Path.Combine(workspace.Project!.AssetsPath, "Scenes", "Arena.scene"));
         var play = services.GetRequiredService<PlayMode>();

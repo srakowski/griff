@@ -27,7 +27,7 @@ public sealed class PlayerSmokeTests : IDisposable
     [InlineData("Small", " (needs .NET)")]
     public async Task ExportedArcade_RunsAndDrawsAFrame(string playerKind, string suffix)
     {
-        var project = await Project.CreateAsync(_root, "Griff Smoke", ProjectTemplate.Arcade);
+        var project = await Project.CreateAsync(_root, "Griff Smoke", ProjectTemplates.Get("Arcade"));
         var export = GameExporter.Export(project, PlayerPath(playerKind), Path.Combine(_root, "Build"), suffix);
         Assert.True(export.Success, export.Error);
 

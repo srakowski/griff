@@ -14,7 +14,7 @@ internal static partial class TemplateArt
 
     public const int FloorTile = 0, FloorTileAlt = 1, ArenaWallTile = 2;
 
-    private static Dictionary<string, byte[]> ArenaFiles() => new()
+    internal static Dictionary<string, byte[]> ArenaFiles() => new()
     {
         [Fighter] = FighterArt().Png(),
         [Slime] = SlimeArt().Png(),

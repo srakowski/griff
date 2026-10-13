@@ -32,52 +32,30 @@ internal static partial class TemplateArt
     // The tiles of the wall sheet, in order.
     public const int StoneTile = 0, PanelTile = 1, BrickTile = 2, MossTile = 3, ComputerTile = 4, ExitTile = 5, HazardTile = 6, WoodTile = 7;
 
-    /// <summary>The image files for a template (relative to Assets), as PNG bytes.</summary>
-    public static IReadOnlyDictionary<string, byte[]> Files(ProjectTemplate template)
+    /// <summary>The Top-down template's pictures: the guide's portrait.</summary>
+    internal static Dictionary<string, byte[]> TopDownFiles() => new() { [GuidePortrait] = GuideArt().Png() };
+
+    /// <summary>The Shooter template's pictures: the wall tiles, enemies, pickups and the guns held in hand.</summary>
+    internal static Dictionary<string, byte[]> ShooterFiles() => new()
     {
-        if (template == ProjectTemplate.Sandbox)
-            return SandboxFiles();
-        if (template == ProjectTemplate.Contraption)
-            return ContraptionFiles();
-        if (template == ProjectTemplate.Multiplayer)
-            return ArenaFiles();
-        if (template == ProjectTemplate.Puzzle)
-            return PuzzleFiles();
-        if (template == ProjectTemplate.Match3)
-            return MatchFiles();
-        if (template == ProjectTemplate.FallingBlocks)
-            return FallingFiles();
-        if (template == ProjectTemplate.Roguelike)
-            return CryptFiles();
-        if (template == ProjectTemplate.Tactics)
-            return TacticsFiles();
-        if (template == ProjectTemplate.BunnyMark)
-            return BunnyMarkFiles();
-        if (template == ProjectTemplate.TopDown)
-            return new Dictionary<string, byte[]> { [GuidePortrait] = GuideArt().Png() };
-        if (template != ProjectTemplate.Shooter)
-            return new Dictionary<string, byte[]>();
-        return new Dictionary<string, byte[]>
-        {
-            [Walls] = WallSheet().Png(),
-            [Grunt] = GruntArt().Png(),
-            [Gunner] = GunnerArt().Png(),
-            [Fireball] = FireballArt().Png(),
-            [Medkit] = MedkitArt().Png(),
-            [Bullets] = AmmoArt(Rgb(0x5B, 0x63, 0x3A), Rgb(0xD9, 0xB0, 0x4C)).Png(),
-            [Shells] = AmmoArt(Rgb(0x8C, 0x2E, 0x2A), Rgb(0xC9, 0x3F, 0x35)).Png(),
-            [Shotgun] = ShotgunPickupArt().Png(),
-            [Key] = KeyArt().Png(),
-            [Barrel] = BarrelArt().Png(),
-            [Lamp] = LampArt().Png(),
-            [Door] = DoorArt().Png(),
-            [Player] = PlayerArt().Png(),
-            [PistolView] = PistolArt(firing: false).Png(),
-            [PistolFire] = PistolArt(firing: true).Png(),
-            [ShotgunView] = ShotgunViewArt(firing: false).Png(),
-            [ShotgunFire] = ShotgunViewArt(firing: true).Png(),
-        };
-    }
+        [Walls] = WallSheet().Png(),
+        [Grunt] = GruntArt().Png(),
+        [Gunner] = GunnerArt().Png(),
+        [Fireball] = FireballArt().Png(),
+        [Medkit] = MedkitArt().Png(),
+        [Bullets] = AmmoArt(Rgb(0x5B, 0x63, 0x3A), Rgb(0xD9, 0xB0, 0x4C)).Png(),
+        [Shells] = AmmoArt(Rgb(0x8C, 0x2E, 0x2A), Rgb(0xC9, 0x3F, 0x35)).Png(),
+        [Shotgun] = ShotgunPickupArt().Png(),
+        [Key] = KeyArt().Png(),
+        [Barrel] = BarrelArt().Png(),
+        [Lamp] = LampArt().Png(),
+        [Door] = DoorArt().Png(),
+        [Player] = PlayerArt().Png(),
+        [PistolView] = PistolArt(firing: false).Png(),
+        [PistolFire] = PistolArt(firing: true).Png(),
+        [ShotgunView] = ShotgunViewArt(firing: false).Png(),
+        [ShotgunFire] = ShotgunViewArt(firing: true).Png(),
+    };
 
     // ----- Walls: a 4 by 2 sheet of 32-pixel tiles -----
 

@@ -139,12 +139,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
 
         var list = DemoUi.Descendants<ListBox>(window).First();
         await ui.Explain(list, "Templates", "Griff comes with Platformer, Top-down and Arcade templates that are playable from the very first second. They're the fastest way to start a jam. Today, though, we'll start from Empty, so you can see how every piece fits together.");
-        var empty = DemoUi.Descendants<ListBoxItem>(list).First(i => i.DataContext is NewProjectViewModel.TemplateOption { Template: Griff.Projects.ProjectTemplate.Empty });
+        var empty = DemoUi.Descendants<ListBoxItem>(list).First(i => i.DataContext is NewProjectViewModel.TemplateOption { Template.Name: "Empty" });
         await ui.Click(empty);
-        if (window.DataContext is NewProjectViewModel vm && vm.SelectedTemplate.Template != Griff.Projects.ProjectTemplate.Empty)
+        if (window.DataContext is NewProjectViewModel vm && vm.SelectedTemplate.Template.Name != "Empty")
         {
             Log("FORCED template Empty");
-            vm.SelectedTemplate = vm.Templates.First(t => t.Template == Griff.Projects.ProjectTemplate.Empty);
+            vm.SelectedTemplate = vm.Templates.First(t => t.Template.Name == "Empty");
         }
 
 

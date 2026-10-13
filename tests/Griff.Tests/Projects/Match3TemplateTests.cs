@@ -27,7 +27,7 @@ public sealed class Match3TemplateTests : IDisposable
 
     private async Task<(Project Project, Game Game)> Create(string? scene = null, Action<MatchBoard>? setUp = null)
     {
-        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplate.Match3);
+        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplates.Get("Match3"));
         Scene Load(string name)
         {
             var loaded = GameLoader.LoadScene(project, _registry, name);
@@ -222,7 +222,7 @@ public sealed class Match3TemplateTests : IDisposable
     [Fact]
     public async Task Levels_HaveTheirStonesWhereTheLayoutSays_AndTheBoardAndHudOnScreen()
     {
-        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplate.Match3);
+        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplates.Get("Match3"));
         for (var i = 0; i < ProjectTemplates.MatchLevels.Count; i++)
         {
             var (_, _, _, collect, gems, layout) = ProjectTemplates.MatchLevels[i];
@@ -257,7 +257,7 @@ public sealed class Match3TemplateTests : IDisposable
     [Fact]
     public async Task ComesWithItsPictures_SoundsAndMusic_ThatEverythingUses()
     {
-        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplate.Match3);
+        var project = await Project.CreateAsync(_root, "Gems", ProjectTemplates.Get("Match3"));
         var serializer = new SceneSerializer(_registry);
         Assert.Equal(1 + ProjectTemplates.MatchLevels.Count, project.FindScenes().Count());
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();

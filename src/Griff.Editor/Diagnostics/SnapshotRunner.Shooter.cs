@@ -18,7 +18,7 @@ internal static partial class SnapshotRunner
     private static async Task ShooterSnapshots(IServiceProvider services, Window main, IWorkspace workspace, string projectDir, string outputDir)
     {
         var checks = new List<string>();
-        await workspace.CreateProjectAsync(projectDir, "Snapshot Shooter", Griff.Projects.ProjectTemplate.Shooter);
+        await workspace.CreateProjectAsync(projectDir, "Snapshot Shooter", Griff.Projects.ProjectTemplates.Get("Shooter"));
         Render(main, Path.Combine(outputDir, "shooter-editor.png"));
         var play = services.GetRequiredService<PlayMode>();
         play.Play();

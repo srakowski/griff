@@ -79,6 +79,18 @@ internal static class ValueCodec
         throw new FormatException($"Expected a {type.Name} but found {element.GetRawText()}.");
     }
 
+    /// <summary>
+    /// Writes back a saved value no property took, as it came. A list of numbers (a vector) stays on one line, as
+    /// <see cref="Write"/> writes them, so saving again doesn't change the file.
+    /// </summary>
+    public static void WriteKept(Utf8JsonWriter writer, JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0 && value.EnumerateArray().All(e => e.ValueKind == JsonValueKind.Number))
+            writer.WriteRawValue($"[{string.Join(", ", value.EnumerateArray().Select(e => e.GetRawText()))}]", skipInputValidation: true);
+        else
+            value.WriteTo(writer);
+    }
+
     // Written as one raw line: the indented writer would otherwise put each number on its own line.
     private static void WriteArray(Utf8JsonWriter writer, params ReadOnlySpan<float> values)
     {

@@ -14,7 +14,7 @@ public sealed class ReloadResult
     /// <summary>Component types now available from scripts.</summary>
     public IReadOnlyList<Type> ComponentTypes { get; init; } = [];
 
-    /// <summary>Old component → its rebuilt replacement, across all migrated scenes.</summary>
+    /// <summary>Old component → its rebuilt replacement, across all the scenes it rebuilt in.</summary>
     public IReadOnlyDictionary<Component, Component> Replaced { get; init; } = new Dictionary<Component, Component>();
 
     public IReadOnlyList<string> Warnings { get; init; } = [];
@@ -63,9 +63,9 @@ public sealed class ScriptHost(ComponentRegistry registry)
     public void Unload(IEnumerable<Scene> liveScenes)
     {
         var serializer = new SceneSerializer(registry);
-        var snapshot = ComponentMigrator.Capture(liveScenes.ToList(), serializer, IsFromScripts);
+        var snapshot = ComponentSwap.Capture(liveScenes.ToList(), serializer, IsFromScripts);
         UnregisterCurrent();
-        ComponentMigrator.Restore(snapshot, serializer);
+        ComponentSwap.Restore(snapshot, serializer);
         _loadedSources = null;
     }
 
@@ -77,14 +77,12 @@ public sealed class ScriptHost(ComponentRegistry registry)
         var context = new AssemblyLoadContext("GriffScripts", isCollectible: true);
         var assembly = context.LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
         DocComments.Register(assembly, compiled.Documentation);
-        var newTypes = assembly.GetTypes()
-            .Where(t => t.IsSubclassOf(typeof(Component)) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
-            .ToList();
+        var newTypes = ComponentRegistry.ComponentTypesIn(assembly);
 
         // Capture with the old types still registered, swap, then rebuild with the new ones.
         var scenes = liveScenes.ToList();
         var serializer = new SceneSerializer(registry);
-        var snapshot = ComponentMigrator.Capture(scenes, serializer, IsFromScripts);
+        var snapshot = ComponentSwap.Capture(scenes, serializer, IsFromScripts);
         UnregisterCurrent();
 
         var warnings = new List<string>();
@@ -102,7 +100,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
             }
         }
 
-        var replaced = ComponentMigrator.Restore(snapshot, serializer, warnings);
+        var replaced = ComponentSwap.Restore(snapshot, serializer, warnings);
 
         var old = _context;
         _context = context;

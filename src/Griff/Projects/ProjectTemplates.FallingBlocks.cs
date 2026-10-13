@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -9,6 +10,23 @@ namespace Griff.Projects;
 // Board, counters that show its score, rows and level, and a panel that opens on its "Game Over".
 public static partial class ProjectTemplates
 {
+    private sealed class FallingBlocksTemplate : ProjectTemplate
+    {
+        public override string Title => "Falling Blocks";
+
+        public override string Description => "Pieces of four blocks fall one after another: slide and turn them to fill rows, which clear, and every ten rows they fall faster, until they stack up to the top. The best score is kept. Left and right to slide, up to turn, down to fall faster, Space to drop.";
+
+        public override int Order => 100;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Tense, seed: 13) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => FallingMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => new() { ["Scenes/Game.scene"] = FallingGame() };
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.FallingFiles();
+    }
+
     private static readonly Color FallingCyan = Color.FromBytes(0x4C, 0xD4, 0xE8);
     private static readonly Color FallingBlue = Color.FromBytes(0x4A, 0x6C, 0xE8);
     private static readonly Color FallingGray = Color.FromBytes(0x34, 0x3A, 0x4E);

@@ -13,7 +13,7 @@ internal static partial class TemplateArt
 
     public const int WarehouseFloorTile = 0, WarehouseWallTile = 1;
 
-    private static Dictionary<string, byte[]> PuzzleFiles() => new()
+    internal static Dictionary<string, byte[]> PuzzleFiles() => new()
     {
         [PuzzleTiles] = WarehouseSheet().Png(),
         [GoalMark] = GoalArt().Png(),

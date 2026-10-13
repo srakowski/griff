@@ -60,7 +60,7 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Replaces the play-mode copy (e.g. after rewinding) without leaving play mode.</summary>
     void ReplacePlayScene(SceneDocument runtime);
 
-    Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty);
+    Task CreateProjectAsync(string location, string name, ProjectTemplate? template = null);
 
     /// <summary>Opens the project at a folder or project.griff path. Returns false if the user cancelled.</summary>
     Task<bool> OpenProjectAsync(string path);
@@ -368,7 +368,7 @@ public sealed class Workspace(
         return true;
     }
 
-    public async Task CreateProjectAsync(string location, string name, ProjectTemplate template = ProjectTemplate.Empty)
+    public async Task CreateProjectAsync(string location, string name, ProjectTemplate? template = null)
     {
         if (!await ConfirmCloseProjectAsync())
             return;

@@ -16,7 +16,7 @@ internal static partial class TemplateArt
 
     public const int CryptWallTile = 0, CryptFloorTile = 1;
 
-    private static Dictionary<string, byte[]> CryptFiles() => new()
+    internal static Dictionary<string, byte[]> CryptFiles() => new()
     {
         [CryptTiles] = CryptSheet().Png(),
         [Hero] = HeroArt().Png(),

@@ -3,7 +3,7 @@ using Griff.Scenes.Serialization;
 
 namespace Griff.Tests.Scenes;
 
-public class ComponentMigratorTests
+public class ComponentSwapTests
 {
     [Fact]
     public void TypeRemovedThenRestored_RoundTripsThroughMissingComponent()
@@ -18,18 +18,18 @@ public class ComponentMigratorTests
         var trailing = entity.AddComponent<TestComponent>();
 
         // The type goes away (e.g. a script fails to load): data is kept as a MissingComponent.
-        var snapshot = ComponentMigrator.Capture([scene], serializer, c => c is RenamedComponent);
+        var snapshot = ComponentSwap.Capture([scene], serializer, c => c is RenamedComponent);
         registry.Unregister(typeof(RenamedComponent));
-        ComponentMigrator.Restore(snapshot, serializer);
+        ComponentSwap.Restore(snapshot, serializer);
 
         var missing = Assert.IsType<MissingComponent>(entity.Components[1]);
         Assert.Equal("Health", missing.TypeName);
         Assert.Same(trailing, entity.Components[2]);
 
         // The type comes back: the component is rebuilt with its value, in the same slot.
-        snapshot = ComponentMigrator.Capture([scene], serializer, _ => false);
+        snapshot = ComponentSwap.Capture([scene], serializer, _ => false);
         registry.Register<RenamedComponent>();
-        var replaced = ComponentMigrator.Restore(snapshot, serializer);
+        var replaced = ComponentSwap.Restore(snapshot, serializer);
 
         var restored = Assert.IsType<RenamedComponent>(entity.Components[1]);
         Assert.Equal(42, restored.Value);
@@ -49,8 +49,8 @@ public class ComponentMigratorTests
         scene.Add(entity);
         var component = entity.AddComponent<RenamedComponent>();
 
-        var snapshot = ComponentMigrator.Capture([scene], serializer, _ => false);
-        var replaced = ComponentMigrator.Restore(snapshot, serializer);
+        var snapshot = ComponentSwap.Capture([scene], serializer, _ => false);
+        var replaced = ComponentSwap.Restore(snapshot, serializer);
 
         Assert.Empty(replaced);
         Assert.Same(component, entity.Components[1]);

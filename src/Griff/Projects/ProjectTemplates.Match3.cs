@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Audio;
 using Griff.Input;
 using Griff.Scenes;
 
@@ -9,6 +10,23 @@ namespace Griff.Projects;
 // and panels that open on the board's "Level Complete" and "Out of Moves".
 public static partial class ProjectTemplates
 {
+    private sealed class Match3Template : ProjectTemplate
+    {
+        public override string Title => "Match-3";
+
+        public override string Description => "Swap gems to line up three or more of a kind in four levels, each with a move limit and goals to meet: a score to reach and gems to collect. Each level opens once the one before is won. Drag a gem onto its neighbor (or click one, then the other); with keys, arrows move and Space picks a gem up.";
+
+        public override int Order => 90;
+
+        protected override MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Bright, seed: 12) with { Volume = 0.5f };
+
+        protected override Scene BuildStartScene() => MatchMenu();
+
+        protected override Dictionary<string, Scene> BuildMoreScenes() => MatchLevelScenes();
+
+        public override IReadOnlyDictionary<string, byte[]> Images() => TemplateArt.MatchFiles();
+    }
+
     private static readonly Color MatchPink = Color.FromBytes(0xF0, 0x5A, 0x9C);
     private static readonly Color MatchViolet = Color.FromBytes(0x7A, 0x5C, 0xE8);
     private static readonly Color MatchGray = Color.FromBytes(0x3E, 0x38, 0x56);
@@ -77,8 +95,8 @@ public static partial class ProjectTemplates
     // Winning a level saves this, which opens the next one's button on the menu.
     private static string CompleteKey(int index) => $"complete-{MatchLevelScene(index).ToLowerInvariant()}";
 
-    private static Dictionary<string, Scene> MatchLevelScenes(ProjectTemplate template) =>
-        Enumerable.Range(0, MatchLevels.Count).ToDictionary(i => $"Scenes/{MatchLevelScene(i)}.scene", i => WithSounds(template, MatchLevel(i)));
+    private static Dictionary<string, Scene> MatchLevelScenes() =>
+        Enumerable.Range(0, MatchLevels.Count).ToDictionary(i => $"Scenes/{MatchLevelScene(i)}.scene", i => MatchLevel(i));
 
     // The menu: a title, a button for each level (each but the first opening once the one before is won), and Quit.
     private static Scene MatchMenu()

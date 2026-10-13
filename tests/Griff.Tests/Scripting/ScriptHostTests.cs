@@ -127,6 +127,42 @@ public class ScriptHostTests
         Assert.NotNull(_registry.Find("Mover"));
     }
 
+    // Renaming a script and a property, then changing what a value means, mid-game: nothing set in the scene is lost.
+    [Fact]
+    public void Reload_OfARenamedScript_KeepsItsValues_ThroughFormerNamesAndUpgrades()
+    {
+        _host.Reload([new ScriptSource("Mover.cs", MoverV1)], []);
+        var scene = new Scene();
+        var entity = new Entity("Ship");
+        scene.Add(entity);
+        var mover = _registry.Find("Mover")!.CreateInstance();
+        _registry.Find("Mover")!.Properties.Single(p => p.Name == "Speed").SetValue(mover, 2f);
+        entity.AddComponent(mover);
+
+        // Mover becomes Glider, Speed becomes Pace and counts tenths, and Pace's old meaning is upgraded from.
+        const string glider = """
+            [FormerName("Mover")]
+            [ComponentVersion(2)]
+            public class Glider : Behavior
+            {
+                [FormerName("Speed")]
+                public float Pace { get; set; } = 10;
+
+                [UpgradeFrom(1)]
+                static void ToTenths(SavedData data) => data.Set("Pace", data.Get<float>("Pace") * 10);
+            }
+            """;
+        var result = _host.Reload([new ScriptSource("Mover.cs", glider)], [scene]);
+
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+        Assert.Empty(result.Warnings);
+        var replacement = Assert.Single(result.Replaced).Value;
+        var descriptor = _registry.Find("Glider")!;
+        Assert.IsType(descriptor.Type, replacement);
+        Assert.Equal(20f, descriptor.Properties.Single(p => p.Name == "Pace").GetValue(replacement));
+        Assert.Same(descriptor, _registry.Find("Mover"));
+    }
+
     [Fact]
     public void Reload_SwapsRunningScripts_AndKeepsTheirProperties()
     {

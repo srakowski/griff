@@ -1,0 +1,40 @@
+title: Scene data that lasts
+intro: Rename a script, or one of its properties, or change what a value means, and the scenes that use it keep what was set in them.
+project: Empty | Spinning Things
+
+chapter: A script with values set | Before anything changes
+say: Here's a small script, Spinner. It turns its entity a number of times a second, and has a label.
+write: Scripts/Spinner.cs | scene-data/Spinner.cs
+code: Assets/Scripts/Spinner.cs | Spinner.cs
+hidecode
+create: Sprite
+rename: Wheel
+add: Spinner
+set: Spinner.Speed = 2.5
+set: Spinner.Label = Big Wheel
+explain: component:Spinner | Set in the scene | Two and a half turns a second, and a label. These values live in the scene file, not in the script.
+save
+expectfile: Main.scene
+
+chapter: Rename it, and change what a value means | Former names and versions
+say: Now the script grows up. Spinner becomes Rotor, Speed becomes Turns Per Minute, and the label goes.
+write: Scripts/Spinner.cs | scene-data/Rotor.cs
+code: Assets/Scripts/Spinner.cs | Spinner.cs
+say: Former Name says what the class and the property were called before, so scenes saved under the old names still load. Turns a minute isn't turns a second, so the component's version goes up to two, with a step that multiplies older values by sixty.
+hidecode
+select: Wheel
+expectcomponents: Wheel = Transform, Sprite, Rotor
+expectvalue: Wheel.Rotor.TurnsPerMinute = 150
+explain: field:Rotor.TurnsPerMinute | Carried over, and upgraded | The same component, renamed, and two and a half turns a second came through as a hundred and fifty a minute.
+play
+wait: 2
+stop
+
+chapter: Nothing is dropped | Values it doesn't know are kept
+say: The label has no property any more, but it wasn't thrown away. Values a component doesn't know are kept in the scene and written back when it's saved. That also keeps a scene safe when it's opened by an older Griff.
+write: Scripts/Spinner.cs | scene-data/RotorWithLabel.cs
+select: Wheel
+expectvalue: Wheel.Rotor.Label = Big Wheel
+explain: field:Rotor.Label | Back again | Put the property back, and its value comes back with it.
+save
+say: Griff's own components follow the same rules, and both they and the templates in New Project are now found rather than listed, so adding one is adding a class.

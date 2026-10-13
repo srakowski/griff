@@ -129,6 +129,18 @@ public class PixelSheetTests
         Assert.NotEqual(first[0], other[0]);
     }
 
+    // A seed draws the same picture in every session, not just twice in one. Changing the generator on purpose changes
+    // these; take the new values from the failure.
+    [Theory]
+    [InlineData(SpriteIdea.Creature, 3041313873u)]
+    [InlineData(SpriteIdea.Item, 2667866317u)]
+    public void Generator_DrawsASeedTheSameInEverySession(SpriteIdea idea, uint expected)
+    {
+        var checksum = SpriteGenerator.Generate(idea, 42)[0].Aggregate(2166136261u, (hash, pixel) => unchecked((hash ^ pixel) * 16777619u));
+
+        Assert.Equal(expected, checksum);
+    }
+
     [Fact]
     public void Generator_MirrorsCreaturesLeftToRight()
     {

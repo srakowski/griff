@@ -46,7 +46,8 @@ public static class SpriteGenerator
     {
         width = Math.Clamp(width, 4, SheetLayout.MaxCellSize);
         height = Math.Clamp(height, 4, SheetLayout.MaxCellSize);
-        var random = new Random(HashCode.Combine(idea, seed));
+        // Not HashCode.Combine: .NET salts it afresh in each process, so a seed would draw differently every session.
+        var random = new Random(unchecked(seed * 31 + (int)idea));
         var ramp = Ramps[random.Next(Ramps.Length)];
         var sheet = new PixelSheet(new SheetLayout(SheetKind.Sprite, width, height, 2, 1, 2, 4));
         switch (idea)

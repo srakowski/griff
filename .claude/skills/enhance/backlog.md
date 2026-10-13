@@ -6,17 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Gameplay foundations
-
-
-### Genres: puzzles
-
-
-### Genres: roguelikes and tactics
-
-- [ ] Add a computer opponent for tactics.
-- [ ] Add a Tactics template.
-
 ### Architecture
 
 - [ ] Add guardrails in one go: a GitHub Actions CI build on Windows (editor build and both test projects) with a Directory.Build.props (nullable on, warnings as errors, an analysis level), central package versions and an .editorconfig; a player smoke test (export a template, run it with GRIFF_PLAYER_SMOKE, check it draws a frame), with exported games' scripts compiled optimized instead of with the editor's Debug settings; and architecture tests that nothing in Griff.Scenes uses Griff.Runtime or Griff.Rendering and no editor code-behind (*.xaml.cs) runs edits or starts processes, today's exceptions in allow-lists that may only shrink.
@@ -34,6 +23,17 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Move the remaining genres into engine modules in one go: Block Worlds, Contraptions, First Person, Dungeons, turns and the puzzle pieces (move history, trails), following the Match-3 pattern.
 - [ ] Step the game at a fixed rate with drawing smoothed in between, so the same input gives the same result on any machine; rewind, multiplayer, slow motion and hit stop keep working. Scripts get a fixed update.
   - The riskiest of these, so it's on its own and last. It goes before the Physics items, which build on it.
+
+### Gameplay foundations
+
+
+### Genres: puzzles
+
+
+### Genres: roguelikes and tactics
+
+- [ ] Add a computer opponent for tactics.
+- [ ] Add a Tactics template.
 
 ### Genres: cards, adventures and stories
 

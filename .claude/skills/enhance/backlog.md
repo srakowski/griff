@@ -17,6 +17,38 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Add a computer opponent for tactics.
 - [ ] Add a Tactics template.
 
+### Architecture
+
+- [ ] Add a CI build: a GitHub Actions workflow on Windows that builds the editor and runs both test projects, plus a Directory.Build.props (nullable on, warnings as errors, an analysis level), central package versions and an .editorconfig.
+  - From the architecture review of 2026-10-13 (https://claude.ai/artifact/WDiDrYziepwVkUnVkUi9oq). These items come before the next genres because today each genre adds another Game partial, another case in the renderer and another row in the net schema; after them a genre is a module that registers itself. Fix any warnings that warnings-as-errors turns up instead of suppressing them.
+- [ ] Add a player smoke test: export a template, run the player with GRIFF_PLAYER_SMOKE and check it starts and draws a frame. Compile exported games' scripts with optimizations on (they use the editor's Debug settings today).
+- [ ] Add architecture tests: nothing in Griff.Scenes uses Griff.Runtime or Griff.Rendering, and no editor code-behind (*.xaml.cs) runs edits or starts processes. Today's exceptions go in allow-lists that may only shrink.
+- [ ] Reload scripts in Play with Players' extra windows too, so they stop running the old script types (which also keeps the old scripts in memory).
+  - Workspace.ReloadScripts remaps the edit scene, the play copy and prefabs, but not the scenes PlayMode opens for the extra players.
+- [ ] Make the Assets panel's menu actions commands: Add to Scene, Open in Another Program, Show in Explorer, and Set as Start Scene for any scene (not just the open one). Dropping an image or prefab on the Scene view uses the same Add to Scene, and opening a script at an Output error becomes a command too.
+  - Today these exist only as click handlers (AssetsView.xaml.cs, SceneViewControl.OnDrop, OutputPanelView.xaml.cs), so agents can't use them. This empties the code-behind allow-list.
+- [ ] Stop ui_set and ui_invoke from changing entities and components outside undo (point agents to entity_update, or record the change as an edit), and mark destructive commands with an attribute instead of guessing from "Delete" or "Cut" in the id.
+- [ ] Tidy the editor's composition: a Scene View module instead of the shell registering its types, the art and audio services from DI instead of EditorArt.Current and EditorAudio.Current, and the script editor's pane state in its view model.
+- [ ] Split the Scene view's control into drawing, handle geometry and input, with the tile palette as a view model agents can inspect.
+- [ ] Untangle the engine's layers: an entity knows whether it's active counting its parents (cached, instead of asking SceneRenderer.IsActive), components that need the game get a small game context instead of Game, and physics stops calling the static Game.Moves. This empties the Scenes allow-list.
+- [ ] Run the frame as registered systems in named phases (begin, logic, scripts, simulate, physics, resolve, present, end), keeping today's order exactly, pinned by a test.
+  - Wrap each existing Run* step as a system without changing what it does; Game.Tick becomes the scheduler.
+- [ ] Move each genre's running state off Game (Rts, Fps, Sandbox, and the level, puzzle, drag and panel state) into its system, which resets it when the scene changes.
+- [ ] Give scripts a late update that runs after everything has moved, and let a script add its own system.
+- [ ] Find components without walking the scene: the scene keeps an index by component type and knows which entities are active, world transforms are cached until something moves, and a frame stops allocating a list per step. Measure a big scene before and after.
+- [ ] Add a broadphase to physics (a spatial grid), so bodies and triggers only test what's near them.
+- [ ] Version components in scene files: each component has a version with upgrade steps, renamed properties and components keep their values (a former-name attribute), and properties a component doesn't know are kept instead of dropped on save.
+  - Before the moves below, which may rename things. Rename ComponentMigrator (it's the hot-reload capture) so "migration" means this.
+- [ ] Register components and templates by finding them, instead of from hand-written lists (ComponentRegistry.CreateDefault, the template switch).
+- [ ] Let components draw themselves: a draw interface that built-in and script components implement, replacing the renderer's list of component types and its genre overlays.
+- [ ] Let components say what they send over the network, replacing the net schema's table of genre types, so script components play online the same way.
+- [ ] Move Match-3 and Falling Blocks into an engine module each: components, systems, drawing, network state, templates and editor presets in one place, registered once. This sets the pattern for the rest.
+- [ ] Move Strategy and Tactics into engine modules.
+- [ ] Move Block Worlds, Contraptions and First Person into engine modules.
+- [ ] Move Dungeons, turns and the puzzle pieces (move history, trails) into engine modules.
+- [ ] Step the game at a fixed rate with drawing smoothed in between, so the same input gives the same result on any machine; rewind, multiplayer, slow motion and hit stop keep working. Scripts get a fixed update.
+  - The riskiest of these, so it's last. It goes before the Physics items, which build on it.
+
 ### Genres: cards, adventures and stories
 
 - [ ] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them.

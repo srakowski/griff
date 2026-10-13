@@ -1977,8 +1977,7 @@ public sealed class SceneViewControl : FrameworkElement
         }
     }
 
-    // Dropping an image from the Assets panel creates a sprite where it lands, sized to the image's aspect;
-    // dropping a prefab places a copy of it there.
+    // Dropping an image or a prefab from the Assets panel is its Add to Scene, placed where it lands.
     protected override void OnDragOver(DragEventArgs e)
     {
         e.Effects = _document is { } document && DroppedAsset(e) is var (assetPath, _) && !PrefabFiles.IsOwnTab(_workspace, document, assetPath)
@@ -1987,38 +1986,22 @@ public sealed class SceneViewControl : FrameworkElement
         e.Handled = true;
     }
 
-    // In a prefab's tab, what's dropped goes inside the prefab, so where it lands is turned into a place inside it.
     protected override void OnDrop(DragEventArgs e)
     {
         e.Handled = true;
-        if (_document is not { } document || DroppedAsset(e) is not var (assetPath, kind) || PrefabFiles.IsOwnTab(_workspace, document, assetPath))
+        if (_document is not { } document || DroppedAsset(e) is not var (assetPath, _) || PrefabFiles.IsOwnTab(_workspace, document, assetPath))
             return;
 
-        var parent = document.ParentFor(null);
-        var position = ToWorld(e.GetPosition(this));
-        if (parent is not null && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var toParent))
-            position = ToVector2(Vector3.Transform(new Vector3(position, 0), toParent));
-        Entity entity;
-        if (kind == Griff.Editor.Features.Assets.AssetKind.Prefab)
+        try
         {
-            if (PrefabFiles.Instantiate(_workspace, assetPath) is not { } instance)
-                return;
-            entity = instance;
-            entity.Transform.Position = new Vector3(position, entity.Transform.Position.Z);
+            _services.GetRequiredService<Griff.Editor.Features.Assets.AssetPlacement>().AddToScene(assetPath, ToWorld(e.GetPosition(this)));
         }
-        else
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
-            var image = LoadImage(assetPath);
-            var aspect = image is { PixelHeight: > 0 } ? (float)image.PixelWidth / image.PixelHeight : 1f;
-            entity = new Entity(Path.GetFileNameWithoutExtension(assetPath));
-            entity.Transform.Position = new Vector3(position, 0);
-            var sprite = entity.AddComponent<Sprite>();
-            sprite.Image = assetPath;
-            sprite.Size = new Vector2(aspect, 1);
+            // A prefab that can't be read: nothing lands.
+            return;
         }
 
-        document.Execute(new AddEntityEdit(document.Scene, entity, parent));
-        _selection.Select(entity);
         Focus();
     }
 

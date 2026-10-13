@@ -1,0 +1,17 @@
+title: Every click is a command
+intro: What the Assets panel and Output did on a click, agents can now do too.
+project: Platformer | Start Anywhere
+
+chapter: Any scene can be the start | File > Set as Start Scene
+say: The game starts in one scene. Until now, the File menu could only make the open scene the start one.
+menu: File > New Scene...
+prompt: Level 2
+say: Level two is open now. But Set as Start Scene has a list of every scene in the project, so the start can stay on Main.
+menu: File > Set as Start Scene > Main
+say: Agents get the same list, and pick a scene by name, open or not.
+
+chapter: Add to Scene | the Assets panel
+say: Right click a prefab or a picture in Assets and choose Add to Scene. It's one undo step, and the copy stays linked to its prefab.
+assetmenu: Prefabs/Sparkle.prefab > Add to Scene
+expectprefab: Sparkle = Sparkle
+say: Dropping a prefab or a picture on the Scene view does the very same thing, placed where it lands. Opening a file in another program, showing it in Explorer, and jumping to a script error in Output are commands as well, so an agent can do each of them, and nothing the editor does is out of its reach.

@@ -106,6 +106,7 @@ public partial class App : Application
         services.AddSingleton<IStatusService, StatusService>();
         services.AddSingleton<IWorkspace, Workspace>();
         services.AddSingleton<ISelection, Selection>();
+        services.AddSingleton<IExternalPrograms, ExternalPrograms>();
         services.AddSingleton<CommandRegistry>();
 
         services.AddMenu(Menus.File, "_File", order: 0);

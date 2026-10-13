@@ -58,12 +58,15 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             Name = "ui_set",
             Title = "Set",
             Description = "Sets a property of an object the editor has (see ui_inspect for what can be set), the way changing a field " +
-                "in a window does: e.g. a Sound Maker slider, the Sprite Painter's color or a window's name box.",
+                "in a window does: e.g. a Sound Maker slider, the Sprite Painter's color or a window's name box. Not entities or " +
+                "components: entity_update changes those, so the change can be undone.",
             InputSchema = Schema.Object([("target", target), ("path", path), ("value", Schema.Any("The new value."))], "target", "path", "value"),
-            Invoke = args => Task.FromResult(ToolResult.Json(new JsonObject
+            Invoke = args =>
             {
-                ["now"] = ObjectSurface.Set(Root(args.String("target")), args.String("path"), args.Required("value")),
-            })),
+                var root = Root(args.String("target"));
+                RefuseSceneData(root, args.String("path"), "ui_set");
+                return Task.FromResult(ToolResult.Json(new JsonObject { ["now"] = ObjectSurface.Set(root, args.String("path"), args.Required("value")) }));
+            },
         };
 
         yield return new AgentTool
@@ -72,7 +75,8 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             Title = "Invoke",
             Description = "Presses a command (a button) or calls a method of an object the editor has, and returns what it gives " +
                 "back: e.g. \"SaveCommand\" in a window, or \"OpenSceneAsync\" on the Workspace with args [\"Scenes/Level 2.scene\"]. " +
-                "Arguments go in order in \"args\" (or by name as an object).",
+                "Arguments go in order in \"args\" (or by name as an object). Not on entities or components: the entity_ tools " +
+                "change those, so the change can be undone.",
             InputSchema = Schema.Object([
                 ("target", target),
                 ("path", Schema.String("The command or method, e.g. \"SaveCommand\" or \"Presets[Coin].Command\" or \"Generate\".")),
@@ -152,6 +156,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
     {
         var root = Root(args.String("target"));
         var path = args.String("path");
+        RefuseSceneData(root, path, "ui_invoke");
         JsonElement? arguments = args.TryGet("args", out var a) ? a : null;
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 10), 0, 300));
 
@@ -167,6 +172,15 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
         if (AgentDialogs.Reported.Count > 0)
             result["reported"] = new JsonArray(AgentDialogs.Reported.Select(r => (JsonNode)r).ToArray());
         return AgentDialogs.Reported.Count > 0 ? ToolResult.Error(result.ToJsonString(ToolResult.Pretty)) : ToolResult.Json(result);
+    }
+
+    // A scene's entities and components change through edits the editor can undo (the entity_ tools, the Inspector's
+    // fields), never by reaching in and setting them, which would leave undo out of step with the scene.
+    private static void RefuseSceneData(object root, string path, string tool)
+    {
+        if (ObjectSurface.OwnerOf(root, path) is Griff.Scenes.Entity or Griff.Scenes.Component or Griff.Scenes.Scene)
+            throw new AgentException($"{tool} doesn't change entities or components, so every change to a scene can be undone. " +
+                "Use entity_update (or entity_create, entity_delete) instead; ui_inspect still reads them.");
     }
 
     // The app's own services; views, commands, panels and plumbing have better ways in (or none needed).

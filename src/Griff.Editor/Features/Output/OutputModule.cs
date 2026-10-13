@@ -1,3 +1,4 @@
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Panels;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,5 +14,6 @@ public sealed class OutputModule : IEditorModule
         services.AddSingleton<OutputLog>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, OutputLoggerProvider>());
         services.AddPanel<OutputPanel, OutputPanelView>();
+        services.AddCommand<GoToScriptErrorCommand>();
     }
 }

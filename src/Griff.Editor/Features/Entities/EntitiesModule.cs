@@ -1103,6 +1103,7 @@ public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection
 }
 
 /// <summary>Copies the selected entities (and their children) to the clipboard and deletes them, as one undo step.</summary>
+[Destructive]
 public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Cut";
@@ -1158,6 +1159,7 @@ public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selectio
 }
 
 /// <summary>Deletes the selected entities and everything inside them, as one undo step.</summary>
+[Destructive]
 public sealed class DeleteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.Delete";

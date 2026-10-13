@@ -30,8 +30,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
                 Name = ToolName(command.Id),
                 Title = command.DisplayText.TrimEnd('.'),
                 Description = Describe(command),
-                Destructive = command.Id.Contains("Delete", StringComparison.Ordinal) || command.Id.Contains("Cut", StringComparison.Ordinal)
-                    || command.Id.Contains("Exit", StringComparison.Ordinal) || command.Id.Contains("Clear", StringComparison.Ordinal),
+                Destructive = command.GetType().IsDefined(typeof(DestructiveAttribute), inherit: false),
                 InputSchema = Schema.Object([
                     ("entity", Schema.String("Select this entity first (name, id or path), for commands that act on the selected entity.")),
                     ("answers", Schema.Map("Answers to questions the command asks, by the question's label, e.g. {\"Scene name\": \"Level 2\"}. " +
@@ -63,7 +62,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         }
         else
         {
-            text.Append(command.Toolbar is not null ? " (Toolbar" : " (Shortcut only");
+            text.Append(command.Toolbar is not null ? " (Toolbar" : command.Gesture is not null ? " (Shortcut only" : " (Not in the main menu");
         }
 
         if (command.GestureText is { Length: > 0 } gesture)

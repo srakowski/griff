@@ -188,6 +188,11 @@ public sealed class McpServer
             {
                 return ToolResult.Error(ex.Message);
             }
+            catch (ArgumentException ex) when (ex.ParamName is not null)
+            {
+                // The message is for whoever made the call; which parameter it was named in the code isn't.
+                return ToolResult.Error($"{ex.GetType().Name}: {ex.Message.Replace($" (Parameter '{ex.ParamName}')", "", StringComparison.Ordinal)}");
+            }
             catch (Exception ex)
             {
                 return ToolResult.Error($"{ex.GetType().Name}: {ex.Message}");

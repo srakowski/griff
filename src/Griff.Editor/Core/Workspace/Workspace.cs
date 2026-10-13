@@ -116,6 +116,12 @@ public interface IWorkspace : INotifyPropertyChanged
 
     /// <summary>Compiles the project's scripts now and swaps them into the open scenes if they build.</summary>
     ReloadResult? ReloadScripts();
+
+    /// <summary>
+    /// Adds scenes that run outside the workspace's own documents (the other players' games in Play with Players), asked
+    /// for at each script reload, so the new scripts reach them too.
+    /// </summary>
+    void AddLiveScenes(Func<IEnumerable<Scene>> scenes);
 }
 
 public sealed class Workspace(
@@ -171,6 +177,10 @@ public sealed class Workspace(
 
     private ScriptHost? _scripts;
 
+    private readonly List<Func<IEnumerable<Scene>>> _liveScenes = [];
+
+    public void AddLiveScenes(Func<IEnumerable<Scene>> scenes) => _liveScenes.Add(scenes);
+
     public event EventHandler<ReloadResult>? ScriptsReloaded;
 
     public ReloadResult? ReloadScripts()
@@ -178,9 +188,11 @@ public sealed class Workspace(
         if (Project is not { } project)
             return null;
 
-        // Rebuild script components everywhere they're live: the edit scene, open prefabs and, while playing, the game.
+        // Rebuild script components everywhere they're live: the edit scene, open prefabs and, while playing, the game
+        // (and the other players' games).
         var documents = new[] { _editScene, _scene }.Concat(_prefabs).OfType<SceneDocument>().Distinct().ToList();
-        var result = Scripts.ReloadFolder(project.AssetsPath, documents.Select(d => d.Scene));
+        var scenes = documents.Select(d => d.Scene).Concat(_liveScenes.SelectMany(live => live())).Distinct().ToList();
+        var result = Scripts.ReloadFolder(project.AssetsPath, scenes);
         if (result.Unchanged)
             return result;
 

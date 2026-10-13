@@ -92,17 +92,45 @@ public sealed class OpenSceneCommand(IWorkspace workspace, IDialogService dialog
     }
 }
 
-/// <summary>Makes the open scene the one the game starts in (when played from a menu or built).</summary>
+/// <summary>
+/// Makes a scene the one the game starts in (when played from a menu or built): the submenu lists the project's scenes,
+/// by name, or by their path in Assets where two share a name. Without a pick, it's the open scene.
+/// </summary>
 public sealed class SetStartSceneCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "Scene.SetStart";
     public override string Text => "Set as S_tart Scene";
     public override string? Icon => Icons.Play;
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 1, Order: 3);
+    public override IReadOnlyList<string>? Choices => Scenes().Select(s => s.Label).ToList();
 
-    protected override bool CanExecuteCore() => workspace.EditScene is { } scene && workspace.Project is { } project
-        && !string.Equals(project.StartScenePath, scene.FilePath, StringComparison.OrdinalIgnoreCase);
+    protected override bool CanExecuteCore() => workspace.Project is not null;
 
     protected override Task ExecuteCoreAsync() =>
-        workspace.EditScene is { } scene ? workspace.SetStartSceneAsync(scene.FilePath) : Task.CompletedTask;
+        workspace.EditScene is { } scene ? workspace.SetStartSceneAsync(scene.FilePath)
+        : throw new InvalidOperationException("Open a scene, or pick one, to make it the start scene.");
+
+    protected override Task ChooseCoreAsync(string choice)
+    {
+        if (workspace.Project is not { } project)
+            return Task.CompletedTask;
+        var path = Scenes().FirstOrDefault(s => s.Label.Equals(choice.Trim(), StringComparison.OrdinalIgnoreCase)).Path
+            ?? project.FindScene(choice.Trim())
+            ?? throw new ArgumentException($"The project has no scene \"{choice}\".", nameof(choice));
+        return string.Equals(project.StartScenePath, path, StringComparison.OrdinalIgnoreCase) ? Task.CompletedTask : workspace.SetStartSceneAsync(path);
+    }
+
+    // Each scene's name, or its path in Assets (without .scene) when another scene has the same name.
+    private List<(string Label, string? Path)> Scenes()
+    {
+        if (workspace.Project is not { } project || !Directory.Exists(project.AssetsPath))
+            return [];
+        var files = project.FindScenes().ToList();
+        var names = files.GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        return files.Select(f =>
+        {
+            var name = Path.GetFileNameWithoutExtension(f);
+            return (names[name] > 1 ? Path.ChangeExtension(PrefabFiles.AssetPathOf(project, f), null) : name, (string?)f);
+        }).ToList();
+    }
 }

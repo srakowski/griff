@@ -48,6 +48,7 @@ public sealed class LoadLayoutCommand(PanelLayout layout, IDialogService dialogs
 }
 
 /// <summary>Forgets a layout saved with View > Save Layout...; the submenu lists the saved layouts.</summary>
+[Destructive]
 public sealed class DeleteLayoutCommand(PanelLayout layout, IDialogService dialogs) : EditorCommand
 {
     public override string Id => "View.DeleteLayout";

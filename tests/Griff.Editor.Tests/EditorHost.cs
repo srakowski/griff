@@ -9,7 +9,10 @@ namespace Griff.Editor.Tests;
 internal static class EditorHost
 {
     // WPF objects (the scene view, the game surface, the clipboard) need a single-threaded apartment.
-    public static void Run(Action<IServiceProvider> test)
+    public static void Run(Action<IServiceProvider> test) => Run(_ => { }, test);
+
+    /// <summary>As <see cref="Run(Action{IServiceProvider})"/>, with services swapped first (a fake for one that reaches outside the editor).</summary>
+    public static void Run(Action<IServiceCollection> configure, Action<IServiceProvider> test)
     {
         Exception? failure = null;
         var thread = new Thread(() =>
@@ -24,6 +27,7 @@ internal static class EditorHost
 
                 // Tests never touch the user's own settings (recent projects and the like).
                 services.AddSingleton<ISettingsStore, TestSettings>();
+                configure(services);
                 using var provider = services.BuildServiceProvider();
                 test(provider);
             }

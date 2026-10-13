@@ -198,6 +198,12 @@ public static partial class ObjectSurface
         return method.ReturnType == typeof(void) ? "done" : Shown(returned, depth: 2);
     }
 
+    /// <summary>
+    /// The object whose property or method <paramref name="path"/> names: what <see cref="Set"/> changes and
+    /// <see cref="InvokeAsync"/> calls on ("Scene.Roots[Player].Name" is the Player entity's).
+    /// </summary>
+    public static object OwnerOf(object root, string path) => string.IsNullOrWhiteSpace(path) ? root : Split(root, path).Owner;
+
     /// <summary>The object at <paramref name="path"/> (the root for an empty path).</summary>
     public static object? Resolve(object root, string? path)
     {

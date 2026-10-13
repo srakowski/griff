@@ -8,18 +8,12 @@ namespace Griff.Editor.Tests;
 /// <summary>
 /// Guards the other half of the agent contract (see CLAUDE.md): a capability that only exists in a code-behind click
 /// handler is invisible to agents, so no *.xaml.cs runs an edit or starts a process; it calls a command instead. The
-/// handlers that still do are listed below and may only shrink: a new one fails, and so does a listed one that has
-/// gone, so the list is trimmed as they become commands.
+/// list of exceptions below is empty and should stay so: a handler that does either fails.
 /// </summary>
 public sealed class CodeBehindTests
 {
     // "<file>: <member> runs an edit" or "<file>: <member> starts a process"
-    private static readonly string[] Allowed =
-    [
-        "AssetsView.xaml.cs: AddPrefabToScene runs an edit",
-        "AssetsView.xaml.cs: OpenExternally starts a process",
-        "AssetsView.xaml.cs: ShowInExplorer starts a process",
-    ];
+    private static readonly string[] Allowed = [];
 
     [Fact]
     public void CodeBehind_RunsNoEdits_AndStartsNoProcesses()

@@ -61,6 +61,7 @@ public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dial
 }
 
 /// <summary>Closes the editor (asking to save unsaved changes first).</summary>
+[Destructive]
 public sealed class ExitCommand : EditorCommand
 {
     public override string Id => "App.Exit";

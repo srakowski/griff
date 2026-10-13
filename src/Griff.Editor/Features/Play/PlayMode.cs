@@ -45,6 +45,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _status = status;
         _logger = logger;
 
+        // A script reload reaches the other players' games as well as the Game tab's.
+        workspace.AddLiveScenes(() => _players.Select(p => p.Runner.Game.Scene).ToList());
+
         // The workspace can leave play mode on its own (e.g. when closing); follow it.
         workspace.PropertyChanged += (_, e) =>
         {

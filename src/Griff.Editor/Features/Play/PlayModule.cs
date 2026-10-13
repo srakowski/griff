@@ -195,6 +195,7 @@ public sealed class SlowConnectionCommand(PlayMode play, IStatusService status) 
 }
 
 /// <summary>Deletes what the game saved with Game.SaveData while playing in the editor, to test a first run again.</summary>
+[Destructive]
 public sealed class ClearSaveDataCommand(IWorkspace workspace, IStatusService status) : EditorCommand
 {
     public override string Id => "Game.ClearSaveData";

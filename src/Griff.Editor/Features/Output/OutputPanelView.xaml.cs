@@ -1,24 +1,17 @@
 using System.Collections.Specialized;
-using System.Globalization;
-using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Input;
-using Griff.Editor.Core.Workspace;
-using Griff.Editor.Features.Scripts;
 
 namespace Griff.Editor.Features.Output;
 
 public partial class OutputPanelView : UserControl
 {
-    private readonly IWorkspace _workspace;
-    private readonly ScriptEditors _scripts;
+    private readonly GoToScriptErrorCommand _goToError;
 
-    public OutputPanelView(IWorkspace workspace, ScriptEditors scripts)
+    public OutputPanelView(GoToScriptErrorCommand goToError)
     {
         InitializeComponent();
-        _workspace = workspace;
-        _scripts = scripts;
+        _goToError = goToError;
         ((INotifyCollectionChanged)EntryList.Items).CollectionChanged += OnItemsChanged;
         EntryList.MouseDoubleClick += OnEntryOpened;
         EntryList.ToolTip = "Double-click a script error to go to it";
@@ -32,16 +25,17 @@ public partial class OutputPanelView : UserControl
     }
 
     // "Ship.cs(12,5): ; expected" opens Ship.cs in the script editor at line 12.
-    private void OnEntryOpened(object sender, MouseButtonEventArgs e)
+    private async void OnEntryOpened(object sender, MouseButtonEventArgs e)
     {
-        if (EntryList.SelectedItem is not LogEntry entry || ScriptLine().Match(entry.Message) is not { Success: true } match ||
-            _workspace.Project is not { } project || !Directory.Exists(project.AssetsPath))
+        if (EntryList.SelectedItem is not LogEntry entry || !GoToScriptErrorCommand.IsScriptLine(entry.Message))
             return;
-        var file = Directory.EnumerateFiles(project.AssetsPath, match.Groups["file"].Value, SearchOption.AllDirectories).FirstOrDefault();
-        if (file is not null)
-            _scripts.Open(file, int.Parse(match.Groups["line"].Value, CultureInfo.InvariantCulture), int.Parse(match.Groups["column"].Value, CultureInfo.InvariantCulture));
+        try
+        {
+            await _goToError.ChooseAsync(entry.Message);
+        }
+        catch (ArgumentException)
+        {
+            // The script has gone since; nothing to open.
+        }
     }
-
-    [GeneratedRegex(@"^(?<file>[^\/:*?""<>|()]+\.cs)\((?<line>\d+),(?<column>\d+)\)")]
-    private static partial Regex ScriptLine();
 }

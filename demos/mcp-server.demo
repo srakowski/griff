@@ -11,8 +11,8 @@ say: The server keeps no list of features. Every menu command is a tool, every c
 chapter: New commands, new tools | File > Set as Start Scene
 say: Two things that only lived in the Assets panel's right click menu are now commands: Open Scene, and Set as Start Scene.
 explain: menu:File | The File menu | Being commands, they're in the File menu with shortcuts, and agents got them as tools, with nobody writing one.
-menu: File > Set as Start Scene
-say: Now this chapter is the one the game starts in.
+menu: File > Set as Start Scene > Lantern Road
+say: Its submenu lists every scene, so any of them can be the one the game starts in. Now it's this chapter.
 
 chapter: Built through it | Hollowmere, chapter one
 say: To test the server, an agent built this whole level through it: the tiles and art, the sounds and music, the lights, creatures, puzzles, menus and scripts, each placed with a tool call, then playtested by pressing keys in the running game.

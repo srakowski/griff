@@ -69,6 +69,27 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
         set => SetProperty(ref _active, value);
     }
 
+    /// <summary>
+    /// Whether script tabs show the component beside the code (its properties and their values in the scene). Shared by
+    /// every tab: open it in one, it's open in all.
+    /// </summary>
+    public bool ShowComponent
+    {
+        get => _showComponent;
+        set => SetProperty(ref _showComponent, value);
+    }
+
+    private bool _showComponent = true;
+
+    /// <summary>How wide the component beside the code is, in pixels, when it shows (kept from when it was last hidden).</summary>
+    public double ComponentPaneWidth
+    {
+        get => _componentPaneWidth;
+        set => SetProperty(ref _componentPaneWidth, Math.Max(220, value));
+    }
+
+    private double _componentPaneWidth = 340;
+
     /// <summary>Raised when a script should be brought to the front.</summary>
     public event EventHandler<ScriptDocument>? ShowRequested;
 

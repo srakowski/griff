@@ -19,14 +19,7 @@ public sealed class EditorAudio
     public EditorAudio(IWorkspace workspace)
     {
         _workspace = workspace;
-        Current = this;
     }
-
-    /// <summary>
-    /// The editor's audio, for property editors that aren't built by dependency injection (the Inspector's and the
-    /// script editor's share their field templates).
-    /// </summary>
-    public static EditorAudio? Current { get; private set; }
 
     public static readonly string[] Extensions = [".wav", ".mp3", ".ogg"];
 

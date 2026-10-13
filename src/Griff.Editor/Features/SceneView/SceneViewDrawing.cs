@@ -1,0 +1,1002 @@
+using System.Globalization;
+using System.IO;
+using System.Numerics;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Griff.Editing;
+using Griff.Editor.Core.Workspace;
+using Griff.Rendering;
+using Griff.Scenes;
+using Point = System.Windows.Point;
+using Vector = System.Windows.Vector;
+
+namespace Griff.Editor.Features.SceneView;
+
+/// <summary>
+/// Draws the Scene view: the grid, what each entity shows (sprites, tilemaps, text, camera frames, particles, or a marker),
+/// the lights, colliders, rooms, level guides and links, the selection with its handles, the tile palette while
+/// painting, and the zoom. Where the handles go is <see cref="SceneHandleGeometry"/>'s; what the mouse is doing (a drag,
+/// the handle under it) is <see cref="SceneViewInput"/>'s.
+/// </summary>
+internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel model, TilePalette palette, ISelection selection,
+    IWorkspace workspace, SceneHandleGeometry handles, SceneViewInput input, SceneViewStyle style)
+{
+    private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
+    private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
+    private SceneDocument? _document;
+
+    // The area a fill would cover, for the map's tiles and the cell it was worked out for.
+    private (IReadOnlyList<string> Tiles, (int X, int Y) Cell)? _fillPreviewOf;
+    private IReadOnlyList<(int X, int Y)> _fillPreview = [];
+
+    /// <summary>Forgets the pictures read so far (another scene or prefab is showing).</summary>
+    public void ForgetImages()
+    {
+        _images.Clear();
+        _tileImages.Clear();
+        _tintedImages.Clear();
+    }
+
+    /// <summary>Draws the open tab's scene (or just the background, with none open).</summary>
+    public void Draw(DrawingContext drawingContext, SceneDocument? document)
+    {
+        drawingContext.DrawRectangle(style.Brush("Brush.Surface.Document"), null, new Rect(viewport.Size));
+        _document = document;
+        if (_document is null)
+            return;
+
+        if (viewport.NeedsFit && viewport.Size.Width > 0)
+            viewport.Fit(_document);
+
+        DrawGrid(drawingContext);
+
+        foreach (var entity in SceneViewModel.DrawOrder(_document.Scene))
+        {
+            if (entity.GetComponent<Tilemap>() is { } tilemap)
+                DrawTilemap(drawingContext, entity, tilemap);
+            if (entity.GetComponent<Sprite>() is { } sprite)
+                DrawSprite(drawingContext, entity, sprite);
+            if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
+                DrawText(drawingContext, entity, text);
+            if (entity.GetComponent<Camera>() is { } camera)
+                DrawCameraFrame(drawingContext, entity, camera, selection.IsSelected(entity));
+            if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
+                DrawParticles(drawingContext, entity, emitter);
+
+            // Entities with nothing solid to see (including emitters) get a marker so they can be found and clicked.
+            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null &&
+                entity.GetComponent<Text>() is null && entity.GetComponent<Camera>() is null)
+                DrawMarker(drawingContext, entity);
+        }
+
+        DrawLights(drawingContext);
+        DrawColliders(drawingContext);
+        DrawRooms(drawingContext);
+        DrawLevelGuides(drawingContext);
+        DrawLinks(drawingContext);
+
+        foreach (var selected in selection.Entities)
+        {
+            if (selected.Scene == _document.Scene)
+                DrawSelection(drawingContext, selected, primary: selected == selection.Entity);
+        }
+
+        if (input.Drag == SceneDrag.Box)
+            DrawBoxSelection(drawingContext);
+        else
+            DrawHandles(drawingContext);
+
+        if (model.PaintTarget is { } painting)
+            DrawPaintOverlay(drawingContext, painting);
+
+        DrawZoomLabel(drawingContext);
+    }
+
+    private void DrawGrid(DrawingContext dc)
+    {
+        var minor = new Pen(style.Brush("Brush.Border.Subtle"), 1);
+        var major = new Pen(style.Brush("Brush.Selection.Inactive"), 1);
+        var topLeft = viewport.ToWorld(new Point(0, 0));
+        var bottomRight = viewport.ToWorld(new Point(viewport.Size.Width, viewport.Size.Height));
+
+        // Step through powers of ten so lines stay 8px or more apart at any zoom.
+        var step = Math.Pow(10, Math.Ceiling(Math.Log10(8 / viewport.Zoom)));
+        for (var x = Math.Floor(topLeft.X / step) * step; x <= bottomRight.X; x += step)
+        {
+            var sx = Math.Round(viewport.ToScreen(new Vector2((float)x, 0)).X) + 0.5;
+            var isMajor = Math.Abs(Math.IEEERemainder(x, step * 10)) < step / 2;
+            dc.DrawLine(isMajor ? major : minor, new Point(sx, 0), new Point(sx, viewport.Size.Height));
+        }
+
+        for (var y = Math.Floor(bottomRight.Y / step) * step; y <= topLeft.Y; y += step)
+        {
+            var sy = Math.Round(viewport.ToScreen(new Vector2(0, (float)y)).Y) + 0.5;
+            var isMajor = Math.Abs(Math.IEEERemainder(y, step * 10)) < step / 2;
+            dc.DrawLine(isMajor ? major : minor, new Point(0, sy), new Point(viewport.Size.Width, sy));
+        }
+
+        var origin = viewport.ToScreen(Vector2.Zero);
+        dc.DrawLine(new Pen(style.Faded("Brush.Axis.X", 0.6), 1), new Point(0, Math.Round(origin.Y) + 0.5), new Point(viewport.Size.Width, Math.Round(origin.Y) + 0.5));
+        dc.DrawLine(new Pen(style.Faded("Brush.Axis.Y", 0.6), 1), new Point(Math.Round(origin.X) + 0.5, 0), new Point(Math.Round(origin.X) + 0.5, viewport.Size.Height));
+    }
+
+    private void DrawSprite(DrawingContext dc, Entity entity, Sprite sprite)
+    {
+        var size = sprite.Size;
+        var rect = new Rect(-size.X / 2, -size.Y / 2, size.X, size.Y);
+        var matrix = viewport.ScreenMatrix(entity.Transform.WorldMatrix);
+
+        // Images are stored top-down; flip Y back since world space is Y-up.
+        var flip = new Matrix(sprite.FlipX ? -1 : 1, 0, 0, sprite.FlipY ? 1 : -1, 0, 0);
+        dc.PushTransform(new MatrixTransform(flip * matrix));
+        dc.PushOpacity(sprite.Tint.A);
+
+        if (LoadImage(sprite.Image) is { } loaded)
+        {
+            var image = Tinted(loaded, sprite.Tint);
+            if (sprite.Columns > 1 || sprite.Rows > 1)
+            {
+                var source = sprite.FrameRect;
+                var brush = new ImageBrush(image)
+                {
+                    Viewbox = new Rect(source.X, source.Y, source.Z, source.W),
+                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+                };
+                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+                dc.DrawRectangle(brush, null, rect);
+            }
+            else
+            {
+                dc.DrawImage(image, rect);
+            }
+        }
+        else
+        {
+            var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, sprite.Tint.RByte, sprite.Tint.GByte, sprite.Tint.BByte));
+            dc.DrawRectangle(fill, null, rect);
+            if (!string.IsNullOrEmpty(sprite.Image))
+            {
+                // Image set but not found: cross it out.
+                var pen = new Pen(style.Brush("Brush.Status.Error"), 2 / viewport.Zoom);
+                dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
+                dc.DrawLine(pen, rect.TopRight, rect.BottomLeft);
+            }
+        }
+
+        dc.Pop();
+        dc.Pop();
+    }
+
+    private void DrawTilemap(DrawingContext dc, Entity entity, Tilemap tilemap)
+    {
+        var size = tilemap.TileSize;
+        // A hair of overlap hides the anti-aliased seams WPF would draw between neighbouring tiles.
+        var bleed = 0.5 / viewport.Zoom;
+        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
+        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(entity.Transform.WorldMatrix)));
+        // While one layer of a map is painted, its other layers fade back.
+        var otherLayer = model.PaintTarget is { } painting && painting != tilemap && painting.BaseMap == tilemap.BaseMap;
+        dc.PushOpacity(tilemap.Tint.A * (otherLayer ? 0.35 : 1));
+
+        foreach (var (x, y, tile) in tilemap.Cells())
+        {
+            var center = tilemap.CellCenter(x, y);
+            var rect = new Rect(center.X - size / 2 - bleed, center.Y - size / 2 - bleed, size + bleed * 2, size + bleed * 2);
+            // Autotiles show the piece that joins their neighbors, as in the game.
+            if (TileImage(tilemap, tilemap.ShownTile(x, y, tile)) is { } image)
+            {
+                // Images are stored top-down; flip each tile about its own center.
+                dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 2 * center.Y));
+                dc.DrawImage(Tinted(image, tilemap.Tint), rect);
+                dc.Pop();
+            }
+            else
+            {
+                dc.DrawRectangle(fill, null, rect);
+            }
+        }
+
+        dc.Pop();
+        dc.Pop();
+    }
+
+    // Particle images are tinted like sprites; without one, particles are tinted squares.
+    private void DrawParticles(DrawingContext dc, Entity entity, ParticleEmitter emitter)
+    {
+        var image = LoadImage(emitter.Image);
+        foreach (var draw in SceneRenderer.ParticleDraws(entity, emitter))
+        {
+            var center = viewport.ToScreen(new Vector2(draw.World.M41, draw.World.M42));
+            var half = draw.World.M11 * viewport.Zoom / 2;
+            var rect = new Rect(center.X - half, center.Y - half, half * 2, half * 2);
+            if (image is not null)
+            {
+                dc.PushOpacity(draw.Tint.A);
+                dc.DrawImage(Tinted(image, draw.Tint), rect);
+                dc.Pop();
+            }
+            else
+            {
+                var color = System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte);
+                dc.DrawRectangle(new SolidColorBrush(color), null, rect);
+            }
+        }
+    }
+
+    // Same font and line height as the game's text rasterizer, scaled to the text's world size.
+    private void DrawText(DrawingContext dc, Entity entity, Text text)
+    {
+        var lines = text.Value!.Split('\n').Length;
+        var formatted = Griff.Platform.Windows.WpfText.Format(text.Value,
+            Griff.Platform.Windows.WpfText.TypefaceFor(text.Font, workspace.Project?.AssetsPath), text.Align,
+            new SolidColorBrush(System.Windows.Media.Color.FromArgb(text.Color.AByte, text.Color.RByte, text.Color.GByte, text.Color.BByte)),
+            style.PixelsPerDip);
+
+        // Same block width as the rasterized texture, placed like the game places it for the alignment.
+        var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace) + 8;
+        formatted.MaxTextWidth = width;
+        var left = text.Align switch { TextAlign.Left => 0, TextAlign.Right => -width, _ => -width / 2 };
+
+        var blockHeight = Griff.Platform.Windows.WpfText.LineHeight * lines;
+        var scale = text.Size / Griff.Platform.Windows.WpfText.LineHeight;
+        var matrix = new Matrix(scale, 0, 0, -scale, 0, 0) * viewport.ScreenMatrix(entity.Transform.WorldMatrix);
+        dc.PushTransform(new MatrixTransform(matrix));
+        dc.DrawText(formatted, new Point(left, -blockHeight / 2));
+        dc.Pop();
+    }
+
+    private void DrawCameraFrame(DrawingContext dc, Entity entity, Camera camera, bool selected)
+    {
+        var height = camera.Size * 2;
+        var width = height * SceneViewModel.CameraAspect;
+        var rect = new Rect(-width / 2, -height / 2, width, height);
+        var pen = new Pen(selected ? style.Brush("Brush.Accent") : style.Brush("Brush.Text.Tertiary"), 1.5 / viewport.Zoom)
+        {
+            DashStyle = new DashStyle([6, 4], 0),
+        };
+
+        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(entity.Transform.WorldMatrix)));
+        dc.DrawRectangle(null, pen, rect);
+        dc.Pop();
+
+        var corner = viewport.ToScreen(ToVector2(Vector3.Transform(new Vector3((float)rect.Left, (float)rect.Bottom, 0), entity.Transform.WorldMatrix)));
+        dc.DrawText(style.Text(entity.Name, "Brush.Text.Tertiary"), new Point(corner.X + 4, corner.Y - 18));
+    }
+
+    // The Scene view isn't lit, so each light shows as a soft glow of its color out to its radius.
+    private void DrawLights(DrawingContext dc)
+    {
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
+        {
+            foreach (var light in entity.GetComponents<Light>().Where(l => l.Radius > 0))
+            {
+                var color = System.Windows.Media.Color.FromRgb(light.Color.RByte, light.Color.GByte, light.Color.BByte);
+                var glow = new RadialGradientBrush(System.Windows.Media.Color.FromArgb(90, color.R, color.G, color.B),
+                    System.Windows.Media.Color.FromArgb(0, color.R, color.G, color.B));
+                var radius = light.Radius * viewport.Zoom;
+                dc.DrawEllipse(glow, null, viewport.ToScreen(light.WorldCenter), radius, radius);
+            }
+        }
+    }
+
+    // Rooms: long-dashed outlines with their names, so a level's screens can be laid out.
+    private void DrawRooms(DrawingContext dc)
+    {
+        var pen = new Pen(style.Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([10, 5], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
+        {
+            foreach (var room in entity.GetComponents<Room>())
+            {
+                var area = room.Area;
+                var topLeft = viewport.ToScreen(new Vector2(area.Min.X, area.Max.Y));
+                dc.DrawRectangle(null, pen, new Rect(topLeft, viewport.ToScreen(new Vector2(area.Max.X, area.Min.Y))));
+                dc.DrawText(style.Text(entity.Name, "Brush.Status.Info"), new Point(topLeft.X + 4, topLeft.Y + 2));
+            }
+        }
+    }
+
+    // Physics shapes in green; triggers dashed.
+    private void DrawColliders(DrawingContext dc)
+    {
+        var solid = new Pen(style.Brush("Brush.Status.Success"), 1.5);
+        var trigger = new Pen(style.Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var clickable = new Pen(style.Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
+        {
+            // Buttons and sliders: where they can be clicked and dragged.
+            foreach (var button in entity.GetComponents<Griff.Scenes.Button>())
+                DrawBox(Griff.Runtime.Game.AreaOf(button), clickable);
+            foreach (var slider in entity.GetComponents<Griff.Scenes.Slider>())
+                DrawBox(Griff.Runtime.Game.AreaOf(slider), clickable);
+
+            foreach (var collider in entity.GetComponents<BoxCollider>())
+            {
+                if (collider.OneWay && !collider.IsTrigger)
+                    DrawOneWay(Griff.Runtime.Physics.BoundsOf(collider));
+                else
+                    DrawBox(Griff.Runtime.Physics.BoundsOf(collider), collider.IsTrigger ? trigger : solid);
+            }
+
+            foreach (var collider in entity.GetComponents<CircleCollider>())
+            {
+                var circle = Griff.Runtime.Physics.BoundsOf(collider);
+                var radius = circle.Radius * viewport.Zoom;
+                dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, viewport.ToScreen(circle.Center), radius, radius);
+            }
+
+            foreach (var tilemap in entity.GetComponents<Tilemap>())
+            {
+                foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
+                {
+                    if (oneWay)
+                        DrawOneWay(box);
+                    else
+                        DrawBox(box, solid);
+                }
+
+                foreach (var (cell, rising) in Griff.Runtime.Physics.SlopeShapes(tilemap))
+                {
+                    var (low, high) = rising
+                        ? (new Vector2(cell.Min.X, cell.Min.Y), new Vector2(cell.Max.X, cell.Max.Y))
+                        : (new Vector2(cell.Max.X, cell.Min.Y), new Vector2(cell.Min.X, cell.Max.Y));
+                    var triangle = new StreamGeometry();
+                    using (var context = triangle.Open())
+                    {
+                        context.BeginFigure(viewport.ToScreen(low), false, true);
+                        context.LineTo(viewport.ToScreen(high), true, false);
+                        context.LineTo(viewport.ToScreen(new Vector2(high.X, low.Y)), true, false);
+                    }
+
+                    dc.DrawGeometry(null, solid, triangle);
+                }
+
+                // Ladder tiles don't collide; they're climbed, like a trigger.
+                var world = entity.Transform.WorldMatrix;
+                foreach (var (x, y, tile) in tilemap.Cells().Where(c => tilemap.IsLadder(c.Tile)))
+                {
+                    var half = new Vector2(tilemap.TileSize / 2);
+                    var center = tilemap.CellCenter(x, y);
+                    var min = Vector2.Transform(center - half, world);
+                    var max = Vector2.Transform(center + half, world);
+                    DrawBox(new Griff.Runtime.Box((min + max) / 2, Vector2.Abs(max - min) / 2), trigger);
+                }
+            }
+        }
+
+        // One-way platforms: a solid top (the side that blocks) over a dashed outline.
+        void DrawOneWay(Griff.Runtime.Box box)
+        {
+            DrawBox(box, trigger);
+            dc.DrawLine(new Pen(solid.Brush, 3), viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y)), viewport.ToScreen(box.Max));
+        }
+
+        void DrawBox(Griff.Runtime.Box box, Pen pen)
+        {
+            var topLeft = viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y));
+            var bottomRight = viewport.ToScreen(new Vector2(box.Max.X, box.Min.Y));
+            dc.DrawRectangle(null, pen, new Rect(topLeft, bottomRight));
+        }
+    }
+
+    // Where movers and grid patrols go and where patrols turn, always; for the selection, its distances (how far a light reaches, a chaser notices, a unit sees),
+    // which way a shooter fires, and how far a player jumps. Where a door leads and what a switch turns on are links.
+    private void DrawLevelGuides(DrawingContext dc)
+    {
+        var guide = style.Brush("Brush.Status.Warning");
+        var dashed = new Pen(guide, 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var dotted = new Pen(guide, 1.5) { DashStyle = new DashStyle([1, 3], 0) };
+        foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
+        {
+            foreach (var mover in entity.GetComponents<Mover>())
+            {
+                var points = SceneViewModel.PathOf(mover).Select(viewport.ToScreen).ToList();
+                for (var i = 1; i < points.Count; i++)
+                    dc.DrawLine(dashed, points[i - 1], points[i]);
+                if (mover.Mode == MoverMode.Loop && points.Count > 2)
+                    dc.DrawLine(dashed, points[^1], points[0]);
+                foreach (var point in points)
+                    dc.DrawEllipse(guide, null, point, 3, 3);
+            }
+
+            // A grid patrol's points, in cell middles, the way a mover's are.
+            foreach (var patrol in entity.GetComponents<GridPatrol>())
+            {
+                var points = SceneViewModel.RouteOf(patrol).Select(viewport.ToScreen).ToList();
+                for (var i = 1; i < points.Count; i++)
+                    dc.DrawLine(dashed, points[i - 1], points[i]);
+                if (patrol.Mode == MoverMode.Loop && points.Count > 2)
+                    dc.DrawLine(dashed, points[^1], points[0]);
+                foreach (var point in points)
+                    dc.DrawEllipse(guide, null, point, 3, 3);
+            }
+
+            // A patrol's route out to its turns, each end marked across; a side with no turn (it walks on until a wall
+            // or an edge) is a dotted arrow, shown only on the selection.
+            foreach (var patrol in entity.GetComponents<Patrol>())
+            {
+                var isPrimary = entity == selection.Entity;
+                if (patrol.Left <= 0 && patrol.Right <= 0 && !isPrimary)
+                    continue;
+                var route = SceneViewModel.RouteOf(patrol);
+                var home = viewport.ToScreen(route.Home);
+                foreach (var (end, open) in new[] { (route.Left, route.LeftOpen), (route.Right, route.RightOpen) })
+                {
+                    var tip = viewport.ToScreen(end);
+                    var way = tip - home;
+                    if (way.Length < 1 || open && !isPrimary)
+                        continue;
+                    way.Normalize();
+                    var across = new Vector(-way.Y, way.X) * 6;
+                    if (open)
+                    {
+                        dc.DrawLine(dotted, home, tip);
+                        dc.DrawLine(new Pen(guide, 1.5), tip, tip - way * 6 + across);
+                        dc.DrawLine(new Pen(guide, 1.5), tip, tip - way * 6 - across);
+                    }
+                    else
+                    {
+                        dc.DrawLine(dashed, home, tip);
+                        dc.DrawLine(new Pen(guide, 2), tip - across, tip + across);
+                    }
+                }
+
+                dc.DrawEllipse(guide, null, home, 3, 3);
+            }
+        }
+
+        if (selection.Entity is not { } selected || selected.Scene != _document.Scene)
+            return;
+        var here = ToVector2(selected.Transform.WorldPosition);
+        foreach (var distance in model.Distances())
+            dc.DrawEllipse(null, dashed, viewport.ToScreen(distance.Center), distance.Value * viewport.Zoom, distance.Value * viewport.Zoom);
+        foreach (var shooter in selected.GetComponents<Shooter>().Where(s => string.IsNullOrWhiteSpace(s.Target) && s.Direction != Vector2.Zero))
+            dc.DrawLine(dashed, viewport.ToScreen(here + shooter.Offset), viewport.ToScreen(here + shooter.Offset + Vector2.Normalize(shooter.Direction) * 2));
+
+        // How far a player jumps, each way, and where a bouncer sends things: under the default gravity.
+        foreach (var movement in selected.GetComponents<PlatformerMovement>())
+        {
+            var gravity = -Griff.Runtime.Physics.DefaultGravity.Y * (selected.GetComponent<Body>()?.GravityScale ?? 1);
+            var jump = movement.JumpSpeedFor(gravity);
+            foreach (var side in new[] { -1, 1 })
+                DrawArc(dc, here, new Vector2(side * movement.Speed, jump), gravity, movement.FallMultiplier, movement.MaxFallSpeed);
+            dc.DrawLine(dashed, viewport.ToScreen(here + new Vector2(-0.6f, movement.JumpHeight)), viewport.ToScreen(here + new Vector2(0.6f, movement.JumpHeight)));
+        }
+
+        foreach (var bouncer in selected.GetComponents<Bouncer>())
+            DrawArc(dc, here, bouncer.Way * bouncer.Strength, -Griff.Runtime.Physics.DefaultGravity.Y, 1, 0);
+    }
+
+    // The selection's links (see SceneViewModel.Links): a dashed arrow from each field's entity to the one it names,
+    // with the fields named halfway along.
+    private void DrawLinks(DrawingContext dc)
+    {
+        var accent = style.Brush("Brush.Accent");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var pen = new Pen(accent, 1.5) { DashStyle = new DashStyle([5, 3], 0) };
+        var border = new Pen(accent, 1);
+        foreach (var arrow in handles.LinkArrows())
+        {
+            var curve = new StreamGeometry();
+            using (var context = curve.Open())
+            {
+                context.BeginFigure(arrow.Start, false, false);
+                context.QuadraticBezierTo(arrow.Bend, arrow.Tip, true, false);
+            }
+
+            curve.Freeze();
+            dc.DrawGeometry(null, pen, curve);
+            dc.DrawEllipse(accent, null, arrow.Start, 2.5, 2.5);
+
+            var into = arrow.Tip - arrow.Bend;
+            into.Normalize();
+            var across = new Vector(-into.Y, into.X) * 4.5;
+            var head = new StreamGeometry();
+            using (var context = head.Open())
+            {
+                context.BeginFigure(arrow.Tip, true, true);
+                context.LineTo(arrow.Tip - into * 10 + across, true, false);
+                context.LineTo(arrow.Tip - into * 10 - across, true, false);
+            }
+
+            head.Freeze();
+            dc.DrawGeometry(accent, null, head);
+
+            var label = style.Text(arrow.Fields, "Brush.Text.Secondary");
+            var place = new Point(arrow.Middle.X - label.Width / 2, arrow.Middle.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, border, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
+    // A dashed arc: where something leaving `from` at `velocity` goes under `gravity` (heavier on the way down), for 1.5 seconds
+    // or until it has fallen well below where it started.
+    private void DrawArc(DrawingContext dc, Vector2 from, Vector2 velocity, float gravity, float fallMultiplier, float maxFall)
+    {
+        var pen = new Pen(style.Brush("Brush.Status.Warning"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(viewport.ToScreen(from), false, false);
+            var (position, v) = (from, velocity);
+            const float dt = 1 / 30f;
+            for (var t = 0f; t < 1.5f && position.Y > from.Y - 4; t += dt)
+            {
+                v.Y -= gravity * (v.Y < 0 ? Math.Max(1, fallMultiplier) : 1) * dt;
+                if (maxFall > 0)
+                    v.Y = Math.Max(v.Y, -maxFall);
+                position += v * dt;
+                context.LineTo(viewport.ToScreen(position), true, false);
+            }
+        }
+
+        geometry.Freeze();
+        dc.DrawGeometry(null, pen, geometry);
+    }
+
+    // While painting: the grid's extent, the cell under the cursor (or the rectangle being dragged, or the area a fill
+    // would cover), a palette of the tileset's tiles, and the tools.
+    private void DrawPaintOverlay(DrawingContext dc, Tilemap tilemap)
+    {
+        var accent = style.Brush("Brush.Accent");
+        var size = tilemap.TileSize;
+        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(tilemap.Entity!.Transform.WorldMatrix)));
+
+        var extent = new Rect(0, -Math.Max(1, tilemap.Height) * size, Math.Max(1, tilemap.Width) * size, Math.Max(1, tilemap.Height) * size);
+        dc.DrawRectangle(null, new Pen(style.Brush("Brush.Text.Tertiary"), 1 / viewport.Zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
+
+        var color = input.Erasing ? "Brush.Status.Error" : "Brush.Accent";
+        var outline = new Pen(style.Brush(color), 2 / viewport.Zoom);
+        Rect Cells(int left, int top, int right, int bottom) => new(left * size, -(bottom + 1) * size, (right - left + 1) * size, (bottom - top + 1) * size);
+        if (input.RectangleFrom is var (fx, fy) && input.HoverCell is var (tx, ty))
+        {
+            var box = Cells(Math.Min(fx, tx), Math.Min(fy, ty), Math.Max(fx, tx), Math.Max(fy, ty));
+            dc.DrawRectangle(style.Faded(color, 0.2), outline, box);
+        }
+        else if (input.HoverCell is var (hx, hy))
+        {
+            if (model.TileTool == TileTool.Fill && input.Drag == SceneDrag.None)
+            {
+                // The area a click would fill, when it's small enough to draw cell by cell.
+                if (_fillPreviewOf is not var (previewTiles, previewCell) || previewTiles != tilemap.Tiles || previewCell != (hx, hy))
+                {
+                    var region = tilemap.FillRegion(hx, hy);
+                    (_fillPreviewOf, _fillPreview) = ((tilemap.Tiles, (hx, hy)), region.Count <= 4096 ? region : []);
+                }
+
+                var shade = style.Faded(color, 0.2);
+                foreach (var (x, y) in _fillPreview)
+                    dc.DrawRectangle(shade, null, Cells(x, y, x, y));
+            }
+
+            dc.DrawRectangle(null, outline, Cells(hx, hy, hx, hy));
+        }
+
+        dc.Pop();
+
+        // Palette, top left: a tab for each tileset (the one shown picked out) and + to add one, then its tiles.
+        var layout = TilePaletteLayout.Of(palette, tilemap, style.Measure);
+        var panel = layout.Panel;
+        dc.DrawRoundedRectangle(style.Brush("Brush.Surface.Chrome"), new Pen(style.Brush("Brush.Border.Default"), 1), panel, 4, 4);
+        foreach (var (box, tileset) in layout.Tabs)
+        {
+            var shown = tileset == layout.Shown;
+            dc.DrawRoundedRectangle(shown ? accent : null, new Pen(shown ? accent : style.Brush("Brush.Border.Default"), 1), box, 3, 3);
+            var name = style.Text(tileset.Name, shown ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(name, new Point(box.X + (box.Width - name.Width) / 2, box.Y + (box.Height - name.Height) / 2));
+        }
+
+        dc.DrawRoundedRectangle(null, new Pen(style.Brush("Brush.Border.Default"), 1), layout.AddTab, 3, 3);
+        var plus = style.Text("+", "Brush.Text.Primary");
+        dc.DrawText(plus, new Point(layout.AddTab.X + (layout.AddTab.Width - plus.Width) / 2, layout.AddTab.Y + (layout.AddTab.Height - plus.Height) / 2));
+
+        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
+        for (var tile = layout.Shown.First; tile < layout.Shown.First + layout.Count; tile++)
+        {
+            if (layout.CellBounds(tile) is not { } cell)
+                continue;
+            var rect = cell;
+            rect.Inflate(-2, -2);
+            if (TileImage(tilemap, tile) is { } image)
+                dc.DrawImage(image, rect);
+            else
+                dc.DrawRectangle(fill, null, rect);
+            if (tile == model.BrushTile)
+                dc.DrawRectangle(null, new Pen(accent, 2), cell);
+        }
+
+        // A thin bar down the right of the tiles when they scroll: how far down the ones in sight are.
+        if (layout.Rows > layout.VisibleRows)
+        {
+            var track = new Rect(panel.Right - 5, layout.CellsTop, 3, layout.VisibleRows * TilePaletteLayout.Cell);
+            var thumb = new Rect(track.X, track.Y + track.Height * layout.Scroll / layout.Rows, track.Width, track.Height * layout.VisibleRows / layout.Rows);
+            dc.DrawRectangle(style.Brush("Brush.Border.Default"), null, track);
+            dc.DrawRectangle(style.Brush("Brush.Text.Secondary"), null, thumb);
+        }
+
+        // The tools, under the layout.
+        foreach (var tool in Enum.GetValues<TileTool>())
+        {
+            var button = layout.ToolBounds(tool);
+            var picked = tool == model.TileTool;
+            dc.DrawRoundedRectangle(picked ? accent : style.Brush("Brush.Surface.Chrome"), new Pen(picked ? accent : style.Brush("Brush.Border.Default"), 1), button, 3, 3);
+            var label = style.Text($"{tool}  {TilePalette.KeyOf(tool)}", picked ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(label, new Point(button.X + (button.Width - label.Width) / 2, button.Y + (button.Height - label.Height) / 2));
+        }
+
+        // The map's layers under the tools, the one being painted picked out, and + Layer to add one.
+        foreach (var (box, layer) in layout.LayerButtons)
+        {
+            var picked = layer == tilemap;
+            dc.DrawRoundedRectangle(picked ? accent : style.Brush("Brush.Surface.Chrome"), new Pen(picked ? accent : style.Brush("Brush.Border.Default"), 1), box, 3, 3);
+            var label = style.Text(layer.Entity!.Name, picked ? "Brush.Text.OnAccent" : "Brush.Text.Primary");
+            dc.DrawText(label, new Point(box.X + (box.Width - label.Width) / 2, box.Y + (box.Height - label.Height) / 2));
+        }
+
+        dc.DrawRoundedRectangle(style.Brush("Brush.Surface.Chrome"), new Pen(style.Brush("Brush.Border.Default"), 1), layout.AddLayer, 3, 3);
+        var addLayer = style.Text(TilePaletteLayout.AddLayerLabel, "Brush.Text.Primary");
+        dc.DrawText(addLayer, new Point(layout.AddLayer.X + (layout.AddLayer.Width - addLayer.Width) / 2, layout.AddLayer.Y + (layout.AddLayer.Height - addLayer.Height) / 2));
+
+        var hint = style.Text(palette.Hint, "Brush.Text.Secondary");
+        dc.DrawText(hint, new Point(panel.Left + 6, layout.AddLayer.Bottom + 4));
+    }
+
+    private void DrawMarker(DrawingContext dc, Entity entity)
+    {
+        var center = viewport.ToScreen(ToVector2(entity.Transform.WorldPosition));
+        var pen = new Pen(entity.IsEnabled ? style.Brush("Brush.Text.Secondary") : style.Brush("Brush.Text.Disabled"), 1.5);
+        dc.DrawEllipse(null, pen, center, SceneHandleGeometry.MarkerRadius, SceneHandleGeometry.MarkerRadius);
+        dc.DrawLine(pen, new Point(center.X - 3, center.Y), new Point(center.X + 3, center.Y));
+        dc.DrawLine(pen, new Point(center.X, center.Y - 3), new Point(center.X, center.Y + 3));
+    }
+
+    /// <summary>Outlines a selected entity; the primary one also gets its pivot handle.</summary>
+    private void DrawSelection(DrawingContext dc, Entity entity, bool primary)
+    {
+        var accent = style.Brush("Brush.Accent");
+        if (SceneViewModel.Outline(entity) is { } bounds)
+        {
+            var corners = bounds.Select(p => viewport.ToScreen(p)).ToArray();
+            var geometry = new StreamGeometry();
+            using (var g = geometry.Open())
+            {
+                g.BeginFigure(corners[0], isFilled: false, isClosed: true);
+                g.PolyLineTo(corners[1..], isStroked: true, isSmoothJoin: false);
+            }
+
+            // Dark halo under the accent line keeps the outline visible on any sprite color.
+            dc.DrawGeometry(null, new Pen(style.Brush("Brush.Surface.Chrome"), 4), geometry);
+            dc.DrawGeometry(null, new Pen(accent, 2), geometry);
+        }
+        else
+        {
+            // Entities with nothing to outline get a ring around their marker.
+            var center = viewport.ToScreen(ToVector2(entity.Transform.WorldPosition));
+            dc.DrawEllipse(null, new Pen(style.Brush("Brush.Surface.Chrome"), 4), center, SceneHandleGeometry.MarkerRadius + 3, SceneHandleGeometry.MarkerRadius + 3);
+            dc.DrawEllipse(null, new Pen(accent, 2), center, SceneHandleGeometry.MarkerRadius + 3, SceneHandleGeometry.MarkerRadius + 3);
+        }
+
+        if (!primary)
+            return;
+
+        // Pivot handle with axis arms.
+        var pivot = viewport.ToScreen(ToVector2(entity.Transform.WorldPosition));
+        dc.DrawLine(new Pen(style.Brush("Brush.Axis.X"), 2), pivot, new Point(pivot.X + 28, pivot.Y));
+        dc.DrawLine(new Pen(style.Brush("Brush.Axis.Y"), 2), pivot, new Point(pivot.X, pivot.Y - 28));
+        dc.DrawEllipse(accent, null, pivot, 3.5, 3.5);
+    }
+
+    // The primary selection's handles: the rotate knob, then the scale or resize squares over the root of its stem, the
+    // knobs on its distances' circles, and those on its path.
+    private void DrawHandles(DrawingContext dc)
+    {
+        if (handles.RotateHandle() is var (root, knob))
+            DrawRotateHandle(dc, root, knob);
+        DrawScaleHandles(dc);
+        DrawResizeHandles(dc);
+        DrawDistanceHandles(dc);
+        DrawPathHandles(dc);
+    }
+
+    // A knob on each of the primary selection's mover and grid patrol points (numbered) and patrol turns (hollow while it walks on to a
+    // wall), and a small plus between points and past the last to drag out a new one, in the guides' color. Hovering says
+    // what a knob does; dragging, where it is.
+    private void DrawPathHandles(DrawingContext dc)
+    {
+        var color = style.Brush("Brush.Status.Warning");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        string Number(float value) => value.ToString("0.##", CultureInfo.CurrentCulture);
+        foreach (var handle in handles.PathHandles())
+        {
+            var dragging = input.Drag == SceneDrag.Path && input.PathKey == handle.Key;
+            var hovered = input.Drag == SceneDrag.None && input.OverPath == handle.Key;
+            var active = dragging || hovered;
+            if (handle.Point is not { } point)
+            {
+                var small = SceneHandleGeometry.HandleSquare + (active ? 1 : 0);
+                dc.DrawEllipse(chrome, halo, handle.Screen, small, small);
+                dc.DrawEllipse(active ? color : chrome, new Pen(color, 1.5), handle.Screen, small, small);
+                var plus = new Pen(active ? chrome : color, 1.5);
+                dc.DrawLine(plus, handle.Screen + new Vector(-2, 0), handle.Screen + new Vector(2, 0));
+                dc.DrawLine(plus, handle.Screen + new Vector(0, -2), handle.Screen + new Vector(0, 2));
+                if (hovered)
+                    PathLabel(style.Text("Drag to add a point", "Brush.Text.Primary"), handle.Screen);
+                continue;
+            }
+
+            var radius = SceneHandleGeometry.HandleRadius + (active ? 1.5 : 0);
+            dc.DrawEllipse(chrome, halo, handle.Screen, radius, radius);
+            dc.DrawEllipse(active || !point.Open ? color : chrome, new Pen(color, 2), handle.Screen, radius, radius);
+
+            string text;
+            if (point.Component is Patrol patrol)
+            {
+                var side = point.Index < 0 ? "Left" : "Right";
+                var value = point.Index < 0 ? patrol.Left : patrol.Right;
+                text = point.Open
+                    ? dragging ? $"{side}: on to a wall" : hovered ? $"{side}: on to a wall or an edge  ·  drag to set" : side
+                    : dragging ? $"{side} {Number(value)}" : hovered ? $"{side} {Number(value)}  ·  double-click to clear" : side;
+            }
+            else
+            {
+                var offset = point.Component is GridPatrol grid
+                    ? new Vector2(grid.Path[point.Index].X, grid.Path[point.Index].Y)
+                    : ((Mover)point.Component).Path[point.Index];
+                text = dragging ? $"{point.Index}  ·  {Number(offset.X)}, {Number(offset.Y)}"
+                    : hovered ? $"{point.Index}  ·  double-click to remove" : $"{point.Index}";
+            }
+
+            PathLabel(style.Text(text, active ? "Brush.Text.Primary" : "Brush.Text.Secondary"), handle.Screen);
+        }
+
+        void PathLabel(FormattedText label, Point at)
+        {
+            var place = new Point(at.X + 10, at.Y - label.Height - 4);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
+    // A knob on each distance's circle in the guides' color, named on its outer side; while dragging, its value too.
+    private void DrawDistanceHandles(DrawingContext dc)
+    {
+        var color = style.Brush("Brush.Status.Warning");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        foreach (var (distance, point, outward) in handles.DistanceHandles())
+        {
+            var dragging = input.Drag == SceneDrag.Distance && input.Distance?.Distance.Key == distance.Key;
+            var active = dragging || input.Drag == SceneDrag.None && input.OverDistance == distance.Key;
+            var radius = SceneHandleGeometry.HandleRadius + (active ? 1.5 : 0);
+            dc.DrawEllipse(chrome, halo, point, radius, radius);
+            dc.DrawEllipse(active ? color : chrome, new Pen(color, 2), point, radius, radius);
+
+            var name = $"{distance.Component.GetType().Name} {distance.Property.Name}";
+            var label = dragging
+                ? style.Text($"{name} {distance.Value.ToString("0.##", CultureInfo.CurrentCulture)}", "Brush.Text.Primary")
+                : style.Text(name, active ? "Brush.Text.Primary" : "Brush.Text.Secondary");
+            // Out to the side for knobs on the left or right, above or below for those on the top or bottom.
+            var place = outward.X > 0.5 ? new Point(point.X + 12, point.Y - label.Height / 2)
+                : outward.X < -0.5 ? new Point(point.X - 12 - label.Width, point.Y - label.Height / 2)
+                : new Point(point.X - label.Width / 2, outward.Y > 0 ? point.Y + 10 : point.Y - 10 - label.Height);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
+    // A stem out of the top of the primary selection with a knob to drag; while turning, the circle the knob follows and
+    // the angle it's at.
+    private void DrawRotateHandle(DrawingContext dc, Point root, Point knob)
+    {
+        var accent = style.Brush("Brush.Accent");
+        var halo = new Pen(style.Brush("Brush.Surface.Chrome"), 4);
+        if (input.Drag == SceneDrag.Rotate && input.Rotate is not null)
+        {
+            var pivot = viewport.ToScreen(input.Rotate.Pivot);
+            var radius = (knob - pivot).Length;
+            dc.DrawEllipse(null, new Pen(style.Faded("Brush.Accent", 0.5), 1) { DashStyle = new DashStyle([4, 4], 0) }, pivot, radius, radius);
+        }
+
+        dc.DrawLine(halo, root, knob);
+        dc.DrawLine(new Pen(accent, 1.5), root, knob);
+        var grown = input.OverRotate || input.Drag == SceneDrag.Rotate ? 1.5 : 0;
+        dc.DrawEllipse(style.Brush("Brush.Surface.Chrome"), halo, knob, SceneHandleGeometry.HandleRadius + grown, SceneHandleGeometry.HandleRadius + grown);
+        dc.DrawEllipse(input.OverRotate || input.Drag == SceneDrag.Rotate ? accent : style.Brush("Brush.Surface.Chrome"), new Pen(accent, 2), knob, SceneHandleGeometry.HandleRadius + grown, SceneHandleGeometry.HandleRadius + grown);
+
+        if (input.Drag == SceneDrag.Rotate && selection.Entity is { } turning)
+        {
+            var label = style.Text($"{turning.Transform.Rotation.Z.ToString("0.#", CultureInfo.CurrentCulture)}°", "Brush.Text.Primary");
+            var at = new Point(knob.X + 12, knob.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(style.Brush("Brush.Surface.Chrome"), null, new Rect(at.X - 4, at.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, at);
+        }
+    }
+
+    // Squares on the corners and edges of the primary selection; while scaling, its scale by the one being dragged.
+    private void DrawScaleHandles(DrawingContext dc)
+    {
+        var accent = style.Brush("Brush.Accent");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        Point? dragged = null;
+        foreach (var (spot, point) in handles.ScaleHandles())
+        {
+            var active = input.Drag == SceneDrag.Scale ? spot == input.ScaleSpot : input.Drag == SceneDrag.None && spot == input.OverScale;
+            var half = SceneHandleGeometry.HandleSquare + (active ? 1 : 0);
+            var square = new Rect(point.X - half, point.Y - half, half * 2, half * 2);
+            dc.DrawRectangle(chrome, halo, square);
+            dc.DrawRectangle(active ? accent : chrome, new Pen(accent, 1.5), square);
+            if (active && input.Drag == SceneDrag.Scale)
+                dragged = point;
+        }
+
+        if (dragged is { } at && selection.Entity is { } scaling)
+        {
+            var scale = scaling.Transform.Scale;
+            var label = style.Text($"{scale.X.ToString("0.##", CultureInfo.CurrentCulture)} × {scale.Y.ToString("0.##", CultureInfo.CurrentCulture)}", "Brush.Text.Primary");
+            var place = new Point(at.X + 12, at.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
+    // Squares on the sprite's or colliders' corners and edges (colliders' in their green); while resizing, the size by the
+    // one being dragged.
+    private void DrawResizeHandles(DrawingContext dc)
+    {
+        var color = style.Brush(model.Handles == SceneHandles.Collider ? "Brush.Status.Success" : "Brush.Accent");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        Point? dragged = null;
+        foreach (var (shape, spot, point) in handles.ResizeHandles())
+        {
+            var active = input.Drag == SceneDrag.Resize
+                ? shape == input.Resize?.Shape && spot == input.ResizeSpot
+                : input.Drag == SceneDrag.None && input.OverResize is var (overShape, overSpot) && overShape == shape && overSpot == spot;
+            var half = SceneHandleGeometry.HandleSquare + (active ? 1 : 0);
+            var square = new Rect(point.X - half, point.Y - half, half * 2, half * 2);
+            dc.DrawRectangle(chrome, halo, square);
+            dc.DrawRectangle(active ? color : chrome, new Pen(color, 1.5), square);
+            if (active && input.Drag == SceneDrag.Resize)
+                dragged = point;
+        }
+
+        if (dragged is { } at && input.Resize?.Shape is { } resizing)
+        {
+            string Number(float value) => value.ToString("0.##", CultureInfo.CurrentCulture);
+            var size = resizing switch
+            {
+                Sprite sprite => sprite.Size,
+                BoxCollider box => box.Size,
+                _ => Vector2.Zero,
+            };
+            var label = style.Text(resizing is CircleCollider circle ? $"r {Number(circle.Radius)}" : $"{Number(size.X)} × {Number(size.Y)}", "Brush.Text.Primary");
+            var place = new Point(at.X + 12, at.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
+    }
+
+    // The box being dragged, and outlines on what it will catch.
+    private void DrawBoxSelection(DrawingContext dc)
+    {
+        if ((input.BoxEnd - input.DragStart).Length < SceneViewInput.DragThreshold)
+            return;
+        foreach (var caught in model.EntitiesInBox(viewport.ToWorld(input.DragStart), viewport.ToWorld(input.BoxEnd)).Where(e => !selection.IsSelected(e)))
+            DrawSelection(dc, caught, primary: false);
+
+        var accent = style.Brush("Brush.Accent");
+        dc.DrawRectangle(style.Faded("Brush.Accent", 0.12), new Pen(accent, 1), new Rect(input.DragStart, input.BoxEnd));
+    }
+
+    // The zoom, and which handles are out when they aren't the scale ones.
+    private void DrawZoomLabel(DrawingContext dc)
+    {
+        var mode = model.Handles switch
+        {
+            SceneHandles.Resize => "Resize handles  ·  ",
+            SceneHandles.Collider => "Collider handles  ·  ",
+            SceneHandles.Distance => "Distance handles  ·  ",
+            _ => "",
+        };
+        var text = style.Text($"{mode}{viewport.Zoom / 64:P0}", "Brush.Text.Tertiary");
+        dc.DrawText(text, new Point(viewport.Size.Width - text.Width - 10, viewport.Size.Height - text.Height - 8));
+
+        // In a prefab's tab, a reminder of what's being edited.
+        if (_document is { IsPrefab: true } prefab)
+        {
+            var label = style.Text($"Editing the {prefab.Name} prefab  ·  saving it updates every copy", "Brush.Accent");
+            dc.DrawText(label, new Point(10, 8));
+        }
+    }
+
+    private BitmapSource? LoadImage(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || workspace.Project is not { } project)
+            return null;
+
+        var path = Path.Combine(project.AssetsPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (_images.TryGetValue(path, out var cached))
+            return cached;
+
+        BitmapSource? image = null;
+        try
+        {
+            if (File.Exists(path))
+            {
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.UriSource = new Uri(path);
+                bitmap.EndInit();
+                bitmap.Freeze();
+                image = bitmap;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            image = null;
+        }
+
+        _images[path] = image;
+        return image;
+    }
+
+    /// <summary>
+    /// <paramref name="image"/> multiplied by the tint's color, as the game draws it; alpha is left to the caller. Tints are
+    /// rounded (see <see cref="ImageTint.Quantize"/>) and the cache is emptied when it grows large, so animated colors
+    /// like particles fading through a gradient don't pile up images.
+    /// </summary>
+    private BitmapSource Tinted(BitmapSource image, Griff.Color tint)
+    {
+        if (ImageTint.IsIdentity(tint))
+            return image;
+
+        var key = (image, ImageTint.Quantize(tint));
+        if (_tintedImages.TryGetValue(key, out var cached))
+            return cached;
+        if (_tintedImages.Count >= 256)
+            _tintedImages.Clear();
+
+        var source = image.Format == PixelFormats.Bgra32 ? image : new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
+        var stride = source.PixelWidth * 4;
+        var pixels = new byte[stride * source.PixelHeight];
+        source.CopyPixels(pixels, stride, 0);
+        ImageTint.ApplyBgra(pixels, key.Item2);
+
+        var tinted = BitmapSource.Create(source.PixelWidth, source.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgra32, null, pixels, stride);
+        tinted.Freeze();
+        _tintedImages[key] = tinted;
+        return tinted;
+    }
+
+    /// <summary>One tile of a tilemap, cut out of its tileset's image for drawing; null when that tileset has no (loadable) image.</summary>
+    private BitmapSource? TileImage(Tilemap tilemap, int tile)
+    {
+        var tileset = tilemap.TilesetOf(tile);
+        if (LoadImage(tileset.Image) is not { } image)
+            return null;
+
+        var key = (tileset.Image!, tile - tileset.First, tileset.Columns, tileset.Rows);
+        if (_tileImages.TryGetValue(key, out var cached))
+            return cached;
+
+        var rect = tileset.Rect(tile);
+        var area = new Int32Rect(
+            (int)Math.Round(rect.X * image.PixelWidth), (int)Math.Round(rect.Y * image.PixelHeight),
+            Math.Max(1, (int)Math.Round(rect.Z * image.PixelWidth)), Math.Max(1, (int)Math.Round(rect.W * image.PixelHeight)));
+        BitmapSource? cropped = null;
+        if (area.X + area.Width <= image.PixelWidth && area.Y + area.Height <= image.PixelHeight)
+        {
+            cropped = new CroppedBitmap(image, area);
+            cropped.Freeze();
+        }
+
+        _tileImages[key] = cropped;
+        return cropped;
+    }
+
+    private static Vector2 ToVector2(Vector3 v) => new(v.X, v.Y);
+}

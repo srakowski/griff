@@ -22,16 +22,13 @@ namespace Griff.Editor.Features.Scripts;
 /// </summary>
 public partial class ScriptEditorView : UserControl
 {
-    // Shared by every script tab: open the panel in one, it's open in all.
-    private static bool s_showComponent = true;
-    private static GridLength s_paneWidth = new(340);
-
     private readonly ScriptEditors _editors;
     private readonly DispatcherTimer _caretTimer;
     private List<ISearchResult> _matches = [];
     private bool _showingReferences;
 
-    public ScriptEditorView(ScriptDocument script, ScriptEditors editors, IWorkspace workspace, ISelection selection, IDialogService dialogs)
+    public ScriptEditorView(ScriptDocument script, ScriptEditors editors, IWorkspace workspace, ISelection selection, IDialogService dialogs,
+        Art.EditorArt art, Audio.EditorAudio audio)
     {
         InitializeComponent();
         Script = script;
@@ -40,7 +37,7 @@ public partial class ScriptEditorView : UserControl
 
         Editor = new CodeEditor(script, editors.Language) { Prompt = dialogs.Prompt };
         EditorHost.Content = Editor;
-        Component = new ComponentPanel(script, workspace, selection);
+        Component = new ComponentPanel(script, workspace, selection, art, audio);
         ComponentPane.DataContext = Component;
 
         var assets = workspace.Project?.AssetsPath;
@@ -90,13 +87,17 @@ public partial class ScriptEditorView : UserControl
                 ShowProblems();
         };
 
-        ComponentToggle.IsChecked = s_showComponent;
+        ComponentToggle.IsChecked = editors.ShowComponent;
         ApplyComponentVisibility();
         UpdateBadges();
         CaretText.Text = "Ln 1, Col 1     Spaces: 4     UTF-8     C#";
+        editors.PropertyChanged += OnEditorsChanged;
+        Unloaded += (_, _) => editors.PropertyChanged -= OnEditorsChanged;
         Loaded += (_, _) =>
         {
-            ComponentToggle.IsChecked = s_showComponent;
+            editors.PropertyChanged -= OnEditorsChanged;
+            editors.PropertyChanged += OnEditorsChanged;
+            ComponentToggle.IsChecked = editors.ShowComponent;
             ApplyComponentVisibility();
             Dispatcher.InvokeAsync(() => Editor.Focus(), DispatcherPriority.Input);
         };
@@ -141,17 +142,24 @@ public partial class ScriptEditorView : UserControl
     {
         if (!IsLoaded)
             return;
-        s_showComponent = ComponentToggle.IsChecked == true;
+        if (ComponentToggle.IsChecked != true && PaneColumn.Width.Value > 0)
+            _editors.ComponentPaneWidth = PaneColumn.Width.Value;
+        _editors.ShowComponent = ComponentToggle.IsChecked == true;
         ApplyComponentVisibility();
+    }
+
+    // Shown or hidden from another tab, or by an agent: the toggle follows, and its handler does the rest.
+    private void OnEditorsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ScriptEditors.ShowComponent) && IsLoaded && ComponentToggle.IsChecked != _editors.ShowComponent)
+            ComponentToggle.IsChecked = _editors.ShowComponent;
     }
 
     private void ApplyComponentVisibility()
     {
         var show = ComponentToggle.IsChecked == true;
-        if (!show && PaneColumn.Width.Value > 0)
-            s_paneWidth = PaneColumn.Width;
         ComponentPane.Visibility = PaneSplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        PaneColumn.Width = show ? s_paneWidth : new GridLength(0);
+        PaneColumn.Width = show ? new GridLength(_editors.ComponentPaneWidth) : new GridLength(0);
         PaneColumn.MinWidth = show ? 220 : 0;
     }
 

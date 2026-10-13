@@ -3,7 +3,7 @@ using Griff.Editor.Core.Commands;
 namespace Griff.Editor.Features.SceneView;
 
 /// <summary>Centers the Scene view on the selection (the middle of everything selected), or on the origin with nothing selected.</summary>
-public sealed class FrameSelectionCommand(SceneViewControl sceneView) : EditorCommand
+public sealed class FrameSelectionCommand(SceneViewport viewport) : EditorCommand
 {
     public override string Id => "View.FrameSelection";
     public override string Text => "_Frame Selection";
@@ -14,7 +14,7 @@ public sealed class FrameSelectionCommand(SceneViewControl sceneView) : EditorCo
 
     protected override Task ExecuteCoreAsync()
     {
-        sceneView.FrameSelection();
+        viewport.FrameSelection();
         return Task.CompletedTask;
     }
 }

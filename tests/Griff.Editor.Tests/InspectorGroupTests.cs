@@ -3,6 +3,7 @@ using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Scripts;
 using Griff.Scenes;
@@ -82,7 +83,7 @@ public class InspectorGroupTests
         Assert.True(Section(inspector, "Platformer Movement").IsExpanded);
 
         var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
         Assert.False(Section(next, "Platformer Movement").Group("Dash")!.IsExpanded);
 
         Section(next, "Platformer Movement").Group("Dash")!.ToggleCommand.Execute(null);

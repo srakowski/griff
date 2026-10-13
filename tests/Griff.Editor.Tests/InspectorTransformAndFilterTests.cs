@@ -4,6 +4,7 @@ using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Hierarchy;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Scripts;
@@ -87,7 +88,7 @@ public class InspectorTransformAndFilterTests
         Assert.True(Section(inspector, "Transform").Is3D);
 
         var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
         Assert.True(next.Transform3D);
         Assert.Equal(["X", "Y", "Z"], Shown(Field(next, "Transform", "Scale")));
 

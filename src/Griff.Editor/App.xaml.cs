@@ -41,6 +41,7 @@ public partial class App : Application
     [
         new ProjectsModule(),
         new ScenesModule(),
+        new SceneViewModule(),
         new EditingModule(),
         new EntitiesModule(),
         new PrefabsModule(),
@@ -118,13 +119,6 @@ public partial class App : Application
         services.AddSingleton<ToolbarBuilder>();
         services.AddSingleton<PanelLayout>();
         services.AddSingleton<PanelHost>();
-        services.AddSingleton<SceneViewModel>();
-        services.AddSingleton<SceneViewControl>();
-        services.AddCommand<FrameSelectionCommand>();
-        services.AddCommand<ScaleHandlesCommand>();
-        services.AddCommand<ResizeHandlesCommand>();
-        services.AddCommand<ColliderHandlesCommand>();
-        services.AddCommand<DistanceHandlesCommand>();
         services.AddCommand<SaveLayoutCommand>();
         services.AddCommand<LoadLayoutCommand>();
         services.AddCommand<DeleteLayoutCommand>();

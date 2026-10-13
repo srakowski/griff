@@ -3,6 +3,7 @@ using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Art;
+using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Scripts;
 using Griff.Editor.Themes.Controls;
@@ -111,7 +112,7 @@ public class InspectorFieldTests
 
         // The next time the editor starts, it's still folded.
         var next = new InspectorPanel(services.GetRequiredService<IWorkspace>(), selection, services.GetRequiredService<ScriptEditors>(),
-            services.GetRequiredService<EditorArt>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
+            services.GetRequiredService<EditorArt>(), services.GetRequiredService<EditorAudio>(), services.GetRequiredService<IDialogService>(), services.GetRequiredService<IStatusService>(), settings);
         Assert.False(Section(next, "Transform").IsExpanded);
 
         Section(next, "Transform").IsExpanded = true;

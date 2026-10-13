@@ -38,6 +38,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private readonly Core.Dialogs.IDialogService _dialogs;
     private readonly Core.Status.IStatusService _status;
     private readonly Art.EditorArt _art;
+    private readonly Audio.EditorAudio _audio;
     private Core.Settings.ISettingsStore _settings;
     // For the selection: each component of a prefab copy (or of something inside one) and the prefab's own, the
     // components a copy added, and the prefab files read for them, with when each was written.
@@ -51,10 +52,11 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private int[] _componentCounts = [];
 
     public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
-        Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings)
+        Audio.EditorAudio audio, Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings)
     {
         _settings = settings;
         _art = art;
+        _audio = audio;
         _workspace = workspace;
         _selection = selection;
         _scripts = scripts;
@@ -231,6 +233,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
 
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     public void Seal() => _document?.History.Seal();
+
+    Art.EditorArt IPropertyHost.Art => _art;
+
+    Audio.EditorAudio IPropertyHost.Audio => _audio;
 
     internal void Execute(IEdit edit) => _document?.Execute(edit);
 
@@ -1355,11 +1361,11 @@ public sealed class PropertyField : ObservableObject
     public static bool IsImageName(string name) => name.EndsWith("Image", StringComparison.Ordinal);
 
     /// <summary>For an image field: a small preview of the picture, or null.</summary>
-    public System.Windows.Media.ImageSource? ImagePreview => Kind == FieldKind.Image && !IsMixed ? Art.EditorArt.Current?.Thumbnail(Value as string) : null;
+    public System.Windows.Media.ImageSource? ImagePreview => Kind == FieldKind.Image && !IsMixed ? _owner.Art.Thumbnail(Value as string) : null;
 
     /// <summary>For an image field: set to a file that isn't in the project.</summary>
     public bool IsImageMissing => Kind == FieldKind.Image && !IsMixed && Value is string { Length: > 0 } path &&
-        Art.EditorArt.Current is { AssetsPath: not null } art && art.Resolve(path) is null;
+        _owner.Art is { AssetsPath: not null } art && art.Resolve(path) is null;
 
     public string ImageTip => Value is string { Length: > 0 } && !IsImageMissing ? "Paint over this in the Sprite Painter" : "Paint a picture for this in the Sprite Painter";
 
@@ -1371,8 +1377,7 @@ public sealed class PropertyField : ObservableObject
 
     private void PaintImage(bool fresh)
     {
-        if (Art.EditorArt.Current is not { } art)
-            return;
+        var art = _owner.Art;
         var host = _owner;
         var (components, property) = (_components, _property);
         var current = fresh || IsMixed || art.Resolve(Value as string) is null ? null : (string)Value!;
@@ -1388,7 +1393,7 @@ public sealed class PropertyField : ObservableObject
     // A picture painted in Griff brings its frames or tiles along; any other is just set.
     private void UseChosenImage(string image)
     {
-        if (Art.EditorArt.Current?.LayoutOf(image) is { } layout)
+        if (_owner.Art.LayoutOf(image) is { } layout)
             _owner.UseImage(_components, _property, image, layout);
         else
             TextValue = image;
@@ -1399,29 +1404,28 @@ public sealed class PropertyField : ObservableObject
 
     /// <summary>For a sound field: set to a file that isn't in the project.</summary>
     public bool IsSoundMissing => Kind == FieldKind.Sound && !IsMixed && Value is string { Length: > 0 } path &&
-        Audio.EditorAudio.Current is { AssetsPath: not null } audio && audio.Resolve(path) is null;
+        _owner.Audio is { AssetsPath: not null } audio && audio.Resolve(path) is null;
 
-    public string SoundTip => Value is string { Length: > 0 } path && Audio.EditorAudio.Current?.CanEdit(path) == true
+    public string SoundTip => Value is string { Length: > 0 } path && _owner.Audio.CanEdit(path)
         ? "Edit this sound in the Sound Maker"
         : IsMusic ? "Make music for this in the Sound Maker" : "Make a sound for this in the Sound Maker";
 
     /// <summary>Plays the field's sound, or stops it if it's playing.</summary>
-    public void PreviewSound() => Audio.EditorAudio.Current?.TogglePreview(Value as string);
+    public void PreviewSound() => _owner.Audio.TogglePreview(Value as string);
 
     /// <summary>
     /// Opens the Sound Maker on the field's sound if it was made there, or on a new one; whatever it saves is set here.
     /// </summary>
     public void MakeSound()
     {
-        if (Audio.EditorAudio.Current is not { } audio)
-            return;
+        var audio = _owner.Audio;
         var current = IsMixed ? null : Value as string;
         var mode = IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect;
         audio.OpenMaker(mode, audio.CanEdit(current) ? current : null, saved => TextValue = saved);
     }
 
     /// <summary>The project's sounds to choose from.</summary>
-    public IReadOnlyList<string> SoundChoices() => Audio.EditorAudio.Current?.Sounds() ?? [];
+    public IReadOnlyList<string> SoundChoices() => _owner.Audio.Sounds();
 
     public IRelayCommand PreviewSoundCommand => _previewSound ??= new RelayCommand(PreviewSound);
 
@@ -1505,7 +1509,7 @@ public sealed class PropertyField : ObservableObject
                 return;
             case FieldKind.Sound:
                 TextValue = name;
-                Audio.EditorAudio.Current?.Preview(name);
+                _owner.Audio.Preview(name);
                 return;
         }
 
@@ -1612,8 +1616,8 @@ public sealed class PropertyField : ObservableObject
         switch (Kind)
         {
             case FieldKind.Image:
-                var art = Art.EditorArt.Current;
-                choices = [.. (art?.Images() ?? []).Select(i => new PickerChoice(i, thumbnail: () => art?.Thumbnail(i)))];
+                var art = _owner.Art;
+                choices = [.. art.Images().Select(i => new PickerChoice(i, thumbnail: () => art.Thumbnail(i)))];
                 setup = new("Type to find an image", "No images in the project yet", false, false,
                     [new("Paint a New One...", Icons.Palette, "picker:paint", () => PaintImage(fresh: true)), .. none]);
                 break;
@@ -1622,7 +1626,7 @@ public sealed class PropertyField : ObservableObject
                 var mode = IsMusic ? Audio.SoundMakerMode.Music : Audio.SoundMakerMode.Effect;
                 setup = new(IsMusic ? "Type to find music" : "Type to find a sound", "No sounds in the project yet", false, false,
                     [new(IsMusic ? "New Music..." : "New Sound...", IsMusic ? Icons.Music : Icons.Audio, "picker:make",
-                        () => Audio.EditorAudio.Current?.OpenMaker(mode, saved: saved => TextValue = saved)), .. none]);
+                        () => _owner.Audio.OpenMaker(mode, saved: saved => TextValue = saved)), .. none]);
                 break;
             case FieldKind.Entity:
                 var inside = _property.EntityName?.Inside == true;
@@ -2059,6 +2063,12 @@ public interface IPropertyHost
 
     /// <summary>Ends the current undo step, e.g. when a drag or typed edit finishes.</summary>
     void Seal();
+
+    /// <summary>The editor's pictures, for image fields: previews, the project's images and the Sprite Painter.</summary>
+    Griff.Editor.Features.Art.EditorArt Art { get; }
+
+    /// <summary>The editor's sounds, for sound fields: previews, the project's sounds and the Sound Maker.</summary>
+    Griff.Editor.Features.Audio.EditorAudio Audio { get; }
 
     /// <summary>The project's prefabs' names: an entity field naming one isn't flagged as matching nothing.</summary>
     IReadOnlyCollection<string> PrefabNames => [];

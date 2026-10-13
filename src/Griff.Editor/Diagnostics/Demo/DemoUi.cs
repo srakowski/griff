@@ -1,6 +1,5 @@
 #if DEBUG
 using System.Numerics;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -95,12 +94,10 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         return rect;
     }
 
-    private static readonly MethodInfo SceneToScreen = typeof(SceneViewControl).GetMethod("ToScreen", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
     /// <summary>Where a world position is on screen in the Scene view.</summary>
     public Point World(float x, float y)
     {
-        var local = (Point)SceneToScreen.Invoke(sceneView, [new Vector2(x, y)])!;
+        var local = sceneView.Viewport.ToScreen(new Vector2(x, y));
         return sceneView.PointToScreen(local);
     }
 
@@ -111,13 +108,9 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public Rect? TileOverlay(string part) =>
         sceneView.PaintOverlayBounds(part) is { } box ? new Rect(sceneView.PointToScreen(box.TopLeft), sceneView.PointToScreen(box.BottomRight)) : null;
 
-    private static readonly MethodInfo SceneRotateHandle = typeof(SceneViewControl).GetMethod("RotateHandle", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
     /// <summary>Where the Scene view's rotate handle (its knob) is on screen, or null when it isn't showing.</summary>
     public Point? RotateKnob() =>
-        SceneRotateHandle.Invoke(sceneView, []) is (Point, Point knob) ? sceneView.PointToScreen(knob) : null;
-
-    private static readonly MethodInfo SceneScaleHandles = typeof(SceneViewControl).GetMethod("ScaleHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        sceneView.Handles.RotateHandle() is (_, var knob) ? sceneView.PointToScreen(knob) : null;
 
     /// <summary>
     /// Where one of the Scene view's scale handles is on screen, by its place on the selection ("top-left", "top",
@@ -126,11 +119,9 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public Point? ScaleHandle(string name)
     {
         var spot = HandleSpot(name);
-        var handles = (IEnumerable<(Vector2 Spot, Point Screen)>)SceneScaleHandles.Invoke(sceneView, [])!;
+        var handles = sceneView.Handles.ScaleHandles();
         return handles.Where(h => h.Spot == spot).Select(h => (Point?)sceneView.PointToScreen(h.Screen)).FirstOrDefault();
     }
-
-    private static readonly MethodInfo SceneResizeHandles = typeof(SceneViewControl).GetMethod("ResizeHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>
     /// One of the Scene view's resize handles (with Resize or Collider handles out): the shape it's on, its spot and
@@ -142,14 +133,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         var dot = name.LastIndexOf('.');
         var (component, place) = dot < 0 ? (null, name) : (name[..dot].Trim(), name[(dot + 1)..]);
         var spot = HandleSpot(place);
-        var handles = (IEnumerable<(Griff.Scenes.Component Shape, Vector2 Spot, Point Screen)>)SceneResizeHandles.Invoke(sceneView, [])!;
+        var handles = sceneView.Handles.ResizeHandles();
         return handles
             .Where(h => h.Spot == spot && (component is null || h.Shape.GetType().Name.Equals(component, StringComparison.OrdinalIgnoreCase)))
             .Select(h => ((Griff.Scenes.Component, Vector2, Point)?)(h.Shape, h.Spot, sceneView.PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
-
-    private static readonly MethodInfo SceneLinkArrows = typeof(SceneViewControl).GetMethod("LinkArrows", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>
     /// The Scene view's arrow from one entity to another, by their names: the fields it's labelled with ("Switch
@@ -157,14 +146,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// </summary>
     public (string Fields, Point Screen)? LinkArrow(string from, string to)
     {
-        var arrows = (IEnumerable<(Griff.Scenes.Entity From, Griff.Scenes.Entity To, string Fields, Point Start, Point Bend, Point Tip, Point Middle)>)SceneLinkArrows.Invoke(sceneView, [])!;
+        var arrows = sceneView.Handles.LinkArrows();
         return arrows
             .Where(a => a.From.Name == from.Trim() && a.To.Name == to.Trim())
             .Select(a => ((string, Point)?)(a.Fields, sceneView.PointToScreen(a.Middle)))
             .FirstOrDefault();
     }
-
-    private static readonly MethodInfo SceneDistanceHandles = typeof(SceneViewControl).GetMethod("DistanceHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     /// <summary>
     /// The knob of one of the selection's distances (with Distance handles out), by its name ("Light.Radius"): the
@@ -172,27 +159,25 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// </summary>
     public (SceneDistance Distance, Point Screen)? DistanceKnob(string name)
     {
-        var handles = (IEnumerable<(SceneDistance Distance, Point Screen, System.Windows.Vector Outward)>)SceneDistanceHandles.Invoke(sceneView, [])!;
+        var handles = sceneView.Handles.DistanceHandles();
         return handles
             .Where(h => h.Distance.Key.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
             .Select(h => ((SceneDistance, Point)?)(h.Distance, sceneView.PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
 
-    private static readonly MethodInfo ScenePathHandles = typeof(SceneViewControl).GetMethod("PathHandles", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
     /// <summary>
     /// A knob on the selection's path, by its name: a mover's or grid patrol's point ("Mover.2", "GridPatrol.1"), the
     /// plus that adds one ("Mover.+3"), or a patrol's turn ("Patrol.Left"). The handle and where it is on screen; null
     /// when it isn't showing.
     /// </summary>
-    public (SceneViewControl.PathHandle Handle, Point Screen)? PathKnob(string name)
+    public (PathHandle Handle, Point Screen)? PathKnob(string name)
     {
         var key = name.Trim();
-        var handles = (IEnumerable<SceneViewControl.PathHandle>)ScenePathHandles.Invoke(sceneView, [])!;
+        var handles = sceneView.Handles.PathHandles();
         return handles
             .Where(h => h.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
-            .Select(h => ((SceneViewControl.PathHandle, Point)?)(h, sceneView.PointToScreen(h.Screen)))
+            .Select(h => ((PathHandle, Point)?)(h, sceneView.PointToScreen(h.Screen)))
             .FirstOrDefault();
     }
 
@@ -211,16 +196,13 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             _ => throw new FormatException($"No handle \"{name}\": top-left, top, top-right, right, bottom-right, bottom, bottom-left or left."),
         };
 
-    private static readonly FieldInfo PanField = typeof(SceneViewControl).GetField("_pan", BindingFlags.NonPublic | BindingFlags.Instance)!;
-    private static readonly FieldInfo ZoomField = typeof(SceneViewControl).GetField("_zoom", BindingFlags.NonPublic | BindingFlags.Instance)!;
-    private static readonly FieldInfo NeedsFitField = typeof(SceneViewControl).GetField("_needsFit", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
     /// <summary>Glides the Scene view to show the world box centered on (x, y), <paramref name="halfHeight"/> units above and below.</summary>
     public async Task Look(float x, float y, float halfHeight, double ms = 900)
     {
-        NeedsFitField.SetValue(sceneView, false);
-        var fromPan = (Vector2)PanField.GetValue(sceneView)!;
-        var fromZoom = (double)ZoomField.GetValue(sceneView)!;
+        var viewport = sceneView.Viewport;
+        viewport.NeedsFit = false;
+        var fromPan = viewport.Pan;
+        var fromZoom = viewport.Zoom;
         var toPan = new Vector2(x, y);
         var toZoom = sceneView.ActualHeight / (halfHeight * 2);
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -229,10 +211,9 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         {
             var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / duration);
             var e = t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
-            PanField.SetValue(sceneView, Vector2.Lerp(fromPan, toPan, (float)e));
+            viewport.Pan = Vector2.Lerp(fromPan, toPan, (float)e);
             // Zoom eases in log space so it feels even.
-            ZoomField.SetValue(sceneView, Math.Exp(Math.Log(fromZoom) + (Math.Log(toZoom) - Math.Log(fromZoom)) * e));
-            sceneView.InvalidateVisual();
+            viewport.Zoom = Math.Exp(Math.Log(fromZoom) + (Math.Log(toZoom) - Math.Log(fromZoom)) * e);
             if (t >= 1)
                 break;
             await Task.Delay(12);

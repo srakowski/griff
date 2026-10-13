@@ -24,11 +24,7 @@ public sealed class EditorArt
     public EditorArt(IWorkspace workspace)
     {
         _workspace = workspace;
-        Current = this;
     }
-
-    /// <summary>The editor's art, for property editors that aren't built by dependency injection.</summary>
-    public static EditorArt? Current { get; private set; }
 
     public string? AssetsPath => _workspace.Project?.AssetsPath;
 

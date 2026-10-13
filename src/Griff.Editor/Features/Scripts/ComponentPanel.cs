@@ -21,6 +21,8 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     private readonly ScriptDocument _script;
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
+    private readonly Art.EditorArt _art;
+    private readonly Audio.EditorAudio _audio;
     private readonly DispatcherTimer _outlineTimer;
     private SceneDocument? _scene;
     private ComponentDescriptor? _descriptor;
@@ -32,11 +34,13 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     private string _className = "";
     private bool _pinned;
 
-    public ComponentPanel(ScriptDocument script, IWorkspace workspace, ISelection selection)
+    public ComponentPanel(ScriptDocument script, IWorkspace workspace, ISelection selection, Art.EditorArt art, Audio.EditorAudio audio)
     {
         _script = script;
         _workspace = workspace;
         _selection = selection;
+        _art = art;
+        _audio = audio;
         JumpCommand = new RelayCommand<ConfigRow>(row => row?.Jump());
         SelectInstanceCommand = new RelayCommand(() =>
         {
@@ -206,6 +210,10 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     }
 
     public void Seal() => _scene?.History.Seal();
+
+    Art.EditorArt IPropertyHost.Art => _art;
+
+    Audio.EditorAudio IPropertyHost.Audio => _audio;
 
     private (long At, Griff.Editing.KnownNames? Names)? _names;
 

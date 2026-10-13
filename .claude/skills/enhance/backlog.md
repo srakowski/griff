@@ -125,6 +125,11 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Add a VR template.
   - Testing VR needs a headset: check what tests and the MCP can, then ask the user to try it on their headset and report back.
 
+### Just for fun
+
+- [ ] Add a Dial-Up Modem component: the 56k handshake sound, made by the synth rather than from a recording (dial tone, the number dialed in touch tones, the answer tone, the screeching negotiation, then the hiss cutting out once it's connected), with Play On Start, a Number to dial, a Speed to shorten it, and Connected and Hung Up events. Optionally it plays while a network game is joining, stopping when it joins.
+  - Low priority; the user asked for it because it's cool. Build it the way the Architecture items leave sound components.
+
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->

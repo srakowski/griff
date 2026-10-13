@@ -76,7 +76,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 ("drag", Schema.Map("One step: {\"from\": point, \"to\": point}, pressing at from and letting go at to (unless \"release\": false).")),
                 ("release", Schema.Bool("One step: let go of the mouse button a drag kept holding.")),
                 ("button", Schema.String("The mouse button for click and drag: Left (default), Right or Middle.")),
-                ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards (default: Player).")),
+                ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards, by name (the first so called), id or path (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
                 ("flags", Schema.Map("Dialogue flags to set (true) or clear (false) before the steps, e.g. {\"HasKey\": true}.")),
             ]),
@@ -337,7 +337,17 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var watch = args.Strings("watch");
         foreach (var name in watch.Count > 0 ? watch : ["Player"])
         {
-            var entity = game.Scene.FindNamed(name);
+            // A name finds the first so called; an id or a path tells apart things with the same name.
+            Entity? entity;
+            try
+            {
+                entity = game.Scene.FindNamed(name) ?? SceneTools.Resolve(game.Scene, name);
+            }
+            catch (AgentException)
+            {
+                entity = null;
+            }
+
             if (entity is null)
             {
                 log.AppendLine($"{name}: not in the game{(watch.Count > 0 ? "" : " (watch something else with \"watch\")")}.");
@@ -345,7 +355,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             }
 
             var p = entity.Transform.WorldPosition;
-            var line = new StringBuilder($"{name}: at ({p.X:0.##}, {p.Y:0.##})");
+            var label = entity.Name == name ? name : $"{entity.Name} ({name})";
+            var line = new StringBuilder($"{label}: at ({p.X:0.##}, {p.Y:0.##})");
             if (entity.GetComponent<Body>() is { } body)
                 line.Append($", moving ({body.Velocity.X:0.##}, {body.Velocity.Y:0.##}){(body.IsGrounded ? ", on the ground" : ", in the air")}");
             if (entity.GetComponent<Health>() is { } health)

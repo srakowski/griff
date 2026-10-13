@@ -1,0 +1,70 @@
+title: The computer plays tactics
+intro: Red's units take their own turns: they come at you, guard a spot, or hold their ground. No code.
+project: Empty | Ambush
+
+chapter: A charge and a tower | Stance
+create: Tilemap
+rename: Field
+set: Tilemap.Tiles = 1111111111\n1........1\n1...11...1\n1........1\n1........1\n1111111111
+select: Main Camera
+set: Transform.Position.X = 5
+set: Transform.Position.Y = -3
+look: 5, -3, 4
+deselect
+create: Tactics Unit
+rename: Knight
+set: Transform.Position = 1.5, -2.5, 0
+set: Health.Max = 5
+create: Tactics Unit
+rename: Orc
+set: Transform.Position = 5.5, -1.5, 0
+select: Turns
+explain: field:TurnOrder.ComputerSides | Red is the computer's | Create Tactics Unit has the computer play Red.
+select: Orc
+say: This orc charges: it comes after the nearest foe.
+explain: field:TacticsUnit.Stance | Stance | Its Stance says how the computer plays it: Charge comes at you, Guard waits until you come close, and Hold never moves.
+create: Tactics Unit
+rename: Squire
+set: Transform.Position = 1.5, -3.5, 0
+create: Tactics Unit
+rename: Tower
+set: Transform.Position = 8.5, -4.5, 0
+set: TacticsUnit.Stance = Hold
+set: TacticsUnit.Range = 3
+set: TacticsUnit.MinRange = 2
+say: And a tower that holds its ground and shoots anything that comes within three cells.
+
+chapter: Red's turn | It plays itself
+play
+wait: 0.5
+gameclick: Knight
+gameclick: Knight
+gameclick: Squire
+gamehover: 2.5, -4.5
+gameclick: 2.5, -4.5
+wait: 1
+expectvalue: Turns.TurnOrder.Current = Red
+say: Blue's knight waits and the squire steps forward. Now it's Red's turn, and nobody needs to click.
+wait: 1.2
+explain: game | Its reach first | Before each of its units moves, its reach lights up, so you can see what's coming.
+wait: 2.5
+expectvalue: Turns.TurnOrder.Current = Blue
+expectvalue: Knight.Health.Current = 4
+expectat: Orc = 1.5, -1.5
+say: The orc walked up and hit the knight. The tower had nothing in range, so it held.
+
+chapter: Into the tower's range | Hold
+gameclick: Squire
+gameclick: 5.5, -4.5
+wait: 1
+gameclick: Knight
+gameclick: Orc
+wait: 1
+expectvalue: Orc.Health.Current = 2
+say: The squire walks into the tower's range, and the knight hits the orc back.
+wait: 4
+expectvalue: Squire.Health.Current = 2
+expectvalue: Knight.Health.Current = 3
+explain: game | The tower fires | On Red's turn the orc swings at the knight again, and the tower shoots the squire from where it stands.
+stop
+say: That's a computer opponent for tactics: give each unit a stance, and the computer plays its side.

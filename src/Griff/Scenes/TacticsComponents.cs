@@ -6,7 +6,9 @@ namespace Griff.Scenes;
 /// <see cref="Move"/> cells, around walls and other units, then attacks something <see cref="MinRange"/> to
 /// <see cref="Range"/> steps away for <see cref="Damage"/>, or waits. Give it a <see cref="TurnTaker"/> with 1 action
 /// naming its side: attacking or waiting uses the action, so once every unit on a side has had its go, the turn passes.
-/// A <see cref="TacticsControls"/> in the scene does the picking and draws the ranges.
+/// A <see cref="TacticsControls"/> in the scene does the picking and draws the ranges. On a side the computer plays (the
+/// turn order's Computer Sides), the computer takes each unit's go in turn, the way its <see cref="Stance"/> says: the
+/// best attack it can make (a foe it can finish off first, then the weakest), or a walk toward the nearest foe.
 /// </summary>
 /// <remarks>
 /// Its enemies are the units on other sides (with no turn takers, every other unit), or whatever with <see cref="Health"/>
@@ -49,6 +51,14 @@ public sealed class TacticsUnit : Component
 
     /// <summary>Freezes the game for this many seconds when an attack lands, so it hits hard. 0 for none.</summary>
     public float HitStop { get; set; } = 0.06f;
+
+    /// <summary>
+    /// How it plays when the computer plays its side (see <see cref="TurnOrder.ComputerSides"/>): Charge goes after the
+    /// nearest foe, Guard stays put until a foe comes within a walk and a hit, Hold never walks and only attacks from
+    /// where it stands.
+    /// </summary>
+    [Group("Computer")]
+    public TacticsStance Stance { get; set; }
 
     /// <summary>
     /// True once it has walked this go and has yet to attack or wait. The game clears it as its go ends and as each of its
@@ -131,6 +141,19 @@ public sealed class TacticsUnit : Component
     internal (int X, int Y)? MovedFrom { get; set; }
 }
 
+/// <summary>How a computer-played <see cref="TacticsUnit"/> plays.</summary>
+public enum TacticsStance
+{
+    /// <summary>Attacks the best foe it can reach, else walks toward the nearest one.</summary>
+    Charge,
+
+    /// <summary>Attacks a foe it can reach with a walk and a hit, else stays where it is.</summary>
+    Guard,
+
+    /// <summary>Never walks: attacks a foe already in range, else waits.</summary>
+    Hold,
+}
+
 internal enum TacticsOrder
 {
     Move,
@@ -147,7 +170,8 @@ internal sealed record TacticsRequest(TacticsOrder Order, (int X, int Y)? Cell, 
 /// <see cref="MoveColor"/>, with the cells it can hit from them in <see cref="AttackColor"/>; hover a cell to see the way
 /// it would go. Click a lit cell to walk there, then an enemy in reach to attack it (or click an enemy straight away to
 /// walk up and hit it), or the unit itself to wait. Right-click (or Cancel) puts it back or lets it go. Hovering any unit
-/// shows how far it reaches. Units that have had their go are dimmed.
+/// shows how far it reaches. Units that have had their go are dimmed. On the computer's turn, each of its units' reach
+/// lights up for <see cref="ComputerPause"/> before it moves.
 /// </summary>
 /// <remarks>One per scene (the first is used); it draws nothing itself. In a network game each player picks on their own screen.</remarks>
 [Category("Gameplay")]
@@ -185,6 +209,13 @@ public sealed class TacticsControls : Component
 
     /// <summary>Multiplies the color of units that have had their go.</summary>
     public Color DoneTint { get; set; } = Color.FromBytes(0x80, 0x80, 0x80);
+
+    /// <summary>
+    /// Seconds the computer takes over each of its units' goes before it moves, while the unit's reach lights up, so you
+    /// can follow what it does.
+    /// </summary>
+    [Group("Computer")]
+    public float ComputerPause { get; set; } = 0.5f;
 
     /// <summary>A sound played on picking a unit, e.g. "Sounds/select.wav".</summary>
     [Group("Sounds")]

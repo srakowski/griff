@@ -553,4 +553,136 @@ public class TacticsTests
         Assert.Equal((4, 1), Cell(knight));
         Assert.Equal(1, knight.GetComponent<TurnTaker>()!.ActionsUsed);
     }
+
+    // ----- The computer's side -----
+
+    private TurnOrder ComputersTurn()
+    {
+        var order = AddTurns(computer: "Red");
+        order.Current = "Red";
+        return order;
+    }
+
+    [Fact]
+    public void A_computer_unit_walks_up_to_a_foe_and_attacks_then_the_turn_comes_back()
+    {
+        AddMap();
+        var order = ComputersTurn();
+        AddControls();
+        var knight = AddUnit("Knight", 1, 1, "Blue");
+        var orc = AddUnit("Orc", 5, 2, "Red");
+        Run(2);
+
+        Assert.True(Adjacent(Cell(orc), Cell(knight)), $"The orc walked up to the knight, to {Cell(orc)}.");
+        Assert.Equal(2, HitPoints(knight));
+        Assert.Equal("Blue", order.Current);
+    }
+
+    [Fact]
+    public void The_computer_goes_for_a_foe_it_can_finish_off()
+    {
+        AddMap();
+        ComputersTurn();
+        AddControls();
+        var strong = AddUnit("Knight", 3, 1, "Blue");
+        var weak = AddUnit("Squire", 4, 2, "Blue", hitPoints: 1);
+        AddUnit("Orc", 3, 2, "Red");
+        Run(2);
+
+        Assert.Null(weak.Scene);
+        Assert.Equal(3, HitPoints(strong));
+    }
+
+    [Fact]
+    public void Out_of_reach_a_charging_unit_walks_as_far_toward_the_nearest_foe_as_it_can()
+    {
+        AddMap();
+        var order = ComputersTurn();
+        AddControls();
+        AddUnit("Knight", 1, 1, "Blue");
+        var orc = AddUnit("Orc", 6, 4, "Red", move: 2);
+        Run(2);
+
+        Assert.Equal(6, Math.Abs(Cell(orc).X - 1) + Math.Abs(Cell(orc).Y - 1));
+        Assert.Equal("Blue", order.Current);
+    }
+
+    [Fact]
+    public void A_guard_stays_put_until_a_foe_comes_within_a_walk_and_a_hit()
+    {
+        AddMap();
+        var order = ComputersTurn();
+        AddControls();
+        var knight = AddUnit("Knight", 1, 1, "Blue");
+        var orc = AddUnit("Orc", 6, 4, "Red", move: 3);
+        UnitOf(orc).Stance = TacticsStance.Guard;
+        Run(2);
+        Assert.Equal((6, 4), Cell(orc));
+        Assert.Equal("Blue", order.Current);
+
+        // The knight walks within reach of it and waits.
+        UnitOf(knight).MoveTo((4, 2));
+        Run(0.6f);
+        UnitOf(knight).Wait();
+        Run(2);
+        Assert.Equal(2, HitPoints(knight));
+        Assert.NotEqual((6, 4), Cell(orc));
+    }
+
+    [Fact]
+    public void A_holding_archer_never_walks_and_shoots_what_comes_into_range()
+    {
+        AddMap();
+        var order = ComputersTurn();
+        AddControls();
+        var knight = AddUnit("Knight", 1, 1, "Blue");
+        var archer = AddUnit("Archer", 6, 1, "Red");
+        (UnitOf(archer).Stance, UnitOf(archer).Range, UnitOf(archer).MinRange) = (TacticsStance.Hold, 3, 2);
+        Run(2);
+        Assert.Equal((6, 1), Cell(archer));
+        Assert.Equal(3, HitPoints(knight));
+        Assert.Equal("Blue", order.Current);
+
+        UnitOf(knight).MoveTo((3, 1));
+        Run(0.6f);
+        Run(2);
+        Assert.Equal((6, 1), Cell(archer));
+        Assert.Equal(2, HitPoints(knight));
+    }
+
+    [Fact]
+    public void The_computers_units_go_one_at_a_time_each_after_a_pause_showing_its_reach()
+    {
+        AddMap();
+        var order = ComputersTurn();
+        var controls = AddControls();
+        AddUnit("Knight", 1, 1, "Blue", hitPoints: 9);
+        var orc = AddUnit("Orc", 5, 1, "Red");
+        var goblin = AddUnit("Goblin", 6, 4, "Red");
+        Run(0.3f);
+        Assert.Equal((5, 1), Cell(orc));
+        Assert.Equal((6, 4), Cell(goblin));
+        var frame = SceneRenderer.Build(_game, 16 / 9f);
+        Assert.Contains(frame.Sprites, d => d.Tint == controls.MoveColor);
+
+        Run(0.6f);
+        Assert.NotEqual((5, 1), Cell(orc));
+        Assert.Equal((6, 4), Cell(goblin));
+
+        Run(1.5f);
+        Assert.NotEqual((6, 4), Cell(goblin));
+        Assert.Equal("Blue", order.Current);
+    }
+
+    [Fact]
+    public void A_unit_saves_its_stance()
+    {
+        var orc = AddUnit("Orc", 1, 1, "Red");
+        UnitOf(orc).Stance = TacticsStance.Hold;
+        var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+
+        var copy = serializer.LoadFromString(serializer.SaveToString(_scene)).Entities.Single(e => e.Name == "Orc").GetComponent<TacticsUnit>()!;
+
+        Assert.Equal(TacticsStance.Hold, copy.Stance);
+    }
 }

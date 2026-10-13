@@ -45,6 +45,8 @@ public sealed partial class Game
             UpdateUnit(unit);
         }
 
+        RunTacticsComputer(units, controls);
+
         if (controls is not null)
         {
             if (!PausedThisFrame && !LocalInputBlocked && TopPanel is null)
@@ -485,12 +487,13 @@ public sealed partial class Game
         view.Grid = grid;
         view.Cursor = controls.Cursor;
         var hovered = controls.Cursor is { } c ? units.FirstOrDefault(u => CellOf(u.Entity!, grid) == c) : null;
-        var shown = selected ?? (controls.ShowOnHover ? hovered : null);
+        var computer = selected is null ? ComputerShown() : null;
+        var shown = selected ?? computer ?? (controls.ShowOnHover ? hovered : null);
         if (shown is null || shown.IsWalking)
             return;
 
         view.Shown = shown.Entity;
-        view.Faint = selected is null;
+        view.Faint = selected is null && computer is null;
         var m = shown.Entity!.GetComponent<GridMovement>()!;
         var here = CellOf(m, grid);
         var walls = GridWalls.Gather(this, m, grid);

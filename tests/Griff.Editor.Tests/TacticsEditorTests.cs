@@ -50,7 +50,7 @@ public sealed class TacticsEditorTests : IDisposable
         Assert.Equal(0, first.GetComponent<Health>()!.InvincibleTime);
         Assert.NotNull(first.GetComponent<TacticsUnit>());
         var order = Assert.Single(document.Scene.Entities.Select(e => e.GetComponent<TurnOrder>()).OfType<TurnOrder>());
-        Assert.Equal(("Blue, Red", ""), (order.Sides, order.ComputerSides));
+        Assert.Equal(("Blue, Red", "Red", 0f), (order.Sides, order.ComputerSides, order.ComputerTurnTime));
         Assert.Contains(order.Entity!.Children, c => c.GetComponent<Griff.Scenes.Button>()?.Action == ButtonAction.EndTurn);
         Assert.Single(document.Scene.Entities, e => e.GetComponent<TacticsControls>() is not null);
 

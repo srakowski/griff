@@ -31,6 +31,9 @@ create: Tactics Unit
 rename: Goblin
 set: Transform.Position = 8.5, -3.5, 0
 say: And a goblin for Red.
+select: Turns
+set: TurnOrder.ComputerSides =
+explain: field:TurnOrder.ComputerSides | Computer Sides | The computer plays Red to begin with. Clearing Computer Sides makes it two people taking turns at one keyboard.
 
 chapter: Blue's turn | Pick, look, walk
 play

@@ -85,7 +85,7 @@ public sealed partial class Game
     // so a hidden panel's scripts don't start until it opens.
     private void SyncPanels()
     {
-        var panels = Scene.Entities.SelectMany(e => e.GetComponents<Panel>()).ToList();
+        var panels = Scene.All<Panel>();
         foreach (var panel in panels)
         {
             if (_panels.Seen.Add(panel) && !panel.Open)
@@ -113,8 +113,10 @@ public sealed partial class Game
             panel.RaiseClosed();
         }
 
-        foreach (var panel in panels.Where(p => p.Entity!.IsActive && _panels.Open.All(o => o.Panel != p)))
+        foreach (var panel in panels)
         {
+            if (!panel.Entity!.IsActive || IsOpen(panel))
+                continue;
             _panels.Open.Add((panel, _focus));
             panel.Open = true;
             _focus = FirstControlOf(panel);
@@ -126,7 +128,29 @@ public sealed partial class Game
         foreach (var (panel, _) in _panels.Open)
             panel.IsTop = panel == TopPanel;
         // A network game is shared, so it can't stop for one player's menu (their keys just don't reach it meanwhile).
-        Time.IsPaused = !Net.IsOnline && _panels.Open.Any(p => p.Panel.PauseGame);
+        Time.IsPaused = !Net.IsOnline && AnyPanelPauses();
+    }
+
+    private bool IsOpen(Panel panel)
+    {
+        foreach (var (open, _) in _panels.Open)
+        {
+            if (open == panel)
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool AnyPanelPauses()
+    {
+        foreach (var (open, _) in _panels.Open)
+        {
+            if (open.PauseGame)
+                return true;
+        }
+
+        return false;
     }
 
     // Its First if that names a control on it, else its top control.
@@ -163,7 +187,7 @@ public sealed partial class Game
         // In a strategy game, Esc cancels placing a building or picking a target before it opens a pause menu.
         if (clicked.Count > 0 || TopPanel is not null || Rts.Placing is not null || Rts.Targeting is not null)
             return;
-        foreach (var panel in Scene.Entities.SelectMany(e => e.GetComponents<Panel>()).ToList())
+        foreach (var panel in Scene.All<Panel>())
         {
             if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled)
                 continue;
@@ -190,14 +214,17 @@ public sealed partial class Game
         if (Input.AnyPressed is not { } pressed)
             return true;
         if (pressed.Key is not Key.Escape && pressed.Gamepad is not (GamepadButton.Start or GamepadButton.Back))
-        {
-            // The new one goes first, so prompts show it; the other device's bindings stay as they were.
-            var kept = Input.BindingsOf(action).Where(b => (b.Gamepad is null) != (pressed.Gamepad is null) && b != pressed);
-            Input.Rebind(action, [pressed, .. kept]);
-        }
+            Rebind(action, pressed);
 
         StopRebinding();
         return true;
+    }
+
+    // The new one goes first, so prompts show it; the other device's bindings stay as they were.
+    private void Rebind(string action, InputBinding pressed)
+    {
+        var kept = Input.BindingsOf(action).Where(b => (b.Gamepad is null) != (pressed.Gamepad is null) && b != pressed);
+        Input.Rebind(action, [pressed, .. kept]);
     }
 
     internal void StopRebinding()
@@ -211,7 +238,7 @@ public sealed partial class Game
     // "Press {Interact}" shows the key or button that does it on the device in use.
     private void FillPrompts()
     {
-        foreach (var text in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Text>()))
+        foreach (var text in Scene.Active<Text>())
         {
             if (text.Value is { } value && value.Contains('{'))
                 text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));

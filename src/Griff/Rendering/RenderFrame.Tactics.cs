@@ -13,7 +13,7 @@ public static partial class SceneRenderer
         var view = game.Tactics;
         if (view.Controls is not { } controls)
             return sprites;
-        var units = game.Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<TacticsUnit>()).OfType<TacticsUnit>().ToList();
+        var units = game.Scene.Active<TacticsUnit>();
         if (units.Count == 0)
             return sprites;
 

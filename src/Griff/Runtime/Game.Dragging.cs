@@ -30,16 +30,19 @@ public sealed partial class Game
     // After scripts and before physics, so a held thing with a body is carried this frame and nothing falls from the hand.
     private void RunDragging()
     {
-        var draggables = Active<Draggable>().ToList();
-        var targets = Active<DropTarget>().ToList();
-        var grabbers = Active<Grabber>().ToList();
+        var draggables = Active<Draggable>();
+        var targets = Active<DropTarget>();
+        var grabbers = Active<Grabber>();
 
         // A grabber that goes away puts down what it held where it is.
-        foreach (var (holder, held) in _drags.Held.ToList())
+        if (_drags.Held.Count > 0)
         {
-            if (held.Thing.Entity?.Scene != Scene || !held.Thing.Entity.IsActive ||
-                (holder is Grabber grabber && !grabbers.Contains(grabber)))
-                LetGo(holder, held);
+            foreach (var (holder, held) in _drags.Held.ToList())
+            {
+                if (held.Thing.Entity?.Scene != Scene || !held.Thing.Entity.IsActive ||
+                    (holder is Grabber grabber && !grabbers.Contains(grabber)))
+                    LetGo(holder, held);
+            }
         }
 
         if (draggables.Count == 0 && targets.Count == 0 && grabbers.Count == 0 && _drags.Held.Count == 0)
@@ -70,7 +73,7 @@ public sealed partial class Game
         UpdateDropTargets(draggables, targets);
     }
 
-    private void Drag(int player, IInput input, List<Draggable> draggables, List<DropTarget> targets)
+    private void Drag(int player, IInput input, IReadOnlyList<Draggable> draggables, IReadOnlyList<DropTarget> targets)
     {
         var mouse = input.MouseWorld;
         if (_drags.Held.TryGetValue(player, out var held))
@@ -93,7 +96,7 @@ public sealed partial class Game
     }
 
     // Picks up or puts down on a press of its action (or, carrying only while that's held, when it's let go).
-    private void Grab(Grabber grabber, List<Draggable> draggables, List<DropTarget> targets)
+    private void Grab(Grabber grabber, IReadOnlyList<Draggable> draggables, IReadOnlyList<DropTarget> targets)
     {
         var input = InputOf(grabber.Entity);
         var action = grabber.Action?.Trim();
@@ -122,7 +125,7 @@ public sealed partial class Game
     }
 
     // What's under a grabber's hand (the one drawn on top), else the nearest thing whose middle is within its reach.
-    private Draggable? ReachableBy(Grabber grabber, Vector2 hand, List<Draggable> draggables)
+    private Draggable? ReachableBy(Grabber grabber, Vector2 hand, IReadOnlyList<Draggable> draggables)
     {
         var self = grabber.Entity!;
         var free = draggables.Where(d => IsFree(d) && !d.Entity!.IsSelfOrDescendantOf(self) && !self.IsSelfOrDescendantOf(d.Entity!)).ToList();
@@ -199,7 +202,7 @@ public sealed partial class Game
     // right where it is. What's swapped out goes into a grabber's hand, or else where the dropped thing came from.
     private sealed record Landing(bool Back, DropTarget? Target = null, Draggable? Swapped = null, Vector2? To = null);
 
-    private static Landing LandingOf(Holding held, Vector2 at, List<DropTarget> targets, bool intoHand)
+    private static Landing LandingOf(Holding held, Vector2 at, IReadOnlyList<DropTarget> targets, bool intoHand)
     {
         var thing = held.Thing;
         var entity = thing.Entity!;
@@ -226,7 +229,7 @@ public sealed partial class Game
         return new Landing(false, To: new Vector2((MathF.Floor(at.X / cell) + 0.5f) * cell, (MathF.Floor(at.Y / cell) + 0.5f) * cell));
     }
 
-    private void Drop(int player, Holding held, List<DropTarget> targets)
+    private void Drop(int player, Holding held, IReadOnlyList<DropTarget> targets)
     {
         var thing = held.Thing;
         LetGo(player, held);
@@ -247,7 +250,7 @@ public sealed partial class Game
     }
 
     // A drop the mouse would send back does nothing here: the grabber keeps holding it.
-    private void Put(Grabber grabber, Holding held, List<DropTarget> targets, Vector2 hand)
+    private void Put(Grabber grabber, Holding held, IReadOnlyList<DropTarget> targets, Vector2 hand)
     {
         var thing = held.Thing;
         var entity = thing.Entity!;
@@ -286,7 +289,7 @@ public sealed partial class Game
     }
 
     // What a grabber would pick up is lit with its highlight; the rest go back to how they were.
-    private static void ShowReach(List<Draggable> draggables, List<Grabber> grabbers)
+    private static void ShowReach(IReadOnlyList<Draggable> draggables, IReadOnlyList<Grabber> grabbers)
     {
         foreach (var thing in draggables)
         {
@@ -307,7 +310,7 @@ public sealed partial class Game
     }
 
     // The drop target on top under a point, leaving out any inside the thing being dropped.
-    private static DropTarget? TargetAt(Vector2 point, List<DropTarget> targets, Entity? dropping = null)
+    private static DropTarget? TargetAt(Vector2 point, IReadOnlyList<DropTarget> targets, Entity? dropping = null)
     {
         var under = targets.Where(t => (dropping is null || !t.Entity!.IsSelfOrDescendantOf(dropping)) && Covers(t.Entity!, point)).ToList();
         return under.OrderBy(t => SceneRenderer.OrderOf(t.Entity!) ?? int.MinValue).ThenBy(t => t.Entity!.Transform.WorldPosition.Z).LastOrDefault();
@@ -347,7 +350,7 @@ public sealed partial class Game
     }
 
     // What rests on each target (not held, not sliding), what arrived and left, and how they look.
-    private void UpdateDropTargets(List<Draggable> draggables, List<DropTarget> targets)
+    private void UpdateDropTargets(IReadOnlyList<Draggable> draggables, IReadOnlyList<DropTarget> targets)
     {
         var resting = draggables.Where(d => !d.IsHeld && !_drags.Slides.ContainsKey(d)).ToList();
         foreach (var thing in draggables)

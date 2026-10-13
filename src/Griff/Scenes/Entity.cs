@@ -27,22 +27,42 @@ public sealed class Entity
 
     public string Name { get; set; }
 
-    public bool IsEnabled { get; set; } = true;
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set
+        {
+            if (_isEnabled == value)
+                return;
+            _isEnabled = value;
+            Scene?.EnabledChanged();
+        }
+    }
+
+    private bool _isEnabled = true;
 
     /// <summary>True if this entity and all its parents are <see cref="IsEnabled"/>: the game runs and draws it.</summary>
     public bool IsActive
     {
         get
         {
-            for (var current = this; current is not null; current = current.Parent)
-            {
-                if (!current.IsEnabled)
-                    return false;
-            }
-
-            return true;
+            // In a scene, kept until something is enabled, disabled or moved.
+            if (Scene is not { } scene)
+                return _isEnabled && (Parent is null || Parent.IsActive);
+            if (_activeFor != scene.ActiveVersion)
+                (_isActive, _activeFor) = (_isEnabled && (Parent is null || Parent.IsActive), scene.ActiveVersion);
+            return _isActive;
         }
     }
+
+    private bool _isActive;
+    private long _activeFor = -1;
+
+    // Joining a scene: what IsActive kept was for another one.
+    internal void ForgetActive() => _activeFor = -1;
+
+    /// <summary>Its place in the scene's hierarchy, depth first, once the scene has numbered it (see <see cref="Scene.Order"/>).</summary>
+    internal int Order { get; set; }
 
     /// <summary>
     /// Locked in the editor: clicks and box selections in the Scene view pass through it (and everything inside it) to
@@ -116,8 +136,10 @@ public sealed class Entity
 
         // Index 0 is always the Transform.
         var position = Math.Clamp(index ?? _components.Count, 1, _components.Count);
+        Scene?.ComponentJoining();
         _components.Insert(position, component);
         component.Entity = this;
+        Scene?.ComponentMoved(component);
         return component;
     }
 
@@ -130,6 +152,7 @@ public sealed class Entity
             return false;
 
         component.Entity = null;
+        Scene?.ComponentLeft(component);
         return true;
     }
 
@@ -144,6 +167,7 @@ public sealed class Entity
 
         _components.RemoveAt(from);
         _components.Insert(Math.Clamp(index, 1, _components.Count), component);
+        Scene?.ComponentMoved(component);
     }
 
     /// <summary>Swaps <paramref name="existing"/> for <paramref name="replacement"/> at the same position (used by script reload).</summary>
@@ -158,12 +182,24 @@ public sealed class Entity
         if (index < 0)
             throw new InvalidOperationException("The component isn't attached to this entity.");
 
+        Scene?.ComponentJoining();
         _components[index] = replacement;
         existing.Entity = null;
         replacement.Entity = this;
+        Scene?.ComponentLeft(existing);
+        Scene?.ComponentMoved(replacement);
     }
 
-    public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
+    public T? GetComponent<T>() where T : Component
+    {
+        foreach (var component in _components)
+        {
+            if (component is T found)
+                return found;
+        }
+
+        return null;
+    }
 
     public IEnumerable<T> GetComponents<T>() where T : Component => _components.OfType<T>();
 

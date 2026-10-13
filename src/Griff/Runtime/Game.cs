@@ -297,19 +297,19 @@ public sealed partial class Game : IGameContext
         var heard = _messages.Send(message, data, Scene);
 
         // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something else).
-        var counters = Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Counter>())
+        var counters = Active<Counter>()
             .Where(c => c.Message?.Trim() == message && !c.CountsOwn).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
 
         // So do sound players.
-        var players = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>())
+        var players = Scene.Active<SoundPlayer>()
             .Where(p => p.Message?.Trim() == message).ToList();
         foreach (var player in players)
             Play(player);
 
         // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing.
-        var panels = Scene.Entities.SelectMany(e => e.GetComponents<Panel>())
+        var panels = Scene.All<Panel>()
             .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive))
             .ToList();
         foreach (var panel in panels)
@@ -385,10 +385,10 @@ public sealed partial class Game : IGameContext
     public IReadOnlyList<Entity> FindAll(string name) => Scene.Entities.Where(e => e.Name == name).ToList();
 
     /// <summary>The first component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.Find&lt;ScoreCounter&gt;()</c>.</summary>
-    public T? Find<T>() where T : Component => Scene.Entities.SelectMany(e => e.GetComponents<T>()).FirstOrDefault();
+    public T? Find<T>() where T : Component => Scene.All<T>().FirstOrDefault();
 
     /// <summary>Every component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.FindAll&lt;Enemy&gt;()</c>.</summary>
-    public IReadOnlyList<T> FindAll<T>() where T : Component => Scene.Entities.SelectMany(e => e.GetComponents<T>()).ToList();
+    public IReadOnlyList<T> FindAll<T>() where T : Component => Scene.All<T>();
 
     /// <summary>
     /// Freezes the game for <paramref name="seconds"/> of real time (a tenth of a second or less is plenty) so a big hit
@@ -453,7 +453,7 @@ public sealed partial class Game : IGameContext
             return;
         _stopped = true;
 
-        foreach (var behavior in Scene.Entities.SelectMany(e => e.GetComponents<Behavior>()))
+        foreach (var behavior in Scene.All<Behavior>())
             behavior.RunDestroy();
         Net.Leave("The game closed.");
         SaveSettings();
@@ -472,6 +472,8 @@ public sealed partial class Game : IGameContext
     // Coroutines started by other coroutines have already taken their first step, so they wait for the next frame.
     private void RunCoroutines()
     {
+        if (_coroutines.Count == 0)
+            return;
         foreach (var coroutine in _coroutines.ToList())
             coroutine.Run(this);
         _coroutines.RemoveAll(c => !c.IsRunning);
@@ -499,6 +501,8 @@ public sealed partial class Game : IGameContext
     // Tweens added by callbacks (e.g. chained with Then) start on the next frame.
     private void RunTweens()
     {
+        if (_tweens.Count == 0)
+            return;
         foreach (var tween in _tweens.ToList())
             tween.Run(Time.Total, Scene);
         _tweens.RemoveAll(t => !t.IsActive);
@@ -507,6 +511,8 @@ public sealed partial class Game : IGameContext
     // Timers added by callbacks wait for the next frame, like spawned behaviors.
     private void RunTimers()
     {
+        if (_timers.Count == 0)
+            return;
         foreach (var timer in _timers.ToList())
             timer.Run(Time.Total, Scene);
 
@@ -545,6 +551,12 @@ public sealed partial class Game : IGameContext
         if (_pendingScene is not { } name)
             return;
         _pendingScene = null;
+        SwitchScene(name);
+    }
+
+    // The lambdas here capture what's staying, so they're kept out of the step every frame takes.
+    private void SwitchScene(string name)
+    {
         SaveWorlds();
 
         var next = SceneLoader!(name);
@@ -601,15 +613,14 @@ public sealed partial class Game : IGameContext
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     private void RunFollowers()
     {
-        foreach (var follow in Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<Follow>()).ToList())
+        foreach (var follow in Moving<Follow>())
             follow.Advance(Time.Delta, ViewAspect, Time.UnscaledDelta);
     }
 
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.
     private void LayOutScreen()
     {
-        var anchors = Scene.Entities.Where(e => e.IsActive)
-            .Select(e => e.GetComponent<ScreenAnchor>()).OfType<ScreenAnchor>().ToList();
+        var anchors = Scene.Active<ScreenAnchor>();
         if (anchors.Count == 0)
             return;
 
@@ -622,6 +633,9 @@ public sealed partial class Game : IGameContext
 
         foreach (var anchor in anchors)
         {
+            // An entity's first anchor places it.
+            if (anchor.Entity!.GetComponent<ScreenAnchor>() != anchor)
+                continue;
             var transform = anchor.Entity!.Transform;
             var world = center + ScreenAnchor.Direction(anchor.Anchor) * half + anchor.Offset;
             var target = new Vector3(world, transform.WorldPosition.Z);
@@ -648,7 +662,7 @@ public sealed partial class Game : IGameContext
     // Lifetimes run on game time; the fade out is an ordinary FadeTo, so it shows on sprites, text and tilemaps alike.
     private void RunLifetimes()
     {
-        foreach (var lifetime in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Lifetime>()).ToList())
+        foreach (var lifetime in Active<Lifetime>())
         {
             lifetime.Age += Time.Delta;
             if (!lifetime.IsFading && lifetime.FadeOut > 0 && lifetime.Age >= lifetime.Seconds - lifetime.FadeOut)
@@ -664,14 +678,14 @@ public sealed partial class Game : IGameContext
 
     private void RunSpawners()
     {
-        foreach (var spawner in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Spawner>()).ToList())
+        foreach (var spawner in Active<Spawner>())
             spawner.Advance(Time.Delta, this);
     }
 
     // Typewriters run on real time, so dialogue still types out while the game is paused.
     private void RunTypewriters()
     {
-        foreach (var typewriter in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Typewriter>()).ToList())
+        foreach (var typewriter in Scene.Active<Typewriter>())
         {
             if (typewriter.Advance(Time.UnscaledDelta))
                 Audio.Play(typewriter.Sound!);
@@ -680,7 +694,7 @@ public sealed partial class Game : IGameContext
 
     private void RunPickupSpin()
     {
-        foreach (var pickup in Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<Pickup>()))
+        foreach (var pickup in Moving<Pickup>())
         {
             if (pickup.Spin != 0)
                 pickup.Entity!.Transform.Rotation += new Vector3(0, 0, pickup.Spin * Time.Delta);
@@ -690,6 +704,8 @@ public sealed partial class Game : IGameContext
     // Touches from this frame's physics; each pickup goes to the first thing that reaches it.
     private void RunPickups()
     {
+        if (_touches.Count == 0)
+            return;
         foreach (var (source, target) in _touches.ToList())
         {
             if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
@@ -747,14 +763,14 @@ public sealed partial class Game : IGameContext
 
     private void RunBars()
     {
-        foreach (var bar in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Bar>()).ToList())
+        foreach (var bar in Active<Bar>())
             bar.Advance(Time.Delta, Scene);
     }
 
     // Counters show their count, keep their best, and pop when the count changes.
     private void RunCounters()
     {
-        foreach (var counter in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Counter>()).ToList())
+        foreach (var counter in Active<Counter>())
         {
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
@@ -762,7 +778,7 @@ public sealed partial class Game : IGameContext
                 counter.Add(ItemCount(counter.Item) - counter.Value);
             if (counter.CountGoals)
             {
-                var goals = Showing<Goal>().ToList();
+                var goals = Showing<Goal>();
                 counter.Total = goals.Count;
                 counter.Add(goals.Count(g => g.IsCovered) - counter.Value);
             }
@@ -874,7 +890,7 @@ public sealed partial class Game : IGameContext
     // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.
     private void RunHealth()
     {
-        foreach (var health in Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<Health>()).ToList())
+        foreach (var health in Active<Health>())
         {
             health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);
@@ -906,31 +922,6 @@ public sealed partial class Game : IGameContext
             return;
         foreach (var behavior in entity.GetComponents<Behavior>().Where(b => b.IsStarted).ToList())
             action(behavior);
-    }
-
-    private IEnumerable<Behavior> ActiveBehaviors()
-    {
-        foreach (var root in Scene.Roots)
-        {
-            foreach (var behavior in ActiveBehaviors(root))
-                yield return behavior;
-        }
-    }
-
-    // Disabled entities skip themselves and their children.
-    private static IEnumerable<Behavior> ActiveBehaviors(Entity entity)
-    {
-        if (!entity.IsEnabled)
-            yield break;
-
-        foreach (var behavior in entity.GetComponents<Behavior>())
-            yield return behavior;
-
-        foreach (var child in entity.Children)
-        {
-            foreach (var behavior in ActiveBehaviors(child))
-                yield return behavior;
-        }
     }
 
     private void FlushDestroys()

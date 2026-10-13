@@ -22,7 +22,7 @@ public sealed partial class Game
     // After turns are taken and before anything moves, so a unit sent off this frame takes its first step this frame.
     private void RunTactics()
     {
-        var units = Showing<TacticsUnit>().ToList();
+        var units = Showing<TacticsUnit>();
         var controls = Showing<TacticsControls>().FirstOrDefault();
         Tactics.Clear(controls);
         if (units.Count == 0)
@@ -354,7 +354,7 @@ public sealed partial class Game
 
     // This screen's picking: the cursor follows the mouse or the arrow keys; a click (or Confirm) picks, sends or attacks,
     // a right click (or Cancel) takes back.
-    private void Control(TacticsControls controls, List<TacticsUnit> units)
+    private void Control(TacticsControls controls, ComponentList<TacticsUnit> units)
     {
         var view = Tactics;
         var input = Input;
@@ -406,7 +406,7 @@ public sealed partial class Game
     }
 
     // A click on a cell: pick a unit, send the picked one there, set it on a foe there, or have it wait.
-    private void Confirm(TacticsControls controls, List<TacticsUnit> units, GridCells grid, (int X, int Y) cell)
+    private void Confirm(TacticsControls controls, IReadOnlyList<TacticsUnit> units, GridCells grid, (int X, int Y) cell)
     {
         var at = units.FirstOrDefault(u => CellOf(u.Entity!, grid) == cell);
         bool Pickable(TacticsUnit? u) => u is { CanAct: true, IsWalking: false } && MayCommand(u, Net.LocalPlayer);
@@ -479,7 +479,7 @@ public sealed partial class Game
 
     // What to draw: the picked unit's reach (or, faintly, the hovered unit's), the way it would go to the hovered cell,
     // and the cursor.
-    private void Show(TacticsControls controls, List<TacticsUnit> units)
+    private void Show(TacticsControls controls, ComponentList<TacticsUnit> units)
     {
         var view = Tactics;
         var selected = controls.Selected?.GetComponent<TacticsUnit>();

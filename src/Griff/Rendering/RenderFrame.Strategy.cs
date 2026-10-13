@@ -289,7 +289,7 @@ public static partial class SceneRenderer
         }
 
         var team = rts.Commander?.Team;
-        foreach (var resource in game.Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<Resource>()).OfType<Resource>())
+        foreach (var resource in game.Scene.Active<Resource>())
         {
             var entity = resource.Entity!;
             if (Game.Footprint(entity) is not { } box || !(rts.Fog?.IsExplored(box.Center) ?? true))

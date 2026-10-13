@@ -166,7 +166,10 @@ public sealed partial class Game
 
     private void RunWeapons()
     {
-        var owners = Active<Weapon>().Select(w => w.Entity!).Distinct().ToList();
+        var all = Active<Weapon>();
+        if (all.Count == 0)
+            return;
+        var owners = all.Select(w => w.Entity!).Distinct().ToList();
         foreach (var owner in owners)
         {
             var weapons = owner.GetComponents<Weapon>().OrderBy(w => w.Slot).ToList();

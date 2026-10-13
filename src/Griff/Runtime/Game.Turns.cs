@@ -16,10 +16,10 @@ public sealed partial class Game
     // Before anything acts, so a turn taker whose turn has just ended doesn't get another frame.
     private void RunTurns()
     {
-        var order = _turnOrder = Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
+        var order = _turnOrder = Scene.Active<TurnOrder>().FirstOrDefault();
         if (order is not null && order.SideList.Count > 0)
         {
-            var takers = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<TurnTaker>()).ToList();
+            var takers = Scene.Active<TurnTaker>();
             if (Runs(order.Entity!))
                 TakeTurns(order, takers);
             foreach (var taker in takers)
@@ -31,8 +31,10 @@ public sealed partial class Game
         if (order is not null && !string.IsNullOrEmpty(end) && !PausedThisFrame && !LocalInputBlocked && Input.WasPressed(end) && MayEndTurn(order, Net.LocalPlayer))
             Net.SendCommand(EndTurnCommand, null);
 
-        foreach (var button in Showing<Button>().Where(b => b.Action == ButtonAction.EndTurn))
+        foreach (var button in Showing<Button>())
         {
+            if (button.Action != ButtonAction.EndTurn)
+                continue;
             var may = order is not null && MayEndTurn(order, Net.LocalPlayer);
             if (button.Interactable != may)
                 button.Interactable = may;
@@ -40,7 +42,7 @@ public sealed partial class Game
     }
 
     // On the machine that runs the game: start the first turn, count turns down, and pass them on as they end.
-    private void TakeTurns(TurnOrder order, List<TurnTaker> takers)
+    private void TakeTurns(TurnOrder order, IReadOnlyList<TurnTaker> takers)
     {
         var sides = order.SideList;
         if (order.Round <= 0)
@@ -83,7 +85,7 @@ public sealed partial class Game
     }
 
     // A side that had turn takers and has none left is beaten: its Defeat Message goes out, once.
-    private void SendDefeats(TurnOrder order, List<TurnTaker> takers)
+    private void SendDefeats(TurnOrder order, IReadOnlyList<TurnTaker> takers)
     {
         foreach (var side in order.SideList)
         {
@@ -96,7 +98,7 @@ public sealed partial class Game
     }
 
     // Over to the next side with anyone to take its turn, after the gap between turns.
-    private void PassTurn(TurnOrder order, List<TurnTaker> takers)
+    private void PassTurn(TurnOrder order, IReadOnlyList<TurnTaker> takers)
     {
         var ended = order.Current?.Trim() ?? "";
         order.RaiseTurnEnded(ended);
@@ -111,7 +113,7 @@ public sealed partial class Game
 
     // The side after this one (the first, with none) that has turn takers, if any side does; and whether it came round
     // past the last side to get there.
-    private (string Side, bool Wrapped) NextSide(TurnOrder order, List<TurnTaker> takers, string? after)
+    private (string Side, bool Wrapped) NextSide(TurnOrder order, IReadOnlyList<TurnTaker> takers, string? after)
     {
         var sides = order.SideList;
         var at = after is null ? -1 : IndexOf(sides, after);
@@ -137,7 +139,7 @@ public sealed partial class Game
         return -1;
     }
 
-    private void BeginTurn(TurnOrder order, List<TurnTaker> takers, string side, float startsIn)
+    private void BeginTurn(TurnOrder order, IReadOnlyList<TurnTaker> takers, string side, float startsIn)
     {
         order.Current = side;
         order.Shown = side;
@@ -154,7 +156,7 @@ public sealed partial class Game
             AnnounceTurn(order, takers);
     }
 
-    private void AnnounceTurn(TurnOrder order, List<TurnTaker> takers)
+    private void AnnounceTurn(TurnOrder order, IReadOnlyList<TurnTaker> takers)
     {
         var side = order.Current?.Trim() ?? "";
         if (!string.IsNullOrWhiteSpace(order.Sound))
@@ -194,7 +196,7 @@ public sealed partial class Game
 
     // A side's turn is over by itself once it has nobody left to take it, or everyone on it has used their actions; a side
     // with a turn taker that has no limit goes on until it's ended.
-    private bool SideIsDone(TurnOrder order, List<TurnTaker> takers)
+    private bool SideIsDone(TurnOrder order, IReadOnlyList<TurnTaker> takers)
     {
         var sides = order.SideList;
         if (!sides.Any(s => HasTakers(takers, s)))
@@ -246,7 +248,7 @@ public sealed partial class Game
         }
     }
 
-    private bool HasTakers(List<TurnTaker> takers, string side) => takers.Any(t => TurnOrder.SameSide(SideOf(t), side));
+    private bool HasTakers(IReadOnlyList<TurnTaker> takers, string side) => takers.Any(t => TurnOrder.SameSide(SideOf(t), side));
 
     // The side a turn taker acts for: its own, or in a network game with teams, its player's team.
     private string SideOf(TurnTaker taker)
@@ -285,7 +287,7 @@ public sealed partial class Game
             return false;
         if (!Net.IsOnline)
             return true;
-        var owners = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<TurnTaker>())
+        var owners = Scene.Active<TurnTaker>()
             .Where(t => TurnOrder.SameSide(SideOf(t), order.Current)).Select(t => NetSession.OwnerIdOf(t.Entity)).Where(id => id != 0).ToList();
         return owners.Count == 0 || (player is not null && owners.Contains(player.Id));
     }
@@ -293,7 +295,7 @@ public sealed partial class Game
     // Someone's End Turn (a key or a button), on the machine that runs the game.
     private void RunEndTurn(NetPlayer? player, object? args)
     {
-        var order = Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
+        var order = Scene.Active<TurnOrder>().FirstOrDefault();
         if (order is not null && Runs(order.Entity!) && MayEndTurn(order, player))
             order.EndTurn();
     }

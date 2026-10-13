@@ -39,8 +39,8 @@ public sealed partial class Game
     // Before followers move: a follower's target that has crossed into another room takes the camera over to it.
     private void RunRooms()
     {
-        var rooms = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Room>()).ToList();
-        foreach (var follow in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Follow>()).ToList())
+        var rooms = Scene.Active<Room>();
+        foreach (var follow in Scene.Active<Follow>())
         {
             var camera = follow.Entity!.GetComponent<Camera>();
             if (camera is null)
@@ -107,7 +107,7 @@ public sealed partial class Game
     // Sound players that have just appeared play their sound if they're set to; scenes' music starts.
     private void RunSoundPlayers()
     {
-        foreach (var player in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundPlayer>()))
+        foreach (var player in Scene.Active<SoundPlayer>())
         {
             if (player.Started)
                 continue;
@@ -116,7 +116,7 @@ public sealed partial class Game
                 Play(player);
         }
 
-        foreach (var music in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<BackgroundMusic>()))
+        foreach (var music in Scene.Active<BackgroundMusic>())
         {
             if (_startedMusic.Contains(music) || string.IsNullOrWhiteSpace(music.Music))
                 continue;
@@ -178,12 +178,14 @@ public sealed partial class Game
     }
 
     private readonly Dictionary<SoundSource, ISoundLoop> _loops = [];
+    private readonly HashSet<SoundSource> _liveSources = [];
 
     // Each playing source keeps a loop going, as loud as it is near the middle of the view.
     private void RunSoundSources()
     {
-        var live = new HashSet<SoundSource>();
-        foreach (var source in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<SoundSource>()))
+        var live = _liveSources;
+        live.Clear();
+        foreach (var source in Scene.Active<SoundSource>())
         {
             if (!source.Playing || string.IsNullOrWhiteSpace(source.Sound))
                 continue;
@@ -204,7 +206,9 @@ public sealed partial class Game
             source.Loudness = loop.Volume;
         }
 
-        foreach (var (source, loop) in _loops.Where(l => !live.Contains(l.Key)).ToList())
+        if (_loops.Count == live.Count)
+            return;
+        foreach (var (source, loop) in _loops.Where(l => !_liveSources.Contains(l.Key)).ToList())
         {
             loop.Stop();
             source.Loudness = 0;
@@ -225,7 +229,7 @@ public sealed partial class Game
 
     private void RunLights()
     {
-        foreach (var light in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Light>()))
+        foreach (var light in Scene.Active<Light>())
             light.AdvanceFlicker(Time.Delta);
     }
 }

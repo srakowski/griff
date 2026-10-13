@@ -102,7 +102,11 @@ public sealed class DebugDraw
     public void Clear() => _shapes.Clear();
 
     /// <summary>Drops shapes whose time is up. Called by the game at the start of each frame, after time moves on.</summary>
-    internal void BeginFrame() => _shapes.RemoveAll(s => s.Frame < _time.Frame && s.Until <= _time.Total);
+    internal void BeginFrame()
+    {
+        if (_shapes.Count > 0)
+            _shapes.RemoveAll(s => s.Frame < _time.Frame && s.Until <= _time.Total);
+    }
 
     // A shape lasts at least until the next frame starts (counted in frames, so it goes even while Time.Scale is 0),
     // and for timed shapes until that much game time has passed.

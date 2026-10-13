@@ -35,7 +35,7 @@ public sealed class TacticsEditorTests : IDisposable
         var document = workspace.Scene!;
         var commands = services.GetRequiredService<CommandRegistry>();
         var selection = services.GetRequiredService<ISelection>();
-        var before = document.Scene.Entities.Count();
+        var before = document.Scene.Entities.Count;
         Entity Create()
         {
             selection.Select(null);
@@ -70,6 +70,6 @@ public sealed class TacticsEditorTests : IDisposable
         document.History.Undo();
         document.History.Undo();
         document.History.Undo();
-        Assert.Equal(before, document.Scene.Entities.Count());
+        Assert.Equal(before, document.Scene.Entities.Count);
     });
 }

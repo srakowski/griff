@@ -14,7 +14,9 @@ chapter: A run | Counting bunnies
 play
 wait: 3
 explain: game | Bunnies pour in | Each bunny is a sprite and a short script, copied from a prefab: an ordinary entity, just like a game's. The frame rate and the count show in the corner.
-wait: 10
+wait: 3
+explain: game | Big scenes | The scene keeps its sprites and scripts by type, so each frame finds them without going through every bunny again and again, and allocates nothing as it goes. In games with physics, each body only tests what is near it.
+wait: 4
 explain: game | The count | When it has found the count, it shows it along the bottom, and saves it with the best so far.
 tap: Space
 wait: 2

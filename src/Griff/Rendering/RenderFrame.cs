@@ -211,7 +211,7 @@ public static partial class SceneRenderer
     public static IEnumerable<LightDraw> LightDraws(Scene scene)
     {
         List<ShadowEdge>? edges = null;
-        foreach (var light in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Light>()))
+        foreach (var light in scene.Active<Light>())
         {
             var intensity = light.CurrentIntensity;
             if (!(light.Radius > 0) || !(intensity > 0))
@@ -336,8 +336,7 @@ public static partial class SceneRenderer
     }
 
     /// <summary>The first enabled entity with a Camera, in hierarchy order.</summary>
-    public static Entity? FindCamera(Scene scene) =>
-        scene.Entities.FirstOrDefault(e => e.IsActive && e.GetComponent<Camera>() is not null);
+    public static Entity? FindCamera(Scene scene) => scene.Active<Camera>().FirstOrDefault()?.Entity;
 
     /// <summary>
     /// Orthographic projection of the camera's view. <paramref name="size"/> is half the visible height;

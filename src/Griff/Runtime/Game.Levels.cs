@@ -39,16 +39,36 @@ public sealed partial class Game
     }
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    private List<T> Active<T>() where T : Component =>
-        Scene.Entities.Where(e => e.IsActive && Runs(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+    private ComponentList<T> Active<T>() where T : Component => Where(Scene.Active<T>(), Runs);
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own.
-    private List<T> Moving<T>() where T : Component =>
-        Scene.Entities.Where(e => e.IsActive && Moves(e)).SelectMany(e => e.GetComponents<T>()).ToList();
+    private ComponentList<T> Moving<T>() where T : Component => Where(Scene.Active<T>(), Moves);
 
     // Everything showing, wherever it's run: for what only changes how things look.
-    private List<T> Showing<T>() where T : Component =>
-        Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<T>()).ToList();
+    private ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
+
+    // Everything this machine runs, active or not.
+    private ComponentList<T> RunHere<T>() where T : Component => Where(Scene.All<T>(), Runs);
+
+    // Those whose entity passes: the same list when they all do (always, offline), so a frame allocates nothing.
+    private static ComponentList<T> Where<T>(ComponentList<T> components, Func<Entity, bool> test) where T : Component
+    {
+        var all = components.AsSpan();
+        var first = 0;
+        while (first < all.Length && test(all[first].Entity!))
+            first++;
+        if (first == all.Length)
+            return components;
+
+        var kept = new List<T>(all.Length);
+        for (var i = 0; i < all.Length; i++)
+        {
+            if (i < first || (i > first && test(all[i].Entity!)))
+                kept.Add(all[i]);
+        }
+
+        return new ComponentList<T>([.. kept]);
+    }
 
     // Movers go before physics, so whatever stands on them is carried along this frame.
     private void RunMovers()
@@ -237,8 +257,10 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0)
             return;
-        foreach (var shooter in Active<Shooter>().Where(s => s.Running))
+        foreach (var shooter in Active<Shooter>())
         {
+            if (!shooter.Running)
+                continue;
             var entity = shooter.Entity!;
             var here = Flat(entity.Transform.WorldPosition);
             var aim = shooter.Direction;
@@ -302,10 +324,10 @@ public sealed partial class Game
 
     private void RunCheckpoints()
     {
-        var all = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Checkpoint>()).ToList();
-        foreach (var checkpoint in all.Where(c => c.Entity!.IsActive))
+        var all = RunHere<Checkpoint>();
+        foreach (var checkpoint in all)
         {
-            if (checkpoint.Active)
+            if (!checkpoint.Entity!.IsActive || checkpoint.Active)
                 continue;
             var (by, _) = TouchersOf(checkpoint.Entity!).FirstOrDefault(t => checkpoint.AcceptsLayer(t.Layer));
             if (by is null)
@@ -337,8 +359,10 @@ public sealed partial class Game
     // Dead and set to respawn: gone for a moment, then back at the active checkpoint (or where it started).
     private void RunRespawns()
     {
-        foreach (var health in Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Health>()).Where(h => h.Respawn && h.IsDead).ToList())
+        foreach (var health in RunHere<Health>())
         {
+            if (!health.Respawn || !health.IsDead)
+                continue;
             var entity = health.Entity!;
             if (float.IsNaN(health.RespawnLeft))
             {
@@ -350,7 +374,7 @@ public sealed partial class Game
             if (health.RespawnLeft > 0)
                 continue;
 
-            var checkpoint = Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Checkpoint>()).FirstOrDefault(c => c.Active);
+            var checkpoint = Scene.Active<Checkpoint>().FirstOrDefault(c => c.Active);
             var position = checkpoint is not null ? Flat(checkpoint.Entity!.Transform.WorldPosition) : health.Home ?? Flat(entity.Transform.WorldPosition);
             entity.IsEnabled = true;
             PlaceAt(entity, position);
@@ -367,7 +391,7 @@ public sealed partial class Game
         entity.Transform.Position = new Vector3(target.X, target.Y, entity.Transform.Position.Z);
         if (entity.GetComponent<Body>() is { } body)
             body.Velocity = Vector2.Zero;
-        foreach (var follow in Scene.Entities.SelectMany(e => e.GetComponents<Follow>()).Where(f => f.TargetEntity == entity))
+        foreach (var follow in Scene.All<Follow>().Where(f => f.TargetEntity == entity))
             follow.Snap();
     }
 
@@ -376,8 +400,16 @@ public sealed partial class Game
     {
         if (PausedThisFrame)
             return;
+        var doors = Active<Door>();
+        if (doors.Count == 0)
+        {
+            if (Time.Delta > 0)
+                _levels.ArrivedByDoor.Clear();
+            return;
+        }
+
         var touchingAnyDoor = new HashSet<Entity>();
-        foreach (var door in Active<Door>())
+        foreach (var door in doors)
         {
             var users = TouchersOf(door.Entity!).Where(t => door.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
             touchingAnyDoor.UnionWith(users);
@@ -444,8 +476,16 @@ public sealed partial class Game
             return;
         }
 
+        var dialogues = Showing<Dialogue>();
+        if (dialogues.Count == 0)
+        {
+            if (Time.Delta > 0)
+                _levels.DialoguesTouched.Clear();
+            return;
+        }
+
         var touched = new HashSet<Dialogue>();
-        foreach (var dialogue in Showing<Dialogue>())
+        foreach (var dialogue in dialogues)
         {
             // Boxes are hidden until there's something to say.
             if (_levels.DialoguesSeen.Add(dialogue) && BoxOf(dialogue) is { } box)
@@ -735,7 +775,7 @@ public sealed partial class Game
 
     // The speaker called name (or whose entity is, when it has no name of its own), anywhere in the scene, shown or not.
     private Speaker? SpeakerNamed(string name) =>
-        Scene.Entities.SelectMany(e => e.GetComponents<Speaker>())
+        Scene.All<Speaker>()
             .FirstOrDefault(s => string.Equals(s.ShownName, name, StringComparison.OrdinalIgnoreCase));
 
     // The box's name tag and portrait show who's talking, and hide when nobody is (or they have no portrait).

@@ -164,7 +164,7 @@ public sealed partial class NetSession : IDisposable
             {
                 _settingsScene = scene;
                 _settingsVersion = scene.Version;
-                _settings = scene.Entities.SelectMany(e => e.GetComponents<Multiplayer>()).FirstOrDefault();
+                _settings = scene.All<Multiplayer>().FirstOrDefault();
             }
 
             return _settings;

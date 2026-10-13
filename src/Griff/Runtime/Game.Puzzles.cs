@@ -12,11 +12,18 @@ public sealed partial class Game
 
     // Before anything runs, so a switched-off turret or spawner can't get a shot off in the first frame (or the frame
     // after a script sets a switch).
-    private void ApplySwitches() => ApplySwitches(Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Switch>()).ToList());
+    private void ApplySwitches()
+    {
+        var all = RunHere<Switch>();
+        if (all.Count > 0)
+            ApplySwitches(all);
+    }
 
     private void RunSwitches()
     {
-        var all = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Switch>()).ToList();
+        var all = RunHere<Switch>();
+        if (all.Count == 0)
+            return;
 
         // The state it starts in isn't a change; being worked in its first frame is.
         foreach (var @switch in all)
@@ -123,7 +130,7 @@ public sealed partial class Game
     }
 
     // Each target is on while every switch naming it is; each hidden entity is hidden while every switch hiding it is on.
-    private void ApplySwitches(IReadOnlyList<Switch> all)
+    private void ApplySwitches(ComponentList<Switch> all)
     {
         var wanted = new Dictionary<(Entity, bool), bool>();
         foreach (var @switch in all)
@@ -201,7 +208,7 @@ public sealed partial class Game
     // this machine's player's own.
     private int ItemCount(string item)
     {
-        var inventories = Scene.Entities.SelectMany(e => e.GetComponents<Inventory>()).ToList();
+        var inventories = Scene.All<Inventory>();
         var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
         return inventory?.Count(item.Trim()) ?? 0;
     }
@@ -209,13 +216,13 @@ public sealed partial class Game
     // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
     private void RunTrails()
     {
-        foreach (var trail in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Trail>()).ToList())
+        foreach (var trail in Scene.Active<Trail>())
             trail.Advance(Time.Delta);
     }
 
     private void RunAnimatedTiles()
     {
-        foreach (var tilemap in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
+        foreach (var tilemap in Scene.Active<Tilemap>())
         {
             if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
                 tilemap.AnimationTime += Time.Delta;
@@ -226,10 +233,17 @@ public sealed partial class Game
     // too; the sounds and messages come from where the game is run.
     private void RunGoals()
     {
-        var crates = Showing<Pushable>().Where(p => p.Entity!.GetComponent<GridMovement>() is not null).ToList();
+        var goals = Showing<Goal>();
+        var pushables = Showing<Pushable>();
+        if (goals.Count > 0 || pushables.Count > 0)
+            RunGoals(goals, pushables);
+    }
+
+    private void RunGoals(ComponentList<Goal> goals, ComponentList<Pushable> pushables)
+    {
+        var crates = pushables.Where(p => p.Entity!.GetComponent<GridMovement>() is not null).ToList();
         foreach (var crate in crates)
             (crate.OnGoal, crate.GoalTint) = (null, null);
-        var goals = Showing<Goal>().ToList();
         foreach (var goal in goals)
         {
             var was = goal.CoveredBy;

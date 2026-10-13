@@ -27,15 +27,25 @@ public sealed class Physics
     private const int MaxPushChain = 4;
 
     private HashSet<(Entity Trigger, Entity Other)> _triggerPairs = [];
+    private HashSet<(Entity Trigger, Entity Other)> _lastTriggerPairs = [];
 
     // Where each grounded body's ground was at the end of the last step, so riders follow it when it moves.
-    private Dictionary<Body, (Entity Ground, Vector2 Position)> _grounds = [];
+    private readonly Dictionary<Body, (Entity Ground, Vector2 Position)> _grounds = [];
 
     // The slope tiles bodies walk on during a step.
-    private List<Slope> _slopes = [];
+    private readonly List<Slope> _slopes = [];
+
+    // What a step works with, kept from one to the next so a step allocates as little as it can.
+    private readonly Solids _solids = new();
+    private readonly Dictionary<Body, BodyGroup> _groupOf = [];
+    private readonly HashSet<BodyGroup> _movedGroups = [];
+    private readonly ShapeGrid _triggerGrid = new();
+    private readonly List<(Collider Collider, Area Area, LayerFilter Filter)> _triggerShapes = [];
+    private readonly List<int> _near = [];
+    private Func<int, Box>? _triggerBounds;
 
     /// <summary>Each trigger and the collider overlapping it, as of the last step.</summary>
-    internal IReadOnlyCollection<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
+    internal HashSet<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
 
     /// <summary>The <see cref="Gravity"/> a game starts with: 25 units per second squared, down.</summary>
     public static readonly Vector2 DefaultGravity = new(0, -25f);
@@ -47,7 +57,8 @@ public sealed class Physics
     public void Reset()
     {
         _triggerPairs = [];
-        _grounds = [];
+        _lastTriggerPairs = [];
+        _grounds.Clear();
     }
 
     /// <summary>World-space box of a collider, from its entity's position and scale.</summary>
@@ -183,19 +194,25 @@ public sealed class Physics
 
     internal void Step(Scene scene, float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
     {
-        var colliders = ActiveColliders(scene).ToList();
-        var solids = Shapes(scene, includeTriggers: false).ToList();
-        _slopes = Slopes(scene).ToList();
-        var groups = new Dictionary<Body, BodyGroup>();
+        var solids = _solids;
+        solids.Fill(scene);
+        _slopes.Clear();
+        if (scene.Active<Tilemap>().Count > 0)
+            _slopes.AddRange(Slopes(scene));
+        _groupOf.Clear();
         foreach (var group in Groups)
         {
             foreach (var member in group.Bodies)
-                groups[member] = group;
+                _groupOf[member] = group;
         }
 
-        var moved = new HashSet<BodyGroup>();
-        foreach (var body in scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<Body>()).OfType<Body>().ToList())
+        _movedGroups.Clear();
+        foreach (var body in scene.Active<Body>())
         {
+            // An entity's first body is the one that moves it.
+            if (body.Entity!.GetComponent<Body>() != body)
+                continue;
+
             // In a network game, another machine moves this one (a player's own character, or the host's copy of
             // anything): leave it where it's put. On the host, what another player's character touches still counts.
             if (!body.Entity!.MovesHere)
@@ -205,9 +222,9 @@ public sealed class Physics
                 continue;
             }
 
-            if (groups.TryGetValue(body, out var group))
+            if (_groupOf.TryGetValue(body, out var group))
             {
-                if (moved.Add(group))
+                if (_movedGroups.Add(group))
                     StepGroup(group, solids, dt, onCollision);
                 continue;
             }
@@ -232,7 +249,7 @@ public sealed class Physics
 
             if (collider is null || collider.IsTrigger)
             {
-                Translate(body.Entity, body.Velocity * dt);
+                Translate(solids, body.Entity, body.Velocity * dt);
                 EndStep(body, dt);
                 continue;
             }
@@ -261,29 +278,38 @@ public sealed class Physics
             EndStep(body, dt);
         }
 
-        _grounds = scene.Entities.Select(e => e.GetComponent<Body>()).OfType<Body>().Where(b => b.Ground is not null)
-            .ToDictionary(b => b, b => (b.Ground!, PositionOf(b.Ground!)));
-        UpdateTriggers(colliders, onTrigger);
+        _grounds.Clear();
+        foreach (var body in scene.All<Body>())
+        {
+            if (body.Ground is not null && body.Entity!.GetComponent<Body>() == body)
+                _grounds[body] = (body.Ground, PositionOf(body.Ground));
+        }
+
+        UpdateTriggers(scene.Active<Collider>(), onTrigger);
     }
 
     // Whatever a body moved by someone else is touching (or all but touching), as if it had bumped into it.
-    private static void ReportContacts(Body body, List<Shape> solids, Action<Entity, Entity> onCollision)
+    private static void ReportContacts(Body body, Solids solids, Action<Entity, Entity> onCollision)
     {
         if (body.Entity!.GetComponent<Collider>() is not { IsTrigger: false } collider)
             return;
         var area = Area.Of(collider);
         var filter = LayerFilter.Of(collider);
-        foreach (var solid in solids)
+        var near = solids.Near(Grow(area.Bounds, 0.1f));
+        foreach (var index in near)
         {
+            var solid = solids.All[index];
             if (solid.Entity.IsSelfOrDescendantOf(body.Entity) || filter.IgnoresEachOther(solid.Filter) || !area.Overlaps(solid.Area, -0.06f))
                 continue;
             onCollision(body.Entity, solid.Entity);
         }
+
+        solids.Return(near);
     }
 
     // A welded group: gravity on each member, then one velocity for all (shared by weight, so a balloon lifts what it's
     // welded to), moved together one axis at a time.
-    private void StepGroup(BodyGroup group, List<Shape> solids, float dt, Action<Entity, Entity> onCollision)
+    private void StepGroup(BodyGroup group, Solids solids, float dt, Action<Entity, Entity> onCollision)
     {
         var members = group.Bodies.Where(b => b.Entity is not null && b.Entity.IsActive).ToList();
         foreach (var body in members)
@@ -349,20 +375,21 @@ public sealed class Physics
     {
         if (delta == Vector2.Zero || bodies.Count == 0)
             return;
-        var solids = Shapes(scene, includeTriggers: false).ToList();
+        var solids = new Solids();
+        solids.Fill(scene);
         MoveGroupAxis(bodies, solids, new Vector2(delta.X, 0), (_, _) => { }, nudge: true);
         MoveGroupAxis(bodies, solids, new Vector2(0, delta.Y), (_, _) => { }, nudge: true);
     }
 
     // Like MoveAxis for a group: everyone moves, then everyone is pushed back by the deepest overlap any of them made.
-    private static void MoveGroupAxis(IReadOnlyList<Body> members, List<Shape> solids, Vector2 delta, Action<Entity, Entity> onCollision, bool nudge)
+    private static void MoveGroupAxis(IReadOnlyList<Body> members, Solids solids, Vector2 delta, Action<Entity, Entity> onCollision, bool nudge)
     {
         if (delta == Vector2.Zero)
             return;
         var axis = delta.X != 0 ? 0 : 1;
         var sign = MathF.Sign(axis == 0 ? delta.X : delta.Y);
         foreach (var body in members)
-            Translate(body.Entity!, delta);
+            Translate(solids, body.Entity!, delta);
 
         var push = 0f;
         var touched = new List<(Entity Member, Entity Solid)>();
@@ -374,9 +401,11 @@ public sealed class Physics
             var area = Area.Of(collider);
             var bottomBefore = area.Bounds.Min.Y - delta.Y;
             var filter = LayerFilter.Of(collider);
-            foreach (var solid in solids)
+            var near = solids.Near(Grow(Union(area.Bounds, Offset(area.Bounds, -delta)), Margin));
+            foreach (var index in near)
             {
-                if (members.Any(m => solid.Entity.IsSelfOrDescendantOf(m.Entity!)) || filter.IgnoresEachOther(solid.Filter))
+                var solid = solids.All[index];
+                if (IsInside(solid.Entity, members) || filter.IgnoresEachOther(solid.Filter))
                     continue;
                 var other = solid.Area;
                 if (!area.Overlaps(other, CircleSkin))
@@ -393,12 +422,14 @@ public sealed class Physics
                 if (axis == 1 && sign < 0)
                     ground = solid.Entity;
             }
+
+            solids.Return(near);
         }
 
         if (push != 0)
         {
             foreach (var body in members)
-                Translate(body.Entity!, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
+                Translate(solids, body.Entity!, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
         }
 
         if (nudge || touched.Count == 0)
@@ -459,7 +490,7 @@ public sealed class Physics
     /// When set, the body is being shoved out of the way by this entity (see <see cref="Pushable"/>): it doesn't collide
     /// with it, and its layer is <paramref name="pusherLayer"/>'s for any crates it pushes in turn.
     /// </param>
-    private void MoveAxis(Body body, Collider collider, List<Shape> solids, Vector2 delta, Action<Entity, Entity> onCollision,
+    private void MoveAxis(Body body, Collider collider, Solids solids, Vector2 delta, Action<Entity, Entity> onCollision,
         Entity? carrier = null, Entity? pusher = null, string? pusherLayer = null, int depth = 0)
     {
         if (delta == Vector2.Zero)
@@ -468,15 +499,21 @@ public sealed class Physics
         var entity = body.Entity!;
         var axis = delta.X != 0 ? 0 : 1;
         var sign = MathF.Sign(axis == 0 ? delta.X : delta.Y);
-        var bottomBefore = Area.Of(collider).Bounds.Min.Y;
+        var boundsBefore = Area.Of(collider).Bounds;
+        var bottomBefore = boundsBefore.Min.Y;
         var filter = LayerFilter.Of(collider);
         pusherLayer ??= collider.Layer;
-        Translate(entity, delta);
-        var hit = _slopes.Count > 0 && (axis == 0 || sign < 0 || delta.Y > 0) && MoveOnSlopes(body, collider, delta, filter, carrier);
+        Translate(solids, entity, delta);
+        var hit = _slopes.Count > 0 && (axis == 0 || sign < 0 || delta.Y > 0) && MoveOnSlopes(body, collider, solids, delta, filter, carrier);
         var area = Area.Of(collider);
 
-        foreach (var solid in solids)
+        // Only the solids near where it went, in the order they'd be met going through them all.
+        var region = Grow(Union(boundsBefore, area.Bounds), Margin);
+        var near = solids.Near(region);
+        for (var n = 0; n < near.Count; n++)
         {
+            var index = near[n];
+            var solid = solids.All[index];
             if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || solid.Entity == carrier ||
                 solid.Entity == pusher || filter.IgnoresEachOther(solid.Filter))
                 continue;
@@ -511,8 +548,19 @@ public sealed class Physics
             // Push back along the axis we moved, to where the two shapes just touch.
             var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis);
             var push = target - Component(area.Center, axis);
-            Translate(entity, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
+            Translate(solids, entity, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
             area = Area.Of(collider);
+
+            // Pushed somewhere it hadn't looked: look there too, carrying on after this solid.
+            if (!Contains(region, area.Bounds))
+            {
+                region = Grow(Union(region, area.Bounds), Margin);
+                solids.Near(region, near);
+                n = near.BinarySearch(index);
+                if (n < 0)
+                    n = ~n - 1;
+            }
+
             hit |= !gaveWay;
             if (carrier is not null)
                 continue;
@@ -529,6 +577,8 @@ public sealed class Physics
             onCollision(entity, solid.Entity);
         }
 
+        solids.Return(near);
+
         // Bounce (or stop) once per axis, however many solids were touched.
         if (hit && carrier is null)
         {
@@ -543,7 +593,7 @@ public sealed class Physics
     // Slopes under (or beside) a body that has just moved: it's lifted onto one it walked or fell into (a little at a time:
     // no more than it moved, as on a 45 degree slope), and blocked by one it walked into the tall side of or jumped into
     // from below. True if it landed on one or was stopped by one, for the caller to stop its velocity along the axis.
-    private bool MoveOnSlopes(Body body, Collider collider, Vector2 delta, LayerFilter filter, Entity? carrier)
+    private bool MoveOnSlopes(Body body, Collider collider, Solids solids, Vector2 delta, LayerFilter filter, Entity? carrier)
     {
         var entity = body.Entity!;
         var bounds = Area.Of(collider).Bounds;
@@ -563,7 +613,7 @@ public sealed class Physics
                 // Jumping up into it from underneath: its flat bottom is a ceiling.
                 if (bounds.Min.Y < cell.Min.Y)
                 {
-                    Translate(entity, new Vector2(0, cell.Min.Y - bounds.Max.Y));
+                    Translate(solids, entity, new Vector2(0, cell.Min.Y - bounds.Max.Y));
                     bounds = Area.Of(collider).Bounds;
                     stopped = true;
                 }
@@ -585,7 +635,7 @@ public sealed class Physics
             {
                 // The tall side of the slope, walked into: a wall.
                 var push = delta.X > 0 ? cell.Min.X - bounds.Max.X : cell.Max.X - bounds.Min.X;
-                Translate(entity, new Vector2(push, 0));
+                Translate(solids, entity, new Vector2(push, 0));
                 bounds = Area.Of(collider).Bounds;
                 if (carrier is null)
                     body.WallSide = MathF.Sign(delta.X);
@@ -595,7 +645,7 @@ public sealed class Physics
 
         if (ground is null)
             return stopped;
-        Translate(entity, new Vector2(0, lift));
+        Translate(solids, entity, new Vector2(0, lift));
         if (carrier is null)
         {
             body.IsGrounded = true;
@@ -636,7 +686,7 @@ public sealed class Physics
     private static IEnumerable<Slope> Slopes(Scene scene, string? layers = null)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        foreach (var tilemap in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Tilemap>()))
+        foreach (var tilemap in scene.Active<Tilemap>())
         {
             if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
@@ -757,54 +807,134 @@ public sealed class Physics
             !s.Entity.IsSelfOrDescendantOf(collider.Entity!) && !filter.IgnoresEachOther(s.Filter) && s.Area.Overlaps(area));
     }
 
-    private void UpdateTriggers(List<Collider> colliders, Action<Entity, Entity, bool> onTrigger)
+    private void UpdateTriggers(ComponentList<Collider> colliders, Action<Entity, Entity, bool> onTrigger)
     {
-        var current = new HashSet<(Entity, Entity)>();
-        var filters = colliders.ToDictionary(c => c, LayerFilter.Of);
-        foreach (var trigger in colliders.Where(c => c.IsTrigger))
+        var current = _lastTriggerPairs;
+        current.Clear();
+        var shapes = _triggerShapes;
+        shapes.Clear();
+        var anyTriggers = false;
+        foreach (var collider in colliders)
         {
-            var area = Area.Of(trigger);
-            foreach (var other in colliders)
+            shapes.Add((collider, Area.Of(collider), LayerFilter.Of(collider)));
+            anyTriggers |= collider.IsTrigger;
+        }
+
+        // Each trigger tests the colliders near it, in order, as if it went through them all.
+        if (anyTriggers)
+        {
+            _triggerGrid.Build(shapes.Count, _triggerBounds ??= i => _triggerShapes[i].Area.Bounds);
+            foreach (var (trigger, area, filter) in shapes)
             {
-                if (other == trigger || other.Entity == trigger.Entity || filters[trigger].IgnoresEachOther(filters[other]) ||
-                    !area.Overlaps(Area.Of(other)))
+                if (!trigger.IsTrigger)
                     continue;
-                current.Add((trigger.Entity!, other.Entity!));
+                _triggerGrid.Near(Grow(area.Bounds, Margin), _near);
+                foreach (var o in _near)
+                {
+                    var (other, otherArea, otherFilter) = shapes[o];
+                    if (other == trigger || other.Entity == trigger.Entity || filter.IgnoresEachOther(otherFilter) ||
+                        !area.Overlaps(otherArea))
+                        continue;
+                    current.Add((trigger.Entity!, other.Entity!));
+                }
             }
         }
 
-        foreach (var pair in current.Except(_triggerPairs))
-            onTrigger(pair.Item1, pair.Item2, true);
-        foreach (var pair in _triggerPairs.Except(current))
-            onTrigger(pair.Item1, pair.Item2, false);
-        _triggerPairs = current;
+        foreach (var pair in current)
+        {
+            if (!_triggerPairs.Contains(pair))
+                onTrigger(pair.Item1, pair.Item2, true);
+        }
+
+        foreach (var pair in _triggerPairs)
+        {
+            if (!current.Contains(pair))
+                onTrigger(pair.Item1, pair.Item2, false);
+        }
+
+        (_triggerPairs, _lastTriggerPairs) = (current, _triggerPairs);
     }
 
     // Everything physics can touch: colliders, and the tiles of solid tilemaps. With layers, only shapes on those layers.
-    private static IEnumerable<Shape> Shapes(Scene scene, bool includeTriggers, string? layers = null)
+    private static List<Shape> Shapes(Scene scene, bool includeTriggers, string? layers = null)
+    {
+        var shapes = new List<Shape>();
+        CollectShapes(scene, includeTriggers, layers, shapes);
+        return shapes;
+    }
+
+    // The same, into a list, in hierarchy order: each entity's colliders and solid tilemaps as they're attached.
+    private static void CollectShapes(Scene scene, bool includeTriggers, string? layers, List<Shape> into)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        foreach (var entity in scene.Entities.Where(e => e.IsActive))
+        var colliders = scene.Active<Collider>();
+        var tilemaps = scene.Active<Tilemap>();
+        if (tilemaps.Count > 0)
+            scene.Order();
+
+        var (c, t) = (0, 0);
+        while (c < colliders.Count || t < tilemaps.Count)
         {
-            foreach (var component in entity.Components)
+            if (t == tilemaps.Count || (c < colliders.Count && Before(colliders[c], tilemaps[t])))
             {
-                if (component is Collider collider && (includeTriggers || !collider.IsTrigger))
-                {
-                    if (only is null || CollisionLayers.Contains(only, collider.Layer))
-                        yield return new Shape(entity, collider, default, false, LayerFilter.Of(collider));
-                }
-                else if (component is Tilemap { Solid: true } tilemap && (only is null || CollisionLayers.Contains(only, tilemap.Layer)))
-                {
-                    var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
-                    foreach (var (box, oneWay) in TileShapes(tilemap))
-                        yield return new Shape(entity, null, box, oneWay, filter);
-                }
+                var collider = colliders[c++];
+                if ((includeTriggers || !collider.IsTrigger) && (only is null || CollisionLayers.Contains(only, collider.Layer)))
+                    into.Add(new Shape(collider.Entity!, collider, default, false, LayerFilter.Of(collider)));
+                continue;
             }
+
+            var tilemap = tilemaps[t++];
+            if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
+                continue;
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
+            foreach (var (box, oneWay) in TileShapes(tilemap))
+                into.Add(new Shape(tilemap.Entity!, null, box, oneWay, filter));
         }
     }
 
-    private static IEnumerable<Collider> ActiveColliders(Scene scene) =>
-        scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Collider>());
+    // True if a comes before b in the hierarchy (once the scene has numbered its entities).
+    private static bool Before(Component a, Component b)
+    {
+        if (a.Entity != b.Entity)
+            return a.Entity!.Order < b.Entity!.Order;
+        foreach (var component in a.Entity!.Components)
+        {
+            if (component == a)
+                return true;
+            if (component == b)
+                return false;
+        }
+
+        return false;
+    }
+
+    // A little more than nothing, so shapes just touching are near each other.
+    private const float Margin = 0.01f;
+
+    private static Box Grow(Box box, float by) => new(box.Center, box.HalfSize + new Vector2(by));
+
+    private static Box Offset(Box box, Vector2 by) => new(box.Center + by, box.HalfSize);
+
+    private static Box Union(Box a, Box b)
+    {
+        var min = Vector2.Min(a.Min, b.Min);
+        var max = Vector2.Max(a.Max, b.Max);
+        return new Box((min + max) / 2, (max - min) / 2);
+    }
+
+    private static bool Contains(Box outer, Box inner) =>
+        inner.Min.X >= outer.Min.X && inner.Min.Y >= outer.Min.Y && inner.Max.X <= outer.Max.X && inner.Max.Y <= outer.Max.Y;
+
+    private static bool IsInside(Entity entity, IReadOnlyList<Body> members)
+    {
+        foreach (var member in members)
+        {
+            if (entity.IsSelfOrDescendantOf(member.Entity!))
+                return true;
+        }
+
+        return false;
+    }
 
     private static Vector2 ScaleOf(Matrix4x4 world) => new(
         new Vector2(world.M11, world.M12).Length(),
@@ -812,13 +942,70 @@ public sealed class Physics
 
     private static float Component(Vector2 v, int axis) => axis == 0 ? v.X : v.Y;
 
-    // Moves by a world-space delta, converting into the parent's space so nested bodies work.
-    private static void Translate(Entity entity, Vector2 worldDelta)
+    // Moves by a world-space delta, converting into the parent's space so nested bodies work, and moves its shapes in the
+    // solids' grid.
+    private static void Translate(Solids solids, Entity entity, Vector2 worldDelta)
     {
         var delta = new Vector3(worldDelta, 0);
         if (entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse))
             delta = Vector3.TransformNormal(delta, inverse);
         entity.Transform.Position += delta;
+        solids.Moved(entity);
+    }
+
+    // The solid shapes of a step, in a grid so a moving body only tests those near it.
+    private sealed class Solids
+    {
+        private readonly ShapeGrid _grid = new();
+
+        // Where each entity's own shapes are in All (together, in hierarchy order).
+        private readonly Dictionary<Entity, (int First, int Count)> _shapesOf = [];
+        private readonly Stack<List<int>> _spare = [];
+        private Func<int, Box>? _boundsOf;
+
+        public List<Shape> All { get; } = [];
+
+        public void Fill(Scene scene)
+        {
+            All.Clear();
+            CollectShapes(scene, includeTriggers: false, null, All);
+            _shapesOf.Clear();
+            for (var i = 0; i < All.Count; i++)
+            {
+                var entity = All[i].Entity;
+                _shapesOf[entity] = _shapesOf.TryGetValue(entity, out var range) ? (range.First, range.Count + 1) : (i, 1);
+            }
+
+            _grid.Build(All.Count, _boundsOf ??= i => All[i].Area.Bounds);
+        }
+
+        /// <summary>The solids near <paramref name="region"/>, in order, in a list to give back with <see cref="Return"/>.</summary>
+        public List<int> Near(Box region)
+        {
+            var near = _spare.Count > 0 ? _spare.Pop() : [];
+            _grid.Near(region, near);
+            return near;
+        }
+
+        public void Near(Box region, List<int> into) => _grid.Near(region, into);
+
+        public void Return(List<int> near) => _spare.Push(near);
+
+        // An entity has moved, and everything inside it with it. Tile boxes stay where the step found them.
+        public void Moved(Entity entity)
+        {
+            if (_shapesOf.TryGetValue(entity, out var range))
+            {
+                for (var i = range.First; i < range.First + range.Count; i++)
+                {
+                    if (All[i].Collider is not null)
+                        _grid.Move(i, All[i].Area.Bounds);
+                }
+            }
+
+            foreach (var child in entity.Children)
+                Moved(child);
+        }
     }
 
     // A collider's area follows its entity as bodies move during a step; tile boxes stay put.

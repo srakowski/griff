@@ -55,7 +55,7 @@ public sealed partial class Game
     internal static bool Moves(Entity entity) => entity.MovesHere;
 
     /// <summary>A menu that would pause the game is open here: online the game goes on, but this player's keys don't reach it.</summary>
-    internal bool LocalInputBlocked => _panels.Open.Any(p => p.Panel.PauseGame);
+    internal bool LocalInputBlocked => AnyPanelPauses();
 
     /// <summary>The mouse is over this machine's HUD, so a click there isn't meant for the world.</summary>
     internal bool MouseOnUi =>
@@ -180,16 +180,16 @@ public sealed partial class Game
     }
 
     // What this player has (their hotbar, their tools): in a network game, what's on their own character.
-    private List<T> Mine<T>() where T : Component
+    private ComponentList<T> Mine<T>() where T : Component => Net.IsOnline ? MineOnline<T>() : Active<T>();
+
+    private ComponentList<T> MineOnline<T>() where T : Component
     {
-        if (!Net.IsOnline)
-            return Active<T>();
         var id = (_acting ?? Net.LocalPlayer)?.Id ?? 0;
-        return Showing<T>().Where(c =>
+        return Where(Showing<T>(), entity =>
         {
-            var owner = NetSession.OwnerIdOf(c.Entity);
-            return (owner != 0 && owner == id) || (owner == 0 && _acting is null && Runs(c.Entity!));
-        }).ToList();
+            var owner = NetSession.OwnerIdOf(entity);
+            return (owner != 0 && owner == id) || (owner == 0 && _acting is null && Runs(entity));
+        });
     }
 
     // A menu open on this machine (not counting another player's, whose tools the host is running for them).
@@ -314,7 +314,7 @@ public sealed partial class Game
             return;
         if (Net.LocalPlayer is { Team.Length: > 0 } me)
         {
-            foreach (var commander in Scene.Entities.SelectMany(e => e.GetComponents<Commander>()))
+            foreach (var commander in Scene.All<Commander>())
             {
                 if (SameTeam(commander.Team, me.Team))
                     continue;

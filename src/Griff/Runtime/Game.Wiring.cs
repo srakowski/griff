@@ -109,8 +109,17 @@ public sealed partial class Game
         RunWireSensors();
 
         // Wires anywhere in the scene, even on hidden entities: a wire into "Show" brings its entity back.
-        var wires = Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Wire>()).ToList();
-        var gates = Active<WireGate>().ToList();
+        var wires = RunHere<Wire>();
+        var gates = Active<WireGate>();
+        if (wires.Count > 0 || gates.Count > 0)
+            PassSignals(wires, gates);
+        if (Sandbox.Applied.Count > 0)
+            Sandbox.Applied.Keys.Where(k => k.Entity.Scene != Scene).ToList().ForEach(k => Sandbox.Applied.Remove(k));
+        RunWireOutputs();
+    }
+
+    private void PassSignals(ComponentList<Wire> wires, ComponentList<WireGate> gates)
+    {
         var inputs = new Dictionary<(Entity Entity, string Port), float>();
         for (var pass = 0; pass < WirePasses; pass++)
         {
@@ -145,8 +154,6 @@ public sealed partial class Game
 
         foreach (var ((entity, port), value) in inputs)
             WriteInput(entity, port, value);
-        Sandbox.Applied.Keys.Where(k => k.Entity.Scene != Scene).ToList().ForEach(k => Sandbox.Applied.Remove(k));
-        RunWireOutputs();
     }
 
     // "power" and " Power " are both "Power".
@@ -274,10 +281,17 @@ public sealed partial class Game
     // E with the mouse over a button, or while touching it, presses it.
     private void RunWireButtons()
     {
+        var buttons = Active<WireButton>();
+        if (buttons.Count > 0)
+            RunWireButtons(buttons);
+    }
+
+    private void RunWireButtons(ComponentList<WireButton> buttons)
+    {
         // Every player can press buttons: with the mouse over one, or touching it.
         var players = PlayerInputs().Select(i => (Input: i, Mouse: i.IsMouseInView ? Physics.OverlapPoint(Scene, i.MouseWorld).ToHashSet() : [])).ToList();
         var held = players.Any(p => p.Input.IsDown("Interact"));
-        foreach (var button in Active<WireButton>())
+        foreach (var button in buttons)
         {
             var entity = button.Entity!;
             var touchers = TouchersOf(entity).Select(t => t.By).ToList();

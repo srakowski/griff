@@ -18,8 +18,12 @@ public sealed partial class Game
     private FrameStep[]? _frame;
 
     // The scripts running this frame, taken as it starts: spawned scripts wait for the next one.
-    private List<Behavior> _running = [];
+    private ComponentList<Behavior> _running;
     private double _tickSeconds;
+
+    // What physics calls back, made once rather than every frame.
+    private Action<Entity, Entity>? _onCollision;
+    private Action<Entity, Entity, bool>? _onTrigger;
 
     /// <summary>
     /// Every step of a frame in the order <see cref="Tick"/> takes them: Griff's own, then in each phase the
@@ -237,9 +241,12 @@ public sealed partial class Game
     // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
     private void StartScripts()
     {
-        _running = ActiveBehaviors().Where(b => Runs(b.Entity!)).ToList();
-        foreach (var behavior in _running.Where(b => !b.IsStarted))
-            behavior.RunStart(this);
+        _running = Active<Behavior>();
+        foreach (var behavior in _running)
+        {
+            if (!behavior.IsStarted)
+                behavior.RunStart(this);
+        }
     }
 
     // While a panel pauses the game, only the scripts on open panels run.
@@ -263,22 +270,27 @@ public sealed partial class Game
     }
 
     // The host runs each other player's tools for them, as them.
-    private void RunOtherPlayersTools() => ForEachRemotePlayer(() =>
+    private void RunOtherPlayersTools()
     {
-        RunSandboxHud();
-        RunBlockPlayers();
-        RunTools();
-    });
+        if (!Net.IsHost)
+            return;
+        ForEachRemotePlayer(() =>
+        {
+            RunSandboxHud();
+            RunBlockPlayers();
+            RunTools();
+        });
+    }
 
     private void RunAnimations()
     {
-        foreach (var animation in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Animation>()).ToList())
+        foreach (var animation in Scene.Active<Animation>())
             animation.Advance(Time.Delta);
     }
 
     private void RunParticles()
     {
-        foreach (var emitter in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<ParticleEmitter>()).ToList())
+        foreach (var emitter in Scene.Active<ParticleEmitter>())
         {
             emitter.Advance(Time.Delta, Physics.Gravity);
             if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
@@ -288,7 +300,7 @@ public sealed partial class Game
 
     private void RunCameraShake()
     {
-        foreach (var camera in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Camera>()))
+        foreach (var camera in Scene.Active<Camera>())
         {
             camera.AdvanceShake(Time.UnscaledDelta);
             camera.AdvanceAmbient(Time.UnscaledDelta);
@@ -297,7 +309,7 @@ public sealed partial class Game
 
     private void RunSpriteEffects()
     {
-        foreach (var sprite in Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Sprite>()))
+        foreach (var sprite in Scene.Active<Sprite>())
             sprite.AdvanceEffects(Time.Delta);
     }
 
@@ -305,7 +317,7 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0)
             return;
-        Physics.Step(Scene, Time.Delta, OnCollision, OnTrigger);
+        Physics.Step(Scene, Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
         foreach (var (trigger, other) in Physics.TriggerPairs)
         {
             _touches.Add((trigger, other));

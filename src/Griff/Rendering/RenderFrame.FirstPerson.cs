@@ -102,7 +102,7 @@ public static partial class SceneRenderer
         var columns = Math.Clamp(fp.Columns, 16, 2000);
         var depths = new float[columns];
         var maxDepth = fp.Fog.A >= 1 && fp.FogDistance > 0 ? fp.FogDistance * 1.05f : 96;
-        var tilemaps = scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Tilemap>()).Where(t => t.Solid && t.TileSize > 0).ToList();
+        var tilemaps = scene.Active<Tilemap>().Where(t => t.Solid && t.TileSize > 0).ToList();
         var blocks = scene.Entities.Where(e => e.IsActive)
             .Select(e => (Block: e.GetComponent<Block>(), Collider: e.GetComponent<BoxCollider>()))
             .Where(b => b.Block is not null && b.Collider is not null)
@@ -513,7 +513,7 @@ public static partial class SceneRenderer
             if (camera?.GetComponent<Camera>() is not { IsDark: true } view)
                 return Daylight;
             // Without shadows: walls stand up out of the map, so its shadows wouldn't fall where they look right.
-            var lights = scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Light>())
+            var lights = scene.Active<Light>()
                 .Where(l => l.Radius > 0 && l.CurrentIntensity > 0)
                 .Select(l => new LightDraw(l.WorldCenter, l.Radius,
                     new Color(l.Color.R * l.CurrentIntensity, l.Color.G * l.CurrentIntensity, l.Color.B * l.CurrentIntensity), l.Softness))

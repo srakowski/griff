@@ -195,7 +195,7 @@ public sealed class AgentGapTests : IDisposable
     {
         var (workspace, _) = Open(services);
         var tools = services.GetRequiredService<AgentServer>().Tools;
-        var camera = workspace.Scene!.Scene.Entities.First();
+        var camera = workspace.Scene!.Scene.Entities[0];
         var name = camera.Name;
 
         var renamed = Assert.ThrowsAny<AgentException>(() => tools["ui_set"].Invoke(ToolArgs.Parse("""{"target": "Workspace", "path": "Scene.Scene.Roots[0].Name", "value": "Renamed"}""")).GetAwaiter().GetResult());

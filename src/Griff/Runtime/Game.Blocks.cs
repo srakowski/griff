@@ -93,7 +93,7 @@ public sealed partial class Game
 
     private void SaveWorlds()
     {
-        foreach (var blocks in Scene.Entities.SelectMany(e => e.GetComponents<Blocks>()))
+        foreach (var blocks in Scene.All<Blocks>())
         {
             if (Changed(blocks))
                 SaveWorld(blocks);
@@ -185,9 +185,18 @@ public sealed partial class Game
     {
         if (SceneRenderer.FindCamera(Scene) is not { } camera || camera.GetComponent<Camera>() is not { } view)
             return;
-        var blocks = Active<Blocks>().FirstOrDefault(b => b.Underground.A > 0);
-        if (blocks?.Entity?.GetComponent<Tilemap>() is not { } map)
+        foreach (var blocks in Active<Blocks>())
+        {
+            if (blocks.Underground.A <= 0)
+                continue;
+            if (blocks.Entity?.GetComponent<Tilemap>() is { } map)
+                DarkenUnderground(view, camera, blocks, map);
             return;
+        }
+    }
+
+    private static void DarkenUnderground(Camera view, Entity camera, Blocks blocks, Tilemap map)
+    {
         if (!Matrix4x4.Invert(map.Entity!.Transform.WorldMatrix, out var toLocal))
             return;
 
@@ -315,7 +324,7 @@ public sealed partial class Game
     private Tilemap? WorldFor(BlockBuilder builder)
     {
         var name = builder.World?.Trim();
-        var maps = Active<Tilemap>().ToList();
+        var maps = Active<Tilemap>();
         if (!string.IsNullOrEmpty(name))
             return maps.FirstOrDefault(m => m.Entity!.Name == name);
         return maps.FirstOrDefault(m => m.Entity!.GetComponent<Blocks>() is not null) ?? maps.FirstOrDefault(m => m.Solid);

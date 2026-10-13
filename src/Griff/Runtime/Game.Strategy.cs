@@ -154,11 +154,19 @@ public sealed partial class Game
     // Before physics, after scripts: a script's orders take effect this frame.
     // In a network game the host runs the units; a player's machine runs its own commander (selecting, the camera, the
     // fog), seeing the host's units, and sends its orders to the host.
+    // Those still standing; with none at all, last frame's list if that was empty too, so a game without any allocates nothing.
+    private List<T> Alive<T>(ComponentList<T> all, List<T> last) where T : Component
+    {
+        if (all.Count == 0)
+            return last.Count == 0 ? last : [];
+        return all.Where(c => IsAlive(c.Entity!)).ToList();
+    }
+
     private void RunStrategy()
     {
         var commander = Active<Commander>().FirstOrDefault();
-        var units = Showing<Unit>().Where(u => IsAlive(u.Entity!)).ToList();
-        var buildings = Showing<Building>().Where(b => IsAlive(b.Entity!)).ToList();
+        var units = Alive(Showing<Unit>(), Rts.Units);
+        var buildings = Alive(Showing<Building>(), Rts.Buildings);
         (Rts.Commander, Rts.Units, Rts.Buildings) = (commander, units, buildings);
         if (!Rts.IsActive)
             return;
@@ -994,7 +1002,7 @@ public sealed partial class Game
             return;
         Rts.DefeatCheckLeft = 0.5f;
 
-        var factions = Showing<Faction>().ToList();
+        var factions = Showing<Faction>();
         foreach (var faction in factions.Where(f => !f.IsDefeated && Runs(f.Entity!)))
         {
             if (Rts.Buildings.Any(b => SameTeam(b.Team, faction.Team) && IsAlive(b.Entity!)))

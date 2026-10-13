@@ -450,7 +450,7 @@ public sealed partial class Game
     // all of them are looked at, not just the active ones.
     private void RunCrumbles()
     {
-        foreach (var crumble in Scene.Entities.Where(Runs).SelectMany(e => e.GetComponents<Crumble>()).ToList())
+        foreach (var crumble in RunHere<Crumble>())
         {
             var entity = crumble.Entity!;
             if (crumble.Crumbled)

@@ -42,7 +42,7 @@ public sealed class GridEnemyEditorTests : IDisposable
     {
         var workspace = Open(services);
         var document = workspace.Scene!;
-        var before = document.Scene.Entities.Count();
+        var before = document.Scene.Entities.Count;
 
         Wait(services.GetRequiredService<CommandRegistry>().Get("Entity.CreateGridEnemy").ExecuteAsync());
 
@@ -58,7 +58,7 @@ public sealed class GridEnemyEditorTests : IDisposable
         Assert.Equal("Player", hitbox.GetComponent<DamageOnTouch>()!.Layers);
 
         document.History.Undo();
-        Assert.Equal(before, document.Scene.Entities.Count());
+        Assert.Equal(before, document.Scene.Entities.Count);
     });
 
     [Fact]

@@ -12,7 +12,7 @@ public sealed partial class Game
     private float _tacticsThink;
 
     // Where the game is run, after scripts' orders: the next computer unit's go, once the last one's walk or swing is over.
-    private void RunTacticsComputer(List<TacticsUnit> units, TacticsControls? controls)
+    private void RunTacticsComputer(IReadOnlyList<TacticsUnit> units, TacticsControls? controls)
     {
         if (_turnOrder is not { Round: > 0, IsBetweenTurns: false } order || order.Entity?.Scene != Scene || !Runs(order.Entity) ||
             !order.IsComputer(order.Current))

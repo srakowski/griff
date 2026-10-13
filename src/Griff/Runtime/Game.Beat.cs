@@ -68,7 +68,7 @@ public sealed partial class Game
     // The clock something names (an entity with a Beat Clock), or the scene's first when it names none.
     internal BeatClock? ClockFor(string? name) =>
         string.IsNullOrWhiteSpace(name)
-            ? Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<BeatClock>()).FirstOrDefault(c => c is not null)
+            ? Scene.Active<BeatClock>().FirstOrDefault()
             : Find(name.Trim())?.GetComponent<BeatClock>();
 
     // Whether something stepping to a clock every so many beats steps this frame.

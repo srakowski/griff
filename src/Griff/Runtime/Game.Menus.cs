@@ -49,25 +49,46 @@ public sealed partial class Game
             return;
 
         var top = TopPanel;
-        var active = Scene.Entities.Where(e => e.IsActive).Where(e => top is null || Inside(e, top)).ToList();
-        var allButtons = active.SelectMany(e => e.GetComponents<Button>()).ToList();
+        var allButtons = OnTop(_menus.AllButtons, Scene.Active<Button>(), top);
         foreach (var button in allButtons)
             button.IsMissingSave = !HasWhatItNeeds(button);
-        var buttons = allButtons.Where(b => b.IsUsable).ToList();
-        var sliders = active.SelectMany(e => e.GetComponents<Slider>()).ToList();
-        var toggles = active.SelectMany(e => e.GetComponents<Toggle>()).ToList();
-        var choices = active.SelectMany(e => e.GetComponents<Choice>()).ToList();
-        var controls = buttons.Where(b => b.Navigable).Cast<Component>().Concat(sliders.Where(s => s.Navigable)).ToList();
+        var buttons = _menus.Buttons;
+        buttons.Clear();
+        foreach (var button in allButtons)
+        {
+            if (button.IsUsable)
+                buttons.Add(button);
+        }
+
+        var sliders = OnTop(_menus.Sliders, Scene.Active<Slider>(), top);
+        var toggles = OnTop(_menus.Toggles, Scene.Active<Toggle>(), top);
+        var choices = OnTop(_menus.Choices, Scene.Active<Choice>(), top);
+        var controls = _menus.Controls;
+        controls.Clear();
+        foreach (var button in buttons)
+        {
+            if (button.Navigable)
+                controls.Add(button);
+        }
+
+        foreach (var slider in sliders)
+        {
+            if (slider.Navigable)
+                controls.Add(slider);
+        }
 
         // The arrows pick a dialogue's choices while it offers them, not the buttons behind it.
         var direction = ReadDirection(controls.Count > 0 && _levels.Talking is not { Choices.Count: > 0 });
         var mouseMoved = MouseMovedOverView();
-        foreach (var button in allButtons.Where(b => !b.IsUsable))
-            (button.IsHovered, button.IsPressed, button.IsFocused) = (false, false, false);
+        foreach (var button in allButtons)
+        {
+            if (!button.IsUsable)
+                (button.IsHovered, button.IsPressed, button.IsFocused) = (false, false, false);
+        }
         if (buttons.Count == 0 && sliders.Count == 0)
         {
             _focus = null;
-            UpdatePanelKeys(top, [], allButtons);
+            UpdatePanelKeys(top, NoneClicked, allButtons);
             return;
         }
 
@@ -99,6 +120,39 @@ public sealed partial class Game
         foreach (var choice in choices)
             LabelChoice(choice);
         UpdatePanelKeys(top, clicked, allButtons);
+    }
+
+    // The controls a frame's menus work with, kept from one frame to the next so a game without menus allocates nothing.
+    private readonly MenuControls _menus = new();
+
+    private static readonly List<Button> NoneClicked = [];
+
+    private sealed class MenuControls
+    {
+        public List<Button> AllButtons { get; } = [];
+
+        public List<Button> Buttons { get; } = [];
+
+        public List<Slider> Sliders { get; } = [];
+
+        public List<Toggle> Toggles { get; } = [];
+
+        public List<Choice> Choices { get; } = [];
+
+        public List<Component> Controls { get; } = [];
+    }
+
+    // Those on the top panel (all of them without one), into a list kept for it.
+    private static List<T> OnTop<T>(List<T> into, ComponentList<T> all, Panel? top) where T : Component
+    {
+        into.Clear();
+        foreach (var control in all)
+        {
+            if (top is null || Inside(control.Entity!, top))
+                into.Add(control);
+        }
+
+        return into;
     }
 
     private List<Button> ButtonClicks(List<Button> buttons)

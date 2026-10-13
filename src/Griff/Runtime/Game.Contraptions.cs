@@ -35,6 +35,12 @@ public sealed partial class Game
             return;
         }
 
+        RunSandboxHud(hotbar, crafting, tools);
+    }
+
+    // Its buttons' actions capture what they act on, so they're made here, only with a HUD to show.
+    private void RunSandboxHud(Hotbar? hotbar, Crafting? crafting, SandboxTools? tools)
+    {
         var (center, size, aspect) = HudView();
         var hud = Sandbox.Hud = new SandboxHud(center, new Vector2(size * (aspect > 0 ? aspect : 1), size));
         var areas = new List<HudRect>();
@@ -416,13 +422,18 @@ public sealed partial class Game
     private void GroupWelds()
     {
         Sandbox.Groups.Clear();
-        var welds = Active<Weld>().ToList();
+        var welds = Active<Weld>();
         if (welds.Count == 0)
         {
             Physics.Groups = [];
             return;
         }
 
+        Physics.Groups = GroupWelds(welds);
+    }
+
+    private List<BodyGroup> GroupWelds(ComponentList<Weld> welds)
+    {
         var parent = new Dictionary<Entity, Entity>();
         Entity Root(Entity e)
         {
@@ -461,7 +472,7 @@ public sealed partial class Game
                 Sandbox.Groups[body] = group;
         }
 
-        Physics.Groups = groups;
+        return groups;
     }
 
     // A body and everything welded to it.
@@ -470,7 +481,7 @@ public sealed partial class Game
     // After physics: ropes pull their ends back within reach, sharing the pull by weight, and stop them pulling apart.
     private void RunRopes()
     {
-        var ropes = Active<Rope>().ToList();
+        var ropes = Active<Rope>();
         if (ropes.Count == 0 || Time.Delta <= 0)
             return;
         for (var pass = 0; pass < 3; pass++)

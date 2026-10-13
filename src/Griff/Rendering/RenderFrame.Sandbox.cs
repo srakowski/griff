@@ -47,7 +47,7 @@ public static partial class SceneRenderer
 
     private static IEnumerable<SpriteDraw> RopeDraws(Scene scene)
     {
-        foreach (var rope in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Rope>()))
+        foreach (var rope in scene.Active<Rope>())
         {
             var other = rope.Other?.Scene == scene ? rope.Other : WirePorts.Find(rope.Entity!, rope.To);
             if (other is null || !other.IsActive || !(rope.Width > 0))
@@ -61,7 +61,7 @@ public static partial class SceneRenderer
     // Wires run from the output's entity to the input's, brighter while they carry a signal; gates say what they are.
     private static IEnumerable<SpriteDraw> WireDraws(Scene scene, Game? game, float thickness)
     {
-        foreach (var wire in scene.Entities.SelectMany(e => e.GetComponents<Wire>()))
+        foreach (var wire in scene.All<Wire>())
         {
             if (!wire.Visible || !wire.Entity!.IsActive)
                 continue;
@@ -76,9 +76,9 @@ public static partial class SceneRenderer
             yield return Quad(b, new Vector2(thickness * 4), color);
         }
 
-        foreach (var gate in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<WireGate>()))
+        foreach (var gate in scene.Active<WireGate>())
             yield return Label(gate.Label, Game.CenterOf(gate.Entity!), LabelSize(gate.Entity!), Color.White, TextAlign.Center);
-        foreach (var display in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<WireDisplay>()))
+        foreach (var display in scene.Active<WireDisplay>())
         {
             if (display.Entity!.GetComponent<Text>() is null)
                 yield return Label(display.Shown, Game.CenterOf(display.Entity), LabelSize(display.Entity), Color.White, TextAlign.Center);
@@ -96,7 +96,7 @@ public static partial class SceneRenderer
     // The block a builder points at, cracking as it's dug, or the outline of where a block would go.
     private static IEnumerable<SpriteDraw> BuilderDraws(Game game, float thickness)
     {
-        foreach (var builder in game.Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<BlockBuilder>()))
+        foreach (var builder in game.Scene.Active<BlockBuilder>())
         {
             if (builder.Map is not { Entity: not null } map || builder.Highlight.A <= 0)
                 continue;
@@ -195,8 +195,8 @@ public static partial class SceneRenderer
         var u = hud.Unit;
         var mouse = game.Input.MouseWorld;
         var buttons = game.SandboxButtons;
-        var hotbar = game.Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Hotbar>()).FirstOrDefault();
-        var crafting = game.Scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Crafting>()).FirstOrDefault();
+        var hotbar = game.Scene.Active<Hotbar>().FirstOrDefault();
+        var crafting = game.Scene.Active<Crafting>().FirstOrDefault();
         var tools = game.Tools;
         var world = WorldOf(game);
 
@@ -359,7 +359,7 @@ public static partial class SceneRenderer
 
     private static IEnumerable<LightDraw> GlowDraws(Scene scene)
     {
-        foreach (var blocks in scene.Entities.Where(e => e.IsActive).SelectMany(e => e.GetComponents<Blocks>()))
+        foreach (var blocks in scene.Active<Blocks>())
         {
             if (string.IsNullOrWhiteSpace(blocks.GlowingTiles) || blocks.Entity!.GetComponent<Tilemap>() is not { } map || !(blocks.GlowRadius > 0))
                 continue;

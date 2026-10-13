@@ -47,7 +47,7 @@ internal static class TemplateSounds
     /// <summary>The sound files for a template (relative to Assets), as WAV bytes.</summary>
     public static IReadOnlyDictionary<string, byte[]> Files(ProjectTemplate template)
     {
-        if (template == ProjectTemplate.Empty)
+        if (template is ProjectTemplate.Empty or ProjectTemplate.BunnyMark)
             return new Dictionary<string, byte[]>();
 
         var files = new Dictionary<string, byte[]>();

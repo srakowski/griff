@@ -12,8 +12,8 @@ using Griff.Scenes;
 namespace Griff.Platform.Windows;
 
 /// <summary>
-/// Runs a <see cref="Game"/> on the WPF UI thread: ticks it once per display frame, renders to a
-/// <see cref="GameSurface"/>, and feeds keyboard input from <paramref name="keySource"/> and mouse input from the surface.
+/// Runs a <see cref="Game"/> on the WPF UI thread: ticks it once per frame the screen shows (see
+/// <see cref="FramePacer"/>), renders to a <see cref="GameSurface"/>, and feeds keyboard input from <paramref name="keySource"/> and mouse input from the surface.
 /// </summary>
 public sealed class GameRunner : IDisposable
 {
@@ -24,7 +24,7 @@ public sealed class GameRunner : IDisposable
     private RenderFrame? _lastFrame;
     private Vector2 _mouseNdc;
     private Point? _mousePixel;
-    private TimeSpan _lastRenderTime;
+    private FramePacer? _pacer;
     // While the game has the mouse (see IInput.WantsMouseLock): the screen point the cursor is held at.
     private (int X, int Y)? _lockCenter;
 
@@ -73,7 +73,7 @@ public sealed class GameRunner : IDisposable
             return;
         IsRunning = true;
         _clock.Restart();
-        CompositionTarget.Rendering += OnRendering;
+        _pacer = new FramePacer(_surface.Dispatcher, OnFrame);
     }
 
     /// <summary>Advances exactly one frame (for frame-stepping while paused).</summary>
@@ -85,7 +85,7 @@ public sealed class GameRunner : IDisposable
 
     public void Dispose()
     {
-        CompositionTarget.Rendering -= OnRendering;
+        _pacer?.Dispose();
         ReleaseMouse();
         _keySource.PreviewKeyDown -= OnKeyDown;
         _keySource.PreviewKeyUp -= OnKeyUp;
@@ -101,14 +101,8 @@ public sealed class GameRunner : IDisposable
         Game.Stop();
     }
 
-    private void OnRendering(object? sender, EventArgs e)
+    private void OnFrame()
     {
-        // Rendering can fire more than once per frame; only act when WPF actually advanced.
-        var renderTime = ((RenderingEventArgs)e).RenderingTime;
-        if (renderTime == _lastRenderTime)
-            return;
-        _lastRenderTime = renderTime;
-
         var seconds = _clock.Elapsed.TotalSeconds;
         _clock.Restart();
 

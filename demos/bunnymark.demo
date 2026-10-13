@@ -1,0 +1,23 @@
+title: BunnyMark
+intro: A benchmark: how many bouncing bunnies this computer keeps up at sixty frames a second.
+project: BunnyMark | Bunnies
+
+chapter: The benchmark | Bunnies, and a script that counts them
+select: BunnyMark
+explain: component:BunnyMark | The BunnyMark script | It adds bunnies while the game keeps up sixty frames a second. When the game falls behind, it takes the last lot away and tries fewer, until it has the count.
+explain: field:BunnyMark.Growth | Growth | Each step adds half as many bunnies again, and the step halves every time the game falls behind.
+explain: field:BunnyMark.Precision | Precision | The run ends once a step would add less than this. For a quick look, a rougher count will do.
+set: BunnyMark.Precision = 0.2
+set: BunnyMark.Window = 0.5
+
+chapter: A run | Counting bunnies
+play
+wait: 3
+explain: game | Bunnies pour in | Each bunny is a sprite and a short script, copied from a prefab: an ordinary entity, just like a game's. The frame rate and the count show in the corner.
+wait: 10
+explain: game | The count | When it has found the count, it shows it along the bottom, and saves it with the best so far.
+tap: Space
+wait: 2
+explain: game | Again | Space starts a new run.
+stop
+say: Exported games are measured the same way: a script in the tools folder builds a game from this template, plays it, and prints the count, so changes to the engine can say how much faster they made it.

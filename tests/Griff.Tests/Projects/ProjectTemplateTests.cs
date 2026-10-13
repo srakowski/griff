@@ -34,6 +34,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
     [InlineData(ProjectTemplate.Tactics)]
+    [InlineData(ProjectTemplate.BunnyMark)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -67,6 +68,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
     [InlineData(ProjectTemplate.Tactics)]
+    [InlineData(ProjectTemplate.BunnyMark)]
     public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -96,6 +98,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
     [InlineData(ProjectTemplate.Tactics)]
+    [InlineData(ProjectTemplate.BunnyMark)]
     public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);

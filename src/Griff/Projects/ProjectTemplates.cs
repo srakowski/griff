@@ -20,6 +20,7 @@ public enum ProjectTemplate
     FallingBlocks,
     Roguelike,
     Tactics,
+    BunnyMark,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
@@ -40,6 +41,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.FallingBlocks => "Pieces of four blocks fall one after another: slide and turn them to fill rows, which clear, and every ten rows they fall faster, until they stack up to the top. The best score is kept. Left and right to slide, up to turn, down to fall faster, Space to drop.",
         ProjectTemplate.Roguelike => "Go down through a crypt made anew every game, floor after floor: find the stairs in each, fight the slimes and bats by walking into them, and pick up gold and potions. Everything moves when you move. The deepest floor reached is kept. Arrow keys or WASD to walk and fight, 1 to drink a potion, Tab to wait a turn.",
         ProjectTemplate.Tactics => "Lead two knights and two archers against an orc warband on a field of trees and rocks, side by side in turns: click a unit to see how far it can walk and hit, send it, and attack. The computer plays the orcs. Click a unit, then a blue cell to walk there and a red foe to attack, right-click to take a walk back, Tab to end your turn.",
+        ProjectTemplate.BunnyMark => "A benchmark: bunnies pour in and bounce about, more and more while the game keeps up 60 frames a second, until it finds how many this computer holds. Each one is an ordinary entity, a sprite and a script. The count is shown and saved, with the best so far. Space to run it again.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -52,10 +54,11 @@ public static partial class ProjectTemplates
     /// <summary>Image files (relative to Assets) for a template, as PNG bytes.</summary>
     internal static IReadOnlyDictionary<string, byte[]> Images(ProjectTemplate template) => TemplateArt.Files(template);
 
-    // Templates that come with sounds have them hooked up to everything that makes a noise, and music playing.
+    // Templates that come with sounds have them hooked up to everything that makes a noise, and music playing. A benchmark
+    // stays quiet, so it times nothing but itself.
     private static Scene WithSounds(ProjectTemplate template, Scene scene)
     {
-        if (template == ProjectTemplate.Empty)
+        if (template is ProjectTemplate.Empty or ProjectTemplate.BunnyMark)
             return scene;
         foreach (var entity in scene.Entities)
             TemplateSounds.Wire(entity);
@@ -78,6 +81,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.FallingBlocks => FallingMenu(),
         ProjectTemplate.Roguelike => RogueMenu(),
         ProjectTemplate.Tactics => TacticsMenu(),
+        ProjectTemplate.BunnyMark => BunnyMarkScene(),
         _ => Empty(),
     };
 
@@ -121,6 +125,11 @@ public static partial class ProjectTemplates
             ["Scripts/EnemySpawner.cs"] = EnemySpawnerScript,
             ["Scripts/GameOver.cs"] = GameOverScript,
         },
+        ProjectTemplate.BunnyMark => new Dictionary<string, string>
+        {
+            ["Scripts/Bunny.cs"] = BunnyScript,
+            ["Scripts/BunnyMark.cs"] = BunnyMarkScript,
+        },
         _ => new Dictionary<string, string>(),
     };
 
@@ -152,6 +161,7 @@ public static partial class ProjectTemplates
         ProjectTemplate.Multiplayer => MultiplayerPrefabs(),
         ProjectTemplate.Roguelike => RoguePrefabs(),
         ProjectTemplate.Tactics => TacticsPrefabs(),
+        ProjectTemplate.BunnyMark => BunnyMarkPrefabs(),
         _ => new Dictionary<string, Entity>(),
     };
 

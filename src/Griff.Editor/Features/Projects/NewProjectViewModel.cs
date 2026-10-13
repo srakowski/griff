@@ -84,6 +84,7 @@ public sealed class NewProjectViewModel : ObservableObject
         new(ProjectTemplate.Roguelike, "Roguelike", ProjectTemplates.Describe(ProjectTemplate.Roguelike)),
         new(ProjectTemplate.Tactics, "Tactics", ProjectTemplates.Describe(ProjectTemplate.Tactics)),
         new(ProjectTemplate.Multiplayer, "Multiplayer", ProjectTemplates.Describe(ProjectTemplate.Multiplayer)),
+        new(ProjectTemplate.BunnyMark, "BunnyMark", ProjectTemplates.Describe(ProjectTemplate.BunnyMark)),
         new(ProjectTemplate.Empty, "Empty", ProjectTemplates.Describe(ProjectTemplate.Empty)),
     ];
 

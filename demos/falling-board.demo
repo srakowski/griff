@@ -1,0 +1,49 @@
+title: Falling blocks
+intro: A board where pieces of four fall, slide, turn and lock, and full rows clear. No code.
+project: Empty | Block Drop
+
+chapter: A falling board | Entity > Create Falling Board
+select: Main Camera
+set: Camera.Size = 11
+deselect
+create: Falling Board
+explain: component:FallingBoard | Falling Board | A Falling Board on a tilemap: ten cells across and twenty down. The blocks that land become the tilemap's tiles.
+explain: field:FallingBoard.Pieces | Pieces | The shapes that come, by letter. Every one comes once in each round, shuffled.
+set: FallingBoard.Columns = 8
+set: FallingBoard.Pieces = I
+explain: field:FallingBoard.Columns | Columns | For a quick try, eight columns and nothing but long straight pieces.
+explain: field:FallingBoard.LinesPerLevel | Lines Per Level | Every ten rows cleared, the level goes up and the pieces fall faster.
+explain: field:FallingBoard.GameOverMessage | Game Over Message | And once a new piece has no room, it sends Game Over, for a panel to open on.
+deselect
+create: Text
+rename: Score
+set: Transform.Position = -9, 8, 0
+add: Counter
+set: Counter.CountScore = true
+explain: field:Counter.CountScore | Count Score | A counter with Count Score shows the board's score.
+deselect
+
+chapter: Play it | Slide, drop, clear a row
+play
+wait: 0.6
+say: The arrows slide the piece, up turns it, and Space drops it all the way.
+tap: Left
+wait: 0.2
+tap: Left
+wait: 0.3
+tap: Space
+wait: 0.6
+tap: Right
+wait: 0.2
+tap: Right
+wait: 0.3
+tap: Space
+wait: 1
+expectvalue: Board.FallingBoard.Lines = 1
+expectvalue: Score.Text.Value = Score: 100
+explain: game | A row cleared | The bottom row filled from side to side, flashed and cleared, for a hundred points.
+tap: Up
+wait: 0.5
+explain: game | The ghost | The outline shows where the piece will land, and the next pieces wait in the box on the right.
+stop
+say: That's a falling-block board with no code. The tiles, score, rows and level are saved with the scene, so a rewind takes them back.

@@ -1,0 +1,42 @@
+title: The Falling Blocks template
+intro: Pieces fall, rows clear, and it speeds up every ten rows, until they stack to the top. No code.
+project: FallingBlocks | Stack Up
+
+chapter: The game | A board, a HUD and a Game Over panel
+scene: Game
+say: The Falling Blocks template is a menu and this game scene, built from no-code pieces.
+select: Board
+explain: component:FallingBoard | Falling Board | A Falling Board, each shape landing as its own block tile.
+explain: field:FallingBoard.Preview | Preview | It shows the next three pieces beside it.
+select: Level
+explain: component:Counter | Level | Counters show the score, the rows, and the level, which listens for Level Up.
+select: Best
+explain: field:Counter.SaveBestAs | Save Best As | The best score is saved, and the menu shows it too.
+select: Game Over
+explain: field:Panel.OpenMessage | Open Message | And this panel opens when the board sends Game Over.
+expectvalue: Game Over.Panel.OpenMessage = Game Over
+deselect
+
+chapter: Play | Slide, turn and drop
+play
+wait: 1
+tap: Left
+wait: 0.2
+tap: Left
+wait: 0.2
+tap: Space
+wait: 0.5
+tap: Up
+wait: 0.2
+tap: Right
+wait: 0.2
+tap: Right
+wait: 0.2
+tap: Space
+wait: 0.5
+tap: Space
+wait: 0.8
+expectvalue: Board.FallingBoard.GameOver = false
+explain: game | Falling Blocks | Left and right slide, up turns, down falls faster and Space drops.
+stop
+say: That's the Falling Blocks template.

@@ -176,6 +176,7 @@ public sealed partial class Game
         });
         RunDragging();
         RunMatchBoards();
+        RunFallingBoards();
         RunStrategy();
         RunAttacks();
         PassIdleGridMovers();
@@ -933,11 +934,20 @@ public sealed partial class Game
     }
 
     // A counter showing the scene's match board: its swaps out of its Moves, its score out of its Target Score, or the
-    // gems of a kind cleared out of how many it asks for.
+    // gems of a kind cleared out of how many it asks for. Or a falling-block board's score.
     private void CountBoard(Counter counter)
     {
         if (Showing<MatchBoard>().FirstOrDefault() is not { } board)
+        {
+            if (counter.CountScore && Showing<FallingBoard>().FirstOrDefault() is { } falling)
+            {
+                counter.Total = 0;
+                counter.Add(falling.Score - counter.Value);
+            }
+
             return;
+        }
+
         var (value, total) = counter.CountMoves ? (board.Swaps, board.Moves)
             : counter.CountScore ? (board.Score, board.TargetScore)
             : (board.ClearedOf(counter.CountGem), board.ToCollect(counter.CountGem));

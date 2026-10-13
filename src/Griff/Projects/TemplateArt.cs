@@ -1,7 +1,7 @@
 namespace Griff.Projects;
 
 /// <summary>
-/// The pictures the Top-down, Shooter, Sandbox, Contraption, Multiplayer and Puzzle templates come with, painted in code as small pixel art:
+/// The pictures the Top-down, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3 and Falling Blocks templates come with, painted in code as small pixel art:
 /// a guide's portrait, a tileset of walls, enemies, pickups, and the guns held in hand. Saved as PNGs in Textures/, so
 /// they open (and can be repainted) in any editor.
 /// </summary>
@@ -43,6 +43,10 @@ internal static partial class TemplateArt
             return ArenaFiles();
         if (template == ProjectTemplate.Puzzle)
             return PuzzleFiles();
+        if (template == ProjectTemplate.Match3)
+            return MatchFiles();
+        if (template == ProjectTemplate.FallingBlocks)
+            return FallingFiles();
         if (template == ProjectTemplate.TopDown)
             return new Dictionary<string, byte[]> { [GuidePortrait] = GuideArt().Png() };
         if (template != ProjectTemplate.Shooter)

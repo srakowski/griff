@@ -23,7 +23,7 @@ public sealed class ProjectsModule : IEditorModule
     }
 }
 
-/// <summary>Opens the New Project window: a name, a folder and a template (Empty, Platformer, Top-down, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer or Puzzle) to start from.</summary>
+/// <summary>Opens the New Project window: a name, a folder and a template (Empty, Platformer, Top-down, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3 or Falling Blocks) to start from.</summary>
 public sealed class NewProjectCommand(IServiceProvider services) : EditorCommand
 {
     public override string Id => "Project.New";

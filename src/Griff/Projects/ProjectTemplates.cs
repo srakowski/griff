@@ -16,6 +16,8 @@ public enum ProjectTemplate
     Contraption,
     Multiplayer,
     Puzzle,
+    Match3,
+    FallingBlocks,
 }
 
 /// <summary>Starter content for new projects: a playable scene and the scripts that drive it.</summary>
@@ -32,6 +34,8 @@ public static partial class ProjectTemplates
         ProjectTemplate.Contraption => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.",
         ProjectTemplate.Multiplayer => "Play with friends: up to eight players in an arena, on one network or over the internet. Host from the menu and others join with your address (in the editor, Game > Play with 2 Players). Shoot each other and the slimes, grab hearts, and top the scoreboard. WASD to move, the mouse to aim, click to fire, Shift to dash.",
         ProjectTemplate.Puzzle => "Push crates onto the marks on the floor in four Sokoban levels, each opening once the one before is solved. Arrow keys or WASD to walk and push, Z to take a move back, R to start the level over.",
+        ProjectTemplate.Match3 => "Swap gems to line up three or more of a kind in four levels, each with a move limit and goals to meet: a score to reach and gems to collect. Each level opens once the one before is won. Drag a gem onto its neighbor (or click one, then the other); with keys, arrows move and Space picks a gem up.",
+        ProjectTemplate.FallingBlocks => "Pieces of four blocks fall one after another: slide and turn them to fill rows, which clear, and every ten rows they fall faster, until they stack up to the top. The best score is kept. Left and right to slide, up to turn, down to fall faster, Space to drop.",
         _ => "A scene with a camera. Start from scratch.",
     };
 
@@ -66,6 +70,8 @@ public static partial class ProjectTemplates
         ProjectTemplate.Contraption => Contraption(),
         ProjectTemplate.Multiplayer => MultiplayerMenu(),
         ProjectTemplate.Puzzle => PuzzleMenu(),
+        ProjectTemplate.Match3 => MatchMenu(),
+        ProjectTemplate.FallingBlocks => FallingMenu(),
         _ => Empty(),
     };
 
@@ -82,6 +88,11 @@ public static partial class ProjectTemplates
             ["Scenes/Arena.scene"] = WithSounds(template, MultiplayerArena()),
         },
         ProjectTemplate.Puzzle => PuzzleLevelScenes(template),
+        ProjectTemplate.Match3 => MatchLevelScenes(template),
+        ProjectTemplate.FallingBlocks => new Dictionary<string, Scene>
+        {
+            ["Scenes/Game.scene"] = WithSounds(template, FallingGame()),
+        },
         _ => new Dictionary<string, Scene>(),
     };
 

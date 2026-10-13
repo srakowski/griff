@@ -44,6 +44,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateCrateCommand>()
             .AddCommand<CreateGoalCommand>()
             .AddCommand<CreateMatchBoardCommand>()
+            .AddCommand<CreateFallingBoardCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
@@ -684,6 +685,27 @@ public sealed class CreateMatchBoardCommand(IWorkspace workspace, ISelection sel
         var board = entity.AddComponent<MatchBoard>();
         entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
         board.DealInto(map, new Random());
+    }
+}
+
+/// <summary>
+/// Creates a falling-block board: a <see cref="Tilemap"/> with a <see cref="FallingBoard"/> 10 cells across and 20 down,
+/// centered on the scene's middle. Pieces fall into it as the game runs: slide them with left and right, turn them with
+/// up, drop them with Space, and fill rows to clear them.
+/// </summary>
+public sealed class CreateFallingBoardCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateFallingBoard";
+    public override string Text => "Create Falling Board";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    protected override string EntityName => "Board";
+
+    protected override void Configure(Entity entity)
+    {
+        entity.AddComponent<Tilemap>().Solid = false;
+        var board = entity.AddComponent<FallingBoard>();
+        entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
     }
 }
 

@@ -166,6 +166,10 @@ internal static class NetSchema
         [
             (typeof(IReadOnlyList<string>), c => MatchView.Write((MatchBoard)c).ToArray(), (c, v) => MatchView.Read((MatchBoard)c, (IReadOnlyList<string>?)v)),
         ],
+        [typeof(FallingBoard)] =
+        [
+            (typeof(IReadOnlyList<string>), c => FallingView.Write((FallingBoard)c).ToArray(), (c, v) => FallingView.Read((FallingBoard)c, (IReadOnlyList<string>?)v)),
+        ],
         [typeof(Faction)] = [(typeof(bool), c => ((Faction)c).IsDefeated, (c, v) => ((Faction)c).IsDefeated = (bool)v!)],
         [typeof(Building)] =
         [

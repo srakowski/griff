@@ -558,10 +558,12 @@ public static partial class SceneRenderer
     {
         var button = entity.GetComponent<Button>();
 
-        // A match-3 board draws its own tiles, moving.
+        // A match-3 board draws its own tiles, moving, and a falling-block board its piece too.
         if (entity.GetComponent<Tilemap>() is { } tilemap)
         {
-            var draws = entity.GetComponent<MatchBoard>() is { } board ? BoardDraws(entity, tilemap, board) : TileDraws(entity, tilemap, cull);
+            var draws = entity.GetComponent<MatchBoard>() is { } board ? BoardDraws(entity, tilemap, board)
+                : entity.GetComponent<FallingBoard>() is { } falling ? FallingDraws(entity, tilemap, falling)
+                : TileDraws(entity, tilemap, cull);
             foreach (var draw in draws)
                 yield return draw;
         }

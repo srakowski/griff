@@ -363,9 +363,12 @@ public sealed class MatchBoard : Component
             set => Cells[x, y] = value;
         }
 
-        public static Grid Read(MatchBoard board, Tilemap map)
+        public static Grid Read(MatchBoard board, Tilemap map) => Read(board.Columns, board.Rows, map);
+
+        // The cells from the tilemap's top left, columns by rows (a falling-block board's too).
+        public static Grid Read(int columns, int rows, Tilemap map)
         {
-            var cells = new int[Math.Max(0, board.Columns), Math.Max(0, board.Rows)];
+            var cells = new int[Math.Max(0, columns), Math.Max(0, rows)];
             for (var y = 0; y < cells.GetLength(1); y++)
             {
                 for (var x = 0; x < cells.GetLength(0); x++)

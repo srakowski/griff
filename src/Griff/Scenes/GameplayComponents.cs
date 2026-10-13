@@ -373,7 +373,7 @@ public sealed class Counter : Component
 
     /// <summary>
     /// Count the scene's <see cref="MatchBoard"/>'s score instead of a message, with <c>{2}</c> its Target Score and
-    /// <c>{3}</c> how far there is to go, e.g. "Score: {0} / {2}".
+    /// <c>{3}</c> how far there is to go, e.g. "Score: {0} / {2}"; or a <see cref="FallingBoard"/>'s.
     /// </summary>
     public bool CountScore { get; set; }
 

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Tests;
 
-/// <summary>Match-3 boards made from the Entity menu.</summary>
+/// <summary>Match-3 and falling-block boards made from the Entity menu.</summary>
 public sealed class MatchBoardEditorTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-tests-" + Guid.NewGuid().ToString("N"));
@@ -48,6 +48,28 @@ public sealed class MatchBoardEditorTests : IDisposable
         Assert.Equal(64, map.Cells().Count());
         Assert.NotNull(board.FindMove());
         Assert.Equal(new System.Numerics.Vector3(-4, 4, 0), entity.Transform.Position);
+
+        workspace.Scene!.History.Undo();
+        Assert.DoesNotContain(entity, workspace.Scene.Scene.Entities);
+    });
+
+    [Fact]
+    public void CreateFallingBoard_MakesAnEmptyBoardCenteredOnTheScene_AndUndoTakesItAway() => EditorHost.Run(services =>
+    {
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
+        var workspace = services.GetRequiredService<IWorkspace>();
+        Wait(workspace.CreateProjectAsync(_root, "Game"));
+        var commands = services.GetRequiredService<CommandRegistry>();
+        var selection = services.GetRequiredService<ISelection>();
+        selection.Select(null);
+        Wait(commands.Get("Entity.CreateFallingBoard").ExecuteAsync());
+        var entity = selection.Entity!;
+
+        var board = entity.GetComponent<FallingBoard>()!;
+        Assert.False(entity.GetComponent<Tilemap>()!.Solid);
+        Assert.Equal((10, 20), (board.Columns, board.Rows));
+        Assert.Empty(entity.GetComponent<Tilemap>()!.Tiles);
+        Assert.Equal(new System.Numerics.Vector3(-5, 10, 0), entity.Transform.Position);
 
         workspace.Scene!.History.Undo();
         Assert.DoesNotContain(entity, workspace.Scene.Scene.Entities);

@@ -62,6 +62,7 @@ public sealed class ComponentRegistry
         registry.Register<Pushable>();
         registry.Register<Goal>();
         registry.Register<MatchBoard>();
+        registry.Register<FallingBoard>();
         registry.Register<MoveHistory>();
         registry.Register<Bouncer>();
         registry.Register<Crumble>();

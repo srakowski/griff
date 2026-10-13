@@ -15,10 +15,15 @@ namespace Griff.Scenes;
 /// the cells under one are filled from just under it. Without a tileset image each gem kind draws as a square of its own
 /// color. The tiles are saved with the scene, so a rewind goes back to how the board was (the slides and falls under way
 /// start again from there). In a network game the host runs the board and any player can swap.
+/// <para>
+/// Each gem cleared scores <see cref="Points"/>, more along a chain. Give it <see cref="Moves"/>, a
+/// <see cref="TargetScore"/> or gems to <see cref="Collect"/> and it's a level: met goals send the
+/// <see cref="WinMessage"/>, moves run out first the <see cref="OutOfMovesMessage"/>, and either way no more swaps are taken.
+/// </para>
 /// </remarks>
 [Category("Gameplay")]
 [Requires(typeof(Tilemap), Note = "holds the gems")]
-[WorksWith(typeof(Counter), Note = "counts the gems cleared, with Message set to the Match Message")]
+[WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Count Moves) or the gems of a kind cleared (Count Gem)")]
 [ComponentName("Griff.MatchBoard")]
 public sealed class MatchBoard : Component
 {
@@ -60,6 +65,37 @@ public sealed class MatchBoard : Component
 
     /// <summary>How many swaps have been made (not counting those that slid back). Saved with the scene, so a rewind takes them back.</summary>
     public int Swaps { get; set; }
+
+    /// <summary>
+    /// Points for each gem cleared, times how far into the chain it clears: gems in the second clear after a swap score
+    /// double, the third triple. 0 keeps no score.
+    /// </summary>
+    [Group("Score and Goals")]
+    public int Points { get; set; } = 10;
+
+    /// <summary>The points scored so far. Saved with the scene, so a rewind takes them back.</summary>
+    public int Score { get; set; }
+
+    /// <summary>
+    /// How many swaps the player gets: once they're used up and the board comes to rest, the level is over (won if its
+    /// goals are met, lost if not). 0 is no limit.
+    /// </summary>
+    public int Moves { get; set; }
+
+    /// <summary>A score that wins the level once it's reached. 0 is no score to reach.</summary>
+    public int TargetScore { get; set; }
+
+    /// <summary>
+    /// Gems to clear to win the level, as kind:count pairs, e.g. "0:20, 3:15" for 20 of tile 0 and 15 of tile 3. With a
+    /// <see cref="TargetScore"/> too, both have to be done.
+    /// </summary>
+    public string? Collect { get; set; }
+
+    /// <summary>
+    /// How many of each kind have been cleared so far, as kind:count pairs like <see cref="Collect"/>. Saved with the
+    /// scene, so a rewind takes them back.
+    /// </summary>
+    public string? Cleared { get; set; }
 
     /// <summary>A swap that lines nothing up slides back. Untick it to let any two neighbors swap.</summary>
     [Group("Rules")]
@@ -124,6 +160,55 @@ public sealed class MatchBoard : Component
     [Names(NameKind.Message)]
     public string? ShuffleMessage { get; set; }
 
+    /// <summary>
+    /// A message sent as gems clear, with the points they scored as its data: a <see cref="Counter"/> listening for it
+    /// (its Message is "Score" to begin with) shows the score.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? ScoreMessage { get; set; } = "Score";
+
+    /// <summary>A sound played when the level is won: its goals met, once the board comes to rest.</summary>
+    public string? WinSound { get; set; }
+
+    /// <summary>A sound played when the moves run out with the goals not met.</summary>
+    public string? OutOfMovesSound { get; set; }
+
+    /// <summary>
+    /// A message sent once the goals are met and the board comes to rest, with this entity as its data: a panel with
+    /// this as its Open Message shows the level is won.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? WinMessage { get; set; } = "Level Complete";
+
+    /// <summary>
+    /// A message sent once the moves run out with the goals not met and the board comes to rest, with this entity as
+    /// its data. A board with no goals sends it too: the end of a game played for score.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? OutOfMovesMessage { get; set; } = "Out of Moves";
+
+    /// <summary>How many swaps are left of <see cref="Moves"/>: 0 once they've run out, -1 with no limit.</summary>
+    [DoNotSerialize]
+    public int MovesLeft => Moves > 0 ? Math.Max(0, Moves - Swaps) : -1;
+
+    /// <summary>True if the board has goals (a <see cref="TargetScore"/> or gems to <see cref="Collect"/>) and they're all met.</summary>
+    [DoNotSerialize]
+    public bool GoalsMet
+    {
+        get
+        {
+            var collect = ParseCounts(Collect);
+            if (TargetScore <= 0 && collect.Count == 0)
+                return false;
+            var cleared = ParseCounts(Cleared);
+            return Score >= TargetScore && collect.All(c => cleared.GetValueOrDefault(c.Key) >= c.Value);
+        }
+    }
+
+    /// <summary>True once the level is over, won or out of moves: no more swaps are taken.</summary>
+    [DoNotSerialize]
+    public bool IsOver => GoalsMet || MovesLeft == 0;
+
     /// <summary>True while gems are swapping, clearing or falling: swaps wait until it's still.</summary>
     [DoNotSerialize]
     public bool IsBusy => Motions.Count > 0 || Clearing.Count > 0;
@@ -148,6 +233,15 @@ public sealed class MatchBoard : Component
 
     /// <summary>Raised once the board comes to rest after a swap, with the length of the chain it set off.</summary>
     public event Action<int>? Settled;
+
+    /// <summary>Raised once the board comes to rest with the level over: true if its goals were met, false if the moves ran out.</summary>
+    public event Action<bool>? Finished;
+
+    /// <summary>How many gems of kind <paramref name="kind"/> (a tile number) have been cleared.</summary>
+    public int ClearedOf(int kind) => ParseCounts(Cleared).GetValueOrDefault(kind);
+
+    /// <summary>How many gems of kind <paramref name="kind"/> <see cref="Collect"/> asks for: 0 if none.</summary>
+    public int ToCollect(int kind) => ParseCounts(Collect).GetValueOrDefault(kind);
 
     /// <summary>True if <paramref name="tile"/> is a gem rather than a block (or empty, -1).</summary>
     public bool IsGem(int tile) => Tilemap.InSet(_gemSet, tile);
@@ -194,6 +288,31 @@ public sealed class MatchBoard : Component
     internal void RaiseSwapped((int X, int Y) a, (int X, int Y) b) => Swapped?.Invoke(a, b);
 
     internal void RaiseSettled(int chain) => Settled?.Invoke(chain);
+
+    internal void RaiseFinished(bool won) => Finished?.Invoke(won);
+
+    // Adds gems cleared of a kind to Cleared.
+    internal void AddCleared(int kind, int count)
+    {
+        var counts = ParseCounts(Cleared);
+        counts[kind] = counts.GetValueOrDefault(kind) + count;
+        Cleared = string.Join(", ", counts.OrderBy(c => c.Key).Select(c => $"{c.Key}:{c.Value}"));
+    }
+
+    // "0:20, 3:15" as kind to count; pairs that don't read are skipped, and a kind named twice adds up.
+    internal static Dictionary<int, int> ParseCounts(string? text)
+    {
+        var counts = new Dictionary<int, int>();
+        foreach (var pair in (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = pair.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length == 2 && int.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var kind) &&
+                int.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var count))
+                counts[kind] = counts.GetValueOrDefault(kind) + count;
+        }
+
+        return counts;
+    }
 
     // ----- What the game keeps while it runs (rewinds start these afresh) -----
 
@@ -469,6 +588,14 @@ internal static class MatchRules
         var original = grid.Copy();
         for (var attempt = 0; attempt < 50; attempt++)
         {
+            // The cells to deal start empty, so what was in them (another deal, or gems painted by hand) can't sway what's
+            // dealt: the same seed and blocks always deal the same board.
+            for (var y = 0; y < grid.Rows; y++)
+            {
+                for (var x = 0; x < grid.Columns; x++)
+                    grid[x, y] = original[x, y] < 0 || (all && isGem(original[x, y])) ? -1 : original[x, y];
+            }
+
             for (var y = 0; y < grid.Rows; y++)
             {
                 for (var x = 0; x < grid.Columns; x++)

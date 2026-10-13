@@ -338,7 +338,8 @@ public sealed class Counter : Component
 
     /// <summary>
     /// How the text reads: <c>{0}</c> is the count and <c>{1}</c> the best, e.g. "Score: {0}", "Best: {1}" or
-    /// "{0:000000}" (and <c>{2}</c> how many goals there are, with <see cref="CountGoals"/>). Empty shows just the number.
+    /// "{0:000000}" (and <c>{2}</c> what it's out of and <c>{3}</c> how many are left, e.g. with <see cref="CountGoals"/>
+    /// how many goals there are and how many are still uncovered). Empty shows just the number.
     /// </summary>
     public string? Format { get; set; } = "Score: {0}";
 
@@ -364,14 +365,35 @@ public sealed class Counter : Component
     public bool CountGoals { get; set; }
 
     /// <summary>
-    /// Count the moves taken in a grid puzzle instead of a message: its <see cref="MoveHistory"/>'s, so an undo counts one
-    /// back, e.g. "Moves: {0}".
+    /// Count the moves taken instead of a message: in a grid puzzle its <see cref="MoveHistory"/>'s, so an undo counts one
+    /// back, e.g. "Moves: {0}"; on a <see cref="MatchBoard"/> its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many
+    /// are left, e.g. "Moves: {3}".
     /// </summary>
     public bool CountMoves { get; set; }
 
-    /// <summary>How many goals there are, for a counter that counts them (<c>{2}</c> in <see cref="Format"/>); 0 otherwise.</summary>
+    /// <summary>
+    /// Count the scene's <see cref="MatchBoard"/>'s score instead of a message, with <c>{2}</c> its Target Score and
+    /// <c>{3}</c> how far there is to go, e.g. "Score: {0} / {2}".
+    /// </summary>
+    public bool CountScore { get; set; }
+
+    /// <summary>
+    /// Count the gems of this kind (a tile number) cleared on the scene's <see cref="MatchBoard"/> instead of a message,
+    /// with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}". -1
+    /// counts no gems.
+    /// </summary>
+    public int CountGem { get; set; } = -1;
+
+    /// <summary>
+    /// What the count is out of, for a counter that counts goals, a match board's moves, score or gems (<c>{2}</c> in
+    /// <see cref="Format"/>); 0 otherwise.
+    /// </summary>
     [DoNotSerialize]
     public int Total { get; internal set; }
+
+    /// <summary>How far the count is from <see cref="Total"/>, never below 0 (<c>{3}</c> in <see cref="Format"/>): goals left, moves left.</summary>
+    [DoNotSerialize]
+    public int Left => Math.Max(0, Total - Value);
 
     /// <summary>The best count, from <see cref="SaveBestAs"/> (or this run's, without it).</summary>
     [DoNotSerialize]
@@ -396,13 +418,16 @@ public sealed class Counter : Component
             return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
-            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best, Total);
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best, Total, Left);
         }
         catch (FormatException)
         {
             return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
     }
+
+    // Counts an item, goals, moves, a board's score or gems rather than its Message.
+    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountGoals || CountMoves || CountScore || CountGem >= 0;
 
     // What the game last showed, and the entity's own scale (so a pop springs back to it).
     internal int? Shown { get; set; }

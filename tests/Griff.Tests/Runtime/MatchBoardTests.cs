@@ -110,11 +110,14 @@ public class MatchBoardTests
         Assert.False(board.Deal);
         Assert.False(board.IsBusy);
 
+        // Even over gems already on it (Create Match Board deals one so it shows in the editor): only the seed counts.
         var again = new Scene();
         var other = new Entity("Board");
-        other.AddComponent<Tilemap>();
+        var otherMap = other.AddComponent<Tilemap>();
         var copy = other.AddComponent<MatchBoard>();
         (copy.Columns, copy.Rows, copy.Deal, copy.Seed) = (8, 8, true, 42);
+        copy.DealInto(otherMap, new Random(1));
+        Assert.NotEqual(Rows(board), Rows(copy));
         again.Add(other);
         new Game(again, new InputState()).Tick(Frame);
         Assert.Equal(Rows(board), Rows(copy));

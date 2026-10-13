@@ -429,9 +429,9 @@ public sealed partial class Game
             Net.Relay(message, data);
         var heard = _messages.Send(message, data, Scene);
 
-        // Counters add up their message with no listener of their own: the number sent, or 1.
+        // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something else).
         var counters = Scene.Entities.Where(e => Rendering.SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<Counter>())
-            .Where(c => c.Message?.Trim() == message).ToList();
+            .Where(c => c.Message?.Trim() == message && !c.CountsOwn).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
 
@@ -903,6 +903,8 @@ public sealed partial class Game
 
             if (counter.CountMoves && Showing<MoveHistory>().FirstOrDefault() is { } history)
                 counter.Add(history.Moves - counter.Value);
+            else if (counter.CountMoves || counter.CountScore || counter.CountGem >= 0)
+                CountBoard(counter);
 
             if (counter.Shown is null)
             {
@@ -928,6 +930,19 @@ public sealed partial class Game
 
             counter.Shown = counter.Value;
         }
+    }
+
+    // A counter showing the scene's match board: its swaps out of its Moves, its score out of its Target Score, or the
+    // gems of a kind cleared out of how many it asks for.
+    private void CountBoard(Counter counter)
+    {
+        if (Showing<MatchBoard>().FirstOrDefault() is not { } board)
+            return;
+        var (value, total) = counter.CountMoves ? (board.Swaps, board.Moves)
+            : counter.CountScore ? (board.Score, board.TargetScore)
+            : (board.ClearedOf(counter.CountGem), board.ToCollect(counter.CountGem));
+        counter.Total = total;
+        counter.Add(value - counter.Value);
     }
 
     // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.

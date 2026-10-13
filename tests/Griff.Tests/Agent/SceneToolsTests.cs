@@ -208,6 +208,25 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void A_match_boards_moves_and_goals_are_set_like_any_field_and_read_back_live()
+    {
+        Run("entity_create", """{"entity": {"name": "Board", "components": {"MatchBoard": {"moves": 20, "targetScore": 1000, "collect": "0:15", "swaps": 5, "cleared": "0:15"}}}}""");
+        var board = Named("Board").GetComponent<MatchBoard>()!;
+        Assert.Equal((20, 1000, "0:15"), (board.Moves, board.TargetScore, board.Collect));
+        Assert.Equal(15, board.MovesLeft);
+
+        _host.IsPlaying = true;
+        var got = Run("entity_get", """{"entity": "Board"}""").Text;
+        Assert.Contains("\"movesLeft\": 15", got);
+        Assert.Contains("\"goalsMet\": false", got);
+
+        var described = Run("component_describe", """{"component": "MatchBoard"}""").Text;
+        Assert.Contains("## Score and Goals", described);
+        Assert.Contains("- collect: text = null. Gems to clear to win the level", described);
+        Assert.Contains("- countGem: a whole number = -1. Count the gems of this kind", Run("component_describe", """{"component": "Counter"}""").Text);
+    }
+
+    [Fact]
     public void Get_SaysWhichMapATilemapIsALayerOf()
     {
         Run("entity_create", """{"entity": {"name": "Level", "components": {"Tilemap": {"image": "Tiles/ground.png", "tiles": ["00"]}}}}""");

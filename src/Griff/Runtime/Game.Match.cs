@@ -90,12 +90,14 @@ public sealed partial class Game
             return;
         }
 
-        ReadHands(board, map, swaps: true);
+        // Once the level is over the gems can't be swapped any more.
+        ReadHands(board, map, swaps: !board.IsOver);
         if (board.SwapRequests.Count > 0)
         {
             var (a, b) = board.SwapRequests[0];
             board.SwapRequests.Clear();
-            StartSwap(board, map, a, b);
+            if (!board.IsOver)
+                StartSwap(board, map, a, b);
         }
     }
 
@@ -122,8 +124,12 @@ public sealed partial class Game
             if (!string.IsNullOrWhiteSpace(board.SettledMessage))
                 Send(board.SettledMessage.Trim(), board.Chain);
             board.RaiseSettled(board.Chain);
+            if (board.IsOver)
+                Finish(board);
         }
 
+        if (board.IsOver)
+            return;
         var stuck = board.ShuffleWhenStuck && !ReferenceEquals(map.Tiles, board.StuckTiles) &&
                     MatchRules.FindMove(grid, board.MatchLength, board.IsGem) is null;
         if (board.ShuffleRequested || stuck)
@@ -194,19 +200,37 @@ public sealed partial class Game
             new(new Vector2(0, -cells), Math.Max(board.FallTime, 0) * MathF.Sqrt(cells), falls: true);
     }
 
-    // What lined up starts to shrink away: one more in the chain.
+    // The level is over, the board at rest: won if its goals are met, otherwise out of moves.
+    private void Finish(MatchBoard board)
+    {
+        var won = board.GoalsMet;
+        foreach (var hand in board.Hands.Values)
+            hand.Picked = null;
+        PlayIfSet(won ? board.WinSound : board.OutOfMovesSound);
+        var message = won ? board.WinMessage : board.OutOfMovesMessage;
+        if (!string.IsNullOrWhiteSpace(message))
+            Send(message.Trim(), board.Entity);
+        board.RaiseFinished(won);
+    }
+
+    // What lined up starts to shrink away: one more in the chain, scoring its gems' points times the chain.
     private void Clear(MatchBoard board, List<(int Kind, List<(int X, int Y)> Cells)> matches)
     {
         board.Chain++;
-        foreach (var (_, cells) in matches)
+        foreach (var (kind, cells) in matches)
         {
             foreach (var cell in cells)
                 board.Clearing[cell] = 0;
+            board.AddCleared(kind, cells.Count);
         }
 
+        var points = board.Clearing.Count * Math.Max(0, board.Points) * Math.Max(1, board.Chain);
+        board.Score += points;
         PlayIfSet(board.MatchSound);
         if (!string.IsNullOrWhiteSpace(board.MatchMessage))
             Send(board.MatchMessage.Trim(), board.Clearing.Count);
+        if (points > 0 && !string.IsNullOrWhiteSpace(board.ScoreMessage))
+            Send(board.ScoreMessage.Trim(), points);
         if (board.Chain >= 2 && !string.IsNullOrWhiteSpace(board.ChainMessage))
             Send(board.ChainMessage.Trim(), board.Chain);
         foreach (var (kind, cells) in matches)

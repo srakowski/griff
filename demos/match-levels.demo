@@ -1,0 +1,74 @@
+title: Match-3 levels
+intro: Points for every gem cleared, a move limit, and goals that win the level or lose it. No code.
+project: Empty | Gem Quest
+
+chapter: Score, moves and goals | The Match Board's Score and Goals
+create: Match Board
+set: MatchBoard.Seed = 152
+explain: field:MatchBoard.Points | Points | Each gem cleared scores ten points, and more along a chain: gems in the second clear after a swap score double, the third triple.
+set: MatchBoard.Moves = 3
+explain: field:MatchBoard.Moves | Moves | Three swaps to play with.
+set: MatchBoard.TargetScore = 150
+explain: field:MatchBoard.TargetScore | Target Score | And a score of a hundred and fifty to reach.
+explain: field:MatchBoard.Collect | Collect | Collect asks for gems of a kind to clear instead, or as well: twenty of one kind, fifteen of another.
+explain: field:MatchBoard.WinMessage | Win Message | Meet the goals and the board sends Level Complete. Run out of moves first and it sends Out of Moves. Either way, no more swaps.
+deselect
+create: Text
+rename: Score
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = Top
+set: ScreenAnchor.Offset = 0, -0.5
+add: Counter
+set: Counter.CountScore = true
+set: Counter.Format = Score: {0} / {2}
+explain: field:Counter.CountScore | Count Score | A counter with Count Score shows the board's score, and brace two is the score to reach.
+deselect
+create: Text
+rename: Moves
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = Bottom
+set: ScreenAnchor.Offset = 0, 0.5
+add: Counter
+set: Counter.CountMoves = true
+set: Counter.Format = Moves left: {3}
+explain: field:Counter.CountMoves | Count Moves | Count Moves counts the board's swaps, and brace three is how many are left. Count Gem does the same for the gems of one kind cleared.
+deselect
+create: Panel
+rename: Won
+set: Panel.OpenMessage = Level Complete
+create: Text
+rename: Won Text
+set: Text.Value = Level complete!
+explain: entity:Won | A panel for the win | And a panel that opens on Level Complete.
+
+chapter: Play the level | Three moves to score a hundred and fifty
+play
+wait: 0.5
+expectvalue: Score.Text.Value = Score: 0 / 150
+expectvalue: Moves.Text.Value = Moves left: 3
+say: Click a gem, then the one beside it.
+gameclick: -0.5, 2.5
+wait: 0.3
+gameclick: 0.5, 2.5
+wait: 2
+expectvalue: Board.MatchBoard.Score = 90
+expectvalue: Score.Text.Value = Score: 90 / 150
+expectvalue: Moves.Text.Value = Moves left: 2
+explain: game | A chain scores more | Three gems cleared for thirty points, then three that landed in a line for sixty more, double along the chain. Two moves left.
+say: One more swap, with the keys this time.
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.3
+tap: Right
+wait: 0.3
+tap: Up
+wait: 0.4
+tap: Space
+wait: 0.4
+tap: Down
+waitfor: Won Text | 6
+expectvalue: Board.MatchBoard.Swaps = 2
+explain: game | Level complete | Past a hundred and fifty with a move to spare: once the board comes to rest the level is won, and the panel opens.
+stop
+say: That's a match-3 level with no code. The score, swaps and gems cleared are saved with the scene, so rewinding takes them back.

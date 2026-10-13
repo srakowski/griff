@@ -47,9 +47,10 @@ public sealed partial class Game
         }
 
         // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run. A
-        // crate only moves when it's pushed.
+        // crate only moves when it's pushed, and a tactics unit walks where it's sent.
+        var tactics = entity.GetComponent<TacticsUnit>();
         var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null ||
-                     entity.GetComponent<Pushable>() is not null;
+                     entity.GetComponent<Pushable>() is not null || tactics is not null;
         // Waiting for their turn, they finish the step under way and go no further. Taking turns a step at a time, each
         // step uses an action.
         var waits = Waiting(entity);
@@ -114,6 +115,8 @@ public sealed partial class Game
             var next = m.Queued ?? (waits ? null : m.Buffered);
             if (next is null && !waits && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
                 next = way;
+            if (next is null && minds && tactics is not null)
+                next = WalkStep(tactics, m);
             var decided = false;
             var thinks = chase is not null || patrol is not null;
             if (next is null && thinks && (m.Rest <= 0 || byTurns))
@@ -130,6 +133,9 @@ public sealed partial class Game
             if (next is { } step && step != (0, 0))
             {
                 TryGridStep(m, grid, step, Math.Min(spare, stepTime) / stepTime);
+                // A unit whose way is blocked stops where it is.
+                if (tactics is not null && !m.Stepping)
+                    tactics.Path.Clear();
                 // Blocked (by the player, another enemy, a closed door): try again in a step's time, not every frame.
                 if (decided && !m.Stepping && !byTurns)
                     m.Rest = stepTime;
@@ -197,6 +203,9 @@ public sealed partial class Game
         if (row is not null)
             Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
         StartGridStep(m, grid, target, direction, progress, glide: null);
+        // A tactics unit's walk is all one go, used up as it attacks or waits.
+        if (entity.GetComponent<TacticsUnit>() is not null)
+            return;
         UseAction(entity);
         // A player's own machine moves their character: the host, running the turns, hears of the step.
         if (!Runs(entity) && StepsByTurns(entity))

@@ -58,6 +58,8 @@ public sealed class ComponentRegistry
         registry.Register<GridPatrol>();
         registry.Register<TurnOrder>();
         registry.Register<TurnTaker>();
+        registry.Register<TacticsUnit>();
+        registry.Register<TacticsControls>();
         registry.Register<Ladder>();
         registry.Register<Pushable>();
         registry.Register<Goal>();

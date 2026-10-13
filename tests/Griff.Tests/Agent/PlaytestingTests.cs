@@ -161,4 +161,46 @@ public class PlaytestingTests
         Assert.Equal(", held", Playtesting.Dragging(card));
         Assert.Equal("Mouse: at (5, 0), holding Card.", Playtesting.Mouse(game));
     }
+
+    [Fact]
+    public void Tactics_SaysWhereAUnitIs_AndWhatItCanDo_AndMouseSaysWhichIsPicked()
+    {
+        var scene = new Scene();
+        var level = new Entity("Level");
+        level.AddComponent<Tilemap>().Tiles = ["......", "......", "......"];
+        scene.Add(level);
+        var turns = new Entity("Turns");
+        var order = turns.AddComponent<TurnOrder>();
+        (order.Sides, order.ComputerSides) = ("Blue, Red", "");
+        scene.Add(turns);
+        var controls = new Entity("Tactics").AddComponent<TacticsControls>();
+        scene.Add(controls.Entity!);
+        Entity Unit(string name, int x, string side)
+        {
+            var unit = new Entity(name);
+            unit.Transform.Position = new Vector3(x + 0.5f, -1.5f, 0);
+            unit.AddComponent<BoxCollider>().Size = new Vector2(0.8f);
+            unit.AddComponent<Body>().GravityScale = 0;
+            unit.AddComponent<GridMovement>();
+            unit.AddComponent<Health>();
+            unit.AddComponent<TacticsUnit>().Move = 1;
+            var taker = unit.AddComponent<TurnTaker>();
+            (taker.Side, taker.Actions) = (side, 1);
+            scene.Add(unit);
+            return unit;
+        }
+
+        var knight = Unit("Knight", 1, "Blue");
+        var orc = Unit("Orc", 2, "Red");
+        var input = new InputState { MouseWorld = new Vector2(-5, 5) };
+        var game = new Game(scene, input);
+        game.Tick(1 / 60f);
+        controls.Selected = knight;
+        game.Tick(1 / 60f);
+
+        Assert.Equal(", in cell (1, 1), can act: reaches 3 cells, can hit Orc", Playtesting.Tactics(knight));
+        Assert.Equal(", in cell (2, 1), waiting for its side's turn", Playtesting.Tactics(orc));
+        Assert.Equal("", Playtesting.Tactics(level));
+        Assert.Equal("Mouse: at (-5, 5), picked Knight.", Playtesting.Mouse(game));
+    }
 }

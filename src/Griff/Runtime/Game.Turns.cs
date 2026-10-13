@@ -130,7 +130,12 @@ public sealed partial class Game
         order.StartsIn = startsIn;
         order.TimeLeft = Math.Max(0, TimeFor(order, side));
         foreach (var taker in takers.Where(t => TurnOrder.SameSide(SideOf(t), side)))
+        {
             taker.ActionsUsed = 0;
+            if (taker.Entity!.GetComponent<TacticsUnit>() is { } unit)
+                FreshGo(unit);
+        }
+
         if (startsIn <= 0)
             AnnounceTurn(order, takers);
     }

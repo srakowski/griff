@@ -1,0 +1,87 @@
+title: Tactics units
+intro: Pick a unit, see how far it can walk and hit, then send it in. Two sides take turns, with no code.
+project: Empty | Skirmish
+
+chapter: Four units on a field | Entity > Create Tactics Unit
+create: Tilemap
+rename: Field
+set: Tilemap.Tiles = 1111111111\n1........1\n1...11...1\n1........1\n1........1\n1111111111
+select: Main Camera
+set: Transform.Position.X = 5
+set: Transform.Position.Y = -3
+look: 5, -3, 4
+deselect
+create: Tactics Unit
+rename: Knight
+set: Transform.Position = 1.5, -2.5, 0
+explain: component:TacticsUnit | Tactics Unit | Create Tactics Unit makes a unit: it walks up to four cells a turn and hits whatever is next to it.
+explain: panel:Hierarchy | Turns and controls | The first unit also brings a turn order, Blue then Red, with an End Turn button, and the tactics controls that let you pick units with the mouse.
+create: Tactics Unit
+rename: Orc
+set: Transform.Position = 8.5, -2.5, 0
+say: The next unit goes on the Red side, so making units one after another makes two even teams.
+create: Tactics Unit
+rename: Archer
+set: Transform.Position = 1.5, -3.5, 0
+set: TacticsUnit.Move = 3
+set: TacticsUnit.Range = 3
+set: TacticsUnit.MinRange = 2
+explain: field:TacticsUnit.Range | Range and Min Range | An archer shoots two or three cells away, but can't hit what's right next to it.
+create: Tactics Unit
+rename: Goblin
+set: Transform.Position = 8.5, -3.5, 0
+say: And a goblin for Red.
+
+chapter: Blue's turn | Pick, look, walk
+play
+wait: 0.5
+gameclick: Knight
+wait: 0.3
+explain: game | Where it can go | Clicking the knight lights up the cells it can walk to in blue, around the wall, and the cells it could hit from them in red.
+gamehover: 4.5, -1.5
+wait: 0.3
+explain: game | The way there | Hovering a cell shows the way it would walk.
+gameclick: 4.5, -1.5
+wait: 1
+expectat: Knight = 4.5, -1.5
+say: There's nothing in reach from there, so its go is over, and it's dimmed until Blue's next turn.
+gameclick: Archer
+gameclick: 3.5, -4.5
+wait: 1
+expectat: Archer = 3.5, -4.5
+expectvalue: Turns.TurnOrder.Current = Red
+say: Once every Blue unit has had its go, the turn passes to Red.
+
+chapter: Red's turn | Take back, attack, wait
+gameclick: Orc
+gameclick: 5.5, -1.5
+wait: 1
+expectat: Orc = 5.5, -1.5
+explain: game | Waiting to attack | The orc walks up next to the knight. With a foe in reach, it waits to be told whom to hit.
+gameorder: 5.5, -1.5
+wait: 0.4
+expectat: Orc = 8.5, -2.5
+say: A right click takes the walk back, as long as it hasn't attacked yet.
+gameclick: Knight
+wait: 1.2
+expectvalue: Knight.Health.Current = 2
+explain: game | Click a foe | Clicking a foe straight away walks up to it and attacks. The knight's health bar drops.
+gameclick: Goblin
+gameclick: Goblin
+wait: 0.5
+expectvalue: Turns.TurnOrder.Current = Blue
+say: Clicking a unit twice has it wait where it stands, and it's Blue's turn again.
+
+chapter: Blue strikes back | Range
+gameclick: Archer
+gameclick: Orc
+wait: 1.2
+expectvalue: Orc.Health.Current = 2
+explain: game | From a distance | The archer walks to where the orc is two or three cells off, and shoots it.
+gameclick: Knight
+gameclick: Orc
+wait: 0.6
+expectvalue: Orc.Health.Current = 1
+say: The knight is right next to the orc, so it hits from where it stands.
+stop
+say: That's tactics with no code: a Tactics Unit for each fighter, with its move, range and damage, and the controls do the rest.

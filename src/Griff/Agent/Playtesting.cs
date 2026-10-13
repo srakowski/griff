@@ -58,11 +58,37 @@ public static class Playtesting
         return text;
     }
 
-    /// <summary>Where the mouse is and what it's holding, e.g. <c>Mouse: at (2.5, 1), holding Card.</c></summary>
+    /// <summary>
+    /// What <paramref name="entity"/> is up to as a tactics unit, to add to where it is: its cell, and whether it's walking,
+    /// has had its go, waits to attack after walking, or can act (with how many cells it reaches and what it can hit from
+    /// where it stands), e.g. <c>, in cell (3, 1), can act: reaches 9 cells, can hit Orc</c>. Empty for anything else.
+    /// </summary>
+    public static string Tactics(Entity entity)
+    {
+        if (entity.GetComponent<TacticsUnit>() is not { } unit || entity.GetComponent<GridMovement>() is not { } m)
+            return "";
+        var text = $", in cell ({m.Cell.X}, {m.Cell.Y})";
+        var targets = unit.Targets.Count > 0 ? $", can hit {string.Join(", ", unit.Targets.Select(t => t.Name))}" : "";
+        if (unit.IsWalking)
+            return text + ", walking";
+        if (unit.IsDone)
+            return text + ", has had its go";
+        if (!unit.CanAct)
+            return text + ", waiting for its side's turn";
+        return unit.HasMoved
+            ? text + ", has moved" + (targets.Length > 0 ? targets + " (or click it to wait)" : "")
+            : text + $", can act: reaches {unit.Reachable.Count} cells" + targets;
+    }
+
+    /// <summary>
+    /// Where the mouse is and what it's holding (or the tactics unit it has picked), e.g. <c>Mouse: at (2.5, 1), holding
+    /// Card.</c>
+    /// </summary>
     public static string Mouse(Game game)
     {
         var at = game.Input.MouseWorld;
-        return $"Mouse: at ({at.X:0.##}, {at.Y:0.##}){(game.Held is { } held ? $", holding {held.Name}" : "")}.";
+        var picked = game.Scene.Entities.Select(e => e.GetComponent<TacticsControls>()).FirstOrDefault(c => c is not null)?.Selected;
+        return $"Mouse: at ({at.X:0.##}, {at.Y:0.##}){(game.Held is { } held ? $", holding {held.Name}" : "")}{(picked is not null ? $", picked {picked.Name}" : "")}.";
     }
 
     /// <summary>

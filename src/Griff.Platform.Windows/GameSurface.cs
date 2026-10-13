@@ -23,10 +23,13 @@ public sealed class GameSurface : HwndHost
     private const int WmMouseMove = 0x0200;
     private const int WmLButtonDown = 0x0201;
     private const int WmLButtonUp = 0x0202;
+    private const int WmLButtonDblClk = 0x0203;
     private const int WmRButtonDown = 0x0204;
     private const int WmRButtonUp = 0x0205;
+    private const int WmRButtonDblClk = 0x0206;
     private const int WmMButtonDown = 0x0207;
     private const int WmMButtonUp = 0x0208;
+    private const int WmMButtonDblClk = 0x0209;
     private const int WmMouseLeave = 0x02A3;
     private const int WmMouseWheel = 0x020A;
     private const int WmNcHitTest = 0x0084;
@@ -172,7 +175,8 @@ public sealed class GameSurface : HwndHost
                 _trackingLeave = false;
                 MouseLeft?.Invoke();
                 break;
-            case WmLButtonDown or WmRButtonDown or WmMButtonDown:
+            // The "static" class asks for double clicks, so a quick second click comes as one: it's a press all the same.
+            case WmLButtonDown or WmRButtonDown or WmMButtonDown or WmLButtonDblClk or WmRButtonDblClk or WmMButtonDblClk:
                 // Keep keyboard focus in WPF so key events keep flowing to the game.
                 Window.GetWindow(this)?.Activate();
                 MouseButtonChanged?.Invoke(ButtonFor(msg), true);
@@ -192,8 +196,8 @@ public sealed class GameSurface : HwndHost
 
     private static Runtime.MouseButton ButtonFor(int msg) => msg switch
     {
-        WmRButtonDown or WmRButtonUp => Runtime.MouseButton.Right,
-        WmMButtonDown or WmMButtonUp => Runtime.MouseButton.Middle,
+        WmRButtonDown or WmRButtonUp or WmRButtonDblClk => Runtime.MouseButton.Right,
+        WmMButtonDown or WmMButtonUp or WmMButtonDblClk => Runtime.MouseButton.Middle,
         _ => Runtime.MouseButton.Left,
     };
 

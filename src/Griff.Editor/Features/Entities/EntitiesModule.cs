@@ -39,6 +39,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateGridPlayerCommand>()
             .AddCommand<CreateGridEnemyCommand>()
             .AddCommand<CreateTurnOrderCommand>()
+            .AddCommand<CreateTacticsUnitCommand>()
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
@@ -80,6 +81,9 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     /// <summary>Changes to what's already in the scene that go with the new entity. Made in the same undo step.</summary>
     protected virtual IEnumerable<IEdit> EditScene(Scene scene) => [];
 
+    /// <summary>What the new entity goes inside, given what's selected: the selection itself, unless overridden.</summary>
+    protected virtual Entity? InsideOf(Entity? selected) => selected;
+
     /// <summary>The scene it's created in.</summary>
     protected Scene? Scene => workspace.Scene?.Scene;
 
@@ -111,7 +115,7 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
         var edits = EditScene(document.Scene).ToList();
         using (children.Count + edits.Count > 0 ? document.History.BeginGroup($"Add {entity.Name}") : null)
         {
-            document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(selection.Entity)));
+            document.Execute(new AddEntityEdit(document.Scene, entity, document.ParentFor(InsideOf(selection.Entity))));
             foreach (var child in children)
                 document.Execute(new AddEntityEdit(document.Scene, child, entity));
             foreach (var edit in edits)
@@ -553,9 +557,10 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
             entity.AddComponent(GridTurnTaker(entity, order));
     }
 
-    // Grid players, enemies and other movers: not the crates they push, which don't take turns.
+    // Grid players, enemies and other movers: not the crates they push, which don't take turns, nor tactics units, which
+    // take theirs side by side.
     internal static IEnumerable<Entity> GridMovers(Scene scene) =>
-        scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null && e.GetComponent<Pushable>() is null);
+        scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null && e.GetComponent<Pushable>() is null && e.GetComponent<TacticsUnit>() is null);
 
     // One action a turn, on the first side a person plays if it's a player, or the first the computer plays if it moves on
     // its own.
@@ -567,6 +572,102 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
             ? sides.FirstOrDefault(s => order!.IsComputer(s)) ?? "Enemy"
             : sides.FirstOrDefault(s => !order!.IsComputer(s)) ?? "Player";
         return new TurnTaker { Side = side, Actions = 1 };
+    }
+}
+
+/// <summary>
+/// Creates a tactics unit: a box sprite in its side's color with a collider, a <see cref="Body"/> without gravity, a
+/// <see cref="GridMovement"/>, a <see cref="Health"/> of 3, a <see cref="TacticsUnit"/> and a <see cref="TurnTaker"/> with
+/// one action, on whichever side has the fewest units so far, so creating a few makes two even teams facing each other.
+/// A scene with no turn order gets one (Blue and Red, two people taking turns at one keyboard, with an End Turn button),
+/// and one with no <see cref="TacticsControls"/> gets those, to pick units with the mouse. All in one undo step.
+/// </summary>
+public sealed class CreateTacticsUnitCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    // The colors of the first sides, in turn order; any further sides are gray.
+    private static readonly Griff.Color[] SideColors =
+    [
+        Griff.Color.FromBytes(0x4C, 0x8D, 0xF0), Griff.Color.FromBytes(0xE0, 0x55, 0x4A), Griff.Color.FromBytes(0x57, 0xAB, 0x5A),
+        Griff.Color.FromBytes(0xE8, 0xC5, 0x4A),
+    ];
+
+    public override string Id => "Entity.CreateTacticsUnit";
+    public override string Text => "Create Tactics Unit";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    protected override string EntityName => $"{Side().Name} Unit";
+
+    private TurnOrder? Order => Scene?.Entities.Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
+
+    // Beside another unit or the map, never inside them (making several in a row selects each in turn), so each stands
+    // where it's put.
+    protected override Entity? InsideOf(Entity? selected)
+    {
+        var parent = selected;
+        while (parent is not null && (parent.GetComponent<TacticsUnit>() is not null || parent.GetComponent<Tilemap>() is not null || parent.GetComponent<TurnOrder>() is not null))
+            parent = parent.Parent;
+        return parent;
+    }
+
+    // The side with the fewest units (the first, of those), where it comes in the turn order, and how many it has.
+    private (string Name, int Index, int Count) Side()
+    {
+        var sides = Order?.SideList is { Count: > 0 } list ? list : ["Blue", "Red"];
+        var units = Scene?.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null).Select(e => e.GetComponent<TurnTaker>()?.Side).ToList() ?? [];
+        return sides.Select((side, i) => (side, i, units.Count(u => TurnOrder.SameSide(u, side)))).MinBy(s => s.Item3);
+    }
+
+    protected override void Configure(Entity entity)
+    {
+        var (side, index, count) = Side();
+        var size = new System.Numerics.Vector2(0.8f, 0.8f);
+        var sprite = entity.AddComponent<Sprite>();
+        (sprite.Size, sprite.Tint) = (size, index < SideColors.Length ? SideColors[index] : Griff.Color.FromBytes(0x9A, 0x9A, 0x9A));
+        entity.AddComponent<BoxCollider>().Size = size;
+        entity.AddComponent<Body>().GravityScale = 0;
+        entity.AddComponent<GridMovement>().StepTime = 0.12f;
+        entity.AddComponent<Health>().InvincibleTime = 0;
+        entity.AddComponent<TacticsUnit>();
+        var taker = entity.AddComponent<TurnTaker>();
+        (taker.Side, taker.Actions) = (side, 1);
+
+        // The first side down the left, the second down the right, a cell apart.
+        var x = index % 2 == 0 ? -2.5f : 2.5f;
+        entity.Transform.Position = new System.Numerics.Vector3(x, 1.5f - 2 * count, 0);
+    }
+
+    protected override IEnumerable<IEdit> EditScene(Scene scene)
+    {
+        if (Order is null)
+        {
+            var turns = new Entity("Turns");
+            var anchor = turns.AddComponent<ScreenAnchor>();
+            (anchor.Anchor, anchor.Offset) = (Anchor.TopRight, new System.Numerics.Vector2(-0.6f, -0.7f));
+            var text = turns.AddComponent<Griff.Scenes.Text>();
+            (text.Value, text.Size, text.Align, text.Order) = ("Blue's turn", 0.6f, TextAlign.Right, 150);
+            var order = turns.AddComponent<TurnOrder>();
+            (order.Sides, order.ComputerSides) = ("Blue, Red", "");
+            yield return new AddEntityEdit(scene, turns);
+
+            var size = new System.Numerics.Vector2(3, 0.9f);
+            var end = new Entity("End Turn");
+            var endAnchor = end.AddComponent<ScreenAnchor>();
+            (endAnchor.Anchor, endAnchor.Offset) = (Anchor.BottomRight, new System.Numerics.Vector2(-1.9f, 0.8f));
+            var sprite = end.AddComponent<Sprite>();
+            (sprite.Size, sprite.Tint, sprite.Order) = (size, Griff.Color.FromBytes(0x3A, 0x3F, 0x4B), 150);
+            var label = end.AddComponent<Griff.Scenes.Text>();
+            (label.Value, label.Size, label.Order) = ("End Turn", 0.45f, 151);
+            var button = end.AddComponent<Griff.Scenes.Button>();
+            (button.Size, button.Action, button.Navigable) = (size, ButtonAction.EndTurn, false);
+            yield return new AddEntityEdit(scene, end, turns);
+        }
+
+        if (!scene.Entities.Any(e => e.GetComponent<TacticsControls>() is not null))
+        {
+            var tactics = new Entity("Tactics");
+            tactics.AddComponent<TacticsControls>();
+            yield return new AddEntityEdit(scene, tactics);
+        }
     }
 }
 

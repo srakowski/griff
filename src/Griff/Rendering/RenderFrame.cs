@@ -144,6 +144,8 @@ public static partial class SceneRenderer
         if (strategy)
             sprites = WithStrategy(game!, sprites, camera, view.Center, view.Half, size);
         sprites = WithSandbox(scene, game, sprites, camera, view, size);
+        if (game is not null && firstPerson.View is null)
+            sprites = WithTactics(game, sprites, size);
 
         // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched.
         var ambient = component?.CurrentAmbient ?? Color.White;

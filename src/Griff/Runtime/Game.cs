@@ -151,6 +151,7 @@ public sealed partial class Game
         RunLobby();
         ApplySwitches();
         RunTurns();
+        RunTactics();
         RunBeatClocks();
 
         // Before anything moves, so a move taken back this frame isn't stepped on from where it was.

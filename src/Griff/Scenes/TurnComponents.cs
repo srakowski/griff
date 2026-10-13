@@ -72,6 +72,13 @@ public sealed class TurnOrder : Component
     public string? Sound { get; set; }
 
     /// <summary>
+    /// A message sent once a side that had turn takers has none left (beaten: its units all destroyed), with the side's
+    /// name as its data. {0} in it is the side's name: "{0}Defeated" sends "RedDefeated", for a Victory panel to open on.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? DefeatMessage { get; set; } = "{0}Defeated";
+
+    /// <summary>
     /// The side whose turn it is. Empty starts with the first side; set it to start with another, or from a script to hand
     /// the turn straight to a side (its turn starts afresh).
     /// </summary>
@@ -127,6 +134,9 @@ public sealed class TurnOrder : Component
     internal bool EndRequested { get; set; }
 
     internal string? Shown { get; set; }
+
+    // The sides seen with turn takers, so one left with none is beaten once. Not saved: a rewound game sees afresh.
+    internal HashSet<string> Fielded { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

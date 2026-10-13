@@ -60,6 +60,7 @@ public sealed partial class Game
             BeginTurn(order, takers, order.Current?.Trim() ?? "", 0);
         }
 
+        SendDefeats(order, takers);
         if (order.StartsIn > 0)
         {
             order.EndRequested = false;
@@ -79,6 +80,19 @@ public sealed partial class Game
 
         if (order.Entity!.GetComponent<Text>() is { } text && TurnLabel(order) is { } label && text.Value != label)
             text.Value = label;
+    }
+
+    // A side that had turn takers and has none left is beaten: its Defeat Message goes out, once.
+    private void SendDefeats(TurnOrder order, List<TurnTaker> takers)
+    {
+        foreach (var side in order.SideList)
+        {
+            if (HasTakers(takers, side))
+                order.Fielded.Add(side.Trim());
+            else if (order.Fielded.Remove(side.Trim()) && !string.IsNullOrWhiteSpace(order.DefeatMessage) &&
+                     Fill(order.DefeatMessage, side.Trim()).Trim() is { Length: > 0 } message)
+                Send(message, side.Trim());
+        }
     }
 
     // Over to the next side with anyone to take its turn, after the gap between turns.

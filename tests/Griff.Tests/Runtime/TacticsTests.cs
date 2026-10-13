@@ -685,4 +685,25 @@ public class TacticsTests
 
         Assert.Equal(TacticsStance.Hold, copy.Stance);
     }
+
+    [Fact]
+    public void A_side_losing_its_last_unit_sends_its_Defeat_Message_once()
+    {
+        AddMap();
+        AddTurns();
+        AddControls();
+        AddUnit("Knight", 1, 1, "Blue");
+        var orc = AddUnit("Orc", 2, 1, "Red", hitPoints: 1);
+        var heard = new List<object?>();
+        _game.On("RedDefeated", heard.Add);
+        _game.On("BlueDefeated", heard.Add);
+        Run(Frame);
+
+        Click(1, 1);
+        Click(2, 1);
+        Run(0.5f);
+
+        Assert.Null(orc.Scene);
+        Assert.Equal(["Red"], heard);
+    }
 }

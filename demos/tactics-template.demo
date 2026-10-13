@@ -1,0 +1,55 @@
+title: The Tactics template
+intro: A battle ready to play: your knights and archers against the computer's orc warband, turn by turn. No code.
+project: Tactics | Skirmish
+scene: Battle
+
+chapter: The field | What's in the battle
+look: 0, 0, 6
+explain: scene | The field | A field of grass, with trees and rocks in the way, painted on a tilemap. Your knights and archers start on the left, the orcs and goblins on the right.
+select: Orc
+explain: component:TacticsUnit | An orc | Every fighter is a Tactics Unit: how far it walks, how far it hits, and how hard. This orc charges.
+select: Goblin 2
+explain: field:TacticsUnit.Stance | Stance | This goblin archer holds its ground on the rocks, shooting whatever comes within three cells.
+select: Turns
+explain: field:TurnOrder.ComputerSides | The computer plays Red | The turn order has the computer play Red.
+explain: field:TurnOrder.DefeatMessage | Defeat Message | When a side loses its last unit, the turn order sends a message: Red Defeated opens the Victory panel, Blue Defeated the Defeat panel.
+
+chapter: A round | You, then the computer
+play
+wait: 0.8
+gameclick: Knight
+wait: 0.3
+explain: game | Pick and send | Pick the knight: where it can walk lights up blue, and where it could hit, red.
+gameclick: Knight + 3, 0
+wait: 1
+gameclick: Archer
+gameclick: Archer + 1, 1
+wait: 1
+expectat: Archer = -5.5, 2.5
+tap: Tab
+wait: 0.5
+expectvalue: Turns.TurnOrder.Current = Red
+say: The rest wait, and Tab ends the turn.
+wait: 5
+expectvalue: Turns.TurnOrder.Current = Blue
+explain: game | The orcs come | The computer moves its units one at a time: the orcs charge across the field, and the goblins keep their places.
+stop
+
+chapter: Victory | One orc left
+select: Orc 2
+select: Ctrl+Orc 3
+select: Ctrl+Goblin
+select: Ctrl+Goblin 2
+menu: Entity > Delete
+select: Orc
+set: Transform.Position = -4.5, 0.5, 0
+set: Health.Current = 1
+say: To see how it ends, a battle down to one wounded orc, right next to a knight.
+play
+wait: 0.8
+gameclick: Knight
+gameclick: Orc
+waitfor: Victory | 5
+explain: game | Victory | The last orc falls, Red is defeated, and the Victory panel opens, with Again and Menu.
+stop
+say: That's the Tactics template: units, a computer opponent and turns, all ready to change into your own battle.

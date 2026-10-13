@@ -33,6 +33,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
+    [InlineData(ProjectTemplate.Tactics)]
     public async Task Template_Compiles_AndLoadsWithoutMissingComponents(ProjectTemplate template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -65,6 +66,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
+    [InlineData(ProjectTemplate.Tactics)]
     public async Task Template_NamesOnlyEntitiesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -93,6 +95,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
+    [InlineData(ProjectTemplate.Tactics)]
     public async Task Template_NamesOnlyPrefabsScenesActionsLayersAndMessagesItHas(ProjectTemplate template)
     {
         var (project, _, _, registry) = await CreateAndLoad(template);
@@ -803,6 +806,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData(ProjectTemplate.Match3)]
     [InlineData(ProjectTemplate.FallingBlocks)]
     [InlineData(ProjectTemplate.Roguelike)]
+    [InlineData(ProjectTemplate.Tactics)]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(ProjectTemplate template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -814,6 +818,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Game");
         if (template == ProjectTemplate.Roguelike)
             scene = GameLoader.LoadScene(project, registry, "Crypt");
+        if (template == ProjectTemplate.Tactics)
+            scene = GameLoader.LoadScene(project, registry, "Battle");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -828,8 +834,10 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.Equal("Resume", game.Focused!.Entity!.Name);
         Assert.Equal("Esc to resume", paused.Children.Single(c => c.Name == "Hint").GetComponent<Text>()!.Shown);
 
-        // Nothing moves while it's up, however hard the player pushes: not the player, nor a board's piece or cursor.
+        // Nothing moves while it's up, however hard the player pushes: not the player, nor a board's piece or cursor, nor
+        // the tactics cursor.
         string Moving() => game.Find("Player") is { } player ? player.Transform.Position.ToString()
+            : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();

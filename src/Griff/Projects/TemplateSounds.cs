@@ -75,6 +75,7 @@ internal static class TemplateSounds
         ProjectTemplate.Match3 => MusicRecipe.ForMood(MusicMood.Bright, seed: 12) with { Volume = 0.5f },
         ProjectTemplate.FallingBlocks => MusicRecipe.ForMood(MusicMood.Tense, seed: 13) with { Volume = 0.5f },
         ProjectTemplate.Roguelike => MusicRecipe.ForMood(MusicMood.Spooky, seed: 14) with { Volume = 0.5f },
+        ProjectTemplate.Tactics => MusicRecipe.ForMood(MusicMood.Heroic, seed: 15) with { Volume = 0.5f },
         _ => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f },
     };
 
@@ -134,6 +135,13 @@ internal static class TemplateSounds
                     break;
                 case BumpAttack b:
                     Set(b.Sound, s => b.Sound = s, Swing);
+                    break;
+                case TacticsUnit t:
+                    Set(t.AttackSound, s => t.AttackSound = s, t.Range > 1 ? Shoot : Swing);
+                    break;
+                case TacticsControls t:
+                    Set(t.SelectSound, s => t.SelectSound = s, Select);
+                    Set(t.CancelSound, s => t.CancelSound = s, Switch);
                     break;
                 case Inventory i when i.ItemUses.Count > 0:
                     Set(i.UseSound, s => i.UseSound = s, PowerUp);

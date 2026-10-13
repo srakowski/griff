@@ -138,6 +138,9 @@ public sealed partial class Game
         Debug.BeginFrame();
         Net.BeginFrame(Time.UnscaledDelta);
 
+        // Dungeons are made first, so what starts this frame starts on the floor (spawns included).
+        RunDungeons();
+
         // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
         var behaviors = ActiveBehaviors().Where(b => Runs(b.Entity!)).ToList();
         foreach (var behavior in behaviors.Where(b => !b.IsStarted))
@@ -448,7 +451,12 @@ public sealed partial class Game
             .ToList();
         foreach (var panel in panels)
             OpenPanel(panel);
-        return heard + counters.Count + players.Count + panels.Count;
+
+        // And dungeons go down to their next floor on theirs, at the start of the next frame.
+        var dungeons = Active<DungeonGenerator>().Where(d => d.NextFloorMessage?.Trim() == message).ToList();
+        foreach (var dungeon in dungeons)
+            dungeon.NextFloor();
+        return heard + counters.Count + players.Count + panels.Count + dungeons.Count;
     }
 
     private static int CountOf(object? data) => data switch

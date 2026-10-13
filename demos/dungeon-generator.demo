@@ -1,0 +1,64 @@
+title: Dungeons
+intro: Floors of rooms and corridors made from a seed, with the player, the stairs and the monsters put in place. No code.
+project: Empty | Deep Halls
+
+chapter: A dungeon | Entity > Create Dungeon
+select: Main Camera
+set: Camera.Size = 17
+deselect
+create: Dungeon
+explain: component:DungeonGenerator | Dungeon Generator | A Dungeon Generator on a tilemap fills it with a dungeon: rooms of different sizes, joined by corridors, cut out of solid wall.
+explain: field:DungeonGenerator.Rooms | Rooms | It makes up to this many rooms, between the smallest and biggest room sizes, and a couple of extra corridors so there's more than one way round.
+explain: field:DungeonGenerator.Seed | Seed | The seed picks the dungeon. Zero makes a new one every game.
+menu: Entity > Generate Dungeon
+wait: 0.8
+menu: Entity > Generate Dungeon
+wait: 0.8
+say: Generate Dungeon shows one in the editor. With a seed of zero, it's a different dungeon every time.
+set: DungeonGenerator.Seed = 140
+menu: Entity > Generate Dungeon
+expecttile: Dungeon 28, 14 = -1
+expecttile: Dungeon 0, 0 = 0
+say: The same seed always makes the same dungeon, so this is the one the game will play.
+
+chapter: Who goes where | Players, the exit and spawns
+deselect
+create: Grid Player
+deselect
+create: Sprite
+rename: Stairs
+set: Sprite.Tint = #F2C94C
+deselect
+create: Sprite
+rename: Slime
+set: Sprite.Tint = #57AB5A
+set: Sprite.Size = 0.7, 0.7
+menu: Entity > Save as Prefab
+menu: Entity > Delete
+say: A grid player, some stairs, and a slime saved as a prefab.
+select: Dungeon
+explain: field:DungeonGenerator.Players | Players | The entity called Player goes in the middle of the first room.
+pick: DungeonGenerator.Exit = Stairs
+explain: field:DungeonGenerator.Exit | Exit | The stairs go in the room the longest walk away. Stepping onto them goes down to the next floor.
+set: DungeonGenerator.Spawns = Slime 6
+explain: field:DungeonGenerator.Spawns | Spawns | Six slimes, scattered through the other rooms. A line can say a range too, like one to three potions.
+menu: Entity > Generate Dungeon
+expectat: Player = 4.5, 1.5
+expectat: Stairs = -20.5, -7.5
+say: Generating again puts the player and the stairs in place, as one undo step.
+
+chapter: Down the stairs | Play it
+play
+wait: 0.5
+expectcount: Slime = 6
+explain: game | Spawns | As the game starts, the six slimes appear in the rooms. They never land in the player's room, on the stairs, or on each other.
+hold: Left 4.2
+expectat: Player = -20.5, 1.5
+say: The player walks the corridor, and the walls stop it.
+hold: Down 1.6
+wait: 0.5
+expectvalue: Dungeon.DungeonGenerator.Floor = 2
+expectcount: Slime = 6
+explain: game | Floor two | Onto the stairs, and it's the next floor: a new dungeon, new slimes, and the player in its first room. Each floor sends a Floor message for a counter to show.
+stop
+say: That's a dungeon generator with no code. The tiles and the floor are saved with the scene, so a rewind goes back to the floor you were on.

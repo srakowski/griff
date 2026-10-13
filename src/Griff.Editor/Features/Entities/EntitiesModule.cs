@@ -45,6 +45,8 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateGoalCommand>()
             .AddCommand<CreateMatchBoardCommand>()
             .AddCommand<CreateFallingBoardCommand>()
+            .AddCommand<CreateDungeonCommand>()
+            .AddCommand<GenerateDungeonCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
@@ -706,6 +708,83 @@ public sealed class CreateFallingBoardCommand(IWorkspace workspace, ISelection s
         entity.AddComponent<Tilemap>().Solid = false;
         var board = entity.AddComponent<FallingBoard>();
         entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
+    }
+}
+
+/// <summary>
+/// Creates a dungeon: a <see cref="Tilemap"/> with a <see cref="DungeonGenerator"/> 48 cells across and 32 down, centered
+/// on the scene's middle, showing a dungeon made from a new seed: rooms and corridors cut from solid wall (Fill Walls), so
+/// they show without a tileset. The game makes its own each time it starts (its Seed is 0); set a Seed to keep one, and
+/// use Generate Dungeon to see it. It puts the entity called "Player" in the first room.
+/// </summary>
+public sealed class CreateDungeonCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateDungeon";
+    public override string Text => "Create D_ungeon";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    protected override string EntityName => "Dungeon";
+
+    protected override void Configure(Entity entity)
+    {
+        var map = entity.AddComponent<Tilemap>();
+        map.Tint = Griff.Color.FromBytes(0x48, 0x4B, 0x55);
+        var dungeon = entity.AddComponent<DungeonGenerator>();
+        dungeon.FillWalls = true;
+        entity.Transform.Position = new System.Numerics.Vector3(-dungeon.Width / 2f, dungeon.Height / 2f, 0);
+        map.Tiles = Griff.Runtime.DungeonGen.Generate(dungeon, Random.Shared.Next(1, int.MaxValue)).Tiles;
+    }
+}
+
+/// <summary>
+/// Makes the selected dungeon now, to see what it looks like: its tilemap filled with rooms and corridors, its Players
+/// put in the first room and its Exit in the furthest, as one undo step. With a Seed, it's the first floor the game will
+/// make; with Seed 0, a new one each time (the game still makes its own). Spawns only appear in the game.
+/// </summary>
+public sealed class GenerateDungeonCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public override string Id => "Entity.GenerateDungeon";
+    public override string Text => "_Generate Dungeon";
+    public override string? Icon => Icons.Shuffle;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 9);
+
+    protected override bool CanExecuteCore() =>
+        workspace.Scene is not null && selection.Entity?.GetComponent<DungeonGenerator>() is not null && selection.Entity.GetComponent<Tilemap>() is not null;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } entity ||
+            entity.GetComponent<DungeonGenerator>() is not { } dungeon || entity.GetComponent<Tilemap>() is not { } map)
+            throw new InvalidOperationException("Select a dungeon (an entity with a Dungeon Generator) to generate it.");
+
+        var layout = Griff.Runtime.DungeonGen.Generate(dungeon, dungeon.Seed != 0 ? dungeon.Seed : Random.Shared.Next(1, int.MaxValue));
+        var moves = new List<(Entity Entity, (int X, int Y) Cell)>();
+        var players = (dungeon.Players ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .SelectMany(name => document.Scene.Entities.Where(e => e.Name == name)).Distinct().ToList();
+        for (var i = 0; i < players.Count; i++)
+            moves.Add((players[i], layout.Players[Math.Min(i, layout.Players.Count - 1)]));
+        if (!string.IsNullOrWhiteSpace(dungeon.Exit) && document.Scene.FindNamed(dungeon.Exit.Trim()) is { } exit)
+            moves.Add((exit, layout.Exit));
+
+        using (document.History.BeginGroup("Generate Dungeon"))
+        {
+            document.Execute(new SetPropertyEdit(map, workspace.Components.Get(typeof(Tilemap)).Properties.Single(p => p.Name == nameof(Tilemap.Tiles)), layout.Tiles));
+            if (moves.Count > 0)
+            {
+                var world = entity.Transform.WorldMatrix;
+                document.Execute(new SetPositionsEdit(moves.Select(m => m.Entity.Transform).ToList(), moves.Select(m =>
+                {
+                    var at = System.Numerics.Vector2.Transform(map.CellCenter(m.Cell.X, m.Cell.Y), world);
+                    var local = new System.Numerics.Vector3(at, m.Entity.Transform.WorldPosition.Z);
+                    if (m.Entity.Parent is { } parent && System.Numerics.Matrix4x4.Invert(parent.Transform.WorldMatrix, out var toParent))
+                        local = System.Numerics.Vector3.Transform(local, toParent);
+                    return local with { Z = m.Entity.Transform.Position.Z };
+                }).ToList()));
+            }
+        }
+
+        document.History.Seal();
+        return Task.CompletedTask;
     }
 }
 

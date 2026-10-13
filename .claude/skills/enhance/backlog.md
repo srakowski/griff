@@ -20,37 +20,6 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Step the game at a fixed rate with drawing smoothed in between, so the same input gives the same result on any machine; rewind, multiplayer, slow motion and hit stop keep working. Scripts get a fixed update.
   - The riskiest of these, so it's on its own and last. It goes before the Physics items, which build on it.
 
-### Gameplay foundations
-
-
-### Genres: puzzles
-
-
-### Genres: roguelikes and tactics
-
-
-### Genres: cards, adventures and stories
-
-- [ ] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them.
-- [ ] Add card effects without code (damage, draw, cost) and a turn-based card opponent.
-- [ ] Add a Cards template.
-- [ ] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it.
-- [ ] Add using inventory items on hotspots and on each other.
-- [ ] Add an Adventure template: a point-and-click adventure.
-- [ ] Add visual novel scenes: backgrounds and characters on screen with positions and expressions, driven by dialogue.
-- [ ] Add visual novel save slots, a log of lines already read, skip and auto-advance.
-- [ ] Add a Visual Novel template.
-
-### Genres: rhythm and fighting
-
-- [ ] Add an audio offset setting players can tune by tapping along (for speakers with their own delay, like Bluetooth headphones), which the beat clock allows for.
-- [ ] Add rhythm notes: a chart of notes timed to the beat clock, scrolling lanes, and hit judgments.
-- [ ] Add rhythm chart recording: tap along to the music in the editor to place notes.
-- [ ] Add a Rhythm template.
-- [ ] Add hitboxes and hurtboxes for each animation frame, edited in the clip editor.
-- [ ] Add fighting moves: blocking, hitstun, an input buffer and special-move inputs like quarter circles.
-- [ ] Add a Fighter template with local versus play.
-
 ### Views
 
 - [ ] Add isometric tilemaps: diamond tiles drawn, painted and depth sorted.
@@ -72,10 +41,6 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Add polygon colliders that rotate, with their points edited in the Scene view.
 - [ ] Add hinge joints, and let welded contraptions turn.
 - [ ] Make ropes swing and sag.
-- [ ] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts.
-- [ ] Add a Physics template, in the Angry Birds style.
-- [ ] Add pinball pieces: flippers, bumpers, a plunger and tilt.
-- [ ] Add a Pinball template.
 
 ### Platforms
 
@@ -106,6 +71,37 @@ grows. The headings only group items; build order is top to bottom.
   - Target: at least 50,000 bunnies (each an ordinary entity with a Sprite and a Body or script) at 60 fps in an exported game, with 1% lows also at 60 fps and no garbage collected per frame, so a jam game never has to think about performance. That's above Godot 3's C# result (about 27,500), and it leaves room for a real game's logic on top. Profile and fix the bottlenecks (sprite batching, per-entity overhead, allocations, physics broadphase) one at a time; each fix that outgrows one session becomes its own item right after this one.
 - [ ] Add a kata runner that builds a 20 Games Challenge clone (start with Pong) and records what it needed: no-code components, lines of script, and what was missing.
 - [ ] Add Breakout, Flappy Bird and Space Invaders to the kata runner.
+
+### Genres: physics games
+
+Built-in genres wait until the engine work above is done (the user's call, 2026-10-13): the genre blocks below come after Architecture, Views, Profiler, Physics, Platforms, Debugger and Benchmarks, and before 3D and VR.
+
+- [ ] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts.
+- [ ] Add a Physics template, in the Angry Birds style.
+- [ ] Add pinball pieces: flippers, bumpers, a plunger and tilt.
+- [ ] Add a Pinball template.
+
+### Genres: cards, adventures and stories
+
+- [ ] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them.
+- [ ] Add card effects without code (damage, draw, cost) and a turn-based card opponent.
+- [ ] Add a Cards template.
+- [ ] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it.
+- [ ] Add using inventory items on hotspots and on each other.
+- [ ] Add an Adventure template: a point-and-click adventure.
+- [ ] Add visual novel scenes: backgrounds and characters on screen with positions and expressions, driven by dialogue.
+- [ ] Add visual novel save slots, a log of lines already read, skip and auto-advance.
+- [ ] Add a Visual Novel template.
+
+### Genres: rhythm and fighting
+
+- [ ] Add an audio offset setting players can tune by tapping along (for speakers with their own delay, like Bluetooth headphones), which the beat clock allows for.
+- [ ] Add rhythm notes: a chart of notes timed to the beat clock, scrolling lanes, and hit judgments.
+- [ ] Add rhythm chart recording: tap along to the music in the editor to place notes.
+- [ ] Add a Rhythm template.
+- [ ] Add hitboxes and hurtboxes for each animation frame, edited in the clip editor.
+- [ ] Add fighting moves: blocking, hitstun, an input buffer and special-move inputs like quarter circles.
+- [ ] Add a Fighter template with local versus play.
 
 ### 3D and VR
 

@@ -160,6 +160,7 @@ public sealed partial class Game
         RunEnemies();
         RunMovement();
         RunFirstPerson();
+        RunItemUses();
 
         // While a panel pauses the game, only the scripts on open panels run.
         foreach (var behavior in behaviors)

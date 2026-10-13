@@ -406,6 +406,8 @@ public sealed class Inventory : Component
     // Names in the order first added, so the Inspector's list doesn't shuffle.
     private readonly List<(string Name, int Count)> _items = [];
     private IReadOnlyList<string>? _rows;
+    private IReadOnlyList<string> _uses = [];
+    private IReadOnlyList<(string Item, IReadOnlyList<(string Verb, string Argument)> Effects)> _effects = [];
 
     /// <summary>What it holds, one kind per row: a name and how many, e.g. "Key 2" (just "Key" is one).</summary>
     public IReadOnlyList<string> Items
@@ -427,8 +429,48 @@ public sealed class Inventory : Component
         }
     }
 
+    /// <summary>
+    /// What its items do when they're used, one per line: the item, a colon, and what it does, several separated by
+    /// commas: "heal 3" gives back hit points, "spawn Explosion" spawns a prefab where it stands, "send Teleport" sends a
+    /// message (with this entity as its data). E.g. "Potion: heal 3", "Bomb: spawn Explosion, send Boom". Using one takes
+    /// it out; a potion that only heals isn't used up at full health.
+    /// </summary>
+    [Group("Using Items")]
+    public IReadOnlyList<string> ItemUses
+    {
+        get => _uses;
+        set
+        {
+            _uses = value ?? [];
+            _effects = ItemEffects.Parse(_uses);
+        }
+    }
+
+    /// <summary>The number keys use what it holds: 1 the first item it has with a use (in the order it got them), 2 the second, up to 9.</summary>
+    public bool NumberKeys { get; set; } = true;
+
+    /// <summary>A sound played as an item is used, e.g. "Sounds/drink.wav".</summary>
+    public string? UseSound { get; set; }
+
     /// <summary>Raised when what it holds changes, with the item's name.</summary>
     public event Action<string>? Changed;
+
+    /// <summary>Raised as an item is used, with its name.</summary>
+    public event Action<string>? Used;
+
+    /// <summary>The items it holds that have a use (see <see cref="ItemUses"/>), in the order it got them: what the number keys use.</summary>
+    public IReadOnlyList<string> Usable => _items.Where(i => i.Count > 0 && EffectsOf(i.Name).Count > 0).Select(i => i.Name).ToList();
+
+    /// <summary>What <paramref name="item"/> does when used, as <see cref="ItemUses"/> says: each a verb ("heal", "spawn", "send") and what it takes.</summary>
+    public IReadOnlyList<(string Verb, string Argument)> EffectsOf(string item) =>
+        _effects.FirstOrDefault(e => string.Equals(e.Item, item?.Trim(), StringComparison.OrdinalIgnoreCase)).Effects ?? [];
+
+    /// <summary>Uses one <paramref name="item"/> at the start of the next frame, as its number key does: on its turn, if it holds one.</summary>
+    public void Use(string item) => UseRequests.Add(item);
+
+    internal List<string> UseRequests { get; } = [];
+
+    internal void RaiseUsed(string item) => Used?.Invoke(item);
 
     /// <summary>Everything it holds and how many, in the order each was first added.</summary>
     public IReadOnlyList<(string Name, int Count)> Contents => _items.ToList();
@@ -489,6 +531,38 @@ public sealed class Inventory : Component
     {
         item = item?.Trim() ?? "";
         return _items.FindIndex(i => string.Equals(i.Name, item, StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+/// <summary>Reads <see cref="Inventory.ItemUses"/>: "Potion: heal 3, send Gulp" lines into each item and its effects.</summary>
+internal static class ItemEffects
+{
+    /// <summary>The verbs an effect can start with.</summary>
+    public static readonly string[] Verbs = ["heal", "spawn", "send"];
+
+    public static IReadOnlyList<(string Item, IReadOnlyList<(string Verb, string Argument)> Effects)> Parse(IReadOnlyList<string> lines)
+    {
+        var uses = new List<(string, IReadOnlyList<(string, string)>)>();
+        foreach (var line in lines)
+        {
+            var colon = line.IndexOf(':');
+            if (colon <= 0)
+                continue;
+            var effects = new List<(string, string)>();
+            foreach (var part in line[(colon + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var space = part.IndexOf(' ');
+                var verb = (space > 0 ? part[..space] : part).ToLowerInvariant();
+                var argument = space > 0 ? part[(space + 1)..].Trim() : "";
+                if (Verbs.Contains(verb) && argument.Length > 0)
+                    effects.Add((verb, argument));
+            }
+
+            if (effects.Count > 0)
+                uses.Add((line[..colon].Trim(), effects));
+        }
+
+        return uses;
     }
 }
 

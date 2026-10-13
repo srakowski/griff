@@ -393,6 +393,9 @@ public sealed class GridMovement : Component
     // Seconds the step under way takes, when it isn't its own Step Time: a pushed crate glides along with its pusher.
     internal float? Glide { get; set; }
 
+    // How far toward the next cell a bump attack lunges (and back) while it stays put; zero for a step.
+    internal Vector2 Lunge { get; set; }
+
     // The frame it was last pushed in: a crate pushed by a mover that ran before it doesn't glide on again that frame.
     internal long PushedOnFrame { get; set; } = -1;
 

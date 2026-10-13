@@ -70,6 +70,7 @@ public sealed class ComponentRegistry
         registry.Register<Light>();
         registry.Register<Room>();
         registry.Register<Attack>();
+        registry.Register<BumpAttack>();
         registry.Register<SoundSource>();
         registry.Register<BackgroundMusic>();
         registry.Register<SoundPlayer>();

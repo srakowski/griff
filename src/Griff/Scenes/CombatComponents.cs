@@ -106,3 +106,49 @@ internal enum AttackPhase
     Active,
     Cooldown,
 }
+
+/// <summary>
+/// A roguelike's attack, with no code: its <see cref="GridMovement"/> stepping into something with <see cref="Health"/>
+/// on its <see cref="Layers"/> hurts it by <see cref="Damage"/> instead of bumping, with a lunge toward it and back over a
+/// step's time. Holding the way keeps hitting. On a player it attacks the monsters it walks into; on a monster with a
+/// <see cref="GridChase"/> whose Stop Distance is 0, it attacks the player it walks into.
+/// </summary>
+/// <remarks>
+/// Taking turns, each hit uses an action, as a step does. A <see cref="Health"/> with an Invincible Time ignores hits
+/// while it lasts: 0 lets each step's hit land. In a network game the host does the damage.
+/// </remarks>
+[Category("Combat")]
+[Requires(typeof(GridMovement))]
+[WorksWith(typeof(GridChase), Note = "with Stop Distance 0, a monster that hits what it chases")]
+[ComponentName("Griff.BumpAttack")]
+public sealed class BumpAttack : Component
+{
+    /// <summary>Hit points each hit takes away.</summary>
+    public float Damage { get; set; } = 1;
+
+    /// <summary>The collision layers it hurts, e.g. "Enemy" (or "Player" for a monster). Empty hurts anything with health.</summary>
+    [Names(NameKind.Layer, Many = true)]
+    public string? Layers { get; set; } = "Enemy";
+
+    /// <summary>A sound played with each hit, e.g. "Sounds/hit.wav".</summary>
+    public string? Sound { get; set; }
+
+    /// <summary>A prefab spawned on what it hits, e.g. "Sparkle": a burst of particles, a damage number.</summary>
+    [Names(NameKind.Prefab)]
+    public string? Effect { get; set; }
+
+    /// <summary>Freezes the game for this many seconds when a hit lands, so it hits hard. 0 for none.</summary>
+    public float HitStop { get; set; }
+
+    /// <summary>Raised with each hit, with what it hit.</summary>
+    public event Action<Entity>? Hit;
+
+    /// <summary>True if it hurts things on collision layer <paramref name="layer"/>.</summary>
+    public bool Hurts(string? layer)
+    {
+        var layers = CollisionLayers.Parse(Layers);
+        return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
+    }
+
+    internal void RaiseHit(Entity target) => Hit?.Invoke(target);
+}

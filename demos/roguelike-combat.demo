@@ -1,0 +1,91 @@
+title: Roguelike fighting
+intro: Bump into a monster to hit it, turn by turn, and pick up potions to drink with the number keys. No code.
+project: Empty | Slime Crawl
+
+chapter: A hero who hits by walking | Bump Attack
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111\n1......1\n1......1\n11111111
+select: Main Camera
+set: Transform.Position.X = 4
+set: Transform.Position.Y = -2
+look: 4, -2, 3.5
+deselect
+create: Grid Player
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+add: Health
+set: Health.Max = 5
+set: Health.Current = 3
+set: Health.InvincibleTime = 0
+say: A small room and a grid player, a little hurt: three hit points of five.
+add: BumpAttack
+explain: component:BumpAttack | Bump Attack | A Bump Attack makes walking into a monster hit it instead of bumping into it.
+explain: field:BumpAttack.Layers | Layers | It hurts things on the Enemy layer, a hit point at a time.
+add: Inventory
+set: Inventory.ItemUses = Potion: heal 2
+explain: field:Inventory.ItemUses | Item Uses | And the inventory says what its items do. A potion heals two hit points. Bombs could spawn an explosion, and scrolls send a message.
+explain: field:Inventory.NumberKeys | Number Keys | The number keys use them: one for the first item it holds that has a use.
+
+chapter: A potion and a slime | Pickups and a monster that hits back
+deselect
+create: Sprite
+rename: Potion
+set: Transform.Position.X = 2.5
+set: Transform.Position.Y = -2.5
+set: Sprite.Size = 0.4, 0.4
+set: Sprite.Tint = #E04060
+add: BoxCollider
+set: BoxCollider.IsTrigger = true
+add: Pickup
+set: Pickup.Item = Potion
+say: A potion to pick up: its Pickup puts a Potion in the inventory of whoever steps on it.
+deselect
+create: Grid Enemy
+set: Transform.Position.X = 6.5
+set: Transform.Position.Y = -1.5
+set: GridChase.Range = 0
+set: GridChase.StopDistance = 0
+click: remove:Attack
+select: Hitbox
+menu: Entity > Delete
+select: Enemy
+add: Health
+set: Health.Max = 2
+set: Health.Current = 2
+set: Health.InvincibleTime = 0
+add: BumpAttack
+set: BumpAttack.Layers = Player
+explain: component:BumpAttack | A monster's Bump Attack | The slime chases the player right into its cell, so with a Bump Attack on the Player layer, it hits the player too.
+deselect
+create: Turn Order
+explain: menu:Entity | Create Turn Order | And a turn order: everything moves when the player moves.
+
+chapter: Fight | Turn by turn
+play
+wait: 0.5
+tap: Down
+wait: 0.5
+tap: Right
+wait: 0.5
+expectvalue: Player.Inventory.Items = Potion
+say: The player steps onto the potion and picks it up. Each step, the slime steps closer.
+tap: D1
+wait: 0.5
+expectvalue: Player.Health.Current = 5
+explain: game | Drinking it | Pressing one drinks it, back to full health. Using it took a turn, so the slime came closer again.
+tap: Up
+wait: 0.6
+expectvalue: Player.Health.Current = 4
+say: The slime walks into the player and hits it.
+tap: Right
+wait: 0.6
+expectvalue: Enemy.Health.Current = 1
+expectvalue: Player.Health.Current = 3
+explain: game | Bump to hit | The player walks into the slime, lunging and hitting it, and the slime hits back on its turn.
+tap: Right
+wait: 0.6
+expectcount: Enemy = 0
+say: One more hit and it's gone.
+stop
+say: That's roguelike fighting with no code: a Bump Attack for anything that steps on the grid, and items with uses for the number keys.

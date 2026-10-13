@@ -21,6 +21,9 @@ public sealed partial class Game
     // A player's machine asks the host to push a crate the host runs.
     private const string GridPushCommand = "griff.gridpush";
 
+    // A player's machine asks the host to land a bump attack on something the host runs.
+    private const string BumpCommand = "griff.bump";
+
     private void RunGrid(GridMovement m)
     {
         var entity = m.Entity!;
@@ -87,7 +90,7 @@ public sealed partial class Game
             }
             else
             {
-                MoveTo(entity, Vector2.Lerp(m.From, m.To, m.Progress));
+                MoveTo(entity, Vector2.Lerp(m.From, m.To, m.Progress) + m.Lunge * MathF.Sin(MathF.PI * m.Progress));
             }
         }
 
@@ -162,6 +165,17 @@ public sealed partial class Game
         if (free && offset.X != 0 && offset.Y != 0)
             free = walls.IsFree((m.Cell.X + offset.X, m.Cell.Y)) && walls.IsFree((m.Cell.X, m.Cell.Y + offset.Y));
 
+        // Something it can hurt in the way is hit instead.
+        if (!free && entity.GetComponent<BumpAttack>() is { } bump && BumpTarget(bump, walls, grid, target) is { } victim)
+        {
+            Lunge(m, grid, target, direction, progress);
+            HitWithBump(bump, victim);
+            UseAction(entity);
+            if (!Runs(entity) && StepsByTurns(entity))
+                Net.SendCommand(GridStepCommand, null);
+            return;
+        }
+
         // A crate in the way (straight ahead, never diagonally) is pushed a cell along first, if it can go.
         var row = !free && (offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay
             ? CratesPushed(entity, way, inTheWay)
@@ -197,10 +211,64 @@ public sealed partial class Game
         m.Cell = target;
         m.Progress = progress;
         m.Glide = glide;
+        m.Lunge = Vector2.Zero;
         m.Stepping = true;
         MoveTo(m.Entity!, Vector2.Lerp(m.From, m.To, m.Progress));
         PlayIfSet(m.StepSound);
         m.RaiseStepped(direction);
+    }
+
+    // ----- Bump attacks -----
+
+    // What's in the cell it bumped into that it can hurt: a grid mover, or anything else with health standing there.
+    private Entity? BumpTarget(BumpAttack bump, GridWalls walls, GridCells grid, (int X, int Y) cell)
+    {
+        bool Hurtable(Entity e) => e != bump.Entity && Health.Of(e) is { IsDead: false } && bump.Hurts(e.GetComponent<Collider>()?.Layer);
+        if (walls.MoverIn(cell) is { } mover)
+            return Hurtable(mover) ? mover : null;
+        return Scene.Entities.Where(SceneRenderer.IsActive)
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is null && Hurtable(e) && grid.CellAt(Flat(e.Transform.WorldPosition)) == cell);
+    }
+
+    // Stays in its cell, lunging part way toward the next and back over a step's time.
+    private static void Lunge(GridMovement m, GridCells grid, (int X, int Y) toward, Vector2 direction, float progress)
+    {
+        m.From = m.To = grid.Center(m.Cell);
+        m.Lunge = (grid.Center(toward) - m.From) * 0.35f;
+        m.Progress = progress;
+        m.Glide = null;
+        m.Stepping = true;
+        m.Facing = direction;
+    }
+
+    // The hit lands where the game is run: here, or asked of the host when it runs what was hit.
+    private void HitWithBump(BumpAttack bump, Entity victim)
+    {
+        if (!Runs(victim))
+        {
+            Net.SendCommand(BumpCommand, new object?[] { victim });
+            return;
+        }
+
+        if (Health.Of(victim) is not { } health || !health.Damage(bump.Damage, bump.Entity))
+            return;
+        PlayIfSet(bump.Sound);
+        if (!string.IsNullOrWhiteSpace(bump.Effect))
+            Spawn(bump.Effect.Trim(), Flat(victim.Transform.WorldPosition));
+        if (bump.HitStop > 0)
+            HitStop(bump.HitStop);
+        bump.RaiseHit(victim);
+    }
+
+    // On the host: a player's character, moved on their own machine, bumped into something the host runs.
+    private void RunBump(NetPlayer? player, object? args)
+    {
+        if (player is null || args is not object?[] { Length: 1 } a || a[0] is not Entity victim || victim.Scene != Scene)
+            return;
+        var attacker = Scene.Entities.Where(SceneRenderer.IsActive)
+            .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && Net.OwnerIdOf(e) == player.Id);
+        if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer))
+            HitWithBump(bump, victim);
     }
 
     // ----- Pushing crates -----

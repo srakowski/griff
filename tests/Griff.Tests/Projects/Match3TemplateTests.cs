@@ -156,7 +156,7 @@ public sealed class Match3TemplateTests : IDisposable
     public async Task EveryLevel_IsWonByPlayingIt_WhichOpensComplete_AndTheNextLevelsButton()
     {
         var (_, game) = await Create();
-        var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level")).OrderBy(b => b.Entity!.Name).ToList();
+        var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)).OrderBy(b => b.Entity!.Name).ToList();
         Assert.Equal(ProjectTemplates.MatchLevels.Count, buttons.Count);
         Assert.Equal("1. First Sparkle", buttons[0].Entity!.GetComponent<Text>()!.Value);
         Assert.True(buttons[0].IsUsable);
@@ -192,7 +192,7 @@ public sealed class Match3TemplateTests : IDisposable
             Assert.Equal(last ? "Main" : ProjectTemplates.MatchLevelScene(i + 1), game.SceneName);
         }
 
-        Assert.All(game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level")), b => Assert.True(b.IsUsable, b.Entity!.Name));
+        Assert.All(game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)), b => Assert.True(b.IsUsable, b.Entity!.Name));
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public sealed class Match3TemplateTests : IDisposable
 
         var files = entities.SelectMany(e => e.Components)
             .SelectMany(c => c.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound") || p.Name is "Music" or "Image"))
+                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound", StringComparison.Ordinal) || p.Name is "Music" or "Image"))
                 .Select(p => (Field: $"{c.GetType().Name}.{p.Name}", Path: p.GetValue(c) as string)))
             .Where(f => !string.IsNullOrWhiteSpace(f.Path))
             .ToList();

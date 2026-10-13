@@ -42,7 +42,8 @@ public class AgentSurfaceTests
 
         Assert.All(tools.Keys, name => Assert.True(AgentTool.IsValidName(name), name));
         Assert.All(tools.Values, tool => Assert.False(string.IsNullOrWhiteSpace(tool.Description), tool.Name));
-        foreach (var expected in new[] { "scene_tree", "entity_create", "entity_update", "component_describe", "asset_write", "ui_invoke", "editor_screenshot", "game_input", "Game_Play", "Scene_Open" })
+        string[] expectedTools = ["scene_tree", "entity_create", "entity_update", "component_describe", "asset_write", "ui_invoke", "editor_screenshot", "game_input", "Game_Play", "Scene_Open"];
+        foreach (var expected in expectedTools)
             Assert.Contains(expected, tools.Keys);
     });
 
@@ -54,7 +55,8 @@ public class AgentSurfaceTests
 
         foreach (var panel in services.GetServices<PanelDescriptor>())
             Assert.Contains(((ToolPanel)services.GetRequiredService(panel.PanelType)).Id, roots);
-        foreach (var service in new[] { "Workspace", "Selection", "PlayMode", "EditorArt", "EditorAudio", "OutputLog", "PanelLayout" })
+        string[] serviceNames = ["Workspace", "Selection", "PlayMode", "EditorArt", "EditorAudio", "OutputLog", "PanelLayout"];
+        foreach (var service in serviceNames)
             Assert.Contains(service, roots);
     });
 

@@ -130,10 +130,10 @@ public sealed class GameSurface : HwndHost
         return new Vector2((float)(pixel.X / width * 2 - 1), (float)(1 - pixel.Y / height * 2));
     }
 
-    protected override HandleRef BuildWindowCore(HandleRef parent)
+    protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
         _hwnd = CreateWindowEx(0, "static", "", WsChild | WsVisible | WsClipChildren | WsClipSiblings,
-            0, 0, 1, 1, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            0, 0, 1, 1, hwndParent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 
         _context = new WglContext(_hwnd);
         _gl = GL.GetApi(_context.GetProcAddress);

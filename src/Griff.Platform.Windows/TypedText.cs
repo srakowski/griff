@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Input;
 
 namespace Griff.Platform.Windows;
@@ -25,10 +24,10 @@ public static class TypedText
             if ((state[ctrl] & 0x80) != 0 && (state[alt] & 0x80) == 0)
                 return "";
 
-            var buffer = new StringBuilder(8);
+            var buffer = new char[8];
             var layout = GetKeyboardLayout(0);
-            var count = ToUnicodeEx(virtualKey, MapVirtualKeyEx(virtualKey, 0, layout), state, buffer, buffer.Capacity, DontChangeKeyboardState, layout);
-            return count > 0 ? buffer.ToString(0, count) : "";
+            var count = ToUnicodeEx(virtualKey, MapVirtualKeyEx(virtualKey, 0, layout), state, buffer, buffer.Length, DontChangeKeyboardState, layout);
+            return count > 0 ? new string(buffer, 0, count) : "";
         }
         catch (EntryPointNotFoundException)
         {
@@ -46,5 +45,5 @@ public static class TypedText
     private static extern uint MapVirtualKeyEx(uint code, uint mapType, IntPtr layout);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int ToUnicodeEx(uint virtualKey, uint scanCode, byte[] keyState, StringBuilder buffer, int bufferSize, uint flags, IntPtr layout);
+    private static extern int ToUnicodeEx(uint virtualKey, uint scanCode, byte[] keyState, [Out] char[] buffer, int bufferSize, uint flags, IntPtr layout);
 }

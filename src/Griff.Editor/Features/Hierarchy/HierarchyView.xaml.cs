@@ -240,7 +240,7 @@ public partial class HierarchyView : UserControl
 
     private static bool IsInside<T>(object source) where T : DependencyObject
     {
-        for (var current = source as DependencyObject; current is not null and not TreeViewItem; current = VisualParent(current))
+        for (var current = source as DependencyObject; current is not null and not TreeViewItem; current = ParentOf(current))
         {
             if (current is T)
                 return true;
@@ -249,12 +249,12 @@ public partial class HierarchyView : UserControl
         return false;
     }
 
-    private static DependencyObject? VisualParent(DependencyObject d) =>
+    private static DependencyObject? ParentOf(DependencyObject d) =>
         d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
 
     private static TreeViewItem? FindItem(object source)
     {
-        for (var current = source as DependencyObject; current is not null; current = VisualParent(current))
+        for (var current = source as DependencyObject; current is not null; current = ParentOf(current))
         {
             if (current is TreeViewItem item)
                 return item;

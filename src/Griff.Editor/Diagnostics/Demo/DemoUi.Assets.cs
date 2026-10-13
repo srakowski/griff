@@ -12,12 +12,12 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>An asset's row in the Assets panel, by its path in Assets ("Prefabs/Coin.prefab").</summary>
-    public TreeViewItem? AssetItem(string assetPath) =>
+    public static TreeViewItem? AssetItem(string assetPath) =>
         Descendants<TreeViewItem>(PanelContent("Assets")).FirstOrDefault(i =>
             i.DataContext is AssetNode n && string.Equals(n.AssetPath, assetPath.Trim('/'), StringComparison.OrdinalIgnoreCase) && i.IsVisible);
 
     /// <summary>An asset's row, with the folders it's in opened so it shows (for spotlights).</summary>
-    public TreeViewItem? RevealAsset(string assetPath)
+    public static TreeViewItem? RevealAsset(string assetPath)
     {
         if (PanelContent("Assets").DataContext is AssetsPanel panel)
         {
@@ -39,7 +39,7 @@ internal sealed partial class DemoUi
     }
 
     // The row's name, rather than the whole row (which includes a folder's contents).
-    private static FrameworkElement AssetLabel(TreeViewItem item) =>
+    private static TextBlock AssetLabel(TreeViewItem item) =>
         Descendants<TextBlock>(item).First(t => item.DataContext is AssetNode n && t.Text == n.Name);
 
     /// <summary>Right-clicks an asset's row and picks an item from its menu: AssetMenu("Prefabs/Coin.prefab", "Rename...").</summary>

@@ -25,7 +25,7 @@ public enum ScriptBuildState
 /// An open script: its text (with undo), whether it has unsaved changes, and the live analysis the editor shows:
 /// semantic colors and the compiler's errors and warnings, recomputed as you type.
 /// </summary>
-public sealed class ScriptDocument : ObservableObject
+public sealed class ScriptDocument : ObservableObject, IDisposable
 {
     private readonly ScriptLanguage _language;
     private readonly DispatcherTimer _diagnoseTimer;
@@ -60,6 +60,18 @@ public sealed class ScriptDocument : ObservableObject
         _language.SetText(FilePath, Text.Text);
         _ = ClassifyAsync();
         _ = DiagnoseAsync();
+    }
+
+    /// <summary>Stops coloring and checking the script (its tab closed).</summary>
+    public void Dispose()
+    {
+        _diagnoseTimer.Stop();
+        _classifying?.Cancel();
+        _classifying?.Dispose();
+        _classifying = null;
+        _diagnosing?.Cancel();
+        _diagnosing?.Dispose();
+        _diagnosing = null;
     }
 
     public string FilePath { get; }

@@ -1023,7 +1023,7 @@ public sealed partial class Game
         {
             health.Home ??= new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             health.Advance(Time.Delta);
-            var at = new Vector2(health.Entity.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
+            var at = new Vector2(health.Entity!.Transform.WorldPosition.X, health.Entity.Transform.WorldPosition.Y);
             if (health.Hurt)
             {
                 health.Hurt = false;

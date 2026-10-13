@@ -275,57 +275,57 @@ public sealed class SceneViewControl : FrameworkElement
 
     // ----- Rendering -----
 
-    protected override void OnRender(DrawingContext dc)
+    protected override void OnRender(DrawingContext drawingContext)
     {
-        dc.DrawRectangle(Brush("Brush.Surface.Document"), null, new Rect(RenderSize));
+        drawingContext.DrawRectangle(Brush("Brush.Surface.Document"), null, new Rect(RenderSize));
         if (_document is null)
             return;
 
         if (_needsFit && ActualWidth > 0)
             FitToCamera();
 
-        DrawGrid(dc);
+        DrawGrid(drawingContext);
 
         foreach (var entity in SceneViewModel.DrawOrder(_document.Scene))
         {
             if (entity.GetComponent<Tilemap>() is { } tilemap)
-                DrawTilemap(dc, entity, tilemap);
+                DrawTilemap(drawingContext, entity, tilemap);
             if (entity.GetComponent<Sprite>() is { } sprite)
-                DrawSprite(dc, entity, sprite);
+                DrawSprite(drawingContext, entity, sprite);
             if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
-                DrawText(dc, entity, text);
+                DrawText(drawingContext, entity, text);
             if (entity.GetComponent<Camera>() is { } camera)
-                DrawCameraFrame(dc, entity, camera, _selection.IsSelected(entity));
+                DrawCameraFrame(drawingContext, entity, camera, _selection.IsSelected(entity));
             if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
-                DrawParticles(dc, entity, emitter);
+                DrawParticles(drawingContext, entity, emitter);
 
             // Entities with nothing solid to see (including emitters) get a marker so they can be found and clicked.
             if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null &&
                 entity.GetComponent<Text>() is null && entity.GetComponent<Camera>() is null)
-                DrawMarker(dc, entity);
+                DrawMarker(drawingContext, entity);
         }
 
-        DrawLights(dc);
-        DrawColliders(dc);
-        DrawRooms(dc);
-        DrawLevelGuides(dc);
-        DrawLinks(dc);
+        DrawLights(drawingContext);
+        DrawColliders(drawingContext);
+        DrawRooms(drawingContext);
+        DrawLevelGuides(drawingContext);
+        DrawLinks(drawingContext);
 
         foreach (var selected in _selection.Entities)
         {
             if (selected.Scene == _document.Scene)
-                DrawSelection(dc, selected, primary: selected == _selection.Entity);
+                DrawSelection(drawingContext, selected, primary: selected == _selection.Entity);
         }
 
         if (_drag == DragMode.Box)
-            DrawBoxSelection(dc);
+            DrawBoxSelection(drawingContext);
         else
-            DrawHandles(dc);
+            DrawHandles(drawingContext);
 
         if (PaintTarget is { } painting)
-            DrawPaintOverlay(dc, painting);
+            DrawPaintOverlay(drawingContext, painting);
 
-        DrawZoomLabel(dc);
+        DrawZoomLabel(drawingContext);
     }
 
     private void DrawGrid(DrawingContext dc)

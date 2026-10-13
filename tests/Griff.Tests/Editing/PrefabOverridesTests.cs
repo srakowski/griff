@@ -48,7 +48,7 @@ public sealed class PrefabOverridesTests
 
     private static Color Hex(string hex) => Color.TryParse(hex, out var color) ? color : throw new FormatException(hex);
 
-    private IReadOnlyList<string> Overrides(Entity copy, string prefabJson) =>
+    private List<string> Overrides(Entity copy, string prefabJson) =>
         PrefabOverrides.Find(copy, _serializer.LoadPrefabFromString(prefabJson), _registry).Select(o => o.ToString()).ToList();
 
     [Fact]

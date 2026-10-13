@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
@@ -38,7 +39,7 @@ public partial class OutputPanelView : UserControl
             return;
         var file = Directory.EnumerateFiles(project.AssetsPath, match.Groups["file"].Value, SearchOption.AllDirectories).FirstOrDefault();
         if (file is not null)
-            _scripts.Open(file, int.Parse(match.Groups["line"].Value), int.Parse(match.Groups["column"].Value));
+            _scripts.Open(file, int.Parse(match.Groups["line"].Value, CultureInfo.InvariantCulture), int.Parse(match.Groups["column"].Value, CultureInfo.InvariantCulture));
     }
 
     [GeneratedRegex(@"^(?<file>[^\/:*?""<>|()]+\.cs)\((?<line>\d+),(?<column>\d+)\)")]

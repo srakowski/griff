@@ -114,7 +114,7 @@ public static partial class ProjectTemplates
         return scene;
     }
 
-    private static IReadOnlyDictionary<string, Entity> StrategyPrefabs() => new Dictionary<string, Entity>
+    private static Dictionary<string, Entity> StrategyPrefabs() => new Dictionary<string, Entity>
     {
         ["Prefabs/Worker.prefab"] = WorkerUnit(),
         ["Prefabs/Soldier.prefab"] = Soldier(),

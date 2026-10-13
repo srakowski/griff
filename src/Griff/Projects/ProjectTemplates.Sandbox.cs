@@ -113,7 +113,7 @@ public static partial class ProjectTemplates
         return scene;
     }
 
-    private static IReadOnlyDictionary<string, Entity> SandboxPrefabs() => new Dictionary<string, Entity>
+    private static Dictionary<string, Entity> SandboxPrefabs() => new Dictionary<string, Entity>
     {
         ["Prefabs/Crumbs.prefab"] = Crumbs(),
     };
@@ -273,7 +273,7 @@ public static partial class ProjectTemplates
         return scene;
     }
 
-    private static IReadOnlyDictionary<string, Entity> ContraptionPrefabs() => new Dictionary<string, Entity>
+    private static Dictionary<string, Entity> ContraptionPrefabs() => new Dictionary<string, Entity>
     {
         ["Prefabs/Crate.prefab"] = CrateProp(),
         ["Prefabs/Ball.prefab"] = BallProp(),

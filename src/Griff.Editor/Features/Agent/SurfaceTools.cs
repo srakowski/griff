@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -140,7 +141,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             foreach (var (name, _, target) in group)
             {
                 var summary = DocComments.Summary(target.GetType()).FirstSentence;
-                text.Append($"- {name} ({target.GetType().Name}){(summary.Length > 0 ? ": " + summary : "")}").AppendLine();
+                text.Append(CultureInfo.InvariantCulture, $"- {name} ({target.GetType().Name}){(summary.Length > 0 ? ": " + summary : "")}").AppendLine();
             }
         }
 

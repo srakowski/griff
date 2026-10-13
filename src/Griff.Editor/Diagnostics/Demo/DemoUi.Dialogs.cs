@@ -1,6 +1,6 @@
 #if DEBUG
 using System.Runtime.InteropServices;
-using System.Text;
+
 using Point = System.Windows.Point;
 
 namespace Griff.Editor.Diagnostics.Demo;
@@ -56,16 +56,14 @@ internal sealed partial class DemoUi
 
     private static string ClassOf(IntPtr window)
     {
-        var text = new StringBuilder(256);
-        GetClassName(window, text, text.Capacity);
-        return text.ToString();
+        var text = new char[256];
+        return new string(text, 0, GetClassName(window, text, text.Length));
     }
 
     private static string TextOf(IntPtr window)
     {
-        var text = new StringBuilder(256);
-        GetWindowText(window, text, text.Capacity);
-        return text.ToString();
+        var text = new char[256];
+        return new string(text, 0, GetWindowText(window, text, text.Length));
     }
 
     private delegate bool EnumProc(IntPtr window, IntPtr data);
@@ -86,10 +84,10 @@ internal sealed partial class DemoUi
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr window, StringBuilder text, int max);
+    private static extern int GetClassName(IntPtr window, [Out] char[] text, int max);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr window, StringBuilder text, int max);
+    private static extern int GetWindowText(IntPtr window, [Out] char[] text, int max);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr window, out RECT rect);

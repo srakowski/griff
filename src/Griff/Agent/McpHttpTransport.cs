@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -146,13 +147,13 @@ public sealed class McpHttpTransport : IAsyncDisposable
     private static async Task WriteAsync(Stream stream, HttpResponse response, CancellationToken stop)
     {
         var head = new StringBuilder();
-        head.Append($"HTTP/1.1 {response.Status} {response.Reason}\r\n");
+        head.Append(CultureInfo.InvariantCulture, $"HTTP/1.1 {response.Status} {response.Reason}\r\n");
         foreach (var (name, value) in response.Headers)
-            head.Append($"{name}: {value}\r\n");
+            head.Append(CultureInfo.InvariantCulture, $"{name}: {value}\r\n");
         var body = response.Body?.Bytes ?? [];
         if (response.Body is { } content)
-            head.Append($"Content-Type: {content.Type}\r\n");
-        head.Append($"Content-Length: {body.Length}\r\n");
+            head.Append(CultureInfo.InvariantCulture, $"Content-Type: {content.Type}\r\n");
+        head.Append(CultureInfo.InvariantCulture, $"Content-Length: {body.Length}\r\n");
         head.Append("Cache-Control: no-store\r\n\r\n");
         await stream.WriteAsync(Encoding.ASCII.GetBytes(head.ToString()), stop);
         if (body.Length > 0)

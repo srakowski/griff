@@ -1,4 +1,5 @@
 #if DEBUG
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -24,7 +25,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
     private static Task Gate() => DemoControl.Active?.Gate() ?? Task.CompletedTask;
 
     /// <summary>Lets go of every key and button the demo might be holding (after a jump or exit mid-action).</summary>
-    public void ReleaseAll()
+    public static void ReleaseAll()
     {
         foreach (var key in new[] { Key.LeftCtrl, Key.LeftAlt, Key.LeftShift, Key.Left, Key.Right, Key.Up, Key.Down, Key.Space })
             Send(VirtualKey(key, down: false));
@@ -32,7 +33,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         Mouse(RightUp);
     }
 
-    public Point Cursor => GetCursorPos(out var p) ? new Point(p.X, p.Y) : default;
+    public static Point Cursor => GetCursorPos(out var p) ? new Point(p.X, p.Y) : default;
 
     public async Task Pause(double ms)
     {
@@ -148,7 +149,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         Mouse(right ? RightDown : LeftDown);
     }
 
-    public void Release(bool right = false) => Mouse(right ? RightUp : LeftUp);
+    public static void Release(bool right = false) => Mouse(right ? RightUp : LeftUp);
 
     /// <summary>Presses at <paramref name="from"/> and drags through <paramref name="path"/>, releasing at the end.</summary>
     /// <param name="holdMs">Real milliseconds to keep the button down at the end, for a running game to catch up.</param>
@@ -269,9 +270,9 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         await Pause(120);
     }
 
-    public void KeyDown(Key key) => Send(VirtualKey(key, down: true));
+    public static void KeyDown(Key key) => Send(VirtualKey(key, down: true));
 
-    public void KeyUp(Key key) => Send(VirtualKey(key, down: false));
+    public static void KeyUp(Key key) => Send(VirtualKey(key, down: false));
 
     public static string Describe(Key key, ModifierKeys modifiers)
     {
@@ -285,7 +286,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
             Key.Escape => "Esc",
             Key.OemOpenBrackets => "[",
             Key.OemCloseBrackets => "]",
-            >= Key.D0 and <= Key.D9 => ((int)(key - Key.D0)).ToString(),
+            >= Key.D0 and <= Key.D9 => ((int)(key - Key.D0)).ToString(CultureInfo.InvariantCulture),
             _ => key.ToString(),
         });
         return string.Join(" + ", parts);
@@ -327,7 +328,7 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         };
     }
 
-    private static void Send(params INPUT[] inputs) => SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    private static void Send(params INPUT[] inputs) => _ = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

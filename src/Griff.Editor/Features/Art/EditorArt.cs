@@ -232,7 +232,7 @@ public sealed class EditorArt
     }
 
     // Any image the system can read, as straight-alpha 32-bit pixels.
-    private static BitmapSource? Decode(byte[] bytes)
+    private static FormatConvertedBitmap? Decode(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes);
         var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames.FirstOrDefault();

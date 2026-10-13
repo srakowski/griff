@@ -15,7 +15,7 @@ internal sealed partial class DemoUi
         Application.Current.Windows.OfType<SoundMakerWindow>().FirstOrDefault(w => w.IsVisible);
 
     /// <summary>Waits for the Sound Maker to open (after Audio > New Sound, or a field's Sound Maker button).</summary>
-    public async Task<SoundMakerWindow> WaitForMaker()
+    public static async Task<SoundMakerWindow> WaitForMaker()
     {
         var window = await WaitFor(() => Maker, "the Sound Maker");
         await Settle(400);
@@ -95,7 +95,7 @@ internal sealed partial class DemoUi
     }
 
     /// <summary>One of a sound field's buttons in the Inspector: play, choose or make.</summary>
-    public Button? SoundButton(string component, string label, string which) =>
+    public static Button? SoundButton(string component, string label, string which) =>
         InspectorRow(component, label) is { } row
             ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == $"sound:{which.ToLowerInvariant()}")
             : null;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Windows;
 using System.Windows.Threading;
@@ -58,7 +59,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         if (command.Placement is { } placement)
         {
             var menu = menus.FirstOrDefault(m => m.Id == placement.Menu)?.Text.Replace("_", "") ?? placement.Menu;
-            text.Append($" (Menu: {menu} > {command.DisplayText}");
+            text.Append(CultureInfo.InvariantCulture, $" (Menu: {menu} > {command.DisplayText}");
         }
         else
         {
@@ -66,10 +67,10 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         }
 
         if (command.GestureText is { Length: > 0 } gesture)
-            text.Append($", {gesture}");
+            text.Append(CultureInfo.InvariantCulture, $", {gesture}");
         text.Append(')');
         if (command.IsChecked is { } on)
-            text.Append($" It's an on/off setting, now {(on ? "on" : "off")}.");
+            text.Append(CultureInfo.InvariantCulture, $" It's an on/off setting, now {(on ? "on" : "off")}.");
         if (command.Choices is { } choices)
             text.Append(choices.Count == 0 ? " It has nothing to pick from now." : $" Pick one with \"choice\": {string.Join(", ", choices.Select(c => $"\"{c}\""))}.");
         return text.ToString();
@@ -100,25 +101,25 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         var text = new StringBuilder();
         if (!finished)
         {
-            text.Append($"{command.DisplayText.TrimEnd('.')} is still going.");
+            text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')} is still going.");
             var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList();
             if (windows.Count > 0)
-                text.Append($" Open windows: {string.Join(", ", windows.Select(w => $"\"{w.Title}\""))}. Use ui_inspect / ui_set / ui_invoke on them.");
+                text.Append(CultureInfo.InvariantCulture, $" Open windows: {string.Join(", ", windows.Select(w => $"\"{w.Title}\""))}. Use ui_inspect / ui_set / ui_invoke on them.");
             return ToolResult.Ok(text.ToString());
         }
 
         await run; // Rethrows what it threw, e.g. a question it needs answered.
-        text.Append($"Done: {command.DisplayText.TrimEnd('.')}.");
+        text.Append(CultureInfo.InvariantCulture, $"Done: {command.DisplayText.TrimEnd('.')}.");
         var after = workspace.Scene?.History.UndoDescription;
         if (after is not null && after != before)
-            text.Append($" Undo: \"{after}\".");
+            text.Append(CultureInfo.InvariantCulture, $" Undo: \"{after}\".");
         if (selection.Entities.Count > 0)
-            text.Append($" Selected: {string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}.");
+            text.Append(CultureInfo.InvariantCulture, $" Selected: {string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}.");
         var newWindows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList();
         if (newWindows.Count > 0)
-            text.Append($" Open windows: {string.Join(", ", newWindows.Select(w => $"\"{w.Title}\""))} (see ui_roots).");
+            text.Append(CultureInfo.InvariantCulture, $" Open windows: {string.Join(", ", newWindows.Select(w => $"\"{w.Title}\""))} (see ui_roots).");
         foreach (var error in AgentDialogs.Reported)
-            text.Append($"\nThe editor reported: {error}");
+            text.Append(CultureInfo.InvariantCulture, $"\nThe editor reported: {error}");
         return AgentDialogs.Reported.Count > 0 ? ToolResult.Error(text.ToString()) : ToolResult.Ok(text.ToString());
     }
 

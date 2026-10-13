@@ -446,7 +446,7 @@ public sealed class ContraptionTests
         Pick(game, input, HudButtonKind.Prop, "Lamp");
         Click(game, input, new Vector2(4, 3));
 
-        Assert.Equal(["Crate", "Crate 2"], scene.Entities.Where(e => e.Name.StartsWith("Crate")).Select(e => e.Name));
+        Assert.Equal(["Crate", "Crate 2"], scene.Entities.Where(e => e.Name.StartsWith("Crate", StringComparison.Ordinal)).Select(e => e.Name));
         Assert.NotNull(game.Find("Lamp"));
         Assert.Equal(new Vector2(0, 3), At(game.Find("Crate")!), new Vector2Comparer(0.3f));
     }

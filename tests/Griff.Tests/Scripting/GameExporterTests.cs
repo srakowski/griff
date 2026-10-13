@@ -65,6 +65,37 @@ public sealed class GameExporterTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportedScripts_AreOptimized_WhileTheEditorsAreNot()
+    {
+        var project = await Project.CreateAsync(_root, "Fast Scripts");
+        File.WriteAllText(Path.Combine(project.AssetsPath, "Spinner.cs"), "public class Spinner : Behavior { public float Speed { get; set; } = 2; }");
+
+        var result = GameExporter.Export(project, _player, _output);
+        var game = GamePackage.Extract(result.Executable!, _cache, "Fast Scripts")!;
+        var exported = File.ReadAllBytes(Path.Combine(game, ExportLayout.ScriptsAssembly));
+        var editor = ScriptCompiler.CompileFolder(project.AssetsPath).Assembly!;
+
+        Assert.False(JitOptimizerDisabled(exported));
+        Assert.True(JitOptimizerDisabled(editor));
+    }
+
+    // A Debug build asks the JIT not to optimize (DebuggableAttribute); a Release build doesn't.
+    private static bool JitOptimizerDisabled(byte[] assembly)
+    {
+        var context = new System.Runtime.Loader.AssemblyLoadContext("optimized?", isCollectible: true);
+        try
+        {
+            using var stream = new MemoryStream(assembly);
+            return System.Reflection.CustomAttributeExtensions
+                .GetCustomAttribute<System.Diagnostics.DebuggableAttribute>(context.LoadFromStream(stream))?.IsJITOptimizerDisabled ?? false;
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    [Fact]
     public async Task ExportedArcade_KnowsItsStartScene_AndPlaysIntoItsGameScene()
     {
         var project = await Project.CreateAsync(_root, "Arcade Export", ProjectTemplate.Arcade);

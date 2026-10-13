@@ -8,11 +8,11 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The Add to All button on a component only some of the selection have.</summary>
-    public Button? AddToAllButton(string component) =>
+    public static Button? AddToAllButton(string component) =>
         ComponentHeader(component) is { } header ? Descendants<Button>(header).FirstOrDefault(b => b.Tag as string == "addall" && b.IsVisible) : null;
 
     /// <summary>The section showing <paramref name="component"/> in the Inspector, or null.</summary>
-    public ComponentSection? InspectorSection(string component) =>
+    public static ComponentSection? InspectorSection(string component) =>
         ComponentHeader(component)?.DataContext as ComponentSection;
 
     /// <summary>Right-clicks a component's header and picks <paramref name="item"/> ("Move Up") from its menu.</summary>
@@ -22,7 +22,7 @@ internal sealed partial class DemoUi
         heading.BringIntoView();
         await Settle(200);
         await Click(heading, right: true);
-        var menuItem = await WaitFor(() => Find<MenuItem>(m => HeaderText(m.Header) == item && m.Tag is string tag && tag.StartsWith("component:") && m.IsVisible),
+        var menuItem = await WaitFor(() => Find<MenuItem>(m => HeaderText(m.Header) == item && m.Tag is string tag && tag.StartsWith("component:", StringComparison.Ordinal) && m.IsVisible),
             $"{item} on {component}'s menu", 3000);
         if (!menuItem.IsEnabled)
             throw new InvalidOperationException($"{item} is greyed out on {component}'s menu.");

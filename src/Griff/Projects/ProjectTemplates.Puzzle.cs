@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Griff.Scenes;
 
@@ -67,7 +68,7 @@ public static partial class ProjectTemplates
     // Solving a level saves this, which opens the next one's button on the menu.
     private static string SolvedKey(int index) => $"solved-{PuzzleLevelScene(index).ToLowerInvariant()}";
 
-    private static IReadOnlyDictionary<string, Scene> PuzzleLevelScenes(ProjectTemplate template) =>
+    private static Dictionary<string, Scene> PuzzleLevelScenes(ProjectTemplate template) =>
         Enumerable.Range(0, PuzzleLevels.Count).ToDictionary(i => $"Scenes/{PuzzleLevelScene(i)}.scene", i => WithSounds(template, PuzzleLevel(i)));
 
     // The menu: a title, a button for each level (each but the first opening once the one before is solved), and Quit.
@@ -132,7 +133,7 @@ public static partial class ProjectTemplates
         var map = level.AddComponent<Tilemap>();
         map.Image = TemplateArt.PuzzleTiles;
         map.Columns = TemplateArt.PuzzleColumns;
-        map.BackgroundTiles = TemplateArt.WarehouseFloorTile.ToString();
+        map.BackgroundTiles = TemplateArt.WarehouseFloorTile.ToString(CultureInfo.InvariantCulture);
         map.Order = -10;
         map.Tiles = Inside(rows, width).Select((row, y) => new string(row.Select((cell, x) => cell switch
         {

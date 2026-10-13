@@ -56,7 +56,7 @@ public sealed class Selection : ObservableObject, ISelection
 {
     private readonly IWorkspace _workspace;
     private SceneDocument? _document;
-    private IReadOnlyList<Entity> _entities = [];
+    private List<Entity> _entities = [];
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SceneDocument, IReadOnlyList<Entity>> _kept = new();
 
     public Selection(IWorkspace workspace)

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Threading;
@@ -475,7 +476,7 @@ public sealed class SliderSetting(string label, double minimum, Func<float> get,
         }
     }
 
-    public string Display => Value.ToString("0.00");
+    public string Display => Value.ToString("0.00", CultureInfo.CurrentCulture);
 
     public void Refresh()
     {

@@ -76,7 +76,7 @@ public static partial class ProjectTemplates
     // Winning a level saves this, which opens the next one's button on the menu.
     private static string CompleteKey(int index) => $"complete-{MatchLevelScene(index).ToLowerInvariant()}";
 
-    private static IReadOnlyDictionary<string, Scene> MatchLevelScenes(ProjectTemplate template) =>
+    private static Dictionary<string, Scene> MatchLevelScenes(ProjectTemplate template) =>
         Enumerable.Range(0, MatchLevels.Count).ToDictionary(i => $"Scenes/{MatchLevelScene(i)}.scene", i => WithSounds(template, MatchLevel(i)));
 
     // The menu: a title, a button for each level (each but the first opening once the one before is won), and Quit.

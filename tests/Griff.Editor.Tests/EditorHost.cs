@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Griff.Editor.Core.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,7 +36,7 @@ internal static class EditorHost
         thread.Start();
         thread.Join();
         if (failure is not null)
-            throw new Exception(failure.Message, failure);
+            ExceptionDispatchInfo.Throw(failure);
     }
 }
 

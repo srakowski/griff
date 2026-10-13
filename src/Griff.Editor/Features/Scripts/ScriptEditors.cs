@@ -15,7 +15,7 @@ namespace Griff.Editor.Features.Scripts;
 /// The scripts open in the built-in editor, as document tabs next to the Scene and Game. Owns the language service
 /// that every open script shares, keeps it in step with the files on disk, and saves scripts so they hot-reload.
 /// </summary>
-public sealed class ScriptEditors : ObservableObject
+public sealed class ScriptEditors : ObservableObject, IDisposable
 {
     private readonly IWorkspace _workspace;
     private readonly IDialogService _dialogs;
@@ -46,6 +46,16 @@ public sealed class ScriptEditors : ObservableObject
         // Like an IDE's build: playing saves the scripts first, so the game runs what you see.
         play.Started += (_, _) => SaveAll();
         _ = Language.WarmUpAsync();
+    }
+
+    /// <summary>Stops watching the scripts on disk (the editor is closing).</summary>
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _diskDebounce.Stop();
+        CloseAll();
+        Language.Dispose();
     }
 
     public ScriptLanguage Language { get; } = new();
@@ -159,6 +169,7 @@ public sealed class ScriptEditors : ObservableObject
         }
 
         Documents.Remove(document);
+        document.Dispose();
         // Back to what's on disk for a script closed without saving.
         if (File.Exists(document.FilePath))
             Language.SetText(document.FilePath, ReadShared(document.FilePath) ?? "");
@@ -193,13 +204,20 @@ public sealed class ScriptEditors : ObservableObject
     {
         foreach (var document in Documents)
             document.Text.UndoStack.MarkAsOriginalFile();
-        Documents.Clear();
+        CloseAll();
         Active = null;
+    }
+
+    private void CloseAll()
+    {
+        foreach (var document in Documents)
+            document.Dispose();
+        Documents.Clear();
     }
 
     private void ProjectChanged()
     {
-        Documents.Clear();
+        CloseAll();
         Active = null;
         _watcher?.Dispose();
         _watcher = null;

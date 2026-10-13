@@ -28,7 +28,7 @@ public sealed class ComponentCatalogViewModel : ObservableObject
         View = new ListCollectionView(Items.ToList()) { Filter = o => Matches((CatalogItem)o) };
         View.GroupDescriptions.Add(new PropertyGroupDescription(nameof(CatalogItem.Category)));
         NavigateCommand = new RelayCommand<Type>(Navigate);
-        Selected = Items.FirstOrDefault();
+        Selected = Items.Count > 0 ? Items[0] : null;
     }
 
     /// <summary>The entity components are added to (the selected one), or null when nothing is selected.</summary>

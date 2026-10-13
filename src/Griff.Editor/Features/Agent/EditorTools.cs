@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Numerics;
 using System.Text;
@@ -108,36 +109,36 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             return ToolResult.Ok(text.ToString());
         }
 
-        text.AppendLine($"Project: {project.Name} ({project.RootPath})");
-        text.AppendLine($"Start scene: {(project.StartScenePath is { } start ? Path.GetRelativePath(project.AssetsPath, start) : "none")}");
-        text.AppendLine($"Scenes: {string.Join(", ", project.FindScenes().Select(s => Path.GetRelativePath(project.AssetsPath, s)))}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Project: {project.Name} ({project.RootPath})");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Start scene: {(project.StartScenePath is { } start ? Path.GetRelativePath(project.AssetsPath, start) : "none")}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Scenes: {string.Join(", ", project.FindScenes().Select(s => Path.GetRelativePath(project.AssetsPath, s)))}");
         if (workspace.EditScene is { } scene)
         {
-            text.AppendLine($"Open scene: {Path.GetRelativePath(project.AssetsPath, scene.FilePath)}{(scene.IsDirty ? " (unsaved changes)" : "")}, {scene.Scene.Count} entities");
-            text.AppendLine($"Undo: {scene.History.UndoDescription ?? "nothing"}; redo: {scene.History.RedoDescription ?? "nothing"}");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Open scene: {Path.GetRelativePath(project.AssetsPath, scene.FilePath)}{(scene.IsDirty ? " (unsaved changes)" : "")}, {scene.Scene.Count} entities");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Undo: {scene.History.UndoDescription ?? "nothing"}; redo: {scene.History.RedoDescription ?? "nothing"}");
         }
 
         if (workspace.Prefabs.Count > 0)
-            text.AppendLine($"Prefabs open in their own tabs: {string.Join(", ", workspace.Prefabs.Select(p => Path.GetRelativePath(project.AssetsPath, p.FilePath) + (p.IsDirty ? " (unsaved changes)" : "")))}");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Prefabs open in their own tabs: {string.Join(", ", workspace.Prefabs.Select(p => Path.GetRelativePath(project.AssetsPath, p.FilePath) + (p.IsDirty ? " (unsaved changes)" : "")))}");
         if (workspace.Scene is { IsPrefab: true } prefab)
         {
-            text.AppendLine($"Showing: the {prefab.Name} prefab's tab, so the scene tools, Hierarchy and Inspector edit the prefab (Scene_Save saves it and updates every copy; Prefab_Close or Workspace.ShowScene goes back to the scene)");
-            text.AppendLine($"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Showing: the {prefab.Name} prefab's tab, so the scene tools, Hierarchy and Inspector edit the prefab (Scene_Save saves it and updates every copy; Prefab_Close or Workspace.ShowScene goes back to the scene)");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
         }
 
-        text.AppendLine($"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
         if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
             text.AppendLine(flags);
-        text.AppendLine($"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
         var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();
         if (windows.Count > 0)
-            text.AppendLine($"Open windows: {string.Join(", ", windows)}");
+            text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
         var problems = log.Entries.Where(entry => entry.Level >= LogLevel.Warning).TakeLast(10).ToList();
         if (problems.Count > 0)
         {
             text.AppendLine("Recent problems:");
             foreach (var entry in problems)
-                text.AppendLine($"  {entry.Timestamp:HH:mm:ss} {entry.Level}: {entry.Message}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"  {entry.Timestamp:HH:mm:ss} {entry.Level}: {entry.Message}");
         }
 
         return ToolResult.Ok(text.ToString());
@@ -219,7 +220,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         }
     }
 
-    private static BitmapSource Render(FrameworkElement element)
+    private static RenderTargetBitmap Render(FrameworkElement element)
     {
         element.UpdateLayout();
         var width = Math.Max(1, (int)element.ActualWidth);
@@ -333,7 +334,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         await FramesAsync(1);
         if (args.Bool("pause_after") && !play.IsPaused)
             play.TogglePause();
-        log.AppendLine($"Played {game.Time.Total - startTime:0.##} s of game time{(play.IsPaused ? "; paused" : "")}.");
+        log.AppendLine(CultureInfo.InvariantCulture, $"Played {game.Time.Total - startTime:0.##} s of game time{(play.IsPaused ? "; paused" : "")}.");
         var watch = args.Strings("watch");
         foreach (var name in watch.Count > 0 ? watch : ["Player"])
         {
@@ -350,7 +351,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
             if (entity is null)
             {
-                log.AppendLine($"{name}: not in the game{(watch.Count > 0 ? "" : " (watch something else with \"watch\")")}.");
+                log.AppendLine(CultureInfo.InvariantCulture, $"{name}: not in the game{(watch.Count > 0 ? "" : " (watch something else with \"watch\")")}.");
                 continue;
             }
 
@@ -358,11 +359,11 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             var label = entity.Name == name ? name : $"{entity.Name} ({name})";
             var line = new StringBuilder($"{label}: at ({p.X:0.##}, {p.Y:0.##})");
             if (entity.GetComponent<Body>() is { } body)
-                line.Append($", moving ({body.Velocity.X:0.##}, {body.Velocity.Y:0.##}){(body.IsGrounded ? ", on the ground" : ", in the air")}");
+                line.Append(CultureInfo.InvariantCulture, $", moving ({body.Velocity.X:0.##}, {body.Velocity.Y:0.##}){(body.IsGrounded ? ", on the ground" : ", in the air")}");
             if (entity.GetComponent<Health>() is { } health)
-                line.Append($", health {health.Current}/{health.Max}{(health.IsDead ? " (dead)" : "")}");
+                line.Append(CultureInfo.InvariantCulture, $", health {health.Current}/{health.Max}{(health.IsDead ? " (dead)" : "")}");
             if (entity.GetComponent<Inventory>() is { } inventory && inventory.Items.Count > 0)
-                line.Append($", carrying {string.Join(", ", inventory.Items)}");
+                line.Append(CultureInfo.InvariantCulture, $", carrying {string.Join(", ", inventory.Items)}");
             line.Append(Playtesting.Dragging(entity));
             line.Append(Playtesting.Tactics(entity));
             log.AppendLine(line.ToString());

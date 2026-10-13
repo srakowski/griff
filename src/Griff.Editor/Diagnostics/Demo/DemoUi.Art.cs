@@ -1,4 +1,5 @@
 #if DEBUG
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -17,7 +18,7 @@ internal sealed partial class DemoUi
         Application.Current.Windows.OfType<SpritePainterWindow>().FirstOrDefault(w => w.IsVisible);
 
     /// <summary>Waits for the Sprite Painter to open (after Art > New Sprite, or an image field's Paint button).</summary>
-    public async Task<SpritePainterWindow> WaitForPainter()
+    public static async Task<SpritePainterWindow> WaitForPainter()
     {
         var window = await WaitFor(() => Painter, "the Sprite Painter");
         await Settle(400);
@@ -79,7 +80,7 @@ internal sealed partial class DemoUi
         Application.Current.Windows.OfType<ClipEditorWindow>().FirstOrDefault(w => w.IsVisible);
 
     /// <summary>Waits for the Clip Editor to open (after Art > Animation Clips).</summary>
-    public async Task<ClipEditorWindow> WaitForClipEditor()
+    public static async Task<ClipEditorWindow> WaitForClipEditor()
     {
         var window = await WaitFor(() => ClipEditor, "the Clip Editor");
         await Settle(400);
@@ -101,9 +102,9 @@ internal sealed partial class DemoUi
             "" or "window" => (FrameworkElement)window.Content,
             "clip" => Descendants<ListBoxItem>(window).FirstOrDefault(i => i.DataContext is ClipRow c && c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException($"No clip {name} in the Clip Editor."),
-            "frame" => Descendants<Button>(Named("FrameStrip")).FirstOrDefault(b => b.DataContext is ClipFrame f && f.SheetFrame.ToString() == name)
+            "frame" => Descendants<Button>(Named("FrameStrip")).FirstOrDefault(b => b.DataContext is ClipFrame f && f.SheetFrame.ToString(CultureInfo.InvariantCulture) == name)
                 ?? throw new InvalidOperationException($"No frame {name} in the strip."),
-            "sheet" when name.Length > 0 => SheetCellOf(window, int.Parse(name)),
+            "sheet" when name.Length > 0 => SheetCellOf(window, int.Parse(name, CultureInfo.InvariantCulture)),
             "sheet" => Named("SheetPanel"),
             "settings" => Named("Settings"),
             "speed" => Named("SpeedBox"),
@@ -128,7 +129,7 @@ internal sealed partial class DemoUi
         };
     }
 
-    private static FrameworkElement SheetCellOf(ClipEditorWindow window, int frame) =>
+    private static Border SheetCellOf(ClipEditorWindow window, int frame) =>
         Descendants<Border>((FrameworkElement)window.FindName("SheetGrid")).FirstOrDefault(b => b.DataContext is SheetCell c && c.Index == frame)
         ?? throw new InvalidOperationException($"No frame {frame} on the Clip Editor's sheet.");
 
@@ -209,7 +210,7 @@ internal sealed partial class DemoUi
     public Task PickImage(string component, string label, string image) => PickFromList(component, label, image);
 
     /// <summary>One of an image field's buttons in the Inspector: choose or paint.</summary>
-    public Button? ImageButton(string component, string label, string which) =>
+    public static Button? ImageButton(string component, string label, string which) =>
         InspectorRow(component, label) is { } row
             ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == $"image:{which.ToLowerInvariant()}")
             : null;

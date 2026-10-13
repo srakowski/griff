@@ -17,7 +17,7 @@ namespace Griff.Editor.Features.Play;
 /// Runs the open scene inside the editor. Play clones the scene and shows the copy everywhere
 /// (hierarchy, inspector, scene view stay live and editable); Stop discards the copy.
 /// </summary>
-public sealed class PlayMode : ObservableObject
+public sealed class PlayMode : ObservableObject, IDisposable
 {
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
@@ -200,6 +200,22 @@ public sealed class PlayMode : ObservableObject
         Stopped?.Invoke(this, EventArgs.Empty);
         _status.Show("Stopped");
         Raise();
+    }
+
+    /// <summary>Ends a game still running when the editor closes, without the editor's own bookkeeping.</summary>
+    public void Dispose()
+    {
+        StopPlayers();
+        var runner = _runner;
+        _runner = null;
+        try
+        {
+            runner?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while stopping the game");
+        }
     }
 
     public void TogglePause()

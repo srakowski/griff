@@ -157,14 +157,14 @@ public sealed class PuzzleTemplateTests : IDisposable
         }
 
         // Every level's button on the menu works now.
-        Assert.All(game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level")), b => Assert.True(b.IsUsable, b.Entity!.Name));
+        Assert.All(game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)), b => Assert.True(b.IsUsable, b.Entity!.Name));
     }
 
     [Fact]
     public async Task Menu_OpensOnlyTheFirstLevel_UntilItsSolved()
     {
         var (_, game) = await Create();
-        var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level")).OrderBy(b => b.Entity!.Name).ToList();
+        var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)).OrderBy(b => b.Entity!.Name).ToList();
         Assert.Equal(ProjectTemplates.PuzzleLevels.Count, buttons.Count);
         Assert.True(buttons[0].IsUsable);
         Assert.All(buttons.Skip(1), b => Assert.False(b.IsUsable, b.Entity!.Name));
@@ -251,7 +251,7 @@ public sealed class PuzzleTemplateTests : IDisposable
 
         var files = entities.SelectMany(e => e.Components)
             .SelectMany(c => c.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound") || p.Name is "Music" or "Image"))
+                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound", StringComparison.Ordinal) || p.Name is "Music" or "Image"))
                 .Select(p => (Field: $"{c.GetType().Name}.{p.Name}", Path: p.GetValue(c) as string)))
             .Where(f => !string.IsNullOrWhiteSpace(f.Path))
             .ToList();

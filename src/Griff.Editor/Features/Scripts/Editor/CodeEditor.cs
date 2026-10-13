@@ -20,7 +20,7 @@ namespace Griff.Editor.Features.Scripts.Editor;
 /// info, signature help, go to definition, find references, rename, formatting, folding, bracket and symbol
 /// highlighting, indent guides, smart typing (auto-closing pairs, smart indent) and the usual editing shortcuts.
 /// </summary>
-public sealed partial class CodeEditor : TextEditor
+public sealed partial class CodeEditor : TextEditor, IDisposable
 {
     private const int IndentSize = 4;
 
@@ -125,7 +125,23 @@ public sealed partial class CodeEditor : TextEditor
                 GoTo(pending.Offset, pending.Length);
             }
         };
-        Unloaded += (_, _) => CloseCompletion();
+        Unloaded += (_, _) =>
+        {
+            CloseCompletion();
+            Dispose();
+        };
+    }
+
+    /// <summary>Cancels lookups still in flight (completion, signatures, hover, occurrences); off screen, none is needed.</summary>
+    public void Dispose()
+    {
+        foreach (var work in new[] { _completing, _signing, _hovering, _occurrences })
+        {
+            work?.Cancel();
+            work?.Dispose();
+        }
+
+        _completing = _signing = _hovering = _occurrences = null;
     }
 
     public ScriptDocument Script => _script;

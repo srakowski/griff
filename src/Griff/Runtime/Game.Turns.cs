@@ -225,7 +225,7 @@ public sealed partial class Game
         if (player is null || _turnOrder is not { } order)
             return;
         var mover = Scene.Entities.Where(SceneRenderer.IsActive)
-            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && Net.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } t && Acts(order, t));
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } t && Acts(order, t));
         if (mover is not null)
             UseAction(mover);
     }
@@ -251,7 +251,7 @@ public sealed partial class Game
     // The side a turn taker acts for: its own, or in a network game with teams, its player's team.
     private string SideOf(TurnTaker taker)
     {
-        if (Net.IsOnline && Net.PlayerById(Net.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
+        if (Net.IsOnline && Net.PlayerById(NetSession.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
             return player.Team;
         return taker.Side?.Trim() ?? "";
     }
@@ -286,7 +286,7 @@ public sealed partial class Game
         if (!Net.IsOnline)
             return true;
         var owners = Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<TurnTaker>())
-            .Where(t => TurnOrder.SameSide(SideOf(t), order.Current)).Select(t => Net.OwnerIdOf(t.Entity)).Where(id => id != 0).ToList();
+            .Where(t => TurnOrder.SameSide(SideOf(t), order.Current)).Select(t => NetSession.OwnerIdOf(t.Entity)).Where(id => id != 0).ToList();
         return owners.Count == 0 || (player is not null && owners.Contains(player.Id));
     }
 

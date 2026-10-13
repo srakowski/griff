@@ -8,7 +8,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The mark by a field a prefab copy changed, which opens Revert and Apply to Prefab.</summary>
-    public Button? OverrideMark(string component, string label) =>
+    public static Button? OverrideMark(string component, string label) =>
         InspectorRow(component, label) is { } row ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == "override" && b.IsVisible) : null;
 
     /// <summary>Clicks a changed field's mark and picks Revert to Prefab (<paramref name="apply"/> false) or Apply to Prefab.</summary>

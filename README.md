@@ -655,9 +655,17 @@ src/
   Griff.Player             Runs exported games
 tests/
   Griff.Tests              Unit and integration tests, including playing every template
+  Griff.Editor.Tests       The editor's real services, the agent surface, and exported games run for real
 ```
 
 The engine lives in `Griff` so that the editor, the player and the tests all use one model. The editor itself is built from modules: each feature registers its commands, panels and menus, and the shell assembles them. See `src/Griff.Editor/Themes/README.md` for the design system.
+
+Tests keep the architecture in shape, so a change that breaks it fails rather than slipping in:
+- **Layers:** nothing in `Griff.Scenes` (data) uses `Griff.Runtime` or `Griff.Rendering` (`LayerTests`).
+- **Agents:** every command is an MCP tool with a description, every panel and service is reachable (`AgentSurfaceTests`), and no code-behind (`*.xaml.cs`) runs an edit or starts a process, where agents couldn't reach it (`CodeBehindTests`).
+- **Players:** a template is exported with both players and run for real; it has to draw a frame (`PlayerSmokeTests`).
+
+The layer and code-behind tests start from today's exceptions, listed in each test; the lists may only shrink.
 
 ## Building
 
@@ -669,11 +677,14 @@ dotnet test
 dotnet run --project src/Griff.Editor
 ```
 
-Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
+Every project shares `Directory.Build.props` (nullable on, warnings are errors, the .NET analyzers' recommended rules), package versions live in `Directory.Packages.props`, and `.editorconfig` holds the code style. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw.
+
+Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, so hot reload can step through them. Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
 ## Status
 
 Griff is young. Known gaps:
+- CI runs on Windows only, and Griff.Graphics and Griff.Platform.Windows have no tests of their own: the player smoke test covers them end to end. The layer test checks Griff.Scenes; Runtime still reaches into Rendering.
 - No web export yet.
 - Physics uses axis-aligned boxes and circles. Rotation is ignored, slopes are tilemap tiles at 45 degrees only, and circle bodies slide rather than roll.
 - Shadows are hard-edged, and come from colliders and tiles rather than sprites' shapes.

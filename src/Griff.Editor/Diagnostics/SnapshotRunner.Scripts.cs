@@ -54,7 +54,7 @@ internal static partial class SnapshotRunner
         var compiled = workspace.ReloadScripts();
         checks.Add($"ship compiles: {(compiled?.Success == true ? "ok" : "FAILED " + string.Join("; ", compiled?.Diagnostics ?? []))}");
 
-        var ship = workspace.Scene!.Scene.Roots.First();
+        var ship = workspace.Scene!.Scene.Roots[0];
         if (workspace.Components.Find("Ship") is { } descriptor)
             workspace.Scene.Execute(ComponentCatalog.AddWithRequirements(workspace.Components, descriptor, ship));
         services.GetRequiredService<ISelection>().Select(ship);

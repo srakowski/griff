@@ -52,15 +52,15 @@ public sealed partial class Game
     }
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    private IEnumerable<T> Active<T>() where T : Component =>
+    private List<T> Active<T>() where T : Component =>
         Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Runs(e)).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own.
-    private IEnumerable<T> Moving<T>() where T : Component =>
+    private List<T> Moving<T>() where T : Component =>
         Scene.Entities.Where(e => SceneRenderer.IsActive(e) && Moves(e)).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // Everything showing, wherever it's run: for what only changes how things look.
-    private IEnumerable<T> Showing<T>() where T : Component =>
+    private List<T> Showing<T>() where T : Component =>
         Scene.Entities.Where(SceneRenderer.IsActive).SelectMany(e => e.GetComponents<T>()).ToList();
 
     // Movers go before physics, so whatever stands on them is carried along this frame.

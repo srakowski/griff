@@ -72,42 +72,42 @@ public sealed class PixelCanvas : FrameworkElement
         return ((int)Math.Floor((point.X - origin.X) / zoom), (int)Math.Floor((point.Y - origin.Y) / zoom));
     }
 
-    protected override void OnRender(DrawingContext context)
+    protected override void OnRender(DrawingContext drawingContext)
     {
-        context.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight));
+        drawingContext.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight));
         if (Painter is not { } painter)
             return;
 
         var layout = painter.Layout;
         var (origin, zoom) = (Origin, Zoom);
         var area = new Rect(origin.X, origin.Y, layout.CellWidth * zoom, layout.CellHeight * zoom);
-        context.DrawRectangle(Checker, null, area);
+        drawingContext.DrawRectangle(Checker, null, area);
 
         if (painter.Onion && painter.Frame > 0)
         {
-            context.PushOpacity(0.3);
-            context.DrawImage(painter.CellBitmap(painter.Frame - 1), area);
-            context.Pop();
+            drawingContext.PushOpacity(0.3);
+            drawingContext.DrawImage(painter.CellBitmap(painter.Frame - 1), area);
+            drawingContext.Pop();
         }
 
-        context.DrawImage(painter.CellBitmap(painter.Frame), area);
+        drawingContext.DrawImage(painter.CellBitmap(painter.Frame), area);
 
         if (painter.ShowGrid && zoom >= 8)
         {
             for (var x = 1; x < layout.CellWidth; x++)
-                context.DrawLine(GridPen, new Point(area.Left + x * zoom + 0.5, area.Top), new Point(area.Left + x * zoom + 0.5, area.Bottom));
+                drawingContext.DrawLine(GridPen, new Point(area.Left + x * zoom + 0.5, area.Top), new Point(area.Left + x * zoom + 0.5, area.Bottom));
             for (var y = 1; y < layout.CellHeight; y++)
-                context.DrawLine(GridPen, new Point(area.Left, area.Top + y * zoom + 0.5), new Point(area.Right, area.Top + y * zoom + 0.5));
+                drawingContext.DrawLine(GridPen, new Point(area.Left, area.Top + y * zoom + 0.5), new Point(area.Right, area.Top + y * zoom + 0.5));
         }
 
         if (painter.Mirror)
         {
             var middle = Math.Floor(area.Left + area.Width / 2) + 0.5;
-            context.DrawLine(MirrorPen, new Point(middle, area.Top), new Point(middle, area.Bottom));
+            drawingContext.DrawLine(MirrorPen, new Point(middle, area.Top), new Point(middle, area.Bottom));
         }
 
         if (_hover is { } hover && hover.X >= 0 && hover.Y >= 0 && hover.X < layout.CellWidth && hover.Y < layout.CellHeight)
-            context.DrawRectangle(null, HoverPen, new Rect(area.Left + hover.X * zoom + 0.5, area.Top + hover.Y * zoom + 0.5, zoom - 1, zoom - 1));
+            drawingContext.DrawRectangle(null, HoverPen, new Rect(area.Left + hover.X * zoom + 0.5, area.Top + hover.Y * zoom + 0.5, zoom - 1, zoom - 1));
     }
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
@@ -180,7 +180,7 @@ public sealed class PixelCanvas : FrameworkElement
 
     private void OnPixelsChanged(object? sender, EventArgs e) => InvalidateVisual();
 
-    private static Brush MakeChecker()
+    private static DrawingBrush MakeChecker()
     {
         var light = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x3A, 0x42));
         var dark = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x2C, 0x2C, 0x33));

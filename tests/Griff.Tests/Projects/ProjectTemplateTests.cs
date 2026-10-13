@@ -134,7 +134,7 @@ public sealed class ProjectTemplateTests : IDisposable
 
         var sounds = entities.SelectMany(e => e.Components)
             .SelectMany(c => c.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound") || p.Name == "Music"))
+                .Where(p => p.PropertyType == typeof(string) && (p.Name.EndsWith("Sound", StringComparison.Ordinal) || p.Name == "Music"))
                 .Select(p => (Component: c.GetType().Name, Field: p.Name, Path: p.GetValue(c) as string)))
             .ToList();
 
@@ -555,7 +555,7 @@ public sealed class ProjectTemplateTests : IDisposable
         input.SetKey(Key.A, false);
         Assert.True(peak > ledge.Transform.Position.Y + 1.5f, $"the spring should launch the player well above the ledge (peak {peak:0.00})");
         Assert.Equal(ledge, player.GetComponent<Body>()!.Ground);
-        Assert.True(game.FindAll("Coin").Count(c => c.IsSelfOrDescendantOf(ledge)) == 0, $"the ledge's coin is collected on landing (player at {player.Transform.Position}, coins at {string.Join(";", game.FindAll("Coin").Select(c => c.Transform.WorldPosition))})");
+        Assert.False(game.FindAll("Coin").Any(c => c.IsSelfOrDescendantOf(ledge)), $"the ledge's coin is collected on landing (player at {player.Transform.Position}, coins at {string.Join(";", game.FindAll("Coin").Select(c => c.Transform.WorldPosition))})");
 
         // A moment later it gives way under the player.
         Run(game, input, 1);
@@ -1008,7 +1008,7 @@ public sealed class ProjectTemplateTests : IDisposable
             entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants());
 
         var images = entities.SelectMany(e => e.Components)
-            .SelectMany(c => c.GetType().GetProperties().Where(p => p.PropertyType == typeof(string) && p.Name.EndsWith("Image")).Select(p => p.GetValue(c) as string))
+            .SelectMany(c => c.GetType().GetProperties().Where(p => p.PropertyType == typeof(string) && p.Name.EndsWith("Image", StringComparison.Ordinal)).Select(p => p.GetValue(c) as string))
             .Where(i => !string.IsNullOrEmpty(i))
             .Distinct()
             .ToList();
@@ -1062,7 +1062,7 @@ public sealed class ProjectTemplateTests : IDisposable
         var (project, scene, input, registry) = await CreateAndLoad(ProjectTemplate.Shooter);
         var game = NewGame(project, scene, input, registry);
         var player = game.Find("Player")!;
-        var grunt = game.FindAll("Grunt").First();
+        var grunt = game.FindAll("Grunt")[0];
         grunt.Transform.Position = new Vector3(5.5f, -3.5f, 0);
         grunt.GetComponent<Chase>()!.Speed = 0;
         Run(game, input, 0.1);

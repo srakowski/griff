@@ -200,7 +200,8 @@ public class ObjectSurfaceTests
     {
         Assert.Equal(new Vector3(1, 2, 0), AgentValues.FromJson(Json("[1, 2]"), typeof(Vector3)));
         Assert.Equal(new Vector2(1, 2), AgentValues.FromJson(Json("\"1, 2\""), typeof(Vector2)));
-        Assert.Equal(new[] { "a", "b" }, (string[])AgentValues.FromJson(Json("\"a\\nb\""), typeof(IReadOnlyList<string>))!);
+        string[] lines = ["a", "b"];
+        Assert.Equal(lines, (string[])AgentValues.FromJson(Json("\"a\\nb\""), typeof(IReadOnlyList<string>))!);
         Assert.Equal(3, AgentValues.FromJson(Json("\"3\""), typeof(int)));
         Assert.Null(AgentValues.FromJson(Json("null"), typeof(int?)));
     }

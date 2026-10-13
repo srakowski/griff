@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- Settings every project shares. A project only says what makes it different. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The .NET analyzers' recommended rules for the SDK in global.json; .editorconfig tunes them. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

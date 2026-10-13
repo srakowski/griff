@@ -34,12 +34,12 @@ public sealed class WaveformView : FrameworkElement
         set => SetValue(LineProperty, value);
     }
 
-    protected override void OnRender(DrawingContext context)
+    protected override void OnRender(DrawingContext drawingContext)
     {
         var (width, height) = (ActualWidth, ActualHeight);
-        context.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, width, height));
+        drawingContext.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, width, height));
         var middle = height / 2;
-        context.DrawRectangle(Line, null, new Rect(0, Math.Floor(middle), width, 1));
+        drawingContext.DrawRectangle(Line, null, new Rect(0, Math.Floor(middle), width, 1));
         if (Peaks is not { Length: > 0 } peaks)
             return;
 
@@ -54,6 +54,6 @@ public sealed class WaveformView : FrameworkElement
         }
 
         geometry.Freeze();
-        context.DrawGeometry(Fill, null, geometry);
+        drawingContext.DrawGeometry(Fill, null, geometry);
     }
 }

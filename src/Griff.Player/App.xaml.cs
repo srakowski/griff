@@ -20,7 +20,7 @@ namespace Griff.Player;
 /// sets the player's name, and <c>--server [port]</c> runs a dedicated server with no window (the game's start scene,
 /// hosted for everyone, played by nobody) until it's closed.
 /// </remarks>
-public partial class App : Application
+public partial class App : Application, IDisposable
 {
     private GameRunner? _runner;
     private WindowState _windowedState;
@@ -157,6 +157,19 @@ public partial class App : Application
         }
 
         return new Options(folder, host, join, server, name);
+    }
+
+    /// <summary>Stops the game when the app exits (stopping twice is harmless: the window's closing stops it too).</summary>
+    public void Dispose()
+    {
+        _runner?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        Dispose();
+        base.OnExit(e);
     }
 
     private static void StartNetwork(Game game, Options options)

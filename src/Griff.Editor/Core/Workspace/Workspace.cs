@@ -122,7 +122,7 @@ public sealed class Workspace(
     ISettingsStore settings,
     IStatusService status,
     IDialogService dialogs,
-    ILogger<Workspace> logger) : ObservableObject, IWorkspace
+    ILogger<Workspace> logger) : ObservableObject, IWorkspace, IDisposable
 {
     private const int MaxRecentProjects = 10;
 
@@ -232,6 +232,15 @@ public sealed class Workspace(
         _scriptWatcher.Deleted += restart;
         _scriptWatcher.Renamed += (s, e) => restart(s, e);
         _scriptWatcher.EnableRaisingEvents = true;
+    }
+
+    /// <summary>Stops watching the project's scripts and writing recovery files (the editor is closing).</summary>
+    public void Dispose()
+    {
+        _scriptWatcher?.Dispose();
+        _scriptWatcher = null;
+        _scriptDebounce?.Stop();
+        _recoveryTimer?.Stop();
     }
 
     public IReadOnlyList<string> RecentProjects => settings.Settings.RecentProjects;

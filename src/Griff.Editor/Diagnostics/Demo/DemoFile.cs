@@ -139,7 +139,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "key":
                 var (key, modifiers) = ParseKey(a);
                 // With the Add Component list open, keys go to its search box (Enter adds, Down moves).
-                if (!ui.IsAddListOpen)
+                if (!DemoUi.IsAddListOpen)
                     await ui.FocusEditor();
                 await ui.Shortcut(key, modifiers);
                 break;
@@ -176,7 +176,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "expectpartial":
                 // "expectpartial: Light = on 1 of 3": only some of the selection have it (or "none": all of them do).
                 var (partialOf, partialWant) = Split2(a, '=');
-                string? Partial() => ui.InspectorSection(partialOf) is { } partialSection ? partialSection.PartialNote ?? "none" : null;
+                string? Partial() => DemoUi.InspectorSection(partialOf) is { } partialSection ? partialSection.PartialNote ?? "none" : null;
                 if (!await Until(() => string.Equals(Partial(), partialWant, StringComparison.OrdinalIgnoreCase), 3000))
                     throw new InvalidOperationException($"Expected {partialOf} to show {partialWant}, but it shows {Partial() ?? "nothing (it isn't in the Inspector)"}.");
                 break;
@@ -214,7 +214,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "expectfolded: PlatformerMovement.Dash = true", a subheading in it.
                 var (foldName, foldWant) = Split2(a, '=');
                 var wantFolded = bool.Parse(foldWant);
-                System.Windows.Controls.Primitives.ToggleButton? FoldOf(string name) => name.Split('.', 2) is [var component, var group] ? ui.GroupFoldButton(component, group) : ui.FoldButton(name);
+                System.Windows.Controls.Primitives.ToggleButton? FoldOf(string name) => name.Split('.', 2) is [var component, var group] ? DemoUi.GroupFoldButton(component, group) : DemoUi.FoldButton(name);
                 if (!await Until(() => FoldOf(foldName) is { } fold && fold.IsChecked != wantFolded, 3000))
                     throw new InvalidOperationException($"Expected {foldName} to be {(wantFolded ? "folded shut" : "open")}.");
                 break;
@@ -229,7 +229,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (axesName.Split('.', 2) is not [var axesComponent, var axesField])
                     throw new InvalidOperationException($"expectaxes needs Component.Field, not {axesName}.");
                 var wantAxes = string.Join(", ", axesWant.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
-                string? ShownAxes() => ui.InspectorRow(axesComponent, Label(axesField)) is { DataContext: PropertyField f }
+                string? ShownAxes() => DemoUi.InspectorRow(axesComponent, Label(axesField)) is { DataContext: PropertyField f }
                     ? string.Join(", ", f.Axes.Where(x => x.IsShown).Select(x => x.Label))
                     : null;
                 if (!await Until(() => ShownAxes() == wantAxes, 3000))
@@ -239,8 +239,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "expectmatches: fields = 4" or "entities = 9": how many the Inspector's or Hierarchy's filter lets through.
                 var (matchesWhich, matchesWant) = Split2(a, '=');
                 var wantMatches = int.Parse(matchesWant, CultureInfo.InvariantCulture);
-                if (!await Until(() => ui.FilterMatches(matchesWhich) == wantMatches, 3000))
-                    throw new InvalidOperationException($"Expected the {matchesWhich} filter to let {wantMatches} through, but it lets {ui.FilterMatches(matchesWhich)} through.");
+                if (!await Until(() => DemoUi.FilterMatches(matchesWhich) == wantMatches, 3000))
+                    throw new InvalidOperationException($"Expected the {matchesWhich} filter to let {wantMatches} through, but it lets {DemoUi.FilterMatches(matchesWhich)} through.");
                 break;
             case "expectfaded":
                 // "expectfaded: PlatformerMovement.DashSpeed = true": the field is faded, unused while what it needs is off.
@@ -248,11 +248,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var wantFaded = bool.Parse(fadedWant);
                 if (fadedName.Split('.', 2) is not [var fadedComponent, var fadedField])
                     throw new InvalidOperationException($"expectfaded needs Component.Field, not {fadedName}.");
-                if (!await Until(() => ui.InspectorRow(fadedComponent, Label(fadedField)) is { DataContext: PropertyField f } && f.IsFaded == wantFaded, 3000))
+                if (!await Until(() => DemoUi.InspectorRow(fadedComponent, Label(fadedField)) is { DataContext: PropertyField f } && f.IsFaded == wantFaded, 3000))
                     throw new InvalidOperationException($"Expected {fadedName} to be {(wantFaded ? "faded" : "not faded")}.");
                 break;
             case "rename":
-                var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(ui.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
+                var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(DemoUi.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
                 await ui.EditBox(box, a);
                 break;
             case "spot":
@@ -443,7 +443,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Build(a.Equals("small", StringComparison.OrdinalIgnoreCase));
                 break;
             case "maker":
-                await ui.WaitForMaker();
+                await DemoUi.WaitForMaker();
                 break;
             case "name":
                 await ui.EditBox((TextBox)DemoUi.MakerPart("name"), a);
@@ -713,7 +713,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var mixedTarget = a.Split('.', StringSplitOptions.TrimEntries);
                 if (mixedTarget.Length is not (2 or 3))
                     throw new FormatException("expectmixed: <Component>.<Field>[.X]");
-                bool IsMixed() => ui.InspectorRow(mixedTarget[0], Label(mixedTarget[1]))?.DataContext is PropertyField mixedField &&
+                bool IsMixed() => DemoUi.InspectorRow(mixedTarget[0], Label(mixedTarget[1]))?.DataContext is PropertyField mixedField &&
                     (mixedTarget.Length == 2 ? mixedField.IsMixed : mixedField.Axes.Any(x => x.Label.Equals(mixedTarget[2], StringComparison.OrdinalIgnoreCase) && x.IsMixed));
                 if (!await Until(IsMixed, 3000))
                     throw new InvalidOperationException($"Expected {a} to show as mixed.");
@@ -727,7 +727,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new FormatException("expectflagged: <Component>.<Field> = <names> | none");
                 var wantFlagged = flagNames.Equals("none", StringComparison.OrdinalIgnoreCase) ? ""
                     : string.Join(", ", flagNames.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
-                string? Flagged() => ui.InspectorRow(flagParts[0], Label(flagParts[1]))?.DataContext is PropertyField flagField
+                string? Flagged() => DemoUi.InspectorRow(flagParts[0], Label(flagParts[1]))?.DataContext is PropertyField flagField
                     ? string.Join(", ", flagField.UnmatchedNames) : null;
                 if (!await Until(() => Flagged() == wantFlagged, 3000))
                     throw new InvalidOperationException($"Expected {flagTarget} to flag \"{wantFlagged}\", but it flags \"{Flagged()}\".");
@@ -772,10 +772,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new InvalidOperationException($"{a} wasn't saved.");
                 break;
             case "painter":
-                await ui.WaitForPainter();
+                await DemoUi.WaitForPainter();
                 break;
             case "clips":
-                await ui.WaitForClipEditor();
+                await DemoUi.WaitForClipEditor();
                 break;
             case "clipframes":
                 // "clipframes: 2 > 5" drags across the Clip Editor's sheet; "clipframes: 3" clicks one; "Shift+6" stretches to it.
@@ -784,7 +784,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.PickClipFrames(int.Parse(clipFrom, CultureInfo.InvariantCulture), int.Parse(clipTo, CultureInfo.InvariantCulture), clipFramesModifiers);
                 break;
             case "clipspeed":
-                await ui.WaitForClipEditor();
+                await DemoUi.WaitForClipEditor();
                 await ui.EditBox((TextBox)DemoUi.ClipsPart("speed"), a);
                 break;
             case "paint":
@@ -816,7 +816,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new InvalidOperationException($"{artPath} has {artLayout.Frames} frames, not {artFrames}.");
                 break;
             case "controls":
-                await ui.WaitForControls();
+                await DemoUi.WaitForControls();
                 break;
             case "action":
                 await ui.PickAction(a);
@@ -904,7 +904,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var label = Label(target[1]);
         var axis = target.Length > 2 ? target[2].ToUpperInvariant() : null;
 
-        var row = await DemoUi.WaitFor(() => ui.InspectorRow(component, label), $"{component}.{label}");
+        var row = await DemoUi.WaitFor(() => DemoUi.InspectorRow(component, label), $"{component}.{label}");
         var field = (PropertyField)row.DataContext;
         switch (field.Kind)
         {
@@ -1217,7 +1217,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         }
         finally
         {
-            Input.Release(right);
+            DemoInput.Release(right);
         }
 
         await DemoUi.Settle(100);
@@ -1410,7 +1410,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var (kind, name) = Split2(target, ':');
         return kind.ToLowerInvariant() switch
         {
-            "panel" => ui.PanelContent(name),
+            "panel" => DemoUi.PanelContent(name),
             "float" => (FrameworkElement?)ui.FloatingWindow(name) ?? throw new InvalidOperationException($"{name} isn't floating."),
             "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
             "scene" => sceneView,
@@ -1419,50 +1419,50 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "player" when int.TryParse(name, out var number) => play.PlayerSurface(number) ?? throw new InvalidOperationException($"There's no player {name}."),
             "toolbar" => ui.ToolbarButton(name),
             "field" when name.Split('.', 2) is [var component, var field] =>
-                ui.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
-            "component" => ui.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
-            "heading" => ui.ComponentHeading(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+                DemoUi.InspectorRow(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
+            "component" => DemoUi.ComponentHeader(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+            "heading" => DemoUi.ComponentHeading(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "fold" when name.Split('.', 2) is [var component, var group] =>
-                ui.GroupFoldButton(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
-            "fold" => ui.FoldButton(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
+                DemoUi.GroupFoldButton(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
+            "fold" => DemoUi.FoldButton(name) ?? throw new InvalidOperationException($"No {name} in the Inspector."),
             "group" when name.Split('.', 2) is [var component, var group] =>
-                ui.GroupRow(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
-            "addall" => ui.AddToAllButton(name) ?? throw new InvalidOperationException($"No Add to All on {name} in the Inspector."),
-            "remove" => ui.RemoveButton(name) ?? throw new InvalidOperationException($"No remove button on {name} in the Inspector."),
-            "need" => (name.Split('.', 2) is [var needer, var needed] ? ui.NeedRow(needer, needed) : ui.NeedRow(name))
+                DemoUi.GroupRow(component, group) ?? throw new InvalidOperationException($"No subheading {name} in the Inspector."),
+            "addall" => DemoUi.AddToAllButton(name) ?? throw new InvalidOperationException($"No Add to All on {name} in the Inspector."),
+            "remove" => DemoUi.RemoveButton(name) ?? throw new InvalidOperationException($"No remove button on {name} in the Inspector."),
+            "need" => (name.Split('.', 2) is [var needer, var needed] ? DemoUi.NeedRow(needer, needed) : DemoUi.NeedRow(name))
                 ?? throw new InvalidOperationException($"{name} isn't flagged as needing something in the Inspector."),
-            "needadd" => (name.Split('.', 2) is [var needer, var needed] ? ui.NeedButton(needer, needed) : ui.NeedButton(name))
+            "needadd" => (name.Split('.', 2) is [var needer, var needed] ? DemoUi.NeedButton(needer, needed) : DemoUi.NeedButton(name))
                 ?? throw new InvalidOperationException($"{name} isn't flagged as needing something in the Inspector."),
-            "addlist" => ui.AddListPart(name),
+            "addlist" => DemoUi.AddListPart(name),
             "label" when name.Split('.', 2) is [var component, var field] =>
-                ui.FieldLabel(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
-            "entity" => (FrameworkElement?)ui.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
-            "lock" => (FrameworkElement?)ui.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
-            "eye" => (FrameworkElement?)ui.HierarchyEye(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
-            "prefab" => (FrameworkElement?)ui.HierarchyPrefabMark(name) ?? throw new InvalidOperationException($"No prefab copy {name} in the Hierarchy."),
-            "prefabnote" => ui.Inspector.FindName("PrefabNote") as FrameworkElement ?? throw new InvalidOperationException("No prefab note in the Inspector."),
+                DemoUi.FieldLabel(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
+            "entity" => (FrameworkElement?)DemoUi.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "lock" => (FrameworkElement?)DemoUi.HierarchyLock(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "eye" => (FrameworkElement?)DemoUi.HierarchyEye(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
+            "prefab" => (FrameworkElement?)DemoUi.HierarchyPrefabMark(name) ?? throw new InvalidOperationException($"No prefab copy {name} in the Hierarchy."),
+            "prefabnote" => DemoUi.Inspector.FindName("PrefabNote") as FrameworkElement ?? throw new InvalidOperationException("No prefab note in the Inspector."),
             "override" when name.Split('.', 2) is [var component, var field] =>
-                ui.OverrideMark(component, Label(field)) ?? throw new InvalidOperationException($"{name} isn't marked as changed from the prefab."),
+                DemoUi.OverrideMark(component, Label(field)) ?? throw new InvalidOperationException($"{name} isn't marked as changed from the prefab."),
             "menu" => DemoUi.Descendants<MenuItem>(ui.Main.MainMenu).First(m => DemoUi.HeaderText(m.Header) == name),
-            "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)ui.Inspector.FindName("CatalogButton"),
+            "catalog" when name.Equals("button", StringComparison.OrdinalIgnoreCase) => (FrameworkElement)DemoUi.Inspector.FindName("CatalogButton"),
             "catalog" => DemoUi.CatalogPart(name),
             "maker" => DemoUi.MakerPart(name),
             "controls" => DemoUi.ControlsPart(name),
             "painter" => DemoUi.PainterPart(name),
             "clips" => DemoUi.ClipsPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
-                ui.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
+                DemoUi.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "color" => ui.ColorPart(name),
-            "transform" => ui.TransformPart(name),
-            "filter" => ui.FilterBox(name),
+            "transform" => DemoUi.TransformPart(name),
+            "filter" => DemoUi.FilterBox(name),
             "pick" when name.Split('.', 2) is [var component, var field] =>
-                ui.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
+                DemoUi.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
-                ui.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
+                DemoUi.SoundButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No sound field {name[..at]} in the Inspector."),
             "code" => ui.CodePart(name),
-            "edit" => ui.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
+            "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
-            "asset" => (FrameworkElement?)ui.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
+            "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
             _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }

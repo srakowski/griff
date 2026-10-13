@@ -8,11 +8,9 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
-using Color = System.Windows.Media.Color;
+using WpfColor = System.Windows.Media.Color;
 
 namespace Griff.Editor.Diagnostics.Demo;
-
-using Color = System.Windows.Media.Color;
 
 /// <summary>
 /// A click-through, never-focused window over the whole screen that draws the demo's dressing: a spotlight on what's
@@ -20,12 +18,12 @@ using Color = System.Windows.Media.Color;
 /// </summary>
 internal sealed class DemoOverlay : Window
 {
-    private static readonly Color Accent = Color.FromRgb(0xFF, 0xB5, 0x47);
+    private static readonly WpfColor Accent = WpfColor.FromRgb(0xFF, 0xB5, 0x47);
     private static readonly FontFamily UiFont = new("Segoe UI Variable Display, Segoe UI");
     private static readonly FontFamily MonoFont = new("Cascadia Mono, Consolas");
 
     private readonly Canvas _canvas = new() { IsHitTestVisible = false };
-    private readonly Path _dim = new() { Fill = new SolidColorBrush(Color.FromArgb(0x8C, 0, 0, 0)), Opacity = 0 };
+    private readonly Path _dim = new() { Fill = new SolidColorBrush(WpfColor.FromArgb(0x8C, 0, 0, 0)), Opacity = 0 };
     private readonly Border _ring;
     private readonly Border _callout;
     private readonly TextBlock _calloutText;
@@ -68,7 +66,7 @@ internal sealed class DemoOverlay : Window
         };
         _canvas.Children.Add(_ring);
 
-        _calloutText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x1B, 0x1D, 0x22)), FontFamily = UiFont, FontSize = 17, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 380 };
+        _calloutText = new TextBlock { Foreground = new SolidColorBrush(WpfColor.FromRgb(0x1B, 0x1D, 0x22)), FontFamily = UiFont, FontSize = 17, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 380 };
         _callout = new Border
         {
             Background = new SolidColorBrush(Accent),
@@ -83,7 +81,7 @@ internal sealed class DemoOverlay : Window
         _captionText = new TextBlock { Foreground = Brushes.White, FontFamily = UiFont, FontSize = 23, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, LineHeight = 31 };
         _caption = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xD8, 0x10, 0x12, 0x16)),
+            Background = new SolidColorBrush(WpfColor.FromArgb(0xD8, 0x10, 0x12, 0x16)),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(22, 12, 22, 13),
             Child = _captionText,
@@ -94,8 +92,8 @@ internal sealed class DemoOverlay : Window
         _keysText = new TextBlock { Foreground = Brushes.White, FontFamily = UiFont, FontSize = 26, FontWeight = FontWeights.SemiBold };
         _keys = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x22, 0x25, 0x2C)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+            Background = new SolidColorBrush(WpfColor.FromArgb(0xE6, 0x22, 0x25, 0x2C)),
+            BorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(18, 8, 18, 10),
@@ -104,7 +102,7 @@ internal sealed class DemoOverlay : Window
         };
         _canvas.Children.Add(_keys);
 
-        _badgeText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x1B, 0x1D, 0x22)), FontFamily = UiFont, FontSize = 18, FontWeight = FontWeights.Bold };
+        _badgeText = new TextBlock { Foreground = new SolidColorBrush(WpfColor.FromRgb(0x1B, 0x1D, 0x22)), FontFamily = UiFont, FontSize = 18, FontWeight = FontWeights.Bold };
         _badge = new Border
         {
             Background = new SolidColorBrush(Accent),
@@ -115,15 +113,15 @@ internal sealed class DemoOverlay : Window
         };
         _canvas.Children.Add(_badge);
 
-        _codeTitle = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xA0, 0xAC)), FontFamily = UiFont, FontSize = 15, Margin = new Thickness(0, 0, 0, 10) };
-        _codeText = new TextBlock { FontFamily = MonoFont, FontSize = 19, LineHeight = 27, Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xDC, 0xE4)) };
+        _codeTitle = new TextBlock { Foreground = new SolidColorBrush(WpfColor.FromRgb(0x9A, 0xA0, 0xAC)), FontFamily = UiFont, FontSize = 15, Margin = new Thickness(0, 0, 0, 10) };
+        _codeText = new TextBlock { FontFamily = MonoFont, FontSize = 19, LineHeight = 27, Foreground = new SolidColorBrush(WpfColor.FromRgb(0xD8, 0xDC, 0xE4)) };
         var codeStack = new StackPanel();
         codeStack.Children.Add(_codeTitle);
         codeStack.Children.Add(_codeText);
         _code = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xF4, 0x17, 0x19, 0x1E)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF)),
+            Background = new SolidColorBrush(WpfColor.FromArgb(0xF4, 0x17, 0x19, 0x1E)),
+            BorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x60, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
             Padding = new Thickness(26, 18, 30, 22),
@@ -135,19 +133,19 @@ internal sealed class DemoOverlay : Window
 
         _cardKicker = new TextBlock { Foreground = new SolidColorBrush(Accent), FontFamily = UiFont, FontSize = 22, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
         _cardTitle = new TextBlock { Foreground = Brushes.White, FontFamily = UiFont, FontSize = 64, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 8) };
-        _cardSubtitle = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0xBE, 0xC9)), FontFamily = UiFont, FontSize = 24, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 1100 };
+        _cardSubtitle = new TextBlock { Foreground = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0xBE, 0xC9)), FontFamily = UiFont, FontSize = 24, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 1100 };
         var cardStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         cardStack.Children.Add(_cardKicker);
         cardStack.Children.Add(_cardTitle);
         cardStack.Children.Add(_cardSubtitle);
-        _card = new Grid { Background = new SolidColorBrush(Color.FromArgb(0xEC, 0x0E, 0x10, 0x14)), Opacity = 0 };
+        _card = new Grid { Background = new SolidColorBrush(WpfColor.FromArgb(0xEC, 0x0E, 0x10, 0x14)), Opacity = 0 };
         _card.Children.Add(cardStack);
         _canvas.Children.Add(_card);
 
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;
-            SetWindowLong(handle, ExStyle, GetWindowLong(handle, ExStyle) | Transparent | Layered | NoActivate | ToolWindow);
+            _ = SetWindowLong(handle, ExStyle, GetWindowLong(handle, ExStyle) | Transparent | Layered | NoActivate | ToolWindow);
         };
     }
 
@@ -393,11 +391,11 @@ internal sealed class DemoOverlay : Window
     private void SetCode(string code, (int Start, int Length)? highlight = null)
     {
         _codeText.Inlines.Clear();
-        var keyword = new SolidColorBrush(Color.FromRgb(0x7A, 0xA8, 0xFF));
-        var type = new SolidColorBrush(Color.FromRgb(0x5E, 0xD3, 0xB5));
-        var number = new SolidColorBrush(Color.FromRgb(0xF2, 0xC1, 0x7A));
-        var comment = new SolidColorBrush(Color.FromRgb(0x6F, 0x78, 0x86));
-        var mark = new SolidColorBrush(Color.FromArgb(0x55, Accent.R, Accent.G, Accent.B));
+        var keyword = new SolidColorBrush(WpfColor.FromRgb(0x7A, 0xA8, 0xFF));
+        var type = new SolidColorBrush(WpfColor.FromRgb(0x5E, 0xD3, 0xB5));
+        var number = new SolidColorBrush(WpfColor.FromRgb(0xF2, 0xC1, 0x7A));
+        var comment = new SolidColorBrush(WpfColor.FromRgb(0x6F, 0x78, 0x86));
+        var mark = new SolidColorBrush(WpfColor.FromArgb(0x55, Accent.R, Accent.G, Accent.B));
 
         var i = 0;
         while (i < code.Length)

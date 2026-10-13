@@ -168,7 +168,7 @@ public static class WorldGen
 
     private static int DirtBottom(int seed, int surface, int dirtDepth, int x) => surface + dirtDepth + (Hash(seed + 3, x, 0) < 0.5f ? 0 : 1);
 
-    private static IReadOnlyList<string> Rows(int[,] grid, int width, int height)
+    private static string[] Rows(int[,] grid, int width, int height)
     {
         var rows = new string[height];
         var row = new char[width];

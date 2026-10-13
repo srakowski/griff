@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using Griff.Editing;
 using Griff.Editor.Core.Commands;
@@ -32,7 +34,7 @@ public sealed partial class NewScriptCommand(
     ScriptEditors editors,
     ILogger<NewScriptCommand> logger) : EditorCommand
 {
-    private const string Template = """
+    private static readonly CompositeFormat Template = CompositeFormat.Parse("""
         public class {0} : Behavior
         {{
             public float Speed {{ get; set; }} = 5;
@@ -48,7 +50,7 @@ public sealed partial class NewScriptCommand(
             }}
         }}
 
-        """;
+        """);
 
     public override string Id => "Script.New";
     public override string Text => "New _Script...";
@@ -69,7 +71,7 @@ public sealed partial class NewScriptCommand(
 
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, name + ".cs");
-        File.WriteAllText(path, string.Format(Template, name).Replace("\n", Environment.NewLine));
+        File.WriteAllText(path, string.Format(CultureInfo.InvariantCulture, Template, name).Replace("\n", Environment.NewLine));
         logger.LogInformation("Created {Path}", project.GetRelativePath(path));
 
         // Compile now (rather than waiting for the file watcher) so it can be attached straight away.

@@ -792,7 +792,7 @@ public sealed partial class NetSession
         return eyes.Any(e => Vector2.DistanceSquared(e, at) <= reach * reach);
     }
 
-    private void ForgetTree(NetPlayer player, NetObject obj)
+    private static void ForgetTree(NetPlayer player, NetObject obj)
     {
         player.Ghosts.Remove(obj);
         foreach (var other in player.Ghosts.Keys.Where(o => o.Entity != obj.Entity && o.Entity.IsSelfOrDescendantOf(obj.Entity)).ToList())

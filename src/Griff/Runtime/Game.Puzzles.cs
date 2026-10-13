@@ -207,7 +207,7 @@ public sealed partial class Game
     private int ItemCount(string item)
     {
         var inventories = Scene.Entities.SelectMany(e => e.GetComponents<Inventory>()).ToList();
-        var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && Net.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
+        var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
         return inventory?.Count(item.Trim()) ?? 0;
     }
 

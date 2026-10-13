@@ -288,39 +288,39 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         Descendants<Button>(main.Toolbar).First(b => b.Command is Core.Commands.EditorCommand c && c.Id == commandId);
 
     // In the main window or a floating one.
-    public TabItem PanelTab(string title) =>
+    public static TabItem PanelTab(string title) =>
         Roots().SelectMany(Descendants<TabItem>).First(t => t.Header is string s ? s == title : t.Header is DependencyObject header && Descendants<TextBlock>(header).Any(b => b.Text == title));
 
-    public FrameworkElement PanelContent(string title) => (FrameworkElement)PanelTab(title).Content;
+    public static FrameworkElement PanelContent(string title) => (FrameworkElement)PanelTab(title).Content;
 
-    public TreeViewItem? HierarchyItem(string name) =>
+    public static TreeViewItem? HierarchyItem(string name) =>
         Descendants<TreeViewItem>(PanelContent("Hierarchy")).FirstOrDefault(i => i.DataContext is EntityNode n && n.Name == name && i.IsVisible);
 
     /// <summary>The lock button on an entity's row in the Hierarchy.</summary>
-    public ToggleButton? HierarchyLock(string name) =>
+    public static ToggleButton? HierarchyLock(string name) =>
         HierarchyItem(name) is { DataContext: EntityNode node } item
             ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "LockToggle" && b.DataContext == node)
             : null;
 
     /// <summary>The eye (hide) button on an entity's row in the Hierarchy.</summary>
-    public ToggleButton? HierarchyEye(string name) =>
+    public static ToggleButton? HierarchyEye(string name) =>
         HierarchyItem(name) is { DataContext: EntityNode node } item
             ? Descendants<ToggleButton>(item).FirstOrDefault(b => b.Name == "HideToggle" && b.DataContext == node)
             : null;
 
     /// <summary>The package mark on a prefab copy's row in the Hierarchy.</summary>
-    public TextBlock? HierarchyPrefabMark(string name) =>
+    public static TextBlock? HierarchyPrefabMark(string name) =>
         HierarchyItem(name) is { DataContext: EntityNode node } item
             ? Descendants<TextBlock>(item).FirstOrDefault(t => t.Name == "PrefabMark" && t.DataContext == node && t.IsVisible)
             : null;
 
-    public InspectorView Inspector => (InspectorView)PanelContent("Inspector");
+    public static InspectorView Inspector => (InspectorView)PanelContent("Inspector");
 
-    public Border? ComponentHeader(string component) =>
+    public static Border? ComponentHeader(string component) =>
         Descendants<Border>(Inspector).FirstOrDefault(b => b.DataContext is ComponentSection s && s.IsNamed(component) && b.Child is DockPanel);
 
     /// <summary>The row (label and editor) for a property of a component in the Inspector.</summary>
-    public Grid? InspectorRow(string component, string label, int nth = 0) =>
+    public static Grid? InspectorRow(string component, string label, int nth = 0) =>
         Descendants<Grid>(Inspector)
             .Where(g => g.DataContext is PropertyField f && f.Label == label && Section(g)?.IsNamed(component) == true && Descendants<TextBlock>(g).Any(t => t.Text == label))
             .Skip(nth)
@@ -614,7 +614,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             Unspot();
     }
 
-    private static FrameworkElement? InspectorRowOf(DependencyObject element)
+    private static Grid? InspectorRowOf(DependencyObject element)
     {
         for (var e = VisualTreeHelper.GetParent(element); e is not null; e = VisualTreeHelper.GetParent(e))
         {
@@ -657,7 +657,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     }
 
     /// <summary>Whether the Inspector's Add Component list is open.</summary>
-    public bool IsAddListOpen => ((InspectorPanel)Inspector.DataContext).IsAddOpen;
+    public static bool IsAddListOpen => ((InspectorPanel)Inspector.DataContext).IsAddOpen;
 
     /// <summary>Opens the Add Component list with its button, with nothing typed yet.</summary>
     public async Task OpenAddList()
@@ -692,7 +692,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     /// A part of the open Add Component list: <c>addlist</c> (all of it), <c>search</c>, <c>list</c>, <c>plan</c>,
     /// <c>browse</c>, or <c>item:Patrol</c> (a row).
     /// </summary>
-    public FrameworkElement AddListPart(string name)
+    public static FrameworkElement AddListPart(string name)
     {
         var popup = (Popup)Inspector.FindName("AddPopup");
         if (!popup.IsOpen || popup.Child is not FrameworkElement root)
@@ -713,16 +713,16 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     }
 
     /// <summary>A section's flag saying what it needs (<c>PlatformerMovement</c>, or <c>PlatformerMovement.Body</c> for one of several).</summary>
-    public FrameworkElement? NeedRow(string component, string? needs = null) =>
+    public static FrameworkElement? NeedRow(string component, string? needs = null) =>
         Descendants<Border>(Inspector).FirstOrDefault(b => b.Tag as string == "need" && b.DataContext is NeedRow row &&
             (needs is null || row.Name.Equals(needs, StringComparison.OrdinalIgnoreCase)) && Section(b)?.IsNamed(component) == true);
 
     /// <summary>The button on a section's flag that adds what it needs.</summary>
-    public Button? NeedButton(string component, string? needs = null) =>
+    public static Button? NeedButton(string component, string? needs = null) =>
         NeedRow(component, needs) is { } row ? Descendants<Button>(row).FirstOrDefault(b => b.Tag as string == "need:add") : null;
 
     /// <summary>A section's remove button.</summary>
-    public Button? RemoveButton(string component) =>
+    public static Button? RemoveButton(string component) =>
         ComponentHeader(component) is { } header ? Descendants<Button>(header).FirstOrDefault(b => b.Tag as string == "remove") : null;
 
     // ----- Component catalog -----

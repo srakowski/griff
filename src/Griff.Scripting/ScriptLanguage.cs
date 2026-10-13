@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Completion;
@@ -39,7 +40,7 @@ public sealed record ScriptClass(string Name, int Start, int Length, IReadOnlyLi
 /// as Roslyn documents, set to the editor's unsaved text for open files, compiled the same way as
 /// <see cref="ScriptCompiler"/>. Methods are safe to call from any thread; each works on a snapshot.
 /// </summary>
-public sealed class ScriptLanguage
+public sealed class ScriptLanguage : IDisposable
 {
     private static readonly Lazy<MefHostServices> Host = new(() => MefHostServices.Create(MefHostServices.DefaultAssemblies));
 
@@ -61,6 +62,8 @@ public sealed class ScriptLanguage
             .AddProject(project)
             .AddDocument(DocumentId.CreateNewId(_projectId), ScriptCompiler.ImplicitUsingsPath, SourceText.From(ScriptCompiler.ImplicitUsings), filePath: ScriptCompiler.ImplicitUsingsPath);
     }
+
+    public void Dispose() => _workspace.Dispose();
 
     /// <summary>Warms up Roslyn (its first completion takes a moment) so the editor's first one is quick.</summary>
     public Task WarmUpAsync() => Task.Run(async () =>
@@ -149,7 +152,7 @@ public sealed class ScriptLanguage
             {
                 var span = d.Location.SourceSpan;
                 var line = d.Location.GetLineSpan().StartLinePosition;
-                return new ScriptProblem(span.Start, span.Length, line.Line + 1, line.Character + 1, d.Id, d.GetMessage(), d.Severity == DiagnosticSeverity.Error);
+                return new ScriptProblem(span.Start, span.Length, line.Line + 1, line.Character + 1, d.Id, d.GetMessage(CultureInfo.CurrentCulture), d.Severity == DiagnosticSeverity.Error);
             })
             .OrderBy(p => p.Start)];
     }

@@ -12,24 +12,24 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>A field's name in the Inspector, which explains it and drags a number.</summary>
-    public TextBlock? FieldLabel(string component, string label) =>
+    public static TextBlock? FieldLabel(string component, string label) =>
         InspectorRow(component, label) is { } row ? Descendants<TextBlock>(row).FirstOrDefault(t => t.Name == "FieldLabel") : null;
 
     /// <summary>A component's name on its section's header.</summary>
-    public TextBlock? ComponentHeading(string component) =>
+    public static TextBlock? ComponentHeading(string component) =>
         ComponentHeader(component) is { } header ? Descendants<TextBlock>(header).FirstOrDefault(t => t.DataContext is ComponentSection && t.Text == ((ComponentSection)t.DataContext).Title) : null;
 
     /// <summary>The arrow on a component's header that folds its section shut or opens it.</summary>
-    public ToggleButton? FoldButton(string component) =>
+    public static ToggleButton? FoldButton(string component) =>
         ComponentHeader(component) is { } header ? Descendants<ToggleButton>(header).FirstOrDefault() : null;
 
     /// <summary>A subheading in a component's section, "Dash" in Platformer Movement's.</summary>
-    public FrameworkElement? GroupRow(string component, string group) =>
+    public static FrameworkElement? GroupRow(string component, string group) =>
         Descendants<DockPanel>(Inspector).FirstOrDefault(d => d.Name == "GroupRow" && d.DataContext is FieldGroup g &&
             g.Name.Equals(group, StringComparison.OrdinalIgnoreCase) && Section(d)?.IsNamed(component) == true);
 
     /// <summary>The arrow on a subheading that folds the fields under it shut or opens them.</summary>
-    public ToggleButton? GroupFoldButton(string component, string group) =>
+    public static ToggleButton? GroupFoldButton(string component, string group) =>
         GroupRow(component, group) is { } row ? Descendants<ToggleButton>(row).FirstOrDefault() : null;
 
     /// <summary>Rests the mouse on <paramref name="element"/> until its tooltip shows.</summary>
@@ -95,7 +95,7 @@ internal sealed partial class DemoUi
         }
         finally
         {
-            input.Release();
+            DemoInput.Release();
         }
 
         await Settle(80);

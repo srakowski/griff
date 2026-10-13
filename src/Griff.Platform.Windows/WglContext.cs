@@ -73,7 +73,7 @@ public sealed class WglContext : IDisposable
 
         wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
         wglDeleteContext(_context);
-        ReleaseDC(_hwnd, _hdc);
+        _ = ReleaseDC(_hwnd, _hdc);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -118,12 +118,12 @@ public sealed class WglContext : IDisposable
     [DllImport("opengl32.dll")]
     private static extern bool wglDeleteContext(IntPtr context);
 
-    [DllImport("opengl32.dll", CharSet = CharSet.Ansi)]
-    private static extern IntPtr wglGetProcAddress(string name);
+    [DllImport("opengl32.dll", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern IntPtr wglGetProcAddress([MarshalAs(UnmanagedType.LPStr)] string name);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr LoadLibrary(string name);
 
-    [DllImport("kernel32.dll", EntryPoint = "GetProcAddress", CharSet = CharSet.Ansi)]
-    private static extern IntPtr GetProcAddressNative(IntPtr module, string name);
+    [DllImport("kernel32.dll", EntryPoint = "GetProcAddress", CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern IntPtr GetProcAddressNative(IntPtr module, [MarshalAs(UnmanagedType.LPStr)] string name);
 }

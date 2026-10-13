@@ -84,6 +84,9 @@ public static class MusicSynth
     private static readonly int[] Minor = [0, 2, 3, 5, 7, 8, 10];
     private static readonly int[] HarmonicMinor = [0, 2, 3, 5, 7, 8, 11];
 
+    // The last beat of a fill bar, where the snare rolls.
+    private static readonly int[] FillSteps = [12, 13, 14, 15];
+
     /// <summary>How long a recipe's loop lasts, in seconds.</summary>
     public static double Seconds(MusicRecipe recipe)
     {
@@ -349,7 +352,7 @@ public static class MusicSynth
                     Hat(start + step, step % 4 == 0 ? 1f : 0.6f);
                 if (fill)
                 {
-                    foreach (var step in new[] { 12, 13, 14, 15 }.Where(_ => rng.NextDouble() < 0.85))
+                    foreach (var step in FillSteps.Where(_ => rng.NextDouble() < 0.85))
                         Snare(start + step, step == 15 ? 1 : 0.7f);
                 }
             }

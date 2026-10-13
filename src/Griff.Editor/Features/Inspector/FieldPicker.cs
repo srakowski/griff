@@ -31,7 +31,7 @@ public sealed class FieldPicker : ObservableObject
             choice.IsPicked = isPicked(choice.Name);
         _matches = _all;
         // Start on what's picked now, so Enter keeps it.
-        _selected = _all.FirstOrDefault(c => c.IsPicked) ?? _all.FirstOrDefault();
+        _selected = _all.FirstOrDefault(c => c.IsPicked) ?? (_all.Count > 0 ? _all[0] : null);
     }
 
     internal PickerSetup Setup { get; }
@@ -54,7 +54,7 @@ public sealed class FieldPicker : ObservableObject
             Matches = text.Length == 0
                 ? _all
                 : [.. _all.Select(c => (Choice: c, Rank: Rank(c, text))).Where(m => m.Rank >= 0).OrderBy(m => m.Rank).Select(m => m.Choice)];
-            Selected = Matches.FirstOrDefault();
+            Selected = Matches.Count > 0 ? Matches[0] : null;
             OnPropertyChanged(nameof(TypedOffer));
             OnPropertyChanged(nameof(HasTypedOffer));
         }

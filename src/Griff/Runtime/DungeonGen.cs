@@ -202,7 +202,7 @@ public static class DungeonGen
     }
 
     // Floors as the floor tile (or empty), walls round them (every cell touching a floor, corners too) or everywhere else.
-    private static IReadOnlyList<string> Tiles(DungeonGenerator g, bool[,] floor, int width, int height)
+    private static List<string> Tiles(DungeonGenerator g, bool[,] floor, int width, int height)
     {
         char Char(int tile) => tile >= 0 && tile < Tilemap.MaxTiles ? Tilemap.CharOf(tile) : Tilemap.Empty;
         var (wall, ground) = (Char(g.WallTile), Char(g.FloorTile));

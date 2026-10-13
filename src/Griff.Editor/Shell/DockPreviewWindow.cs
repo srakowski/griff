@@ -69,7 +69,7 @@ internal sealed class DockPreviewWindow : Window
         base.OnSourceInitialized(e);
         // Clicks and the mouse pass through to whatever's under it.
         var handle = new WindowInteropHelper(this).Handle;
-        SetWindowLong(handle, ExStyle, GetWindowLong(handle, ExStyle) | Transparent | NoActivate | ToolWindow);
+        _ = SetWindowLong(handle, ExStyle, GetWindowLong(handle, ExStyle) | Transparent | NoActivate | ToolWindow);
     }
 
     private const int ExStyle = -20;

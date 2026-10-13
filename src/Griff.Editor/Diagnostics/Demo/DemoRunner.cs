@@ -127,9 +127,16 @@ internal static class DemoRunner
             var sceneView = services.GetRequiredService<SceneViewControl>();
 
             Log("demo started" + (scriptPath is null ? "" : ": " + scriptPath));
-            restart = scriptPath is null
-                ? await new DemoScript(ui, workspace, selection, play, sceneView, options).Run()
-                : await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options).Run();
+            if (scriptPath is null)
+            {
+                using var tour = new DemoScript(ui, workspace, selection, play, sceneView, options);
+                restart = await tour.Run();
+            }
+            else
+            {
+                restart = await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options).Run();
+            }
+
             Log(restart ? "starting over" : "demo finished");
         }
         catch (Exception ex)
@@ -151,6 +158,7 @@ internal static class DemoRunner
             await Task.Delay(300);
             bar.Close();
             overlay.Close();
+            control.Dispose();
         }
 
         // Checking demos (GRIFF_DEMO_EXIT=1): close the editor when done, with an exit code that says how it went.

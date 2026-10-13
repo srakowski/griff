@@ -275,7 +275,7 @@ public sealed partial class Game
         if (player is null || args is not object?[] { Length: 1 } a || a[0] is not Entity victim || victim.Scene != Scene)
             return;
         var attacker = Scene.Entities.Where(SceneRenderer.IsActive)
-            .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && Net.OwnerIdOf(e) == player.Id);
+            .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && NetSession.OwnerIdOf(e) == player.Id);
         if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer))
             HitWithBump(bump, victim);
     }
@@ -340,7 +340,7 @@ public sealed partial class Game
             crate.Scene != Scene)
             return;
         var pusher = Scene.Entities.Where(SceneRenderer.IsActive)
-            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && Net.OwnerIdOf(e) == player.Id);
+            .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id);
         (int X, int Y) way = (Math.Sign(direction.X), Math.Sign(direction.Y));
         if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0) && CratesPushed(pusher, way, crate) is { } row)
             Push(pusher, row, way, 0, Math.Max(0.02f, mover.StepTime));

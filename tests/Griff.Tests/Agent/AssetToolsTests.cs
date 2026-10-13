@@ -16,7 +16,7 @@ public sealed class AssetToolsTests : IDisposable
         {
             Changed.Add(assetPath);
             Previous.Add(previousText);
-            return Task.FromResult(assetPath.EndsWith(".cs") ? new AssetFeedback("Broken.cs(1,1): error", IsError: true) : null);
+            return Task.FromResult(assetPath.EndsWith(".cs", StringComparison.Ordinal) ? new AssetFeedback("Broken.cs(1,1): error", IsError: true) : null);
         }
 
         public List<(string From, string To)> Moved { get; } = [];

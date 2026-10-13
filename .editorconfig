@@ -1,0 +1,67 @@
+# Griff's code style. The build enforces the rules marked "warning" (see Directory.Build.props).
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{csproj,props,targets,slnx,xml,xaml,json,yml,yaml}]
+indent_size = 2
+
+[*.xaml]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+max_line_length = 120
+
+# Namespaces and usings
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# Prefer the language's own forms
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_prefer_braces = when_multiline:silent
+
+# Naming: _camelCase private fields, PascalCase types and members, IPascalCase interfaces
+dotnet_naming_rule.interfaces.symbols = interface_symbols
+dotnet_naming_rule.interfaces.style = i_prefix
+dotnet_naming_rule.interfaces.severity = warning
+dotnet_naming_symbols.interface_symbols.applicable_kinds = interface
+dotnet_naming_style.i_prefix.required_prefix = I
+dotnet_naming_style.i_prefix.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields.symbols = private_fields
+dotnet_naming_rule.private_fields.style = underscore_camel
+dotnet_naming_rule.private_fields.severity = suggestion
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Analyzer rules that don't fit Griff. Everything else in the recommended set is fixed, not suppressed.
+# CA1716: flags names that are Visual Basic keywords (Stop, Loop, Next, Shadows); Griff's API and scripts are C# only.
+dotnet_diagnostic.CA1716.severity = none
+# CA1720: NetBuffer's Int/Float/String reads and writes and the agent schema's String/Integer kinds name types on purpose.
+dotnet_diagnostic.CA1720.severity = none
+# CA1711: IAudioStream is a stream of audio samples, which is what the suffix says.
+dotnet_diagnostic.CA1711.severity = none
+# CA1848, CA1873: the editor's log is the Output panel, always on and written on user actions, not in a hot loop.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+# CA1822: only for private and internal members. Public ones are API that scripts and XAML bindings call on an instance.
+dotnet_code_quality.CA1822.api_surface = private, internal
+
+[tests/**.cs]
+# CA1707: test names read as sentences (Jump_Lands_On_Platform).
+dotnet_diagnostic.CA1707.severity = none

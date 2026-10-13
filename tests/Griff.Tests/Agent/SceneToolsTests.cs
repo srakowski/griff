@@ -535,7 +535,7 @@ public class SceneToolsTests
 
         Assert.Contains("\"needs\": \"It needs a Collider, which Player doesn't have, and won't work until one is added.\"", json);
         // Its Body needs one too; nothing else is flagged.
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(json, "\"needs\"").Count);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Count(json, "\"needs\""));
     }
 
     [Fact]

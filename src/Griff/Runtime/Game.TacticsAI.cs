@@ -108,7 +108,7 @@ public sealed partial class Game
 
     // How many steps each cell is from somewhere it could hit a foe from, around walls (other units are passed by, as
     // they'll move), within its map or a margin round the fighters.
-    private Dictionary<(int X, int Y), int> DistanceToFoes(TacticsUnit unit, GridMovement m, GridWalls walls,
+    private static Dictionary<(int X, int Y), int> DistanceToFoes(TacticsUnit unit, GridMovement m, GridWalls walls,
         List<(Entity Entity, (int X, int Y) Cell)> foes, (int X, int Y) here)
     {
         int minX, minY, maxX, maxY;

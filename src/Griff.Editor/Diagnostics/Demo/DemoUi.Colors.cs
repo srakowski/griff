@@ -66,12 +66,12 @@ internal sealed partial class DemoUi
     }
 
     /// <summary>The Transform's "3d" switch, or the "hidden" note naming what 2D doesn't show.</summary>
-    public FrameworkElement TransformPart(string name) =>
+    public static FrameworkElement TransformPart(string name) =>
         Descendants<FrameworkElement>(Inspector).FirstOrDefault(e => e.Tag as string == $"transform:{name.ToLowerInvariant()}" && e.IsVisible)
             ?? throw new InvalidOperationException($"No transform:{name} showing in the Inspector.");
 
     /// <summary>The filter box at the top of the Inspector ("fields") or the Hierarchy ("entities").</summary>
-    public FrameworkElement FilterBox(string which) => which.ToLowerInvariant() switch
+    public static FrameworkElement FilterBox(string which) => which.ToLowerInvariant() switch
     {
         "fields" => (FrameworkElement)Inspector.FindName("FieldFilter"),
         "entities" => (FrameworkElement)((HierarchyView)PanelContent("Hierarchy")).FindName("Filter"),
@@ -79,7 +79,7 @@ internal sealed partial class DemoUi
     };
 
     /// <summary>How many fields (Inspector) or entities (Hierarchy) the filter lets through.</summary>
-    public int FilterMatches(string which) => which.ToLowerInvariant() switch
+    public static int FilterMatches(string which) => which.ToLowerInvariant() switch
     {
         "fields" => ((InspectorPanel)Inspector.DataContext).FilterMatches,
         "entities" => ((HierarchyPanel)PanelContent("Hierarchy").DataContext).FilterMatches.Count,

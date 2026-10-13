@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -520,7 +521,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     // Each component of the first entity, with the same component on every other one (the nth of a type matches the nth
     // of that type), then those only others have, in the order they come up. A component some of them lack comes with
     // the entities lacking it. Missing ones are left out when there are several.
-    private static IEnumerable<(IReadOnlyList<Component> Components, IReadOnlyList<Entity> Lacking)> Sections(IReadOnlyList<Entity> entities)
+    private static IEnumerable<(IReadOnlyList<Component> Components, IReadOnlyList<Entity> Lacking)> Sections(List<Entity> entities)
     {
         if (entities.Count == 1)
         {
@@ -1708,7 +1709,7 @@ public sealed class PropertyField : ObservableObject
 
     public double NumberValue
     {
-        get => Convert.ToDouble(Value);
+        get => Convert.ToDouble(Value, CultureInfo.InvariantCulture);
         // Boxed separately: as one conditional, int and float would both widen to double.
         set => Value = _property.Type == typeof(int) ? (object)(int)Math.Round(value)
             : _property.Type == typeof(float) ? (object)(float)value

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Griff.Scenes;
 
@@ -92,7 +93,7 @@ public static partial class ProjectTemplates
         return scene;
     }
 
-    private static IReadOnlyDictionary<string, Entity> ShooterPrefabs() => new Dictionary<string, Entity>
+    private static Dictionary<string, Entity> ShooterPrefabs() => new Dictionary<string, Entity>
     {
         ["Prefabs/Fireball.prefab"] = Fireball(),
         ["Prefabs/Puff.prefab"] = Puff(),
@@ -456,7 +457,7 @@ public static partial class ProjectTemplates
 
         static Entity ItemCounter(string item, string format, TextAlign align)
         {
-            var entity = Label(item + " Counter", Vector2.Zero, string.Format(format, 0), 0.45f, Color.FromBytes(0xE6, 0xE8, 0xEC));
+            var entity = Label(item + " Counter", Vector2.Zero, string.Format(CultureInfo.InvariantCulture, format, 0), 0.45f, Color.FromBytes(0xE6, 0xE8, 0xEC));
             entity.GetComponent<Text>()!.Align = align;
             var counter = entity.AddComponent<Counter>();
             counter.Message = null;

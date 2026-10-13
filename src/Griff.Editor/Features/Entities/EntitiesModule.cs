@@ -1251,7 +1251,7 @@ public sealed class SaveAsPrefabCommand(IWorkspace workspace, ISelection selecti
             return;
 
         // In a prefab's tab, the entity at the top is the prefab: saving it is saving the tab.
-        if (workspace.Scene is { IsPrefab: true } tab && tab.Scene.Roots.FirstOrDefault() == entity)
+        if (workspace.Scene is { IsPrefab: true } tab && tab.Scene.Roots is [var root, ..] && root == entity)
         {
             await workspace.SaveSceneAsync();
             return;

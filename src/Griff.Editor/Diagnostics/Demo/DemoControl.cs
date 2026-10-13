@@ -6,7 +6,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// through <see cref="Gate"/> or <see cref="Delay(double)"/>, so a pause holds it where it is and a jump or exit stops
 /// the chapter that's running (with an <see cref="OperationCanceledException"/>).
 /// </summary>
-internal sealed class DemoControl
+internal sealed class DemoControl : IDisposable
 {
     private CancellationTokenSource _cancel = new();
     private bool _paused;
@@ -120,6 +120,8 @@ internal sealed class DemoControl
         RewindTo = null;
         _cancel = new CancellationTokenSource();
     }
+
+    public void Dispose() => _cancel.Dispose();
 
     /// <summary>Stops here while paused; throws if a jump or exit was asked for.</summary>
     public async Task Gate()

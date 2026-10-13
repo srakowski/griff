@@ -488,7 +488,7 @@ public sealed partial class CodeEditor
         ShowPopup(panel, span.Start);
     }
 
-    private static FrameworkElement ProblemLine(ScriptProblem problem, bool spaced)
+    private static DockPanel ProblemLine(ScriptProblem problem, bool spaced)
     {
         var line = new DockPanel { Margin = new Thickness(0, spaced ? 4 : 0, 0, 0) };
         var icon = Icons.Create(problem.IsError ? Icons.Error : Icons.Warning, 12);

@@ -132,7 +132,7 @@ internal sealed class DemoSession(DemoUi ui, IWorkspace workspace, ISelection se
         ui.StopSpeaking();
         ui.Overlay.Reset();
         ui.Input.Boost = 1;
-        ui.Input.ReleaseAll();
+        DemoInput.ReleaseAll();
 
         foreach (var item in DemoUi.Descendants<MenuItem>(ui.Main.MainMenu))
             item.IsSubmenuOpen = false;

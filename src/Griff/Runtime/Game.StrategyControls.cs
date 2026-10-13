@@ -61,7 +61,7 @@ public sealed partial class Game
             building.IsSelected = selected.Contains(building.Entity!);
     }
 
-    private bool IsMine(Entity entity, Commander commander) => SameTeam(TeamOf(entity), commander.Team);
+    private static bool IsMine(Entity entity, Commander commander) => SameTeam(TeamOf(entity), commander.Team);
 
     private IEnumerable<Entity> MySelected(Commander commander) => Rts.Selected.Where(e => IsMine(e, commander));
 

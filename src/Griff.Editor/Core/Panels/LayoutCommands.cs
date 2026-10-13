@@ -15,7 +15,7 @@ public sealed class SaveLayoutCommand(PanelLayout layout, IDialogService dialogs
 
     protected override Task ExecuteCoreAsync()
     {
-        var name = dialogs.Prompt("Save Layout", "Layout name", layout.SavedLayouts.LastOrDefault() ?? "My Layout",
+        var name = dialogs.Prompt("Save Layout", "Layout name", layout.SavedLayouts is [.., var newest] ? newest : "My Layout",
             text => text.Trim().Length == 0 ? "A layout needs a name." : null);
         if (name is not null)
             layout.Save(name);

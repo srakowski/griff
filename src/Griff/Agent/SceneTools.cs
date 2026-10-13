@@ -228,7 +228,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             ? $"Prefab {host.ScenePath}, open on its own in place of the scene (Scene_Save saves it and updates every copy; Prefab_Close goes back to the scene): {scene.Count} entities"
             : $"Scene {host.ScenePath ?? "(unsaved)"}: {scene.Count} entities{(host.IsPlaying ? ", PLAYING (live game; changes are lost on Stop)" : "")}");
         if (host.Selection.Count > 0)
-            text.Append($", selected: {string.Join(", ", host.Selection.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}");
+            text.Append(CultureInfo.InvariantCulture, $", selected: {string.Join(", ", host.Selection.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}");
         text.AppendLine();
 
         IEnumerable<Entity> roots = args.OptionalString("under") is { } under ? [Resolve(scene, under)] : scene.Roots;
@@ -239,7 +239,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             text.AppendLine("Names that match nothing in the scene (fields that name entities, flagged in the Inspector):");
             foreach (var (reference, names) in unmatched)
-                text.Append($"- {reference.Component.Entity!.Name} #{AgentValues.ShortId(reference.Component.Entity.Id)} {reference.Label}: ")
+                text.Append(CultureInfo.InvariantCulture, $"- {reference.Component.Entity!.Name} #{AgentValues.ShortId(reference.Component.Entity.Id)} {reference.Label}: ")
                     .AppendLine(string.Join(", ", names.Select(n => $"\"{n}\"")));
         }
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
@@ -247,7 +247,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers or messages, flagged in the Inspector):");
             foreach (var (component, label, problem) in unknown)
-                text.AppendLine($"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
         }
 
         return ToolResult.Ok(text.ToString());
@@ -275,7 +275,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         if (level + 1 >= depth)
         {
             if (entity.Children.Count > 0)
-                text.Append(new string(' ', (level + 1) * 2)).Append($"({entity.Children.Count} more inside)").AppendLine();
+                text.Append(new string(' ', (level + 1) * 2)).Append(CultureInfo.InvariantCulture, $"({entity.Children.Count} more inside)").AppendLine();
             return;
         }
 
@@ -739,9 +739,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var all = ComponentCatalog.Build(host.Components);
         var entry = all.FirstOrDefault(e => e.Descriptor == descriptor);
         var text = new StringBuilder();
-        text.Append($"# {descriptor.DisplayName}");
+        text.Append(CultureInfo.InvariantCulture, $"# {descriptor.DisplayName}");
         if (entry is not null)
-            text.Append($" ({entry.Category}{(entry.IsScript ? ", a script" : "")})");
+            text.Append(CultureInfo.InvariantCulture, $" ({entry.Category}{(entry.IsScript ? ", a script" : "")})");
         text.AppendLine();
         if (entry is not null && !entry.Summary.IsEmpty)
             text.AppendLine(entry.Summary.PlainText);
@@ -773,14 +773,14 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         foreach (var property in ordered)
         {
             if (property.Group is { } group && group != heading)
-                text.AppendLine($"## {heading = group}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"## {heading = group}");
             var fallback = sample is null ? "?" : AgentValues.ToJson(property.GetValue(sample))?.ToJsonString() ?? "null";
             var meaning = docs.TryGetValue(property.Name, out var doc) && !doc.Doc.IsEmpty ? doc.Doc.PlainText.Replace("\n\n", " ") : "";
-            text.Append($"- {property.SerializedName}: {AgentValues.Describe(property.Type)} = {fallback}");
+            text.Append(CultureInfo.InvariantCulture, $"- {property.SerializedName}: {AgentValues.Describe(property.Type)} = {fallback}");
             if (meaning.Length > 0)
                 text.Append(". ").Append(meaning);
             if (property.ShownWhenText(property: p => descriptor.Properties.First(d => d.Name == p).SerializedName) is { } shownWhen)
-                text.Append($" (Only used when {shownWhen}.)");
+                text.Append(CultureInfo.InvariantCulture, $" (Only used when {shownWhen}.)");
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
             if (property.EntityName is { } entityName)
@@ -807,7 +807,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             foreach (var property in live)
             {
                 var meaning = DocComments.Summary(property) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
-                text.AppendLine($"- {JsonNamingPolicy.CamelCase.ConvertName(property.Name)}: {AgentValues.Describe(property.PropertyType)}{meaning}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {JsonNamingPolicy.CamelCase.ConvertName(property.Name)}: {AgentValues.Describe(property.PropertyType)}{meaning}");
             }
         }
 

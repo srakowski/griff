@@ -133,7 +133,7 @@ public static partial class ProjectTemplates
         return prefabs;
     }
 
-    private static IReadOnlyDictionary<string, Entity> BuildPrefabs(ProjectTemplate template) => template switch
+    private static Dictionary<string, Entity> BuildPrefabs(ProjectTemplate template) => template switch
     {
         ProjectTemplate.Platformer or ProjectTemplate.TopDown => new Dictionary<string, Entity>
         {

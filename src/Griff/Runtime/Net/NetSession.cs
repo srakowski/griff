@@ -56,7 +56,7 @@ internal enum NetMessage : byte
 /// its player's own character itself so it never waits on the connection. Cameras, the HUD, menus and music stay on each
 /// machine. Put a <see cref="Multiplayer"/> component in the scene to give each player a character and choose teams.
 /// </remarks>
-public sealed partial class NetSession
+public sealed partial class NetSession : IDisposable
 {
     /// <summary>The port games are hosted on unless a <see cref="Multiplayer"/> says otherwise.</summary>
     public const int DefaultPort = 7777;
@@ -295,6 +295,9 @@ public sealed partial class NetSession
         _peer.Discovered += OnDiscovered;
     }
 
+    /// <summary>Leaves any game in progress and closes the connection, as stopping the game does.</summary>
+    public void Dispose() => Leave("The game closed.");
+
     /// <summary>Leaves the game (or stops hosting it, which ends it for everyone). This machine carries on by itself.</summary>
     public void Leave(string reason = "Left the game.")
     {
@@ -376,7 +379,7 @@ public sealed partial class NetSession
             connection.Disconnect(reason);
     }
 
-    internal int OwnerIdOf(Entity? entity)
+    internal static int OwnerIdOf(Entity? entity)
     {
         for (var e = entity; e is not null; e = e.Parent)
         {

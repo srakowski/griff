@@ -17,7 +17,7 @@ internal sealed partial class DemoUi
     private static ControlsWindow OpenControls => ControlsWindow ?? throw new InvalidOperationException("The Controls window isn't open.");
 
     /// <summary>Waits for the Controls window to open (after Game > Controls...).</summary>
-    public async Task<ControlsWindow> WaitForControls()
+    public static async Task<ControlsWindow> WaitForControls()
     {
         var window = await WaitFor(() => ControlsWindow, "the Controls window");
         await Settle(400);
@@ -66,7 +66,7 @@ internal sealed partial class DemoUi
         Descendants<ListBoxItem>(window).FirstOrDefault(i => i.DataContext is ActionRow a && a.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && i.IsVisible);
 
     // A chip's outline, found by the text it shows ("Space", "Left Click", "LB") or the binding's own name ("Gamepad LeftShoulder").
-    private static FrameworkElement? Chip(ControlsWindow window, string name) =>
+    private static StackPanel? Chip(ControlsWindow window, string name) =>
         Descendants<StackPanel>(window).FirstOrDefault(p => p.DataContext is BindingChip c && p.IsVisible && p.Children.Count == 2 && p.Children[0] is Border &&
             (c.Text.Equals(name, StringComparison.OrdinalIgnoreCase) || c.Binding.ToString().Equals(name, StringComparison.OrdinalIgnoreCase)));
 

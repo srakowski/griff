@@ -356,7 +356,8 @@ public class GridMovementTests
         Assert.NotNull(copy.GetComponent<GridMovement>());
         var game = new Game(restored, new InputState());
         game.Tick(Frame);
-        Assert.Contains(copy.Transform.Position.X, new[] { 1.5f, 2.5f });
+        float[] cellCentres = [1.5f, 2.5f];
+        Assert.Contains(copy.Transform.Position.X, cellCentres);
         Assert.False(copy.GetComponent<GridMovement>()!.IsMoving);
     }
 

@@ -85,7 +85,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
 /// The project's Assets folder as a live tree. Changes on disk show up within a moment. Prefabs can be renamed and
 /// moved between folders here, keeping every copy of them linked.
 /// </summary>
-public sealed class AssetsPanel : ToolPanel
+public sealed class AssetsPanel : ToolPanel, IDisposable
 {
     private readonly IWorkspace _workspace;
     private readonly IDialogService _dialogs;
@@ -109,6 +109,14 @@ public sealed class AssetsPanel : ToolPanel
                 MarkStartScene();
         };
         Track();
+    }
+
+    /// <summary>Stops watching the Assets folder (the editor is closing).</summary>
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _refresh.Stop();
     }
 
     public override string Id => "Assets";

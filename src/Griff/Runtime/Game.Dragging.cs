@@ -160,7 +160,7 @@ public sealed partial class Game
     }
 
     // Moves what a grabber holds to its hand, sliding in from where it was picked up.
-    private void Carry(Grabber grabber, Holding held)
+    private static void Carry(Grabber grabber, Holding held)
     {
         var entity = held.Thing.Entity!;
         var seconds = held.Thing.SlideTime;

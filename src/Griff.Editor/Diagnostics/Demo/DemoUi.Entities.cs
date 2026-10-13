@@ -9,7 +9,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 internal sealed partial class DemoUi
 {
     /// <summary>The ▾ button on a field that opens its list.</summary>
-    public Button? PickerButton(string component, string label) =>
+    public static Button? PickerButton(string component, string label) =>
         InspectorRow(component, label) is { } row
             ? Descendants<Button>(row).FirstOrDefault(b => b.Tag is string tag && tag.EndsWith(":choose", StringComparison.Ordinal))
             : null;

@@ -38,7 +38,7 @@ public sealed partial class Game
     {
         if (!Net.IsOnline || entity is null)
             return Input;
-        var owner = Net.OwnerIdOf(entity);
+        var owner = NetSession.OwnerIdOf(entity);
         if (owner == 0)
             return Input;
         if (Net.LocalPlayer is { } me && me.Id == owner)
@@ -68,7 +68,7 @@ public sealed partial class Game
     /// <summary>A scene started in a network game (the host's, or the copy of it here): settle who's who in it.</summary>
     internal void NetSceneStarted()
     {
-        Scene.PreferNamed = Net.IsOnline ? e => Net.IsMine(e) && Net.OwnerIdOf(e) != 0 : null;
+        Scene.PreferNamed = Net.IsOnline ? e => Net.IsMine(e) && NetSession.OwnerIdOf(e) != 0 : null;
         AssignCommanders();
     }
 
@@ -181,14 +181,14 @@ public sealed partial class Game
     }
 
     // What this player has (their hotbar, their tools): in a network game, what's on their own character.
-    private IEnumerable<T> Mine<T>() where T : Component
+    private List<T> Mine<T>() where T : Component
     {
         if (!Net.IsOnline)
             return Active<T>();
         var id = (_acting ?? Net.LocalPlayer)?.Id ?? 0;
         return Showing<T>().Where(c =>
         {
-            var owner = Net.OwnerIdOf(c.Entity);
+            var owner = NetSession.OwnerIdOf(c.Entity);
             return (owner != 0 && owner == id) || (owner == 0 && _acting is null && Runs(c.Entity!));
         }).ToList();
     }
@@ -248,7 +248,7 @@ public sealed partial class Game
     /// <summary>In a network game, marks what <paramref name="by"/> fired or made as its player's: what it hits counts for them.</summary>
     internal void Claim(Entity spawned, Entity by)
     {
-        var owner = Net.IsOnline ? Net.OwnerIdOf(by) : 0;
+        var owner = Net.IsOnline ? NetSession.OwnerIdOf(by) : 0;
         if (owner == 0)
             return;
         var networked = spawned.GetComponent<Networked>() ?? spawned.AddComponent<Networked>();

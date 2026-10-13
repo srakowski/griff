@@ -128,7 +128,7 @@ public static partial class DocComments
         }
     }
 
-    private static IReadOnlyDictionary<string, XElement> Parse(string? xml)
+    private static Dictionary<string, XElement> Parse(string? xml)
     {
         var members = new Dictionary<string, XElement>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(xml))
@@ -172,7 +172,7 @@ public static partial class DocComments
             }
         }
 
-        public IReadOnlyList<IReadOnlyList<DocRun>> Finish()
+        public List<IReadOnlyList<DocRun>> Finish()
         {
             Break();
             return _paragraphs;

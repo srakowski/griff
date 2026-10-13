@@ -31,7 +31,7 @@ public static class GameExporter
         if (!File.Exists(playerExecutable))
             return new ExportResult { Success = false, Error = $"The player isn't installed at \"{playerExecutable}\"." };
 
-        var compiled = ScriptCompiler.CompileFolder(project.AssetsPath);
+        var compiled = ScriptCompiler.CompileFolder(project.AssetsPath, optimize: true);
         if (!compiled.Success)
             return new ExportResult { Success = false, Diagnostics = compiled.Diagnostics, Error = "Scripts have errors." };
 

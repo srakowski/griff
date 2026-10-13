@@ -82,7 +82,7 @@ public sealed class ScriptTabs(ScriptEditors editors, IServiceProvider services)
         _tabs?.Items.OfType<TabItem>().FirstOrDefault(t => t.Tag == document);
 
     // [code icon] Ship.cs [● or ×]: the dot shows unsaved changes and turns into the close button on hover.
-    private FrameworkElement Header(ScriptDocument document)
+    private StackPanel Header(ScriptDocument document)
     {
         var icon = Icons.Create(Icons.Code, 12);
         icon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");

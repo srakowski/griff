@@ -7,10 +7,9 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using WpfColor = System.Windows.Media.Color;
 
 namespace Griff.Editor.Diagnostics.Demo;
-
-using Color = System.Windows.Media.Color;
 
 /// <summary>
 /// The demo's transport bar, pinned to the top of the screen: back, pause, next, speed, a dot per chapter and Exit.
@@ -19,7 +18,7 @@ using Color = System.Windows.Media.Color;
 /// </summary>
 internal sealed class DemoControlBar : Window
 {
-    private static readonly Color Accent = Color.FromRgb(0xFF, 0xB5, 0x47);
+    private static readonly WpfColor Accent = WpfColor.FromRgb(0xFF, 0xB5, 0x47);
     private static readonly FontFamily UiFont = new("Segoe UI Variable Display, Segoe UI");
     private static readonly FontFamily Symbols = new("Segoe Fluent Icons, Segoe MDL2 Assets");
 
@@ -55,8 +54,8 @@ internal sealed class DemoControlBar : Window
 
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x15, 0x17, 0x1C)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)),
+            Background = new SolidColorBrush(WpfColor.FromArgb(0xEE, 0x15, 0x17, 0x1C)),
+            BorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x50, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(20),
             Padding = new Thickness(8, 5, 8, 5),
@@ -105,7 +104,7 @@ internal sealed class DemoControlBar : Window
             if (Math.Abs(_control.Speed - speed) < 0.01)
             {
                 chip.Background = new SolidColorBrush(Accent);
-                chip.Foreground = new SolidColorBrush(Color.FromRgb(0x1B, 0x1D, 0x22));
+                chip.Foreground = new SolidColorBrush(WpfColor.FromRgb(0x1B, 0x1D, 0x22));
             }
 
             _speeds.Children.Add(chip);
@@ -125,7 +124,7 @@ internal sealed class DemoControlBar : Window
                 Cursor = Cursors.Hand,
                 Focusable = false,
                 ToolTip = $"{i}. {_control.Chapters[i]}",
-                Template = DotTemplate(current ? Accent : reached ? Color.FromRgb(0xC8, 0xCC, 0xD6) : Color.FromRgb(0x4A, 0x4F, 0x5C)),
+                Template = DotTemplate(current ? Accent : reached ? WpfColor.FromRgb(0xC8, 0xCC, 0xD6) : WpfColor.FromRgb(0x4A, 0x4F, 0x5C)),
             };
             dot.Click += (_, _) => _control.GoTo(chapter);
             _dots.Children.Add(dot);
@@ -135,7 +134,7 @@ internal sealed class DemoControlBar : Window
         _title.Text = _control.Skipping ? $"Skipping ahead… {name}" : _control.Paused ? $"Paused · {name}" : name;
     }
 
-    private static ControlTemplate DotTemplate(Color color)
+    private static ControlTemplate DotTemplate(WpfColor color)
     {
         var template = new ControlTemplate(typeof(Button));
         var border = new FrameworkElementFactory(typeof(Border));
@@ -145,7 +144,7 @@ internal sealed class DemoControlBar : Window
         return template;
     }
 
-    private Button Glyph(string glyph, string tip, Action click)
+    private static Button Glyph(string glyph, string tip, Action click)
     {
         var button = Plain(tip, click);
         button.Content = GlyphText(glyph);
@@ -153,7 +152,7 @@ internal sealed class DemoControlBar : Window
         return button;
     }
 
-    private Button Text(string text, string tip, Action click, bool danger = false)
+    private static Button Text(string text, string tip, Action click, bool danger = false)
     {
         var button = Plain(tip, click);
         button.Content = text;
@@ -161,7 +160,7 @@ internal sealed class DemoControlBar : Window
         if (danger)
         {
             button.Foreground = Brushes.White;
-            button.Background = new SolidColorBrush(Color.FromRgb(0xB8, 0x3A, 0x3A));
+            button.Background = new SolidColorBrush(WpfColor.FromRgb(0xB8, 0x3A, 0x3A));
         }
 
         return button;
@@ -224,7 +223,7 @@ internal sealed class DemoControlBar : Window
     private void Hook()
     {
         _source = (HwndSource)PresentationSource.FromVisual(this)!;
-        SetWindowLong(_source.Handle, ExStyle, GetWindowLong(_source.Handle, ExStyle) | NoActivate | ToolWindow);
+        _ = SetWindowLong(_source.Handle, ExStyle, GetWindowLong(_source.Handle, ExStyle) | NoActivate | ToolWindow);
         _source.AddHook(WndProc);
         foreach (var (id, key, _) in Hotkeys)
             RegisterHotKey(_source.Handle, id, ModControl | ModAlt | ModNoRepeat, key);

@@ -584,7 +584,7 @@ public sealed partial class Game
         }
     }
 
-    private void Arrive(Unit unit)
+    private static void Arrive(Unit unit)
     {
         unit.Command(UnitOrder.Idle, Vector2.Zero, null);
         unit.RaiseArrived();
@@ -616,7 +616,7 @@ public sealed partial class Game
     private static bool IsArmed(Entity entity) =>
         entity.GetComponent<Fighter>() is not null && entity.GetComponent<Building>() is not { IsBuilt: false };
 
-    private bool InSight(Unit unit, Entity other, float extra = 1) =>
+    private static bool InSight(Unit unit, Entity other, float extra = 1) =>
         EdgeDistance(Flat(unit.Entity!.Transform.WorldPosition), other) <= unit.Sight * extra;
 
     // The closest enemy in sight (or, holding, in reach), units before buildings; whoever hit it last if it's idle.
@@ -713,7 +713,7 @@ public sealed partial class Game
         Hurt(target, fighter.Damage, attacker);
     }
 
-    private void Hurt(Entity target, float damage, Entity? attacker)
+    private static void Hurt(Entity target, float damage, Entity? attacker)
     {
         if (Health.Of(target) is not { } health)
             return;

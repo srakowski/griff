@@ -107,7 +107,7 @@ public sealed class AddTilesetCommand(EditorArt art, SceneView.SceneViewModel sc
     protected override Task ExecuteCoreAsync()
     {
         var images = art.Images();
-        var image = dialogs.Prompt("Add Tileset", "Image (in Assets)", images.FirstOrDefault(i => i.StartsWith("Tiles/", StringComparison.OrdinalIgnoreCase)) ?? images.FirstOrDefault() ?? "",
+        var image = dialogs.Prompt("Add Tileset", "Image (in Assets)", images.FirstOrDefault(i => i.StartsWith("Tiles/", StringComparison.OrdinalIgnoreCase)) ?? (images.Count > 0 ? images[0] : ""),
             text => art.Resolve(text) is null ? "There's no such image in Assets." : null);
         return image is null ? Task.CompletedTask : ChooseCoreAsync(image);
     }

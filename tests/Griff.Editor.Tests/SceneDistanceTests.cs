@@ -168,6 +168,7 @@ public class SceneDistanceTests
         using (var none = System.Text.Json.JsonDocument.Parse("[]"))
         {
             var listed = Griff.Agent.ObjectSurface.InvokeAsync(model, "Distances", none.RootElement).GetAwaiter().GetResult();
+            Assert.NotNull(listed);
             Assert.Contains("Chase.Range = 2 around 0, 5", listed.ToString());
         }
     });

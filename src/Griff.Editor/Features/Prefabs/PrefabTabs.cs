@@ -116,7 +116,7 @@ public sealed class PrefabTabs(IWorkspace workspace)
     }
 
     // [package icon] Coin [● or ×]: the dot shows unsaved changes and turns into the close button on hover.
-    private FrameworkElement Header(SceneDocument prefab)
+    private StackPanel Header(SceneDocument prefab)
     {
         var icon = Icons.Create(Icons.Package, 12);
         icon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");

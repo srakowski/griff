@@ -202,7 +202,7 @@ public sealed class GameRunner : IDisposable
         _lockCenter = ((clip.Left + clip.Right) / 2, (clip.Top + clip.Bottom) / 2);
         ClipCursor(ref clip);
         SetCursorPos(_lockCenter.Value.X, _lockCenter.Value.Y);
-        ShowCursor(false);
+        _ = ShowCursor(false);
         _input.IsMouseLocked = true;
     }
 
@@ -212,7 +212,7 @@ public sealed class GameRunner : IDisposable
             return;
         _lockCenter = null;
         ClipCursor(IntPtr.Zero);
-        ShowCursor(true);
+        _ = ShowCursor(true);
         _input.IsMouseLocked = false;
     }
 

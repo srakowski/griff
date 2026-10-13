@@ -43,7 +43,7 @@ public class RoomTests
             _game.Tick(Step);
     }
 
-    private void PlaceAt(Entity entity, Vector2 position) => entity.Transform.Position = new Vector3(position, 0);
+    private static void PlaceAt(Entity entity, Vector2 position) => entity.Transform.Position = new Vector3(position, 0);
 
     private Vector2 CameraAt => new(_camera.Transform.Position.X, _camera.Transform.Position.Y);
 

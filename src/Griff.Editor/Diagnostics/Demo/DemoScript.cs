@@ -25,7 +25,7 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// The guided demo: builds "Ember Hollow", a small platformer, from an empty project, narrating each step and
 /// driving the editor with real input.
 /// </summary>
-internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options)
+internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options) : IDisposable
 {
     private const string ProjectName = "Ember Hollow";
 
@@ -79,6 +79,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             ("Ship it", Ship),
             ("Outro", Outro),
         ], firstSnapshot: 2);
+    }
+
+    public void Dispose()
+    {
+        _pilot?.Dispose();
+        _pilot = null;
     }
     // ===== 0. Intro =====
 
@@ -154,12 +160,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private async Task Tour()
     {
         await Chapter(2, "Finding your way around", "Four panels and a toolbar: that's the whole editor.");
-        await ui.Explain(ui.PanelContent("Hierarchy"), "Hierarchy", "On the left is the Hierarchy: everything in the scene, as a tree. A new scene has just a camera.");
+        await ui.Explain(DemoUi.PanelContent("Hierarchy"), "Hierarchy", "On the left is the Hierarchy: everything in the scene, as a tree. A new scene has just a camera.");
         await ui.Explain(sceneView, "Scene view", "In the middle is the Scene view, where you lay out your level. You scroll to zoom, and right drag to pan.");
 
         await ui.Select("Main Camera");
-        await ui.Explain(ui.Inspector, "Inspector", "On the right, the Inspector shows whatever is selected. In Griff an entity is just a name plus components. This camera is a Transform, which says where it is, and a Camera component.");
-        await ui.Explain(ui.PanelContent("Assets"), "Assets", "Along the bottom are your Assets: the files in the project folder. Next to them is the Output panel, for logs and script errors.");
+        await ui.Explain(DemoUi.Inspector, "Inspector", "On the right, the Inspector shows whatever is selected. In Griff an entity is just a name plus components. This camera is a Transform, which says where it is, and a Camera component.");
+        await ui.Explain(DemoUi.PanelContent("Assets"), "Assets", "Along the bottom are your Assets: the files in the project folder. Next to them is the Output panel, for logs and script errors.");
         var play = ui.ToolbarButton("Game.Play");
         var stop = ui.ToolbarButton("Game.Stop");
         await ui.Explain(DemoUi.Union(play, stop), "Play controls", "And up top are the play controls. F5 plays, F6 pauses and Shift F5 stops. We'll be using those a lot.");
@@ -174,12 +180,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         DemoArt.WriteAll(Path.Combine(workspace.Project!.AssetsPath, "Sprites"));
         await DemoUi.Settle(800);
         await ExpandAsset("Sprites");
-        await ui.Explain(ui.PanelContent("Assets"), "Sprites folder", "Copy files into the project's Assets folder and they appear in the Assets panel on their own, with no import step. Each image is a sprite sheet. The tileset, for example, is eight tiles across and three down.");
+        await ui.Explain(DemoUi.PanelContent("Assets"), "Sprites folder", "Copy files into the project's Assets folder and they appear in the Assets panel on their own, with no import step. Each image is a sprite sheet. The tileset, for example, is eight tiles across and three down.");
     }
 
     private async Task ExpandAsset(string folder)
     {
-        var view = ui.PanelContent("Assets");
+        var view = DemoUi.PanelContent("Assets");
         var item = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(view).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name == folder), $"asset folder {folder}", 5000);
         await ui.Hover(item);
         var expander = DemoUi.Descendants<ToggleButton>(item).FirstOrDefault();
@@ -215,7 +221,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.Say("Tile sixteen is a wooden plank you can jump up through. Grass, flowers and water are just background. And the water tiles ripple through four frames, six times a second.");
 
         // The level is text: paste it in.
-        var row = await DemoUi.WaitFor(() => ui.InspectorRow("Tilemap", "Tiles"), "the Tiles field");
+        var row = await DemoUi.WaitFor(() => DemoUi.InspectorRow("Tilemap", "Tiles"), "the Tiles field");
         var box = DemoUi.Descendants<TextBox>(row).First();
         ui.Spot(row, "A level is just text", dim: true);
         await ui.Say("Here's my favorite part. A tilemap is plain text, one character per tile. A dot is empty, zero is ground, g is a plank and k is water. I sketched this level ahead of time, so I'll just paste it in.");
@@ -270,7 +276,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.SetText("Animation", "Clips", "Idle 0-1 @3, Run 2-5 @12, Jump 6, Fall 7", "Name clips; the player plays them itself");
 
         await ui.Look(DemoLevel.PlayerStart.X + 3, -1.5f, 3.5f);
-        var movement = await DemoUi.WaitFor(() => ui.ComponentHeader("PlatformerMovement"), "PlatformerMovement");
+        var movement = await DemoUi.WaitFor(() => DemoUi.ComponentHeader("PlatformerMovement"), "PlatformerMovement");
         movement.BringIntoView();
         await DemoUi.Settle(100);
         await ui.Explain(movement, "PlatformerMovement", "The Platformer Movement component is where you tune how it feels. Speed, acceleration, jump height, coyote time and jump buffering are all here, and all forgiving by default.");
@@ -349,7 +355,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         _pilot.Dispose();
         _pilot = null;
         await StopPlaying();
-        var row = await DemoUi.WaitFor(() => ui.InspectorRow("PlatformerMovement", "Jump Height"), "jump height");
+        var row = await DemoUi.WaitFor(() => DemoUi.InspectorRow("PlatformerMovement", "Jump Height"), "jump height");
         await ui.Explain(row, "Kept: 3.8", "Stopped, and the new jump height stuck. Everything else went back to how it was.", dim: false);
     }
 
@@ -569,7 +575,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         Overlay.HideCode();
         await ui.Say("The moment it's saved, Griff compiles it, and Hover is a component like any other.");
         await ui.AddComponent("Hover");
-        var hover = await DemoUi.WaitFor(() => ui.ComponentHeader("Hover"), "the Hover section");
+        var hover = await DemoUi.WaitFor(() => DemoUi.ComponentHeader("Hover"), "the Hover section");
         hover.BringIntoView();
         await DemoUi.Settle(150);
         await ui.Explain(hover, "Your script, in the Inspector", "There are its properties, ready to tweak.", dim: false);
@@ -802,7 +808,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         try
         {
             await ExpandAsset("Scenes");
-            menuScene = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(ui.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible), "Menu.scene", 4000);
+            menuScene = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(DemoUi.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible), "Menu.scene", 4000);
         }
         catch (InvalidOperationException)
         {
@@ -822,7 +828,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         // Setting the start scene refreshes the Assets tree, so find the row again before opening it.
         try
         {
-            var row = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(ui.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible && PresentationSource.FromVisual(i) is not null), "Menu.scene again", 3000);
+            var row = await DemoUi.WaitFor(() => DemoUi.Descendants<TreeViewItem>(DemoUi.PanelContent("Assets")).FirstOrDefault(i => i.DataContext is AssetNode n && n.Name.StartsWith("Menu", StringComparison.Ordinal) && i.IsVisible && PresentationSource.FromVisual(i) is not null), "Menu.scene again", 3000);
             await Input.Click(DemoUi.Center(DemoUi.Descendants<TextBlock>(row).First()), clicks: 2);
             await WaitUntil(() => workspace.Scene?.Name == "Menu", 3000);
         }
@@ -936,18 +942,18 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
                 await Input.Press(Key.Enter);
                 await Wait(1500);
                 Overlay.ShowKeys("→");
-                Input.KeyDown(Key.Right);
+                DemoInput.KeyDown(Key.Right);
                 await Wait(900);
                 await Input.Press(Key.Space, showBadge: true);
                 await Wait(1800);
-                Input.KeyUp(Key.Right);
+                DemoInput.KeyUp(Key.Right);
                 await ui.Say("Same game, same feel, no editor required.");
                 await Wait(600);
             }
         }
         finally
         {
-            Input.KeyUp(Key.Right);
+            DemoInput.KeyUp(Key.Right);
             try
             {
                 if (game is { HasExited: false })
@@ -999,7 +1005,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
 
     private async Task Rename(string name)
     {
-        var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(ui.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
+        var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(DemoUi.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
         await ui.EditBox(box, name);
     }
 

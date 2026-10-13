@@ -225,7 +225,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     private void ReadOutline()
     {
         _outline = ScriptLanguage.Outline(_script.Text.Text);
-        var name = _outline.FirstOrDefault(c => Find(c.Name) is not null)?.Name ?? _outline.FirstOrDefault()?.Name ?? _script.Name;
+        var name = _outline.FirstOrDefault(c => Find(c.Name) is not null)?.Name ?? (_outline.Count > 0 ? _outline[0].Name : null) ?? _script.Name;
         if (name != ClassName)
         {
             ClassName = name;

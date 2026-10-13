@@ -137,7 +137,7 @@ public partial class App : Application
     private async Task ReopenLastProjectAsync(ILogger logger)
     {
         var workspace = _host!.Services.GetRequiredService<IWorkspace>();
-        if (workspace.RecentProjects.FirstOrDefault() is not { } last)
+        if (workspace.RecentProjects is not [{ } last, ..])
             return;
 
         try

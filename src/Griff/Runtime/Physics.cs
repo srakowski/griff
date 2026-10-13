@@ -384,7 +384,7 @@ public sealed class Physics
     /// Moves <paramref name="bodies"/> together by a world-space delta, stopping where the first of them meets something
     /// solid (not each other). Velocities are left alone and nothing is reported: for pulling things along a rope.
     /// </summary>
-    internal void Nudge(Scene scene, IReadOnlyList<Body> bodies, Vector2 delta)
+    internal static void Nudge(Scene scene, IReadOnlyList<Body> bodies, Vector2 delta)
     {
         if (delta == Vector2.Zero || bodies.Count == 0)
             return;
@@ -760,7 +760,7 @@ public sealed class Physics
     /// When <paramref name="body"/> stands only on one-way platforms, the lowest of their bottoms (what's under the floor
     /// it's on, for climbing down a ladder below it); otherwise null.
     /// </summary>
-    internal float? OneWayFloorBottom(Scene scene, Body body)
+    internal static float? OneWayFloorBottom(Scene scene, Body body)
     {
         if (!body.IsGrounded || body.Entity?.GetComponent<Collider>() is not { } collider)
             return null;
@@ -778,7 +778,7 @@ public sealed class Physics
     }
 
     /// <summary>True if the bottom edge of <paramref name="body"/>'s collider is inside a one-way platform (climbing up through it).</summary>
-    internal bool FeetInOneWay(Scene scene, Body body)
+    internal static bool FeetInOneWay(Scene scene, Body body)
     {
         if (body.Entity?.GetComponent<Collider>() is not { } collider)
             return false;

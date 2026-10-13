@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Globalization;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -127,7 +128,7 @@ public sealed class Coroutine
             case WaitSeconds wait:
                 return SecondsFrom(game, wait.Seconds);
             case float or double or int:
-                return SecondsFrom(game, Convert.ToDouble(yielded));
+                return SecondsFrom(game, Convert.ToDouble(yielded, CultureInfo.InvariantCulture));
             case WaitCondition condition:
                 return condition.IsDone;
             case Tween tween:

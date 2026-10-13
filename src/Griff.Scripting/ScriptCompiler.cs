@@ -64,8 +64,16 @@ public static class ScriptCompiler
         // Documentation is optional in scripts; don't nag about public members without it.
         specificDiagnosticOptions: [new("CS1591", ReportDiagnostic.Suppress)]);
 
+    /// <summary>
+    /// For exported games: optimized, like a Release build. The editor compiles with <see cref="CompilationOptions"/>
+    /// (Debug) so hot-reloaded scripts can be stepped through.
+    /// </summary>
+    public static CSharpCompilationOptions ExportCompilationOptions { get; } =
+        CompilationOptions.WithOptimizationLevel(OptimizationLevel.Release);
+
     /// <summary>Reads and compiles every *.cs file under <paramref name="folder"/>.</summary>
-    public static CompileResult CompileFolder(string folder) => Compile(ReadFolder(folder));
+    /// <param name="optimize">Compile for an exported game (<see cref="ExportCompilationOptions"/>) rather than the editor.</param>
+    public static CompileResult CompileFolder(string folder, bool optimize = false) => Compile(ReadFolder(folder), optimize);
 
     /// <summary>Every *.cs file under <paramref name="folder"/>, in a stable order.</summary>
     public static IReadOnlyList<ScriptSource> ReadFolder(string folder) =>
@@ -76,7 +84,7 @@ public static class ScriptCompiler
                 .ToList()
             : [];
 
-    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources)
+    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false)
     {
         var trees = sources
             .Select(s => CSharpSyntaxTree.ParseText(s.Text, ParseOptions, s.Path, System.Text.Encoding.UTF8))
@@ -87,7 +95,7 @@ public static class ScriptCompiler
             $"GriffScripts_{Guid.NewGuid():N}",
             trees,
             References.Value,
-            CompilationOptions);
+            optimize ? ExportCompilationOptions : CompilationOptions);
 
         using var assembly = new MemoryStream();
         using var symbols = new MemoryStream();
@@ -117,7 +125,7 @@ public static class ScriptCompiler
             span.Path,
             span.StartLinePosition.Line + 1,
             span.StartLinePosition.Character + 1,
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(System.Globalization.CultureInfo.CurrentCulture),
             diagnostic.Severity == DiagnosticSeverity.Error);
     }
 

@@ -123,13 +123,13 @@ public class InspectorAddComponentTests
 
         // Adding the collider leaves the Body to add.
         needs[1].AddCommand.Execute(null);
-        Assert.IsType<BoxCollider>(player.Components.Last());
+        Assert.IsType<BoxCollider>(player.Components[^1]);
         Assert.Equal("Add BoxCollider", document.History.UndoDescription);
         Assert.Equal(["Body"], Section(inspector, "Platformer Movement").Needs.Select(n => n.Name));
 
         Section(inspector, "Platformer Movement").Needs[0].AddCommand.Execute(null);
         Assert.False(Section(inspector, "Platformer Movement").HasNeeds);
-        Assert.IsType<Body>(player.Components.Last());
+        Assert.IsType<Body>(player.Components[^1]);
 
         // A Body brings its own collider when there's none.
         var crate = new Entity("Crate");

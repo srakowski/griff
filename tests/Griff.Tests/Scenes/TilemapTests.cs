@@ -194,7 +194,8 @@ public class TilemapTests
     [Fact]
     public void TileChars_GoPastTheFirst62_OneCharacterPerTile()
     {
-        Assert.Equal(['0', 'a', 'Z', 'À', 'Ö', 'Ø', 'ö', 'ø', 'ɏ', '一'], new[] { 0, 10, 61, 62, 84, 85, 115, 116, 459, 460 }.Select(Tilemap.CharOf));
+        int[] tiles = [0, 10, 61, 62, 84, 85, 115, 116, 459, 460];
+        Assert.Equal(['0', 'a', 'Z', 'À', 'Ö', 'Ø', 'ö', 'ø', 'ɏ', '一'], tiles.Select(Tilemap.CharOf));
         Assert.Equal(Tilemap.Empty, Tilemap.CharOf(Tilemap.MaxTiles));
         Assert.Equal(-1, Tilemap.TileOf('×'));
         Assert.Equal(-1, Tilemap.TileOf('÷'));
@@ -214,7 +215,8 @@ public class TilemapTests
         map.SetTile(2, 0, 2000);
 
         Assert.Equal(3, map.Tiles[0].Length);
-        Assert.Equal([3, 105, 2000], new[] { 0, 1, 2 }.Select(x => map.GetTile(x, 0)));
+        int[] columns = [0, 1, 2];
+        Assert.Equal([3, 105, 2000], columns.Select(x => map.GetTile(x, 0)));
         Assert.Equal([(0, 0, 3)], map.Runs().Select(r => (r.X, r.Y, r.Length)));
     }
 

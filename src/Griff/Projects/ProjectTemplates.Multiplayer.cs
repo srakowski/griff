@@ -299,7 +299,7 @@ public static partial class ProjectTemplates
         scene.Add(hint, panel);
     }
 
-    private static IReadOnlyDictionary<string, Entity> MultiplayerPrefabs() => new Dictionary<string, Entity>
+    private static Dictionary<string, Entity> MultiplayerPrefabs() => new Dictionary<string, Entity>
     {
         ["Prefabs/Shot.prefab"] = ArenaShot(),
         ["Prefabs/Slime.prefab"] = ArenaSlime(),

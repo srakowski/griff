@@ -53,7 +53,7 @@ public sealed class SceneDocument : ObservableObject
     /// Where something new goes when it's put inside <paramref name="parent"/>: there, or with none, at the top of a
     /// scene. A prefab is one entity, so in a prefab's tab that's inside the prefab.
     /// </summary>
-    public Entity? ParentFor(Entity? parent) => parent ?? (IsPrefab ? Scene.Roots.FirstOrDefault() : null);
+    public Entity? ParentFor(Entity? parent) => parent ?? (IsPrefab && Scene.Roots is [var root, ..] ? root : null);
 
     public EditHistory History { get; } = new();
 

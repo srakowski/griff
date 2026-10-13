@@ -18,7 +18,10 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Move the board and strategy genres into engine modules in one go: Match-3 and Falling Blocks first (each its components, systems, drawing, network state, templates and editor presets in one place, registered once), setting the pattern for Strategy and Tactics.
 - [ ] Move the remaining genres into engine modules in one go: Block Worlds, Contraptions, First Person, Dungeons, turns and the puzzle pieces (move history, trails), following the Match-3 pattern.
 - [ ] Step the game at a fixed rate with drawing smoothed in between, so the same input gives the same result on any machine; rewind, multiplayer, slow motion and hit stop keep working. Scripts get a fixed update.
-  - The riskiest of these, so it's on its own and last. It goes before the Physics items, which build on it.
+  - The riskiest of these, so it's on its own and last of the restructuring. It goes before the Physics items, which build on it.
+- [ ] Add a BunnyMark benchmark: a scene that keeps adding bouncing sprites, shows the fps and the sprite count, and records how many it holds at 60 fps.
+- [ ] Reach the BunnyMark target, recording the result in the README.
+  - Target: at least 50,000 bunnies (each an ordinary entity with a Sprite and a Body or script) at 60 fps in an exported game, with 1% lows also at 60 fps and no garbage collected per frame, so a jam game never has to think about performance. That's above Godot 3's C# result (about 27,500), and it leaves room for a real game's logic on top. Profile and fix the bottlenecks (sprite batching, per-entity overhead, allocations, physics broadphase) one at a time; each fix that outgrows one session becomes its own item right after this one.
 
 ### Views
 
@@ -64,17 +67,9 @@ grows. The headings only group items; build order is top to bottom.
 - [ ] Add stepping (over, into, out) and continue.
 - [ ] Pause on a script exception at the line that threw, with the values in scope, and let rewind go back to just before it.
 
-### Benchmarks
-
-- [ ] Add a BunnyMark benchmark: a scene that keeps adding bouncing sprites, shows the fps and the sprite count, and records how many it holds at 60 fps.
-- [ ] Reach the BunnyMark target, recording the result in the README.
-  - Target: at least 50,000 bunnies (each an ordinary entity with a Sprite and a Body or script) at 60 fps in an exported game, with 1% lows also at 60 fps and no garbage collected per frame, so a jam game never has to think about performance. That's above Godot 3's C# result (about 27,500), and it leaves room for a real game's logic on top. Profile and fix the bottlenecks (sprite batching, per-entity overhead, allocations, physics broadphase) one at a time; each fix that outgrows one session becomes its own item right after this one.
-- [ ] Add a kata runner that builds a 20 Games Challenge clone (start with Pong) and records what it needed: no-code components, lines of script, and what was missing.
-- [ ] Add Breakout, Flappy Bird and Space Invaders to the kata runner.
-
 ### Genres: physics games
 
-Built-in genres wait until the engine work above is done (the user's call, 2026-10-13): the genre blocks below come after Architecture, Views, Profiler, Physics, Platforms, Debugger and Benchmarks, and before 3D and VR.
+Built-in genres wait until the engine work above is done (the user's call, 2026-10-13): the genre blocks below come after Architecture, Views, Profiler, Physics, Platforms and Debugger, and before 3D and VR.
 
 - [ ] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts.
 - [ ] Add a Physics template, in the Angry Birds style.
@@ -120,6 +115,8 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 
 - [ ] Add a Dial-Up Modem component: the 56k handshake sound, made by the synth rather than from a recording (dial tone, the number dialed in touch tones, the answer tone, the screeching negotiation, then the hiss cutting out once it's connected), with Play On Start, a Number to dial, a Speed to shorten it, and Connected and Hung Up events. Optionally it plays while a network game is joining, stopping when it joins.
   - Low priority; the user asked for it because it's cool. Build it the way the Architecture items leave sound components.
+- [ ] Add a kata runner that builds a 20 Games Challenge clone (start with Pong) and records what it needed: no-code components, lines of script, and what was missing.
+- [ ] Add Breakout, Flappy Bird and Space Invaders to the kata runner.
 
 ## Done
 

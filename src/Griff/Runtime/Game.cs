@@ -175,6 +175,7 @@ public sealed partial class Game
             RunTools();
         });
         RunDragging();
+        RunMatchBoards();
         RunStrategy();
         RunAttacks();
         PassIdleGridMovers();

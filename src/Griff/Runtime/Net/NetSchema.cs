@@ -162,6 +162,10 @@ internal static class NetSchema
         ],
         [typeof(Worker)] = [(typeof(int), c => ((Worker)c).Load, (c, v) => ((Worker)c).Load = (int)v!)],
         [typeof(Unit)] = [(typeof(UnitOrder), c => ((Unit)c).Order, (c, v) => ((Unit)c).Order = (UnitOrder)v!)],
+        [typeof(MatchBoard)] =
+        [
+            (typeof(IReadOnlyList<string>), c => MatchView.Write((MatchBoard)c).ToArray(), (c, v) => MatchView.Read((MatchBoard)c, (IReadOnlyList<string>?)v)),
+        ],
         [typeof(Faction)] = [(typeof(bool), c => ((Faction)c).IsDefeated, (c, v) => ((Faction)c).IsDefeated = (bool)v!)],
         [typeof(Building)] =
         [

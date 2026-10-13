@@ -195,6 +195,19 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Cells_a_component_shows_while_playing_are_x_y_arrays()
+    {
+        Assert.Equal("[2,3]", AgentValues.ToJson((2, 3))!.ToJsonString());
+        Assert.Equal("[x, y], whole numbers or null", AgentValues.Describe(typeof((int X, int Y)?)));
+
+        Run("entity_create", """{"entity": {"name": "Board", "components": {"MatchBoard": {}}}}""");
+        _host.IsPlaying = true;
+        Assert.Contains("\"picked\": null", Run("entity_get", """{"entity": "Board"}""").Text);
+        Assert.Contains("- cursor: [x, y], whole numbers or null. The cell this machine's player's keyboard cursor is on",
+            Run("component_describe", """{"component": "MatchBoard"}""").Text);
+    }
+
+    [Fact]
     public void Get_SaysWhichMapATilemapIsALayerOf()
     {
         Run("entity_create", """{"entity": {"name": "Level", "components": {"Tilemap": {"image": "Tiles/ground.png", "tiles": ["00"]}}}}""");

@@ -43,6 +43,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
             .AddCommand<CreateGoalCommand>()
+            .AddCommand<CreateMatchBoardCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
@@ -661,6 +662,28 @@ public sealed class CreateGoalCommand(IWorkspace workspace, ISelection selection
         entity.AddComponent<Goal>().AllCoveredMessage = "Solved";
         if (Scene is { } scene && !scene.Entities.Any(e => e.GetComponent<MoveHistory>() is not null))
             entity.AddComponent<MoveHistory>();
+    }
+}
+
+/// <summary>
+/// Creates a match-3 board: an 8 by 8 <see cref="Tilemap"/> of six kinds of gem with a <see cref="MatchBoard"/>, centered
+/// on the scene's middle and dealt already so it shows; each game deals it afresh. Swap gems to line up three of a kind.
+/// </summary>
+public sealed class CreateMatchBoardCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateMatchBoard";
+    public override string Text => "Create Match Board";
+    public override string? Icon => Icons.Add;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    protected override string EntityName => "Board";
+
+    protected override void Configure(Entity entity)
+    {
+        var map = entity.AddComponent<Tilemap>();
+        map.Solid = false;
+        var board = entity.AddComponent<MatchBoard>();
+        entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
+        board.DealInto(map, new Random());
     }
 }
 

@@ -103,6 +103,8 @@ public static class AgentValues
             case Component component: return $"{component.GetType().Name} on {component.Entity?.Name ?? "nothing"}";
             case JsonNode node: return node.DeepClone();
             case JsonElement element: return JsonNode.Parse(element.GetRawText());
+            case System.Runtime.CompilerServices.ITuple tuple when IsTuple(value.GetType()):
+                return new JsonArray(Enumerable.Range(0, tuple.Length).Select(i => ToJson(tuple[i], depth)).ToArray());
         }
 
         var type = value.GetType();
@@ -146,8 +148,15 @@ public static class AgentValues
             : IsEntityList(type) ? "entities: an array of their names, ids or paths"
             : typeof(Entity).IsAssignableFrom(type) ? "an entity: its name, id or path"
             : typeof(Component).IsAssignableFrom(type) ? $"an entity with a {type.Name}: its name, id or path"
+            : IsTuple(type) && type.GetGenericArguments() is [var x, var y] && x == typeof(int) && y == typeof(int) ? "[x, y], whole numbers"
+            : IsTuple(type) ? $"[{string.Join(", ", type.GetGenericArguments().Select(Describe))}]"
             : type.Name;
     }
+
+    /// <summary>True for a tuple of values agents can read, e.g. a board's cell, <c>(int X, int Y)</c>: shown as an array.</summary>
+    public static bool IsTuple(Type type) =>
+        type.IsValueType && type.IsGenericType && typeof(System.Runtime.CompilerServices.ITuple).IsAssignableFrom(type) &&
+        type.GetGenericArguments().All(ValueCodec.IsSupported);
 
     /// <summary>A JSON schema for a value of <paramref name="type"/>.</summary>
     public static JsonObject SchemaOf(Type type, string? description = null)

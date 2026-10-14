@@ -38,10 +38,12 @@ Other agents may be working in the main checkout at the same time, so never swit
   and follow the same shape: no-code components that work from the Inspector, scripting API where it helps, a
   playable (and audible) template when the item names one, multiplayer and rewind support like the existing
   components, and undo for everything in the editor.
-- Keep to the item. If it turns out bigger than one change, build the part that stands on its own and add the rest
-  as new items right after it in **Next**.
+- Keep to the item, and finish all of it: each run is a standalone effort that defers nothing. Don't leave part of
+  the item for later, don't add follow-up items to the backlog, and don't leave known gaps in what the item covers.
+  If something you find along the way is outside the item, fix it in this change when it's small; otherwise mention it
+  in the report and leave the backlog alone.
 - Update `README.md`: the feature list and its own section, and the **Status** section's known gaps (remove gaps this
-  closes, add any this leaves).
+  closes).
 - Add unit tests in `tests/Griff.Tests`, including playing any new template. Existing demos and the guided tour
   that show something this changes get updated (see `CLAUDE.md`).
 - `dotnet build src/Griff.Editor/Griff.Editor.csproj` and `dotnet test tests/Griff.Tests` both pass before going on.
@@ -69,8 +71,7 @@ the demo turns up before going on.
 
 ## 5. Commit, merge, tick it off
 
-1. In `backlog.md`, move the item from **Next** to **Done** as `- [x] <item> (YYYY-MM-DD)`, adding a short note if
-   anything was deferred (and the deferred work as a new item in **Next**).
+1. In `backlog.md`, move the item from **Next** to **Done** as `- [x] <item> (YYYY-MM-DD)`.
 2. Commit everything in the worktree (code, tests, README, demos, `backlog.md`) as one commit on `enhance/<slug>`.
    Use the repo's message style, e.g. `Add grid movement: things that step tile by tile on a tilemap`.
 3. Bring it up to date with main and merge it:
@@ -82,7 +83,7 @@ the demo turns up before going on.
 
 ## 6. Report
 
-Say what was built, what the MCP testing and the demo turned up, what was deferred, and the next item on the list
+Say what was built, what the MCP testing and the demo turned up, anything found outside the item, and the next item on the list
 (the one the next `/enhance` will build).
 
 ## Building a new backlog

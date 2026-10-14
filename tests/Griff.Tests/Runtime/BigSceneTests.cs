@@ -14,9 +14,9 @@ public sealed class BigSceneTests
         protected override void Update() => Transform.Rotation += new Vector3(0, 0, 90 * Time.Delta);
     }
 
-    private static Scene Bunnies(int count)
+    private static Scene Bunnies(int count, Scene? scene = null)
     {
-        var scene = new Scene();
+        scene ??= new Scene();
         for (var i = 0; i < count; i++)
         {
             var bunny = new Entity("Bunny");
@@ -58,6 +58,44 @@ public sealed class BigSceneTests
 
         // A list of 2,000 draws is over 250 KB; what's left is the frame's own few objects.
         Assert.Equal(2000, frame!.Sprites.Count);
+        Assert.True(perFrame < 16 * 1024, $"A frame allocated {perFrame:N0} bytes.");
+    }
+
+    // A HUD over the crowd that comes first in the hierarchy (its draws move after the crowd's), or every bunny on a layer
+    // of its own (sorted by key): putting the frame back to front reuses what it needs too.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Drawing_a_frame_put_back_to_front_into_the_last_one_allocates_next_to_nothing(bool layered)
+    {
+        var scene = new Scene();
+        for (var i = 0; i < 3; i++)
+        {
+            var hud = new Entity("Hud");
+            hud.AddComponent<Sprite>().Order = 100 + i;
+            scene.Add(hud);
+        }
+
+        Bunnies(2000, scene);
+        if (layered)
+        {
+            var random = new Random(3);
+            foreach (var bunny in scene.Entities.Where(e => e.Name == "Bunny"))
+                bunny.GetComponent<Sprite>()!.Order = random.Next(7);
+        }
+
+        var game = new Game(scene, new InputState());
+        RenderFrame? frame = null;
+        for (var i = 0; i < 30; i++)
+        {
+            game.Tick(1 / 60.0);
+            frame = SceneRenderer.Build(game, 16 / 9f, frame);
+        }
+
+        var perFrame = Allocations.PerCall(() => frame = SceneRenderer.Build(game, 16 / 9f, frame), 20, enough: 16 * 1024 - 1);
+
+        Assert.Equal(2003, frame!.Sprites.Count);
+        Assert.Equal("Hud", frame.Sprites[^1].Entity.Name);
         Assert.True(perFrame < 16 * 1024, $"A frame allocated {perFrame:N0} bytes.");
     }
 }

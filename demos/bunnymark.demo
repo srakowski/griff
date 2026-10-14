@@ -18,7 +18,7 @@ play
 wait: 3
 explain: game | Bunnies pour in | Each bunny is a sprite and a short script, copied from a prefab: an ordinary entity, just like a game's. The frame rate and the count show in the corner.
 wait: 3
-explain: game | Big scenes | Each frame puts its sprites back to front by their keys rather than comparing them one by one, calls each script only for the steps it has, and draws the sprites in a few big batches, making no garbage. An exported game keeps fifty thousand bunnies at sixty frames a second.
+explain: game | Big scenes | Each frame draws every bunny as it comes to it, in one pass, then puts the draws back to front by their keys, moving as few as it can. It calls each script only for the steps it has, and draws the sprites in a few big batches, making no garbage. An exported game keeps fifty thousand bunnies at sixty frames a second.
 wait: 6
 explain: game | The count | When it has found the count and held it, it shows it along the bottom with how the hold went, and saves it with the best so far.
 tap: Space

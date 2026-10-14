@@ -146,8 +146,8 @@ public static class SceneRenderer
 
     // ----- Entities -----
 
-    // One entity that draws: where its drawable components are (in step order) in a list of them, or its sprite when
-    // that's all it draws, and what it sorts by.
+    // One entity that draws: its sprite when that's all it draws (or else its drawable components, gathered in step order
+    // apart), where its draws are in the frame's list once it's drawn (First, Count), and what it sorts by.
     private readonly record struct Drawn(Entity Entity, Sprite? Sole, int First, int Count, bool Lifted, int Order, float Z, float Y);
 
     /// <summary>
@@ -187,25 +187,39 @@ public static class SceneRenderer
         public List<Drawn> Entries { get; } = [];
 
         public StableSort Sort { get; } = new();
+
+        // The runs of the frame's draws in the order they go in, and room for those that move by way of it.
+        public List<Block> Blocks { get; } = [];
+
+        public SpriteDraw[] Spare { get; set; } = [];
     }
 
+    // One pass over the entities, in hierarchy order: each is drawn as it's found, its draws kept together where they
+    // land, and then those runs of draws are put back to front by what their entities sort by. An entity's drawable
+    // components are called in that order too (hierarchy order, then DrawStep order within the entity), whatever order
+    // their draws end up in.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
         List<IDrawable>? overs, Scratch scratch)
     {
+        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
         var drawables = scratch.Drawables;
-        var entities = CollectionsMarshal.AsSpan(Sorted(scene, drawables, overs, include, scratch.Entries, scratch.Sort, out var order));
-        sprites.EnsureCapacity(sprites.Count + entities.Length + 16);
+        var entries = scratch.Entries;
+        var first = sprites.Count;
+        sprites.EnsureCapacity(first + scene.Entities.Count + 16);
         var drawing = new Drawing(sprites, ScreenEntity, view, cameraSize / 180, playing);
-        if (order.IsEmpty)
+        foreach (var entity in scene.Entities)
         {
-            foreach (ref readonly var entity in entities)
-                DrawEntity(entity, drawables, drawing, sprites);
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)) ||
+                !Describe(entity, sortByY, drawables, overs, out var entry))
+                continue;
+            var start = sprites.Count;
+            DrawEntity(entity, entry.Sole, drawables, drawing, sprites);
+            // What draws nothing this frame (blinked out, out of view) has nothing to put in order.
+            if (sprites.Count > start)
+                entries.Add(entry with { First = start, Count = sprites.Count - start });
         }
-        else
-        {
-            foreach (var at in order)
-                DrawEntity(entities[at], drawables, drawing, sprites);
-        }
+
+        PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
 
         if (overs is not { Count: > 0 })
             return -1;
@@ -231,73 +245,131 @@ public static class SceneRenderer
         return screen.Count;
     }
 
-    // The scene's drawing entities in hierarchy order, their drawable components gathered into `drawables` (and those
-    // that go over the world into `overs`), and `order`, the order to draw them in back to front: empty when that's the
-    // order they're in.
-    private static List<Drawn> Sorted(Scene scene, List<IDrawable> drawables, List<IDrawable>? overs, Func<Entity, bool>? include, List<Drawn> entries,
-        StableSort sort, out ReadOnlySpan<int> order)
+    // Puts the draws from `first` on (each entry's run of them, the runs in hierarchy order) back to front, each run kept
+    // as it is. Nothing moves when they're in that order already, as a big scene on one layer is; otherwise entries next to
+    // each other in both orders move together, the biggest such block of them in place and the rest by way of the spare.
+    private static void PutBackToFront(List<SpriteDraw> sprites, int first, ReadOnlySpan<Drawn> entries, bool sortByY, Scratch scratch)
     {
-        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
-        foreach (var entity in scene.Entities)
+        var order = SortBackToFront(entries, sortByY, scratch.Sort);
+        if (order.IsEmpty)
+            return;
+
+        var blocks = scratch.Blocks;
+        blocks.Clear();
+        var biggest = 0;
+        foreach (var index in order)
         {
-            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)))
-                continue;
-            Vector3 position;
-            if (entity.SoleSprite is { } sole)
-            {
-                position = entity.Transform.WorldPosition;
-                entries.Add(new Drawn(entity, sole, 0, 1, IsLifted(entity), sole.Order, position.Z, sortByY ? position.Y : 0));
-                continue;
-            }
-
-            var first = drawables.Count;
-            int? spriteOrder = null, ownOrder = null;
-            var orderStep = int.MaxValue;
-            foreach (var component in entity.ComponentList)
-            {
-                if ((component.Roles & ComponentRoles.Drawable) == 0)
-                    continue;
-                var drawable = Unsafe.As<IDrawable>(component);
-                var step = drawable.DrawStep;
-                if (step >= DrawSteps.OverWorld)
-                {
-                    overs?.Add(drawable);
-                    continue;
-                }
-
-                // In step order, keeping the order they're attached within a step.
-                var at = drawables.Count;
-                while (at > first && drawables[at - 1].DrawStep > step)
-                    at--;
-                drawables.Insert(at, drawable);
-
-                if ((component.Roles & ComponentRoles.Sprite) != 0)
-                    spriteOrder ??= Unsafe.As<Sprite>(component).Order;
-                else if (step < orderStep && drawable.DrawOrder is { } own)
-                    (ownOrder, orderStep) = (own, step);
-            }
-
-            if ((spriteOrder ?? ownOrder) is not { } entityOrder)
-            {
-                drawables.RemoveRange(first, drawables.Count - first);
-                continue;
-            }
-
-            position = entity.Transform.WorldPosition;
-            entries.Add(new Drawn(entity, null, first, drawables.Count - first, IsLifted(entity), entityOrder, position.Z,
-                sortByY ? position.Y : 0));
+            ref readonly var entry = ref entries[index];
+            if (blocks.Count > 0 && blocks[^1].From + blocks[^1].Count == entry.First)
+                blocks[^1] = blocks[^1] with { Count = blocks[^1].Count + entry.Count };
+            else
+                blocks.Add(new Block(entry.First, entry.Count));
+            if (blocks[^1].Count > blocks[biggest].Count)
+                biggest = blocks.Count - 1;
         }
 
-        order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, sort);
-        return entries;
+        var drawn = CollectionsMarshal.AsSpan(sprites);
+        var big = blocks[biggest];
+        var spareCount = drawn.Length - first - big.Count;
+        if (scratch.Spare.Length < spareCount)
+            scratch.Spare = new SpriteDraw[Math.Max(spareCount, scratch.Spare.Length * 2)];
+        var spare = scratch.Spare.AsSpan(0, spareCount);
+        var at = 0;
+        var bigTo = first;
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            if (b < biggest)
+                bigTo += blocks[b].Count;
+            if (b == biggest)
+                continue;
+            drawn.Slice(blocks[b].From, blocks[b].Count).CopyTo(spare[at..]);
+            at += blocks[b].Count;
+        }
+
+        // Copying within one array as if by way of another, so it may overlap where it was.
+        drawn.Slice(big.From, big.Count).CopyTo(drawn[bigTo..]);
+        (at, var to) = (0, first);
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            var count = blocks[b].Count;
+            if (b != biggest)
+            {
+                spare.Slice(at, count).CopyTo(drawn[to..]);
+                at += count;
+            }
+
+            to += count;
+        }
+
+        // The copies would otherwise keep the entities they belong to (and what they draw) from being collected.
+        spare.Clear();
+    }
+
+    // Whether the entity draws in the world, and what it sorts by: its sprite when that's all it draws, or else its
+    // drawable components gathered into `drawables` in step order (and those that go over the world into `overs`). Its
+    // sprite's order is the entity's, or else that of its first drawable (by step) with one; with none it draws nothing
+    // in the world.
+    private static bool Describe(Entity entity, bool sortByY, List<IDrawable> drawables, List<IDrawable>? overs, out Drawn entry)
+    {
+        Vector3 position;
+        if (entity.SoleSprite is { } sole)
+        {
+            position = entity.Transform.WorldPosition;
+            entry = new Drawn(entity, sole, 0, 0, IsLifted(entity), sole.Order, position.Z, sortByY ? position.Y : 0);
+            return true;
+        }
+
+        drawables.Clear();
+        int? spriteOrder = null, ownOrder = null;
+        var orderStep = int.MaxValue;
+        foreach (var component in entity.ComponentList)
+        {
+            if ((component.Roles & ComponentRoles.Drawable) == 0)
+                continue;
+            var drawable = Unsafe.As<IDrawable>(component);
+            var step = drawable.DrawStep;
+            if (step >= DrawSteps.OverWorld)
+            {
+                overs?.Add(drawable);
+                continue;
+            }
+
+            // In step order, keeping the order they're attached within a step.
+            var at = drawables.Count;
+            while (at > 0 && drawables[at - 1].DrawStep > step)
+                at--;
+            drawables.Insert(at, drawable);
+
+            if ((component.Roles & ComponentRoles.Sprite) != 0)
+                spriteOrder ??= Unsafe.As<Sprite>(component).Order;
+            else if (step < orderStep && drawable.DrawOrder is { } own)
+                (ownOrder, orderStep) = (own, step);
+        }
+
+        if ((spriteOrder ?? ownOrder) is not { } entityOrder)
+        {
+            entry = default;
+            return false;
+        }
+
+        position = entity.Transform.WorldPosition;
+        entry = new Drawn(entity, null, 0, 0, IsLifted(entity), entityOrder, position.Z, sortByY ? position.Y : 0);
+        return true;
     }
 
     // Lifted ones last, then by Order, then Z, then (sorting by Y) higher up first, keeping hierarchy order among equals
-    // (the order they come in). A big scene is often in order already, all on one layer: that's seen in one look.
+    // (the order they come in): empty when that's the order they're in. A big scene is often in order already, all on one
+    // layer, or nearly (a few things over or under its crowd): that's seen, and merged, in a look at each.
     private static ReadOnlySpan<int> SortBackToFront(ReadOnlySpan<Drawn> entries, bool sortByY, StableSort keys)
     {
-        if (InOrder(entries))
-            return [];
+        switch (keys.TryMerge(entries, new BackToFront(), MaxStretches))
+        {
+            case 1:
+                return [];
+            case > 1:
+                return keys.Order;
+        }
+
         keys.Begin(entries.Length);
         var key = keys.Keys;
         if (sortByY)
@@ -319,16 +391,16 @@ public static class SceneRenderer
         return keys.Order;
     }
 
-    private static bool InOrder(ReadOnlySpan<Drawn> entries)
-    {
-        for (var i = 1; i < entries.Length; i++)
-        {
-            if (Compare(entries[i - 1], entries[i]) > 0)
-                return false;
-        }
+    // Past this many stretches in order, the entries are sorted by key rather than merged.
+    private const int MaxStretches = 16;
 
-        return true;
+    private readonly struct BackToFront : IComparer<Drawn>
+    {
+        public int Compare(Drawn a, Drawn b) => SceneRenderer.Compare(a, b);
     }
+
+    // A run of the frame's draws: where it starts and how many.
+    private readonly record struct Block(int From, int Count);
 
     private static int Compare(in Drawn a, in Drawn b)
     {
@@ -349,7 +421,16 @@ public static class SceneRenderer
     /// </summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene)
     {
-        var entries = Sorted(scene, [], null, null, [], new StableSort(), out var order);
+        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
+        var drawables = new List<IDrawable>();
+        var entries = new List<Drawn>();
+        foreach (var entity in scene.Entities)
+        {
+            if ((entity.Roles & ComponentRoles.Drawable) != 0 && entity.IsActive && Describe(entity, sortByY, drawables, null, out var entry))
+                entries.Add(entry);
+        }
+
+        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
         return order.IsEmpty ? entries.Select(d => d.Entity).ToList() : order.ToArray().Select(at => entries[at].Entity).ToList();
     }
 
@@ -394,16 +475,16 @@ public static class SceneRenderer
     // An entity's draws, component by component. On a parallax layer (the entity or an ancestor) they shift with it, and
     // its sprite may repeat across the view; otherwise its and its ancestors' effects move them (a shake, a beat).
     // Steps from DrawSteps.View on are drawn where they say.
-    private static void DrawEntity(in Drawn entry, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
+    private static void DrawEntity(Entity entity, Sprite? sole, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
     {
-        if (entry.Sole is { } sole)
+        if (sole is not null)
         {
             IDrawable drawable = sole;
-            DrawEntity(entry.Entity, new ReadOnlySpan<IDrawable>(ref drawable), drawing, sprites);
+            DrawEntity(entity, new ReadOnlySpan<IDrawable>(ref drawable), drawing, sprites);
         }
         else
         {
-            DrawEntity(entry.Entity, CollectionsMarshal.AsSpan(drawables).Slice(entry.First, entry.Count), drawing, sprites);
+            DrawEntity(entity, CollectionsMarshal.AsSpan(drawables), drawing, sprites);
         }
     }
 

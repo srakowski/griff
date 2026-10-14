@@ -30,8 +30,11 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
 
 /// <summary>
 /// A component that draws something: Griff's own (sprites, tilemaps, text, bars, particles, boards) and scripts' alike.
-/// Each frame the renderer goes through the entities back to front (see <see cref="DrawOrder"/>) and asks each of an
-/// entity's drawable components, in <see cref="DrawStep"/> order, to <see cref="Draw"/> itself. A running game is drawn
+/// Each frame the renderer goes through the entities once, in hierarchy order (the Hierarchy panel's, top to bottom), and
+/// asks each of an entity's drawable components, in <see cref="DrawStep"/> order, to <see cref="Draw"/> itself; then it
+/// puts the entities' draws back to front (see <see cref="DrawOrder"/>), each entity's kept together in the order they
+/// were added. So Draw is called in the same order whatever layer things are on, and needn't know what's drawn under
+/// it (a <see cref="Runtime.GameSystem"/>'s Draw sees the whole frame). A running game is drawn
 /// between its last two steps: transforms are placed there by themselves, and what a component draws from its own state
 /// gets there through <see cref="Drawing.Blend"/> (keep what changes in a <see cref="Smoothed{T}"/>).
 /// </summary>

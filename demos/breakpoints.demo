@@ -1,5 +1,5 @@
 title: Breakpoints
-intro: Stop the game at a line of code and see what everything holds right there. Resume carries on from that line.
+intro: Stop the game at a line of code and see what everything holds right there. Continue carries on from that line.
 project: Arcade | Breakpoints
 scene: Game
 
@@ -22,8 +22,8 @@ explain: code:value:this | Look inside | Open the ship to see its own fields, li
 hover: aim = Input
 explain: code:quickinfo | Hover for a value | Hover a variable in the code, and it shows its value too.
 
-chapter: Carry on | Resume picks up from that line
-explain: code:resume | Resume | Resume, or F6, lets the script carry on from that very line, and the game plays on.
+chapter: Carry on | Continue picks up from that line
+explain: code:continue | Continue | Continue, F5 or F6, lets the script carry on from that very line, and the game plays on. The buttons beside it step through the code a line at a time.
 pause
 expectstopped: none
 say: Fire again, and it stops again: every time the code gets there.
@@ -31,7 +31,7 @@ gamehover: Player + 4, 2
 hold: Space 1
 expectstopped: _cooldown = 1 / FireRate
 click: code:breakpoint:_cooldown = 1 / FireRate
-explain: code:text:_cooldown = 1 / FireRate | Off again | Click the dot again to take the breakpoint off. Resume, and the ship fires freely.
+explain: code:text:_cooldown = 1 / FireRate | Off again | Click the dot again to take the breakpoint off. Continue, and the ship fires freely.
 pause
 expectstopped: none
 gamehover: Player + 4, 2

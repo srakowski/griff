@@ -188,13 +188,26 @@ public partial class ScriptEditorView : UserControl
     private void ShowPaused()
     {
         var here = _debugger is { IsPaused: true, PausedPath: { } path } && string.Equals(path, Script.FilePath, StringComparison.OrdinalIgnoreCase);
-        PausedPanel.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
+        // A step from here ran to the end of the frame: the game waits there, for Step Into or Continue.
+        var after = !here && _debugger is { IsPaused: false, StepEndedIn: { } from } && string.Equals(from, Script.FilePath, StringComparison.OrdinalIgnoreCase);
+        PausedPanel.Visibility = here || after ? Visibility.Visible : Visibility.Collapsed;
         ValuesTree.ItemsSource = here ? _debugger.Values : null;
+        ValuesTree.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
+        StepOverButton.Visibility = StepOutButton.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
         if (here)
-            PausedTitle.Text = $"Paused at line {_debugger.PausedLine}  ·  {_debugger.PausedIn}";
+            PausedTitle.Text = (_debugger.StoppedByStep && _debugger.StoppedBy is { } step && step != "a breakpoint" ? $"{step} to line {_debugger.PausedLine}" : $"Paused at line {_debugger.PausedLine}")
+                + $"  ·  {_debugger.PausedIn}";
+        else if (after)
+            PausedTitle.Text = "Paused after the frame  ·  no more script ran in it";
     }
 
-    private void OnResumeClicked(object sender, RoutedEventArgs e) => _debugger.Resume();
+    private void OnResumeClicked(object sender, RoutedEventArgs e) => _debugger.Continue();
+
+    private void OnStepOverClicked(object sender, RoutedEventArgs e) => _ = _debugger.StepOver();
+
+    private void OnStepIntoClicked(object sender, RoutedEventArgs e) => _ = _debugger.StepInto();
+
+    private void OnStepOutClicked(object sender, RoutedEventArgs e) => _ = _debugger.StepOut();
 
     // ----- Problems and references -----
 

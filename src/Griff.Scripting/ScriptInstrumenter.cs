@@ -180,7 +180,11 @@ public static class ScriptInstrumenter
     {
         var function = FunctionOf(statement);
         List<string> names = function is null ? [] : InScope(model, statement, function, precise).Distinct().ToList();
-        var probe = new ScriptProbe(id, path, line, Where(statement), names, function is not null && CanPassThis(function));
+        var probe = new ScriptProbe(id, path, line, Where(statement), names, function is not null && CanPassThis(function))
+        {
+            Function = function?.SpanStart ?? -1,
+            Entry = function is not null && IsEntry(statement, function),
+        };
         var call = Call(probe);
         var edits = statement.Parent is BlockSyntax or SwitchSectionSyntax
             ? new[] { new Edit(statement.SpanStart, 2, call + " ") }
@@ -336,7 +340,7 @@ public static class ScriptInstrumenter
         var names = ParametersOf(member)
             .Where(p => !p.IsOut && (!precise || Passable(model.Value.GetDeclaredSymbol(p.Node))))
             .Select(p => p.Name).ToList();
-        var probe = new ScriptProbe(id, path, line, Where(body), names, self);
+        var probe = new ScriptProbe(id, path, line, Where(body), names, self) { Function = member.SpanStart, Entry = true };
         var call = Call(probe);
         var getter = member is PropertyDeclarationSyntax or IndexerDeclarationSyntax;
         var open = (getter ? "{ get { " : "{ ") + call + (returns == false || body is ThrowExpressionSyntax ? " " : " return ");
@@ -364,7 +368,7 @@ public static class ScriptInstrumenter
             return null;
 
         var names = symbol.Parameters.Where(p => !p.IsDiscard && p.Name is not ("" or "_") && p.RefKind != RefKind.Out && Passable(p)).Select(p => p.Name).ToList();
-        var probe = new ScriptProbe(id, path, line, Where(body), names, false);
+        var probe = new ScriptProbe(id, path, line, Where(body), names, false) { Function = lambda.SpanStart, Entry = true };
         var nothing = symbol.ReturnsVoid || symbol.IsAsync && symbol.ReturnType is INamedTypeSymbol { Arity: 0 } || body is ThrowExpressionSyntax;
         var open = "{ " + Call(probe) + (nothing ? " " : " return ");
         return new Site(probe, body, [new Edit(body.SpanStart, 2, open), new Edit(body.Span.End, 0, "; }")], line, LineOf(body, body.Span.End));
@@ -397,6 +401,21 @@ public static class ScriptInstrumenter
         }
 
         return null;
+    }
+
+    // Whether `statement` is the first its function runs each time it's called: the first statement of its body (a local
+    // function declared there isn't run).
+    private static bool IsEntry(StatementSyntax statement, SyntaxNode function)
+    {
+        var body = function switch
+        {
+            BaseMethodDeclarationSyntax method => method.Body,
+            AccessorDeclarationSyntax accessor => accessor.Body,
+            LocalFunctionStatementSyntax local => local.Body,
+            AnonymousFunctionExpressionSyntax anonymous => anonymous.Block,
+            _ => null,
+        };
+        return body is not null && statement.Parent == body && body.Statements.FirstOrDefault(s => s is not LocalFunctionStatementSyntax) == statement;
     }
 
     // A function's parameters that can be passed (a setter's `value` stands as the accessor itself), and whether each is an

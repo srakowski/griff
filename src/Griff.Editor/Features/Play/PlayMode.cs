@@ -293,6 +293,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         Raise();
     }
 
+    /// <summary>The runner of the game in the Game tab, while one plays.</summary>
+    internal GameRunner? Runner => _runner;
+
     /// <summary>Advances one frame and stays paused.</summary>
     public void Step()
     {
@@ -369,7 +372,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// resumed (<see cref="TogglePause"/>) or stopped or rewound. Returns true if it was stopped or rewound, so the script
     /// goes no further. False straight away if <paramref name="runner"/> isn't one of the games playing, or one is held already.
     /// </summary>
-    internal bool HoldAtBreakpoint(GameRunner runner, string where)
+    internal bool HoldAtBreakpoint(GameRunner runner, string where, string? stepped = null)
     {
         if (_held is not null || _runner is null || (runner != _runner && _players.All(p => p.Runner != runner)))
             return false;
@@ -378,8 +381,10 @@ public sealed class PlayMode : ObservableObject, IDisposable
         var frame = _held = new DispatcherFrame();
         _abandonHeld = false;
         Refresh();
-        _status.Show($"Paused at a breakpoint: {where}. Resume (F6) carries on from there.");
-        _logger.LogInformation("Paused at a breakpoint: {Where}", where);
+        _status.Show(stepped is null
+            ? $"Paused at a breakpoint: {where}. Continue (F5 or F6) carries on from there; F10, F11 and Shift+F11 step."
+            : $"{stepped}: {where}");
+        _logger.LogInformation("Paused at {Where} ({By})", where, stepped ?? "a breakpoint");
         Raise();
         BreakpointReached?.Invoke(this, EventArgs.Empty);
         try
@@ -398,6 +403,30 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     /// <summary>Raised as the game stops at a breakpoint (see <see cref="HoldAtBreakpoint"/>).</summary>
     public event EventHandler? BreakpointReached;
+
+    /// <summary>
+    /// Lets a script held at a breakpoint carry on with the game staying paused, for a step of the debugger: it runs until
+    /// the debugger holds it again at the line the step ends at, or to the end of the frame, where it stays paused (see
+    /// <see cref="PausedAfterStep"/>). False if no script is held.
+    /// </summary>
+    internal bool StepOn()
+    {
+        if (_held is null)
+            return false;
+        LetGo(abandon: false);
+        return true;
+    }
+
+    /// <summary>A step of the debugger ran to the end of the frame: the game stays paused there, the panels showing it.</summary>
+    internal void PausedAfterStep(string message)
+    {
+        if (_runner is null)
+            return;
+        SetPaused(true);
+        Refresh();
+        _status.Show(message);
+        Raise();
+    }
 
     // Lets go of a script held at a breakpoint: it carries on once the editor's done with what it's doing, or with
     // `abandon`, stops there (the game is being stopped or rewound).

@@ -130,10 +130,10 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             text.AppendLine(CultureInfo.InvariantCulture, $"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
         }
 
-        text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? debugger.IsPaused ? $"paused at a breakpoint, {debugger.Location}" : play.IsPaused ? "paused" : "playing" : "not playing")}");
+        var stoppedAt = debugger.StoppedBy is "a breakpoint" ? $"at a breakpoint, {debugger.Location}" : $"where {debugger.StoppedBy} stopped, {debugger.Location}";
+        text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? debugger.IsPaused ? $"paused {stoppedAt}" : play.IsPaused ? "paused" : "playing" : "not playing")}");
         if (debugger.IsPaused)
-            text.Append("Values in scope there (ui_inspect Debugger reads them, Values[name].Members goes deeper; Game_Pause resumes):").AppendLine()
-                .Append(debugger.ValuesText);
+            text.Append("Values in scope there:").AppendLine().Append(debugger.ValuesText).AppendLine(Debugger.WhatNext);
         if (debugger.Breakpoints.Count > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Breakpoints: {string.Join(", ", debugger.Breakpoints.Select(b => b.Label + (b.IsSet ? "" : " (not in the scripts as built)")))} (ui_invoke Debugger SetBreakpoint / RemoveBreakpoint)");
         if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
@@ -485,8 +485,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     // A breakpoint stopped the game: the steps stop there, and say where it is and what's in scope.
     private ToolResult StoppedAtBreakpoint(StringBuilder log)
     {
-        log.Append("Stopped at a breakpoint: ").Append(debugger.ValuesText)
-            .AppendLine("ui_inspect Debugger (Values[name].Members) looks deeper; Game_Pause resumes from there.");
+        log.AppendLine(debugger.StoppedText());
         return ToolResult.Ok(log.ToString());
     }
 

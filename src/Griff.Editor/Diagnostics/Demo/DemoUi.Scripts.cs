@@ -158,10 +158,13 @@ internal sealed partial class DemoUi
             "tab" => Descendants<TabItem>(main.DocumentTabs).First(t => t.Content == view),
             "paused" => Named("PausedPanel"),
             "values" => Named("ValuesTree"),
-            "resume" => Named("ResumeButton"),
+            "resume" or "continue" => Named("ResumeButton"),
+            "stepover" => Named("StepOverButton"),
+            "stepinto" => Named("StepIntoButton"),
+            "stepout" => Named("StepOutButton"),
             "value" => ValueRow(name) is { } item ? (FrameworkElement?)Descendants<Border>(item).FirstOrDefault(b => b.Name == "Bd") ?? item : throw new InvalidOperationException($"No value {name} is showing."),
             "expand" => ValueRow(name) is { } toggle ? Descendants<System.Windows.Controls.Primitives.ToggleButton>(toggle).First(b => b.Name == "Expander") : throw new InvalidOperationException($"No value {name} is showing."),
-            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, breakpoint:, paused, values, value:, expand:, resume, completion, quickinfo, signature)."),
+            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, breakpoint:, paused, values, value:, expand:, continue, stepover, stepinto, stepout, completion, quickinfo, signature)."),
         };
     }
 

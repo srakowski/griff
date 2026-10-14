@@ -1,0 +1,50 @@
+title: Stepping
+intro: Stopped at a breakpoint, go on a line at a time: over a line, into the method it calls in another script, out again, and on into the next frame.
+project: Arcade | Stepping
+scene: Game
+
+chapter: A radar on the ship | Two small scripts
+write: Scripts/Sweep.cs | stepping/Sweep.cs
+write: Scripts/Radar.cs | stepping/Radar.cs
+select: Player
+add: Radar
+edit: Radar
+say: Here's a little radar on the ship. Every frame it works out how far the ship is from the middle of the arena, with a helper from another script.
+click: code:breakpoint:var here = Transform.Position
+play
+expectstopped: var here = Transform.Position
+explain: code:paused | Stopped at a breakpoint | The game stops at the radar's first line, in its very first frame. Now step through it.
+
+chapter: Over, into and out | F10, F11 and Shift+F11
+explain: code:stepover | Step Over | Step Over, or F10, runs this line and stops at the next one.
+click: code:stepover
+expectstopped: FromMiddle = Sweep.Distance
+explain: code:values | Set by that line | The ship's position is in scope now.
+explain: code:stepinto | Step Into | This line calls a method in another script. Step Into, or F11, follows the call in.
+click: code:stepinto
+expectstopped: var dx = to.X - from.X
+explain: code:values | Its own values | The helper's script opens at its first line, with what it was given.
+click: code:stepover
+expectstopped: var dy = to.Y - from.Y
+explain: code:stepout | Step Out | Step Out, or Shift F11, runs the rest of the helper and stops back in the radar, at the line after the call.
+click: code:stepout
+expectstopped: if (FromMiddle > 8)
+explain: code:values | What it worked out | The radar has its answer.
+
+chapter: Off the end | Into Griff, and on to the next frame
+say: Step over the end of Update and the game goes back into Griff. It stops at the next line of any script that runs. Nothing else runs this frame, so it pauses at the end of it.
+click: code:stepover
+expectstopped: none
+explain: code:paused | Paused after the frame | The frame's done, and the game waits here.
+explain: code:stepinto | Into the next frame | Step Into plays the next frame up to the first line of script it runs.
+click: code:stepinto
+expectstopped: GetComponent<Body>()!.Velocity = Input.Move * Speed
+explain: code:paused | The ship's own script | This time that's the ship's own Update, which runs before the radar.
+explain: code:continue | Continue | Continue, F5 or F6, lets the game run on until it gets to a breakpoint again: the radar's, in this same frame.
+click: code:continue
+expectstopped: var here = Transform.Position
+click: code:breakpoint:var here = Transform.Position
+click: code:continue
+expectstopped: none
+say: Stepping keeps everything breakpoints promise. It costs nothing until the game stops, the game plays out the same, and Stop or rewinding leave the frame at any step.
+stop

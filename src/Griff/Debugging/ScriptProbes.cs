@@ -1,14 +1,19 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Griff.Debugging;
 
 /// <summary>
 /// A line of a script reached with a breakpoint on it, in a build of the scripts with probes (see
 /// <see cref="ScriptProbes"/>): which build (its table of probes, <paramref name="Probes"/>), which of its probes, the
-/// object the code runs on (null in a static method or a lambda) and the values of the variables in scope there, in the
-/// order the build's table names them.
+/// object the code runs on (null in a static method or a lambda), the values of the variables in scope there, in the
+/// order the build's table names them, and where on the thread's stack the line runs (<paramref name="Stack"/>: lower is
+/// deeper, so a method a line calls runs lower than the line, and one it returns to higher; the same call of a method runs
+/// all its lines at one place).
 /// </summary>
-public readonly record struct ScriptBreak(Type Probes, int Probe, object? This, object?[] Values);
+public readonly record struct ScriptBreak(Type Probes, int Probe, object? This, object?[] Values, nint Stack = 0);
 
 /// <summary>What holds a game at a breakpoint: the editor's debugger.</summary>
 public interface IScriptBreakHandler
@@ -19,6 +24,13 @@ public interface IScriptBreakHandler
     /// or rewound while it was held), which ends the frame with a <see cref="ScriptAbortedException"/>.
     /// </summary>
     bool Break(in ScriptBreak hit);
+
+    /// <summary>
+    /// Whether a line whose switch is on stops (and <see cref="Break"/> is called): a breakpoint's line always does, but
+    /// while the debugger steps every line's switch is on, and only the line the step ends at stops. Asked of every line
+    /// reached while stepping, so it should be quick.
+    /// </summary>
+    bool Stops(in ScriptBreak hit) => true;
 }
 
 /// <summary>
@@ -100,9 +112,15 @@ public static class ScriptProbes
     /// (through <see cref="Handler"/>) for as long as it says; throws <see cref="ScriptAbortedException"/> if the game was
     /// stopped meanwhile.
     /// </summary>
+    // Compiled once, fully (never again by tiering), so its frame is always the same size: the stack position it measures
+    // stands for its caller's.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
     public static void Hit(Type probes, int probe, object? self, object?[] values)
     {
         if (t_handler is not { } handler || t_quiet > 0)
+            return;
+        var hit = new ScriptBreak(probes, probe, self, values, StackPosition());
+        if (!handler.Stops(hit))
             return;
 
         // While it's held, the editor works on this thread: what it does mustn't draw on the game's random numbers or count
@@ -114,7 +132,7 @@ public static class ScriptProbes
         try
         {
             Interlocked.Increment(ref s_breaks);
-            abort = handler.Break(new ScriptBreak(probes, probe, self, values));
+            abort = handler.Break(hit);
         }
         finally
         {
@@ -126,5 +144,33 @@ public static class ScriptProbes
 
         if (abort)
             throw new ScriptAbortedException();
+    }
+
+    // Where on this thread's stack the caller of Hit is: the address of a local here, a fixed distance below Hit's caller's
+    // frame (both this and Hit are compiled once, fully optimized, and never inlined).
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
+    private static nint StackPosition()
+    {
+        byte here = 0;
+        return Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref here);
+    }
+
+    private static readonly MethodInfo s_hit = typeof(ScriptProbes).GetMethod(nameof(Hit))!;
+
+    /// <summary>
+    /// The methods running on this thread under the line of script that reached a probe, outermost first, ending with the
+    /// one that line is in: for a handler (see <see cref="IScriptBreakHandler"/>) to tell whether a call it saw start is
+    /// still under way. Empty when called other than from a handler.
+    /// </summary>
+    public static MethodBase?[] CallStack()
+    {
+        var frames = new StackTrace(1, false).GetFrames();
+        var at = Array.FindIndex(frames, f => f.GetMethod() == s_hit);
+        if (at < 0)
+            return [];
+        var methods = new MethodBase?[frames.Length - at - 1];
+        for (var i = 0; i < methods.Length; i++)
+            methods[i] = frames[frames.Length - 1 - i].GetMethod();
+        return methods;
     }
 }

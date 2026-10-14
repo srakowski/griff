@@ -106,7 +106,7 @@ build: standalone
 | `caret: <code> [\| before]` | Click in the script to put the caret just after (or before) the first match of `<code>`. |
 | `hover: <code>` | Rest the mouse on `<code>` until its hover info shows. |
 | `codekey: <shortcut>` | Press a shortcut in the script editor, e.g. `codekey: Ctrl+F`, `codekey: Tab`. |
-| `expectstopped: <code>` | Wait (up to 8 seconds) for the game to stop at a breakpoint on the line with that code, e.g. `expectstopped: _cooldown = 1 / FireRate` after `click: code:breakpoint:_cooldown = 1 / FireRate` and firing; `expectstopped: none` for it not to be stopped at one (after `pause` resumes it). |
+| `expectstopped: <code>` | Wait (up to 8 seconds) for the game to stop at a breakpoint (or the end of a step) on the line with that code, e.g. `expectstopped: _cooldown = 1 / FireRate` after `click: code:breakpoint:_cooldown = 1 / FireRate` and firing, or after `click: code:stepover`; `expectstopped: none` for it not to be stopped at one (after `pause` resumes it). |
 | `tune: <Property> = <value>` | Type a value into a property in the script editor's component panel. |
 | `expect: <code>` | Fail unless the script contains `<code>`: checks that what was typed came out as narrated. |
 | `build: standalone` / `build: small` | Game > Build Game (or Build Small Game) and wait for the exe. |
@@ -187,6 +187,7 @@ code), `code:line:12`, `code:breakpoint:Speed * Time` (the strip left of the lin
 clicking it puts a breakpoint there, or takes it off), and while they show, `code:completion`, `code:signature` and
 `code:quickinfo`. While the game is stopped at a breakpoint in the script: `code:paused` (the panel under the code),
 `code:values` (the values in scope), `code:value:this` (a value's row, or `code:value:this.Speed` for one inside
-another), `code:expand:this` (the arrow that opens it) and `code:resume` (the Resume button).
+another), `code:expand:this` (the arrow that opens it), `code:continue` (the Continue button, also `code:resume`), and
+`code:stepover`, `code:stepinto` and `code:stepout` (the step buttons).
 
 Keep a demo to a few minutes: show the change working, the way someone would use it, and say why it matters.

@@ -276,17 +276,56 @@
                     Visibility="Collapsed">
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Height="32" Margin="10,0,6,0">
+                        <Button x:Name="StepOutButton"
+                                Width="Auto"
+                                Padding="8,0"
+                                DockPanel.Dock="Right"
+                                Click="OnStepOutClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Step Out (Shift+F11): run the rest of this method and stop in the one that called it">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.StepOut}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Out" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="Shift+F11" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="StepIntoButton"
+                                Width="Auto"
+                                Padding="8,0"
+                                DockPanel.Dock="Right"
+                                Click="OnStepIntoClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Step Into (F11): stop at the next line of script that runs, inside a method this line calls">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.StepInto}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Into" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F11" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="StepOverButton"
+                                Width="Auto"
+                                Padding="8,0"
+                                DockPanel.Dock="Right"
+                                Click="OnStepOverClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Step Over (F10): run this line and stop at the next one of this method">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.StepOver}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Over" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F10" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="ResumeButton"
                                 Width="Auto"
-                                Padding="10,0"
+                                Padding="8,0"
                                 DockPanel.Dock="Right"
                                 Click="OnResumeClicked"
                                 Style="{StaticResource Style.Button.Toolbar}"
-                                ToolTip="Resume (F6): the script carries on from this line">
+                                ToolTip="Continue (F5 or F6): the script carries on from this line until the next breakpoint">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontSize="11" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Play}" />
-                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Resume" />
-                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F6" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Continue" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F5" />
                             </StackPanel>
                         </Button>
                         <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontSize="12" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Pause}" />

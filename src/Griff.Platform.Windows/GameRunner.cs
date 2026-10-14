@@ -60,6 +60,12 @@ public sealed class GameRunner : IDisposable
     /// </summary>
     public event EventHandler? Ticked;
 
+    /// <summary>
+    /// Raised once a frame the game played is over, its steps taken and its picture built (after each of
+    /// <see cref="Step"/> too): the debugger ends a step there that didn't come to a line of script.
+    /// </summary>
+    public event EventHandler? FrameEnded;
+
     /// <summary>Raised when gameplay code throws. The game pauses so the error can be fixed.</summary>
     public event EventHandler<Exception>? Faulted;
 
@@ -121,6 +127,8 @@ public sealed class GameRunner : IDisposable
     {
         RunSafely(stepOnce: true, 0);
         RenderLatest();
+        if (IsRunning)
+            FrameEnded?.Invoke(this, EventArgs.Empty);
     }
 
     public void Dispose()
@@ -142,6 +150,14 @@ public sealed class GameRunner : IDisposable
     }
 
     private void OnFrame(long shownAt)
+    {
+        var plays = !IsPaused;
+        Frame(shownAt);
+        if (plays && IsRunning)
+            FrameEnded?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Frame(long shownAt)
     {
         // Time a script stood still at a breakpoint isn't time the game owes: it picks up where it stopped.
         if (_heldUntil > _lastShown)

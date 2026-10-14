@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Debugging;
@@ -64,12 +65,14 @@ public sealed partial class Breakpoint : ObservableObject
 }
 
 /// <summary>
-/// The editor's debugger: breakpoints in scripts, and the game stopped at one. Put a breakpoint on a line (F9, or click
-/// beside the line number) and the game pauses when a script gets there, in the middle of its frame, with the script open
-/// at that line and the values in scope (its variables and the object it runs on) to look into. Resume (F6) carries on
-/// from that line; Stop or rewinding leave the frame. The editor builds scripts with a probe on every line, so a
-/// breakpoint takes effect at once, even while the game runs, and costs nothing until the game reaches it: a line without
-/// one only reads a switch that's off, and an exported game has no probes at all. Breakpoints are kept with the project.
+/// The editor's debugger: breakpoints in scripts, the game stopped at one, and stepping on from there. Put a breakpoint on
+/// a line (F9, or click beside the line number) and the game pauses when a script gets there, in the middle of its frame,
+/// with the script open at that line and the values in scope (its variables and the object it runs on) to look into.
+/// Continue (F5 or F6) carries on from that line; Step Over (F10), Step Into (F11) and Step Out (Shift+F11) go on a line
+/// at a time (see <see cref="StepOver"/>); Stop or rewinding leave the frame. The editor builds scripts with a probe on
+/// every line, so a breakpoint takes effect at once, even while the game runs, and costs nothing until the game reaches
+/// it: a line without one only reads a switch that's off, and an exported game has no probes at all. Breakpoints are kept
+/// with the project.
 /// </summary>
 public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposable
 {
@@ -82,15 +85,22 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     private readonly ObservableCollection<Breakpoint> _breakpoints = [];
     private readonly Dictionary<ScriptDocument, Tracker> _trackers = [];
     private readonly HashSet<ScriptProbe> _armed = [];
+    private readonly HashSet<int> _armedIds = [];
     private ProbeTable? _armedIn;
     private Paused? _paused;
     private bool _loading;
 
-    // Where the game stands at a breakpoint: the probe it stopped at (in the build it's in), the line as the script reads
-    // now, and the values in scope.
-    // Where the game stands at a breakpoint: the probe it stopped at, the script's text as the build it's in has it (the
-    // scripts may be built again while it stands there), the line as the script reads now, and the values in scope.
-    private sealed record Paused(ScriptProbe Probe, string? Built, string Path, string Script, int Line, IReadOnlyList<DebugValue> Values);
+    // A step under way (see Step): what decides where it ends, the game it's in, and what's waiting for it to end.
+    private ScriptStep? _step;
+    private GameRunner? _stepRunner;
+    private TaskCompletionSource? _stepDone;
+
+    // Where the game stands at a breakpoint (or the line a step ended at): the probe it stopped at, the script's text as
+    // the build it's in has it (the scripts may be built again while it stands there), the line as the script reads now,
+    // the values in scope, and for stepping on from there, where on the stack it ran, the methods under it and its game;
+    // `By` is what stopped it ("a breakpoint", "Step Over"), and `Stepped` whether a step brought it there.
+    private sealed record Paused(ScriptProbe Probe, string? Built, string Path, string Script, int Line, IReadOnlyList<DebugValue> Values,
+        nint Stack, MethodBase?[] Callers, GameRunner Runner, string By, bool Stepped);
 
     public Debugger(IWorkspace workspace, PlayMode play, ScriptEditors editors, ISettingsStore settings, IStatusService status, ILogger<Debugger> logger)
     {
@@ -104,6 +114,13 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
         ScriptProbes.Handler = this;
         workspace.ScriptsReloaded += (_, _) => Arm();
+        play.Stopped += (_, _) => EndStep();
+        // Once the game plays on after a step ran to the end of a frame, that's over too.
+        play.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayMode.IsPaused) && StepEnded is not null && (!play.IsPaused || !play.IsPlaying))
+                SetStepEnded(null, null);
+        };
         workspace.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(IWorkspace.Project))
@@ -124,14 +141,47 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
             SaveNow();
         }
 
+        EndStep();
         Disarm();
     }
 
     /// <summary>Every breakpoint in the project's scripts, by script and line.</summary>
     public ReadOnlyObservableCollection<Breakpoint> Breakpoints { get; }
 
-    /// <summary>True while the game stands at a breakpoint: paused mid-frame, at <see cref="Location"/>.</summary>
+    /// <summary>True while the game stands at a breakpoint, or the line a step ended at: paused mid-frame, at <see cref="Location"/>.</summary>
     public bool IsPaused => _paused is not null;
+
+    /// <summary>
+    /// What stopped the game where it stands: "a breakpoint", or the step that ended there ("Step Over", "Step Into",
+    /// "Step Out"). Null unless <see cref="IsPaused"/>.
+    /// </summary>
+    public string? StoppedBy => _paused?.By;
+
+    /// <summary>True while it stands where a step took it (rather than where it first stopped).</summary>
+    public bool StoppedByStep => _paused?.Stepped == true;
+
+    /// <summary>How many times the game has stopped at a line so far (at a breakpoint or at the end of a step).</summary>
+    public int Stops { get; private set; }
+
+    /// <summary>
+    /// How the last step that didn't end at a line went (it ran to the end of the frame, which stays paused); null once
+    /// the game stops at a line again.
+    /// </summary>
+    public string? StepEnded { get; private set; }
+
+    /// <summary>The script a step that ran to the end of the frame left from (its full path), while <see cref="StepEnded"/> stands.</summary>
+    internal string? StepEndedIn { get; private set; }
+
+    // What an agent can do from where the game stopped.
+    internal const string WhatNext = "ui_inspect Debugger (Values[name].Members) looks deeper; Debug_StepOver, Debug_StepInto and Debug_StepOut " +
+        "go on a line at a time, Debug_Continue (or Game_Pause) carries on.";
+
+    // "the game stopped at a breakpoint" or "Step Over stopped at": with where, and the values in scope.
+    internal string StoppedText() =>
+        (StoppedBy is null or "a breakpoint" ? "Stopped at a breakpoint. " : $"{StoppedBy} stopped. ") + ValuesText + WhatNext;
+
+    /// <summary>True while a step is under way (the game runs on to the line it ends at).</summary>
+    public bool IsStepping => _step is not null;
 
     /// <summary>Where the game stopped: "Scripts/Player.cs line 12, in Player.Update". Null unless <see cref="IsPaused"/>.</summary>
     public string? Location => _paused is { } p ? $"{p.Script} line {p.Line}, in {p.Probe.Where}" : null;
@@ -263,10 +313,167 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         return true;
     }
 
+    /// <summary>
+    /// Lets the game carry on from where it's stopped (a line, or paused between frames after a step), until it reaches a
+    /// breakpoint again: Resume (F6). False if it isn't paused.
+    /// </summary>
+    public bool Continue()
+    {
+        if (!_play.IsPlaying || !_play.IsPaused)
+            return false;
+        _play.TogglePause();
+        return true;
+    }
+
+    /// <summary>
+    /// Runs the line the game is stopped at and stops at the next line of the same method, without stopping in what the
+    /// line calls (unless a breakpoint is there). At the method's end it goes on to the next line of the script that
+    /// called it; a method Griff called (Update, say) returns into Griff, and the step goes on to the next line of script
+    /// that runs, in any script, or if none does before the frame ends, pauses there, after the frame. The task finishes
+    /// as the step does.
+    /// </summary>
+    public Task StepOver() => Step(StepKind.Over);
+
+    /// <summary>
+    /// Stops at the next line of script that runs: into a method of a script the line calls (this script's or another's),
+    /// and through what Griff does in between to a script it calls (a spawned thing's Start, say). A call into Griff that
+    /// runs no script is stepped over. Paused between frames (after a step ran to the end of one, or with Pause), it plays
+    /// the next frame up to the first line of script it runs. The task finishes as the step does.
+    /// </summary>
+    public Task StepInto() => Step(StepKind.Into);
+
+    /// <summary>
+    /// Runs the rest of the method the game is stopped in and stops at the next line of the one that called it. A method
+    /// Griff called returns into Griff: the step goes on to the next line of script that runs, or pauses after the frame
+    /// if none does. The task finishes as the step does.
+    /// </summary>
+    public Task StepOut() => Step(StepKind.Out);
+
+    /// <summary>Whether a step can start: the game stands at a line (or, for Step Into, is paused between frames).</summary>
+    public bool CanStep(StepKind kind) =>
+        _step is null && _play.IsPlaying && (_play.IsAtBreakpoint ? _paused is not null : kind == StepKind.Into && _play.IsPaused);
+
+    private Task Step(StepKind kind)
+    {
+        if (!CanStep(kind))
+            return Task.CompletedTask;
+        var table = _workspace.ScriptProbes;
+        if (_play.IsAtBreakpoint && _paused is { } paused)
+        {
+            var done = Begin(new ScriptStep(kind, paused.Probe, paused.Stack, paused.Callers), paused.Runner, table);
+            _play.StepOn();
+            return done;
+        }
+
+        // Between frames: the next frame, up to the first line of script it runs. It's played once this returns, so a command
+        // stepping is over (and can step again) when the game stops at that line rather than once it carries on from it.
+        if (_play.Runner is not { } runner)
+            return Task.CompletedTask;
+        var step = new ScriptStep(StepKind.Into, null, 0, []);
+        var next = Begin(step, runner, table);
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, () =>
+        {
+            if (_step != step)
+                return;
+            if (_play.Runner == runner && _play.IsPaused && !_play.IsAtBreakpoint)
+                _play.Step();
+            if (_step == step)
+                EndStep();
+        });
+        return next;
+    }
+
+    // Every line's switch on, so each can say whether the step ends there.
+    private Task Begin(ScriptStep step, GameRunner runner, ProbeTable table)
+    {
+        _step = step;
+        _stepRunner = runner;
+        _stepDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        SetStepEnded(null, null);
+        var done = _stepDone.Task;
+        table.SetAll(true);
+        ScriptProbes.Armed = true;
+        runner.FrameEnded += OnStepFrameEnded;
+        OnPropertyChanged(nameof(IsStepping));
+        return done;
+    }
+
+    // The step is over (it stopped at a line, or ran out of frame): only breakpoints' switches stay on.
+    private void EndStep()
+    {
+        if (_step is null)
+            return;
+        _step = null;
+        if (_stepRunner is { } runner)
+            runner.FrameEnded -= OnStepFrameEnded;
+        _stepRunner = null;
+        var table = _workspace.ScriptProbes;
+        table.SetAll(false);
+        if (_armedIn == table)
+        {
+            foreach (var probe in _armed)
+                table.Set(probe, true);
+        }
+        else
+        {
+            Arm();
+        }
+
+        ScriptProbes.Armed = _armed.Count > 0;
+        var done = _stepDone;
+        _stepDone = null;
+        OnPropertyChanged(nameof(IsStepping));
+        done?.TrySetResult();
+    }
+
+    // The frame ended with the step under way: no line of script ran after where it started. The game stays paused there.
+    private void OnStepFrameEnded(object? sender, EventArgs e)
+    {
+        if (_step is not { } step)
+            return;
+        var message = step.From is null
+            ? "No script ran a line in that frame: paused after it"
+            : $"{Name(step.Kind)} ran to the end of the frame without reaching another line of script: paused after it. Step Into (F11) plays on to the next line that runs";
+        _logger.LogInformation("{Message}", message);
+        var from = step.From is { } line ? Path.GetFullPath(line.Path) : null;
+        EndStep();
+        _play.PausedAfterStep(message);
+        SetStepEnded(message, from);
+    }
+
+    private void SetStepEnded(string? message, string? path)
+    {
+        if (StepEnded == message && StepEndedIn == path)
+            return;
+        (StepEnded, StepEndedIn) = (message, path);
+        OnPropertyChanged(nameof(StepEnded));
+        PausedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static string Name(StepKind kind) => kind switch
+    {
+        StepKind.Over => "Step Over",
+        StepKind.Out => "Step Out",
+        _ => "Step Into",
+    };
+
     /// <summary>The breakpoints in the script at <paramref name="path"/> (its full path).</summary>
     internal IEnumerable<Breakpoint> In(string path) => _breakpoints.Where(b => Same(b.Path, path));
 
     // ----- Stopping -----
+
+    // While a step is under way every line comes here first: a breakpoint stops it as it would the game, and otherwise the
+    // step says whether it ends there.
+    bool IScriptBreakHandler.Stops(in ScriptBreak hit)
+    {
+        if (_step is not { } step)
+            return true;
+        if (_armedIds.Contains(hit.Probe) && hit.Probes == _armedIn?.Switches)
+            return true;
+        if (GameRunner.Running != _stepRunner || hit.Probes != _workspace.ScriptProbes.Switches || _workspace.ScriptProbes[hit.Probe] is not { } probe)
+            return false;
+        return step.EndsAt(probe, hit.Stack, ScriptProbes.CallStack);
+    }
 
     bool IScriptBreakHandler.Break(in ScriptBreak hit)
     {
@@ -288,14 +495,20 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         for (var i = 0; i < probe.Names.Count && i < hit.Values.Length; i++)
             values.Add(new DebugValue(probe.Names[i], hit.Values[i], null, isScript));
 
-        _paused = new Paused(probe, built, path, RelativePath(path), line, values);
+        // A step ends here, or at a breakpoint on its way.
+        var by = _step is { } step && !_armedIds.Contains(hit.Probe) ? Name(step.Kind) : "a breakpoint";
+        _paused = new Paused(probe, built, path, RelativePath(path), line, values, hit.Stack, ScriptProbes.CallStack(), runner,
+            by, _step is not null);
+        Stops++;
+        (StepEnded, StepEndedIn) = (null, null);
+        EndStep();
         RaisePaused();
         _editors.Open(path, line);
         _logger.LogInformation("Stopped at {Script} line {Line} in {Where}", RelativePath(path), line, probe.Where);
         bool abandoned;
         try
         {
-            abandoned = _play.HoldAtBreakpoint(runner, $"{RelativePath(path)} line {line}, in {probe.Where}");
+            abandoned = _play.HoldAtBreakpoint(runner, $"{RelativePath(path)} line {line}, in {probe.Where}", by == "a breakpoint" ? null : by);
         }
         finally
         {
@@ -316,6 +529,8 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         OnPropertyChanged(nameof(PausedScript));
         OnPropertyChanged(nameof(PausedLine));
         OnPropertyChanged(nameof(PausedIn));
+        OnPropertyChanged(nameof(StoppedBy));
+        OnPropertyChanged(nameof(StoppedByStep));
         OnPropertyChanged(nameof(Values));
         OnPropertyChanged(nameof(ValuesText));
         PausedChanged?.Invoke(this, EventArgs.Empty);
@@ -356,7 +571,9 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
         foreach (var probe in _armed.Except(wanted).ToList())
         {
-            table.Set(probe, false);
+            // While a step is under way every switch stays on until it ends.
+            if (_step is null)
+                table.Set(probe, false);
             _armed.Remove(probe);
         }
 
@@ -367,7 +584,10 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         }
 
         _armedIn = table;
-        ScriptProbes.Armed = _armed.Count > 0;
+        _armedIds.Clear();
+        foreach (var probe in _armed)
+            _armedIds.Add(probe.Id);
+        ScriptProbes.Armed = _armed.Count > 0 || _step is not null;
     }
 
     private void Disarm()
@@ -375,6 +595,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         foreach (var probe in _armed)
             _armedIn?.Set(probe, false);
         _armed.Clear();
+        _armedIds.Clear();
         ScriptProbes.Armed = false;
     }
 

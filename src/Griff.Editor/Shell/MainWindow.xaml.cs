@@ -42,24 +42,38 @@ public partial class MainWindow : ChromeWindow
         StartHost.Content = startPage;
         play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
         play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;
-        // A breakpoint shows its script; resuming goes back to the game, if that's what was showing.
+        // A breakpoint shows its script; carrying on (after any steps) goes back to the game, if that's what was showing.
         var gameBeforeBreak = false;
+        void BackToGame()
+        {
+            if (gameBeforeBreak && play.IsPlaying && !play.IsPaused && !debugger.IsPaused)
+            {
+                gameBeforeBreak = false;
+                DocumentTabs.SelectedItem = GameTab;
+            }
+        }
+
         debugger.PausedChanged += (_, _) =>
         {
-            if (debugger.IsPaused)
+            if (debugger.IsPaused && !debugger.StoppedByStep)
                 gameBeforeBreak = DocumentTabs.SelectedItem == GameTab;
-            else if (gameBeforeBreak && play.IsPlaying && !play.IsPaused)
-                DocumentTabs.SelectedItem = GameTab;
+            BackToGame();
+        };
+        play.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayMode.IsPaused))
+                BackToGame();
         };
         prefabTabs.Attach(DocumentTabs, SceneTab, sceneView);
         scriptTabs.Attach(DocumentTabs);
 
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);
-        foreach (var command in commands.All)
+        // Commands can share a shortcut when only one can run at a time (F10 steps a frame, or a line at a breakpoint).
+        foreach (var shared in commands.All.Where(c => c.Gesture is not null).GroupBy(c => (c.Gesture!.Key, c.Gesture.Modifiers)))
         {
-            if (command.Gesture is { } gesture)
-                InputBindings.Add(new KeyBinding(command, gesture));
+            var list = shared.ToList();
+            InputBindings.Add(new KeyBinding(list.Count == 1 ? list[0] : new FirstThatCanRun(list), list[0].Gesture!));
         }
 
         panelHost.Attach(this, DockRoot, DocumentArea);
@@ -79,4 +93,18 @@ public partial class MainWindow : ChromeWindow
             _ = Dispatcher.InvokeAsync(Close);
         }
     }
+}
+
+// The commands sharing a shortcut: it runs the first of them that can run now.
+internal sealed class FirstThatCanRun(IReadOnlyList<EditorCommand> commands) : ICommand
+{
+    public event EventHandler? CanExecuteChanged
+    {
+        add => CommandManager.RequerySuggested += value;
+        remove => CommandManager.RequerySuggested -= value;
+    }
+
+    public bool CanExecute(object? parameter) => commands.Any(c => ((ICommand)c).CanExecute(parameter));
+
+    public void Execute(object? parameter) => ((ICommand?)commands.FirstOrDefault(c => ((ICommand)c).CanExecute(parameter)))?.Execute(parameter);
 }

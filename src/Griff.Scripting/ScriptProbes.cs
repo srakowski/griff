@@ -7,7 +7,20 @@ namespace Griff.Scripting;
 /// <see cref="ProbeTable"/>, the script and line (as compiled), the member it's in ("Player.Update"), and the variables in
 /// scope there, named in the order the probe passes their values (and whether it passes the object it runs on, "this").
 /// </summary>
-public sealed record ScriptProbe(int Id, string Path, int Line, string Where, IReadOnlyList<string> Names, bool HasThis);
+public sealed record ScriptProbe(int Id, string Path, int Line, string Where, IReadOnlyList<string> Names, bool HasThis)
+{
+    /// <summary>
+    /// The method, accessor, lambda or local function the line is in, as where it starts in the script as built (-1 for
+    /// none): lines with the same <see cref="Path"/> and Function are in the same one.
+    /// </summary>
+    public int Function { get; init; } = -1;
+
+    /// <summary>The first line its function runs each time it's called: reaching it means a new call has begun.</summary>
+    public bool Entry { get; init; }
+
+    /// <summary>Whether <paramref name="other"/> is a line of the same method (or lambda, or local function).</summary>
+    public bool InSameFunction(ScriptProbe other) => Function >= 0 && Function == other.Function && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>
 /// The probes of one build of the scripts (see <see cref="ScriptInstrumenter"/>), and the switches that turn each on: a
@@ -72,6 +85,13 @@ public sealed class ProbeTable
     public void Set(ScriptProbe probe, bool on)
     {
         if (_switches.TryGetValue(probe.Id, out var field))
+            field.SetValue(null, on);
+    }
+
+    /// <summary>Turns every switch on (while the debugger steps, so every line can say whether the step ends there), or off.</summary>
+    public void SetAll(bool on)
+    {
+        foreach (var field in _switches.Values)
             field.SetValue(null, on);
     }
 

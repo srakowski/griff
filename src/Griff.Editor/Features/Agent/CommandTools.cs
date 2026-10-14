@@ -99,6 +99,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         var dispatcher = Application.Current.Dispatcher;
         var choice = args.OptionalString("choice");
         // A command that runs the game into a breakpoint (Step Frame, say) is still going while it's stopped there: it says so then.
+        var stops = debugger.Stops;
         var stopped = new TaskCompletionSource();
         void OnStopped(object? sender, EventArgs e) => stopped.TrySetResult();
         play.BreakpointReached += OnStopped;
@@ -115,10 +116,15 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
         var finished = first == run;
         var text = new StringBuilder();
-        if (!finished && debugger.IsPaused)
+        // It ran the game to a line where it stopped (a breakpoint, or the end of a step): where, and what's in scope.
+        if (debugger.IsPaused && (!finished || debugger.Stops != stops))
         {
-            text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')}: the game stopped at a breakpoint. ").Append(debugger.ValuesText)
-                .Append("ui_inspect Debugger (Values[name].Members) looks deeper; Game_Pause resumes from there.");
+            if (finished)
+                await run;
+            // A step says what it was itself ("Step Over stopped."); anything else says what ran into it.
+            if (debugger.StoppedBy != command.DisplayText.TrimEnd('.'))
+                text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')}: ");
+            text.Append(debugger.StoppedText());
             return ToolResult.Ok(text.ToString());
         }
 
@@ -133,6 +139,9 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
         await run; // Rethrows what it threw, e.g. a question it needs answered.
         text.Append(CultureInfo.InvariantCulture, $"Done: {command.DisplayText.TrimEnd('.')}.");
+        // A step that ran to the end of the frame.
+        if (debugger.StepEnded is { } ended && command is StepOverCommand or StepIntoCommand or StepOutCommand)
+            text.Append(' ').Append(ended).Append('.');
         var after = workspace.Scene?.History.UndoDescription;
         if (after is not null && after != before)
             text.Append(CultureInfo.InvariantCulture, $" Undo: \"{after}\".");
@@ -148,7 +157,9 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
     private string WhyNot(EditorCommand command) =>
         command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
-        : play.IsAtBreakpoint ? " (the game is stopped at a breakpoint, in the middle of a frame: Game_Pause resumes it)"
+        : play.IsAtBreakpoint ? " (the game is stopped at a line of script, in the middle of a frame: Debug_Continue or Game_Pause carries on, Debug_StepOver, Debug_StepInto and Debug_StepOut step)"
+        : command is StepOverCommand or StepOutCommand ? " (the game isn't stopped at a line of script: set a breakpoint with ui_invoke Debugger SetBreakpoint and run the game to it; paused between frames, Debug_StepInto plays to the next line)"
+        : command is StepIntoCommand or ContinueCommand ? " (the game isn't stopped at a line of script or paused)"
         : workspace.Project is null ? " (no project is open)"
         : workspace.Scene is null ? " (no scene is open)"
         : selection.Entity is null ? " (perhaps it needs an entity selected: pass \"entity\")"

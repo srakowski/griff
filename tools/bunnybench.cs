@@ -12,7 +12,8 @@
 //   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline]
 // --steps 2 takes two steps every frame, as a frame after a missed one does; --no-draw leaves OpenGL out; --by-step
 // also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first; --timeline keeps
-// rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind.
+// rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind (the settling
+// that follows each, on another thread, is reported after).
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
@@ -71,7 +72,7 @@ try
     var byStep = args.Contains("--by-step") ? TimeEachStep(game) : null;
 
     // --timeline keeps rewind snapshots as the editor does while playing, timing them apart from the rest of the step.
-    var timeline = rewind ? new Timeline(new Griff.Scenes.Serialization.SceneSerializer(loaded.Components)) { CostPerStep = TimeSpan.FromMilliseconds(0.1) } : null;
+    var timeline = rewind ? new Timeline(new Griff.Scenes.Serialization.SceneSerializer(loaded.Components)) { CostPerStep = TimeSpan.FromMilliseconds(0.5) } : null;
     var recordTimes = new double[frames];
     var recording = -1;
     if (timeline is not null)
@@ -127,7 +128,8 @@ try
     Console.WriteLine($"  GCs: {GC.CollectionCount(0) - collections.Item1} gen0, {GC.CollectionCount(1) - collections.Item2} gen1, " +
                       $"{GC.CollectionCount(2) - collections.Item3} gen2; {allocated / (double)frames:N0} bytes allocated a frame");
     if (timeline is not null)
-        Console.WriteLine($"  Rewind: {timeline.Count} snapshots kept, one every {timeline.Spacing} steps, {timeline.Bytes / 1e6:N0} MB ({GC.GetTotalMemory(true) / 1e6:N0} MB held in all)");
+        Console.WriteLine($"  Rewind: {timeline.Count} snapshots kept, one every {timeline.Spacing} steps, {timeline.Bytes / 1e6:N0} MB ({GC.GetTotalMemory(true) / 1e6:N0} MB held in all); " +
+                          $"each takes {timeline.CaptureTime.TotalMilliseconds:0.00} ms to copy out, then {timeline.SettleTime.TotalMilliseconds:0.00} ms to settle on another thread");
     if (byStep is not null)
     {
         foreach (var (name, ms) in byStep.OrderByDescending(s => s.Value).Take(10))

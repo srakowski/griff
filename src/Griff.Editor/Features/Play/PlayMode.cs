@@ -170,8 +170,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _selection.Select(copy.Find(id));
 
         Surface.AssetRoot = project.AssetsPath;
-        // A big scene is snapshotted less often: on average, a tenth of a millisecond a step at most.
-        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.1) };
+        // A big scene is snapshotted less often: copying one out costs a step half a millisecond on average at most (a
+        // Debug editor copies 20,000 BunnyMark bunnies out in under 3 ms, so ten times a second).
+        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5) };
         _timeline.Record(copy, 0, force: true);
         _position = 0;
         _sceneName = edit.Name;

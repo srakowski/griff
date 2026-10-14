@@ -1,5 +1,5 @@
 title: Big scenes in the editor
-intro: Twenty thousand things playing in the editor, smoothly, with rewind and live panels.
+intro: Twenty thousand things playing in the editor, smoothly, recorded for rewind ten times a second, with live panels.
 project: BunnyMark | Big Scene
 
 chapter: Twenty thousand bunnies | Played right in the editor
@@ -12,16 +12,16 @@ wait: 2
 explain: panel:Hierarchy | All twenty thousand | The Hierarchy fills at once. It only makes the rows you can see, and it catches up with the game ten times a second rather than every frame.
 select: Bunny
 explain: panel:Inspector | Live values | Pick one, and the Inspector shows its values changing as it bounces.
-explain: game | Smooth | The game keeps its frame rate. Recording for rewind used to stall a scene this big every few frames, and fill the memory.
+explain: game | Smooth | The game keeps its frame rate while it records for rewind. Between two steps it copies the bunnies out, which is quick, and it works out what changed on another thread.
 wait: 3
 explain: game | Timed | BunnyMark times every frame while it holds them, and shows the frame rate, its one percent low and the garbage collections along the bottom.
 
 chapter: Rewind a big scene | The recording keeps up
 pause
-explain: rewind | The Rewind bar | Griff has been recording all along. Each snapshot is a compact copy of the scene, and anything that hasn't changed since the last one is kept just once.
+explain: rewind | The Rewind bar | Griff has been recording all along, ten times a second, even with twenty thousand bunnies. Each snapshot keeps just the bytes that changed since the one before, so a bunny takes a few dozen bytes.
 rewind: 0.2
-explain: game | Back in time | The bunnies are back where they were. A big scene is recorded less often, so the recording fits in memory and the game stays smooth.
+explain: game | Back in time | The bunnies are back where they were. Only a scene too big for the recording to fit in memory is recorded less often.
 pause
 wait: 2
 stop
-say: Small scenes are still recorded ten times a second, and a script can check how it all goes: BunnyBench, in the tools folder, times the recording too.
+say: Every tenth snapshot is kept whole, so rewinding never has far to go. And a script can check how it all goes: BunnyBench, in the tools folder, times the recording too.

@@ -204,10 +204,12 @@ public class TimelineTests
         scene.Add(ball, scene.Roots[500]);
         var timeline = new Timeline(_serializer, framesPerSnapshot: 1);
         timeline.Record(scene, 0);
+        timeline.Complete();
         var first = timeline.Bytes;
 
         ball.Transform.Position = new Vector3(0, 1, 0);
         timeline.Record(scene, 1);
+        timeline.Complete();
 
         // The second adds the ball's record and a list of where the rest are: far less than the first.
         Assert.True(timeline.Bytes - first < first / 2, $"{first} bytes, then {timeline.Bytes - first}");
@@ -256,7 +258,7 @@ public class TimelineTests
         var scene = new Scene();
         for (var i = 0; i < 500; i++)
             scene.Add(new Entity($"Thing {i}"));
-        const long budget = 1_000_000;
+        const long budget = 200_000;
         var timeline = new Timeline(_serializer, capacity: 100, framesPerSnapshot: 2) { MemoryBudget = budget };
 
         for (var step = 0; step < 600; step++)
@@ -268,13 +270,135 @@ public class TimelineTests
             Assert.True(timeline.Bytes <= budget || timeline.Count == 1);
         }
 
-        // A snapshot of 500 entities takes well over 10,000 bytes, so 100 of them can't fit: they're further apart, and
-        // the timeline still reaches back about as far as 100 snapshots two steps apart would.
+        // A snapshot of 500 entities takes a few thousand bytes (each keeps the bytes of its position that changed, and
+        // every tenth all of each), so 100 of them can't fit: they're further apart, and the timeline still reaches back
+        // about as far as 100 snapshots two steps apart would.
         Assert.True(timeline.Spacing > 2);
         Assert.True(timeline.Count < 100);
         var times = timeline.Times.ToList();
         Assert.Equal(timeline.Spacing, times[^1] - times[^2]);
         Assert.InRange(times[^1] - times[0], 160, 220);
+    }
+
+    // ----- Copied out at once, settled on another thread -----
+
+    private static Scene Crowd(int count, List<string> lines)
+    {
+        var scene = new Scene();
+        for (var i = 0; i < count; i++)
+        {
+            var thing = new Entity($"Thing {i}");
+            thing.Transform.Position = new Vector3(i, 0, 0);
+            var sprite = thing.AddComponent<Sprite>();
+            sprite.Image = $"Sprites/{i % 7}.png";
+            sprite.Tint = new Color(0.5f, i % 3 * 0.25f, 1);
+            if (i % 100 == 0)
+                thing.AddComponent<Dialogue>().Lines = lines;
+            scene.Add(thing, i % 10 == 9 ? scene.Roots[^1] : null);
+        }
+
+        return scene;
+    }
+
+    [Fact]
+    public void A_snapshot_holds_the_scene_as_it_was_taken_while_it_changes_as_the_snapshot_settles()
+    {
+        // A list a script set and goes on changing in place, as well as everything else changing.
+        var lines = new List<string> { "Hello!", "Bye." };
+        var scene = Crowd(3000, lines);
+        var timeline = new Timeline(_serializer, framesPerSnapshot: 1);
+        var files = new List<string>();
+        for (var step = 0; step < 4; step++)
+        {
+            files.Add(AsFileLoads(scene));
+            timeline.Record(scene, step);
+            Assert.Equal(step + 1, timeline.Count);
+
+            // Straight after it's taken, before it can have settled.
+            foreach (var thing in scene.Entities.ToList())
+            {
+                thing.Transform.Position += new Vector3(0, 1, 0);
+                if (thing.GetComponent<Sprite>() is { } sprite)
+                    sprite.Image = $"Sprites/moved {step}.png";
+            }
+
+            lines.Add($"Line {step}");
+            lines[0] = $"Changed {step}";
+            scene.Remove(scene.Roots[step]);
+            scene.Add(new Entity($"New {step}"), index: 0);
+        }
+
+        for (var i = 0; i < 4; i++)
+            Assert.Equal(files[i], _serializer.SaveToString(timeline.Restore(i)));
+    }
+
+    [Fact]
+    public void Snapshots_keep_what_changed_and_restore_from_the_last_whole_one_through_comings_goings_and_drops()
+    {
+        var lines = new List<string> { "Hello!" };
+        var scene = Crowd(400, lines);
+        var timeline = new Timeline(_serializer, capacity: 25, framesPerSnapshot: 1);
+        var files = new List<string>();
+        var sizes = new List<long>();
+        for (var step = 0; step < 60; step++)
+        {
+            // Most move a little; some are renamed (their strings change), come, go, or swap places.
+            var roots = scene.Roots;
+            foreach (var thing in roots)
+                thing.Transform.Position += new Vector3(0.1f, 0, 0);
+            roots[step % roots.Count].Name = $"Renamed {step}";
+            if (step % 7 == 3)
+                scene.Remove(roots[step % roots.Count]);
+            if (step % 5 == 1)
+                scene.Add(new Entity($"Spawned {step}"), index: step % 50);
+            if (step % 11 == 2)
+            {
+                var moved = scene.Roots[^1];
+                scene.Remove(moved);
+                scene.Add(moved, index: 3);
+            }
+
+            var bytes = timeline.Bytes;
+            timeline.Record(scene, step);
+            timeline.Complete();
+            sizes.Add(timeline.Bytes - bytes);
+            files.Add(AsFileLoads(scene));
+        }
+
+        Assert.Equal(25, timeline.Count);
+        for (var i = 0; i < 25; i++)
+            Assert.Equal(files[35 + i], _serializer.SaveToString(timeline.Restore(i)));
+
+        // A snapshot of things that moved keeps the bytes of their positions that changed: far less than a whole one.
+        Assert.True(sizes[1] * 4 < sizes[0], $"whole {sizes[0]} bytes, then {sizes[1]}");
+        Assert.True(timeline.Bytes < sizes[0] * 25 / 2, $"{timeline.Bytes} bytes kept");
+    }
+
+    [Fact]
+    public void Truncating_while_a_snapshot_settles_keeps_it_and_the_new_future_restores_as_the_file_would()
+    {
+        var scene = Crowd(2000, ["Hi"]);
+        var timeline = new Timeline(_serializer, framesPerSnapshot: 1);
+        var files = new List<string>();
+        for (var step = 0; step < 3; step++)
+        {
+            foreach (var thing in scene.Roots)
+                thing.Transform.Position += Vector3.UnitY;
+            files.Add(AsFileLoads(scene));
+            timeline.Record(scene, step);
+        }
+
+        // Rewound to the one still settling, and to one before it, then resumed.
+        Assert.Equal(files[2], _serializer.SaveToString(timeline.Restore(2)));
+        timeline.TruncateAfter(1);
+        Assert.Equal(2, timeline.Count);
+        scene = timeline.Restore(1);
+        foreach (var thing in scene.Roots)
+            thing.Transform.Position += Vector3.UnitX;
+        timeline.Record(scene, 10);
+        Assert.Equal(AsFileLoads(scene), _serializer.SaveToString(timeline.Restore(2)));
+        Assert.Equal(files[0], _serializer.SaveToString(timeline.Restore(0)));
+        Assert.Equal(files[1], _serializer.SaveToString(timeline.Restore(1)));
     }
 
     [ComponentName("Test.Swapped")]

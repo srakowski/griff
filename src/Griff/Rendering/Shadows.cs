@@ -37,8 +37,8 @@ public readonly record struct ShadowEdge(Vector2 A, Vector2 B, object? Owner = n
 }
 
 /// <summary>
-/// What blocks the light of a <see cref="Light"/> with <see cref="Light.Shadows"/> on: solid tiles (slopes included) and
-/// solid colliders. Triggers, one-way platforms, background, ladder and one-way tiles let light through.
+/// What blocks the light of a <see cref="Light"/> with <see cref="Light.Shadows"/> on: solid tiles (slopes included, and
+/// hex maps' hexagons) and solid colliders. Triggers, one-way platforms, background, ladder and one-way tiles let light through.
 /// </summary>
 public static class Shadows
 {
@@ -54,6 +54,8 @@ public static class Shadows
             // Isometric maps don't block light yet.
             if (entity.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Square } tilemap)
                 AddTiles(edges, tilemap);
+            else if (entity.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Hex } hex)
+                AddHexTiles(edges, hex);
             foreach (var collider in entity.GetComponents<Collider>())
             {
                 if (collider.IsTrigger || collider is BoxCollider { OneWay: true })
@@ -189,6 +191,27 @@ public static class Shadows
             var to = -MathF.Tau * (i + 1) / CircleSides;
             Add(edges, circle.Center + new Vector2(MathF.Cos(from), MathF.Sin(from)) * circle.Radius,
                 circle.Center + new Vector2(MathF.Cos(to), MathF.Sin(to)) * circle.Radius, owner);
+        }
+    }
+
+    // Each solid hexagon's sides that face open space. A cell's outline runs clockwise from its top left corner, and its
+    // side from corner i to corner i + 1 is the one it shares with neighbor i.
+    private static void AddHexTiles(List<ShadowEdge> edges, Tilemap tilemap)
+    {
+        var world = tilemap.Entity!.Transform.WorldMatrix;
+        foreach (var (x, y, _) in tilemap.Cells())
+        {
+            if (!tilemap.IsBlocked(x, y))
+                continue;
+            var corners = tilemap.OutlineOf(x, y, x, y);
+            var cell = new TileCell(tilemap, x, y);
+            var i = 0;
+            foreach (var (nx, ny) in tilemap.Neighbors(x, y))
+            {
+                if (!tilemap.IsBlocked(nx, ny))
+                    Add(edges, Vector2.Transform(corners[i], world), Vector2.Transform(corners[(i + 1) % corners.Length], world), cell);
+                i++;
+            }
         }
     }
 

@@ -13,7 +13,8 @@ public readonly record struct RaycastHit(Entity Entity, Vector2 Point, Vector2 N
 /// Simple, predictable 2D physics for jam games. Bodies move one axis at a time and are pushed out of
 /// solid colliders and solid tilemaps, which gives tight platformer and top-down movement without tunnelling
 /// at normal speeds. Boxes and circles collide with each other in any combination. On an isometric tilemap a body
-/// stands on the diamond under its collider and slides along the solid diamonds' edges (see <see cref="IsometricShapes"/>).
+/// stands on the diamond under its collider and slides along the solid diamonds' edges (see <see cref="IsometricShapes"/>);
+/// on a hex tilemap its collider meets the solid hexagons' six sides and slides along them (see <see cref="HexShapes"/>).
 /// </summary>
 public sealed partial class Physics
 {
@@ -84,8 +85,8 @@ public sealed partial class Physics
 
     /// <summary>
     /// Like <see cref="BoundsOf(Tilemap)"/>, also saying which runs are one-way platforms. Empty unless the map is
-    /// <see cref="Tilemap.Solid"/> and square (an isometric map's are diamonds: see <see cref="IsometricShapes"/>; hex maps
-    /// don't collide yet);
+    /// <see cref="Tilemap.Solid"/> and square (an isometric map's are diamonds: see <see cref="IsometricShapes"/>, and a hex
+    /// map's hexagons: see <see cref="HexShapes"/>);
     /// background tiles are left out.
     /// </summary>
     public static IEnumerable<(Box Box, bool OneWay)> TileShapes(Tilemap tilemap)
@@ -130,14 +131,16 @@ public sealed partial class Physics
     /// </summary>
     public IEnumerable<Entity> OverlapPoint(Scene scene, Vector2 point, string? layers = null) =>
         Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Contains(point)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!)).Distinct();
+            .Concat(Isometric(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!))
+            .Concat(Hex(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!)).Distinct();
 
     /// <summary>Entities whose colliders (or solid tiles) overlap the box centered on <paramref name="center"/>.</summary>
     public IEnumerable<Entity> OverlapBox(Scene scene, Vector2 center, Vector2 size, string? layers = null)
     {
         var box = Area.Of(new Box(center, size / 2));
         return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(box)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!)).Distinct();
+            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!))
+            .Concat(Hex(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!)).Distinct();
     }
 
     /// <summary>Entities whose colliders (or solid tiles) overlap the circle, e.g. for an explosion's reach.</summary>
@@ -145,7 +148,8 @@ public sealed partial class Physics
     {
         var circle = Area.Of(new Circle(center, radius));
         return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(circle)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!)).Distinct();
+            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!))
+            .Concat(Hex(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!)).Distinct();
     }
 
     /// <summary>
@@ -193,6 +197,17 @@ public sealed partial class Physics
                 best = new RaycastHit(walls.Map.Entity!, origin + direction * distance, normal, distance);
         }
 
+        foreach (var walls in Hex(scene, layers))
+        {
+            if (ignore is not null && walls.Map.Entity!.IsSelfOrDescendantOf(ignore))
+                continue;
+            var reach = best is { } nearest ? Math.Min(maxDistance, nearest.Distance) : maxDistance;
+            if (walls.Raycast(origin, direction, reach) is not var (distance, normal))
+                continue;
+            if (best is null || distance < best.Value.Distance)
+                best = new RaycastHit(walls.Map.Entity!, origin + direction * distance, normal, distance);
+        }
+
         return best;
     }
 
@@ -209,10 +224,12 @@ public sealed partial class Physics
         solids.Fill(scene);
         _slopes.Clear();
         _isometric.Clear();
+        _hex.Clear();
         if (scene.Active<Tilemap>().Count > 0)
         {
             _slopes.AddRange(Slopes(scene));
             CollectIsometric(scene, null, _isometric);
+            CollectHex(scene, null, _hex);
         }
         _groupOf.Clear();
         foreach (var group in Groups)
@@ -269,8 +286,8 @@ public sealed partial class Physics
                 continue;
             }
 
-            // Where it started, for keeping it off isometric maps' walls once it has moved.
-            var from = _isometric.Count > 0 ? Area.Of(collider).Bounds.Center : default;
+            // Where it started, for keeping it off isometric and hex maps' walls once it has moved.
+            var from = _isometric.Count > 0 || _hex.Count > 0 ? Area.Of(collider).Bounds.Center : default;
 
             // Ride along with whatever it stood on, if that has moved since (a moving platform).
             if (_grounds.TryGetValue(body, out var ground) && ground.Ground.Scene == scene && ground.Ground.IsActive)
@@ -295,6 +312,8 @@ public sealed partial class Physics
 
             if (_isometric.Count > 0)
                 KeepOffIsometricWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
+            if (_hex.Count > 0)
+                KeepOffHexWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
             EndStep(body, dt);
         }
 
@@ -525,9 +544,11 @@ public sealed partial class Physics
         pusherLayer ??= collider.Layer;
         Translate(solids, entity, delta);
 
-        // A crate shoved along is kept off isometric maps' walls straight away, so whatever shoved it is stopped by it.
+        // A crate shoved along is kept off isometric and hex maps' walls straight away, so whatever shoved it is stopped by it.
         if (pusher is not null && _isometric.Count > 0)
             KeepOffIsometricWalls(body, collider, solids, boundsBefore.Center, onCollision, carrier, pusher);
+        if (pusher is not null && _hex.Count > 0)
+            KeepOffHexWalls(body, collider, solids, boundsBefore.Center, onCollision, carrier, pusher);
         var hit = _slopes.Count > 0 && (axis == 0 || sign < 0 || delta.Y > 0) && MoveOnSlopes(body, collider, solids, delta, filter, carrier);
         var area = Area.Of(collider);
 

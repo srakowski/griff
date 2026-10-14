@@ -203,7 +203,7 @@ public class HexTilemapTests
     }
 
     [Fact]
-    public void HexMaps_DontCollideOrCastShadowsYet()
+    public void HexMaps_CollideAsHexagons_NotBoxesOrDiamonds_AndCastShadows()
     {
         var scene = new Scene();
         var level = new Entity("Level");
@@ -213,7 +213,8 @@ public class HexTilemapTests
 
         Assert.Empty(Physics.TileShapes(map));
         Assert.Empty(Physics.IsometricShapes(map));
-        Assert.Empty(Shadows.Edges(scene));
+        Assert.Equal(2, Physics.HexShapes(map).Count());
+        Assert.Equal(14, Shadows.Edges(scene).Count);
     }
 
     [Fact]

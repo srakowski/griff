@@ -6,10 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Views
-
-- [ ] Make solid hex maps collide: bodies meet each hexagon's sides and slide along them, raycasts and overlaps see them, and they cast shadows.
-
 ### Profiler
 
 - [ ] Add a profiler panel: a frame-time graph and entity counts while playing.
@@ -127,6 +123,8 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Make solid hex maps collide: bodies meet each hexagon's sides and slide along them, raycasts and overlaps see them, and they cast shadows. (2026-10-14)
+  - `Physics.Hex.cs` (`HexWalls`, like `IsometricWalls`): a moved body's collider, box or circle as it is, is swept from where it was in steps of a quarter tile and pushed out of solid hexagons across their open sides (or along its own axes towards one), the two deepest at once so it settles in a notch instead of rocking; velocity into a side stops or bounces, an upward side grounds it (Ground is the map), a straight one sets WallSide, and pushed crates are kept off straight away. A body that hasn't moved isn't pushed, so grid movers keep to their hexagons' middles. Raycasts step along the ray testing the hexagon there and its six neighbours (so an enemy's sight stops at hex walls); `OverlapPoint/Box/Circle` see them; `Physics.HexShapes` outlines runs of solid hexagons (the Scene view draws them); `Shadows` casts from each solid hexagon's sides that face open cells. Checked through the MCP: a top-down player in a hex room stopped at straight sides, rested on points and in notches, wedged against the pillar; a Chase with Needs Sight ignored the player behind the pillar and chased once they stepped out; the lamp's shadows fell behind the hexagons; a pushed crate stopped at the wall and stopped the player. Demo `demos/hex-collision.demo` passed its first check. Left for later: welded contraptions still pass through hex (and isometric) walls, and isometric maps still don't cast shadows.
 - [x] Make grid movement and turn-based play work on hex maps. (2026-10-14)
   - GridCells does the hex work: `Step(cell, way)` (ways stay x right, y up; (±1, ±1) are the hexagons in the rows above and below, and (0, ±1) alone resolves by row parity so holding it zigzags straight up the screen), `WayBetween`, `Neighbours(cell)` (six, by parity), `Steps` (axial hex distance), `Toward` (nearest of the six ways) and `Shape`/`Corners` for lighting cells. Grid movers, chasers' A*, patrols, pushed crates (any of the six ways), bump attacks, roguelike turns and Tactics (reach, range, the computer, the cursor) all go through it; Diagonal does nothing on hex. Tactics now lights cells and the cursor in their own shape (hexagons, and diamonds on isometric maps, closing that gap). Left for later: sight (raycasts) sees through hex walls until hex collision, close-up attacks swing up or down for the four slanted ways, and dungeons generate on square maps only.
 - [x] Add hex tilemaps, drawn and painted. (2026-10-14)

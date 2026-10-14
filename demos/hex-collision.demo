@@ -1,0 +1,82 @@
+title: Walls on hex maps
+intro: A hex map's solid hexagons are now walls: bodies meet their six sides and slide along them, enemies can't see through them, and lights cast shadows from them.
+project: Empty | Hex Walls
+
+# A hex field: a floor that doesn't collide, and a layer of walls round it with a pillar in the middle. Cell x, y's
+# middle is at (-4.25 + x + half a tile on odd rows, 2 - three quarters of a tile a row). The top wall's points hang
+# down to y = 1.5, with notches between them at 1.75 (x = -4.75, -3.75 ... 3.25).
+create: Tilemap
+rename: Field
+set: Transform.Position = -4.75, 2.5, 0
+set: Tilemap.Shape = Hex
+set: Tilemap.Tint = #6FA860
+set: Tilemap.Tiles = 111111111\n111111111\n111111111\n111111111\n111111111\n111111111
+set: Tilemap.Solid = false
+click: tiles:layer:+
+rename: Walls
+set: Tilemap.Tint = #8A8178
+set: Tilemap.Tiles = 222222222\n2.......2\n2...2...2\n2.......2\n2.......2\n222222222
+set: Tilemap.Solid = false
+expecttile: Walls 4, 2 = 2
+
+chapter: Walls shaped like hexagons | Solid, on a hex map
+select: Walls
+look: 0, 0, 3.5
+set: Tilemap.Solid = true
+explain: world:-5, 2.75, 5, -2.5 | Solid hexagons | Here's a hex map: a floor that doesn't collide, and a layer of walls with Solid on. Their hexagons are now walls with six sides, and the Scene view outlines them.
+
+chapter: Sliding along the sides | Bodies on a hex map
+deselect
+create: Top-down Player
+set: Transform.Position = -1.75, -0.25, 0
+set: Sprite.Size = 0.5, 0.5
+set: BoxCollider.Size = 0.5, 0.5
+play
+wait: 0.3
+hold: Right 2.5
+expectat: Player = 3.5, -0.25
+explain: game | A straight side | Walking right, the player meets the straight side of the wall's hexagon and stops there.
+stop
+select: Player
+set: Transform.Position = 1.4, -0.25, 0
+play
+wait: 0.3
+hold: Up 0.25
+wait: 0.2
+explain: game | A slanted side | Walking straight up into the hexagons above, its corner meets a slanted side, and it slides along it...
+hold: Up 1.5
+expectat: Player = 1.25, 1.38
+explain: game | Into the notch | ...into the notch between two hexagons, where it rests against both. Boxes and circles meet the six sides as they are, and crates pushed into a wall stop there.
+stop
+
+chapter: Sight and shadows | Raycasts and lights see the hexagons
+select: Player
+set: Transform.Position = 1.75, 0.5, 0
+deselect
+create: Sprite
+rename: Bat
+set: Transform.Position = -3.25, 0.5, 0
+set: Sprite.Tint = #7A3FBF
+set: Sprite.Size = 0.5, 0.5
+add: Chase
+set: BoxCollider.Size = 0.5, 0.5
+set: Body.Gravity Scale = 0
+set: Chase.Speed = 2
+set: Chase.Needs Sight = true
+expectcomponents: Bat = Transform, Sprite, BoxCollider, Body, Chase
+deselect
+create: Light
+set: Transform.Position = -2.3, -1.2, 0
+set: Light.Radius = 7
+set: Light.Shadows = true
+select: Main Camera
+set: Camera.Ambient = #101018
+say: A bat that needs to see its target, on the far side of the pillar from the player, and a lamp that casts shadows in the dark.
+play
+wait: 1.5
+expectat: Bat = -3.25, 0.5
+explain: game | Hidden behind the pillar | The bat's sight is a raycast, and raycasts now stop at hexagons, so it can't see the player through the pillar. The lamp's light stops at the hexagons' sides too, leaving shadows behind them.
+hold: Down 0.6
+wait: 1
+explain: game | Seen | Step out from behind the pillar and the bat sees the player and gives chase.
+stop

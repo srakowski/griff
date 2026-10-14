@@ -136,7 +136,8 @@ public sealed class CircleCollider : Collider
 /// <summary>
 /// Makes an entity with a <see cref="Collider"/> move under velocity and gravity and collide with solids. On an
 /// isometric <see cref="Tilemap"/>, it meets the solid diamonds with the diamond under its collider (as wide as the
-/// collider, half as tall, round its middle) and slides along them.
+/// collider, half as tall, round its middle) and slides along them; on a hex one, its collider meets the solid
+/// hexagons' six sides and slides along them.
 /// </summary>
 [Category("Physics")]
 [Requires(typeof(Collider), Note = "the shape that collides")]

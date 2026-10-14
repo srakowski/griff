@@ -428,10 +428,16 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, viewport.ToScreen(circle.Center), radius, radius);
             }
 
-            // An isometric map's walls: a run of solid diamonds along each row.
+            // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons.
             foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric))
             {
                 foreach (var outline in Griff.Runtime.Physics.IsometricShapes(tilemap))
+                    DrawOutline(outline, solid);
+            }
+
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Hex))
+            {
+                foreach (var outline in Griff.Runtime.Physics.HexShapes(tilemap))
                     DrawOutline(outline, solid);
             }
 

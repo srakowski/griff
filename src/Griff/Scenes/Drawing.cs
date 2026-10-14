@@ -237,6 +237,8 @@ public sealed class Drawing
     /// </summary>
     public Color Tint(IDrawable drawn, Color color)
     {
+        if ((Entity.Roles & ComponentRoles.DrawEffect) == 0)
+            return color;
         foreach (var component in Entity.ComponentList)
         {
             if (component is IDrawEffect effect)

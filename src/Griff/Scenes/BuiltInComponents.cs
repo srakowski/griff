@@ -303,6 +303,8 @@ public sealed class Sprite : Component, IDrawable, INetState
         {
             var columns = Math.Max(1, Columns);
             var rows = Math.Max(1, Rows);
+            if (columns == 1 && rows == 1)
+                return new System.Numerics.Vector4(0, 0, 1, 1);
             var frame = ((Frame % (columns * rows)) + columns * rows) % (columns * rows);
             return new System.Numerics.Vector4((float)(frame % columns) / columns, (float)(frame / columns) / rows, 1f / columns, 1f / rows);
         }
@@ -339,6 +341,7 @@ public sealed class Sprite : Component, IDrawable, INetState
             return;
         (_flashColor, _flashSeconds) = (color ?? Color.White, seconds);
         _flashLeft.Set(this, seconds);
+        ListEffects();
     }
 
     /// <summary>
@@ -350,11 +353,31 @@ public sealed class Sprite : Component, IDrawable, INetState
         _blinkLeft = Math.Max(0, seconds);
         _blinkRate = Math.Max(0.1f, rate);
         _blinkTime = 0;
+        ListEffects();
+    }
+
+    /// <summary>True while a <see cref="Flash"/> or <see cref="Blink"/> is under way.</summary>
+    internal bool HasEffects => _flashLeft.Value != 0 || _blinkLeft != 0;
+
+    // The scene whose list of sprites flashing or blinking it's in (see Scene.SpriteEffects), if any: the game moves on
+    // only those, rather than going through every sprite every step.
+    internal Scene? EffectsListedIn { get; set; }
+
+    internal void ListEffects()
+    {
+        if (HasEffects && Entity?.Scene is { } scene && EffectsListedIn != scene)
+        {
+            scene.SpriteEffects.Add(this);
+            EffectsListedIn = scene;
+        }
     }
 
     /// <summary>Moves <see cref="Flash"/> and <see cref="Blink"/> on by <paramref name="seconds"/>. Called by the game.</summary>
     public void AdvanceEffects(float seconds)
     {
+        // Neither flashing nor blinking (as nearly every sprite is, nearly always): nothing to move on.
+        if (_flashLeft.Value == 0 && _blinkLeft == 0)
+            return;
         _flashLeft.Set(this, Math.Max(0, _flashLeft.Value - seconds));
         _blinkLeft = Math.Max(0, _blinkLeft - seconds);
         _blinkTime += seconds;
@@ -407,8 +430,15 @@ public sealed class Sprite : Component, IDrawable, INetState
     internal Matrix4x4 QuadMatrix =>
         QuadMatrixAt(_size.ChangedIn != 0 && _size.ChangedIn == Entity?.Scene?.Step ? StepBlend.For(Entity.Scene, Entity).Of(_size) : _size.Value);
 
-    private Matrix4x4 QuadMatrixAt(Vector2 size) =>
-        Matrix4x4.CreateScale(size.X * (FlipX ? -1 : 1), size.Y * (FlipY ? -1 : 1), 1) * Entity!.Transform.WorldMatrix;
+    // Scaled along the entity's own axes: its world matrix's first two rows, as multiplying by a scale would.
+    private Matrix4x4 QuadMatrixAt(Vector2 size)
+    {
+        var quad = Entity!.Transform.WorldMatrix;
+        var (x, y) = (size.X * (FlipX ? -1 : 1), size.Y * (FlipY ? -1 : 1));
+        (quad.M11, quad.M12, quad.M13, quad.M14) = (quad.M11 * x, quad.M12 * x, quad.M13 * x, quad.M14 * x);
+        (quad.M21, quad.M22, quad.M23, quad.M24) = (quad.M21 * y, quad.M22 * y, quad.M23 * y, quad.M24 * y);
+        return quad;
+    }
 
     int? IDrawable.DrawOrder => Order;
 

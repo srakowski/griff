@@ -24,6 +24,41 @@ public abstract class Component
     /// the order they were saved. The serializer writes them back, so loading and saving a scene loses nothing.
     /// </summary>
     internal IReadOnlyList<KeyValuePair<string, System.Text.Json.JsonElement>>? Kept { get; set; }
+
+    /// <summary>
+    /// What it is to the code that goes through every entity every frame (drawing, mostly), worked out once as it's made:
+    /// a big scene's frame asks a field rather than each component whether it draws.
+    /// </summary>
+    internal ComponentRoles Roles { get; }
+
+    protected Component() =>
+        Roles = (this is IDrawable ? ComponentRoles.Drawable : 0) |
+                (this is IDrawEffect ? ComponentRoles.DrawEffect : 0) |
+                (this is Sprite ? ComponentRoles.Sprite : 0) |
+                (this is Parallax ? ComponentRoles.Parallax : 0) |
+                (this is ScreenAnchor ? ComponentRoles.ScreenAnchor : 0);
+}
+
+/// <summary>What a component is, for code that asks of every entity every frame (see <see cref="Component.Roles"/>, <see cref="Entity.Roles"/>).</summary>
+[Flags]
+internal enum ComponentRoles : byte
+{
+    None = 0,
+
+    /// <summary>An <see cref="IDrawable"/>.</summary>
+    Drawable = 1,
+
+    /// <summary>An <see cref="IDrawEffect"/>.</summary>
+    DrawEffect = 2,
+
+    /// <summary>A <see cref="Scenes.Sprite"/>.</summary>
+    Sprite = 4,
+
+    /// <summary>A <see cref="Scenes.Parallax"/>.</summary>
+    Parallax = 8,
+
+    /// <summary>A <see cref="Scenes.ScreenAnchor"/>.</summary>
+    ScreenAnchor = 16,
 }
 
 /// <summary>Excludes a public read/write property from scene files and the inspector.</summary>

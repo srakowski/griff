@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -43,6 +44,33 @@ public abstract class Behavior : Component, IHealthListener
     protected DebugDraw Debug => Game.Debug;
 
     internal bool IsStarted { get; private set; }
+
+    /// <summary>Which of Update, FixedUpdate and LateUpdate its type has, worked out once a type: the game calls only those.</summary>
+    internal BehaviorHooks Hooks { get; }
+
+    protected Behavior() => Hooks = HooksOf(GetType());
+
+    // Held weakly, so a script reloaded in the editor doesn't keep its last version's types alive.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, StrongBox<BehaviorHooks>> s_hooks = new();
+
+    private static BehaviorHooks HooksOf(Type type) => s_hooks.GetValue(type, static type => new StrongBox<BehaviorHooks>(
+        (Overrides(type, nameof(Update)) ? BehaviorHooks.Update : 0) |
+        (Overrides(type, nameof(FixedUpdate)) ? BehaviorHooks.FixedUpdate : 0) |
+        (Overrides(type, nameof(LateUpdate)) ? BehaviorHooks.LateUpdate : 0))).Value;
+
+    // Whether a type between `type` and Behavior overrides Behavior's method `name`.
+    private static bool Overrides(Type type, string name)
+    {
+        const System.Reflection.BindingFlags declared = System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Instance |
+                                                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        for (var t = type; t is not null && t != typeof(Behavior); t = t.BaseType)
+        {
+            if (t.GetMethod(name, declared, Type.EmptyTypes) is { } method && method.GetBaseDefinition().DeclaringType == typeof(Behavior))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>Called once, before the first <see cref="Update"/>, after every behavior in the scene exists.</summary>
     protected virtual void Start()
@@ -248,4 +276,14 @@ public abstract class Behavior : Component, IHealthListener
         if (IsStarted)
             OnDestroy();
     }
+}
+
+/// <summary>The steps a <see cref="Behavior"/>'s type has code for (see <see cref="Behavior.Hooks"/>).</summary>
+[Flags]
+internal enum BehaviorHooks : byte
+{
+    None = 0,
+    Update = 1,
+    FixedUpdate = 2,
+    LateUpdate = 4,
 }

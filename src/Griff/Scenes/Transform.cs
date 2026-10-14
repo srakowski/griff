@@ -94,9 +94,19 @@ public sealed class Transform : Component
         {
             if (!_localKept)
             {
-                _local = Matrix4x4.CreateScale(Scale) *
-                         Matrix4x4.CreateFromQuaternion(RotationQuaternion) *
-                         Matrix4x4.CreateTranslation(Position);
+                // Most things in a 2D game never turn: they're only scaled and moved, with no turn to work out.
+                if (_rotation == Vector3.Zero)
+                {
+                    _local = Matrix4x4.CreateScale(_scale);
+                    _local.Translation = _position;
+                }
+                else
+                {
+                    _local = Matrix4x4.CreateScale(_scale) *
+                             Matrix4x4.CreateFromQuaternion(RotationQuaternion) *
+                             Matrix4x4.CreateTranslation(_position);
+                }
+
                 _localKept = true;
             }
 

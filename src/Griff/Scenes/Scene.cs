@@ -36,6 +36,13 @@ public sealed class Scene
     internal float DrawBlend;
     internal float GlideLimit;
 
+    // How many of its entities a network game treats specially here (see Entity.NetFlags): while none are, everything in
+    // it runs and moves on this machine, and the game needn't look at each entity to know.
+    internal int NetFlagged;
+
+    // The sprites flashing or blinking, which the game moves on each step (and drops once they're done or gone).
+    internal readonly List<Sprite> SpriteEffects = [];
+
     public IReadOnlyList<Entity> Roots => _roots;
 
     /// <summary>Every entity in the scene, depth first, as it is now: adding or removing entities while going through it is safe.</summary>
@@ -236,6 +243,8 @@ public sealed class Scene
         {
             e.Scene = this;
             e.ForgetActive();
+            if (e.NetFlags != NetFlags.None)
+                NetFlagged++;
             // Something new is drawn where it starts out, not glided there from wherever it was made.
             e.Transform.Jumped();
             _byId.Add(e.Id, e);
@@ -243,6 +252,8 @@ public sealed class Scene
                 e.Order = _nextOrder++;
             foreach (var component in e.Components)
             {
+                // A sprite flashed before it was added flashes here.
+                (component as Sprite)?.ListEffects();
                 foreach (var list in IndexesFor(component))
                 {
                     if (atEnd && !list.Dirty)
@@ -270,6 +281,8 @@ public sealed class Scene
         foreach (var e in entity.SelfAndDescendants())
         {
             e.Scene = null;
+            if (e.NetFlags != NetFlags.None)
+                NetFlagged--;
             _byId.Remove(e.Id);
             foreach (var component in e.Components)
                 ComponentLeft(component);

@@ -39,16 +39,16 @@ public sealed partial class Game
     }
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    internal ComponentList<T> Active<T>() where T : Component => Where(Scene.Active<T>(), Runs);
+    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Runs);
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own.
-    internal ComponentList<T> Moving<T>() where T : Component => Where(Scene.Active<T>(), Moves);
+    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Moves);
 
     // Everything showing, wherever it's run: for what only changes how things look.
     internal ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
 
     // Everything this machine runs, active or not.
-    internal ComponentList<T> RunHere<T>() where T : Component => Where(Scene.All<T>(), Runs);
+    internal ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.All<T>() : Where(Scene.All<T>(), Runs);
 
     // Those whose entity passes: the same list when they all do (always, offline), so a frame allocates nothing.
     private static ComponentList<T> Where<T>(ComponentList<T> components, Func<Entity, bool> test) where T : Component

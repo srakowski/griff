@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -144,8 +146,9 @@ public static class SceneRenderer
 
     // ----- Entities -----
 
-    // One entity that draws: where its drawable components are (in step order) in a list of them, and what it sorts by.
-    private readonly record struct Drawn(Entity Entity, int First, int Count, bool Lifted, int Order, float Z, float Y, int Index);
+    // One entity that draws: where its drawable components are (in step order) in a list of them, or its sprite when
+    // that's all it draws, and what it sorts by.
+    private readonly record struct Drawn(Entity Entity, Sprite? Sole, int First, int Count, bool Lifted, int Order, float Z, float Y);
 
     /// <summary>
     /// Draws the scene's entities (those <paramref name="include"/> takes, or all) back to front into
@@ -182,17 +185,27 @@ public static class SceneRenderer
         public List<IDrawable> Overs { get; } = [];
 
         public List<Drawn> Entries { get; } = [];
+
+        public StableSort Sort { get; } = new();
     }
 
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
         List<IDrawable>? overs, Scratch scratch)
     {
         var drawables = scratch.Drawables;
-        var entities = Sorted(scene, drawables, overs, include, scratch.Entries);
-        sprites.EnsureCapacity(sprites.Count + entities.Count + 16);
+        var entities = CollectionsMarshal.AsSpan(Sorted(scene, drawables, overs, include, scratch.Entries, scratch.Sort, out var order));
+        sprites.EnsureCapacity(sprites.Count + entities.Length + 16);
         var drawing = new Drawing(sprites, ScreenEntity, view, cameraSize / 180, playing);
-        foreach (var entity in entities)
-            DrawEntity(entity, drawables, drawing, sprites);
+        if (order.IsEmpty)
+        {
+            foreach (ref readonly var entity in entities)
+                DrawEntity(entity, drawables, drawing, sprites);
+        }
+        else
+        {
+            foreach (var at in order)
+                DrawEntity(entities[at], drawables, drawing, sprites);
+        }
 
         if (overs is not { Count: > 0 })
             return -1;
@@ -218,22 +231,33 @@ public static class SceneRenderer
         return screen.Count;
     }
 
-    // The scene's drawing entities back to front, their drawable components gathered into `drawables` (and those that go
-    // over the world into `overs`).
-    private static List<Drawn> Sorted(Scene scene, List<IDrawable> drawables, List<IDrawable>? overs, Func<Entity, bool>? include, List<Drawn> entries)
+    // The scene's drawing entities in hierarchy order, their drawable components gathered into `drawables` (and those
+    // that go over the world into `overs`), and `order`, the order to draw them in back to front: empty when that's the
+    // order they're in.
+    private static List<Drawn> Sorted(Scene scene, List<IDrawable> drawables, List<IDrawable>? overs, Func<Entity, bool>? include, List<Drawn> entries,
+        StableSort sort, out ReadOnlySpan<int> order)
     {
         var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
         foreach (var entity in scene.Entities)
         {
-            if (!entity.IsActive || (include is not null && !include(entity)))
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)))
                 continue;
+            Vector3 position;
+            if (entity.SoleSprite is { } sole)
+            {
+                position = entity.Transform.WorldPosition;
+                entries.Add(new Drawn(entity, sole, 0, 1, IsLifted(entity), sole.Order, position.Z, sortByY ? position.Y : 0));
+                continue;
+            }
+
             var first = drawables.Count;
-            int? spriteOrder = null, order = null;
+            int? spriteOrder = null, ownOrder = null;
             var orderStep = int.MaxValue;
             foreach (var component in entity.ComponentList)
             {
-                if (component is not IDrawable drawable)
+                if ((component.Roles & ComponentRoles.Drawable) == 0)
                     continue;
+                var drawable = Unsafe.As<IDrawable>(component);
                 var step = drawable.DrawStep;
                 if (step >= DrawSteps.OverWorld)
                 {
@@ -247,35 +271,75 @@ public static class SceneRenderer
                     at--;
                 drawables.Insert(at, drawable);
 
-                if (drawable is Sprite sprite)
-                    spriteOrder ??= sprite.Order;
+                if ((component.Roles & ComponentRoles.Sprite) != 0)
+                    spriteOrder ??= Unsafe.As<Sprite>(component).Order;
                 else if (step < orderStep && drawable.DrawOrder is { } own)
-                    (order, orderStep) = (own, step);
+                    (ownOrder, orderStep) = (own, step);
             }
 
-            if ((spriteOrder ?? order) is not { } entityOrder)
+            if ((spriteOrder ?? ownOrder) is not { } entityOrder)
             {
                 drawables.RemoveRange(first, drawables.Count - first);
                 continue;
             }
 
-            var position = entity.Transform.WorldPosition;
-            entries.Add(new Drawn(entity, first, drawables.Count - first, IsLifted(entity), entityOrder, position.Z,
-                sortByY ? position.Y : 0, entries.Count));
+            position = entity.Transform.WorldPosition;
+            entries.Add(new Drawn(entity, null, first, drawables.Count - first, IsLifted(entity), entityOrder, position.Z,
+                sortByY ? position.Y : 0));
         }
 
-        entries.Sort(static (a, b) =>
-        {
-            var c = a.Lifted.CompareTo(b.Lifted);
-            if (c == 0)
-                c = a.Order.CompareTo(b.Order);
-            if (c == 0)
-                c = a.Z.CompareTo(b.Z);
-            if (c == 0)
-                c = b.Y.CompareTo(a.Y);
-            return c != 0 ? c : a.Index.CompareTo(b.Index);
-        });
+        order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, sort);
         return entries;
+    }
+
+    // Lifted ones last, then by Order, then Z, then (sorting by Y) higher up first, keeping hierarchy order among equals
+    // (the order they come in). A big scene is often in order already, all on one layer: that's seen in one look.
+    private static ReadOnlySpan<int> SortBackToFront(ReadOnlySpan<Drawn> entries, bool sortByY, StableSort keys)
+    {
+        if (InOrder(entries))
+            return [];
+        keys.Begin(entries.Length);
+        var key = keys.Keys;
+        if (sortByY)
+        {
+            for (var i = 0; i < entries.Length; i++)
+                key[i] = ~StableSort.KeyOf(entries[i].Y);
+            keys.Apply();
+        }
+
+        for (var i = 0; i < entries.Length; i++)
+            key[i] = StableSort.KeyOf(entries[i].Z);
+        keys.Apply();
+        for (var i = 0; i < entries.Length; i++)
+            key[i] = StableSort.KeyOf(entries[i].Order);
+        keys.Apply();
+        for (var i = 0; i < entries.Length; i++)
+            key[i] = entries[i].Lifted ? 1u : 0u;
+        keys.Apply();
+        return keys.Order;
+    }
+
+    private static bool InOrder(ReadOnlySpan<Drawn> entries)
+    {
+        for (var i = 1; i < entries.Length; i++)
+        {
+            if (Compare(entries[i - 1], entries[i]) > 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static int Compare(in Drawn a, in Drawn b)
+    {
+        var c = a.Lifted.CompareTo(b.Lifted);
+        if (c == 0)
+            c = a.Order.CompareTo(b.Order);
+        if (c == 0)
+            c = a.Z.CompareTo(b.Z);
+        if (c == 0)
+            c = b.Y.CompareTo(a.Y);
+        return c;
     }
 
     /// <summary>
@@ -283,7 +347,11 @@ public static class SceneRenderer
     /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order. An
     /// entity drawn on top (a <see cref="Draggable"/> being held, and what's inside it) draws over everything else.
     /// </summary>
-    public static IEnumerable<Entity> DrawOrder(Scene scene) => Sorted(scene, [], null, null, []).Select(d => d.Entity);
+    public static IEnumerable<Entity> DrawOrder(Scene scene)
+    {
+        var entries = Sorted(scene, [], null, null, [], new StableSort(), out var order);
+        return order.IsEmpty ? entries.Select(d => d.Entity).ToList() : order.ToArray().Select(at => entries[at].Entity).ToList();
+    }
 
     /// <summary>
     /// The draw order of an entity: its sprite's, or else that of its first drawable component (in
@@ -293,6 +361,8 @@ public static class SceneRenderer
     {
         int? order = null;
         var orderStep = int.MaxValue;
+        if ((entity.Roles & ComponentRoles.Drawable) == 0)
+            return null;
         foreach (var component in entity.ComponentList)
         {
             if (component is Sprite sprite)
@@ -309,6 +379,8 @@ public static class SceneRenderer
     {
         for (var e = entity; e is not null; e = e.Parent)
         {
+            if ((e.Roles & ComponentRoles.DrawEffect) == 0)
+                continue;
             foreach (var component in e.ComponentList)
             {
                 if (component is IDrawEffect { DrawsOnTop: true })
@@ -322,14 +394,26 @@ public static class SceneRenderer
     // An entity's draws, component by component. On a parallax layer (the entity or an ancestor) they shift with it, and
     // its sprite may repeat across the view; otherwise its and its ancestors' effects move them (a shake, a beat).
     // Steps from DrawSteps.View on are drawn where they say.
-    private static void DrawEntity(Drawn entry, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
+    private static void DrawEntity(in Drawn entry, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
     {
-        var entity = entry.Entity;
+        if (entry.Sole is { } sole)
+        {
+            IDrawable drawable = sole;
+            DrawEntity(entry.Entity, new ReadOnlySpan<IDrawable>(ref drawable), drawing, sprites);
+        }
+        else
+        {
+            DrawEntity(entry.Entity, CollectionsMarshal.AsSpan(drawables).Slice(entry.First, entry.Count), drawing, sprites);
+        }
+    }
+
+    private static void DrawEntity(Entity entity, ReadOnlySpan<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
+    {
         var parallax = ParallaxOf(entity);
         drawing.Entity = entity;
         drawing.CanCull = parallax is null;
-        var end = entry.First + entry.Count;
-        var i = entry.First;
+        var end = drawables.Length;
+        var i = 0;
         if (parallax is null)
         {
             var start = sprites.Count;
@@ -367,6 +451,8 @@ public static class SceneRenderer
             return;
         for (var e = entity; e is not null; e = e.Parent)
         {
+            if ((e.Roles & ComponentRoles.DrawEffect) == 0)
+                continue;
             foreach (var component in e.ComponentList)
             {
                 if (component is not IDrawEffect effect || effect.DrawTransform is not { } transform)
@@ -402,7 +488,7 @@ public static class SceneRenderer
     {
         for (var e = entity; e is not null; e = e.Parent)
         {
-            if (e.GetComponent<Parallax>() is { } parallax)
+            if ((e.Roles & ComponentRoles.Parallax) != 0 && e.GetComponent<Parallax>() is { } parallax)
                 return parallax;
         }
 
@@ -450,7 +536,7 @@ public static class SceneRenderer
             return true;
         for (var e = entity; e is not null; e = e.Parent)
         {
-            if (e.GetComponent<ScreenAnchor>() is not null || (e != entity && e == camera))
+            if ((e.Roles & ComponentRoles.ScreenAnchor) != 0 || (e != entity && e == camera))
                 return true;
         }
 

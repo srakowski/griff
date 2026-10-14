@@ -18,8 +18,15 @@ public sealed partial class Game
     private FrameStep[][] _phases = [];
     private FrameStep[]? _frame;
 
-    // The scripts running this frame, taken as it starts: spawned scripts wait for the next one.
+    // The scripts running this frame, taken as it starts: spawned scripts wait for the next one. Then those of them with
+    // an Update, a FixedUpdate and a LateUpdate, kept with the snapshot they were taken from (unchanged while nothing is
+    // added, removed, enabled or disabled), and the last snapshot every script of had started.
     private ComponentList<Behavior> _running;
+    private Behavior[]? _hooksFor;
+    private Behavior[] _updating = [];
+    private Behavior[] _fixedUpdating = [];
+    private Behavior[] _lateUpdating = [];
+    private Behavior[]? _startedFor;
     private double _tickSeconds;
 
     // What physics calls back, made once rather than every frame.
@@ -394,17 +401,54 @@ public sealed partial class Game
     private void StartScripts()
     {
         _running = Active<Behavior>();
-        foreach (var behavior in _running)
+        var running = _running.Items;
+        if (running != _hooksFor)
+        {
+            (_updating, _fixedUpdating, _lateUpdating) = (With(running, BehaviorHooks.Update), With(running, BehaviorHooks.FixedUpdate),
+                With(running, BehaviorHooks.LateUpdate));
+            _hooksFor = running;
+        }
+
+        // A big scene's scripts started long ago: unless it's changed, there's nothing to look for.
+        if (running == _startedFor)
+            return;
+        _startedFor = null;
+        foreach (var behavior in running)
         {
             if (!behavior.IsStarted)
                 behavior.RunStart(this);
         }
+
+        _startedFor = running;
+    }
+
+    // Those of `running` whose type has `hook`, in the same order.
+    private static Behavior[] With(Behavior[] running, BehaviorHooks hook)
+    {
+        var count = 0;
+        foreach (var behavior in running)
+        {
+            if ((behavior.Hooks & hook) != 0)
+                count++;
+        }
+
+        if (count == running.Length)
+            return running;
+        var with = new Behavior[count];
+        count = 0;
+        foreach (var behavior in running)
+        {
+            if ((behavior.Hooks & hook) != 0)
+                with[count++] = behavior;
+        }
+
+        return with;
     }
 
     // While a panel pauses the game, only the scripts on open panels run.
     private void UpdateScripts()
     {
-        foreach (var behavior in _running)
+        foreach (var behavior in _updating)
         {
             if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
                 behavior.RunUpdate();
@@ -417,7 +461,7 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0)
             return;
-        foreach (var behavior in _running)
+        foreach (var behavior in _fixedUpdating)
         {
             if (behavior.Entity?.Scene == Scene)
                 behavior.RunFixedUpdate();
@@ -427,7 +471,7 @@ public sealed partial class Game
     // After everything has moved and the camera has followed, before what's pinned to the screen is put in place.
     private void LateUpdateScripts()
     {
-        foreach (var behavior in _running)
+        foreach (var behavior in _lateUpdating)
         {
             if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
                 behavior.RunLateUpdate();
@@ -496,10 +540,28 @@ public sealed partial class Game
         }
     }
 
+    // Only the sprites flashing or blinking, each dropped from the list once it's done, or gone. Each moves on by itself,
+    // so the order they're in doesn't matter.
     private void RunSpriteEffects()
     {
-        foreach (var sprite in Scene.Active<Sprite>())
-            sprite.AdvanceEffects(Time.Delta);
+        var sprites = Scene.SpriteEffects;
+        for (var i = 0; i < sprites.Count; i++)
+        {
+            var sprite = sprites[i];
+            if (sprite.Entity is { } entity && entity.Scene == Scene)
+            {
+                if (!entity.IsActive)
+                    continue;
+                sprite.AdvanceEffects(Time.Delta);
+                if (sprite.HasEffects)
+                    continue;
+            }
+
+            if (sprite.EffectsListedIn == Scene)
+                sprite.EffectsListedIn = null;
+            sprites[i--] = sprites[^1];
+            sprites.RemoveAt(sprites.Count - 1);
+        }
     }
 
     private void StepPhysics()

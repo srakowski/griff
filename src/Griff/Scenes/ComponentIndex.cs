@@ -13,6 +13,9 @@ public readonly struct ComponentList<T> : IReadOnlyList<T>
 
     internal ComponentList(T[] items) => _items = items;
 
+    // The snapshot itself: the same array as long as nothing has changed, so a caller can tell nothing has.
+    internal T[] Items => _items ?? [];
+
     public int Count => _items?.Length ?? 0;
 
     public T this[int index] => (_items ?? [])[index];

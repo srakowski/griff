@@ -153,7 +153,9 @@ public static partial class ProjectTemplates
         /// <summary>
         /// Finds how many bunnies this computer keeps bouncing at 60 frames a second. It adds bunnies while the game keeps
         /// up; when it falls behind, it takes the last lot away and tries half as many, until a step is too small to
-        /// matter. Then it shows the count and saves it ("held", and the "best" so far). Space starts it again.
+        /// matter. Then it holds that many for a while, timing every frame, and shows and saves the count ("held", and the
+        /// "best" so far) with how the hold went: the frame rate ("fps"), its 1% low ("low") and the garbage collections
+        /// ("collections"). Space starts it again.
         /// </summary>
         [Category("Benchmark")]
         public class BunnyMark : Behavior
@@ -177,19 +179,35 @@ public static partial class ProjectTemplates
             [Names(NameKind.Prefab)]
             public string Prefab { get; set; } = "Bunny";
 
+            /// <summary>Seconds it holds the count it found, timing every frame.</summary>
+            public float HoldSeconds { get; set; } = 10;
+
+            /// <summary>Holds this many bunnies straight away rather than finding the count (0 finds it): to try a count.</summary>
+            public int HoldCount { get; set; }
+
             /// <summary>Bunnies bouncing now.</summary>
             public int Count => _bunnies.Count;
 
             /// <summary>The most bunnies that have kept up the frame rate so far: the result, once the run is done.</summary>
             public int Held { get; private set; }
 
-            /// <summary>The frame rate over the last count timed.</summary>
+            /// <summary>The frame rate over the last count timed (the hold's, once it's done).</summary>
             public float Fps { get; private set; }
+
+            /// <summary>
+            /// The hold's 1% low: the frame rate of its slowest frames, from the time 99 frames in 100 came within. A
+            /// frame that misses the screen's beat takes twice as long, so a low under the frame rate means some did.
+            /// </summary>
+            public float Low { get; private set; }
+
+            /// <summary>The garbage collections during the hold: 0 when nothing a frame does makes garbage.</summary>
+            public int Collections { get; private set; }
 
             /// <summary>True once the run has found its count.</summary>
             public bool IsDone { get; private set; }
 
             private readonly List<Entity> _bunnies = new();
+            private readonly List<double> _frameTimes = new();
             private long _shownFrom;
             private double _shownSince;
 
@@ -214,9 +232,42 @@ public static partial class ProjectTemplates
 
             private IEnumerator Run()
             {
-                (IsDone, Held) = (false, 0);
-                Show("Status", $"Adding bunnies while the game keeps up {TargetFps:0} fps...");
+                (IsDone, Held, Low, Collections) = (false, 0, 0, 0);
                 RemoveTo(0);
+                if (HoldCount > 0)
+                {
+                    Add(HoldCount);
+                    Held = HoldCount;
+                }
+                else
+                {
+                    yield return FindCount();
+                }
+
+                Show("Status", $"Holding {Held:N0} bunnies for {HoldSeconds:0} seconds, timing every frame...");
+                yield return Hold();
+                IsDone = true;
+                Game.SaveData.Set("fps", (int)MathF.Round(Fps));
+                Game.SaveData.Set("low", (int)MathF.Round(Low));
+                Game.SaveData.Set("collections", Collections);
+                Game.SaveData.Set("held", Held);
+                var hold = $"{Fps:0} fps, 1% low {Low:0} fps, {Collections} garbage collections. Space to run it again.";
+                if (HoldCount > 0)
+                {
+                    Show("Status", $"Held {Held:N0} bunnies for {HoldSeconds:0} s: {hold}");
+                    yield break;
+                }
+
+                var best = Math.Max(Held, Game.SaveData.GetInt("best"));
+                Game.SaveData.Set("best", best);
+                Show("Status", $"Holds {Held:N0} bunnies at {TargetFps:0} fps (best {best:N0}); held for {HoldSeconds:0} s: {hold}");
+            }
+
+            // Adds bunnies while the frame rate keeps up, and takes the last lot away when it falls behind, until a step
+            // would be too small to matter.
+            private IEnumerator FindCount()
+            {
+                Show("Status", $"Adding bunnies while the game keeps up {TargetFps:0} fps...");
                 var step = Growth;
                 Add(StartCount);
                 while (true)
@@ -236,12 +287,34 @@ public static partial class ProjectTemplates
                         break;
                     Add(Math.Max(1, (int)(Math.Max(Held, StartCount) * step)));
                 }
+            }
 
-                IsDone = true;
-                var best = Math.Max(Held, Game.SaveData.GetInt("best"));
-                Game.SaveData.Set("best", best);
-                Game.SaveData.Set("held", Held);
-                Show("Status", $"Holds {Held:N0} bunnies at {TargetFps:0} fps (best {best:N0}). Space to run it again.");
+            // Times every frame the screen shows for HoldSeconds, and counts the garbage collections meanwhile, after two
+            // seconds to settle (the runtime optimizes code that's just got busy). Frames with no step between them (a
+            // screen faster than the game's steps) share the time they took.
+            private IEnumerator Hold()
+            {
+                yield return Wait(2);
+                _frameTimes.Clear();
+                _frameTimes.EnsureCapacity((int)(HoldSeconds * 500));
+                var (frames, since) = (Time.DrawnFrames, Time.RealTotal);
+                var (start, collections) = (since, GC.CollectionCount(0));
+                while (Time.RealTotal - start < HoldSeconds)
+                {
+                    yield return null;
+                    var drawn = Time.DrawnFrames - frames;
+                    for (var i = 0; i < drawn; i++)
+                        _frameTimes.Add((Time.RealTotal - since) / drawn);
+                    if (drawn > 0)
+                        (frames, since) = (Time.DrawnFrames, Time.RealTotal);
+                }
+
+                Collections = GC.CollectionCount(0) - collections;
+                if (_frameTimes.Count == 0)
+                    yield break;
+                Fps = (float)(_frameTimes.Count / _frameTimes.Sum());
+                _frameTimes.Sort();
+                Low = (float)(1 / _frameTimes[(int)(_frameTimes.Count * 0.99)]);
             }
 
             // Times the frames the screen shows at the count now. New bunnies start on the next step and gone ones go at the

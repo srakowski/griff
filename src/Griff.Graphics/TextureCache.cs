@@ -30,6 +30,7 @@ internal sealed class TextureCache : IDisposable
     private readonly GL _gl;
     private readonly string _assetRoot;
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _paths = new(StringComparer.Ordinal);
     private readonly Dictionary<(string Text, string? Font, TextAlign Align), (Texture Texture, long LastUsed)> _text = [];
     private readonly TextRasterizer? _rasterizer;
     private long _frame;
@@ -52,7 +53,9 @@ internal sealed class TextureCache : IDisposable
         if (string.IsNullOrWhiteSpace(relativePath))
             return _white;
 
-        var path = Path.Combine(_assetRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        // Each name's file is worked out once: thousands of sprites a frame look theirs up without making strings.
+        if (!_paths.TryGetValue(relativePath, out var path))
+            _paths[relativePath] = path = Path.Combine(_assetRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         if (!_entries.TryGetValue(path, out var entry))
         {
             entry = Load(path);

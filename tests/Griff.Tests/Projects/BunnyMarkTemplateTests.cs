@@ -37,8 +37,9 @@ public sealed class BunnyMarkTemplateTests : IDisposable
             ViewAspect = 16 / 9f,
         };
         var bunnyMark = game.Find("BunnyMark")!.Components.Single(c => c.GetType().Name == "BunnyMark");
-        // Shorter steps than the template's, so a run takes less time to test.
+        // Shorter steps and hold than the template's, so a run takes less time to test.
         Set(bunnyMark, "Window", 0.25f);
+        Set(bunnyMark, "HoldSeconds", 1f);
         return (game, bunnyMark);
     }
 
@@ -87,6 +88,60 @@ public sealed class BunnyMarkTemplateTests : IDisposable
 
         Run(game, 0.5);
         Assert.Contains($"{held:N0} bunnies", game.Find("Stats")!.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
+    public async Task Run_HoldsTheCount_AndSavesHowTheHoldWent()
+    {
+        var (game, bunnyMark) = await Create();
+
+        // Past the count frames slow to 40 fps, so the hold at the count runs at 60 with nothing slower.
+        RunUntilDone(game, bunnyMark, holds: 700);
+
+        Assert.Equal(60, Get<float>(bunnyMark, "Fps"), 0.5f);
+        Assert.Equal(60, Get<float>(bunnyMark, "Low"), 0.5f);
+        Assert.Equal(60, game.SaveData.GetInt("fps"));
+        Assert.Equal(60, game.SaveData.GetInt("low"));
+        Assert.True(game.SaveData.Has("collections"));
+        Assert.Contains("1% low 60 fps", game.Find("Status")!.GetComponent<Text>()!.Value);
+    }
+
+    [Fact]
+    public async Task Hold_WithFramesThatMissTheBeat_HasALowUnderTheFrameRate()
+    {
+        var (game, bunnyMark) = await Create();
+        Set(bunnyMark, "HoldCount", 300);
+
+        // One frame in fifty takes two of the screen's: the frame rate stays near 60, the 1% low is 30.
+        for (var frame = 0; frame < 60 * 30 && !Get<bool>(bunnyMark, "IsDone"); frame++)
+        {
+            game.Advance(frame % 50 == 49 ? 2 / 60.0 : 1 / 60.0);
+            _input.EndFrame();
+        }
+
+        Assert.True(Get<bool>(bunnyMark, "IsDone"));
+        Assert.Equal(300, Bunnies(game));
+        Assert.Equal(300, Get<int>(bunnyMark, "Held"));
+        Assert.InRange(Get<float>(bunnyMark, "Fps"), 57, 60);
+        Assert.Equal(30, Get<float>(bunnyMark, "Low"), 0.5f);
+    }
+
+    [Fact]
+    public async Task HoldCount_HoldsThatManyWithoutFindingTheCount()
+    {
+        var (game, bunnyMark) = await Create();
+        Set(bunnyMark, "HoldCount", 1234);
+
+        Run(game, 1 / 60.0);
+        Assert.Equal(1234, Bunnies(game));
+        Assert.Contains("Holding 1,234 bunnies", game.Find("Status")!.GetComponent<Text>()!.Value);
+        RunUntilDone(game, bunnyMark, holds: 0);
+
+        Assert.Equal(1234, Bunnies(game));
+        Assert.Equal(1234, game.SaveData.GetInt("held"));
+        Assert.Equal(40, game.SaveData.GetInt("fps"));
+        Assert.Contains("Held 1,234 bunnies for 1 s: 40 fps", game.Find("Status")!.GetComponent<Text>()!.Value);
+        Assert.False(game.SaveData.Has("best"));
     }
 
     [Fact]

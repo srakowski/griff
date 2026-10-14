@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Griff.Rendering;
 using Griff.Scenes;
 using Silk.NET.OpenGL;
@@ -6,30 +7,52 @@ using Silk.NET.OpenGL;
 namespace Griff.Graphics;
 
 /// <summary>
-/// Draws a <see cref="RenderFrame"/> with OpenGL 3.3: textured, tinted quads batched by texture. In a dark scene, lights
-/// are added up in a light map the size of the screen, which then darkens the world drawn before it.
+/// Draws a <see cref="RenderFrame"/> with OpenGL 3.3: textured, tinted quads batched by texture, each quad one instance
+/// of a four-corner strip (its corners worked out here, in clip space). In a dark scene, lights are added up in a light
+/// map the size of the screen, which then darkens the world drawn before it.
 /// Must be created and used on the thread that owns the GL context.
 /// </summary>
 public sealed class SpriteRenderer : IDisposable
 {
-    private const int MaxQuads = 4096;
-    private const int FloatsPerVertex = 12; // clip x, y, u, v, tint r, g, b, a, flash r, g, b, amount
+    // Quads a draw call takes at most: a big scene's sprites go in a few of these.
+    private const int MaxQuads = 16384;
 
+    // One quad, as an instance: its corners in clip space (top left, top right, bottom right, bottom left), the part of
+    // the image on it (u, v, width, height), its tint and its flash (color, and how much).
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Quad
+    {
+        public Vector4 Corners01;
+        public Vector4 Corners23;
+        public Vector4 Source;
+        public Vector4 Tint;
+        public Vector4 Flash;
+    }
+
+    // Each instance is drawn as two triangles, (top right, bottom right, top left) and (bottom right, top left, bottom
+    // left): corners 0-1-2 and 0-2-3 round the quad, so a quad of any four points (a shadow) is split the same way always.
     private const string VertexShader = """
         #version 330 core
-        layout(location = 0) in vec2 aPosition;
-        layout(location = 1) in vec2 aUv;
-        layout(location = 2) in vec4 aColor;
-        layout(location = 3) in vec4 aFlash;
+        layout(location = 0) in vec4 aCorners01;
+        layout(location = 1) in vec4 aCorners23;
+        layout(location = 2) in vec4 aSource;
+        layout(location = 3) in vec4 aColor;
+        layout(location = 4) in vec4 aFlash;
         out vec2 vUv;
         out vec4 vColor;
         out vec4 vFlash;
         void main()
         {
-            vUv = aUv;
+            vec2 position;
+            vec2 uv;
+            if (gl_VertexID == 0) { position = aCorners01.zw; uv = vec2(1.0, 0.0); }
+            else if (gl_VertexID == 1) { position = aCorners23.xy; uv = vec2(1.0, 1.0); }
+            else if (gl_VertexID == 2) { position = aCorners01.xy; uv = vec2(0.0, 0.0); }
+            else { position = aCorners23.zw; uv = vec2(0.0, 1.0); }
+            vUv = aSource.xy + uv * aSource.zw;
             vColor = aColor;
             vFlash = aFlash;
-            gl_Position = vec4(aPosition, 0.0, 1.0);
+            gl_Position = vec4(position, 0.0, 1.0);
         }
         """;
 
@@ -171,15 +194,6 @@ public sealed class SpriteRenderer : IDisposable
         }
         """;
 
-    // Unit quad corners with their UVs. Image row 0 is the top, so the quad's top maps to v = 0.
-    private static readonly (Vector2 Position, Vector2 Uv)[] Corners =
-    [
-        (new(-0.5f, 0.5f), new(0, 0)),
-        (new(0.5f, 0.5f), new(1, 0)),
-        (new(0.5f, -0.5f), new(1, 1)),
-        (new(-0.5f, -0.5f), new(0, 1)),
-    ];
-
     private readonly GL _gl;
     private readonly TextureCache _textures;
     private readonly uint _program;
@@ -189,10 +203,13 @@ public sealed class SpriteRenderer : IDisposable
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private readonly uint _vao;
     private readonly uint _vbo;
-    private readonly uint _ebo;
-    private readonly float[] _vertices = new float[MaxQuads * 4 * FloatsPerVertex];
+    private readonly Quad[] _quads = new Quad[MaxQuads];
     private int _quadCount;
     private Texture? _batchTexture;
+
+    // The last image drawn and its texture: a run of sprites of one image finds it without looking it up.
+    private string? _lastImage;
+    private Texture? _lastTexture;
 
     // The light map: a texture the size of the screen that lights add up in, and the framebuffer that draws into it.
     private uint _lightFramebuffer;
@@ -220,33 +237,18 @@ public sealed class SpriteRenderer : IDisposable
         _vao = gl.GenVertexArray();
         gl.BindVertexArray(_vao);
 
+        // Every attribute is the instance's: a quad's four corners all read the same one.
         _vbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(_vertices.Length * sizeof(float)), ReadOnlySpan<float>.Empty, BufferUsageARB.DynamicDraw);
-
-        _ebo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _ebo);
-        var indices = new uint[MaxQuads * 6];
-        for (uint q = 0, i = 0; q < MaxQuads; q++, i += 6)
-        {
-            var v = q * 4;
-            (indices[i], indices[i + 1], indices[i + 2]) = (v, v + 1, v + 2);
-            (indices[i + 3], indices[i + 4], indices[i + 5]) = (v, v + 2, v + 3);
-        }
-
-        gl.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
-
-        var stride = (uint)(FloatsPerVertex * sizeof(float));
         unsafe
         {
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, stride, (void*)0);
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, (void*)(2 * sizeof(float)));
-            gl.EnableVertexAttribArray(2);
-            gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, stride, (void*)(4 * sizeof(float)));
-            gl.EnableVertexAttribArray(3);
-            gl.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, stride, (void*)(8 * sizeof(float)));
+            var stride = (uint)sizeof(Quad);
+            for (uint attribute = 0; attribute < 5; attribute++)
+            {
+                gl.EnableVertexAttribArray(attribute);
+                gl.VertexAttribPointer(attribute, 4, VertexAttribPointerType.Float, false, stride, (void*)(attribute * 4 * sizeof(float)));
+                gl.VertexAttribDivisor(attribute, 1);
+            }
         }
 
         gl.BindVertexArray(0);
@@ -258,6 +260,7 @@ public sealed class SpriteRenderer : IDisposable
     public void Render(RenderFrame frame, int width, int height)
     {
         _textures.RefreshChanged();
+        (_lastImage, _lastTexture) = (null, null);
         LastDrawCalls = 0;
 
         var screen = 0;
@@ -325,7 +328,6 @@ public sealed class SpriteRenderer : IDisposable
             _gl.DeleteTexture(_sceneTexture);
         _textures.Dispose();
         _gl.DeleteBuffer(_vbo);
-        _gl.DeleteBuffer(_ebo);
         _gl.DeleteVertexArray(_vao);
         _gl.DeleteProgram(_program);
         _gl.DeleteProgram(_shapeProgram);
@@ -351,14 +353,19 @@ public sealed class SpriteRenderer : IDisposable
 
             // The draw is one line high; stretch to the rasterized block's line count and aspect,
             // then slide it so its left or right edge is at the origin for aligned text.
-            var lines = text.Count(c => c == '\n') + 1;
+            var lines = text.AsSpan().Count('\n') + 1;
             var width = (float)texture.Width / texture.Height * lines;
             var shift = sprite.Align switch { TextAlign.Left => width / 2, TextAlign.Right => -width / 2, _ => 0f };
             world = Matrix4x4.CreateScale(width, lines, 1) * Matrix4x4.CreateTranslation(shift, 0, 0) * world;
         }
+        else if (_lastTexture is not null && string.Equals(sprite.Image, _lastImage, StringComparison.Ordinal))
+        {
+            texture = _lastTexture;
+        }
         else
         {
             texture = _textures.Get(sprite.Image);
+            (_lastImage, _lastTexture) = (sprite.Image, texture);
         }
 
         if (_batchTexture is not null && texture != _batchTexture)
@@ -369,29 +376,25 @@ public sealed class SpriteRenderer : IDisposable
         WriteQuad(world * viewProjection, sprite.Source, sprite.Tint, sprite.Flash);
     }
 
-    // One quad's four vertices into the batch: its corners taken to clip space, the part of the image, tint and flash.
-    private void WriteQuad(Matrix4x4 toClip, Vector4 source, Color tint, Color flash)
+    // One quad into the batch: the unit quad's corners (-0.5..0.5) taken to clip space, the part of the image (row 0 is
+    // its top, so the quad's top is v = 0), tint and flash.
+    private void WriteQuad(in Matrix4x4 toClip, Vector4 source, Color tint, Color flash)
     {
-        var offset = _quadCount * 4 * FloatsPerVertex;
-        foreach (var (position, uv) in Corners)
-        {
-            var clip = Vector4.Transform(new Vector4(position, 0, 1), toClip);
-            _vertices[offset++] = clip.X / clip.W;
-            _vertices[offset++] = clip.Y / clip.W;
-            _vertices[offset++] = source.X + uv.X * source.Z;
-            _vertices[offset++] = source.Y + uv.Y * source.W;
-            _vertices[offset++] = tint.R;
-            _vertices[offset++] = tint.G;
-            _vertices[offset++] = tint.B;
-            _vertices[offset++] = tint.A;
-            _vertices[offset++] = flash.R;
-            _vertices[offset++] = flash.G;
-            _vertices[offset++] = flash.B;
-            _vertices[offset++] = flash.A;
-        }
-
-        _quadCount++;
+        ref var quad = ref _quads[_quadCount++];
+        quad.Corners01 = Pair(ToClip(-0.5f, 0.5f, toClip), ToClip(0.5f, 0.5f, toClip));
+        quad.Corners23 = Pair(ToClip(0.5f, -0.5f, toClip), ToClip(-0.5f, -0.5f, toClip));
+        quad.Source = source;
+        quad.Tint = new Vector4(tint.R, tint.G, tint.B, tint.A);
+        quad.Flash = new Vector4(flash.R, flash.G, flash.B, flash.A);
     }
+
+    private static Vector2 ToClip(float x, float y, in Matrix4x4 toClip)
+    {
+        var clip = Vector4.Transform(new Vector4(x, y, 0, 1), toClip);
+        return new Vector2(clip.X / clip.W, clip.Y / clip.W);
+    }
+
+    private static Vector4 Pair(Vector2 a, Vector2 b) => new(a.X, a.Y, b.X, b.Y);
 
     // Adds the lights up in the light map, starting from the ambient light, then multiplies what's been drawn by it.
     private void ApplyLighting(RenderFrame frame, int width, int height)
@@ -486,20 +489,12 @@ public sealed class SpriteRenderer : IDisposable
     }
 
     // A quad from four world points, in order round it, with no image.
-    private void WriteCorners(Matrix4x4 viewProjection, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
-    {
-        var offset = _quadCount * 4 * FloatsPerVertex;
-        foreach (var point in (ReadOnlySpan<Vector2>)[p0, p1, p2, p3])
+    private void WriteCorners(Matrix4x4 viewProjection, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3) =>
+        _quads[_quadCount++] = new Quad
         {
-            var clip = Vector4.Transform(new Vector4(point, 0, 1), viewProjection);
-            _vertices[offset++] = clip.X / clip.W;
-            _vertices[offset++] = clip.Y / clip.W;
-            for (var i = 0; i < FloatsPerVertex - 2; i++)
-                _vertices[offset++] = 0;
-        }
-
-        _quadCount++;
-    }
+            Corners01 = Pair(ToClip(p0.X, p0.Y, viewProjection), ToClip(p1.X, p1.Y, viewProjection)),
+            Corners23 = Pair(ToClip(p2.X, p2.Y, viewProjection), ToClip(p3.X, p3.Y, viewProjection)),
+        };
 
     // Lights (mode 0) or holes (mode 1) with the shape program, each quad already in clip space; the sprite program is
     // back on afterwards.
@@ -518,14 +513,15 @@ public sealed class SpriteRenderer : IDisposable
         _gl.UseProgram(_program);
     }
 
-    // Draws the quads written so far with whatever program and texture are bound.
-    private unsafe void DrawBatch()
+    // Draws the quads written so far with whatever program and texture are bound. Each batch goes into fresh storage
+    // (the last is left to the draws still reading it), so the GPU never has to finish one before the next is written.
+    private void DrawBatch()
     {
         if (_quadCount == 0)
             return;
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-        _gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, new ReadOnlySpan<float>(_vertices, 0, _quadCount * 4 * FloatsPerVertex));
-        _gl.DrawElements(PrimitiveType.Triangles, (uint)(_quadCount * 6), DrawElementsType.UnsignedInt, (void*)0);
+        _gl.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Quad>(_quads, 0, _quadCount), BufferUsageARB.StreamDraw);
+        _gl.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, (uint)_quadCount);
         LastDrawCalls++;
         _quadCount = 0;
     }

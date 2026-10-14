@@ -111,7 +111,20 @@ public sealed class Entity
     /// How a network game treats this entity on this machine: copied from the host (so the host runs it), and moved here
     /// by this player, or moved by another player (on the host). See <c>Runtime.NetSession</c>.
     /// </summary>
-    internal NetFlags NetFlags { get; set; }
+    internal NetFlags NetFlags
+    {
+        get => _netFlags;
+        set
+        {
+            if (value == _netFlags)
+                return;
+            if (Scene is { } scene)
+                scene.NetFlagged += (value != NetFlags.None ? 1 : 0) - (_netFlags != NetFlags.None ? 1 : 0);
+            _netFlags = value;
+        }
+    }
+
+    private NetFlags _netFlags;
 
     /// <summary>True if this machine runs the entity's gameplay: everything offline, and everything on the host.</summary>
     internal bool RunsHere => (NetFlags & NetFlags.Replicated) == 0;
@@ -125,6 +138,27 @@ public sealed class Entity
 
     // The same list, for going through it without allocating an enumerator (the renderer does, for every entity, every frame).
     internal List<Component> ComponentList => _components;
+
+    // Every role its components have, together: the renderer skips what an entity has none of without going through them.
+    internal ComponentRoles Roles { get; private set; }
+
+    // Its sprite, when that's all it draws (as most things are): drawn without going through its components.
+    internal Sprite? SoleSprite { get; private set; }
+
+    private void ComponentsChanged()
+    {
+        var roles = ComponentRoles.None;
+        var drawables = 0;
+        Sprite? sprite = null;
+        foreach (var component in _components)
+        {
+            roles |= component.Roles;
+            if ((component.Roles & ComponentRoles.Drawable) != 0)
+                (drawables, sprite) = (drawables + 1, component as Sprite);
+        }
+
+        (Roles, SoleSprite) = (roles, drawables == 1 ? sprite : null);
+    }
 
     public T AddComponent<T>() where T : Component, new() => (T)AddComponent(new T());
 
@@ -142,6 +176,7 @@ public sealed class Entity
         Scene?.ComponentJoining();
         _components.Insert(position, component);
         component.Entity = this;
+        ComponentsChanged();
         Scene?.ComponentMoved(component);
         return component;
     }
@@ -155,6 +190,7 @@ public sealed class Entity
             return false;
 
         component.Entity = null;
+        ComponentsChanged();
         Scene?.ComponentLeft(component);
         return true;
     }
@@ -189,6 +225,7 @@ public sealed class Entity
         _components[index] = replacement;
         existing.Entity = null;
         replacement.Entity = this;
+        ComponentsChanged();
         Scene?.ComponentLeft(existing);
         Scene?.ComponentMoved(replacement);
     }
@@ -235,6 +272,7 @@ public sealed class Entity
     {
         _components.Add(component);
         component.Entity = this;
+        ComponentsChanged();
     }
 }
 

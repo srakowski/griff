@@ -37,6 +37,15 @@ public sealed class ScriptHost(ComponentRegistry registry)
     /// <summary>Component types from the currently loaded scripts.</summary>
     public IReadOnlyList<Type> ComponentTypes => _types;
 
+    /// <summary>
+    /// Build the scripts with breakpoint probes (see <see cref="ScriptInstrumenter"/>), as the editor does, so a
+    /// breakpoint can stop them without building them again.
+    /// </summary>
+    public bool WithProbes { get; init; }
+
+    /// <summary>The probes of the loaded scripts (empty without <see cref="WithProbes"/>): what breakpoints switch on.</summary>
+    public ProbeTable Probes { get; private set; } = ProbeTable.Empty;
+
     /// <summary>Raised after scripts are swapped, with the result (also returned by <see cref="Reload"/>).</summary>
     public event EventHandler<ReloadResult>? Reloaded;
 
@@ -50,7 +59,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
         if (fingerprint == _loadedSources)
             return new ReloadResult { Success = true, Diagnostics = [], ComponentTypes = _types, Unchanged = true };
 
-        var result = Apply(ScriptCompiler.Compile(sources), liveScenes);
+        var result = Apply(ScriptCompiler.Compile(sources, probes: WithProbes), liveScenes);
         if (result.Success)
             _loadedSources = fingerprint;
         return result;
@@ -67,6 +76,8 @@ public sealed class ScriptHost(ComponentRegistry registry)
         UnregisterCurrent();
         ComponentSwap.Restore(snapshot, serializer);
         _loadedSources = null;
+        Probes.Clear();
+        Probes = ProbeTable.Empty;
     }
 
     private ReloadResult Apply(CompileResult compiled, IEnumerable<Scene> liveScenes)
@@ -77,6 +88,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
         var context = new AssemblyLoadContext("GriffScripts", isCollectible: true);
         var assembly = context.LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
         DocComments.Register(assembly, compiled.Documentation);
+        compiled.Probes.Attach(assembly);
         var newTypes = ComponentRegistry.ComponentTypesIn(assembly);
 
         // Capture with the old types still registered, swap, then rebuild with the new ones.
@@ -105,6 +117,9 @@ public sealed class ScriptHost(ComponentRegistry registry)
         var old = _context;
         _context = context;
         _types = registered;
+        // The old scripts may still be running (held at a breakpoint): they stop at none from now on.
+        Probes.Clear();
+        Probes = compiled.Probes;
         old?.Unload();
 
         var result = new ReloadResult

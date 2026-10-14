@@ -27,7 +27,8 @@ public partial class MainWindow : ChromeWindow
         ToolbarBuilder toolbarBuilder,
         PanelHost panelHost,
         Features.Scripts.ScriptTabs scriptTabs,
-        Features.Prefabs.PrefabTabs prefabTabs)
+        Features.Prefabs.PrefabTabs prefabTabs,
+        Features.Debugging.Debugger debugger)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -41,6 +42,15 @@ public partial class MainWindow : ChromeWindow
         StartHost.Content = startPage;
         play.Started += (_, _) => DocumentTabs.SelectedItem = GameTab;
         play.Stopped += (_, _) => DocumentTabs.SelectedItem = SceneTab;
+        // A breakpoint shows its script; resuming goes back to the game, if that's what was showing.
+        var gameBeforeBreak = false;
+        debugger.PausedChanged += (_, _) =>
+        {
+            if (debugger.IsPaused)
+                gameBeforeBreak = DocumentTabs.SelectedItem == GameTab;
+            else if (gameBeforeBreak && play.IsPlaying && !play.IsPaused)
+                DocumentTabs.SelectedItem = GameTab;
+        };
         prefabTabs.Attach(DocumentTabs, SceneTab, sceneView);
         scriptTabs.Attach(DocumentTabs);
 

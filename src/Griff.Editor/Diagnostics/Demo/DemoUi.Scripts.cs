@@ -20,6 +20,8 @@ internal sealed partial class DemoUi
 
     public ScriptTabs? ScriptTabs { get; set; }
 
+    public Features.Debugging.Debugger? Debugger { get; set; }
+
     /// <summary>The script tab showing, or an error if none is.</summary>
     public ScriptEditorView ScriptView =>
         Scripts?.Active is { } active && ScriptTabs?.ViewFor(active) is { } view
@@ -121,6 +123,12 @@ internal sealed partial class DemoUi
             case "tab":
                 var tab = Descendants<TabItem>(main.DocumentTabs).First(t => t.Content == view);
                 return ScreenRect(tab);
+            case "breakpoint":
+                // The strip left of the line numbers, on the line with that code: where a click puts a breakpoint.
+                var margin = ScreenRect(view.Editor.BreakpointStrip ?? throw new InvalidOperationException("The script has no breakpoint strip."));
+                var lineOf = view.Editor.Document.GetLineByOffset(Find(view.Editor, name));
+                var row = TextRect(view.Editor, lineOf.Offset, Math.Max(1, lineOf.Length));
+                return new Rect(margin.Left, row.Top, margin.Width, row.Height);
             default:
                 return ScreenRect(CodePart(part));
         }
@@ -148,8 +156,31 @@ internal sealed partial class DemoUi
             "notice" => Named("NoticeBox"),
             "instances" => Named("InstancesSection"),
             "tab" => Descendants<TabItem>(main.DocumentTabs).First(t => t.Content == view),
-            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, completion, quickinfo, signature)."),
+            "paused" => Named("PausedPanel"),
+            "values" => Named("ValuesTree"),
+            "resume" => Named("ResumeButton"),
+            "value" => ValueRow(name) is { } item ? (FrameworkElement?)Descendants<Border>(item).FirstOrDefault(b => b.Name == "Bd") ?? item : throw new InvalidOperationException($"No value {name} is showing."),
+            "expand" => ValueRow(name) is { } toggle ? Descendants<System.Windows.Controls.Primitives.ToggleButton>(toggle).First(b => b.Name == "Expander") : throw new InvalidOperationException($"No value {name} is showing."),
+            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, breakpoint:, paused, values, value:, expand:, resume, completion, quickinfo, signature)."),
         };
+    }
+
+    // A row of the values in scope where the game stopped, by its name ("this", or "this.Speed" for one inside another).
+    private TreeViewItem? ValueRow(string name)
+    {
+        TreeViewItem? row = null;
+        ItemsControl within = (TreeView)ScriptView.FindName("ValuesTree");
+        foreach (var part in name.Split('.', StringSplitOptions.TrimEntries))
+        {
+            within.UpdateLayout();
+            row = Descendants<TreeViewItem>(within).FirstOrDefault(i => i.DataContext is Features.Debugging.DebugValue v && v.Variable == part
+                && ItemsControl.ItemsControlFromItemContainer(i) == within);
+            if (row is null)
+                return null;
+            within = row;
+        }
+
+        return row;
     }
 
     private static int Find(CodeEditor editor, string text)

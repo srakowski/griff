@@ -45,6 +45,7 @@ public static class Icons
     public const string Step = "\uE893";
     public const string Stop = "\uE71A";
     public const string Record = "\uE7C8";
+    public const string Bug = "\uEBE8";
 
     // Tools and panels
     public const string Hierarchy = "\uE8FD";

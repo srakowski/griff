@@ -105,8 +105,9 @@ public sealed partial class Game
         job.Start(this, scripts, run, hook, paused, Rand.NextSeed());
         try
         {
-            // Paused, a panel's scripts run on this thread: whether one's on an open panel isn't for another to ask.
-            if (paused)
+            // Paused, a panel's scripts run on this thread: whether one's on an open panel isn't for another to ask. With a
+            // breakpoint set, they all do, so it can hold them there (the crowd does the same either way).
+            if (paused || Debugging.ScriptProbes.Armed)
                 job.RunAll();
             else
                 Workers.Run(job, job.Chunks);

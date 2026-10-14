@@ -14,6 +14,7 @@ using Griff.Editor.Features.Assets;
 using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Build;
 using Griff.Editor.Features.Controls;
+using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Editing;
 using Griff.Editor.Features.Entities;
@@ -48,6 +49,7 @@ public partial class App : Application
         new PrefabsModule(),
         new PlayModule(),
         new ScriptsModule(),
+        new DebuggingModule(),
         new BuildModule(),
         new HierarchyModule(),
         new InspectorModule(),

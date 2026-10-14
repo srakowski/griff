@@ -111,6 +111,15 @@ public sealed class ScriptDocument : ObservableObject, IDisposable
         internal set => SetProperty(ref _status, value);
     }
 
+    /// <summary>The line the caret is on (from 1): where Toggle Breakpoint (F9) puts one.</summary>
+    public int CaretLine
+    {
+        get => _caretLine;
+        set => SetProperty(ref _caretLine, Math.Clamp(value, 1, Math.Max(1, Text.LineCount)));
+    }
+
+    private int _caretLine = 1;
+
     public ScriptBuildState BuildState
     {
         get => _buildState;

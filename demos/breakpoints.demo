@@ -1,0 +1,40 @@
+title: Breakpoints
+intro: Stop the game at a line of code and see what everything holds right there. Resume carries on from that line.
+project: Arcade | Breakpoints
+scene: Game
+
+chapter: Stop at a line | Click beside a line number
+select: Player
+edit: Ship
+say: The ship's script fires a bullet while the fire button is down. Let's stop the game right as it fires.
+caret: _cooldown = 1 / FireRate
+explain: code:breakpoint:_cooldown = 1 / FireRate | Breakpoints | Click beside a line number, or press F9 on the line, to put a breakpoint there.
+click: code:breakpoint:_cooldown = 1 / FireRate
+explain: code:text:_cooldown = 1 / FireRate | A red dot | Now the game stops whenever a script gets to this line. Breakpoints work while the game runs too, and nothing has to be rebuilt.
+play
+gamehover: Player + 4, 2
+hold: Space 1
+expectstopped: _cooldown = 1 / FireRate
+explain: code:breakpoint:_cooldown = 1 / FireRate | Stopped here | Fire, and the game stops right at that line, in the middle of its frame. The yellow arrow shows where.
+explain: code:values | The values in scope | Below the code is everything in scope here: the ship itself, where it is, and the way it's aiming.
+click: code:expand:this
+explain: code:value:this | Look inside | Open the ship to see its own fields, like the cooldown between shots, and what it builds on: its entity, its transform and the rest.
+hover: aim = Input
+explain: code:quickinfo | Hover for a value | Hover a variable in the code, and it shows its value too.
+
+chapter: Carry on | Resume picks up from that line
+explain: code:resume | Resume | Resume, or F6, lets the script carry on from that very line, and the game plays on.
+pause
+expectstopped: none
+say: Fire again, and it stops again: every time the code gets there.
+gamehover: Player + 4, 2
+hold: Space 1
+expectstopped: _cooldown = 1 / FireRate
+click: code:breakpoint:_cooldown = 1 / FireRate
+explain: code:text:_cooldown = 1 / FireRate | Off again | Click the dot again to take the breakpoint off. Resume, and the ship fires freely.
+pause
+expectstopped: none
+gamehover: Player + 4, 2
+hold: Space 1
+say: Breakpoints cost nothing until the game gets to one. A line without one only checks a switch that's off, and an exported game has no checks at all.
+stop

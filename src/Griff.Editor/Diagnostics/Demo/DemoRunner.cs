@@ -120,6 +120,7 @@ internal static class DemoRunner
             var ui = new DemoUi(main, services.GetRequiredService<SceneViewControl>(), input, overlay, narrator);
             ui.Scripts = services.GetRequiredService<Features.Scripts.ScriptEditors>();
             ui.ScriptTabs = services.GetRequiredService<Features.Scripts.ScriptTabs>();
+            ui.Debugger = services.GetRequiredService<Features.Debugging.Debugger>();
             ui.Panels = services.GetRequiredService<PanelHost>();
             var options = new DemoOptions(fast, Log, control);
             var workspace = services.GetRequiredService<IWorkspace>();

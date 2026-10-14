@@ -260,6 +260,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 break;
             case "spot":
                 var (target, label) = Split2(a);
+                await Showing(target);
                 ui.Spot(TargetRect(target), label.Length > 0 ? label : null);
                 break;
             case "unspot":
@@ -269,6 +270,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var parts = a.Split('|', 3, StringSplitOptions.TrimEntries);
                 if (parts.Length < 3)
                     throw new FormatException("explain: <target> | <label> | <narration>");
+                await Showing(parts[0]);
                 await ui.Explain(TargetRect(parts[0]), parts[1], parts[2]);
                 break;
             case "look":
@@ -394,13 +396,15 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.Type(typed.Replace("\\n", "\n"));
                 break;
             case "click":
-                if (a.StartsWith("world:", StringComparison.OrdinalIgnoreCase) || a.StartsWith("tiles:", StringComparison.OrdinalIgnoreCase))
+                if (a.StartsWith("world:", StringComparison.OrdinalIgnoreCase) || a.StartsWith("tiles:", StringComparison.OrdinalIgnoreCase)
+                    || a.StartsWith("code:breakpoint:", StringComparison.OrdinalIgnoreCase))
                 {
                     var spot = TargetRect(a);
                     await Input.Click(new Point(spot.X + spot.Width / 2, spot.Y + spot.Height / 2));
                 }
                 else
                 {
+                    await Showing(a);
                     await ui.Click(Target(a));
                 }
                 break;
@@ -444,6 +448,18 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 break;
             case "hover":
                 await ui.HoverCode(a);
+                break;
+            case "expectstopped":
+                // "expectstopped: _cooldown = 1" waits for the game to stop at a breakpoint on the line with that code;
+                // "expectstopped: none" for it not to be stopped at one.
+                var debugger = ui.Debugger ?? throw new InvalidOperationException("There's no debugger.");
+                bool StoppedAsSaid() => a.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    ? !debugger.IsPaused
+                    : debugger is { IsPaused: true, PausedLine: { } at } && ui.Scripts?.Active is { } shown
+                        && at <= shown.Text.LineCount && shown.Text.GetText(shown.Text.GetLineByNumber(at)).Contains(a, StringComparison.Ordinal);
+                if (!await Until(StoppedAsSaid, 8000))
+                    throw new InvalidOperationException(debugger.IsPaused ? $"The game is stopped at {debugger.Location}, not at \"{a}\"." : $"The game isn't stopped at a breakpoint (expected \"{a}\").");
+                await DemoUi.Settle(200);
                 break;
             case "expect":
                 // Checks the code ended up as narrated: completion, auto-closed brackets and snippets did what they should.
@@ -1503,6 +1519,14 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
             _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
+    }
+
+    // Waits for a target the editor shows a moment after what made it (the Inspector building an entity's sections after
+    // it's selected: an Edit Script button).
+    private static async Task Showing(string target)
+    {
+        if (target.StartsWith("edit:", StringComparison.OrdinalIgnoreCase))
+            await DemoUi.WaitFor(() => DemoUi.EditScriptButton(target[5..].Trim()), $"the Edit Script button on {target[5..].Trim()}");
     }
 
     /// <summary>Where a target is on screen; world:left,top,right,bottom is a box in the Scene view.</summary>

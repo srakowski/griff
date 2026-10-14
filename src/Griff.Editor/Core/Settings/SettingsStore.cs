@@ -36,6 +36,19 @@ public sealed class EditorSettings
     /// and one rotation angle).
     /// </summary>
     public bool Transform3D { get; set; }
+
+    /// <summary>The breakpoints in each project's scripts (see the Debugger), kept between sessions.</summary>
+    public List<SavedBreakpoint> Breakpoints { get; set; } = [];
+}
+
+/// <summary>A breakpoint kept between sessions: the project's folder, the script's path in its Assets, and the line.</summary>
+public sealed class SavedBreakpoint
+{
+    public string Project { get; set; } = "";
+
+    public string Script { get; set; } = "";
+
+    public int Line { get; set; }
 }
 
 public interface ISettingsStore

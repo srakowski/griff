@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using Griff.Debugging;
 using Griff.Networking;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
@@ -74,6 +76,17 @@ public sealed class PlayMode : ObservableObject, IDisposable
     internal Game? Game => _runner?.Game;
 
     public bool IsPaused => _runner?.IsPaused == true;
+
+    /// <summary>
+    /// True while a script stands at a breakpoint (see <see cref="HoldAtBreakpoint"/>): the game is paused in the middle
+    /// of its frame, at that line. Resuming (<see cref="TogglePause"/>) lets the script carry on from there.
+    /// </summary>
+    public bool IsAtBreakpoint => _held is not null;
+
+    // While a script stands at a breakpoint: the editor's own loop, run until it's let go, and whether the game it's in
+    // is being stopped (or rewound) rather than resumed.
+    private DispatcherFrame? _held;
+    private bool _abandonHeld;
 
     /// <summary>
     /// Where the Game tab's game times its frames (see <see cref="Griff.Runtime.Game.Profiler"/>), from now on and in every
@@ -197,7 +210,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
         // Keys should drive the game, not whichever field had focus.
         Keyboard.ClearFocus();
-        Application.Current.MainWindow?.Focus();
+        Application.Current?.MainWindow?.Focus();
 
         Started?.Invoke(this, EventArgs.Empty);
         _status.Show("Playing");
@@ -210,6 +223,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (_runner is not { } runner)
             return;
 
+        LetGo(abandon: true);
         _runner = null;
         StopPlayers();
         runner.Ticked -= OnTicked;
@@ -239,6 +253,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// <summary>Ends a game still running when the editor closes, without the editor's own bookkeeping.</summary>
     public void Dispose()
     {
+        LetGo(abandon: true);
         StopPlayers();
         var runner = _runner;
         _runner = null;
@@ -257,13 +272,21 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (_runner is null)
             return;
 
+        // At a breakpoint, resuming lets the script carry on from that line.
+        if (_held is not null)
+        {
+            LetGo(abandon: false);
+            SetPaused(false);
+            _status.Show("Playing");
+            Raise();
+            return;
+        }
+
         // Resuming from a rewound moment starts a new future from there.
         if (_runner.IsPaused && _timeline is not null)
             _timeline.TruncateAfter(_position);
 
-        _runner.IsPaused = !_runner.IsPaused;
-        foreach (var player in _players)
-            player.Runner.IsPaused = _runner.IsPaused;
+        SetPaused(!_runner.IsPaused);
         if (_runner.IsPaused)
             Refresh();
         _status.Show(_runner.IsPaused ? "Paused" : "Playing");
@@ -273,7 +296,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// <summary>Advances one frame and stays paused.</summary>
     public void Step()
     {
-        if (_runner is null)
+        // At a breakpoint the frame is under way: it can only carry on (resume) or be left (stop, rewind).
+        if (_runner is null || _held is not null)
             return;
         _runner.IsPaused = true;
         _runner.Step();
@@ -288,7 +312,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
 
         index = Math.Clamp(index, 0, timeline.Count - 1);
-        if (index == _position && _runner.IsPaused)
+        if (index == _position && _runner.IsPaused && _held is null)
             return;
         if (_players.Count > 0)
         {
@@ -296,6 +320,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
         }
 
+        // Rewinding from a breakpoint leaves the frame it's in: the game goes back to before it.
+        LetGo(abandon: true);
         var selectedId = _selection.Entity?.Id;
         var old = _runner;
         old.Ticked -= OnTicked;
@@ -315,7 +341,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     private void StartRunner(Scene scene, bool paused)
     {
-        _runner = new GameRunner(scene, Surface, Application.Current.MainWindow!) { IsPaused = paused };
+        // Keys come from the whole window (or, with no window, as in tests, the game's own view).
+        _runner = new GameRunner(scene, Surface, (UIElement?)Application.Current?.MainWindow ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
         if (_workspace.Project is { } project)
@@ -335,6 +362,64 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner.Game.QuitRequested += OnGameQuit;
         _runner.Start();
     }
+
+    /// <summary>
+    /// Holds the game at a breakpoint a script of <paramref name="runner"/>'s game reached (on this thread, in the middle of
+    /// its frame): every player's game pauses, and the editor goes on working, on a loop of its own, until the game is
+    /// resumed (<see cref="TogglePause"/>) or stopped or rewound. Returns true if it was stopped or rewound, so the script
+    /// goes no further. False straight away if <paramref name="runner"/> isn't one of the games playing, or one is held already.
+    /// </summary>
+    internal bool HoldAtBreakpoint(GameRunner runner, string where)
+    {
+        if (_held is not null || _runner is null || (runner != _runner && _players.All(p => p.Runner != runner)))
+            return false;
+
+        SetPaused(true);
+        var frame = _held = new DispatcherFrame();
+        _abandonHeld = false;
+        Refresh();
+        _status.Show($"Paused at a breakpoint: {where}. Resume (F6) carries on from there.");
+        _logger.LogInformation("Paused at a breakpoint: {Where}", where);
+        Raise();
+        BreakpointReached?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            Dispatcher.PushFrame(frame);
+        }
+        finally
+        {
+            if (_held == frame)
+                _held = null;
+        }
+
+        Raise();
+        return _abandonHeld || frame.Dispatcher.HasShutdownStarted;
+    }
+
+    /// <summary>Raised as the game stops at a breakpoint (see <see cref="HoldAtBreakpoint"/>).</summary>
+    public event EventHandler? BreakpointReached;
+
+    // Lets go of a script held at a breakpoint: it carries on once the editor's done with what it's doing, or with
+    // `abandon`, stops there (the game is being stopped or rewound).
+    private void LetGo(bool abandon)
+    {
+        if (_held is not { } frame)
+            return;
+        _held = null;
+        _abandonHeld = abandon;
+        frame.Continue = false;
+    }
+
+    private void SetPaused(bool paused)
+    {
+        if (_runner is not null)
+            _runner.IsPaused = paused;
+        foreach (var player in _players)
+            player.Runner.IsPaused = paused;
+    }
+
+    // Keys typed into a script's code (F9 for a breakpoint too) are the code editor's, not the game's.
+    private static bool NotTypingCode() => Keyboard.FocusedElement is not ICSharpCode.AvalonEdit.Editing.TextArea;
 
     // ----- Play with Players -----
 
@@ -460,6 +545,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     {
         if (_runtime is null)
             return;
+        // The editor reading the new scene (a script's properties, say) doesn't stop at breakpoints.
+        using var quiet = ScriptProbes.Quiet();
         _runtime = new SceneDocument(scene, _runtime.FilePath, isRuntime: true);
         _sceneName = (sender as Game)?.SceneName ?? _sceneName;
         _workspace.ReplacePlayScene(_runtime);
@@ -483,6 +570,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     {
         if (_runtime is null || _runner is not { IsPaused: false } runner || runner.Game != sender || _timeline is not { } timeline)
             return;
+        // A snapshot reads scripts' properties for itself: that doesn't stop at breakpoints.
+        using var quiet = ScriptProbes.Quiet();
         // The profiler shows what keeping rewind snapshots costs the game's frames, as the editor's own work.
         if (runner.Game.Profiler is { } profiler)
         {
@@ -553,6 +642,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         OnPropertyChanged(nameof(PlayerCount));
         OnPropertyChanged(nameof(IsPlaying));
         OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(IsAtBreakpoint));
         OnPropertyChanged(nameof(TimelineCount));
         OnPropertyChanged(nameof(TimelinePosition));
         OnPropertyChanged(nameof(SecondsBehind));

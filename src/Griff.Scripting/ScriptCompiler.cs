@@ -28,6 +28,12 @@ public sealed class CompileResult
     /// <summary>The scripts' <c>///</c> comments as documentation XML, for the editor's component catalog.</summary>
     public string? Documentation { get; init; }
 
+    /// <summary>
+    /// The breakpoint probes in a build made with them (see <see cref="ScriptInstrumenter"/>), to be attached to the loaded
+    /// assembly; empty otherwise.
+    /// </summary>
+    public ProbeTable Probes { get; init; } = ProbeTable.Empty;
+
     public IEnumerable<ScriptDiagnostic> Errors => Diagnostics.Where(d => d.IsError);
 }
 
@@ -90,7 +96,11 @@ public static class ScriptCompiler
                 .ToList()
             : [];
 
-    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false)
+    /// <param name="probes">
+    /// Put breakpoint probes in (see <see cref="ScriptInstrumenter"/>), as the editor does: each line then tests a switch
+    /// of its own, which a breakpoint turns on.
+    /// </param>
+    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false, bool probes = false)
     {
         var trees = sources
             .Select(s => CSharpSyntaxTree.ParseText(s.Text, ParseOptions, s.Path, System.Text.Encoding.UTF8))
@@ -103,26 +113,96 @@ public static class ScriptCompiler
             References.Value,
             optimize ? ExportCompilationOptions : CompilationOptions);
 
+        if (probes)
+        {
+            var result = CompileWithProbes(compilation);
+            if (result.Probes != ProbeTable.Empty)
+                result.Probes.KeepSources(sources);
+            return result;
+        }
+
+        var emitted = Emit(compilation);
+        var diagnostics = Report(emitted.Result.Diagnostics);
+        return new CompileResult
+        {
+            Success = emitted.Result.Success,
+            Diagnostics = diagnostics,
+            Assembly = emitted.Result.Success ? emitted.Assembly : null,
+            Symbols = emitted.Result.Success ? emitted.Symbols : null,
+            Documentation = emitted.Result.Success ? emitted.Documentation : null,
+        };
+    }
+
+    // The scripts' own errors and warnings come from them as written; the build has the probes in. A probe that doesn't
+    // compile (something the analysis didn't foresee) is left out, so a script that compiles always builds.
+    private static CompileResult CompileWithProbes(CSharpCompilation compilation)
+    {
+        var diagnostics = Report(compilation.GetDiagnostics());
+        if (diagnostics.Any(d => d.IsError))
+            return new CompileResult { Success = false, Diagnostics = diagnostics };
+
+        var plan = ScriptInstrumenter.Analyze(compilation, ImplicitUsingsPath);
+        var leftOut = new HashSet<int>();
+        var refined = new HashSet<int>();
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            var (instrumented, table) = plan.Build(leftOut);
+            var emitted = Emit(instrumented);
+            if (emitted.Result.Success)
+                return Built(emitted, diagnostics, table);
+
+            // A probe that doesn't compile is worked out again with Roslyn's help, and if it still doesn't, left out.
+            var failing = new HashSet<int>();
+            foreach (var error in emitted.Result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
+            {
+                var span = error.Location.GetLineSpan();
+                failing.UnionWith(plan.Around(span.Path, span.StartLinePosition.Line + 1));
+            }
+
+            var unrefined = failing.Except(refined).ToList();
+            if (unrefined.Count > 0)
+            {
+                plan.Refine(unrefined);
+                refined.UnionWith(unrefined);
+                continue;
+            }
+
+            var before = leftOut.Count;
+            leftOut.UnionWith(failing);
+            if (leftOut.Count == before)
+                break;
+        }
+
+        var plain = Emit(compilation);
+        return plain.Result.Success
+            ? Built(plain, diagnostics, new ProbeTable([]))
+            : new CompileResult { Success = false, Diagnostics = Report(plain.Result.Diagnostics) };
+    }
+
+    private static CompileResult Built((EmitResult Result, byte[] Assembly, byte[] Symbols, string Documentation) emitted, IReadOnlyList<ScriptDiagnostic> diagnostics, ProbeTable probes) => new()
+    {
+        Success = true,
+        Diagnostics = diagnostics,
+        Assembly = emitted.Assembly,
+        Symbols = emitted.Symbols,
+        Documentation = emitted.Documentation,
+        Probes = probes,
+    };
+
+    private static (EmitResult Result, byte[] Assembly, byte[] Symbols, string Documentation) Emit(CSharpCompilation compilation)
+    {
         using var assembly = new MemoryStream();
         using var symbols = new MemoryStream();
         using var documentation = new MemoryStream();
         var result = compilation.Emit(assembly, symbols, documentation, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
-
-        var diagnostics = result.Diagnostics
-            .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning && !d.IsSuppressed)
-            .Select(ToScriptDiagnostic)
-            .OrderBy(d => !d.IsError)
-            .ToList();
-
-        return new CompileResult
-        {
-            Success = result.Success,
-            Diagnostics = diagnostics,
-            Assembly = result.Success ? assembly.ToArray() : null,
-            Symbols = result.Success ? symbols.ToArray() : null,
-            Documentation = result.Success ? System.Text.Encoding.UTF8.GetString(documentation.ToArray()) : null,
-        };
+        return (result, assembly.ToArray(), symbols.ToArray(), System.Text.Encoding.UTF8.GetString(documentation.ToArray()));
     }
+
+    private static List<ScriptDiagnostic> Report(IEnumerable<Diagnostic> diagnostics) => diagnostics
+        .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning && !d.IsSuppressed)
+        .Select(ToScriptDiagnostic)
+        .OrderBy(d => !d.IsError)
+        .ToList();
 
     private static ScriptDiagnostic ToScriptDiagnostic(Diagnostic diagnostic)
     {

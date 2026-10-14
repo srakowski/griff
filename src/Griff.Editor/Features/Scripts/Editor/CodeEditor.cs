@@ -216,6 +216,7 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
         _caretIdle.Stop();
         _caretIdle.Start();
         UpdateSignatureHelpForCaret();
+        _script.CaretLine = CaretLine;
         CaretMoved?.Invoke(this, EventArgs.Empty);
     }
 

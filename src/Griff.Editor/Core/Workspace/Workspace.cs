@@ -118,6 +118,12 @@ public interface IWorkspace : INotifyPropertyChanged
     ReloadResult? ReloadScripts();
 
     /// <summary>
+    /// The breakpoint probes of the scripts loaded now: the editor builds scripts with a probe on each line of code, which
+    /// a breakpoint switches on (see <see cref="ScriptInstrumenter"/>).
+    /// </summary>
+    ProbeTable ScriptProbes { get; }
+
+    /// <summary>
     /// Adds scenes that run outside the workspace's own documents (the other players' games in Play with Players), asked
     /// for at each script reload, so the new scripts reach them too.
     /// </summary>
@@ -173,7 +179,9 @@ public sealed class Workspace(
     public Griff.Editing.KnownNames? Names =>
         Project is { } project ? (_names ??= new(Components)).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
-    public ScriptHost Scripts => _scripts ??= new ScriptHost(Components);
+    public ScriptHost Scripts => _scripts ??= new ScriptHost(Components) { WithProbes = true };
+
+    public ProbeTable ScriptProbes => Scripts.Probes;
 
     private ScriptHost? _scripts;
 
@@ -528,8 +536,12 @@ public sealed class Workspace(
 
     public async Task<bool> OpenSceneAsync(string path)
     {
-        if (Project is null || IsPlaying || !await ConfirmCloseAsync())
+        if (Project is not { } project || IsPlaying || !await ConfirmCloseAsync())
             return false;
+
+        // A path in Assets ("Scenes/Level 2.scene") or a scene's name works as well as a full path.
+        if (!Path.IsPathRooted(path))
+            path = File.Exists(Path.Combine(project.AssetsPath, path)) ? Path.Combine(project.AssetsPath, path) : project.FindScene(path) ?? Path.Combine(project.AssetsPath, path);
 
         var scene = await LoadSceneAsync(path);
         SetScene(scene);

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.Scripts.Editor;
 using Griff.Editor.Themes;
 using Griff.Scripting;
@@ -28,14 +29,16 @@ public partial class ScriptEditorView : UserControl
     private bool _showingReferences;
 
     public ScriptEditorView(ScriptDocument script, ScriptEditors editors, IWorkspace workspace, ISelection selection, IDialogService dialogs,
-        Art.EditorArt art, Audio.EditorAudio audio)
+        Art.EditorArt art, Audio.EditorAudio audio, Debugger debugger)
     {
         InitializeComponent();
         Script = script;
         _editors = editors;
+        _debugger = debugger;
         DataContext = script;
 
         Editor = new CodeEditor(script, editors.Language) { Prompt = dialogs.Prompt };
+        Editor.Attach(debugger);
         EditorHost.Content = Editor;
         Component = new ComponentPanel(script, workspace, selection, art, audio);
         ComponentPane.DataContext = Component;
@@ -92,11 +95,20 @@ public partial class ScriptEditorView : UserControl
         UpdateBadges();
         CaretText.Text = "Ln 1, Col 1     Spaces: 4     UTF-8     C#";
         editors.PropertyChanged += OnEditorsChanged;
-        Unloaded += (_, _) => editors.PropertyChanged -= OnEditorsChanged;
+        debugger.PausedChanged += OnPausedChanged;
+        ShowPaused();
+        Unloaded += (_, _) =>
+        {
+            editors.PropertyChanged -= OnEditorsChanged;
+            debugger.PausedChanged -= OnPausedChanged;
+        };
         Loaded += (_, _) =>
         {
             editors.PropertyChanged -= OnEditorsChanged;
             editors.PropertyChanged += OnEditorsChanged;
+            debugger.PausedChanged -= OnPausedChanged;
+            debugger.PausedChanged += OnPausedChanged;
+            ShowPaused();
             ComponentToggle.IsChecked = editors.ShowComponent;
             ApplyComponentVisibility();
             Dispatcher.InvokeAsync(() => Editor.Focus(), DispatcherPriority.Input);
@@ -104,6 +116,8 @@ public partial class ScriptEditorView : UserControl
     }
 
     public ScriptDocument Script { get; }
+
+    private readonly Debugger _debugger;
 
     public CodeEditor Editor { get; }
 
@@ -165,6 +179,22 @@ public partial class ScriptEditorView : UserControl
 
     // A finished drag or typed number in the component panel closes the undo step.
     private void OnEditCompleted(object sender, RoutedEventArgs e) => Component.Seal();
+
+    // ----- Stopped at a breakpoint -----
+
+    private void OnPausedChanged(object? sender, EventArgs e) => ShowPaused();
+
+    // Stopped in this script: the line, the member and the values in scope below the code.
+    private void ShowPaused()
+    {
+        var here = _debugger is { IsPaused: true, PausedPath: { } path } && string.Equals(path, Script.FilePath, StringComparison.OrdinalIgnoreCase);
+        PausedPanel.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
+        ValuesTree.ItemsSource = here ? _debugger.Values : null;
+        if (here)
+            PausedTitle.Text = $"Paused at line {_debugger.PausedLine}  ·  {_debugger.PausedIn}";
+    }
+
+    private void OnResumeClicked(object sender, RoutedEventArgs e) => _debugger.Resume();
 
     // ----- Problems and references -----
 

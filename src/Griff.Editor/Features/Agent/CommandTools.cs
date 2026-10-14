@@ -6,6 +6,8 @@ using Griff.Agent;
 using Griff.Editing;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Debugging;
+using Griff.Editor.Features.Play;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Agent;
@@ -17,7 +19,7 @@ namespace Griff.Editor.Features.Agent;
 /// here changes. Questions the command asks are answered from "answers" (see <see cref="AgentDialogs"/>), and a command
 /// that opens a window returns while it's open, so the window can be worked through the ui_ tools.
 /// </summary>
-public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefinition> menus, ISelection selection, IWorkspace workspace) : IAgentToolSource
+public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefinition> menus, ISelection selection, IWorkspace workspace, PlayMode play, Debugger debugger) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -96,10 +98,30 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         // Queued rather than called, so a command that opens a modal window doesn't hold this call until it closes.
         var dispatcher = Application.Current.Dispatcher;
         var choice = args.OptionalString("choice");
+        // A command that runs the game into a breakpoint (Step Frame, say) is still going while it's stopped there: it says so then.
+        var stopped = new TaskCompletionSource();
+        void OnStopped(object? sender, EventArgs e) => stopped.TrySetResult();
+        play.BreakpointReached += OnStopped;
         var run = dispatcher.InvokeAsync(() => choice is null ? command.ExecuteAsync() : command.ChooseAsync(choice), DispatcherPriority.Normal).Task.Unwrap();
-        var finished = await Task.WhenAny(run, Task.Delay(wait)) == run;
+        Task first;
+        try
+        {
+            first = await Task.WhenAny(run, Task.Delay(wait), stopped.Task);
+        }
+        finally
+        {
+            play.BreakpointReached -= OnStopped;
+        }
 
+        var finished = first == run;
         var text = new StringBuilder();
+        if (!finished && debugger.IsPaused)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')}: the game stopped at a breakpoint. ").Append(debugger.ValuesText)
+                .Append("ui_inspect Debugger (Values[name].Members) looks deeper; Game_Pause resumes from there.");
+            return ToolResult.Ok(text.ToString());
+        }
+
         if (!finished)
         {
             text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')} is still going.");
@@ -126,6 +148,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
     private string WhyNot(EditorCommand command) =>
         command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
+        : play.IsAtBreakpoint ? " (the game is stopped at a breakpoint, in the middle of a frame: Game_Pause resumes it)"
         : workspace.Project is null ? " (no project is open)"
         : workspace.Scene is null ? " (no scene is open)"
         : selection.Entity is null ? " (perhaps it needs an entity selected: pass \"entity\")"

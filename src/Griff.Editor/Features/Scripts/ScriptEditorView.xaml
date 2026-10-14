@@ -10,6 +10,7 @@
              xmlns:theme="clr-namespace:Griff.Editor.Themes"
              xmlns:editor="clr-namespace:Griff.Editor.Features.Scripts.Editor"
              xmlns:scripting="clr-namespace:Griff.Scripting;assembly=Griff.Scripting"
+             xmlns:debugging="clr-namespace:Griff.Editor.Features.Debugging"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=scripts:ScriptDocument}"
              d:DesignHeight="700" d:DesignWidth="1100"
@@ -92,6 +93,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="34" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="24" />
             </Grid.RowDefinitions>
@@ -264,8 +266,45 @@
                 </DockPanel>
             </Border>
 
+            <!-- Stopped at a breakpoint in this script: where, the values in scope, and Resume -->
+            <Border x:Name="PausedPanel"
+                    Grid.Row="3"
+                    MaxHeight="280"
+                    Background="{StaticResource Code.Bar}"
+                    BorderBrush="#B0F5C542"
+                    BorderThickness="0,2,0,0"
+                    Visibility="Collapsed">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Height="32" Margin="10,0,6,0">
+                        <Button x:Name="ResumeButton"
+                                Width="Auto"
+                                Padding="10,0"
+                                DockPanel.Dock="Right"
+                                Click="OnResumeClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Resume (F6): the script carries on from this line">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Play}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Resume" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F6" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontSize="12" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Pause}" />
+                        <TextBlock x:Name="PausedTitle" VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <TreeView x:Name="ValuesTree" Margin="4,0,4,6" Background="Transparent" BorderThickness="0">
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate DataType="{x:Type debugging:DebugValue}" ItemsSource="{Binding Members}">
+                                <TextBlock FontFamily="{StaticResource Font.Mono}" FontSize="12.5" TextTrimming="CharacterEllipsis">
+                                    <Run Foreground="{x:Static editor:CodeTheme.Parameter}" Text="{Binding Variable, Mode=OneWay}" /><Run Foreground="{x:Static editor:CodeTheme.Operator}" Text=" = " /><Run Foreground="{x:Static editor:CodeTheme.Text}" Text="{Binding Value, Mode=OneWay}" /><Run Text="  " /><Run FontSize="11" Foreground="{x:Static editor:CodeTheme.Comment}" Text="{Binding Type, Mode=OneWay}" />
+                                </TextBlock>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
             <!-- Status: what the last save did, and where the caret is -->
-            <Border Grid.Row="3" Background="{StaticResource Code.Bar}" BorderBrush="{StaticResource Code.Line}" BorderThickness="0,1,0,0">
+            <Border Grid.Row="4" Background="{StaticResource Code.Bar}" BorderBrush="{StaticResource Code.Line}" BorderThickness="0,1,0,0">
                 <DockPanel Margin="10,0">
                     <TextBlock x:Name="CaretText" DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource Style.Text.Caption}" />
                     <TextBlock x:Name="BuildIcon" Margin="0,0,7,0" VerticalAlignment="Center" FontSize="11" Style="{StaticResource Style.Icon}" />

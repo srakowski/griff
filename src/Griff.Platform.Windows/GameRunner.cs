@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Griff.Debugging;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -64,6 +65,15 @@ public sealed class GameRunner : IDisposable
 
     public Game Game { get; }
 
+    /// <summary>
+    /// The runner whose game is taking its steps or building its picture on this thread right now, if any: what a
+    /// breakpoint reached on it stops (see <see cref="ScriptProbes"/>), rather than code the editor runs between frames.
+    /// </summary>
+    public static GameRunner? Running => t_running;
+
+    [ThreadStatic]
+    private static GameRunner? t_running;
+
     public bool IsRunning { get; private set; }
 
     /// <summary>Holds the game still (the editor's pause), drawn as it is rather than between steps.</summary>
@@ -73,14 +83,23 @@ public sealed class GameRunner : IDisposable
         set
         {
             _isPaused = value;
-            if (value)
-                Game.ShowAsIs();
+            if (!value)
+                return;
+            Game.ShowAsIs();
+            // A paused game gives the mouse back, so the editor can be used (also when it's held at a breakpoint, mid-frame).
+            ReleaseMouse();
         }
     }
 
     private bool _isPaused;
 
     private bool _drawFaulted;
+
+    /// <summary>
+    /// Whether a key pressed now is the game's, asked as each is pressed (null: always, unless typing into a text box or
+    /// paused): the editor says no while typing code, so F9 and typing work there while the game runs.
+    /// </summary>
+    public Func<bool>? TakesKeys { get; set; }
 
     /// <summary>
     /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
@@ -124,6 +143,9 @@ public sealed class GameRunner : IDisposable
 
     private void OnFrame(long shownAt)
     {
+        // Time a script stood still at a breakpoint isn't time the game owes: it picks up where it stopped.
+        if (_heldUntil > _lastShown)
+            _lastShown = Math.Min(_heldUntil, shownAt);
         var seconds = (double)Math.Max(0, shownAt - _lastShown) / Stopwatch.Frequency;
         _lastShown = shownAt;
         var first = !_shownAny;
@@ -138,11 +160,21 @@ public sealed class GameRunner : IDisposable
             var steps = Game.Time.Frame;
             var (allocated, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
             var started = Stopwatch.GetTimestamp();
+            var breaks = ScriptProbes.Breaks;
             RunSafely(stepOnce: false, seconds);
             var stepped = Stopwatch.GetTimestamp();
+            // A frame held at a breakpoint isn't timed: it took as long as someone looked at it.
+            if (ScriptProbes.Breaks != breaks || !IsRunning)
+            {
+                RenderLatest();
+                return;
+            }
+
             // Building the picture times its own parts (what each kind of thing drawn costs: see FrameCostKind.Build).
             RenderLatest(out var built, out var builtAllocated);
             var drawn = Stopwatch.GetTimestamp();
+            if (ScriptProbes.Breaks != breaks)
+                return;
             profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, Workers.AllocatedBytes() - builtAllocated);
             profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
                 Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0,
@@ -174,6 +206,9 @@ public sealed class GameRunner : IDisposable
     private void RunSafely(bool stepOnce, double seconds)
     {
         var steps = Game.Time.Frame;
+        var breaks = ScriptProbes.Breaks;
+        var outer = t_running;
+        t_running = this;
         try
         {
             UpdateMouseWorld();
@@ -185,6 +220,10 @@ public sealed class GameRunner : IDisposable
             else
                 Game.Advance(seconds);
         }
+        catch (ScriptAbortedException)
+        {
+            // Stopped (or rewound) at a breakpoint: this game is gone, and nothing went wrong in it.
+        }
         catch (Exception ex)
         {
             IsPaused = true;
@@ -192,13 +231,19 @@ public sealed class GameRunner : IDisposable
         }
         finally
         {
+            t_running = outer;
             if (stepOnce)
                 _input.EndFrame();
+            if (ScriptProbes.Breaks != breaks)
+                _heldUntil = Stopwatch.GetTimestamp();
         }
 
-        if (Game.Time.Frame != steps)
+        if (IsRunning && Game.Time.Frame != steps)
             Ticked?.Invoke(this, EventArgs.Empty);
     }
+
+    // When a script last let go of a breakpoint it stood at in this game's frame (a Stopwatch timestamp).
+    private long _heldUntil;
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
     // and the last good frame stays up.
@@ -209,9 +254,23 @@ public sealed class GameRunner : IDisposable
     private void RenderLatest(out long built, out long allocated)
     {
         RenderFrame frame;
+        if (!IsRunning)
+        {
+            // Stopped while a script stood at a breakpoint in this frame: the game's gone, and so is its picture.
+            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
+            return;
+        }
+
+        var outer = t_running;
+        t_running = this;
         try
         {
             frame = SceneRenderer.Build(Game, _surface.Aspect, recycle: _lastFrame);
+        }
+        catch (ScriptAbortedException)
+        {
+            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
+            return;
         }
         catch (Exception ex)
         {
@@ -224,6 +283,10 @@ public sealed class GameRunner : IDisposable
             }
 
             return;
+        }
+        finally
+        {
+            t_running = outer;
         }
 
         (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
@@ -296,8 +359,9 @@ public sealed class GameRunner : IDisposable
         if (e.Key == System.Windows.Input.Key.Escape)
             ReleaseMouse();
 
-        // Typing into a text field (say, the editor's Inspector while playing) isn't playing the game.
-        if (Keyboard.FocusedElement is TextBoxBase)
+        // Typing into a text field (say, the editor's Inspector while playing) isn't playing the game, and nor is pressing
+        // keys while it's paused: those are the editor's (F6 resumes, F9 sets a breakpoint, typing goes into the code).
+        if (Keyboard.FocusedElement is TextBoxBase || IsPaused || TakesKeys?.Invoke() == false)
             return;
 
         var wpfKey = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;

@@ -509,6 +509,46 @@ public sealed class CoresTests
         Assert.NotEqual(one, Play(16, seed: 4));
     }
 
+    // Where each of a crowd's scripts ran.
+    [Crowd]
+    private sealed class ThreadSpy : Behavior
+    {
+        public int Thread { get; set; }
+
+        protected override void Update() => Thread = Environment.CurrentManagedThreadId;
+    }
+
+    // A breakpoint can only hold a script on the game's thread: with one set, a crowd runs there, and plays out the same.
+    [Fact]
+    public void With_a_breakpoint_set_a_crowd_runs_on_the_games_thread_and_plays_out_the_same()
+    {
+        var spread = Play(16, seed: 3);
+        Griff.Debugging.ScriptProbes.Armed = true;
+        try
+        {
+            Assert.Equal(spread, Play(16, seed: 3));
+            var scene = new Scene();
+            for (var i = 0; i < 4000; i++)
+            {
+                var spy = new Entity($"Spy {i}");
+                spy.AddComponent<ThreadSpy>();
+                scene.Add(spy);
+            }
+
+            var game = new Game(scene, new InputState());
+            With(16, chunked: true, () =>
+            {
+                game.Tick(1 / 60.0);
+                return 0;
+            });
+            Assert.All(scene.Active<ThreadSpy>(), s => Assert.Equal(Environment.CurrentManagedThreadId, s.Thread));
+        }
+        finally
+        {
+            Griff.Debugging.ScriptProbes.Armed = false;
+        }
+    }
+
     [Fact]
     public void Each_script_of_a_crowd_gets_numbers_of_its_own()
     {

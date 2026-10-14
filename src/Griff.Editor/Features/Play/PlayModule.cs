@@ -52,7 +52,10 @@ public sealed class PlayCommand(PlayMode play, IWorkspace workspace) : EditorCom
     }
 }
 
-/// <summary>Pauses the running game, or resumes it. While paused, the timeline rewinds up to the last 20 seconds.</summary>
+/// <summary>
+/// Pauses the running game, or resumes it. While paused, the timeline rewinds up to the last 20 seconds. Stopped at a
+/// breakpoint, resuming lets the script carry on from that line.
+/// </summary>
 public sealed class PauseCommand(PlayMode play) : EditorCommand
 {
     public override string Id => "Game.Pause";
@@ -71,7 +74,7 @@ public sealed class PauseCommand(PlayMode play) : EditorCommand
     }
 }
 
-/// <summary>Advances the paused game by one frame.</summary>
+/// <summary>Advances the paused game by one frame (not while it's stopped at a breakpoint, in the middle of one).</summary>
 public sealed class StepCommand(PlayMode play) : EditorCommand
 {
     public override string Id => "Game.Step";
@@ -81,7 +84,7 @@ public sealed class StepCommand(PlayMode play) : EditorCommand
     public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 0, Order: 2);
     public override ToolbarPlacement? Toolbar { get; } = new(Group: 2, Order: 2);
 
-    protected override bool CanExecuteCore() => play.IsPlaying;
+    protected override bool CanExecuteCore() => play.IsPlaying && !play.IsAtBreakpoint;
 
     protected override Task ExecuteCoreAsync()
     {

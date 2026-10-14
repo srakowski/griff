@@ -459,21 +459,36 @@ public sealed partial class CodeEditor
             return;
         }
 
-        if (cancel.IsCancellationRequested || problems.Count == 0 && info is null)
+        // Stopped at a breakpoint here: what a variable holds comes first.
+        var paused = PausedValueAt(offset);
+        if (cancel.IsCancellationRequested || problems.Count == 0 && info is null && paused is null)
             return;
 
         var panel = new StackPanel { MaxWidth = 620 };
+        if (paused is not null)
+        {
+            var value = new TextBlock { FontFamily = CodeTheme.Font, FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 2) };
+            value.Inlines.Add(new Run(paused.Variable) { Foreground = CodeTheme.Parameter });
+            value.Inlines.Add(new Run(" = ") { Foreground = CodeTheme.Operator });
+            value.Inlines.Add(new Run(paused.Value) { Foreground = CodeTheme.Text, FontWeight = FontWeights.SemiBold });
+            value.Inlines.Add(new Run("  " + paused.Type) { Foreground = CodeTheme.Comment, FontSize = 11.5 });
+            panel.Children.Add(value);
+            if (problems.Count > 0 || info is not null)
+                panel.Children.Add(new Border { Height = 1, Background = CodeTheme.PopupBorder, Margin = new Thickness(0, 6, 0, 8) });
+        }
+
         foreach (var problem in problems)
             panel.Children.Add(ProblemLine(problem, panel.Children.Count > 0));
         if (info is not null)
         {
             if (problems.Count > 0)
                 panel.Children.Add(new Border { Height = 1, Background = CodeTheme.PopupBorder, Margin = new Thickness(0, 8, 0, 8) });
+            var first = panel.Children.Count;
             foreach (var section in info.Sections)
             {
                 var mono = section.Kind == QuickInfoSectionKinds.Description;
                 var block = Tagged(section.Parts, mono);
-                block.Margin = new Thickness(0, panel.Children.Count == 0 ? 0 : mono ? 0 : 6, 0, 0);
+                block.Margin = new Thickness(0, panel.Children.Count == first ? 0 : mono ? 0 : 6, 0, 0);
                 if (!mono)
                 {
                     block.Foreground = section.Kind == QuickInfoSectionKinds.DocumentationComments ? CodeTheme.Text : CodeTheme.Comment;
@@ -484,7 +499,7 @@ public sealed partial class CodeEditor
             }
         }
 
-        var span = info is not null ? (info.Start, info.Length) : (problems[0].Start, Math.Max(1, problems[0].Length));
+        (int Start, int Length) span = info is not null ? (info.Start, info.Length) : problems.Count > 0 ? (problems[0].Start, Math.Max(1, problems[0].Length)) : (offset, 1);
         ShowPopup(panel, span.Start);
     }
 

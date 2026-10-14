@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Griff.Agent;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
@@ -25,7 +26,7 @@ namespace Griff.Editor.Features.Agent;
 /// What an agent needs to see its work and try it: where the editor is at, pictures of the game and the editor, the
 /// Output log, and keys pressed in the running game to playtest it.
 /// </summary>
-public sealed class EditorTools(IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log) : IAgentToolSource
+public sealed class EditorTools(IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -35,8 +36,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Title = "Editor State",
             ReadOnly = true,
             Description = "Where the editor is at: the open project and scene, unsaved changes, whether the game is playing (and the " +
-                "dialogue flags set and the systems scripts have added while it is), the selection, what undo and redo would do, open windows and " +
-                "recent problems from the Output panel.",
+                "dialogue flags set and the systems scripts have added while it is, or the breakpoint it's stopped at with the values in scope), " +
+                "the breakpoints set, the selection, what undo and redo would do, open windows and recent problems from the Output panel.",
             Invoke = _ => Task.FromResult(State()),
         };
 
@@ -59,7 +60,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         {
             Name = "game_input",
             Title = "Game Input",
-            Description = "Plays the running game (start it with Game_Play): presses keys and uses the mouse as a player would, in steps. Each step can " +
+            Description = "Plays the running game (start it with Game_Play): presses keys and uses the mouse as a player would, in steps. If a breakpoint stops the game, it stops there and says where, with the values in scope. Each step can " +
                 "\"hold\" keys for \"seconds\", \"tap\" keys (pressed for one frame) or just \"wait\" seconds. Keys are names like Right, " +
                 "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact. " +
                 "The mouse: \"point\" moves it to a point, \"click\" clicks there (\"button\": \"Right\" for the right button), and \"drag\" presses " +
@@ -129,7 +130,12 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             text.AppendLine(CultureInfo.InvariantCulture, $"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
         }
 
-        text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? play.IsPaused ? "paused" : "playing" : "not playing")}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? debugger.IsPaused ? $"paused at a breakpoint, {debugger.Location}" : play.IsPaused ? "paused" : "playing" : "not playing")}");
+        if (debugger.IsPaused)
+            text.Append("Values in scope there (ui_inspect Debugger reads them, Values[name].Members goes deeper; Game_Pause resumes):").AppendLine()
+                .Append(debugger.ValuesText);
+        if (debugger.Breakpoints.Count > 0)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Breakpoints: {string.Join(", ", debugger.Breakpoints.Select(b => b.Label + (b.IsSet ? "" : " (not in the scripts as built)")))} (ui_invoke Debugger SetBreakpoint / RemoveBreakpoint)");
         if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
             text.AppendLine(flags);
         if (play.Game is { } running && Playtesting.AddedSystems(running) is { } systems)
@@ -326,7 +332,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             }
 
             if (seconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(Math.Min(seconds, 60)));
+                await UntilBreakpointAsync(Task.Delay(TimeSpan.FromSeconds(Math.Min(seconds, 60))));
             foreach (var key in hold)
                 input.SetKey(key, false);
             if (play.Game != game)
@@ -334,9 +340,14 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 log.AppendLine("The game stopped.");
                 return ToolResult.Ok(log.ToString());
             }
+
+            if (debugger.IsPaused)
+                return StoppedAtBreakpoint(log);
         }
 
         await FramesAsync(1);
+        if (debugger.IsPaused)
+            return StoppedAtBreakpoint(log);
         if (args.Bool("pause_after") && !play.IsPaused)
             play.TogglePause();
         log.AppendLine(CultureInfo.InvariantCulture, $"Played {game.Time.Total - startTime:0.##} s of game time{(play.IsPaused ? "; paused" : "")}.");
@@ -471,6 +482,32 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         return keys;
     }
 
+    // A breakpoint stopped the game: the steps stop there, and say where it is and what's in scope.
+    private ToolResult StoppedAtBreakpoint(StringBuilder log)
+    {
+        log.Append("Stopped at a breakpoint: ").Append(debugger.ValuesText)
+            .AppendLine("ui_inspect Debugger (Values[name].Members) looks deeper; Game_Pause resumes from there.");
+        return ToolResult.Ok(log.ToString());
+    }
+
+    // Waits for `work`, or until a breakpoint stops the game, whichever comes first.
+    private async Task UntilBreakpointAsync(Task work)
+    {
+        if (debugger.IsPaused)
+            return;
+        var stopped = new TaskCompletionSource();
+        void OnStopped(object? sender, EventArgs e) => stopped.TrySetResult();
+        play.BreakpointReached += OnStopped;
+        try
+        {
+            await Task.WhenAny(work, stopped.Task);
+        }
+        finally
+        {
+            play.BreakpointReached -= OnStopped;
+        }
+    }
+
     // Lets the game run a few frames (each one ticks the running scene).
     private async Task FramesAsync(int frames)
     {
@@ -487,7 +524,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         runtime.RuntimeTicked += Tick;
         try
         {
-            await Task.WhenAny(done.Task, Task.Delay(1000));
+            await UntilBreakpointAsync(Task.WhenAny(done.Task, Task.Delay(1000)));
         }
         finally
         {

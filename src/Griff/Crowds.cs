@@ -37,6 +37,16 @@ internal static class Crowds
         Rand.Use(previous);
     }
 
+    // While a crowd's script is held at a breakpoint, what the editor does on this thread isn't the crowd's.
+    public static Type? SetAside()
+    {
+        var running = t_running;
+        t_running = null;
+        return running;
+    }
+
+    public static void Restore(Type? running) => t_running = running;
+
     /// <summary>This thread's random numbers for a crowd's scripts: <see cref="CrowdRandom.Start"/> them for each script.</summary>
     public static CrowdRandom Random => t_random ??= new CrowdRandom();
 }

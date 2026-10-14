@@ -270,7 +270,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
             if (pull.Length() > MaxGrabSpeed)
                 pull = Vector2.Normalize(pull) * MaxGrabSpeed;
             foreach (var body in GroupOf(held))
-                (body.Velocity, body.FloatThisStep) = (pull, true);
+                (body.Velocity, body.Spin, body.FloatThisStep) = (pull, 0, true);
             return;
         }
 

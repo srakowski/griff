@@ -241,6 +241,20 @@ public sealed partial class Physics
         // The cells a world box covers on the grid (clamped to the map), for looking at the solid ones in it.
         public IEnumerable<(int X, int Y)> CellsUnder(Box box)
         {
+            var (x0, y0, x1, y1) = CellRange(box);
+            for (var y = y0; y <= y1; y++)
+            {
+                for (var x = x0; x <= x1; x++)
+                {
+                    if (Blocked(x, y))
+                        yield return (x, y);
+                }
+            }
+        }
+
+        /// <summary>The columns and rows of the cells a world box covers on the grid, clamped to the map (none when the ends cross).</summary>
+        public (int X0, int Y0, int X1, int Y1) CellRange(Box box)
+        {
             var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
             foreach (var corner in (ReadOnlySpan<Vector2>)[box.Min, box.Max, new Vector2(box.Min.X, box.Max.Y), new Vector2(box.Max.X, box.Min.Y)])
             {
@@ -250,14 +264,35 @@ public sealed partial class Physics
 
             var (x0, y0) = (Math.Max(0, (int)MathF.Floor(min.X)), Math.Max(0, (int)MathF.Floor(min.Y)));
             var (x1, y1) = (Math.Min(Width - 1, (int)MathF.Floor(max.X)), Math.Min(Height - 1, (int)MathF.Floor(max.Y)));
-            for (var y = y0; y <= y1; y++)
-            {
-                for (var x = x0; x <= x1; x++)
-                {
-                    if (Blocked(x, y))
-                        yield return (x, y);
-                }
-            }
+            return (x0, y0, x1, y1);
+        }
+
+        /// <summary>A cell's diamond in the world, as a turning body's shapes meet it.</summary>
+        public void DiamondHull(ref Hull hull, int x, int y)
+        {
+            hull.Count = 4;
+            hull.Points[0] = Vector2.Transform(new Vector2(x, y), FromGrid);
+            hull.Points[1] = Vector2.Transform(new Vector2(x + 1, y), FromGrid);
+            hull.Points[2] = Vector2.Transform(new Vector2(x + 1, y + 1), FromGrid);
+            hull.Points[3] = Vector2.Transform(new Vector2(x, y + 1), FromGrid);
+            FinishPolygon(ref hull);
+        }
+
+        /// <summary>
+        /// The diamond under a collider's middle, <paramref name="halfWidth"/> half as wide as it in the world: a square on
+        /// the grid, what a body meets the walls with.
+        /// </summary>
+        public void FootprintHull(ref Hull hull, Vector2 center, float halfWidth)
+        {
+            var middle = Vector2.Transform(center, ToGrid);
+            var half = HalfOf(halfWidth);
+            hull.Count = 4;
+            hull.Points[0] = Vector2.Transform(middle + new Vector2(-half, -half), FromGrid);
+            hull.Points[1] = Vector2.Transform(middle + new Vector2(half, -half), FromGrid);
+            hull.Points[2] = Vector2.Transform(middle + new Vector2(half, half), FromGrid);
+            hull.Points[3] = Vector2.Transform(middle + new Vector2(-half, half), FromGrid);
+            FinishPolygon(ref hull);
+            hull.Center = center;
         }
 
         // A cell's diamond in the world: its four corners, round from its top.

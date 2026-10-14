@@ -67,7 +67,7 @@ public sealed partial class Game
         foreach (var held in _drags.Held.Values)
         {
             if (held.Thing.Entity!.GetComponent<Body>() is { } body)
-                (body.Velocity, body.FloatThisStep) = (Vector2.Zero, true);
+                (body.Velocity, body.Spin, body.FloatThisStep) = (Vector2.Zero, 0, true);
         }
 
         UpdateDropTargets(draggables, targets);
@@ -343,7 +343,7 @@ public sealed partial class Game
             var to = Vector2.Lerp(slide.From, slide.To, eased);
             MoveTo(entity, to - CenterOf(entity) + Flat(entity.Transform.WorldPosition));
             if (entity.GetComponent<Body>() is { } body)
-                (body.Velocity, body.FloatThisStep) = (Vector2.Zero, true);
+                (body.Velocity, body.Spin, body.FloatThisStep) = (Vector2.Zero, 0, true);
             if (t >= 1)
                 _drags.Slides.Remove(thing);
         }
@@ -419,8 +419,7 @@ public sealed partial class Game
     // A draggable's or drop target's shape: its collider's, else its sprite's, else a square a unit across.
     internal static bool Covers(Entity entity, Vector2 point) => entity.GetComponent<Collider>() switch
     {
-        CircleCollider circle => Physics.BoundsOf(circle).Contains(point),
-        { } collider => Physics.BoundsOf(collider).Contains(point),
+        { } collider => collider.Contains(point),
         _ => DragAreaOf(entity).Contains(point),
     };
 

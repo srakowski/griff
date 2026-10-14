@@ -1023,12 +1023,19 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         };
     }
 
-    private static bool ValueMatches(string? have, string want) =>
-        have is not null && (Griff.Color.TryParse(want, out var wantColor) && Griff.Color.TryParse(have, out var haveColor)
+    // A number can be given with how far off it may be: "-90 ~ 5" is anything from -95 to -85.
+    private static bool ValueMatches(string? have, string want)
+    {
+        var tolerance = 1e-3;
+        if (want.Split('~', StringSplitOptions.TrimEntries) is [var number, var within] &&
+            double.TryParse(within, CultureInfo.InvariantCulture, out var allowed))
+            (want, tolerance) = (number, allowed);
+        return have is not null && (Griff.Color.TryParse(want, out var wantColor) && Griff.Color.TryParse(have, out var haveColor)
             ? wantColor.ToHex() == haveColor.ToHex()
             : double.TryParse(want, CultureInfo.InvariantCulture, out var wantNumber) && double.TryParse(have, CultureInfo.InvariantCulture, out var haveNumber)
-                ? Math.Abs(wantNumber - haveNumber) < 1e-3
+                ? Math.Abs(wantNumber - haveNumber) <= tolerance
                 : have.Equals(want, StringComparison.OrdinalIgnoreCase));
+    }
 
     // "JumpHeight" or "Jump Height": the Inspector shows the spaced form.
     private static string Label(string name) => name.Contains(' ') ? name : InspectorPanel.Humanize(name);

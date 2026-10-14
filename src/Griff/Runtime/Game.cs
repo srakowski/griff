@@ -725,8 +725,24 @@ public sealed partial class Game : IGameContext
     {
         _touches.Add((a, b));
         _touches.Add((b, a));
-        Notify(a, behavior => behavior.RunCollision(b));
-        Notify(b, behavior => behavior.RunCollision(a));
+        // Most things that bump (crates resting on the floor every step) have no scripts to tell.
+        if (HasBehaviors(a))
+            NotifyCollision(a, b);
+        if (HasBehaviors(b))
+            NotifyCollision(b, a);
+    }
+
+    private void NotifyCollision(Entity entity, Entity other) => Notify(entity, behavior => behavior.RunCollision(other));
+
+    private static bool HasBehaviors(Entity entity)
+    {
+        foreach (var component in entity.ComponentList)
+        {
+            if (component is Behavior)
+                return true;
+        }
+
+        return false;
     }
 
     private void OnTrigger(Entity trigger, Entity other, bool entered)
@@ -780,7 +796,7 @@ public sealed partial class Game : IGameContext
     // Touches from this frame's physics; each pickup goes to the first thing that reaches it.
     private void RunPickups()
     {
-        if (_touches.Count == 0)
+        if (_touches.Count == 0 || Active<Pickup>().Count == 0)
             return;
         foreach (var (source, target) in _touches.ToList())
         {

@@ -1,0 +1,76 @@
+title: Bodies that rotate
+intro: Tick a body's Rotates and it turns: it tips over, spins, and gets knocked about, while everything else stays upright as before.
+project: Empty | Tumble
+
+# A floor 24 wide whose top is at y = -2.5, a platformer player, a crate dropped tilted, a tall plank stood on end, and
+# a frozen plank tilted down to the floor as a ramp, its low end at the player's left.
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 24, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 24, 1
+deselect
+create: Platformer Player
+set: Transform.Position = -4, -2, 0
+deselect
+create: Crate
+set: Transform.Position = -2, 1, 0
+set: Transform.Rotation.Z = 30
+deselect
+create: Crate
+rename: Plank
+set: Transform.Position = 3, -1, 0
+set: Sprite.Size = 0.3, 3
+set: BoxCollider.Size = 0.3, 3
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Ramp
+set: Transform.Position = -7, -1.95, 0
+set: Transform.Rotation.Z = -15
+set: Sprite.Size = 5, 0.3
+set: Sprite.Tint = #7A7A80
+set: BoxCollider.Size = 5, 0.3
+set: Body.Rotates = true
+set: Body.Frozen = true
+expectcomponents: Crate = Transform, Sprite, BoxCollider, Body, Pushable
+
+chapter: Tipping over | Body > Rotates
+select: Crate
+look: 0, -0.5, 4
+explain: entity:Crate | A tilted crate | Here's a crate, turned thirty degrees and up in the air. Until now a body stayed upright whatever its rotation: it fell and landed as a flat, upright box.
+set: Body.Rotates = true
+explain: field:Body.Rotates | Rotates | Now a body has Rotates. Tick it, and its box collider turns with it, which the Scene view outlines.
+play
+wait: 2
+expectat: Crate = -1.66, -2
+expectvalue: Crate.Transform.Rotation.Z = 0 ~ 1
+explain: game | Lands on its corner | It lands on its corner and tips over, then comes to rest flat, as a real crate would.
+stop
+
+chapter: Knocked about | Everything meets it turned
+say: The tall plank on the right rotates too. The player doesn't: bodies without Rotates stay upright, as players and enemies should.
+play
+wait: 1
+hold: Right 3
+expectvalue: Plank.Transform.Rotation.Z = -90 ~ 3
+explain: game | Shoved and tipped | Walking into the crate shoves it along by their weights, and the crate, hitting the plank low down, tips it over.
+stop
+select: Plank
+explain: field:Body.Grip | Grip | Grip says how well it holds on to what it touches. Low, it slides off an edge like ice. High, it tips over instead.
+
+chapter: Spinning, and ramps | Spin, and frozen turned planks
+select: Crate
+set: Body.Spin = 400
+explain: field:Body.Spin | Spin | Spin is how fast it turns, in degrees a second. Set it, and the crate starts out spinning.
+play
+wait: 2
+expectat: Crate = -1.64, -2
+explain: game | Spun as it fell | It spun as it fell, tumbled on landing and settled again.
+explain: entity:Ramp | A tilted ramp | The grey plank on the left rotates too, but it's frozen: a turned box that stays put, a ramp.
+hold: Left 0.6
+expectvalue: Player.Transform.Position.Y = -1.1 ~ 0.5
+explain: game | Walked up | The player walks up its slant, as everything meets a turned box as it is: rays, shadows and the walls of tile, hex and isometric maps too.
+stop

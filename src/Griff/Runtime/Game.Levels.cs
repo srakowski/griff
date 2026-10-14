@@ -390,7 +390,7 @@ public sealed partial class Game
             target = Vector3.Transform(target, inverse);
         entity.Transform.Teleport(new Vector3(target.X, target.Y, entity.Transform.Position.Z));
         if (entity.GetComponent<Body>() is { } body)
-            body.Velocity = Vector2.Zero;
+            (body.Velocity, body.Spin) = (Vector2.Zero, 0);
         foreach (var follow in Scene.All<Follow>().Where(f => f.TargetEntity == entity))
             follow.Snap();
     }

@@ -415,6 +415,16 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
             foreach (var collider in entity.GetComponents<BoxCollider>())
             {
+                // Turning with a body that rotates, it's drawn as it's turned.
+                if (collider.WorldShape.Axis != Vector2.UnitX)
+                {
+                    var (a, b, c, d) = collider.WorldCorners;
+                    DrawOutline([a, b, c, d], collider.IsTrigger || collider.OneWay ? trigger : solid);
+                    if (collider.OneWay && !collider.IsTrigger)
+                        dc.DrawLine(new Pen(solid.Brush, 3), viewport.ToScreen(d), viewport.ToScreen(c));
+                    continue;
+                }
+
                 if (collider.OneWay && !collider.IsTrigger)
                     DrawOneWay(Griff.Runtime.Physics.BoundsOf(collider));
                 else

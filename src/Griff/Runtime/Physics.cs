@@ -15,6 +15,9 @@ public readonly record struct RaycastHit(Entity Entity, Vector2 Point, Vector2 N
 /// at normal speeds. Boxes and circles collide with each other in any combination. On an isometric tilemap a body
 /// stands on the diamond under its collider and slides along the solid diamonds' edges (see <see cref="IsometricShapes"/>);
 /// on a hex tilemap its collider meets the solid hexagons' six sides and slides along them (see <see cref="HexShapes"/>).
+/// A body that <see cref="Body.Rotates"/> is a rigid shape instead: it's pushed apart from what it touches at the points
+/// where they touch, so it spins, tips over and falls flat, and its box turns with it; everything else meets that box
+/// turned, walks up its slant, and knocks it about.
 /// </summary>
 public sealed partial class Physics
 {
@@ -63,7 +66,10 @@ public sealed partial class Physics
         _grounds.Clear();
     }
 
-    /// <summary>World-space box of a collider, from its entity's position and scale.</summary>
+    /// <summary>
+    /// World-space box of a collider, from its entity's position and scale: for one that turns with its body, the box round
+    /// it as it's turned (see <see cref="BoxCollider.WorldShape"/>).
+    /// </summary>
     public static Box BoundsOf(BoxCollider collider) => collider.WorldBox;
 
     /// <summary>World-space circle of a collider. The radius scales with the larger of the entity's X and Y scale.</summary>
@@ -78,8 +84,8 @@ public sealed partial class Physics
     };
 
     /// <summary>
-    /// World-space boxes covering a tilemap's colliding tiles, one per horizontal run. Like colliders, they follow the
-    /// entity's position and scale but ignore its rotation.
+    /// World-space boxes covering a tilemap's colliding tiles, one per horizontal run. Like colliders that don't turn, they
+    /// follow the entity's position and scale but ignore its rotation.
     /// </summary>
     public static IEnumerable<Box> BoundsOf(Tilemap tilemap) => TileShapes(tilemap).Select(t => t.Box);
 
@@ -264,6 +270,7 @@ public sealed partial class Physics
             if (body.Frozen)
             {
                 body.Velocity = Vector2.Zero;
+                body.Spin = 0;
                 body.IsGrounded = false;
                 body.Ground = null;
                 body.WallSide = 0;
@@ -272,9 +279,17 @@ public sealed partial class Physics
             }
 
             var collider = body.Entity!.GetComponent<Collider>();
+            if (body.Rotates && collider is { IsTrigger: false })
+            {
+                StepTurning(body, collider, solids, dt, onCollision);
+                EndStep(body, dt);
+                continue;
+            }
+
             if (!body.FloatThisStep)
                 body.Velocity += Gravity * body.GravityScale * dt;
             var wasGrounded = body.IsGrounded;
+            var lastGround = body.Ground;
             body.IsGrounded = false;
             body.Ground = null;
             body.WallSide = 0;
@@ -282,6 +297,8 @@ public sealed partial class Physics
             if (collider is null || collider.IsTrigger)
             {
                 Translate(solids, body.Entity, body.Velocity * dt);
+                if (body.Rotates)
+                    Turn(solids, body.Entity, collider, body.Spin * dt * MathF.PI / 180);
                 EndStep(body, dt);
                 continue;
             }
@@ -308,6 +325,15 @@ public sealed partial class Physics
                 var reach = MathF.Abs(body.Velocity.X * dt) * 1.05f + 0.05f;
                 if (SlopeBelow(collider, reach))
                     MoveAxis(body, collider, solids, new Vector2(0, -reach), onCollision);
+            }
+
+            // So too down a turned plank or crate: down onto it, if it's still there.
+            if (wasGrounded && !body.IsGrounded && body.Velocity.Y <= 0 && lastGround?.GetComponent<Collider>() is { Turns: true })
+            {
+                var reach = MathF.Abs(body.Velocity.X * dt) * TurnedStepSlope + 0.05f;
+                MoveAxis(body, collider, solids, new Vector2(0, -reach), onCollision);
+                if (!body.IsGrounded)
+                    Translate(solids, body.Entity, new Vector2(0, reach));
             }
 
             if (_isometric.Count > 0)
@@ -451,13 +477,15 @@ public sealed partial class Physics
                     continue;
                 if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f || body.IsDroppingThrough))
                     continue;
-                var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis);
+                var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign);
                 var back = target - Component(area.Center, axis);
                 if (back * sign > 0)
                     continue; // Already overlapping from the far side: not something this move ran into.
                 if (MathF.Abs(back) > MathF.Abs(push))
                     push = back;
                 touched.Add((body.Entity, solid.Entity));
+                if (!nudge)
+                    Knock(body, area, solid, axis, sign);
                 if (axis == 1 && sign < 0)
                     ground = solid.Entity;
             }
@@ -577,7 +605,7 @@ public sealed partial class Physics
             if (carrier is null && depth < MaxPushChain && CanPush(solid, axis, pusherLayer) is var (pushed, crate, pushable))
             {
                 var before = Component(other.Center, axis);
-                var overlap = Component(area.Center, axis) + sign * area.ContactDistance(other, axis) - before;
+                var overlap = Component(area.Center, axis) + sign * area.ContactDistance(other, axis, sign) - before;
                 var shove = overlap * Math.Clamp(pushable.Speed, 0, 1);
                 MoveAxis(pushed, crate, solids, axis == 0 ? new Vector2(shove, 0) : new Vector2(0, shove), onCollision,
                     pusher: entity, pusherLayer: pusherLayer, depth: depth + 1);
@@ -590,10 +618,28 @@ public sealed partial class Physics
                 }
             }
 
+            // Walking into a turned plank or crate where it slants gently enough to walk up: up onto it, rather than stopped.
+            var climbed = false;
+            if (axis == 0 && other.IsTurned && carrier is null && body.GravityScale > 0 && Gravity.Y < 0)
+            {
+                var lift = other.Center.Y + area.ContactDistance(other, 1, -1) - area.Center.Y;
+                if (lift > 0 && lift <= MathF.Abs(delta.X) * TurnedStepSlope + 0.02f)
+                {
+                    Translate(solids, entity, new Vector2(0, lift));
+                    climbed = true;
+                }
+            }
+
             // Push back along the axis we moved, to where the two shapes just touch.
-            var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis);
-            var push = target - Component(area.Center, axis);
-            Translate(solids, entity, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
+            if (!climbed)
+            {
+                var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign);
+                var push = target - Component(area.Center, axis);
+                Translate(solids, entity, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
+                if (carrier is null && !gaveWay)
+                    Knock(body, area, solid, axis, sign);
+            }
+
             area = Area.Of(collider);
 
             // Pushed somewhere it hadn't looked: look there too, carrying on after this solid.
@@ -606,10 +652,10 @@ public sealed partial class Physics
                     n = ~n - 1;
             }
 
-            hit |= !gaveWay;
+            hit |= !gaveWay && !climbed;
             if (carrier is not null)
                 continue;
-            if (axis == 1 && sign < 0)
+            if ((axis == 1 && sign < 0) || climbed)
             {
                 body.IsGrounded = true;
                 body.Ground = solid.Entity;
@@ -798,7 +844,7 @@ public sealed partial class Physics
     private (Body Body, Collider Collider, Pushable Pushable)? CanPush(Shape solid, int axis, string? layer)
     {
         if (solid.Collider is not { } collider || solid.Entity.GetComponent<Pushable>() is not { } pushable ||
-            solid.Entity.GetComponent<Body>() is not { } body || !pushable.AcceptsLayer(layer) ||
+            solid.Entity.GetComponent<Body>() is not { Rotates: false } body || !pushable.AcceptsLayer(layer) ||
             solid.Entity.GetComponent<GridMovement>() is not null)
             return null;
         if (axis == 1 && body.GravityScale != 0 && Gravity != Vector2.Zero)
@@ -1036,6 +1082,21 @@ public sealed partial class Physics
 
         public void Return(List<int> near) => _spare.Push(near);
 
+        /// <summary>A collider's layer and the layers it passes through, as this step found them.</summary>
+        public LayerFilter FilterOf(Collider collider)
+        {
+            if (_shapesOf.TryGetValue(collider.Entity!, out var range))
+            {
+                for (var i = range.First; i < range.First + range.Count; i++)
+                {
+                    if (All[i].Collider == collider)
+                        return All[i].Filter;
+                }
+            }
+
+            return LayerFilter.Of(collider);
+        }
+
         // An entity has moved, and everything inside it with it. Tile boxes stay where the step found them.
         public void Moved(Entity entity)
         {
@@ -1071,9 +1132,18 @@ public sealed partial class Physics
             (other.Ignores.Length > 0 && CollisionLayers.Contains(other.Ignores, Layer));
     }
 
-    // A box or a circle in world space. For a circle, Bounds is the box around it.
+    // A box or a circle in world space. For a circle, Bounds is the box around it. A turned box (one whose body Rotates)
+    // has its own Axis, a unit vector, and its own Half size; Bounds is then the box round it.
     private readonly record struct Area(Box Bounds, float Radius, bool IsCircle)
     {
+        /// <summary>A turned box's X axis (its Y is that turned a quarter anticlockwise); zero for one that isn't turned.</summary>
+        public Vector2 Axis { get; init; }
+
+        /// <summary>Half a turned box's own width and height.</summary>
+        public Vector2 Half { get; init; }
+
+        public bool IsTurned => Axis != Vector2.Zero;
+
         public Vector2 Center => Bounds.Center;
 
         public Circle Circle => new(Bounds.Center, Radius);
@@ -1084,16 +1154,46 @@ public sealed partial class Physics
 
         public static Area Of(Collider collider) => collider switch
         {
-            BoxCollider box => Of(BoundsOf(box)),
+            BoxCollider box => Of(box),
             CircleCollider circle => Of(BoundsOf(circle)),
             _ => throw new NotSupportedException($"Unknown collider {collider.GetType().Name}."),
         };
 
-        public bool Contains(Vector2 point) => IsCircle ? Circle.Contains(point) : Bounds.Contains(point);
+        private static Area Of(BoxCollider collider)
+        {
+            var (center, half, axis) = collider.WorldShape;
+            if (axis == Vector2.UnitX)
+                return Of(new Box(center, half));
+            var (x, y) = (MathF.Abs(axis.X), MathF.Abs(axis.Y));
+            return new Area(new Box(center, new Vector2(x * half.X + y * half.Y, y * half.X + x * half.Y)), 0, false)
+            {
+                Axis = axis,
+                Half = half,
+            };
+        }
+
+        // A world point in a turned box's own frame, round its middle.
+        private Vector2 ToLocal(Vector2 point)
+        {
+            var offset = point - Center;
+            return new Vector2(Vector2.Dot(offset, Axis), Axis.X * offset.Y - Axis.Y * offset.X);
+        }
+
+        private Vector2 ToWorldNormal(Vector2 local) => Axis * local.X + new Vector2(-Axis.Y, Axis.X) * local.Y;
+
+        public bool Contains(Vector2 point)
+        {
+            if (IsTurned)
+                return new Box(Vector2.Zero, Half).Contains(ToLocal(point));
+            return IsCircle ? Circle.Contains(point) : Bounds.Contains(point);
+        }
 
         /// <param name="skin">Overlaps shallower than this don't count, for shapes involving a circle.</param>
         public bool Overlaps(Area other, float skin = 0)
         {
+            if (IsTurned || other.IsTurned)
+                return TurnedOverlaps(other, skin);
+
             // Boxes get the skin too: a box resting at y = 0.39999998 on a floor whose top is at 0 is touching, not inside it.
             if (!IsCircle && !other.IsCircle)
                 return new Box(Center, Vector2.Max(Bounds.HalfSize - new Vector2(skin), Vector2.Zero)).Overlaps(other.Bounds);
@@ -1103,12 +1203,51 @@ public sealed partial class Physics
             return box.Overlaps(circle.Center, circle.Radius - skin);
         }
 
-        /// <summary>
-        /// How far apart the centers are along <paramref name="axis"/> (0 = X, 1 = Y) when the shapes just touch,
-        /// keeping their offset on the other axis.
-        /// </summary>
-        public float ContactDistance(Area other, int axis)
+        // With a turned box: a circle against it in its own frame, or two boxes by their four sides' directions.
+        private bool TurnedOverlaps(Area other, float skin)
         {
+            if (IsCircle || other.IsCircle)
+            {
+                var (box, circle) = IsCircle ? (other, this) : (this, other);
+                return new Box(Vector2.Zero, box.Half).Overlaps(box.ToLocal(circle.Center), circle.Radius - skin);
+            }
+
+            var between = other.Center - Center;
+            for (var i = 0; i < 4; i++)
+            {
+                var axis = SideNormal(i < 2 ? this : other, i % 2);
+                if (MathF.Abs(Vector2.Dot(between, axis)) >= Reach(axis) + other.Reach(axis) - skin)
+                    return false;
+            }
+
+            return true;
+        }
+
+        // A box's side directions: its X axis (0) or Y axis (1), the world's for one that isn't turned.
+        private static Vector2 SideNormal(Area box, int side) =>
+            box.IsTurned ? (side == 0 ? box.Axis : new Vector2(-box.Axis.Y, box.Axis.X)) : (side == 0 ? Vector2.UnitX : Vector2.UnitY);
+
+        // How far a box reaches from its middle along a unit direction.
+        private float Reach(Vector2 direction)
+        {
+            if (!IsTurned)
+                return MathF.Abs(direction.X) * Bounds.HalfSize.X + MathF.Abs(direction.Y) * Bounds.HalfSize.Y;
+            return MathF.Abs(Vector2.Dot(direction, Axis)) * Half.X + MathF.Abs(Axis.X * direction.Y - Axis.Y * direction.X) * Half.Y;
+        }
+
+        /// <summary>
+        /// How far apart the centers are along <paramref name="axis"/> (0 = X, 1 = Y) when the shapes just touch, keeping
+        /// their offset on the other axis, with this one on the side it came from: below or to the left of
+        /// <paramref name="other"/> moving the way of <paramref name="sign"/> 1, above or to the right moving the way of -1.
+        /// </summary>
+        public float ContactDistance(Area other, int axis, float sign)
+        {
+            if (IsTurned || other.IsTurned)
+            {
+                var (low, high) = Chord(other, axis);
+                return sign > 0 ? -low : high;
+            }
+
             var across = 1 - axis;
             if (!IsCircle && !other.IsCircle)
                 return Component(Bounds.HalfSize, axis) + Component(other.Bounds.HalfSize, axis);
@@ -1127,9 +1266,85 @@ public sealed partial class Physics
             return Component(box.HalfSize, axis) + MathF.Sqrt(MathF.Max(0, circle.Radius * circle.Radius - beyond * beyond));
         }
 
+        // With a turned box: the stretch of offsets along the axis (this one's middle less the other's) over which the two
+        // overlap, keeping the offset across it they have now.
+        private (float Low, float High) Chord(Area other, int axis)
+        {
+            var along = axis == 0 ? Vector2.UnitX : Vector2.UnitY;
+            var offset = Center - other.Center;
+            var across = offset - along * Vector2.Dot(offset, along);
+            if (IsCircle || other.IsCircle)
+            {
+                // The circle's middle against the box grown by its radius (rounded at the corners), in the box's own frame.
+                var (box, circle, sign) = IsCircle ? (other, this, 1f) : (this, other, -1f);
+                return RoundedChord(box, circle.Radius, across * sign, along * sign);
+            }
+
+            var (low, high) = (float.NegativeInfinity, float.PositiveInfinity);
+            for (var i = 0; i < 4; i++)
+            {
+                var normal = SideNormal(i < 2 ? this : other, i % 2);
+                var facing = Vector2.Dot(along, normal);
+                if (MathF.Abs(facing) < 1e-6f)
+                    continue;
+                var reach = Reach(normal) + other.Reach(normal);
+                var at = Vector2.Dot(across, normal);
+                var (a, b) = ((-reach - at) / facing, (reach - at) / facing);
+                if (a > b)
+                    (a, b) = (b, a);
+                (low, high) = (MathF.Max(low, a), MathF.Min(high, b));
+            }
+
+            return (low, high);
+        }
+
+        // The stretch of t over which a circle's middle at start + t * way (from a turned box's middle) is within its
+        // radius of the box.
+        private static (float Low, float High) RoundedChord(Area box, float radius, Vector2 start, Vector2 way)
+        {
+            var from = new Vector2(Vector2.Dot(start, box.Axis), box.Axis.X * start.Y - box.Axis.Y * start.X);
+            var along = new Vector2(Vector2.Dot(way, box.Axis), box.Axis.X * way.Y - box.Axis.Y * way.X);
+            var half = box.Half;
+            var (low, high) = (float.NegativeInfinity, float.PositiveInfinity);
+            for (var axis = 0; axis < 2; axis++)
+            {
+                var (s, d, reach) = axis == 0 ? (from.X, along.X, half.X + radius) : (from.Y, along.Y, half.Y + radius);
+                if (MathF.Abs(d) < 1e-6f)
+                    continue;
+                var (a, b) = ((-reach - s) / d, (reach - s) / d);
+                if (a > b)
+                    (a, b) = (b, a);
+                (low, high) = (MathF.Max(low, a), MathF.Min(high, b));
+            }
+
+            // An end out past a corner is on that corner's rounding instead.
+            return (Corner(low, false), Corner(high, true));
+
+            float Corner(float t, bool far)
+            {
+                var p = from + along * t;
+                if (MathF.Abs(p.X) <= half.X || MathF.Abs(p.Y) <= half.Y)
+                    return t;
+                var corner = new Vector2(MathF.CopySign(half.X, p.X), MathF.CopySign(half.Y, p.Y));
+                var m = from - corner;
+                var b = Vector2.Dot(m, along);
+                var discriminant = b * b - (m.LengthSquared() - radius * radius);
+                if (discriminant < 0)
+                    return t;
+                var root = MathF.Sqrt(discriminant);
+                return far ? -b + root : -b - root;
+            }
+        }
+
         /// <summary>The entry distance and surface normal along a normalized ray, or null on a miss or when starting inside.</summary>
-        public (float Distance, Vector2 Normal)? Intersect(Vector2 origin, Vector2 direction) =>
-            IsCircle ? IntersectCircle(Circle, origin, direction) : IntersectBox(Bounds, origin, direction);
+        public (float Distance, Vector2 Normal)? Intersect(Vector2 origin, Vector2 direction)
+        {
+            if (!IsTurned)
+                return IsCircle ? IntersectCircle(Circle, origin, direction) : IntersectBox(Bounds, origin, direction);
+            var local = ToLocal(origin);
+            var way = new Vector2(Vector2.Dot(direction, Axis), Axis.X * direction.Y - Axis.Y * direction.X);
+            return IntersectBox(new Box(Vector2.Zero, Half), local, way) is var (distance, normal) ? (distance, ToWorldNormal(normal)) : null;
+        }
 
         private static (float, Vector2)? IntersectCircle(Circle circle, Vector2 origin, Vector2 direction)
         {

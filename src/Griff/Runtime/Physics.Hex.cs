@@ -288,6 +288,31 @@ public sealed partial class Physics
             return corners;
         }
 
+        /// <summary>A hexagon in the world, as a turning body's shapes meet it.</summary>
+        public void HexagonHull(ref Hull hull, int x, int y)
+        {
+            var middle = Middle(x, y);
+            hull.Count = 6;
+            for (var i = 0; i < 6; i++)
+                hull.Points[i] = middle + _corners[i];
+            FinishPolygon(ref hull);
+        }
+
+        /// <summary>
+        /// True if the side of hexagon x, y facing <paramref name="normal"/> (out of it) is shared with another solid
+        /// hexagon: inside the wall, not its surface.
+        /// </summary>
+        public bool SharedSide(int x, int y, Vector2 normal)
+        {
+            for (var i = 0; i < 6; i++)
+            {
+                if (Vector2.Dot(_normals[i], normal) > 0.999f)
+                    return !Open(x, y, i);
+            }
+
+            return false;
+        }
+
         /// <summary>The columns and rows (clamped to the map) whose hexagons could touch a world box.</summary>
         public (int X0, int Y0, int X1, int Y1) CellsNear(Box box)
         {

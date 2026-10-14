@@ -85,8 +85,12 @@ public static class Shadows
             var entity = collider.Entity!;
             if (collider is BoxCollider box)
             {
-                var bounds = Physics.BoundsOf(box);
-                AddBox(edges, bounds.Min, bounds.Max, entity);
+                // Clockwise round it, as it's turned.
+                var (a, b, c, d) = box.WorldCorners;
+                Add(edges, a, d, entity);
+                Add(edges, d, c, entity);
+                Add(edges, c, b, entity);
+                Add(edges, b, a, entity);
             }
             else if (collider is CircleCollider circle)
             {
@@ -172,7 +176,7 @@ public static class Shadows
             {
                 if (component is not Collider { IsTrigger: false } collider)
                     continue;
-                if (collider is BoxCollider box ? Physics.BoundsOf(box).Contains(point) : collider is CircleCollider circle && Physics.BoundsOf(circle).Contains(point))
+                if (collider.Contains(point))
                     return true;
             }
 

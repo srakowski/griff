@@ -136,6 +136,28 @@ public class SceneResizeTests
     });
 
     [Fact]
+    public void A_box_collider_whose_body_rotates_is_resized_along_its_turned_sides() => EditorHost.Run(services =>
+    {
+        var (document, selection, model) = Open(services);
+        var plank = Named(document, "Plank");
+        var box = plank.GetComponent<BoxCollider>()!;
+        plank.AddComponent<Body>().Rotates = true;
+        plank.Transform.Rotation = new Vector3(0, 0, 90);
+        selection.Select(plank);
+
+        var resize = model.BeginResize(box)!;
+        // Turned a quarter, its own X runs up the screen: its right edge (now its top) dragged out to 1.5 doubles its width,
+        // its bottom staying where it was.
+        Near(new Vector2(0, 1), resize.Frame.AxisX);
+        resize.Drag(new Vector2(1, 0), new Vector2(1.5f, 0), proportional: false, snap: false);
+        resize.End();
+        Assert.Equal(new Vector2(2, 1), box.Size);
+        Assert.Equal(new Vector2(0.5f, 0), box.Offset);
+        Near(new Vector2(1.5f, 1.5f), box.WorldCorners.C);
+        Near(new Vector2(2.5f, -0.5f), box.WorldCorners.A);
+    });
+
+    [Fact]
     public void CircleCollider_GrowsAroundItsMiddle_SnappingToQuarters() => EditorHost.Run(services =>
     {
         var (document, selection, model) = Open(services);

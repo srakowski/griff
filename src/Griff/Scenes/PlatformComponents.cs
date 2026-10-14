@@ -22,7 +22,8 @@ public sealed class Ladder : Component
 /// (when its <see cref="Body"/>'s Gravity Scale is 0). It pushes crates in front of it in turn, and stops at walls. Needs
 /// a <see cref="Body"/> and a solid collider. Give it a layer (say "Crate") to have it hold a pressure plate down. With a
 /// <see cref="GridMovement"/> too it's a Sokoban crate: a grid mover stepping into it pushes it a cell (gliding along with
-/// it), unless a wall or another crate is in the way, and resting on a puzzle's Goal covers it.
+/// it), unless a wall or another crate is in the way, and resting on a puzzle's Goal covers it. A crate whose body
+/// <see cref="Body.Rotates"/> doesn't need one: whatever walks into it knocks it along (and over), by their weights.
 /// </summary>
 [Category("Level")]
 [Requires(typeof(Body))]

@@ -640,7 +640,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// <summary>
     /// Where a sprite, box collider or circle collider is, in its own units (as the Inspector shows its size): a point
     /// there is <see cref="Origin"/> plus so much of <see cref="AxisX"/> and <see cref="AxisY"/> in the world. A sprite
-    /// turns and stretches with its entity; colliders ignore rotation, so theirs lie along the world's axes.
+    /// turns and stretches with its entity; colliders stay upright, so theirs lie along the world's axes, unless they turn
+    /// with a body that rotates (<see cref="Collider.Turns"/>).
     /// </summary>
     public readonly record struct ShapeFrame(Vector2 Origin, Vector2 AxisX, Vector2 AxisY, Vector2 Center, Vector2 Size, bool IsCircle)
     {
@@ -663,9 +664,14 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             var scale = new Vector2(axisX.Length(), axisY.Length());
             var round = MathF.Max(scale.X, scale.Y);
             var origin = Flat(entity.Transform.WorldPosition);
+            // A collider that turns with its body turns its axes (a circle's still both as long as its larger scale).
+            var turns = shape is Collider { Turns: true } && scale.X > 0 && scale.Y > 0;
+            var (turnedX, turnedY) = turns ? (axisX / scale.X, axisY / scale.Y) : (Vector2.UnitX, Vector2.UnitY);
             ShapeFrame frame = shape switch
             {
                 Sprite sprite => new(origin, axisX, axisY, Vector2.Zero, sprite.Size, false),
+                BoxCollider box when turns => new(origin, axisX, axisY, box.Offset, box.Size, false),
+                CircleCollider circle when turns => new(origin, turnedX * round, turnedY * round, circle.Offset, new Vector2(circle.Radius * 2), true),
                 BoxCollider box => new(origin, new Vector2(scale.X, 0), new Vector2(0, scale.Y), box.Offset, box.Size, false),
                 CircleCollider circle => new(origin, new Vector2(round, 0), new Vector2(0, round), circle.Offset, new Vector2(circle.Radius * 2), true),
                 _ => default,

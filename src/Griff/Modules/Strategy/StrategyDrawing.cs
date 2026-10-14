@@ -31,7 +31,7 @@ internal static class StrategyDrawing
                 continue;
             }
 
-            var look = LookOf(strategy, draw.Entity, looks);
+            var look = LookOf(strategy, draw.Entity, looks, frame);
             if (look <= 0)
                 continue;
             kept.Add(look < 1 ? draw with { Tint = draw.Tint with { A = draw.Tint.A * look } } : draw);
@@ -41,14 +41,19 @@ internal static class StrategyDrawing
         var thickness = frame.LineWidth;
         var over = new List<SpriteDraw>();
         over.AddRange(FogDraws(strategy, frame.View.Center, frame.View.HalfSize));
-        over.AddRange(MarkingDraws(strategy, thickness));
+        over.AddRange(MarkingDraws(strategy, thickness, frame));
         if (strategy.Rts is { Commander.Hud: true, Hud: { } hud })
-            over.AddRange(HudDraws(strategy, hud, thickness));
+        {
+            var start = over.Count;
+            over.AddRange(HudDraws(strategy, hud, thickness, frame));
+            frame.PinToView(over, hud.View.Center, hud.View.Height / 2, start);
+        }
+
         frame.AddOverWorld(over);
     }
 
     // 0 hidden, 1 as it is, in between see-through: for what a draw belongs to (the unit or building it's part of).
-    private static float LookOf(StrategySystem strategy, Entity entity, Dictionary<Entity, float> looks)
+    private static float LookOf(StrategySystem strategy, Entity entity, Dictionary<Entity, float> looks, FrameDrawing frame)
     {
         if (looks.TryGetValue(entity, out var known))
             return known;
@@ -63,7 +68,7 @@ internal static class StrategyDrawing
 
             if (e.GetComponent<Building>() is { IsBuilt: false } building)
             {
-                look = 0.35f + 0.4f * building.Progress;
+                look = 0.35f + 0.4f * building.ProgressDrawn(frame.BlendOf(e));
                 break;
             }
 
@@ -112,7 +117,7 @@ internal static class StrategyDrawing
 
     // ----- In the world -----
 
-    private static IEnumerable<SpriteDraw> MarkingDraws(StrategySystem strategy, float thickness)
+    private static IEnumerable<SpriteDraw> MarkingDraws(StrategySystem strategy, float thickness, FrameDrawing frame)
     {
         var rts = strategy.Rts;
         var team = rts.Commander?.Team;
@@ -146,21 +151,23 @@ internal static class StrategyDrawing
             var top = unit is not null ? at.Y + unit.Radius + 0.25f : at.Y + Math.Abs(building!.Size.Y) / 2 + 0.25f;
             var health = entity.GetComponent<Health>();
             var hurt = health is not null && health.Current < health.Max;
+            // Meters fill and empty between steps.
+            var blend = frame.BlendOf(entity);
             if (health is not null && (hurt || entity.GetComponent<Unit>()?.IsSelected == true || building?.IsSelected == true))
             {
-                var fraction = health.Max > 0 ? Math.Clamp(health.Current / health.Max, 0, 1) : 0;
+                var fraction = health.Max > 0 ? Math.Clamp(health.CurrentDrawn(blend) / health.Max, 0, 1) : 0;
                 foreach (var draw in Meter(new Vector2(at.X, top), width, 0.12f, fraction, HealthColor(fraction)))
                     yield return draw;
             }
 
             if (building is { IsBuilt: false })
             {
-                foreach (var draw in Meter(new Vector2(at.X, top - 0.18f), width, 0.1f, building.Progress, Busy))
+                foreach (var draw in Meter(new Vector2(at.X, top - 0.18f), width, 0.1f, building.ProgressDrawn(blend), Busy))
                     yield return draw;
             }
             else if (building?.Entity?.GetComponent<Producer>() is { Queue.Count: > 0 } producer && StrategySystem.SameTeam(building.Team, team))
             {
-                foreach (var draw in Meter(new Vector2(at.X, top - 0.18f), width, 0.1f, producer.Progress, Busy))
+                foreach (var draw in Meter(new Vector2(at.X, top - 0.18f), width, 0.1f, producer.ProgressDrawn(blend), Busy))
                     yield return draw;
             }
 
@@ -178,9 +185,11 @@ internal static class StrategyDrawing
             yield return Quad(rally + new Vector2(0.15f, 0.4f), new Vector2(0.3f, 0.2f), Mine);
         }
 
+        // Markers shrink and fade between steps.
+        var aged = frame.Blend.For(rts.MarkersAgedIn);
         foreach (var marker in rts.Markers)
         {
-            var t = marker.Age / StrategyState.MarkerSeconds;
+            var t = aged.Between(marker.AgeFrom, marker.Age) / StrategyState.MarkerSeconds;
             foreach (var draw in Circle(marker.At, 0.15f + 0.45f * (1 - t), thickness * 1.5f, marker.Color with { A = 1 - t }))
                 yield return draw;
         }
@@ -207,7 +216,7 @@ internal static class StrategyDrawing
 
     // ----- The HUD -----
 
-    private static IEnumerable<SpriteDraw> HudDraws(StrategySystem strategy, StrategyHud hud, float thickness)
+    private static IEnumerable<SpriteDraw> HudDraws(StrategySystem strategy, StrategyHud hud, float thickness, FrameDrawing frame)
     {
         var rts = strategy.Rts;
         var commander = rts.Commander!;
@@ -230,9 +239,9 @@ internal static class StrategyDrawing
 
         foreach (var draw in MinimapDraws(strategy, hud, thickness))
             yield return draw;
-        foreach (var draw in SelectionDraws(strategy, hud))
+        foreach (var draw in SelectionDraws(strategy, hud, frame))
             yield return draw;
-        foreach (var draw in CardDraws(strategy, hud, thickness))
+        foreach (var draw in CardDraws(strategy, hud, thickness, frame))
             yield return draw;
 
         // A word about what just happened, or what the next click will do.
@@ -243,7 +252,7 @@ internal static class StrategyDrawing
             : null;
         if (!string.IsNullOrEmpty(hint))
         {
-            var alpha = rts.NoticeLeft > 0 ? Math.Min(1, rts.NoticeLeft * 2) : 1;
+            var alpha = rts.NoticeLeft > 0 ? Math.Min(1, frame.Blend.Of(rts.NoticeShown) * 2) : 1;
             yield return Label(hint, new Vector2(hud.View.Center.X, hud.Panel.Top + 3.5f * u), 2.4f * u, Neutral with { A = alpha }, TextAlign.Center);
         }
     }
@@ -343,7 +352,7 @@ internal static class StrategyDrawing
     private static Color TeamColor(StrategySystem strategy, string? owner, string? mine) =>
         strategy.FactionOf(owner)?.Color ?? (StrategySystem.SameTeam(owner, mine) ? Busy : Theirs);
 
-    private static IEnumerable<SpriteDraw> SelectionDraws(StrategySystem strategy, StrategyHud hud)
+    private static IEnumerable<SpriteDraw> SelectionDraws(StrategySystem strategy, StrategyHud hud, FrameDrawing frame)
     {
         var rts = strategy.Rts;
         var u = hud.Unit;
@@ -363,7 +372,7 @@ internal static class StrategyDrawing
                 var entity = rts.Selected[i];
                 var tile = hud.Tile(i);
                 var health = Health.Of(entity);
-                var fraction = health is { Max: > 0 } ? Math.Clamp(health.Current / health.Max, 0, 1) : 1;
+                var fraction = health is { Max: > 0 } ? Math.Clamp(health.CurrentDrawn(frame.BlendOf(entity)) / health.Max, 0, 1) : 1;
                 yield return Quad(tile.Center, new Vector2(tile.Width, tile.Height), HudEdge);
                 yield return Quad(tile.Center, new Vector2(tile.Width, tile.Height) * 0.86f, entity.GetComponent<Sprite>()?.Tint ?? HudDim);
                 yield return Quad(new Vector2(tile.Center.X, tile.Y + tile.Height * 0.08f), new Vector2(tile.Width * 0.86f * fraction, tile.Height * 0.14f), HealthColor(fraction));
@@ -379,7 +388,7 @@ internal static class StrategyDrawing
         if (Health.Of(only) is { } hp)
         {
             y -= 4.2f * u;
-            var fraction = hp.Max > 0 ? Math.Clamp(hp.Current / hp.Max, 0, 1) : 0;
+            var fraction = hp.Max > 0 ? Math.Clamp(hp.CurrentDrawn(frame.BlendOf(only)) / hp.Max, 0, 1) : 0;
             var width = Math.Min(info.Width * 0.5f, 26 * u);
             foreach (var draw in Meter(new Vector2(info.X + width / 2, y), width, 1.4f * u, fraction, HealthColor(fraction)))
                 yield return draw;
@@ -396,7 +405,7 @@ internal static class StrategyDrawing
         if (only.GetComponent<Producer>() is { Queue.Count: > 0 } producer && only.GetComponent<Building>() is not { IsBuilt: false })
         {
             var width = Math.Min(info.Width * 0.5f, 26 * u);
-            foreach (var draw in Meter(new Vector2(info.X + width / 2, y), width, 1.4f * u, producer.Progress, Busy))
+            foreach (var draw in Meter(new Vector2(info.X + width / 2, y), width, 1.4f * u, producer.ProgressDrawn(frame.BlendOf(only)), Busy))
                 yield return draw;
             yield return Label($"{producer.Progress * 100:0}%", new Vector2(info.X + width + 1.5f * u, y), 2.2f * u, HudDim, TextAlign.Left);
         }
@@ -442,7 +451,7 @@ internal static class StrategyDrawing
             yield return $"Damage {fighter.Damage:0.#}, range {fighter.Range:0.#}";
     }
 
-    private static IEnumerable<SpriteDraw> CardDraws(StrategySystem strategy, StrategyHud hud, float thickness)
+    private static IEnumerable<SpriteDraw> CardDraws(StrategySystem strategy, StrategyHud hud, float thickness, FrameDrawing frame)
     {
         var rts = strategy.Rts;
         var u = hud.Unit;

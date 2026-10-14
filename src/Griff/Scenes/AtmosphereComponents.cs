@@ -26,25 +26,65 @@ public sealed class Light : Component
 {
     /// <summary>How far the light reaches, in world units.</summary>
     [Distance(Center = nameof(Offset))]
-    public float Radius { get; set; } = 4;
+    public float Radius
+    {
+        get => _radius.Value;
+        set => _radius.Set(this, value);
+    }
 
     /// <summary>The light's color: warm orange for a torch, pale blue for moonlight.</summary>
-    public Color Color { get; set; } = Color.FromBytes(0xFF, 0xD8, 0x9A);
+    public Color Color
+    {
+        get => _color.Value;
+        set => _color.Set(this, value);
+    }
 
     /// <summary>How bright it is: 1 lights its middle fully, more spreads full brightness further out, less is dim.</summary>
-    public float Intensity { get; set; } = 1;
+    public float Intensity
+    {
+        get => _intensity.Value;
+        set => _intensity.Set(this, value);
+    }
 
     /// <summary>
     /// How gradually it fades out towards its edge: 1 fades all the way from the middle, 0 is a hard-edged circle (a
     /// spotlight, a window's square of light seen from above).
     /// </summary>
-    public float Softness { get; set; } = 1;
+    public float Softness
+    {
+        get => _softness.Value;
+        set => _softness.Set(this, value);
+    }
 
     /// <summary>How much it flickers, from 0 (steady) to 1 (a guttering candle). Flames look right at about 0.2.</summary>
     public float Flicker { get; set; }
 
     /// <summary>Where the light is, relative to the entity, e.g. (0, 0.5) for a lantern held up.</summary>
-    public Vector2 Offset { get; set; }
+    public Vector2 Offset
+    {
+        get => _offset.Value;
+        set => _offset.Set(this, value);
+    }
+
+    // What it's drawn with, kept as it was when the step began too, so a light that grows, dims, changes color, moves
+    // about its entity or flickers is drawn between steps.
+    private Smoothed<float> _radius = new(4);
+    private Smoothed<Color> _color = new(Color.FromBytes(0xFF, 0xD8, 0x9A));
+    private Smoothed<float> _intensity = new(1);
+    private Smoothed<float> _softness = new(1);
+    private Smoothed<Vector2> _offset;
+    private Smoothed<float> _flickerDip;
+
+    /// <summary>
+    /// Where it is, how far it reaches, its color, its intensity (flicker included, as <see cref="CurrentIntensity"/>) and
+    /// how soft its edge is, in a frame drawn as <paramref name="blend"/> says.
+    /// </summary>
+    internal (Vector2 Center, float Radius, Color Color, float Intensity, float Softness) Drawn(StepBlend blend)
+    {
+        var world = Entity?.Transform.WorldMatrix ?? Matrix4x4.Identity;
+        return (Vector2.Transform(blend.Of(_offset), world), blend.Of(_radius), blend.Of(_color),
+            blend.Of(_intensity) * (1 - Math.Clamp(Flicker, 0, 1) * blend.Of(_flickerDip)), blend.Of(_softness));
+    }
 
     /// <summary>
     /// Walls, solid tiles and solid colliders block the light and cast shadows behind them. What carries the light (a
@@ -84,7 +124,11 @@ public sealed class Light : Component
     }
 
     // 0 (full brightness) to 1 (as dim as the flicker goes), from a few out-of-step waves so it never visibly repeats.
-    internal float FlickerDip { get; private set; }
+    internal float FlickerDip
+    {
+        get => _flickerDip.Value;
+        private set => _flickerDip.Set(this, value);
+    }
 
     internal float FlickerTime { get; set; }
 

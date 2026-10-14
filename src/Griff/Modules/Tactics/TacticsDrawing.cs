@@ -58,7 +58,8 @@ internal static class TacticsDrawing
             {
                 if (unit.Entity!.GetComponent<Health>() is not { } health || health.IsDead)
                     continue;
-                var fraction = health.Max > 0 ? Math.Clamp(health.Current / health.Max, 0, 1) : 0;
+                // Filling and emptying between steps.
+                var fraction = health.Max > 0 ? Math.Clamp(health.CurrentDrawn(frame.BlendOf(unit.Entity)) / health.Max, 0, 1) : 0;
                 var at = Flat(unit.Entity.Transform.WorldPosition) - new Vector2(0, cell * 0.42f);
                 over.AddRange(Meter(at, cell * 0.7f, cell * 0.08f, fraction, HealthColor(fraction)));
             }

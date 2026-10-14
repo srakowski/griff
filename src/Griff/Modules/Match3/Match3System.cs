@@ -32,18 +32,34 @@ internal sealed class Match3System : GameSystem
         }
     }
 
-    // The slides, falls and clears under way go on, on every machine.
+    // The slides, falls and clears under way go on, on every machine, each remembering how far along it was as the step
+    // began (and what came to rest or cleared away in it), so the board is drawn between steps.
     private void AdvanceGems(MatchBoard board)
     {
         var seconds = Time.Delta;
+        board.MovedIn = board.Entity!.Scene?.Step ?? 0;
+        board.ClearingFrom.Clear();
+        board.Landed.Clear();
+        board.Vanished.Clear();
         foreach (var motion in board.Motions.Values)
+        {
+            motion.ElapsedFrom = motion.Elapsed;
             motion.Elapsed += seconds;
-        foreach (var cell in board.Clearing.Keys.ToList())
-            board.Clearing[cell] += seconds;
+        }
+
+        foreach (var (cell, cleared) in board.Clearing.ToList())
+        {
+            board.ClearingFrom[cell] = cleared;
+            board.Clearing[cell] = cleared + seconds;
+        }
+
         if (Game.Runs(board.Entity!))
         {
             foreach (var cell in board.Motions.Where(m => m.Value.IsDone).Select(m => m.Key).ToList())
+            {
+                board.Landed[cell] = board.Motions[cell];
                 board.Motions.Remove(cell);
+            }
         }
     }
 
@@ -70,8 +86,12 @@ internal sealed class Match3System : GameSystem
             }
 
             var grid = TileGrid.Read(board.Columns, board.Rows, map);
-            foreach (var (x, y) in board.Clearing.Keys)
+            foreach (var ((x, y), cleared) in board.Clearing)
+            {
+                board.Vanished.Add(new VanishedGem(x, y, grid[x, y], board.ClearingFrom.GetValueOrDefault((x, y), cleared), cleared));
                 grid[x, y] = -1;
+            }
+
             board.Clearing.Clear();
             Collapse(board, grid);
             grid.Write(map);

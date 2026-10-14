@@ -1,0 +1,48 @@
+title: Smooth boards
+intro: Match-3 gems, falling blocks, bars, a gun's kick, lights and the camera's zoom and shake are now drawn between the game's steps too.
+project: Match3 | Smooth Gems
+
+chapter: Ten steps a second | Gems that glide
+say: The game moves in steps, sixty a second, and the screen is drawn between them, so things glide on a fast screen. Until now a match-3 board's gems, a falling-block piece, a bar's trail and a gun's kick still moved once a step.
+say: To show the difference on any screen, this script slows the game down to ten steps a second. Whatever still moved once a step would jump ten times a second.
+write: Scripts/TenSteps.cs | smooth-boards/TenSteps.cs
+code: Assets/Scripts/TenSteps.cs | TenSteps.cs
+hidecode
+scene: Level1
+select: Board
+set: MatchBoard.Seed = 1
+create: Empty
+rename: Ten Steps
+add: TenSteps
+deselect
+play
+wait: 1
+say: Swap two gems.
+gameclick: 0.9, 3.5
+wait: 0.4
+gameclick: 0.9, 2.5
+wait: 2.5
+expectvalue: Board.MatchBoard.Swaps = 1
+explain: game | Drawn between steps | Even at ten steps a second, the gems slide across, shrink away and fall into the gaps smoothly: each frame draws them part way between the last two steps.
+stop
+
+chapter: Falling blocks | A piece that glides down
+menu: File > New Scene...
+prompt: Blocks
+select: Main Camera
+set: Camera.Size = 11
+deselect
+create: Falling Board
+create: Empty
+rename: Ten Steps
+add: TenSteps
+deselect
+play
+wait: 2.5
+tap: Left
+wait: 1
+tap: Right
+wait: 1.5
+explain: game | Falling and sliding | The piece falls a row and slides a column in a single step, but it's drawn gliding there. Full rows shrink away and the rows above drop into place the same way.
+stop
+say: Bars, a first person gun's kick and flash, lights, the camera's zoom and shake, and every game's heads up display glide the same way at the normal sixty steps a second.

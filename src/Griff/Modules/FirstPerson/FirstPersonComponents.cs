@@ -280,7 +280,40 @@ public sealed class Weapon : Component
     internal float Cooldown { get; set; }
 
     // Seconds since it last fired, for the kick and the flash.
-    internal float SinceFired { get; set; } = float.PositiveInfinity;
+    internal float SinceFired
+    {
+        get => _sinceFired;
+        set
+        {
+            _sinceFired = value;
+            _kick.Set(this, KickAt(value));
+            _flash.Set(this, FlashAt(value));
+        }
+    }
+
+    private float _sinceFired = float.PositiveInfinity;
+
+    // How far back it's kicked (1 as it fires, back to 0) and how bright its flash is (1 as it fires, 0 once it's gone),
+    // kept as they were when the step began too, so both are drawn between steps.
+    private Smoothed<float> _kick;
+    private Smoothed<float> _flash;
+
+    // Seconds the kick and the flash last.
+    internal const float KickSeconds = 0.15f, FlashSeconds = 0.08f;
+
+    private static float KickAt(float sinceFired) => sinceFired < KickSeconds ? 1 - sinceFired / KickSeconds : 0;
+
+    private static float FlashAt(float sinceFired) => sinceFired < FlashSeconds ? 1 - sinceFired / FlashSeconds : 0;
+
+    // The kick and the flash in a frame drawn as `blend` says.
+    internal (float Kick, float Flash) Drawn(StepBlend blend) => (blend.Of(_kick), blend.Of(_flash));
+
+    // Put away: taken out again, it's drawn as it is (not kicking or flashing) rather than from how it was.
+    internal void PutAway()
+    {
+        _sinceFired = float.PositiveInfinity;
+        (_kick, _flash) = (default, default);
+    }
 }
 
 /// <summary>

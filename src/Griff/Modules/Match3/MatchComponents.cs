@@ -359,7 +359,24 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
 
     // On a player's machine, everyone's picked-up gem and cursor, as the host sends them (see MatchView).
     internal Dictionary<int, ((int X, int Y)? Picked, (int X, int Y)? Cursor)> Remote { get; } = [];
+
+    // ----- How the gems were as the last step began, to draw them between steps (see StepBlend) -----
+
+    // The step the gems last moved in: they're drawn between how they were and are only just after it.
+    internal long MovedIn { get; set; } = -1;
+
+    // How long each gem clearing had been at it as that step began.
+    internal Dictionary<(int X, int Y), float> ClearingFrom { get; } = [];
+
+    // Gems that came home in that step, drawn the rest of the way in.
+    internal Dictionary<(int X, int Y), GemMotion> Landed { get; } = [];
+
+    // Gems that finished clearing in that step, drawn shrinking the rest of the way away.
+    internal List<VanishedGem> Vanished { get; } = [];
 }
+
+/// <summary>A gem that finished clearing in the last step: its cell and kind, and how long it had been clearing as the step began and ended.</summary>
+internal readonly record struct VanishedGem(int X, int Y, int Tile, float From, float To);
 
 /// <summary>Gems of one kind lined up and cleared together on a <see cref="MatchBoard"/>.</summary>
 /// <param name="Kind">The gem's tile number.</param>
@@ -392,25 +409,31 @@ internal sealed class GemMotion(Vector2 from, float seconds, bool falls, bool gr
 
     public float Elapsed { get; set; }
 
-    public float Progress => Math.Clamp(Elapsed / Seconds, 0, 1);
+    /// <summary>What <see cref="Elapsed"/> was as the last step began, to draw it between steps.</summary>
+    public float ElapsedFrom { get; set; }
+
+    public float Progress => ProgressAt(Elapsed);
 
     public bool IsDone => Elapsed >= Seconds;
 
     /// <summary>How far from its cell it's drawn now, in cells.</summary>
-    public Vector2 Offset
-    {
-        get
-        {
-            var t = Progress;
-            if (Returns)
-            {
-                var away = t < 0.5f ? 2 * t : 2 - 2 * t;
-                return From * (away * away * (3 - 2 * away));
-            }
+    public Vector2 Offset => OffsetAt(Elapsed);
 
-            var eased = Falls ? t * t : t * t * (3 - 2 * t);
-            return From * (1 - eased);
+    /// <summary>How far through it is <paramref name="elapsed"/> seconds in, from 0 to 1.</summary>
+    public float ProgressAt(float elapsed) => Math.Clamp(elapsed / Seconds, 0, 1);
+
+    /// <summary>How far from its cell it's drawn <paramref name="elapsed"/> seconds in, in cells.</summary>
+    public Vector2 OffsetAt(float elapsed)
+    {
+        var t = ProgressAt(elapsed);
+        if (Returns)
+        {
+            var away = t < 0.5f ? 2 * t : 2 - 2 * t;
+            return From * (away * away * (3 - 2 * away));
         }
+
+        var eased = Falls ? t * t : t * t * (3 - 2 * t);
+        return From * (1 - eased);
     }
 }
 

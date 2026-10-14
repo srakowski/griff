@@ -248,7 +248,8 @@ internal sealed class MoveSnapshot
             var target = new Vector3(world, entity.Transform.WorldPosition.Z);
             if (entity.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var inverse))
                 target = Vector3.Transform(target, inverse);
-            entity.Transform.Position = new Vector3(target.X, target.Y, entity.Transform.Position.Z);
+            // Put straight back, not glided there over the step.
+            entity.Transform.Teleport(new Vector3(target.X, target.Y, entity.Transform.Position.Z));
             if (entity.GetComponent<Body>() is { } body)
                 body.Velocity = Vector2.Zero;
 

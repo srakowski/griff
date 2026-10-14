@@ -126,7 +126,9 @@ public abstract class GameSystem
     /// <summary>
     /// Called early in each frame's Simulate phase (and on the host of a network game, again for each other player, as
     /// them: see <see cref="RunForPlayer"/>) to lay out what the system shows on the screen for the view as it is now,
-    /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click.
+    /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click. Draw what
+    /// it lays out through <see cref="FrameDrawing.PinToView"/>, so it keeps still on the screen as the camera is drawn
+    /// moving between steps.
     /// </summary>
     protected virtual void LayOutHud()
     {

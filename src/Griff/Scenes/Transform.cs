@@ -194,10 +194,7 @@ public sealed class Transform : Component
         var position = Vector3.DistanceSquared(_fromPosition, _position) <= scene.GlideLimit * scene.GlideLimit
             ? Vector3.Lerp(_fromPosition, _position, t)
             : _position;
-        var rotation = _fromRotation == _rotation
-            ? _rotation
-            : new Vector3(StepBlend.TurnBetween(_fromRotation.X, _rotation.X, t), StepBlend.TurnBetween(_fromRotation.Y, _rotation.Y, t),
-                StepBlend.TurnBetween(_fromRotation.Z, _rotation.Z, t));
+        var rotation = GlidedRotation(t);
         var scale = _fromScale == _scale || !SameSigns(_fromScale, _scale) ? _scale : Vector3.Lerp(_fromScale, _scale, t);
         if (rotation == _rotation && scale == _scale)
         {
@@ -212,6 +209,32 @@ public sealed class Transform : Component
 
         static bool SameSigns(Vector3 a, Vector3 b) =>
             MathF.Sign(a.X) == MathF.Sign(b.X) && MathF.Sign(a.Y) == MathF.Sign(b.Y) && MathF.Sign(a.Z) == MathF.Sign(b.Z);
+    }
+
+    // Its turn part way from how it was turned as the last step began, `t` of the way; a big turn is drawn as it ends up.
+    private Vector3 GlidedRotation(float t) =>
+        _fromRotation == _rotation
+            ? _rotation
+            : new Vector3(StepBlend.TurnBetween(_fromRotation.X, _rotation.X, t), StepBlend.TurnBetween(_fromRotation.Y, _rotation.Y, t),
+                StepBlend.TurnBetween(_fromRotation.Z, _rotation.Z, t));
+
+    /// <summary>
+    /// Its own <see cref="Rotation"/> (in its parent's space) in the frame being drawn: between how it was turned as the
+    /// last step began and how it is, as <see cref="WorldMatrix"/> turns it.
+    /// </summary>
+    internal Vector3 RotationDrawn =>
+        Entity?.Scene is not { DrawStamp: not 0 } scene || _movedStep != scene.Step || _jumpedStep == scene.Step
+            ? _rotation
+            : GlidedRotation(scene.DrawBlend);
+
+    /// <summary><see cref="RotationDrawn"/> as a quaternion, like <see cref="RotationQuaternion"/>: for the camera's view.</summary>
+    internal Quaternion RotationQuaternionDrawn
+    {
+        get
+        {
+            var rotation = RotationDrawn;
+            return Quaternion.CreateFromYawPitchRoll(ToRadians(rotation.Y), ToRadians(rotation.X), ToRadians(rotation.Z));
+        }
     }
 
     private void Keep(Matrix4x4 world, Transform? parent)

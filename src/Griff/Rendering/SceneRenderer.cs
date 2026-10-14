@@ -76,7 +76,9 @@ public static class SceneRenderer
     {
         var camera = FindCamera(scene);
         var component = camera?.GetComponent<Camera>();
-        var size = component?.Size ?? DefaultCameraSize;
+        // A zoom and a fade of the background are drawn between steps, like the camera's moves.
+        var drawn = component?.Drawn(StepBlend.For(scene, camera));
+        var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse ?? [];
         sprites.Clear();
@@ -128,7 +130,7 @@ public static class SceneRenderer
 
         return new RenderFrame
         {
-            Background = component?.Background ?? DefaultBackground,
+            Background = drawn?.Background ?? DefaultBackground,
             ViewProjection = viewProjection,
             Sprites = sprites,
             Camera = camera,
@@ -136,6 +138,7 @@ public static class SceneRenderer
             Lights = dark ? LightsIn(scene, view) : [],
             LitCount = dark ? litCount : sprites.Count,
             Effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } effects ? effects : null,
+            Look = camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown.Drawn(StepBlend.For(scene, camera)) : default,
         };
     }
 
@@ -460,7 +463,7 @@ public static class SceneRenderer
     public static IReadOnlyList<LightDraw> Lights(Scene scene, float aspect)
     {
         var camera = FindCamera(scene);
-        var size = camera?.GetComponent<Camera>()?.Size ?? DefaultCameraSize;
+        var size = camera?.GetComponent<Camera>()?.Drawn(StepBlend.For(scene, camera)).Size ?? DefaultCameraSize;
         return LightsIn(scene, new Box(ViewCenter(camera), new Vector2(size * aspect, size)));
     }
 
@@ -486,11 +489,11 @@ public static class SceneRenderer
         List<ShadowEdge>? edges = null;
         foreach (var light in scene.Active<Light>())
         {
-            var intensity = light.CurrentIntensity;
-            if (!(light.Radius > 0) || !(intensity > 0))
+            // A light that grows, dims or flickers does it between steps too.
+            var (center, radius, color, intensity, softness) = light.Drawn(StepBlend.For(scene, light.Entity));
+            if (!(radius > 0) || !(intensity > 0))
                 continue;
-            var draw = new LightDraw(light.WorldCenter, light.Radius,
-                new Color(light.Color.R * intensity, light.Color.G * intensity, light.Color.B * intensity), light.Softness);
+            var draw = new LightDraw(center, radius, new Color(color.R * intensity, color.G * intensity, color.B * intensity), softness);
             if (light.Shadows)
                 draw = draw with { Casters = Shadows.CastersFor(edges ??= Shadows.Edges(scene), light) };
             yield return draw;
@@ -554,8 +557,12 @@ public static class SceneRenderer
         if (camera is null)
             return Vector2.Zero;
         var position = camera.Transform.WorldPosition;
-        return new Vector2(position.X, position.Y) + (camera.GetComponent<Camera>()?.ShakeOffset ?? Vector2.Zero);
+        return new Vector2(position.X, position.Y) + ShakeDrawn(camera);
     }
+
+    // The camera's shake in the frame being drawn: between steps, like its moves.
+    private static Vector2 ShakeDrawn(Entity camera) =>
+        camera.GetComponent<Camera>()?.Drawn(StepBlend.For(camera.Scene, camera)).Shake ?? Vector2.Zero;
 
     /// <summary>Quads for debug shapes. Lines are about two pixels thick on a 720-pixel-high view, whatever the zoom.</summary>
     public static IEnumerable<SpriteDraw> DebugDraws(IEnumerable<Runtime.DebugShape> shapes, float cameraSize)
@@ -593,8 +600,8 @@ public static class SceneRenderer
         if (camera is not null)
         {
             var transform = camera.Transform;
-            var shake = camera.GetComponent<Camera>()?.ShakeOffset ?? Vector2.Zero;
-            var world = Matrix4x4.CreateFromQuaternion(transform.RotationQuaternion) *
+            var shake = ShakeDrawn(camera);
+            var world = Matrix4x4.CreateFromQuaternion(transform.RotationQuaternionDrawn) *
                         Matrix4x4.CreateTranslation(transform.WorldPosition + new Vector3(shake, 0));
             Matrix4x4.Invert(world, out view);
         }

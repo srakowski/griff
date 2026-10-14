@@ -5,7 +5,8 @@ namespace Griff.Modules.Match3;
 
 // A match-3 board draws its tilemap itself: its backdrop, the picked-up gem's cell and the cursors, then its gems, each
 // where it's sliding or falling to and shrinking as it clears. Without a tileset image each kind of gem is a square of its
-// own color.
+// own color. A frame between two steps draws the gems between how they were and are: part way along a slide or fall, part
+// shrunk, and those that came home or cleared away in the last step on their way there.
 public sealed partial class MatchBoard
 {
     // A color for each kind of gem on a board with no tileset image, in the order of its Gems.
@@ -28,11 +29,11 @@ public sealed partial class MatchBoard
     {
         if (Entity!.GetComponent<Tilemap>() is not { } map)
             return;
-        foreach (var draw in BoardDraws(Entity, map, this))
+        foreach (var draw in BoardDraws(Entity, map, this, drawing.Blend.For(MovedIn), map.TintDrawn(drawing.Blend)))
             drawing.Add(draw);
     }
 
-    private static IEnumerable<SpriteDraw> BoardDraws(Entity entity, Tilemap map, MatchBoard board)
+    private static IEnumerable<SpriteDraw> BoardDraws(Entity entity, Tilemap map, MatchBoard board, StepBlend blend, Color mapTint)
     {
         var world = entity.Transform.WorldMatrix;
         var size = map.TileSize;
@@ -66,29 +67,51 @@ public sealed partial class MatchBoard
 
         var kinds = board.Kinds().ToList();
         const float seamless = 1.004f;
+
+        // Gems that finished clearing in the last step shrink the rest of the way away, under what falls in over them.
+        if (blend.IsBetween)
+        {
+            foreach (var gone in board.Vanished)
+            {
+                var scale = Shrunk(blend.Between(gone.From, gone.To));
+                if (scale > 0 && Gem(gone.X, gone.Y, gone.Tile, Vector2.Zero, scale) is { } draw)
+                    yield return draw;
+            }
+        }
+
         foreach (var (x, y, tile) in map.Cells())
         {
             var inside = x < columns && y < rows;
-            var motion = inside ? board.Motions.GetValueOrDefault((x, y)) : null;
-            var offset = motion?.Offset ?? Vector2.Zero;
+            // A gem that came home in the last step has the rest of the way to go.
+            var motion = inside ? board.Motions.GetValueOrDefault((x, y)) ?? board.Landed.GetValueOrDefault((x, y)) : null;
+            var elapsed = motion is null ? 0 : blend.Between(motion.ElapsedFrom, motion.Elapsed);
+            var offset = motion?.OffsetAt(elapsed) ?? Vector2.Zero;
             var scale = 1f;
             if (motion is { Grows: true })
-                scale = motion.Progress;
+                scale = motion.ProgressAt(elapsed);
             if (inside && board.Clearing.TryGetValue((x, y), out var cleared))
-                scale = board.ClearTime > 0 ? 1 - Math.Clamp(cleared / board.ClearTime, 0, 1) : 0;
+                scale = Shrunk(blend.Between(board.ClearingFrom.GetValueOrDefault((x, y), cleared), cleared));
+            if (scale > 0 && Gem(x, y, tile, offset, scale) is { } draw)
+                yield return draw;
+        }
 
-            // A gem dropping in fades in as it comes onto the board.
+        // How big a gem is that has been clearing this long.
+        float Shrunk(float cleared) => board.ClearTime > 0 ? 1 - Math.Clamp(cleared / board.ClearTime, 0, 1) : 0;
+
+        // A gem in cell (x, y), drawn `offset` cells from it at `scale`. One dropping in fades in as it comes onto the board.
+        SpriteDraw? Gem(int x, int y, int tile, Vector2 offset, float scale)
+        {
             var row = y + offset.Y;
             var alpha = row < 0 ? Math.Clamp(1 + row, 0, 1) : 1;
-            if (scale <= 0 || alpha <= 0)
-                continue;
+            if (alpha <= 0)
+                return null;
 
             var center = new Vector2((x + offset.X + 0.5f) * size, -(row + 0.5f) * size);
             var shown = map.ShownTile(x, y, tile);
             var tileset = map.TilesetOf(shown);
             var colored = tileset.Image is null && board.IsGem(tile);
             var extent = size * scale * (colored ? GemFill : seamless);
-            var tint = map.Tint;
+            var tint = mapTint;
             if (colored)
             {
                 var gem = GemColors[Math.Max(0, kinds.IndexOf(tile)) % GemColors.Length];
@@ -96,7 +119,7 @@ public sealed partial class MatchBoard
             }
 
             var matrix = Matrix4x4.CreateScale(extent, extent, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
-            yield return new SpriteDraw(matrix, tileset.Image, tint with { A = tint.A * alpha }, entity)
+            return new SpriteDraw(matrix, tileset.Image, tint with { A = tint.A * alpha }, entity)
             {
                 Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown),
             };

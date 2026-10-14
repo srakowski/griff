@@ -94,6 +94,23 @@ public sealed class FrameDrawing
     public bool IsOnScreen(Entity entity) => SceneRenderer.IsOnScreen(entity, Camera);
 
     /// <summary>
+    /// Moves the draws of <paramref name="draws"/> from <paramref name="start"/> on, laid out in the world over a view
+    /// centered at <paramref name="laidOutAt"/> and <paramref name="laidOutHalfHeight"/> high as the game stepped (a
+    /// system's HUD), onto the view this frame is drawn with: the camera moves, zooms and shakes between steps, so a HUD
+    /// laid out over where it was keeps still on the screen.
+    /// </summary>
+    public void PinToView(List<SpriteDraw> draws, Vector2 laidOutAt, float laidOutHalfHeight, int start = 0)
+    {
+        var zoom = laidOutHalfHeight > 0 ? View.HalfSize.Y / laidOutHalfHeight : 1;
+        if (View.Center == laidOutAt && zoom == 1)
+            return;
+        var move = Matrix4x4.CreateTranslation(-laidOutAt.X, -laidOutAt.Y, 0) * Matrix4x4.CreateScale(zoom, zoom, 1) *
+                   Matrix4x4.CreateTranslation(View.Center.X, View.Center.Y, 0);
+        for (var i = start; i < draws.Count; i++)
+            draws[i] = draws[i] with { World = draws[i].World * move };
+    }
+
+    /// <summary>
     /// Adds <paramref name="draws"/> over the whole world and under what's pinned to the screen (after whatever was added
     /// this way before). The first time, everything pinned to the screen is moved after the world, keeping its order.
     /// </summary>

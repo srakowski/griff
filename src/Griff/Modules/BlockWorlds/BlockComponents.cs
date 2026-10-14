@@ -369,7 +369,17 @@ public sealed class BlockBuilder : Component
     /// <summary>How far through breaking <see cref="Target"/> it is, from 0 to 1.</summary>
     [DoNotSerialize]
     [Sent]
-    public float Progress { get; internal set; }
+    public float Progress
+    {
+        get => _progress.Value;
+        internal set => _progress.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so digging is drawn between steps (and starting over as it is).
+    private Smoothed<float> _progress;
+
+    // How far through breaking it is in a frame drawn as `blend` says.
+    internal float ProgressDrawn(StepBlend blend) => _progress.Value >= _progress.Was ? blend.Of(_progress) : _progress.Value;
 
     internal Tilemap? Map { get; set; }
 

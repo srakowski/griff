@@ -28,7 +28,12 @@ internal static class ContraptionsDrawing
             overlays.AddRange(ToolDraws(game, thickness));
 
         if (state.Hud is { } layout && system.Tools is { } tools)
+        {
+            var start = overlays.Count;
             overlays.AddRange(HudDraws(game, state, layout, tools, thickness));
+            frame.PinToView(overlays, layout.View.Center, layout.View.Height / 2, start);
+        }
+
         if (overlays.Count > 0)
             frame.AddOverWorld(overlays);
     }

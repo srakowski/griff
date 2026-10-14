@@ -291,10 +291,10 @@ public sealed class SpriteRenderer : IDisposable
         if (frame.IsDark && frame.LitCount >= sprites.Count)
             ApplyLighting(frame, width, height);
         Flush();
-        if (frame.Effects is { } effects)
+        if (frame.Effects is not null)
         {
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
-            ApplyEffects(effects, width, height);
+            ApplyEffects(frame.Look, width, height);
         }
 
         _textures.EndFrame();
@@ -437,7 +437,7 @@ public sealed class SpriteRenderer : IDisposable
     }
 
     // The frame drawn so far, onto the screen through the effects.
-    private void ApplyEffects(ScreenEffects effects, int width, int height)
+    private void ApplyEffects(ScreenLook effects, int width, int height)
     {
         _gl.Viewport(0, 0, (uint)width, (uint)height);
         _gl.Disable(EnableCap.Blend);

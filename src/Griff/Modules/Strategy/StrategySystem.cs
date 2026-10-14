@@ -219,10 +219,13 @@ internal sealed partial class StrategySystem : GameSystem
             CheckDefeats();
 
         UpdateFog(commander);
+        // Each marker remembers how old it was as the step began, and the notice how long it had left, to be drawn between steps.
         foreach (var marker in Rts.Markers)
-            marker.Age += Time.UnscaledDelta;
+            (marker.AgeFrom, marker.Age) = (marker.Age, marker.Age + Time.UnscaledDelta);
+        Rts.MarkersAgedIn = Scene.Step;
         Rts.Markers.RemoveAll(m => m.Age >= StrategyState.MarkerSeconds);
         Rts.NoticeLeft = Math.Max(0, Rts.NoticeLeft - Time.UnscaledDelta);
+        Rts.NoticeShown.Set(Scene, Rts.NoticeLeft);
     }
 
     // ----- Teams -----
@@ -1148,6 +1151,11 @@ internal sealed class StrategyState
 
     public float NoticeLeft { get; set; }
 
+    // How long the notice had left as each step left it, and the step the markers last aged in, to draw them between steps.
+    public Smoothed<float> NoticeShown;
+
+    public long MarkersAgedIn { get; set; } = -1;
+
     // Real seconds since the strategy game started, for double-clicks and double-tapped groups.
     public double Clock { get; set; }
 
@@ -1196,6 +1204,9 @@ internal sealed class Marker(Vector2 at, Color color)
     public Color Color { get; } = color;
 
     public float Age { get; set; }
+
+    // How old it was as the last step began.
+    public float AgeFrom { get; set; }
 }
 
 /// <summary>What one team has seen of the map: explored once, and visible now.</summary>

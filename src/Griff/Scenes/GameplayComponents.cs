@@ -30,7 +30,17 @@ public sealed class Health : Component
     }
 
     /// <summary>Hit points now. Normally starts at <see cref="Max"/>.</summary>
-    public float Current { get; set; } = 3;
+    public float Current
+    {
+        get => _current.Value;
+        set => _current.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a meter showing it fills and empties between steps.
+    private Smoothed<float> _current = new(3);
+
+    /// <summary>Its <see cref="Current"/> hit points in a frame drawn as <paramref name="blend"/> says, for a meter showing them.</summary>
+    internal float CurrentDrawn(StepBlend blend) => blend.Of(_current);
 
     /// <summary>Seconds after a hit during which further damage is ignored. 0 lets every hit land.</summary>
     [Group("When Hit")]

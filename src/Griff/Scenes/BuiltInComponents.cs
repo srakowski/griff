@@ -10,10 +10,27 @@ namespace Griff.Scenes;
 public sealed class Camera : Component
 {
     /// <summary>Half the visible height, in world units. Width follows the window's aspect ratio.</summary>
-    public float Size { get; set; } = 5f;
+    public float Size
+    {
+        get => _size.Value;
+        set => _size.Set(this, value);
+    }
 
     /// <summary>The color behind everything, where nothing is drawn.</summary>
-    public Color Background { get; set; } = Color.FromBytes(0x1E, 0x22, 0x2B);
+    public Color Background
+    {
+        get => _background.Value;
+        set => _background.Set(this, value);
+    }
+
+    // The zoom, the background and the shake, kept as they were when the step began too, so a zoom, a fade of the
+    // background and a shake are drawn between steps.
+    private Smoothed<float> _size = new(5f);
+    private Smoothed<Color> _background = new(Color.FromBytes(0x1E, 0x22, 0x2B));
+    private Smoothed<System.Numerics.Vector2> _shake;
+
+    /// <summary>Its <see cref="Size"/>, <see cref="Background"/> and <see cref="ShakeOffset"/> in a frame drawn as <paramref name="blend"/> says (see <see cref="StepBlend"/>).</summary>
+    internal (float Size, Color Background, System.Numerics.Vector2 Shake) Drawn(StepBlend blend) => (blend.Of(_size), blend.Of(_background), blend.Of(_shake));
 
     /// <summary>
     /// For top-down games: among things with the same Order and Z, whatever is lower down draws in front, so the player
@@ -87,7 +104,11 @@ public sealed class Camera : Component
 
     /// <summary>How far the view is currently thrown off by <see cref="Shake"/>, in world units.</summary>
     [DoNotSerialize]
-    public System.Numerics.Vector2 ShakeOffset { get; private set; }
+    public System.Numerics.Vector2 ShakeOffset
+    {
+        get => _shake.Value;
+        private set => _shake.Set(this, value);
+    }
 
     /// <summary>
     /// Shakes the view by up to <paramref name="strength"/> world units, fading out over <paramref name="duration"/>
@@ -142,7 +163,14 @@ public sealed class Text : Component, IDrawable
     public string? Value { get; set; } = "Text";
 
     /// <summary>Height of one line in world units, before the transform's scale.</summary>
-    public float Size { get; set; } = 1f;
+    public float Size
+    {
+        get => _size.Value;
+        set => _size.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so text growing or shrinking is drawn between steps.
+    private Smoothed<float> _size = new(1f);
 
     /// <summary>The color of the letters.</summary>
     public Color Color
@@ -189,7 +217,8 @@ public sealed class Text : Component, IDrawable
         var value = Entity!.GetComponent<Typewriter>() is { } typewriter ? typewriter.Visible(Shown) : Shown;
         if (string.IsNullOrEmpty(value))
             return;
-        var world = Matrix4x4.CreateScale(Size, Size, 1) * Entity.Transform.WorldMatrix;
+        var size = drawing.Smooth(_size);
+        var world = Matrix4x4.CreateScale(size, size, 1) * Entity.Transform.WorldMatrix;
         drawing.Add(new SpriteDraw(world, null, drawing.Tint(this, drawing.Smooth(_color)), Entity, value)
         {
             Font = string.IsNullOrWhiteSpace(Font) ? null : Font,
@@ -225,7 +254,14 @@ public sealed class Sprite : Component, IDrawable, INetState
     private Smoothed<Color> _tint = new(Color.White);
 
     /// <summary>Size in world units before the transform's scale.</summary>
-    public System.Numerics.Vector2 Size { get; set; } = System.Numerics.Vector2.One;
+    public System.Numerics.Vector2 Size
+    {
+        get => _size.Value;
+        set => _size.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a sprite growing or shrinking is drawn between steps.
+    private Smoothed<System.Numerics.Vector2> _size = new(System.Numerics.Vector2.One);
 
     /// <summary>Draws the image mirrored left to right (movement components flip it to face the way they go).</summary>
     [Sent(ByMover = true)]
@@ -330,24 +366,27 @@ public sealed class Sprite : Component, IDrawable, INetState
     /// The quads the sprite is drawn with, in the world, and the part of its image on each: one, or nine for a
     /// <see cref="Slice"/>d sprite (corners, edges, middle; left to right, top to bottom).
     /// </summary>
-    public IEnumerable<(Matrix4x4 World, Vector4 Source)> Pieces()
+    public IEnumerable<(Matrix4x4 World, Vector4 Source)> Pieces() => Pieces(Size);
+
+    // The quads for a sprite drawn `drawnSize` big.
+    private IEnumerable<(Matrix4x4 World, Vector4 Source)> Pieces(Vector2 drawnSize)
     {
         var frame = FrameRect;
         if (!IsSliced)
         {
-            yield return (QuadMatrix, frame);
+            yield return (QuadMatrixAt(drawnSize), frame);
             yield break;
         }
 
         // Edges of the three columns and rows, in the sprite's own space (-size/2..size/2, Y up) and in the frame (V down).
-        var size = Vector2.Abs(Size);
+        var size = Vector2.Abs(drawnSize);
         var border = Vector2.Min(new Vector2(SliceSize), size / 2);
         var slice = Math.Min(Slice, 0.5f);
         float[] xs = [-size.X / 2, -size.X / 2 + border.X, size.X / 2 - border.X, size.X / 2];
         float[] ys = [size.Y / 2, size.Y / 2 - border.Y, -size.Y / 2 + border.Y, -size.Y / 2];
         float[] us = [frame.X, frame.X + frame.Z * slice, frame.X + frame.Z * (1 - slice), frame.X + frame.Z];
         float[] vs = [frame.Y, frame.Y + frame.W * slice, frame.Y + frame.W * (1 - slice), frame.Y + frame.W];
-        var outside = Matrix4x4.CreateScale(MathF.Sign(Size.X) * (FlipX ? -1 : 1), MathF.Sign(Size.Y) * (FlipY ? -1 : 1), 1) *
+        var outside = Matrix4x4.CreateScale(MathF.Sign(drawnSize.X) * (FlipX ? -1 : 1), MathF.Sign(drawnSize.Y) * (FlipY ? -1 : 1), 1) *
                       Entity!.Transform.WorldMatrix;
         for (var row = 0; row < 3; row++)
         {
@@ -364,9 +403,12 @@ public sealed class Sprite : Component, IDrawable, INetState
         }
     }
 
-    // The whole sprite's quad in the world, flips included.
+    // The whole sprite's quad in the world, flips included: as it's drawn, while a frame is drawn between steps.
     internal Matrix4x4 QuadMatrix =>
-        Matrix4x4.CreateScale(Size.X * (FlipX ? -1 : 1), Size.Y * (FlipY ? -1 : 1), 1) * Entity!.Transform.WorldMatrix;
+        QuadMatrixAt(_size.ChangedIn != 0 && _size.ChangedIn == Entity?.Scene?.Step ? StepBlend.For(Entity.Scene, Entity).Of(_size) : _size.Value);
+
+    private Matrix4x4 QuadMatrixAt(Vector2 size) =>
+        Matrix4x4.CreateScale(size.X * (FlipX ? -1 : 1), size.Y * (FlipY ? -1 : 1), 1) * Entity!.Transform.WorldMatrix;
 
     int? IDrawable.DrawOrder => Order;
 
@@ -377,17 +419,18 @@ public sealed class Sprite : Component, IDrawable, INetState
     {
         if (IsBlinkedOut)
             return;
-        // A fade or a flash fading is drawn between steps, like the sprite's place.
+        // A fade, a flash fading and growing or shrinking are drawn between steps, like the sprite's place.
         var tint = drawing.Tint(this, drawing.Smooth(_tint));
         var flash = FlashAt(drawing.Smooth(_flashLeft));
+        var size = drawing.Smooth(_size);
         if (!IsSliced)
         {
             // One quad, without going through Pieces: a frame of thousands of sprites makes nothing to collect.
-            drawing.Add(new SpriteDraw(QuadMatrix, Image, tint, Entity!) { Source = FrameRect, Flash = flash });
+            drawing.Add(new SpriteDraw(QuadMatrixAt(size), Image, tint, Entity!) { Source = FrameRect, Flash = flash });
             return;
         }
 
-        foreach (var (world, source) in Pieces())
+        foreach (var (world, source) in Pieces(size))
             drawing.Add(new SpriteDraw(world, Image, tint, Entity!) { Source = source, Flash = flash });
     }
 }

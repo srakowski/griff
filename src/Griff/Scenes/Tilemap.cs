@@ -159,6 +159,9 @@ public sealed partial class Tilemap : Component, IDrawable
     // Kept as it was when the step began too, so a fade is drawn between steps.
     private Smoothed<Color> _tint = new(Color.White);
 
+    /// <summary>Its <see cref="Tint"/> in a frame drawn as <paramref name="blend"/> says: part way through a fade between steps (for a component drawing its tiles itself).</summary>
+    internal Color TintDrawn(StepBlend blend) => blend.Of(_tint);
+
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; }
 

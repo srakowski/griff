@@ -131,8 +131,15 @@ public sealed class Bouncer : Component
 [ComponentName("Griff.Crumble")]
 public sealed class Crumble : Component, IDrawEffect
 {
-    // About to go, it's drawn shaken off its place (with whatever is inside it); its collider stays put.
-    Matrix4x4? IDrawEffect.DrawTransform => ShakeOffset != Vector2.Zero ? Matrix4x4.CreateTranslation(ShakeOffset.X, ShakeOffset.Y, 0) : null;
+    // About to go, it's drawn shaken off its place (with whatever is inside it), between steps too; its collider stays put.
+    Matrix4x4? IDrawEffect.DrawTransform
+    {
+        get
+        {
+            var shake = StepBlend.For(Entity!).Of(_shake);
+            return shake != Vector2.Zero ? Matrix4x4.CreateTranslation(shake.X, shake.Y, 0) : null;
+        }
+    }
 
     /// <summary>Seconds it shakes, once stood on, before it falls away.</summary>
     public float Delay { get; set; } = 0.5f;
@@ -161,7 +168,14 @@ public sealed class Crumble : Component, IDrawEffect
 
     /// <summary>How far it's shaken off its place right now; it's drawn there, while its collider stays put.</summary>
     [DoNotSerialize]
-    public Vector2 ShakeOffset { get; internal set; }
+    public Vector2 ShakeOffset
+    {
+        get => _shake.Value;
+        internal set => _shake.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so the shake is drawn between steps.
+    private Smoothed<Vector2> _shake;
 
     /// <summary>Raised when it falls away.</summary>
     public event Action<Crumble>? Fell;

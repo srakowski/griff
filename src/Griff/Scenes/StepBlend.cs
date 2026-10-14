@@ -110,6 +110,13 @@ public readonly struct StepBlend
     /// <summary>The angle in degrees <paramref name="value"/> holds, turned as <see cref="Turn"/> does if it changed in the last step.</summary>
     public float TurnOf(in Smoothed<float> value) => value.ChangedIn == Step ? Turn(value.Was, value.Value) : value.Value;
 
+    /// <summary>
+    /// The blend for what <paramref name="entity"/> draws in the frame being drawn, for code that draws it without a
+    /// <see cref="Drawing"/> (an <see cref="IDrawEffect"/>'s <see cref="IDrawEffect.DrawTransform"/> or
+    /// <see cref="IDrawEffect.Tint"/>): <see cref="AsIs"/> while nothing is being drawn between steps.
+    /// </summary>
+    public static StepBlend For(Entity entity) => For(entity.Scene, entity);
+
     // The blend for what `entity` draws in `scene`: as it is unless a frame of the game is being drawn between steps, and
     // for an entity that jumped (or is inside one that did) in the last step.
     internal static StepBlend For(Scene? scene, Entity? entity)

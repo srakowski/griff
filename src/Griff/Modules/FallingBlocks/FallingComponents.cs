@@ -1,3 +1,4 @@
+using System.Numerics;
 using Griff.Scenes;
 
 namespace Griff.Modules.FallingBlocks;
@@ -238,7 +239,21 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
 
     internal Random? Random { get; set; }
 
-    internal FallingPiece? Falling { get; set; }
+    internal FallingPiece? Falling
+    {
+        get => _falling;
+        set
+        {
+            // The same piece slid or fallen is drawn between where it was and is; a new piece, or one turned, as it is.
+            if (value is { } now && _falling is { } was && now.Shape == was.Shape && now.Rotation == was.Rotation)
+                _pieceAt.Set(this, new Vector2(now.X, now.Y));
+            else
+                _pieceAt = new Smoothed<Vector2>(value is null ? Vector2.Zero : new Vector2(value.X, value.Y));
+            _falling = value;
+        }
+    }
+
+    private FallingPiece? _falling;
 
     // The shapes coming next, topped up a round at a time.
     internal List<char> Coming { get; } = [];
@@ -246,7 +261,11 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     // Full rows flashing before they clear, and how long they've been at it.
     internal List<int> ClearingRows { get; } = [];
 
-    internal float ClearingFor { get; set; }
+    internal float ClearingFor
+    {
+        get => _clearingFor.Value;
+        set => _clearingFor.Set(this, value);
+    }
 
     // Seconds towards the next row down, and how long the piece has rested on something.
     internal float FallFor { get; set; }
@@ -260,6 +279,30 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
 
     // Each player's held left or right, for repeats (keyed by player id, 0 offline).
     internal Dictionary<int, (int Way, float HeldFor, float NextRepeat)> Held { get; } = [];
+
+    // ----- How the board was as the last step began, to draw it between steps (see StepBlend) -----
+
+    // Where the falling piece's box was and is, in cells, and how long the full rows had been clearing.
+    private Smoothed<Vector2> _pieceAt;
+    private Smoothed<float> _clearingFor;
+
+    // The step full rows last went in, the blocks that went (and how long they had been clearing as it began and ended),
+    // and how many rows each row now on the board dropped in it.
+    internal long RemovedIn { get; set; } = -1;
+
+    internal List<(int X, int Y, int Tile)> Removed { get; } = [];
+
+    internal (float From, float To) RemovedClearing { get; set; }
+
+    internal int[] DroppedBy { get; set; } = [];
+
+    // The falling piece's box's top left in a frame drawn as `blend` says, in cells (each `size` world units): between
+    // where it was and is if it slid or fell in the last step, where it ends up if that's a jump (see StepBlend).
+    internal Vector2 PieceDrawn(StepBlend blend, float size) =>
+        _pieceAt.ChangedIn == blend.Step && size > 0 ? blend.Between(_pieceAt.Was * size, _pieceAt.Value * size) / size : _pieceAt.Value;
+
+    // How long the full rows have been clearing, in a frame drawn as `blend` says.
+    internal float ClearingDrawn(StepBlend blend) => blend.Of(_clearingFor);
 }
 
 /// <summary>The piece falling on a <see cref="FallingBoard"/>: its shape, where its box's top left is, and how it's turned.</summary>
@@ -335,7 +378,8 @@ internal static class FallingView
 
     public static void Read(FallingBoard board, IReadOnlyList<string>? lines)
     {
-        board.Falling = null;
+        // The piece is set once, so one that slid or fell since the last update glides there (see FallingBoard.Falling).
+        FallingPiece? piece = null;
         board.Coming.Clear();
         board.ClearingRows.Clear();
         foreach (var line in lines ?? [])
@@ -345,7 +389,7 @@ internal static class FallingView
             switch (parts[0])
             {
                 case "p" when parts.Length >= 5 && parts[1].Length == 1 && FallingShapes.IsShape(parts[1][0]):
-                    board.Falling = new FallingPiece(parts[1][0], I(2), I(3), I(4));
+                    piece = new FallingPiece(parts[1][0], I(2), I(3), I(4));
                     break;
                 case "n" when parts.Length >= 2:
                     board.Coming.AddRange(parts[1].Where(FallingShapes.IsShape));
@@ -356,5 +400,7 @@ internal static class FallingView
                     break;
             }
         }
+
+        board.Falling = piece;
     }
 }

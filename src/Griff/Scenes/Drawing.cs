@@ -117,7 +117,8 @@ public interface IDrawEffect
 
     /// <summary>
     /// Moves, turns or scales everything the entity and what's inside it draw this frame, after it's placed (a platform
-    /// shaking, something bopping to the beat); null for nothing.
+    /// shaking, something bopping to the beat); null for nothing. What changes once a step is drawn between steps with
+    /// <see cref="StepBlend.For(Entity)"/>.
     /// </summary>
     Matrix4x4? DrawTransform => null;
 
@@ -216,6 +217,9 @@ public sealed class Drawing
         value.ChangedIn != 0 && value.ChangedIn == _entity.Scene?.Step ? Blend.Of(value) : value.Value;
 
     internal float Smooth(in Smoothed<float> value) =>
+        value.ChangedIn != 0 && value.ChangedIn == _entity.Scene?.Step ? Blend.Of(value) : value.Value;
+
+    internal Vector2 Smooth(in Smoothed<Vector2> value) =>
         value.ChangedIn != 0 && value.ChangedIn == _entity.Scene?.Step ? Blend.Of(value) : value.Value;
 
     /// <summary>True while the game runs; false in the editor, where nothing has started.</summary>

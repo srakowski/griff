@@ -53,8 +53,9 @@ internal sealed class FirstPersonSystem : GameSystem
         if (Fps.Weapons.GetValueOrDefault(owner) != weapon)
         {
             Fps.Weapons[owner] = weapon;
-            weapon.SinceFired = float.PositiveInfinity;
+            weapon.PutAway();
             Fps.Swapped = 0;
+            Fps.Lowered = new Smoothed<float>(1);
         }
 
         return true;
@@ -83,6 +84,7 @@ internal sealed class FirstPersonSystem : GameSystem
         RunWeapons();
 
         Fps.Swapped += Time.Delta;
+        Fps.Lowered.Set(Scene, Fps.Swapped < FirstPersonState.RaiseSeconds ? 1 - Fps.Swapped / FirstPersonState.RaiseSeconds : 0);
         if (view is null || ViewerOf(view) is not { } viewer)
             return;
 
@@ -238,7 +240,7 @@ internal sealed class FirstPersonSystem : GameSystem
         var pressed = keys.WasPressed(action);
         var wants = weapon.Automatic ? keys.IsDown(action) : pressed;
         // A weapon just taken out is raised before it fires.
-        if (!wants || weapon.Cooldown > 0 || Fps.Swapped < 0.2f)
+        if (!wants || weapon.Cooldown > 0 || Fps.Swapped < FirstPersonState.RaiseSeconds)
             return;
 
         var inventory = owner.GetComponent<Inventory>();
@@ -328,8 +330,15 @@ internal sealed class FirstPersonState
 
     public Dictionary<Entity, HashSet<Weapon>> Usable { get; } = [];
 
+    // Seconds a weapon takes to come up as it's taken out, before it can fire.
+    public const float RaiseSeconds = 0.2f;
+
     // Seconds since a weapon was taken out.
     public float Swapped { get; set; } = 1;
+
+    // How far down the weapon in hand still is as it's taken out (1 just taken out, 0 once it's up), as each step left it,
+    // so it's drawn coming up between steps (a weapon just taken out is drawn as it is: all the way down).
+    public Smoothed<float> Lowered;
 
     // The viewer's health last frame, to flash the screen when it drops.
     public float? LastHealth { get; set; }

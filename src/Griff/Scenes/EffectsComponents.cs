@@ -32,47 +32,121 @@ public sealed class ScreenEffects : Component
 {
     /// <summary>How much the corners and edges darken, from 0 (not at all) to 1 (a spyglass). 0.4 frames a scene softly.</summary>
     [Group("Screen")]
-    public float Vignette { get; set; } = 0.4f;
+    public float Vignette
+    {
+        get => _vignette.Value;
+        set => _vignette.Set(this, value);
+    }
 
     /// <summary>How dark an old TV's lines across the screen are, from 0 (none) to 1 (black).</summary>
-    public float Scanlines { get; set; }
+    public float Scanlines
+    {
+        get => _scanlines.Value;
+        set => _scanlines.Set(this, value);
+    }
 
     /// <summary>How much the screen bulges like an old TV's curved glass, from 0 (flat) to 1. 0.3 is about right.</summary>
-    public float Curvature { get; set; }
+    public float Curvature
+    {
+        get => _curvature.Value;
+        set => _curvature.Set(this, value);
+    }
 
     /// <summary>
     /// How big each pixel is drawn, in screen pixels on a 720-pixel-high window (it scales with the window): 1 is
     /// off, 4 is chunky, 8 is blocky.
     /// </summary>
-    public float PixelSize { get; set; } = 1;
+    public float PixelSize
+    {
+        get => _pixelSize.Value;
+        set => _pixelSize.Set(this, value);
+    }
 
     /// <summary>How far red and blue split apart towards the edges, like a cheap lens, from 0 (not at all) to 1.</summary>
-    public float Aberration { get; set; }
+    public float Aberration
+    {
+        get => _aberration.Value;
+        set => _aberration.Set(this, value);
+    }
 
     /// <summary>How colorful it is: 1 as drawn, 0 black and white, more than 1 vivid.</summary>
     [Group("Color")]
-    public float Saturation { get; set; } = 1;
+    public float Saturation
+    {
+        get => _saturation.Value;
+        set => _saturation.Set(this, value);
+    }
 
     /// <summary>1 as drawn; more makes darks darker and lights lighter, less washes it out.</summary>
-    public float Contrast { get; set; } = 1;
+    public float Contrast
+    {
+        get => _contrast.Value;
+        set => _contrast.Set(this, value);
+    }
 
     /// <summary>Added to every color: 0 as drawn, -1 black, 1 white. Small amounts (±0.1) for a mood.</summary>
-    public float Brightness { get; set; }
+    public float Brightness
+    {
+        get => _brightness.Value;
+        set => _brightness.Set(this, value);
+    }
 
     /// <summary>Multiplied into every color: white leaves it alone, a pale blue for night, red for danger.</summary>
-    public Color Tint { get; set; } = Color.White;
+    public Color Tint
+    {
+        get => _tint.Value;
+        set => _tint.Set(this, value);
+    }
 
     /// <summary>How much film grain flickers over the screen, from 0 (none) to 1.</summary>
-    public float Grain { get; set; }
+    public float Grain
+    {
+        get => _grain.Value;
+        set => _grain.Set(this, value);
+    }
 
     /// <summary>Draws the screen in a few colors only, after everything above.</summary>
     public ScreenPalette Palette { get; set; }
+
+    // Every setting, kept as it was when the step began too, so a tween of one is drawn between steps.
+    private Smoothed<float> _vignette = new(0.4f);
+    private Smoothed<float> _scanlines;
+    private Smoothed<float> _curvature;
+    private Smoothed<float> _pixelSize = new(1);
+    private Smoothed<float> _aberration;
+    private Smoothed<float> _saturation = new(1);
+    private Smoothed<float> _contrast = new(1);
+    private Smoothed<float> _brightness;
+    private Smoothed<Color> _tint = new(Color.White);
+    private Smoothed<float> _grain;
+
+    /// <summary>Its settings in a frame drawn as <paramref name="blend"/> says (see <see cref="StepBlend"/>).</summary>
+    internal ScreenLook Drawn(StepBlend blend) =>
+        new(blend.Of(_vignette), blend.Of(_scanlines), blend.Of(_curvature), blend.Of(_pixelSize), blend.Of(_aberration), blend.Of(_saturation),
+            blend.Of(_contrast), blend.Of(_brightness), blend.Of(_tint), blend.Of(_grain), Palette);
 
     /// <summary>True if any setting changes the screen at all.</summary>
     public bool IsActive =>
         Vignette > 0 || Scanlines > 0 || Curvature > 0 || PixelSize > 1 || Aberration > 0 || Saturation != 1 || Contrast != 1 ||
         Brightness != 0 || Tint != Color.White || Grain > 0 || Palette != ScreenPalette.Full;
 }
+
+/// <summary>
+/// A <see cref="ScreenEffects"/>'s settings as one frame is drawn with them (between the game's last two steps, for
+/// settings a script tweens): what the renderer applies to the finished screen.
+/// </summary>
+public readonly record struct ScreenLook(
+    float Vignette,
+    float Scanlines,
+    float Curvature,
+    float PixelSize,
+    float Aberration,
+    float Saturation,
+    float Contrast,
+    float Brightness,
+    Color Tint,
+    float Grain,
+    ScreenPalette Palette);
 
 /// <summary>What a <see cref="Weather"/> fills the view with.</summary>
 public enum WeatherKind
@@ -120,23 +194,26 @@ public sealed class Weather : Component, IDrawable
         var area = Area;
         var corner = view.Center - area / 2;
         var slant = MathF.Atan2(Wind, 18 * Math.Max(Speed, 0.05f));
-        // Each falls between where it was and is, if they moved in the last step (one wrapping round is drawn where it is).
+        // Each falls between where it was and is (and turns, flutters and flickers between too), if they moved in the last
+        // step; one wrapping round is drawn where it is.
         var blend = drawing.Blend.For(MovedIn);
+        var tint = drawing.Smooth(_tint);
         foreach (var drop in Drops)
         {
             var at = blend.Between(drop.From, drop.Position);
             var position = new Vector2(corner.X + Wrap(at.X - corner.X, area.X), corner.Y + Wrap(at.Y - corner.Y, area.Y));
-            var color = new Color(drop.Color.R * Tint.R, drop.Color.G * Tint.G, drop.Color.B * Tint.B, drop.Color.A * Tint.A);
+            var color = new Color(drop.Color.R * tint.R, drop.Color.G * tint.G, drop.Color.B * tint.B, drop.Color.A * tint.A);
+            var phase = blend.Between(drop.PhaseFrom, drop.Phase);
             var shape = Kind switch
             {
                 WeatherKind.Rain => Matrix4x4.CreateScale(0.035f, drop.Size, 1) * Matrix4x4.CreateRotationZ(slant),
                 // A leaf flutters: it narrows and widens as it turns over.
-                WeatherKind.Leaves => Matrix4x4.CreateScale(drop.Size * (0.35f + 0.65f * MathF.Abs(MathF.Cos(drop.Phase * 2))), drop.Size * 0.55f, 1) *
-                                      Matrix4x4.CreateRotationZ(drop.Angle),
+                WeatherKind.Leaves => Matrix4x4.CreateScale(drop.Size * (0.35f + 0.65f * MathF.Abs(MathF.Cos(phase * 2))), drop.Size * 0.55f, 1) *
+                                      Matrix4x4.CreateRotationZ(blend.Between(drop.AngleFrom, drop.Angle)),
                 _ => Matrix4x4.CreateScale(drop.Size, drop.Size, 1),
             };
             if (Kind == WeatherKind.Embers)
-                color = color with { A = color.A * (0.55f + 0.45f * MathF.Sin(drop.Phase)) };
+                color = color with { A = color.A * (0.55f + 0.45f * MathF.Sin(phase)) };
             drawing.Add(new SpriteDraw(shape * Matrix4x4.CreateTranslation(position.X, position.Y, z), null, color, Entity));
         }
 
@@ -156,7 +233,14 @@ public sealed class Weather : Component, IDrawable
     public float Speed { get; set; } = 1;
 
     /// <summary>Multiplied into its colors: white keeps the usual look (blue-grey rain, white snow, autumn leaves, orange embers).</summary>
-    public Color Tint { get; set; } = Color.White;
+    public Color Tint
+    {
+        get => _tint.Value;
+        set => _tint.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a fade is drawn between steps.
+    private Smoothed<Color> _tint = new(Color.White);
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>. The default falls in front of most things.</summary>
     public int Order { get; set; } = 50;
@@ -188,7 +272,7 @@ public sealed class Weather : Component, IDrawable
 
     /// <summary>
     /// One drop, flake, leaf or spark: where it is (wrapped into the view as it's drawn) and was before it last moved, how fast it goes, how big it
-    /// is, how it turns, how far through its sway or flicker it is, and which of the kind's colors it has.
+    /// is, how it turns, how far through its sway or flicker it is (and both before it last moved), and which of the kind's colors it has.
     /// </summary>
     internal sealed class Drop
     {
@@ -199,6 +283,8 @@ public sealed class Weather : Component, IDrawable
         public float Angle;
         public float Spin;
         public float Phase;
+        public float PhaseFrom;
+        public float AngleFrom;
         public Color Color;
     }
 

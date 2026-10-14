@@ -49,11 +49,12 @@ internal sealed class FallingBlocksSystem : GameSystem
         // Full rows flash, then go, and the next piece comes in.
         if (board.ClearingRows.Count > 0)
         {
+            var clearedFor = board.ClearingFor;
             board.ClearingFor += Time.Delta;
             board.Requests.Clear();
             if (board.ClearingFor < board.ClearTime)
                 return;
-            RemoveRows(board, map);
+            RemoveRows(board, map, (clearedFor, board.ClearingFor));
         }
 
         if (board.Falling is null && !Spawn(board))
@@ -245,15 +246,31 @@ internal sealed class FallingBlocksSystem : GameSystem
         board.RaiseLeveledUp(board.Level);
     }
 
-    // The full rows go and everything above them drops down.
-    private static void RemoveRows(FallingBoard board, Tilemap map)
+    // The full rows go and everything above them drops down. What went, and how far each row dropped, is kept for a frame
+    // drawn between this step and the last: the rows shrink the rest of the way away as the rest drops into their place.
+    private static void RemoveRows(FallingBoard board, Tilemap map, (float From, float To) clearing)
     {
         var grid = TileGrid.Read(board.Columns, board.Rows, map);
         var kept = Enumerable.Range(0, grid.Rows).Where(y => !board.ClearingRows.Contains(y)).ToList();
         var dropped = new TileGrid { Cells = new int[grid.Columns, grid.Rows] };
         var gap = grid.Rows - kept.Count;
+        board.RemovedIn = board.Entity!.Scene?.Step ?? 0;
+        board.RemovedClearing = clearing;
+        board.Removed.Clear();
+        foreach (var y in board.ClearingRows.Where(y => y >= 0 && y < grid.Rows))
+        {
+            for (var x = 0; x < grid.Columns; x++)
+            {
+                if (grid[x, y] >= 0)
+                    board.Removed.Add((x, y, grid[x, y]));
+            }
+        }
+
+        board.DroppedBy = new int[grid.Rows];
         for (var y = 0; y < grid.Rows; y++)
         {
+            if (y >= gap)
+                board.DroppedBy[y] = y - kept[y - gap];
             for (var x = 0; x < grid.Columns; x++)
                 dropped[x, y] = y < gap ? -1 : grid[x, kept[y - gap]];
         }

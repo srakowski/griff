@@ -80,11 +80,11 @@ internal static class FirstPersonDrawing
         var phase = walked * MathF.PI / 1.1f;
         var bob = MathF.Max(0, fp.Bob);
         var eyeHeight = fp.EyeHeight + MathF.Sin(phase * 2) * 0.025f * bob * stride;
-        var shake = camera?.GetComponent<Camera>()?.ShakeOffset ?? Vector2.Zero;
+        var shake = camera is null ? Vector2.Zero : camera.GetComponent<Camera>()?.Drawn(blendOf(camera)).Shake ?? Vector2.Zero;
         var horizon = -MathF.Tan(pitch * MathF.PI / 180) * vertical + shake.Y / view.HalfSize.Y;
         var nudge = shake.X / view.HalfSize.X;
         var wallHeight = MathF.Max(0.01f, fp.WallHeight);
-        var lighting = Lighting.For(scene, camera);
+        var lighting = Lighting.For(scene, camera, blendOf);
 
         float FogOf(float depth) => fp.Fog.A > 0 && fp.FogDistance > 0 ? Math.Clamp(depth / fp.FogDistance, 0, 1) * fp.Fog.A : 0;
         Color Fogged(float depth) => fp.Fog with { A = FogOf(depth) };
@@ -125,11 +125,13 @@ internal static class FirstPersonDrawing
         var columns = Math.Clamp(fp.Columns, 16, 2000);
         var depths = new float[columns];
         var maxDepth = fp.Fog.A >= 1 && fp.FogDistance > 0 ? fp.FogDistance * 1.05f : 96;
-        var tilemaps = scene.Active<Tilemap>().Where(t => t.Solid && t.TileSize > 0).ToList();
+        // Walls fading or flashing do it between steps, like the sprites standing among them.
+        var tilemaps = scene.Active<Tilemap>().Where(t => t.Solid && t.TileSize > 0).Select(t => (Map: t, Tint: t.TintDrawn(blendOf(t.Entity!)))).ToList();
         var blocks = scene.Entities.Where(e => e.IsActive)
             .Select(e => (Block: e.GetComponent<Block>(), Collider: e.GetComponent<BoxCollider>()))
             .Where(b => b.Block is not null && b.Collider is not null)
             .Select(b => (b.Block!, Physics.BoundsOf(b.Collider!), b.Block!.Entity!.GetComponent<Sprite>()))
+            .Select(b => (b.Item1, b.Item2, b.Item3, Drawn: b.Item3?.Drawn(blendOf(b.Item3.Entity!))))
             .ToList();
         var strip = 2f / columns;
         for (var column = 0; column < columns; column++)
@@ -139,13 +141,13 @@ internal static class FirstPersonDrawing
             WallHit? nearest = null;
             foreach (var tilemap in tilemaps)
             {
-                if (CastTilemap(tilemap, eye, ray, maxDepth, fp.ShadeSides) is { } hit && (nearest is null || hit.Depth < nearest.Value.Depth))
+                if (CastTilemap(tilemap.Map, tilemap.Tint, eye, ray, maxDepth, fp.ShadeSides) is { } hit && (nearest is null || hit.Depth < nearest.Value.Depth))
                     nearest = hit;
             }
 
-            foreach (var (block, box, sprite) in blocks)
+            foreach (var (block, box, sprite, drawn) in blocks)
             {
-                if (CastBlock(block, box, sprite, eye, ray, wallHeight, fp.ShadeSides) is { } hit && (nearest is null || hit.Depth < nearest.Value.Depth))
+                if (CastBlock(block, box, sprite, drawn, eye, ray, wallHeight, fp.ShadeSides) is { } hit && (nearest is null || hit.Depth < nearest.Value.Depth))
                     nearest = hit;
             }
 
@@ -198,18 +200,18 @@ internal static class FirstPersonDrawing
             }
         }
 
-        draws.AddRange(WeaponDraws(game, fp, viewer, screen, aspect, stride, phase));
+        draws.AddRange(WeaponDraws(game, fp, viewer, screen, aspect, stride, phase, blendOf));
         if (fp.Crosshair.A > 0)
             draws.AddRange(CrosshairDraws(screen, fp.Crosshair));
         if (fp.Minimap)
-            draws.AddRange(MinimapDraws(scene, viewer, eye, dir, tilemaps, blocks.Select(b => b.Item2), screen, aspect));
+            draws.AddRange(MinimapDraws(scene, viewer, eye, dir, tilemaps.Select(t => t.Map).ToList(), blocks.Select(b => b.Item2), screen, aspect));
         return draws;
     }
 
     // ----- Rays -----
 
     // Steps a ray cell by cell across a tilemap's grid until it reaches a wall tile.
-    private static WallHit? CastTilemap(Tilemap tilemap, Vector2 eye, Vector2 ray, float maxDepth, bool shadeSides)
+    private static WallHit? CastTilemap(Tilemap tilemap, Color drawnTint, Vector2 eye, Vector2 ray, float maxDepth, bool shadeSides)
     {
         if (!Matrix4x4.Invert(tilemap.Entity!.Transform.WorldMatrix, out var inverse))
             return null;
@@ -261,7 +263,7 @@ internal static class FirstPersonDrawing
             var image = tilemap.ImageOf(shown);
             var source = image is null ? new Vector4(0, 0, 1, 1) : tilemap.TileRect(shown);
             var shade = shadeSides && !across ? SideShade : 1;
-            var tint = new Color(tilemap.Tint.R * shade, tilemap.Tint.G * shade, tilemap.Tint.B * shade, tilemap.Tint.A);
+            var tint = new Color(drawnTint.R * shade, drawnTint.G * shade, drawnTint.B * shade, drawnTint.A);
             return new WallHit(depth, eye + ray * depth, image, Strip(source, u), tint, true);
         }
 
@@ -269,7 +271,8 @@ internal static class FirstPersonDrawing
     }
 
     // A ray against a block's box: the face it meets first.
-    private static WallHit? CastBlock(Block block, Box box, Sprite? sprite, Vector2 eye, Vector2 ray, float wallHeight, bool shadeSides)
+    private static WallHit? CastBlock(Block block, Box box, Sprite? sprite, (Color Tint, Color Flash)? drawn, Vector2 eye, Vector2 ray, float wallHeight,
+        bool shadeSides)
     {
         var (min, max) = (box.Min, box.Max);
         // Along each axis, where the ray is between the box's two sides (all the way, if it runs parallel to them and between).
@@ -306,9 +309,9 @@ internal static class FirstPersonDrawing
 
         var image = sprite is null || string.IsNullOrEmpty(sprite.Image) ? null : sprite.Image;
         var source = image is null ? new Vector4(0, 0, 1, 1) : sprite!.FrameRect;
-        var color = sprite?.Tint ?? Color.Gray;
+        var color = drawn?.Tint ?? Color.Gray;
         var shade = block.Shaded && shadeSides && !across ? SideShade : 1;
-        var flash = sprite?.FlashOverlay ?? Color.Transparent;
+        var flash = drawn?.Flash ?? Color.Transparent;
         if (flash.A > 0)
             color = Color.Lerp(color, flash with { A = color.A }, flash.A);
         return new WallHit(near, hit, image, Strip(source, u), new Color(color.R * shade, color.G * shade, color.B * shade, color.A), block.Shaded);
@@ -331,7 +334,9 @@ internal static class FirstPersonDrawing
                 continue;
             var billboard = entity.GetComponent<Billboard>();
             var scale = billboard?.Scale ?? 1;
-            var lift = (billboard?.Lift ?? 0) + (billboard is { Bob: not 0 } ? billboard.Bob * (0.5f + 0.5f * MathF.Sin((float)time * MathF.Tau * billboard.BobSpeed)) : 0);
+            // Bobbing between steps too: at the game time this frame is drawn at.
+            var bobTime = billboard is { Bob: not 0 } ? blendOf(entity).Between((float)(time - game.Time.Delta), (float)time) : 0;
+            var lift = (billboard?.Lift ?? 0) + (billboard is { Bob: not 0 } ? billboard.Bob * (0.5f + 0.5f * MathF.Sin(bobTime * MathF.Tau * billboard.BobSpeed)) : 0);
             var matrix = entity.Transform.WorldMatrix;
             var at = new Vector2(matrix.M41, matrix.M42);
 
@@ -341,7 +346,7 @@ internal static class FirstPersonDrawing
                     MathF.Abs(sprite.Size.Y) * new Vector2(matrix.M21, matrix.M22).Length()) * scale;
                 // A spinning pickup turns in place, edge-on and back.
                 if (entity.GetComponent<Pickup>() is { Spin: not 0 })
-                    size.X *= MathF.Max(0.08f, MathF.Abs(MathF.Cos(entity.Transform.Rotation.Z * MathF.PI / 180)));
+                    size.X *= MathF.Max(0.08f, MathF.Abs(MathF.Cos(entity.Transform.RotationDrawn.Z * MathF.PI / 180)));
                 var flip = sprite.FlipX ^ (sprite.Size.X < 0);
                 var source = string.IsNullOrEmpty(sprite.Image) ? new Vector4(0, 0, 1, 1) : sprite.FrameRect;
                 if (flip)
@@ -387,7 +392,8 @@ internal static class FirstPersonDrawing
 
     // ----- Weapon, crosshair, minimap -----
 
-    private static IEnumerable<SpriteDraw> WeaponDraws(Game game, FirstPersonView fp, Entity viewer, ScreenSpace screen, float aspect, float stride, float phase)
+    private static IEnumerable<SpriteDraw> WeaponDraws(Game game, FirstPersonView fp, Entity viewer, ScreenSpace screen, float aspect, float stride, float phase,
+        Func<Entity, StepBlend> blendOf)
     {
         if (game.CurrentWeapon is not { } weapon || weapon.Entity != viewer || !(weapon.Size > 0))
             yield break;
@@ -398,13 +404,15 @@ internal static class FirstPersonDrawing
         var width = height / aspect;
         var sway = MathF.Sin(phase) * 0.045f * bob;
         var dip = MathF.Abs(MathF.Cos(phase)) * 0.04f * bob;
-        var kick = weapon.SinceFired < 0.15f ? (1 - weapon.SinceFired / 0.15f) * weapon.Kick * height : 0;
-        var swapped = FirstPersonGame.Of(game).State.Swapped;
-        var raise = swapped < 0.2f ? (1 - swapped / 0.2f) * height : 0;
+        // The kick, the flash and coming up are drawn between steps, as the bob is.
+        var blend = blendOf(viewer);
+        var (kicked, flash) = weapon.Drawn(blend);
+        var kick = kicked * weapon.Kick * height;
+        var raise = blend.Of(FirstPersonGame.Of(game).State.Lowered) * height;
         var middle = 0.12f + sway;
         var bottom = -1 - dip - kick - raise - height * 0.04f;
         var top = bottom + height;
-        var firing = weapon.SinceFired < 0.08f;
+        var firing = flash > 0;
 
         if (firing && weapon.MuzzleFlash.A > 0)
             yield return screen.Rect(-1, -1, 1, 1, weapon.MuzzleFlash with { A = 0.07f * weapon.MuzzleFlash.A });
@@ -427,7 +435,7 @@ internal static class FirstPersonDrawing
         // The flash at the muzzle: a bright star where the barrel ends.
         if (firing && weapon.MuzzleFlash.A > 0 && string.IsNullOrWhiteSpace(weapon.FireImage))
         {
-            var size = height * 0.28f * (1 - weapon.SinceFired / 0.08f * 0.4f);
+            var size = height * 0.28f * (0.6f + 0.4f * flash);
             var at = new Vector2(middle, bottom + height * 0.8f);
             yield return screen.Rect(at.X - size / aspect / 2, at.Y - size / 2, at.X + size / aspect / 2, at.Y + size / 2, weapon.MuzzleFlash);
             yield return screen.Rect(at.X - size / aspect / 4, at.Y - size / 4, at.X + size / aspect / 4, at.Y + size / 4, Color.White);
@@ -531,17 +539,18 @@ internal static class FirstPersonDrawing
 
         private Lighting(Color ambient, List<LightDraw> lights) => (_ambient, _lights) = (ambient, lights);
 
-        public static Lighting For(Scene scene, Entity? camera)
+        public static Lighting For(Scene scene, Entity? camera, Func<Entity, StepBlend> blendOf)
         {
             if (camera?.GetComponent<Camera>() is not { IsDark: true } view)
                 return Daylight;
-            // Without shadows: walls stand up out of the map, so its shadows wouldn't fall where they look right.
+            // Without shadows: walls stand up out of the map, so its shadows wouldn't fall where they look right. The
+            // ambient light fading and the lights flickering are drawn between steps, as in the flat view.
             var lights = scene.Active<Light>()
-                .Where(l => l.Radius > 0 && l.CurrentIntensity > 0)
-                .Select(l => new LightDraw(l.WorldCenter, l.Radius,
-                    new Color(l.Color.R * l.CurrentIntensity, l.Color.G * l.CurrentIntensity, l.Color.B * l.CurrentIntensity), l.Softness))
+                .Select(l => l.Drawn(blendOf(l.Entity!)))
+                .Where(l => l.Radius > 0 && l.Intensity > 0)
+                .Select(l => new LightDraw(l.Center, l.Radius, new Color(l.Color.R * l.Intensity, l.Color.G * l.Intensity, l.Color.B * l.Intensity), l.Softness))
                 .ToList();
-            return new Lighting(view.CurrentAmbient, lights);
+            return new Lighting(view.AmbientDrawn(blendOf(camera)), lights);
         }
 
         public Color At(Vector2 point)

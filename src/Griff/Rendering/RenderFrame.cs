@@ -53,6 +53,9 @@ public sealed class RenderFrame
     /// <summary>The camera's <see cref="ScreenEffects"/>, applied to the whole finished screen; null if it has none in use.</summary>
     public ScreenEffects? Effects { get; init; }
 
+    /// <summary>The <see cref="Effects"/>' settings as this frame is drawn with them: between the game's last two steps, as a tween of them goes.</summary>
+    public ScreenLook Look { get; init; }
+
     /// <summary>True if the scene is dark, so the renderer darkens the first <see cref="LitCount"/> sprites and adds lights.</summary>
     public bool IsDark => Ambient.R < 1 || Ambient.G < 1 || Ambient.B < 1;
 

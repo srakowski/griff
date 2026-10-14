@@ -48,7 +48,7 @@ public sealed partial class Game
             Phase = Range(0, MathF.Tau),
             Angle = Range(0, MathF.Tau),
         };
-        drop.From = drop.Position;
+        (drop.From, drop.PhaseFrom, drop.AngleFrom) = (drop.Position, drop.Phase, drop.Angle);
         switch (weather.Kind)
         {
             case WeatherKind.Rain:
@@ -92,7 +92,7 @@ public sealed partial class Game
     // Positions wrap round the area, so the view never runs out.
     private static void MoveDrop(Weather weather, Weather.Drop drop, float seconds)
     {
-        drop.From = drop.Position;
+        (drop.From, drop.PhaseFrom, drop.AngleFrom) = (drop.Position, drop.Phase, drop.Angle);
         drop.Phase += seconds * (weather.Kind == WeatherKind.Embers ? 7 : 1.7f);
         var velocity = drop.Velocity * weather.Speed + new Vector2(weather.Wind, 0);
         velocity.X += weather.Kind switch

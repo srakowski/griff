@@ -267,7 +267,17 @@ public sealed class Bar : Component, IDrawable
 
     int IDrawable.DrawStep => DrawSteps.Bar;
 
-    void IDrawable.Draw(Drawing drawing) => drawing.Bar(Size, Direction, Fraction, TrailFraction, Background, Fill, Trail);
+    // Filling, emptying and the trail draining are drawn between steps, like everything else that moves.
+    void IDrawable.Draw(Drawing drawing)
+    {
+        var fraction = FractionOf(drawing.Smooth(_value), drawing.Smooth(_max));
+        drawing.Bar(Size, Direction, fraction, Math.Max(fraction, drawing.Smooth(_trailAt)), Background, Fill, Trail);
+    }
+
+    // The value, its max and how far the trail reaches, kept as they were when the step began too.
+    private Smoothed<float> _value = new(1);
+    private Smoothed<float> _max = new(1);
+    private Smoothed<float> _trailAt;
 
     private float? _trail;
     private float _trailHold;
@@ -278,10 +288,18 @@ public sealed class Bar : Component, IDrawable
     private const float TrailHold = 0.35f;
 
     /// <summary>How full it is, out of <see cref="Max"/>.</summary>
-    public float Value { get; set; } = 1;
+    public float Value
+    {
+        get => _value.Value;
+        set => _value.Set(this, value);
+    }
 
     /// <summary>The value at which it's full.</summary>
-    public float Max { get; set; } = 1;
+    public float Max
+    {
+        get => _max.Value;
+        set => _max.Set(this, value);
+    }
 
     /// <summary>
     /// The name of an entity whose <see cref="Health"/> the bar shows, e.g. "Player" or "Boss": its Current out of its
@@ -309,7 +327,9 @@ public sealed class Bar : Component, IDrawable
     public int Order { get; set; } = 100;
 
     /// <summary>How full the bar is, from 0 to 1.</summary>
-    public float Fraction => Max > 0 && float.IsFinite(Value) ? Math.Clamp(Value / Max, 0, 1) : 0;
+    public float Fraction => FractionOf(Value, Max);
+
+    private static float FractionOf(float value, float max) => max > 0 && float.IsFinite(value) ? Math.Clamp(value / max, 0, 1) : 0;
 
     /// <summary>How far the <see cref="Trail"/> reaches, from 0 to 1: at least <see cref="Fraction"/>.</summary>
     public float TrailFraction => Math.Max(Fraction, _trail ?? Fraction);
@@ -327,6 +347,12 @@ public sealed class Bar : Component, IDrawable
                 (Value, Max) = _tracked.Scene == scene ? (health.Current, health.Max) : (0, health.Max);
         }
 
+        AdvanceTrail(seconds);
+        _trailAt.Set(this, _trail ?? Fraction);
+    }
+
+    private void AdvanceTrail(float seconds)
+    {
         var fraction = Fraction;
         if (_trail is not { } trail || fraction >= trail)
         {

@@ -132,15 +132,19 @@ public sealed class BeatClock : Component
 [WorksWith(typeof(BeatClock), Note = "somewhere in the scene, keeping the beat")]
 public sealed class BeatPulse : Component, IDrawEffect
 {
-    // Drawn bigger about its middle, its children with it.
+    // Drawn bigger about its middle, its children with it. Settling back is drawn between steps; a beat landing in the last
+    // step is drawn as it is, so the bop starts with the beat.
     System.Numerics.Matrix4x4? IDrawEffect.DrawTransform
     {
         get
         {
-            if (Scale == 1)
+            var scale = _scale.Value;
+            if (MathF.Abs(scale - 1) <= MathF.Abs(_scale.Was - 1))
+                scale = StepBlend.For(Entity!).Of(_scale);
+            if (scale == 1)
                 return null;
             var center = Entity!.Transform.WorldPosition;
-            return System.Numerics.Matrix4x4.CreateScale(Scale, Scale, 1, new System.Numerics.Vector3(center.X, center.Y, 0));
+            return System.Numerics.Matrix4x4.CreateScale(scale, scale, 1, new System.Numerics.Vector3(center.X, center.Y, 0));
         }
     }
 
@@ -156,5 +160,12 @@ public sealed class BeatPulse : Component, IDrawEffect
 
     /// <summary>How big it's drawn right now, from 1 up to 1 + <see cref="Size"/> as a beat lands; set by the game.</summary>
     [DoNotSerialize]
-    public float Scale { get; internal set; } = 1;
+    public float Scale
+    {
+        get => _scale.Value;
+        internal set => _scale.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so it's drawn settling back between steps.
+    private Smoothed<float> _scale = new(1);
 }

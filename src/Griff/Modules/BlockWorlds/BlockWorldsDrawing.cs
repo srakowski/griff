@@ -26,11 +26,13 @@ internal static class BlockWorldsDrawing
         var firstPerson = game.Eyes is not null;
         var overlays = new List<SpriteDraw>();
         if (!firstPerson)
-            overlays.AddRange(BuilderDraws(game, thickness));
+            overlays.AddRange(BuilderDraws(game, thickness, frame.BlendOf));
 
         var hud = state.Hud is { } layout ? HudDraws(game, state, layout, thickness).ToList() : [];
+        if (state.Hud is { } laidOut)
+            frame.PinToView(hud, laidOut.View.Center, laidOut.View.Height / 2);
         if (firstPerson)
-            hud.InsertRange(0, FirstPersonDigDraws(game, frame.View));
+            hud.InsertRange(0, FirstPersonDigDraws(game, frame.View, frame.BlendOf));
         if (overlays.Count == 0 && hud.Count == 0)
             return;
         overlays.AddRange(hud);
@@ -40,7 +42,7 @@ internal static class BlockWorldsDrawing
     // ----- In the world -----
 
     // The block a builder points at, cracking as it's dug, or the outline of where a block would go.
-    private static IEnumerable<SpriteDraw> BuilderDraws(Game game, float thickness)
+    private static IEnumerable<SpriteDraw> BuilderDraws(Game game, float thickness, Func<Entity, StepBlend> blendOf)
     {
         foreach (var builder in game.Scene.Active<BlockBuilder>())
         {
@@ -52,7 +54,7 @@ internal static class BlockWorldsDrawing
                 var center = BlockWorldsSystem.CellWorld(map, target.X, target.Y);
                 if (builder.Progress > 0)
                 {
-                    var amount = Math.Clamp(builder.Progress, 0, 1);
+                    var amount = Math.Clamp(builder.ProgressDrawn(blendOf(builder.Entity!)), 0, 1);
                     yield return Quad(center, cell, new Color(0, 0, 0, 0.15f + 0.45f * amount));
                     foreach (var crack in Cracks(center, cell, amount, thickness))
                         yield return crack;
@@ -95,12 +97,12 @@ internal static class BlockWorldsDrawing
     }
 
     // A first-person dig shows as a bar under the crosshair.
-    private static IEnumerable<SpriteDraw> FirstPersonDigDraws(Game game, Box view)
+    private static IEnumerable<SpriteDraw> FirstPersonDigDraws(Game game, Box view, Func<Entity, StepBlend> blendOf)
     {
         if (game.Eyes?.GetComponent<BlockBuilder>() is not { Progress: > 0 } builder)
             yield break;
         var u = view.HalfSize.Y * 2 / 100;
-        foreach (var draw in Meter(view.Center - new Vector2(0, 5 * u), 10 * u, 0.9f * u, builder.Progress, Color.White))
+        foreach (var draw in Meter(view.Center - new Vector2(0, 5 * u), 10 * u, 0.9f * u, builder.ProgressDrawn(blendOf(builder.Entity!)), Color.White))
             yield return draw;
     }
 

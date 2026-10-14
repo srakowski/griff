@@ -324,7 +324,17 @@ public sealed class Building : Component, INetState
 
     /// <summary>How far along it is, from 0 (just placed) to 1 (finished). Buildings in a scene start finished.</summary>
     [Group("State")]
-    public float Progress { get; set; } = 1;
+    public float Progress
+    {
+        get => _progress.Value;
+        set => _progress.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so it's drawn going up between steps.
+    private Smoothed<float> _progress = new(1);
+
+    // Its progress in a frame drawn as `blend` says.
+    internal float ProgressDrawn(StepBlend blend) => blend.Of(_progress);
 
     /// <summary>True once it's finished: only then does it train, take resources, provide supply or shoot.</summary>
     public bool IsBuilt => Progress >= 1;
@@ -377,7 +387,17 @@ public sealed class Producer : Component, INetState
     /// <summary>How far along the first in line is, from 0 to 1.</summary>
     [DoNotSerialize]
     [Sent]
-    public float Progress { get; internal set; }
+    public float Progress
+    {
+        get => _progress.Value;
+        internal set => _progress.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so it's drawn filling between steps (and starting the next one over as it is).
+    private Smoothed<float> _progress;
+
+    // Its progress in a frame drawn as `blend` says.
+    internal float ProgressDrawn(StepBlend blend) => _progress.Value >= _progress.Was ? blend.Of(_progress) : _progress.Value;
 
     /// <summary>Raised with each unit it finishes.</summary>
     public event Action<Entity>? Trained;

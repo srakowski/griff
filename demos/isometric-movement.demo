@@ -1,0 +1,68 @@
+title: Walking on isometric maps
+intro: An isometric map's solid diamonds are now walls: players walk over the diamonds, slide along the walls, and step from diamond to diamond.
+project: Empty | Iso Walk
+
+create: Tilemap
+rename: Floor
+set: Transform.Position = 0, 0, 0
+set: Tilemap.Shape = Isometric
+set: Tilemap.Tile Size = 2
+set: Tilemap.Tint = #6FA860
+set: Tilemap.Tiles = 11111111\n11111111\n11111111\n11111111\n11111111\n11111111\n11111111\n11111111
+set: Tilemap.Solid = false
+click: tiles:layer:+
+rename: Walls
+set: Tilemap.Tint = #9A8F86
+set: Tilemap.Tiles = 22222222\n2......2\n2......2\n2..2...2\n2......2\n2......2\n2......2\n22222222
+select: Main Camera
+set: Transform.Position = 0, -4.5, 0
+set: Camera.Size = 6
+
+chapter: Walls shaped like diamonds | Solid, on an isometric map
+select: Walls
+look: 0, -4, 5
+set: Tilemap.Solid = true
+explain: world:-8, 0, 8, -8 | Solid diamonds | Here's an isometric room: a floor that doesn't collide, and a layer of walls with Solid on. Their solid tiles are now walls the shape of their diamonds, and the Scene view outlines them.
+
+chapter: Walking over the ground | Top-down Movement, Isometric
+deselect
+create: Top-down Player
+set: Transform.Position = 0, -6, 0
+set: Sprite.Size = 0.6, 0.3
+set: BoxCollider.Size = 0.6, 0.3
+explain: component:TopDownMovement | A reminder | A top-down player on an isometric map gets a reminder in the Inspector.
+set: TopDownMovement.Isometric = true
+explain: field:TopDownMovement.Isometric | Isometric | Tick Isometric, and up and down go half as fast on the screen as left and right, the way the ground is seen at a slant. Its footprint is the diamond inside its collider, drawn in the Scene view.
+play
+hold: Up 0.5
+hold: Right 2.5
+expectat: Player = 5.7, -4
+explain: game | Sliding along the wall | Walking straight right, it meets the wall's edge and slides along it, up into the corner, the way the wall runs on the screen.
+hold: Down 3
+expectat: Player = 0, -6.85
+stop
+
+chapter: A diamond at a time | Grid Movement
+select: Player
+key: Delete
+deselect
+create: Grid Player
+set: Transform.Position = -3, -4, 0
+play
+wait: 0.3
+expectat: Player = -3, -4
+say: A grid player steps from diamond to diamond. Up steps up to the right, and left steps up to the left.
+tap: Up
+wait: 0.3
+tap: Up
+wait: 0.3
+expectat: Player = -1, -3
+tap: Right
+wait: 0.3
+expectat: Player = -1, -3
+explain: game | Blocked | The pillar's diamond is down to the right, so pressing right bumps into it.
+tap: Left
+wait: 0.3
+expectat: Player = -2, -2.5
+say: Chasers, patrols, crates and pathfinding step over the diamonds the same way, and an Isometric template is next.
+stop

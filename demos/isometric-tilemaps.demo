@@ -55,5 +55,5 @@ set: Transform.Position = 2, -3.15, 0
 explain: world:0, -1, 4, -4 | And in front | Stepping out in front of the wall, the player draws over it. The floor sorts as one, under everything standing on it.
 play
 wait: 1.5
-say: The game draws it just the same. Isometric maps don't collide yet: walking and blocking come next, then an Isometric template.
+say: The game draws it just the same, and solid diamonds are walls a character walks into and slides along.
 stop

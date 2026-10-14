@@ -194,7 +194,8 @@ public sealed class PlatformerMovement : Component
 /// A top-down player with no code: moves in eight directions (or four) with WASD, the arrow keys, the D-pad or the stick,
 /// never faster diagonally, with an optional dash. It ignores gravity, so it works in a game that has some. Plays its
 /// <see cref="Animation"/>'s Idle and Run clips if it has them (and IdleUp, IdleDown, RunUp and RunDown, facing that
-/// way). Needs a <see cref="Body"/> and a collider.
+/// way). Needs a <see cref="Body"/> and a collider. On an isometric <see cref="Tilemap"/>, turn on
+/// <see cref="Isometric"/> so it walks over the diamonds.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -213,8 +214,19 @@ public sealed class TopDownMovement : Component
     /// <summary>How quickly it stops once let go, in units per second per second. 0 stops dead.</summary>
     public float Deceleration { get; set; } = 80;
 
-    /// <summary>Only up, down, left and right: for grid-like games. The way pressed last wins.</summary>
+    /// <summary>
+    /// Only up, down, left and right: for grid-like games. The way pressed last wins. With <see cref="Isometric"/>, the
+    /// four ways are along the diamonds' edges instead: up goes up to the right, right down to the right, down down to the
+    /// left and left up to the left, and two ways held together go that way on the screen.
+    /// </summary>
     public bool FourWay { get; set; }
+
+    /// <summary>
+    /// Walks over an isometric map's ground (a <see cref="Tilemap"/> whose Shape is Isometric): up and down go half as
+    /// fast on the screen as left and right, as the ground is seen at a slant, so up and right together run along the
+    /// diamonds' edges. <see cref="Speed"/> is how fast it goes across the screen.
+    /// </summary>
+    public bool Isometric { get; set; }
 
     /// <summary>The Dash action (Left Shift, K or the gamepad's B) bursts the way it's moving, or facing.</summary>
     [Group("Dash")]
@@ -255,6 +267,12 @@ public sealed class TopDownMovement : Component
     /// <summary>Raised at the start of each dash.</summary>
     public event Action<TopDownMovement>? Dashed;
 
+    /// <summary>On an isometric map with <see cref="Isometric"/> off, a reminder to turn it on.</summary>
+    public override string? SetupNote() =>
+        !Isometric && Entity?.Scene is { } scene && scene.Entities.Any(e => e.IsActive && e.GetComponent<Tilemap>() is { Shape: TileShape.Isometric, LayerOf: null })
+            ? "The map is isometric: turn on Isometric so it walks along the diamonds."
+            : null;
+
     internal void RaiseDashed() => Dashed?.Invoke(this);
 
     internal float DashLeft { get; set; }
@@ -277,7 +295,10 @@ public sealed class TopDownMovement : Component
 /// <see cref="Animation"/>'s Idle and Walk (or Run) clips if it has them (and IdleUp, WalkDown and so on, facing that
 /// way). Needs a <see cref="Body"/> and a collider, so pickups, doors and damage reach it; it ignores gravity. With a
 /// <see cref="GridChase"/> or a <see cref="GridPatrol"/> it's an enemy or another mover instead, stepping on its own;
-/// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it.
+/// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it. On an isometric
+/// map it steps from diamond to diamond: up goes up to the right, right down to the right, down down to the left and left
+/// up to the left, and two ways held together go that way on the screen (with <see cref="Diagonal"/>, every way pressed
+/// goes that way on the screen).
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -334,7 +355,10 @@ public sealed class GridMovement : Component
     /// <summary>A sound played on trying to step into a wall, once per press.</summary>
     public string? BumpSound { get; set; }
 
-    /// <summary>The way it faces, one cell's step as a unit vector (diagonals are (±1, ±1)): down to start with.</summary>
+    /// <summary>
+    /// The way it faces, one cell's step as a unit vector (diagonals are (±1, ±1)): down to start with. Like
+    /// <see cref="Step"/>'s ways, it's along the grid: on an isometric map, (0, 1) faces up to the right.
+    /// </summary>
     [DoNotSerialize]
     public Vector2 Facing { get; set; } = -Vector2.UnitY;
 
@@ -599,6 +623,22 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
         Map is null ? new Vector2(cell.X, -cell.Y) : Vector2.Transform(Map.CellCenter(cell.X, cell.Y), World);
 
     public static (int X, int Y) Offset((int X, int Y) way) => (way.X, -way.Y);
+
+    /// <summary>Whether its cells are an isometric map's diamonds.</summary>
+    public bool IsIsometric => Map is { Shape: TileShape.Isometric };
+
+    /// <summary>A way along the grid (x right, y up, a step's worth) as it looks in the world: on an isometric map, (0, 1) is up to the right.</summary>
+    public Vector2 InWorld(Vector2 way) =>
+        Map is null ? way : Vector2.TransformNormal(Map.PointAt(way.X, -way.Y), World);
+
+    /// <summary>A world offset as a way along the grid (x right, y up, in cells): the other way from <see cref="InWorld"/>.</summary>
+    public Vector2 WayOf(Vector2 offset)
+    {
+        if (Map is null)
+            return offset;
+        var grid = Map.GridAt(Vector2.TransformNormal(offset, ToLocal));
+        return new Vector2(grid.X, -grid.Y);
+    }
 }
 
 /// <summary>

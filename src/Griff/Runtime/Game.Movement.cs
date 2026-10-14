@@ -266,7 +266,14 @@ public sealed partial class Game
         var control = m.Controllable;
         var raw = control ? keys.Move : Vector2.Zero;
         var input = raw;
-        if (m.FourWay)
+        if (m.FourWay && m.Isometric)
+        {
+            // Along the diamonds' edges: one way held is turned an eighth to the right, two held go between them.
+            var (x, y) = (MathF.Abs(raw.X) > 0.1f ? MathF.Sign(raw.X) : 0, MathF.Abs(raw.Y) > 0.1f ? MathF.Sign(raw.Y) : 0);
+            var edge = x != 0 && y != 0 ? new Vector2(x, y) : new Vector2(x + y, y - x);
+            input = edge == Vector2.Zero ? Vector2.Zero : Vector2.Normalize(edge) * Math.Min(1, raw.Length());
+        }
+        else if (m.FourWay)
         {
             // The axis pressed most recently wins; holding just one goes that way.
             if (MathF.Abs(raw.X) > 0.1f && MathF.Abs(m.LastInput.X) <= 0.1f)
@@ -297,11 +304,11 @@ public sealed partial class Game
         if (m.DashLeft > 0)
         {
             m.DashLeft -= dt;
-            v = m.DashDirection * (m.DashLeft > 0 ? m.DashSpeed : m.Speed);
+            v = OnGround(m, m.DashDirection) * (m.DashLeft > 0 ? m.DashSpeed : m.Speed);
         }
         else
         {
-            var target = input * m.Speed;
+            var target = OnGround(m, input) * m.Speed;
             var rate = target != Vector2.Zero ? m.Acceleration : m.Deceleration;
             v = rate > 0 ? MoveTowards(v, target, rate * dt) : target;
         }
@@ -314,7 +321,8 @@ public sealed partial class Game
         if (entity.GetComponent<Animation>() is not { } animation || IsPlayingAttack(entity, animation))
             return;
         var moving = m.IsDashing || (input != Vector2.Zero && v.LengthSquared() > 0.01f);
-        var facingUpOrDown = MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
+        // On an isometric map, going up the screen at all is seen from behind, and down it from the front.
+        var facingUpOrDown = m.Isometric ? MathF.Abs(m.Facing.Y) > 0.1f : MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
         var way = m.Facing.Y > 0 ? "Up" : "Down";
         if (m.IsDashing)
             PlayFirst(animation, "Dash", facingUpOrDown ? "Run" + way : "Run", "Run");
@@ -323,6 +331,10 @@ public sealed partial class Game
         else
             PlayFirst(animation, facingUpOrDown ? "Idle" + way : "Idle", "Idle");
     }
+
+    // A way over the ground as it moves on the screen: on an isometric map's ground, seen at a slant, up and down are
+    // halved.
+    private static Vector2 OnGround(TopDownMovement m, Vector2 way) => m.Isometric ? way with { Y = way.Y / 2 } : way;
 
     // The first of the clips the animation has, if any.
     private static void PlayFirst(Animation animation, params string[] clips)

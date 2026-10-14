@@ -137,7 +137,14 @@ public sealed partial class Game
         }
 
         if (entity.GetComponent<GridMovement>() is { } grid && grid.Facing != Vector2.Zero)
-            return grid.Facing.X != 0 ? new Vector2(MathF.Sign(grid.Facing.X), 0) : new Vector2(0, MathF.Sign(grid.Facing.Y));
+        {
+            if (GridCells.Of(grid.FindMap()) is not { IsIsometric: true } cells)
+                return grid.Facing.X != 0 ? new Vector2(MathF.Sign(grid.Facing.X), 0) : new Vector2(0, MathF.Sign(grid.Facing.Y));
+
+            // On an isometric map, the way it faces on the screen: a step up to the right swings right.
+            var seen = cells.InWorld(grid.Facing);
+            return MathF.Abs(seen.X) > MathF.Abs(seen.Y) ? new Vector2(MathF.Sign(seen.X), 0) : new Vector2(0, MathF.Sign(seen.Y));
+        }
 
         return new Vector2(entity.GetComponent<Sprite>()?.FlipX == true ? -1 : 1, 0);
     }
@@ -146,7 +153,7 @@ public sealed partial class Game
     {
         // A grid mover turns to face it up or down too, so the hitbox swings its way.
         if (entity.GetComponent<GridMovement>() is { } grid)
-            grid.Facing = WayTowards(Flat(target.Transform.WorldPosition) - Flat(entity.Transform.WorldPosition), grid.Diagonal);
+            grid.Facing = WayTowards(GridCells.Of(grid.FindMap()).WayOf(Flat(target.Transform.WorldPosition) - Flat(entity.Transform.WorldPosition)), grid.Diagonal);
         var dx = target.Transform.WorldPosition.X - entity.Transform.WorldPosition.X;
         if (MathF.Abs(dx) > 1e-3f)
             Face(entity, MathF.Sign(dx));

@@ -394,8 +394,18 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var solid = new Pen(style.Brush("Brush.Status.Success"), 1.5);
         var trigger = new Pen(style.Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
         var clickable = new Pen(style.Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
+
+        // With walls on an isometric map, a body meets them with the diamond under its collider: drawn inside it.
+        var isometric = _document!.Scene.Entities.Any(e => e.IsActive && e.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Isometric });
         foreach (var entity in _document!.Scene.Entities.Where(SceneViewModel.IsShown))
         {
+            if (isometric && entity.GetComponent<Body>() is not null && entity.GetComponent<Collider>() is { IsTrigger: false } footed)
+            {
+                var bounds = Griff.Runtime.Physics.BoundsOf(footed);
+                var (across, down) = (new Vector2(bounds.HalfSize.X, 0), new Vector2(0, bounds.HalfSize.X / 2));
+                DrawOutline([bounds.Center + down, bounds.Center + across, bounds.Center - down, bounds.Center - across], solid);
+            }
+
             // Buttons and sliders: where they can be clicked and dragged.
             foreach (var button in entity.GetComponents<Griff.Scenes.Button>())
                 DrawBox(Griff.Runtime.Game.AreaOf(button), clickable);
@@ -417,7 +427,13 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, viewport.ToScreen(circle.Center), radius, radius);
             }
 
-            // Isometric maps don't collide yet.
+            // An isometric map's walls: a run of solid diamonds along each row.
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric))
+            {
+                foreach (var outline in Griff.Runtime.Physics.IsometricShapes(tilemap))
+                    DrawOutline(outline, solid);
+            }
+
             foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape != TileShape.Isometric))
             {
                 foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
@@ -456,6 +472,9 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 }
             }
         }
+
+        void DrawOutline(Vector2[] world, Pen pen) =>
+            dc.DrawGeometry(null, pen, Polygon(world.Select(p => viewport.ToScreen(p)).Select(p => new Vector2((float)p.X, (float)p.Y)).ToArray()));
 
         // One-way platforms: a solid top (the side that blocks) over a dashed outline.
         void DrawOneWay(Griff.Box box)

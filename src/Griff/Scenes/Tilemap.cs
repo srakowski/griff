@@ -158,8 +158,9 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// How the cells are laid out: <see cref="TileShape.Square"/> in rows and columns, or
     /// <see cref="TileShape.Isometric"/> as diamonds twice as wide as they're tall, the grid's columns running down to the
     /// right from the entity's position (the top corner of cell 0, 0) and its rows down to the left. Tiles, painting,
-    /// <see cref="CellAt"/> and <see cref="CellCenter"/> all follow it. A layer's is its map's (see <see cref="LayerOf"/>).
-    /// Isometric maps don't collide yet.
+    /// <see cref="CellAt"/> and <see cref="CellCenter"/> all follow it, and so do collisions: on an isometric map a body
+    /// meets a solid tile's diamond with the diamond under its collider (see <see cref="Body"/>), sliding along the
+    /// walls, and grid movers step from diamond to diamond. A layer's is its map's (see <see cref="LayerOf"/>).
     /// </summary>
     public TileShape Shape
     {
@@ -526,12 +527,26 @@ public sealed partial class Tilemap : Component, ISortsInParts
         var size = TileSize > 0 ? TileSize : 1;
         if (Shape != TileShape.Isometric)
             return ((int)MathF.Floor(local.X / size), (int)MathF.Floor(-local.Y / size));
+        var grid = GridAt(local);
+        return ((int)MathF.Floor(grid.X), (int)MathF.Floor(grid.Y));
+    }
+
+    /// <summary>
+    /// How many columns (X) and rows (Y) along the grid <paramref name="local"/>, a point in the entity's own space, is
+    /// from its start: the other way from <see cref="PointAt"/>, so cell x, y holds the points from (x, y) to (x + 1,
+    /// y + 1). On an isometric map that turns the diamonds into squares, where walls run straight along the grid.
+    /// </summary>
+    public Vector2 GridAt(Vector2 local)
+    {
+        var size = TileSize > 0 ? TileSize : 1;
+        if (Shape != TileShape.Isometric)
+            return new Vector2(local.X / size, -local.Y / size);
 
         // In half widths across and quarter widths (half a diamond's height) down, those are the column less the row and
         // the column plus the row.
         var across = local.X / (size / 2);
         var down = -local.Y / (size / 4);
-        return ((int)MathF.Floor((down + across) / 2), (int)MathF.Floor((down - across) / 2));
+        return new Vector2((down + across) / 2, (down - across) / 2);
     }
 
     /// <summary>The center of cell (<paramref name="x"/>, <paramref name="y"/>) in the entity's own space.</summary>

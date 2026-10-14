@@ -62,7 +62,7 @@ public sealed partial class Game
         // A player waiting while the computer takes its turn still hears its keys, so a step pressed then is taken as the
         // turn comes back.
         var controls = waits && byTurns && ComputersTurn() ? ControlsOf(entity) : InputOf(entity);
-        var way = m.Controllable && !driven ? GridWay(m, controls.Move) : (X: 0, Y: 0);
+        var way = m.Controllable && !driven ? GridWay(m, controls.Move, grid.IsIsometric) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
         m.HeldFor = way == m.Held ? m.HeldFor + Time.Delta : 0;
         m.Held = way;
@@ -143,13 +143,16 @@ public sealed partial class Game
             m.Idle = byTurns && thinks && !m.Stepping;
         }
 
-        if (m.FlipSprite && MathF.Abs(m.Facing.X) > 0.1f)
-            Face(entity, MathF.Sign(m.Facing.X));
+        // Which way it faces on the screen: on an isometric map, every step along the grid is a diagonal, seen from behind
+        // (Up) going up the screen and from the front (Down) coming down it.
+        var seen = grid.InWorld(m.Facing);
+        if (m.FlipSprite && MathF.Abs(seen.X) > 1e-4f)
+            Face(entity, MathF.Sign(seen.X));
 
         if (entity.GetComponent<Animation>() is not { } animation || IsPlayingAttack(entity, animation))
             return;
-        var facingUpOrDown = MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
-        var suffix = facingUpOrDown ? (m.Facing.Y > 0 ? "Up" : "Down") : "";
+        var facingUpOrDown = grid.IsIsometric ? MathF.Abs(seen.Y) > 1e-4f : MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
+        var suffix = facingUpOrDown ? (seen.Y > 0 ? "Up" : "Down") : "";
         if (m.Stepping)
             PlayFirst(animation, "Walk" + suffix, "Run" + suffix, "Walk", "Run");
         else
@@ -390,8 +393,10 @@ public sealed partial class Game
             Push(pusher, row, way, 0, Math.Max(0.02f, mover.StepTime));
     }
 
-    // The way pressed as a step: four-way, the axis pressed most recently winning, unless it steps diagonally.
-    private static (int X, int Y) GridWay(GridMovement m, Vector2 move)
+    // The way pressed as a step: four-way, the axis pressed most recently winning, unless it steps diagonally. On an
+    // isometric map, where the grid runs diagonally on the screen, two ways held together step to the diamond that way;
+    // stepping diagonally too, every way pressed is turned onto the grid, so it goes that way on the screen.
+    private static (int X, int Y) GridWay(GridMovement m, Vector2 move, bool isometric)
     {
         var x = MathF.Abs(move.X) > GridDeadZone ? Math.Sign(move.X) : 0;
         var y = MathF.Abs(move.Y) > GridDeadZone ? Math.Sign(move.Y) : 0;
@@ -400,6 +405,10 @@ public sealed partial class Game
         if (y != 0 && m.LastRaw.Y == 0)
             m.PreferVertical = true;
         m.LastRaw = (x, y);
+        if (isometric && m.Diagonal)
+            return (Math.Sign(x - y), Math.Sign(x + y));
+        if (isometric && x != 0 && y != 0)
+            return ((x - y) / 2, (x + y) / 2);
         if (m.Diagonal || x == 0 || y == 0)
             return (x, y);
         return m.PreferVertical ? (0, y) : (x, 0);
@@ -460,7 +469,7 @@ public sealed partial class Game
         if (near)
         {
             if (steps > 0)
-                m.Facing = WayTowards(Flat(target.Transform.WorldPosition) - Flat(m.Entity!.Transform.WorldPosition), m.Diagonal);
+                m.Facing = WayTowards(grid.WayOf(Flat(target.Transform.WorldPosition) - Flat(m.Entity!.Transform.WorldPosition)), m.Diagonal);
             return null;
         }
 
@@ -614,7 +623,8 @@ public sealed partial class Game
 
     internal static (int X, int Y)[] Neighbours(bool diagonal) => diagonal ? EightWays : FourWays;
 
-    // The way (x right, y up) a grid mover faces to look along an offset: the longer axis, or both if it steps diagonally.
+    // The way (x right, y up) a grid mover faces to look along an offset along its grid (see GridCells.WayOf): the longer
+    // axis, or both if it steps diagonally.
     internal static Vector2 WayTowards(Vector2 offset, bool diagonal)
     {
         var (x, y) = (MathF.Abs(offset.X) > 1e-3f ? MathF.Sign(offset.X) : 0, MathF.Abs(offset.Y) > 1e-3f ? MathF.Sign(offset.Y) : 0);

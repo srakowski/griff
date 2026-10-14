@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Views
 
-- [ ] Add movement and collision on isometric maps.
 - [ ] Add an Isometric template.
 - [ ] Add hex tilemaps, drawn and painted.
 - [ ] Make grid movement and turn-based play work on hex maps.
@@ -130,6 +129,9 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Add movement and collision on isometric maps. (2026-10-14)
+  - A solid isometric map's tiles are walls shaped like their diamonds. A body meets them with the diamond under its collider (as wide as the collider, half as tall), which in the map's grid (`Tilemap.GridAt`, the other way from `PointAt`) is a square, so it's kept off solid cells a grid axis at a time and slides along walls the way they run on the screen; velocity into a wall stops (or bounces), and a shoved crate stops at one and stops its pusher (`Physics.Isometric.cs`). Raycasts (so a chaser's sight) and `OverlapPoint`/`OverlapBox`/`OverlapCircle` see the diamonds; `Physics.IsometricShapes` outlines them, and the Scene view draws those and each body's footprint. `TopDownMovement.Isometric` halves up and down on the screen (with Four Way, its four ways are the diamonds' edges), and the Inspector reminds you to tick it on an isometric map. Grid movers step diamond to diamond: a key steps along the grid (up is up to the right), two held together step to the diamond that way on the screen, and with Diagonal every way pressed goes that way on the screen; they flip and play Up/Down clips by the way they face on the screen, and face targets along the grid.
+  - Checked through the MCP: built a walled isometric room with `entity_create`, saw the Isometric reminder in `entity_get`, walked a top-down player into the pillar and each corner (stopping exactly where the footprint meets the walls), and stepped a grid player and a grid enemy that chased it to the next diamond. Left in README Status: no shadows yet; bodies meet other colliders as boxes; welded contraptions pass through isometric walls; close-up attacks swing to the side of the screen a grid mover faces; tactics highlights are squares.
 - [x] Add isometric tilemaps: diamond tiles drawn, painted and depth sorted. (2026-10-14)
   - `Tilemap.Shape` (Square or Isometric), `TileHeight` (how tall pictures stand on their diamonds) and `SortByY` (each row, or diagonal, sorted among the sprites through a new `Drawing.SortAt` and the `ISortsInParts` extension point, so the renderer still names no tilemap). Painting, hover, fills and growing up-left follow the diamonds; the Scene view draws sorted rows in the game's order. Fixed on the way: picking a choice that changes which fields show (Shape) remade the Inspector mid-click and threw; the dropdown now applies its pick just after the click. Isometric maps don't collide or cast shadows yet (the next item).
 - [x] Build a frame in one pass over the entities: each is gone through twice (once for what it sorts by, then to draw it), now 6.5 of the 10 ms an exported game spends on a frame of 50,000 BunnyMark bunnies (`tools\bunnybench.cs`). Draw each entity as it's found and sort the draws' ranges by key, keeping the order scripts' drawables are called in sensible. (2026-10-14)

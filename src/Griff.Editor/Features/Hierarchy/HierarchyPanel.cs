@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
@@ -74,7 +75,7 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
     /// <summary>Whether a parent's hiding covers the entity (so the Scene view doesn't draw it either).</summary>
     public bool IsHiddenByParent => !Entity.IsHidden && Entity.IsHiddenInHierarchy;
 
-    public ObservableCollection<EntityNode> Children { get; } = [];
+    public EntityNodes Children { get; } = [];
 
     public bool IsExpanded
     {
@@ -125,6 +126,9 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
         set => SetProperty(ref _dropHint, value);
     }
 
+    // The entity may have changed (renamed, enabled, locked...): the row reads it again.
+    internal void Refresh() => OnPropertyChanged(string.Empty);
+
     private bool _isFilteredOut, _isFilterContext;
 
     /// <summary>True while the Hierarchy's filter hides the row: neither it nor anything inside it has what's typed in its name.</summary>
@@ -146,7 +150,26 @@ public sealed class EntityNode(Entity entity, HierarchyPanel owner) : Observable
 }
 
 /// <summary>
-/// The open scene's entities as a tree. Structural changes rebuild it; expansion and selection survive. A filter at the
+/// Rows of the hierarchy tree, which can be replaced all at once: the tree hears of it once rather than once a row, so a
+/// scene of thousands of entities fills it at once.
+/// </summary>
+public sealed class EntityNodes : ObservableCollection<EntityNode>
+{
+    internal void ReplaceAll(List<EntityNode> nodes)
+    {
+        CheckReentrancy();
+        Items.Clear();
+        foreach (var node in nodes)
+            Items.Add(node);
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+}
+
+/// <summary>
+/// The open scene's entities as a tree. Structural changes bring it up to date, keeping the rows of entities still there
+/// (so expansion and selection survive), and while the game plays it catches up ten times a second. A filter at the
 /// top narrows it to the entities whose names have what's typed, with what they're inside.
 /// </summary>
 public sealed class HierarchyPanel : ToolPanel
@@ -154,7 +177,9 @@ public sealed class HierarchyPanel : ToolPanel
     private readonly IWorkspace _workspace;
     private readonly ISelection _selection;
     private readonly HashSet<Guid> _expanded = [];
-    private readonly Dictionary<Guid, EntityNode> _nodes = [];
+    private Dictionary<Guid, EntityNode> _nodes = [];
+    // The rows before an update, for it to take the ones it can keep from.
+    private Dictionary<Guid, EntityNode> _before = [];
     private SceneDocument? _document;
     private bool _syncingSelection;
     private long _builtVersion;
@@ -178,7 +203,7 @@ public sealed class HierarchyPanel : ToolPanel
     public override string? Icon => Icons.Hierarchy;
     public override PanelZone Zone => PanelZone.Left;
 
-    public ObservableCollection<EntityNode> Roots { get; } = [];
+    public EntityNodes Roots { get; } = [];
 
     public string? SceneName => _document?.Name;
 
@@ -394,7 +419,7 @@ public sealed class HierarchyPanel : ToolPanel
         if (_document is not null)
         {
             _document.Changed -= OnDocumentChanged;
-            _document.RuntimeTicked -= OnRuntimeTicked;
+            _document.RuntimeRefreshed -= OnRuntimeRefreshed;
         }
 
         // Entering or leaving play mode swaps documents but keeps the same entity ids; keep expansion.
@@ -403,7 +428,7 @@ public sealed class HierarchyPanel : ToolPanel
         if (_document is not null)
         {
             _document.Changed += OnDocumentChanged;
-            _document.RuntimeTicked += OnRuntimeTicked;
+            _document.RuntimeRefreshed += OnRuntimeRefreshed;
         }
 
         if (!keepExpansion)
@@ -425,7 +450,7 @@ public sealed class HierarchyPanel : ToolPanel
     }
 
     // The running game can spawn and destroy entities; only rebuild when the structure actually changed.
-    private void OnRuntimeTicked(object? sender, EventArgs e)
+    private void OnRuntimeRefreshed(object? sender, EventArgs e)
     {
         if (_document is not null && _document.Scene.Version != _builtVersion)
             Rebuild();
@@ -438,28 +463,65 @@ public sealed class HierarchyPanel : ToolPanel
         _ => false,
     };
 
+    // Brings the tree up to date with the scene: the rows of entities still there stay (read again), new ones get rows,
+    // and a list of rows changes only where it has to.
     private void Rebuild()
     {
+        (_before, _nodes) = (_nodes, _before);
         _nodes.Clear();
-        Roots.Clear();
         if (_document is null)
+        {
+            _before.Clear();
+            Roots.Clear();
             return;
+        }
 
         _builtVersion = _document.Scene.Version;
-        foreach (var root in _document.Scene.Roots)
-            Roots.Add(CreateNode(root));
+        Update(Roots, _document.Scene.Roots);
+        _before.Clear();
         ApplyFilter();
         SyncSelectionToTree();
     }
 
-    private EntityNode CreateNode(Entity entity)
+    private EntityNode NodeFor(Entity entity)
     {
-        var node = new EntityNode(entity, this);
+        if (_before.Remove(entity.Id, out var node) && node.Entity == entity)
+            node.Refresh();
+        else
+            node = new EntityNode(entity, this);
         _nodes[entity.Id] = node;
-        foreach (var child in entity.Children)
-            node.Children.Add(CreateNode(child));
+        Update(node.Children, entity.Children);
         node.IsExpanded = _expanded.Contains(entity.Id);
         return node;
+    }
+
+    private void Update(EntityNodes rows, IReadOnlyList<Entity> entities)
+    {
+        if (entities.Count == 0)
+        {
+            if (rows.Count > 0)
+                rows.Clear();
+            return;
+        }
+
+        var nodes = new List<EntityNode>(entities.Count);
+        foreach (var entity in entities)
+            nodes.Add(NodeFor(entity));
+
+        var same = 0;
+        while (same < rows.Count && same < nodes.Count && rows[same] == nodes[same])
+            same++;
+        if (same == rows.Count && same == nodes.Count)
+            return;
+        // A few added at the end (spawned, most often) are added; anything else replaces the list.
+        if (same == rows.Count && nodes.Count - same <= 32)
+        {
+            for (var i = same; i < nodes.Count; i++)
+                rows.Add(nodes[i]);
+            return;
+        }
+
+        rows.ReplaceAll(nodes);
     }
 
     private void SyncSelectionToTree()

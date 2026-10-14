@@ -60,9 +60,13 @@
                 </TextBlock.Visibility>
             </TextBlock>
 
+            <!-- Only the rows in sight are made, so a scene of thousands of entities shows (and plays) at once. -->
             <TreeView x:Name="Tree"
                       AllowDrop="True"
                       ItemsSource="{Binding Roots}"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Standard"
+                      VirtualizingPanel.ScrollUnit="Pixel"
                       DragLeave="OnDragLeave"
                       DragOver="OnDragOver"
                       Drop="OnDrop"
@@ -71,8 +75,20 @@
                       PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
                       PreviewMouseMove="OnPreviewMouseMove"
                       PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown">
+                <TreeView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </TreeView.ItemsPanel>
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                        <Setter Property="ItemsPanel">
+                            <Setter.Value>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </Setter.Value>
+                        </Setter>
                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                         <!-- The tree's own selection is the primary entity; every selected row is highlighted. -->
                         <Setter Property="IsSelected" Value="{Binding IsPrimary, Mode=TwoWay}" />

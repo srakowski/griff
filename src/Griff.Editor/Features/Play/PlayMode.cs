@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -31,6 +32,10 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private MemoryNetwork? _network;
     private readonly List<PlayerWindow> _players = [];
     private bool _slowConnection;
+    private long _refreshedAt;
+
+    /// <summary>How often the panels that show what the game changes (the Hierarchy, the Inspector) catch up while it plays.</summary>
+    public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(0.1);
 
     // Another player's game, in a window of its own, joined to the one in the Game tab.
     private sealed record PlayerWindow(int Number, Window Window, GameSurface Surface, GameRunner Runner);
@@ -165,7 +170,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _selection.Select(copy.Find(id));
 
         Surface.AssetRoot = project.AssetsPath;
-        _timeline = new Timeline(_workspace.Serializer);
+        // A big scene is snapshotted less often: on average, a tenth of a millisecond a step at most.
+        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.1) };
         _timeline.Record(copy, 0, force: true);
         _position = 0;
         _sceneName = edit.Name;
@@ -240,6 +246,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner.IsPaused = !_runner.IsPaused;
         foreach (var player in _players)
             player.Runner.IsPaused = _runner.IsPaused;
+        if (_runner.IsPaused)
+            Refresh();
         _status.Show(_runner.IsPaused ? "Paused" : "Playing");
         Raise();
     }
@@ -251,6 +259,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
         _runner.IsPaused = true;
         _runner.Step();
+        Refresh();
         Raise();
     }
 
@@ -476,12 +485,22 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _selection.Select(null);
 
         _runtime.NotifyRuntimeTick();
+        if (Stopwatch.GetElapsedTime(_refreshedAt) >= RefreshEvery)
+            Refresh();
+    }
+
+    // The panels catch up with the game.
+    private void Refresh()
+    {
+        _refreshedAt = Stopwatch.GetTimestamp();
+        _runtime?.NotifyRuntimeRefresh();
     }
 
     private void OnFaulted(object? sender, Exception ex)
     {
         _logger.LogError(ex, "Game error: {Message}", ex.Message);
         _status.Show("Paused on error; see Output");
+        Refresh();
         Raise();
     }
 

@@ -9,9 +9,10 @@
 // building the frame to draw, drawing it with OpenGL (into a hidden window: the CPU's part), and the GPU's part. It
 // prints the median, mean, 99th percentile and worst of each, and the garbage collections and bytes allocated meanwhile.
 // The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step]
+//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline]
 // --steps 2 takes two steps every frame, as a frame after a missed one does; --no-draw leaves OpenGL out; --by-step
-// also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first.
+// also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first; --timeline keeps
+// rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind.
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
@@ -28,6 +29,7 @@ var count = Arg("--count", 50_000);
 var frames = Arg("--frames", 600);
 var steps = Arg("--steps", 1);
 var draw = !args.Contains("--no-draw");
+var rewind = args.Contains("--timeline");
 
 var root = Path.Combine(Path.GetTempPath(), "griff-bunnybench-" + Guid.NewGuid().ToString("N")[..8]);
 try
@@ -67,6 +69,24 @@ try
     }
 
     var byStep = args.Contains("--by-step") ? TimeEachStep(game) : null;
+
+    // --timeline keeps rewind snapshots as the editor does while playing, timing them apart from the rest of the step.
+    var timeline = rewind ? new Timeline(new Griff.Scenes.Serialization.SceneSerializer(loaded.Components)) { CostPerStep = TimeSpan.FromMilliseconds(0.1) } : null;
+    var recordTimes = new double[frames];
+    var recording = -1;
+    if (timeline is not null)
+    {
+        game.Stepped += (_, _) =>
+        {
+            var start = Stopwatch.GetTimestamp();
+            timeline.Record(game.Scene, game.Time.Total);
+            if (recording >= 0)
+                recordTimes[recording] += Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        };
+        for (var i = 0; i < 1200; i++)
+            game.Advance(step);
+    }
+
     GC.Collect();
     GC.WaitForPendingFinalizers();
     GC.Collect();
@@ -77,9 +97,10 @@ try
     var clock = new Stopwatch();
     for (var i = 0; i < frames; i++)
     {
+        recording = i;
         clock.Restart();
         game.Advance(step * steps);
-        stepTimes[i] = clock.Elapsed.TotalMilliseconds;
+        stepTimes[i] = clock.Elapsed.TotalMilliseconds - recordTimes[i];
         clock.Restart();
         frame = SceneRenderer.Build(game, 16 / 9f, frame);
         buildTimes[i] = clock.Elapsed.TotalMilliseconds;
@@ -98,11 +119,15 @@ try
     if (gpu is not null)
         Report("Draw", drawTimes);
     // The CPU's frame: the GPU draws the last frame while the next one is worked out.
-    Report("CPU", Enumerable.Range(0, frames).Select(i => stepTimes[i] + buildTimes[i] + drawTimes[i]).ToArray());
+    if (timeline is not null)
+        Report("Rewind", recordTimes);
+    Report("CPU", Enumerable.Range(0, frames).Select(i => stepTimes[i] + recordTimes[i] + buildTimes[i] + drawTimes[i]).ToArray());
     if (gpu is not null)
         Report("GPU", gpuTimes);
     Console.WriteLine($"  GCs: {GC.CollectionCount(0) - collections.Item1} gen0, {GC.CollectionCount(1) - collections.Item2} gen1, " +
                       $"{GC.CollectionCount(2) - collections.Item3} gen2; {allocated / (double)frames:N0} bytes allocated a frame");
+    if (timeline is not null)
+        Console.WriteLine($"  Rewind: {timeline.Count} snapshots kept, one every {timeline.Spacing} steps, {timeline.Bytes / 1e6:N0} MB ({GC.GetTotalMemory(true) / 1e6:N0} MB held in all)");
     if (byStep is not null)
     {
         foreach (var (name, ms) in byStep.OrderByDescending(s => s.Value).Take(10))

@@ -303,14 +303,14 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
         if (_scene is not null)
         {
             _scene.Changed -= OnSceneChanged;
-            _scene.RuntimeTicked -= OnRuntimeTicked;
+            _scene.RuntimeRefreshed -= OnRuntimeRefreshed;
         }
 
         _scene = scene;
         if (_scene is not null)
         {
             _scene.Changed += OnSceneChanged;
-            _scene.RuntimeTicked += OnRuntimeTicked;
+            _scene.RuntimeRefreshed += OnRuntimeRefreshed;
         }
 
         _pinned = false;
@@ -327,7 +327,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
             RefreshValues();
     }
 
-    private void OnRuntimeTicked(object? sender, EventArgs e) => RefreshValues();
+    private void OnRuntimeRefreshed(object? sender, EventArgs e) => RefreshValues();
 
     private void FollowSelection()
     {

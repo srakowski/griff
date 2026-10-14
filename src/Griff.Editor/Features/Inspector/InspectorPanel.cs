@@ -344,14 +344,14 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
         if (_document is not null)
         {
             _document.Changed -= OnDocumentChanged;
-            _document.RuntimeTicked -= OnRuntimeTicked;
+            _document.RuntimeRefreshed -= OnRuntimeRefreshed;
         }
 
         _document = document;
         if (_document is not null)
         {
             _document.Changed += OnDocumentChanged;
-            _document.RuntimeTicked += OnRuntimeTicked;
+            _document.RuntimeRefreshed += OnRuntimeRefreshed;
         }
 
         Rebuild();
@@ -367,7 +367,7 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     }
 
     // Show live values while the game runs. Components added or removed by gameplay rebuild the sections.
-    private void OnRuntimeTicked(object? sender, EventArgs e)
+    private void OnRuntimeRefreshed(object? sender, EventArgs e)
     {
         if (_entities.Where((entity, i) => entity.Components.Count != _componentCounts[i]).Any() || PrefabsChanged())
             Rebuild();

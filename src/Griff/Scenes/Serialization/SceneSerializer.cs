@@ -344,6 +344,9 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         return entity;
     }
 
+    /// <summary>Adds the component <paramref name="data"/> holds to <paramref name="entity"/> (or sets its transform) as loading a scene file does.</summary>
+    internal void ReadComponentInto(Entity entity, JsonElement data) => ReadComponent(entity, data, new LoadContext(null));
+
     private void ReadComponent(Entity entity, JsonElement data, LoadContext context)
     {
         var typeName = data.TryGetProperty("type", out var t) ? t.GetString() : null;

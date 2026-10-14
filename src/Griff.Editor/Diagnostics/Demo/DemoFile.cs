@@ -292,6 +292,16 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.FocusEditor();
                 await ui.Shortcut(Key.F6);
                 break;
+            case "rewind":
+                // "rewind: 0.3": drag the Rewind bar's knob three tenths of the way along it (0 is the oldest snapshot, 1 now).
+                var rewindTo = double.Parse(a, CultureInfo.InvariantCulture);
+                var rewindBar = RewindBar();
+                var rewindTrack = DemoUi.ScreenRect(rewindBar);
+                var rewindKnob = DemoUi.Descendants<System.Windows.Controls.Primitives.Thumb>(rewindBar).First();
+                await Input.Drag(DemoUi.Center(rewindKnob), [new Point(rewindTrack.Left + rewindTrack.Width * rewindTo, rewindTrack.Top + rewindTrack.Height / 2)], 900);
+                if (rewindTo < 1 && !await Until(() => play.TimelinePosition < play.TimelineCount - 1, 2000))
+                    throw new InvalidOperationException("The game didn't rewind.");
+                break;
             case "wait":
                 await options.Control.Delay(double.Parse(a, CultureInfo.InvariantCulture) * 1000);
                 break;
@@ -1414,8 +1424,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     // ----- Targets -----
 
+    // The Rewind bar over the Game tab while playing.
+    private Slider RewindBar() =>
+        DemoUi.Descendants<Slider>(ui.Main.GameTab.Content as DependencyObject ?? ui.Main).FirstOrDefault(s => s.Name == "Scrubber" && s.IsVisible)
+        ?? throw new InvalidOperationException("The Rewind bar isn't showing: play first.");
+
     /// <summary>
-    /// What a spotlight or click points at: panel:Inspector, logo, scene, game, toolbar:Game.Play, field:Health.Max,
+    /// What a spotlight or click points at: panel:Inspector, logo, rewind, scene, game, toolbar:Game.Play, field:Health.Max,
     /// component:Health, entity:Player, menu:Game, catalog:requires, world:left,top,right,bottom.
     /// </summary>
     private FrameworkElement Target(string target)
@@ -1426,6 +1441,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "panel" => DemoUi.PanelContent(name),
             "float" => (FrameworkElement?)ui.FloatingWindow(name) ?? throw new InvalidOperationException($"{name} isn't floating."),
             "logo" => (FrameworkElement)ui.Main.Template.FindName("AppMark", ui.Main),
+            "rewind" => RewindBar(),
             "scene" => sceneView,
             "game" => (FrameworkElement)ui.Main.GameTab.Content,
             "player" when int.TryParse(name, out var number) && number == 1 => (FrameworkElement)ui.Main.GameTab.Content,

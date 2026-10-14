@@ -116,12 +116,19 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}">
-                        <ScrollViewer Padding="{TemplateBinding Padding}"
+                        <ScrollViewer x:Name="Scroller"
+                                      Padding="{TemplateBinding Padding}"
                                       CanContentScroll="False"
                                       Focusable="False">
                             <ItemsPresenter />
                         </ScrollViewer>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- A tree that makes only the rows in sight scrolls by them. -->
+                        <Trigger Property="VirtualizingPanel.IsVirtualizing" Value="True">
+                            <Setter TargetName="Scroller" Property="CanContentScroll" Value="True" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

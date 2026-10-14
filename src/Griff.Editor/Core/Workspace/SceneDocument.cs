@@ -29,6 +29,13 @@ public sealed class SceneDocument : ObservableObject
     /// <summary>Raised after each game frame while playing. The game may have changed anything.</summary>
     public event EventHandler? RuntimeTicked;
 
+    /// <summary>
+    /// Raised ten times a second while the game plays, and as it pauses or takes a single step: for panels that show what
+    /// the game has changed (the Hierarchy, the Inspector), which needn't follow every frame. The game may have changed
+    /// anything.
+    /// </summary>
+    public event EventHandler? RuntimeRefreshed;
+
     /// <summary>True for the throwaway copy that runs in play mode. It's never saved.</summary>
     public bool IsRuntime { get; }
 
@@ -73,6 +80,8 @@ public sealed class SceneDocument : ObservableObject
     public void Execute(IEdit edit) => History.Execute(edit);
 
     internal void NotifyRuntimeTick() => RuntimeTicked?.Invoke(this, EventArgs.Empty);
+
+    internal void NotifyRuntimeRefresh() => RuntimeRefreshed?.Invoke(this, EventArgs.Empty);
 
     internal void MarkSaved()
     {

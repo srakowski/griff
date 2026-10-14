@@ -316,7 +316,7 @@ public sealed partial class Game
         Step(FramePhase.Resolve, "Bars", RunBars);
         Step(FramePhase.Resolve, "Counters", RunCounters);
         Step(FramePhase.Resolve, "Fade", AdvanceFade);
-        Step(FramePhase.Resolve, "Screen Flash", () => _screenFlashLeft = Math.Max(0, _screenFlashLeft - Time.UnscaledDelta));
+        Step(FramePhase.Resolve, "Screen Flash", RunScreenFlash);
         Step(FramePhase.Resolve, "Destroys", FlushDestroys);
         Step(FramePhase.Resolve, "Scene Change", SwitchSceneIfRequested);
 

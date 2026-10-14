@@ -61,7 +61,25 @@ public sealed class Camera : Component
         (_ambientFadeSeconds, _ambientFadeLeft) = seconds > 0 ? (seconds, seconds) : (0, 0);
     }
 
-    internal void AdvanceAmbient(float seconds) => _ambientFadeLeft = Math.Max(0, _ambientFadeLeft - seconds);
+    internal void AdvanceAmbient(float seconds)
+    {
+        _ambientFadeLeft = Math.Max(0, _ambientFadeLeft - seconds);
+        if (_ambientKept)
+            _ambientStepped.Set(this, CurrentAmbient);
+        else
+            (_ambientStepped, _ambientKept) = (new Smoothed<Color>(CurrentAmbient), true);
+    }
+
+    // The ambient light as each step left it (from the first), to draw a fade between steps.
+    private Smoothed<Color> _ambientStepped;
+    private bool _ambientKept;
+
+    /// <summary>The ambient light in a frame drawn as <paramref name="blend"/> says: part way through a fade between steps.</summary>
+    internal Color AmbientDrawn(StepBlend blend)
+    {
+        var now = CurrentAmbient;
+        return _ambientStepped.Value == now ? blend.Of(_ambientStepped) : now;
+    }
 
     private float _shakeStrength;
     private float _shakeDuration;
@@ -127,7 +145,14 @@ public sealed class Text : Component, IDrawable
     public float Size { get; set; } = 1f;
 
     /// <summary>The color of the letters.</summary>
-    public Color Color { get; set; } = Color.White;
+    public Color Color
+    {
+        get => _color.Value;
+        set => _color.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a fade is drawn between steps.
+    private Smoothed<Color> _color = new(Color.White);
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; }
@@ -165,7 +190,7 @@ public sealed class Text : Component, IDrawable
         if (string.IsNullOrEmpty(value))
             return;
         var world = Matrix4x4.CreateScale(Size, Size, 1) * Entity.Transform.WorldMatrix;
-        drawing.Add(new SpriteDraw(world, null, drawing.Tint(this, Color), Entity, value)
+        drawing.Add(new SpriteDraw(world, null, drawing.Tint(this, drawing.Smooth(_color)), Entity, value)
         {
             Font = string.IsNullOrWhiteSpace(Font) ? null : Font,
             Align = Align,
@@ -190,7 +215,14 @@ public sealed class Sprite : Component, IDrawable, INetState
     public string? Image { get; set; }
 
     /// <summary>Multiplies the image's colors: white leaves it as it is, and a lower alpha fades it.</summary>
-    public Color Tint { get; set; } = Color.White;
+    public Color Tint
+    {
+        get => _tint.Value;
+        set => _tint.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a fade is drawn between steps.
+    private Smoothed<Color> _tint = new(Color.White);
 
     /// <summary>Size in world units before the transform's scale.</summary>
     public System.Numerics.Vector2 Size { get; set; } = System.Numerics.Vector2.One;
@@ -242,7 +274,7 @@ public sealed class Sprite : Component, IDrawable, INetState
 
     private Color _flashColor;
     private float _flashSeconds;
-    private float _flashLeft;
+    private Smoothed<float> _flashLeft;
     private float _blinkLeft;
     private float _blinkRate;
     private float _blinkTime;
@@ -251,7 +283,12 @@ public sealed class Sprite : Component, IDrawable, INetState
     /// The color painted over the sprite right now by <see cref="Flash"/>, with its alpha saying how much (0 none, 1 all
     /// of it). The image's shape and transparency are kept.
     /// </summary>
-    public Color FlashOverlay => _flashLeft > 0 ? _flashColor with { A = _flashColor.A * Math.Min(1, 2 * _flashLeft / _flashSeconds) } : Color.Transparent;
+    public Color FlashOverlay => FlashAt(_flashLeft.Value);
+
+    /// <summary>Its <see cref="Tint"/> and <see cref="FlashOverlay"/> in a frame drawn as <paramref name="blend"/> says: part way through a fade or flash between steps.</summary>
+    public (Color Tint, Color Flash) Drawn(StepBlend blend) => (blend.Of(_tint), FlashAt(blend.Of(_flashLeft)));
+
+    private Color FlashAt(float left) => left > 0 ? _flashColor with { A = _flashColor.A * Math.Min(1, 2 * left / _flashSeconds) } : Color.Transparent;
 
     /// <summary>True while <see cref="Blink"/> has the sprite in its hidden half.</summary>
     public bool IsBlinkedOut => _blinkLeft > 0 && (int)(_blinkTime * _blinkRate * 2) % 2 == 0;
@@ -264,7 +301,8 @@ public sealed class Sprite : Component, IDrawable, INetState
     {
         if (!(seconds > 0))
             return;
-        (_flashColor, _flashSeconds, _flashLeft) = (color ?? Color.White, seconds, seconds);
+        (_flashColor, _flashSeconds) = (color ?? Color.White, seconds);
+        _flashLeft.Set(this, seconds);
     }
 
     /// <summary>
@@ -281,7 +319,7 @@ public sealed class Sprite : Component, IDrawable, INetState
     /// <summary>Moves <see cref="Flash"/> and <see cref="Blink"/> on by <paramref name="seconds"/>. Called by the game.</summary>
     public void AdvanceEffects(float seconds)
     {
-        _flashLeft = Math.Max(0, _flashLeft - seconds);
+        _flashLeft.Set(this, Math.Max(0, _flashLeft.Value - seconds));
         _blinkLeft = Math.Max(0, _blinkLeft - seconds);
         _blinkTime += seconds;
     }
@@ -339,8 +377,9 @@ public sealed class Sprite : Component, IDrawable, INetState
     {
         if (IsBlinkedOut)
             return;
-        var tint = drawing.Tint(this, Tint);
-        var flash = FlashOverlay;
+        // A fade or a flash fading is drawn between steps, like the sprite's place.
+        var tint = drawing.Tint(this, drawing.Smooth(_tint));
+        var flash = FlashAt(drawing.Smooth(_flashLeft));
         if (!IsSliced)
         {
             // One quad, without going through Pieces: a frame of thousands of sprites makes nothing to collect.

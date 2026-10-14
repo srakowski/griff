@@ -28,7 +28,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PlayWithTwoCommand>()
             .AddCommand<PlayWithThreeCommand>()
             .AddCommand<PlayWithFourCommand>()
-            .AddCommand<SlowConnectionCommand>();
+            .AddCommand<SlowConnectionCommand>()
+            .AddCommand<StepRateCommand>();
     }
 }
 
@@ -201,7 +202,7 @@ public sealed class ClearSaveDataCommand(IWorkspace workspace, IStatusService st
     public override string Id => "Game.ClearSaveData";
     public override string Text => "_Clear Save Data";
     public override string? Icon => Icons.Clear;
-    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 0);
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 2, Order: 1);
 
     protected override bool CanExecuteCore() => workspace.Project is not null;
 

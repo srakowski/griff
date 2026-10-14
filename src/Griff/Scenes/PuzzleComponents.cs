@@ -332,11 +332,16 @@ public sealed class Trail : Component, IDrawable
 
     int IDrawable.DrawStep => DrawSteps.Trail;
 
+    // Each copy fades between how faded it was and is, if they aged in the last step. One left in the last step is where
+    // the sprite is now, ahead of where it's drawn between steps, so it shows once the sprite is drawn there.
     void IDrawable.Draw(Drawing drawing)
     {
+        var blend = drawing.Blend.For(_agedIn);
         foreach (var copy in _copies)
         {
-            var opacity = OpacityOf(copy);
+            if (copy.Age <= 0 && blend.IsBetween)
+                continue;
+            var opacity = OpacityAt(blend.Between(Math.Max(0, copy.Age - _agedBy), copy.Age));
             if (opacity > 0)
                 drawing.Add(new SpriteDraw(copy.World, copy.Image, copy.Tint with { A = copy.Tint.A * opacity }, Entity!) { Source = copy.Source, Flash = Color });
         }
@@ -345,6 +350,10 @@ public sealed class Trail : Component, IDrawable
     private readonly List<TrailCopy> _copies = [];
     private Vector2? _last;
     private float _sinceCopy;
+
+    // The step the copies last aged in, and by how much, for drawing them between steps.
+    private long _agedIn = -1;
+    private float _agedBy;
 
     /// <summary>Seconds between copies.</summary>
     public float Interval { get; set; } = 0.04f;
@@ -375,6 +384,7 @@ public sealed class Trail : Component, IDrawable
         foreach (var i in Enumerable.Range(0, _copies.Count))
             _copies[i] = _copies[i] with { Age = _copies[i].Age + seconds };
         _copies.RemoveAll(c => c.Age >= Fade);
+        (_agedIn, _agedBy) = (Entity?.Scene?.Step ?? -1, seconds);
 
         var position = Entity!.Transform.WorldPosition;
         var here = new Vector2(position.X, position.Y);
@@ -391,7 +401,9 @@ public sealed class Trail : Component, IDrawable
     }
 
     /// <summary>How solid a copy is now: <see cref="Opacity"/> fading to nothing over <see cref="Fade"/>.</summary>
-    public float OpacityOf(TrailCopy copy) => Fade > 0 ? Math.Clamp(Opacity, 0, 1) * Math.Clamp(1 - copy.Age / Fade, 0, 1) : 0;
+    public float OpacityOf(TrailCopy copy) => OpacityAt(copy.Age);
+
+    private float OpacityAt(float age) => Fade > 0 ? Math.Clamp(Opacity, 0, 1) * Math.Clamp(1 - age / Fade, 0, 1) : 0;
 }
 
 /// <summary>One copy left by a <see cref="Trail"/>: where it was drawn, what it showed, and how many seconds ago.</summary>

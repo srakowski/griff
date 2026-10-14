@@ -120,7 +120,11 @@ public sealed class FirstPersonMovement : Component
 
     /// <summary>Degrees it's looking up (positive) or down (negative), with <see cref="LookUpDown"/>.</summary>
     [DoNotSerialize]
-    public float Pitch { get; set; }
+    public float Pitch
+    {
+        get => _pitch.Value;
+        set => _pitch.Set(this, value);
+    }
 
     /// <summary>The way it's facing across the floor, as a unit vector.</summary>
     [DoNotSerialize]
@@ -135,10 +139,26 @@ public sealed class FirstPersonMovement : Component
 
     /// <summary>How fast it's walking, from 0 (standing) to 1 (full speed): for the view's bob.</summary>
     [DoNotSerialize]
-    public float Stride { get; internal set; }
+    public float Stride
+    {
+        get => _stride.Value;
+        internal set => _stride.Set(this, value);
+    }
 
     // How far it has walked, for the bob and footsteps.
-    internal float Walked { get; set; }
+    internal float Walked
+    {
+        get => _walked.Value;
+        set => _walked.Set(this, value);
+    }
+
+    // The look up and down and the bob, kept as they were when the step began too, so the view is drawn between steps.
+    private Smoothed<float> _pitch;
+    private Smoothed<float> _stride;
+    private Smoothed<float> _walked;
+
+    // The pitch, stride and distance walked in a frame drawn as `blend` says.
+    internal (float Pitch, float Stride, float Walked) Drawn(StepBlend blend) => (blend.Of(_pitch), blend.Of(_stride), blend.Of(_walked));
 
     internal float NextStep { get; set; }
 }

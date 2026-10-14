@@ -67,7 +67,17 @@ public sealed partial class Game : IGameContext
     /// How much of the screen the scene change's <see cref="FadeColor"/> covers, from 0 (none) to 1 (all of it).
     /// See <see cref="LoadScene"/>.
     /// </summary>
-    public float FadeAmount { get; private set; }
+    public float FadeAmount
+    {
+        get => _fade.Value;
+        private set => _fade.Set(Scene, value);
+    }
+
+    // Kept as it was when the step began, too, to draw the screen between steps.
+    private Smoothed<float> _fade;
+
+    // How much of the screen the fade covers in a frame drawn as `blend` says.
+    internal float FadeDrawn(StepBlend blend) => blend.Of(_fade);
 
     /// <summary>The color the screen fades through between scenes.</summary>
     public Color FadeColor { get; private set; } = Color.Black;
@@ -443,18 +453,27 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void FlashScreen(Color? color = null, float seconds = 0.15f)
     {
-        if (seconds > 0)
-            (_screenFlash, _screenFlashSeconds, _screenFlashLeft) = (color ?? Color.White, seconds, seconds);
+        if (!(seconds > 0))
+            return;
+        (_screenFlash, _screenFlashSeconds) = (color ?? Color.White, seconds);
+        _screenFlashLeft.Set(Scene, seconds);
     }
 
     /// <summary>The color <see cref="FlashScreen"/> is covering the screen with right now; transparent when there's no flash.</summary>
-    public Color ScreenFlash => _screenFlashLeft > 0
-        ? _screenFlash with { A = _screenFlash.A * (_screenFlashLeft / _screenFlashSeconds) }
-        : Color.Transparent;
+    public Color ScreenFlash => ScreenFlashDrawn(StepBlend.AsIs);
+
+    // The flash in a frame drawn as `blend` says.
+    internal Color ScreenFlashDrawn(StepBlend blend)
+    {
+        var left = blend.Of(_screenFlashLeft);
+        return left > 0 ? _screenFlash with { A = _screenFlash.A * Math.Min(1, left / _screenFlashSeconds) } : Color.Transparent;
+    }
 
     private Color _screenFlash;
     private float _screenFlashSeconds;
-    private float _screenFlashLeft;
+    private Smoothed<float> _screenFlashLeft;
+
+    private void RunScreenFlash() => _screenFlashLeft.Set(Scene, Math.Max(0, _screenFlashLeft.Value - Time.UnscaledDelta));
 
     /// <summary>
     /// Paints <paramref name="entity"/>'s sprites and its children's <paramref name="color"/> (white by default) for

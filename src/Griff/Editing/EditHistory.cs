@@ -41,7 +41,20 @@ public sealed class EditHistory
     /// <summary>True when the current state differs from the last <see cref="MarkSaved"/>.</summary>
     public bool IsDirty => CurrentEntryId != _savedEntryId;
 
-    private long CurrentEntryId => _undo.Count > 0 ? _undo[^1].Id : 0;
+    // The last edit that changed the document (one saved as it's made, like a project setting, leaves it as it was).
+    private long CurrentEntryId
+    {
+        get
+        {
+            for (var i = _undo.Count - 1; i >= 0; i--)
+            {
+                if (_undo[i].Edit.ChangesDocument)
+                    return _undo[i].Id;
+            }
+
+            return 0;
+        }
+    }
 
     /// <summary>Applies <paramref name="edit"/> and records it, merging with the previous edit when possible.</summary>
     public void Execute(IEdit edit)

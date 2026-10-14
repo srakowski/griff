@@ -18,6 +18,12 @@ public interface IEdit
     /// (e.g. successive values while dragging). Called only with this edit already applied.
     /// </summary>
     bool TryMerge(IEdit next) => false;
+
+    /// <summary>
+    /// False for an edit saved as it's made rather than with the document (a project setting such as its step rate):
+    /// undoing and redoing it doesn't leave the document with unsaved changes.
+    /// </summary>
+    bool ChangesDocument => true;
 }
 
 /// <summary>
@@ -48,4 +54,6 @@ public sealed class CompositeEdit(string description, IReadOnlyList<IEdit> edits
         for (var i = Edits.Count - 1; i >= 0; i--)
             Edits[i].Revert();
     }
+
+    public bool ChangesDocument => Edits.Any(e => e.ChangesDocument);
 }

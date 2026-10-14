@@ -1,0 +1,48 @@
+title: Smooth between steps
+intro: Particles, trails, rain, fades, debug lines and a first-person view's look up and down are now drawn between the game's steps, scripts can draw that way too, and a project sets its step rate in the editor.
+project: Platformer | Smooth Steps
+
+chapter: Everything glides | Not just where things are
+say: The game moves in steps, sixty a second, and each frame the screen shows is drawn between the last two steps. Until now that was only true of where things are. Particles, trails, rain, fades, flashes, debug lines and a first person view's look up and down moved once a step, so on a fast screen they stepped while everything else glided.
+say: Now they're drawn between steps too, by the same rules: something that jumps, like a respawn or a teleport, is still drawn where it lands.
+create: Particles
+rename: Sparks
+set: Transform.Position = -3, 1, 0
+set: ParticleEmitter.Speed = 4
+set: ParticleEmitter.Spread = 360
+write: Scripts/Gauge.cs | smooth-drawing/Gauge.cs
+code: Assets/Scripts/Gauge.cs | Gauge.cs
+say: A script that draws from numbers of its own does it the same way. Gauge keeps its needle's angle in a Smoothed value, and draws it through the drawing's Blend, so the needle sweeps smoothly between steps.
+hidecode
+create: Empty
+rename: Dial
+set: Transform.Position = 3, 1, 0
+add: Gauge
+play
+wait: 2
+explain: game | Drawn between steps | The sparks and the needle move every frame the screen shows, not just every step, so they glide like the player does.
+hold: Right 1
+wait: 0.5
+stop
+
+chapter: Step rate | Game > Step Rate
+say: The step rate used to be something only a script could change. Now it's a project setting, under Game, Step Rate.
+write: Scripts/StepMeter.cs | fixed-steps/StepMeter.cs
+create: Text
+rename: Step Meter
+add: StepMeter
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = Bottom
+set: ScreenAnchor.Offset = 0, 0.9
+menu: Game > Step Rate > 120 steps a second
+explain: menu:Game | Step Rate | Thirty, sixty, a hundred and twenty or two hundred and forty steps a second, with the one in use ticked. Any rate from ten to two hundred and forty can be typed in.
+play
+wait: 2.5
+explain: game | 120 steps a second | The game now takes a hundred and twenty steps a second: finer steps for fast bodies, for more work each second. It's saved in the project, so exported games use it, and agents set it with the same command.
+stop
+key: Ctrl+Z
+say: It's undone like any edit, without leaving the scene unsaved, and back at sixty.
+play
+wait: 2
+explain: game | Back to 60 | Sixty steps a second again.
+stop

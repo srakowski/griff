@@ -39,6 +39,18 @@ public sealed class FrameDrawing
     /// <summary>The camera's entity, or null if the scene has none (a default camera at the origin is used).</summary>
     public Entity? Camera { get; }
 
+    /// <summary>
+    /// How far this frame is between the game's last two steps, for what a system draws from the game's own state (see
+    /// <see cref="StepBlend"/>); <see cref="BlendOf"/> for what belongs to an entity.
+    /// </summary>
+    public StepBlend Blend => StepBlend.For(Scene, null);
+
+    /// <summary>
+    /// How far this frame is between the game's last two steps for what <paramref name="entity"/> draws: as it is if it
+    /// jumped in the last step (see <see cref="StepBlend"/>).
+    /// </summary>
+    public StepBlend BlendOf(Entity entity) => StepBlend.For(Scene, entity);
+
     /// <summary>Half the height of the camera's view, in world units.</summary>
     public float CameraSize { get; }
 

@@ -18,7 +18,7 @@ public sealed partial class Tilemap
                 return;
         }
 
-        foreach (var draw in TileDraws(drawing.CanCull ? drawing.View : null))
+        foreach (var draw in TileDraws(drawing.CanCull ? drawing.View : null, drawing.Smooth(_tint)))
             drawing.Add(draw);
     }
 
@@ -26,7 +26,9 @@ public sealed partial class Tilemap
     /// One quad per tile (in the world), of those in <paramref name="cull"/> (and a cell around it) or all of them.
     /// Without an image, tiles are solid squares of the tint.
     /// </summary>
-    public IEnumerable<SpriteDraw> TileDraws(Box? cull = null)
+    public IEnumerable<SpriteDraw> TileDraws(Box? cull = null) => TileDraws(cull, Tint);
+
+    private IEnumerable<SpriteDraw> TileDraws(Box? cull, Color tint)
     {
         var entity = Entity!;
         var world = entity.Transform.WorldMatrix;
@@ -40,7 +42,7 @@ public sealed partial class Tilemap
             var matrix = size * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
             var shown = ShownTile(x, y, tile);
             var tileset = TilesetOf(shown);
-            yield return new SpriteDraw(matrix, tileset.Image, Tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) };
+            yield return new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) };
         }
     }
 

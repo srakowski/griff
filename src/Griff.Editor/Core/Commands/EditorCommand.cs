@@ -50,6 +50,9 @@ public abstract class EditorCommand : ICommand
     /// </summary>
     public virtual IReadOnlyList<string>? Choices => null;
 
+    /// <summary>For a command that picks a setting: the one of its <see cref="Choices"/> in effect now, ticked in its submenu. Null for none.</summary>
+    public virtual string? Chosen => null;
+
     public event EventHandler? CanExecuteChanged
     {
         add => CommandManager.RequerySuggested += value;

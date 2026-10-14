@@ -120,9 +120,12 @@ public sealed class Weather : Component, IDrawable
         var area = Area;
         var corner = view.Center - area / 2;
         var slant = MathF.Atan2(Wind, 18 * Math.Max(Speed, 0.05f));
+        // Each falls between where it was and is, if they moved in the last step (one wrapping round is drawn where it is).
+        var blend = drawing.Blend.For(MovedIn);
         foreach (var drop in Drops)
         {
-            var position = new Vector2(corner.X + Wrap(drop.Position.X - corner.X, area.X), corner.Y + Wrap(drop.Position.Y - corner.Y, area.Y));
+            var at = blend.Between(drop.From, drop.Position);
+            var position = new Vector2(corner.X + Wrap(at.X - corner.X, area.X), corner.Y + Wrap(at.Y - corner.Y, area.Y));
             var color = new Color(drop.Color.R * Tint.R, drop.Color.G * Tint.G, drop.Color.B * Tint.B, drop.Color.A * Tint.A);
             var shape = Kind switch
             {
@@ -168,6 +171,9 @@ public sealed class Weather : Component, IDrawable
     /// <summary>The drops, flakes, leaves or sparks there are now. The game moves them while it runs.</summary>
     internal List<Drop> Drops { get; } = [];
 
+    /// <summary>The step the drops last moved in, to draw them between where they were and are.</summary>
+    internal long MovedIn { get; set; } = -1;
+
     /// <summary>The area the drops wrap around in, the view's size with room to spare; they're scattered over it.</summary>
     internal Vector2 Area { get; set; }
 
@@ -181,12 +187,13 @@ public sealed class Weather : Component, IDrawable
     internal float ThunderIn { get; set; } = -1;
 
     /// <summary>
-    /// One drop, flake, leaf or spark: where it is (wrapped into the view as it's drawn), how fast it goes, how big it
+    /// One drop, flake, leaf or spark: where it is (wrapped into the view as it's drawn) and was before it last moved, how fast it goes, how big it
     /// is, how it turns, how far through its sway or flicker it is, and which of the kind's colors it has.
     /// </summary>
     internal sealed class Drop
     {
         public Vector2 Position;
+        public Vector2 From;
         public Vector2 Velocity;
         public float Size;
         public float Angle;

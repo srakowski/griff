@@ -150,7 +150,14 @@ public sealed partial class Tilemap : Component, IDrawable
     }
 
     /// <summary>Multiplies the tiles' colors: white leaves them as they are, and a lower alpha fades them.</summary>
-    public Color Tint { get; set; } = Color.White;
+    public Color Tint
+    {
+        get => _tint.Value;
+        set => _tint.Set(this, value);
+    }
+
+    // Kept as it was when the step began too, so a fade is drawn between steps.
+    private Smoothed<Color> _tint = new(Color.White);
 
     /// <summary>Higher draws on top, like <see cref="Sprite.Order"/>.</summary>
     public int Order { get; set; }

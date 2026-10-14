@@ -38,9 +38,6 @@ public sealed class Transform : Component
     private long _drawnFor;
     private bool _drawnAsIs;
 
-    // A turn bigger than this in one step is drawn where it ends up rather than swung through.
-    private const float MaxGlideDegrees = 90;
-
     /// <summary>Where it is, in world units, from its parent's position (or the world's middle, with none). Y is up.</summary>
     public Vector3 Position
     {
@@ -151,6 +148,9 @@ public sealed class Transform : Component
             _jumpedStep = scene.Step;
     }
 
+    // Whether it jumped in `step`, so what it draws then isn't glided either (see StepBlend).
+    internal bool JumpedIn(long step) => _jumpedStep == step;
+
     // About to move: the first time in a step, it remembers where it was as the step began.
     private void Moving()
     {
@@ -196,7 +196,8 @@ public sealed class Transform : Component
             : _position;
         var rotation = _fromRotation == _rotation
             ? _rotation
-            : new Vector3(Turn(_fromRotation.X, _rotation.X, t), Turn(_fromRotation.Y, _rotation.Y, t), Turn(_fromRotation.Z, _rotation.Z, t));
+            : new Vector3(StepBlend.TurnBetween(_fromRotation.X, _rotation.X, t), StepBlend.TurnBetween(_fromRotation.Y, _rotation.Y, t),
+                StepBlend.TurnBetween(_fromRotation.Z, _rotation.Z, t));
         var scale = _fromScale == _scale || !SameSigns(_fromScale, _scale) ? _scale : Vector3.Lerp(_fromScale, _scale, t);
         if (rotation == _rotation && scale == _scale)
         {
@@ -208,13 +209,6 @@ public sealed class Transform : Component
         return Matrix4x4.CreateScale(scale) *
                Matrix4x4.CreateFromQuaternion(Quaternion.CreateFromYawPitchRoll(ToRadians(rotation.Y), ToRadians(rotation.X), ToRadians(rotation.Z))) *
                Matrix4x4.CreateTranslation(position);
-
-        // The short way round, so an angle kept between -180 and 180 doesn't spin all the way back as it crosses over.
-        static float Turn(float from, float to, float t)
-        {
-            var delta = ((to - from) % 360 + 540) % 360 - 180;
-            return MathF.Abs(delta) > MaxGlideDegrees ? to : from + delta * t;
-        }
 
         static bool SameSigns(Vector3 a, Vector3 b) =>
             MathF.Sign(a.X) == MathF.Sign(b.X) && MathF.Sign(a.Y) == MathF.Sign(b.Y) && MathF.Sign(a.Z) == MathF.Sign(b.Z);

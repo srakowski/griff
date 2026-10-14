@@ -70,7 +70,7 @@ public sealed class MenuBuilder(CommandRegistry commands, IEnumerable<MenuDefini
         item.IsEnabled = choices.Count > 0 && command.CanExecute();
         foreach (var choice in choices)
         {
-            var entry = new MenuItem { Header = choice.Replace("_", "__") };
+            var entry = new MenuItem { Header = choice.Replace("_", "__"), IsChecked = choice == command.Chosen };
             // Exceptions surface through Application.DispatcherUnhandledException, as a command's do.
             entry.Click += async (_, _) => await command.ChooseAsync(choice);
             item.Items.Add(entry);

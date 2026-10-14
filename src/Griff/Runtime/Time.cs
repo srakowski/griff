@@ -14,6 +14,9 @@ public sealed class Time
     /// </summary>
     public const float MaxDelta = 0.1f;
 
+    /// <summary>How many steps a second a game takes unless its project or a script says otherwise.</summary>
+    public const int DefaultStepRate = 60;
+
     /// <summary>The fewest steps a second <see cref="StepRate"/> takes.</summary>
     public const int MinStepRate = 10;
 
@@ -36,8 +39,9 @@ public sealed class Time
     public float Scale { get; set; } = 1f;
 
     /// <summary>
-    /// How many steps the game takes a second: 60 unless a script changes it (say, 120 for a game whose fast bodies need
-    /// finer steps). Each step is <see cref="FixedDelta"/> long. From 10 to 240.
+    /// How many steps the game takes a second: the project's Step Rate (Game &gt; Step Rate in the editor, 60 unless it's
+    /// changed), and a script can change it as the game runs (say, 120 for a level whose fast bodies need finer steps).
+    /// Each step is <see cref="FixedDelta"/> long. From 10 to 240.
     /// </summary>
     public int StepRate
     {
@@ -45,7 +49,7 @@ public sealed class Time
         set => _stepRate = Math.Clamp(value, MinStepRate, MaxStepRate);
     }
 
-    private int _stepRate = 60;
+    private int _stepRate = DefaultStepRate;
 
     /// <summary>Real seconds each step covers: 1 / <see cref="StepRate"/>.</summary>
     public float FixedDelta => (float)StepSeconds;

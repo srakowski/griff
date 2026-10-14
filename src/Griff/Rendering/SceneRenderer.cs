@@ -98,8 +98,12 @@ public static class SceneRenderer
         view = frame.View;
         var viewProjection = frame.ViewProjection;
 
+        // What the game draws over the screen (its fades and flashes, and debug shapes) changes once a step too, so it's
+        // drawn between the steps as well.
+        var blend = frame.Blend;
+
         // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched.
-        var ambient = component?.CurrentAmbient ?? Color.White;
+        var ambient = component?.AmbientDrawn(blend) ?? Color.White;
         var dark = component?.IsDark == true && frame.Lit;
         var litCount = sprites.Count;
         if (dark)
@@ -113,13 +117,14 @@ public static class SceneRenderer
         {
             // Quads over the whole view: twice the unit quad in clip space, taken back into the world.
             var whole = Matrix4x4.CreateScale(2, 2, 1) * clipToWorld;
-            if (game.ScreenFlash.A > 0)
-                sprites.Add(new SpriteDraw(whole, null, game.ScreenFlash, ScreenEntity));
-            if (TransitionDraw(game, component?.Transition ?? SceneTransition.Fade, view, clipToWorld) is { } transition)
+            if (game.ScreenFlashDrawn(blend) is { A: > 0 } flash)
+                sprites.Add(new SpriteDraw(whole, null, flash, ScreenEntity));
+            if (TransitionDraw(game, game.FadeDrawn(blend), component?.Transition ?? SceneTransition.Fade, view, clipToWorld) is { } transition)
                 sprites.Add(transition);
         }
 
-        sprites.AddRange(DebugDraws(game?.Debug.Shapes ?? [], size));
+        if (game is { Debug.HasShapes: true })
+            sprites.AddRange(DebugDraws(game.Debug.ShapesAt(blend), size));
 
         return new RenderFrame
         {
@@ -504,9 +509,9 @@ public static class SceneRenderer
     // ----- The screen -----
 
     // The scene change's cover, drawn the transition's way: the whole view fading, a wipe across it, or an iris closing.
-    private static SpriteDraw? TransitionDraw(Runtime.Game game, SceneTransition transition, Box view, Matrix4x4 clipToWorld)
+    private static SpriteDraw? TransitionDraw(Runtime.Game game, float fade, SceneTransition transition, Box view, Matrix4x4 clipToWorld)
     {
-        var amount = Math.Clamp(game.FadeAmount, 0, 1);
+        var amount = Math.Clamp(fade, 0, 1);
         if (amount <= 0)
             return null;
         var color = game.FadeColor;

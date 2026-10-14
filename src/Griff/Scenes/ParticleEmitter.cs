@@ -7,6 +7,12 @@ public readonly record struct Particle(Vector2 Position, Vector2 Velocity, float
 {
     /// <summary>0 when born, 1 when it disappears.</summary>
     public float Progress => Lifetime > 0 ? Math.Clamp(Age / Lifetime, 0, 1) : 1;
+
+    /// <summary>Where it was before it last moved (where it was born, until it moves), for drawing it between steps.</summary>
+    public Vector2 From { get; init; } = Position;
+
+    /// <summary>Its age before it last moved, for drawing it between steps.</summary>
+    public float AgeFrom { get; init; } = Age;
 }
 
 /// <summary>
@@ -26,23 +32,31 @@ public sealed class ParticleEmitter : Component, IDrawable
 
     void IDrawable.Draw(Drawing drawing)
     {
-        foreach (var draw in ParticleDraws())
+        foreach (var draw in ParticleDraws(drawing.Blend))
             drawing.Add(draw);
     }
 
-    /// <summary>One quad per live particle, in world space at the emitter's depth.</summary>
-    public IEnumerable<SpriteDraw> ParticleDraws()
+    /// <summary>One quad per live particle, in world space at the emitter's depth, where they are now.</summary>
+    public IEnumerable<SpriteDraw> ParticleDraws() => ParticleDraws(StepBlend.AsIs);
+
+    /// <summary>
+    /// One quad per live particle, in world space at the emitter's depth, in a frame drawn as <paramref name="blend"/>
+    /// says: each between where it was and is (and how old it was and is), if they moved in the last step.
+    /// </summary>
+    public IEnumerable<SpriteDraw> ParticleDraws(StepBlend blend)
     {
+        blend = blend.For(_movedIn);
         var entity = Entity!;
         var z = entity.Transform.WorldPosition.Z;
         var image = string.IsNullOrEmpty(Image) ? null : Image;
         foreach (var particle in _particles)
         {
-            var progress = particle.Progress;
+            var progress = particle.Lifetime > 0 ? Math.Clamp(blend.Between(particle.AgeFrom, particle.Age) / particle.Lifetime, 0, 1) : 1;
             var size = SizeAt(progress);
             if (size <= 0)
                 continue;
-            var world = Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(particle.Position.X, particle.Position.Y, z);
+            var at = blend.Between(particle.From, particle.Position);
+            var world = Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, z);
             yield return new SpriteDraw(world, image, ColorAt(progress), entity);
         }
     }
@@ -50,6 +64,9 @@ public sealed class ParticleEmitter : Component, IDrawable
     private readonly List<Particle> _particles = [];
     private float _pending;
     private bool _started;
+
+    // The step the particles last moved in: they're drawn between where they were and are only just after it.
+    private long _movedIn = -1;
 
     /// <summary>Image for each particle, relative to Assets. Without one, particles are solid squares.</summary>
     public string? Image { get; set; }
@@ -152,8 +169,11 @@ public sealed class ParticleEmitter : Component, IDrawable
             }
 
             var velocity = p.Velocity + pull;
-            _particles[i] = p with { Age = age, Velocity = velocity, Position = p.Position + velocity * seconds };
+            _particles[i] = p with { Age = age, Velocity = velocity, Position = p.Position + velocity * seconds, From = p.Position, AgeFrom = p.Age };
         }
+
+        if (seconds > 0 && Entity?.Scene is { } scene)
+            _movedIn = scene.Step;
 
         if (!Emitting || !(Rate > 0))
         {

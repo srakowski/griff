@@ -36,6 +36,16 @@ public sealed record LoadedGame(Project Project, ComponentRegistry Components, S
 /// <summary>Loads an exported game folder (or a project folder) for the player.</summary>
 public static class GameLoader
 {
+    /// <summary>
+    /// Sets <paramref name="game"/> up as <paramref name="project"/> says, before it starts: its controls (the game's own
+    /// input actions) and its step rate. Every host does this, so a game plays the same in the editor and exported.
+    /// </summary>
+    public static void UseProjectSettings(this Game game, Project project)
+    {
+        (game.Input as InputState)?.UseControls(project.Controls);
+        game.Time.StepRate = project.StepRate;
+    }
+
     public static async Task<LoadedGame> LoadAsync(string gameFolder)
     {
         var project = await Project.LoadAsync(gameFolder);

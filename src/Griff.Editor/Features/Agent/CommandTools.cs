@@ -72,6 +72,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
             text.Append(CultureInfo.InvariantCulture, $" It's an on/off setting, now {(on ? "on" : "off")}.");
         if (command.Choices is { } choices)
             text.Append(choices.Count == 0 ? " It has nothing to pick from now." : $" Pick one with \"choice\": {string.Join(", ", choices.Select(c => $"\"{c}\""))}.");
+        if (command.Chosen is { } chosen)
+            text.Append(CultureInfo.InvariantCulture, $" Now \"{chosen}\".");
         return text.ToString();
     }
 

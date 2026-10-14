@@ -8,12 +8,17 @@ namespace Griff.Projects;
 /// The game's own input actions, set in the editor's Controls window: each action's keys and buttons by name, e.g.
 /// <c>"Jump": ["Space", "W", "Gamepad A"]</c>. Only actions that differ from Griff's built-in ones are listed.
 /// </param>
+/// <param name="StepRate">
+/// How many steps a second the game takes (see <see cref="Runtime.Time.StepRate"/>), set with Game &gt; Step Rate; null for
+/// the usual 60.
+/// </param>
 public sealed record ProjectManifest(
     string Name,
     int FormatVersion,
     DateTimeOffset CreatedAt,
     string? StartScene = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string[]>? Controls = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string[]>? Controls = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? StepRate = null)
 {
     public const int CurrentFormatVersion = 1;
 }

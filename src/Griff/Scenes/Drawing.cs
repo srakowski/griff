@@ -31,7 +31,9 @@ public readonly record struct SpriteDraw(Matrix4x4 World, string? Image, Color T
 /// <summary>
 /// A component that draws something: Griff's own (sprites, tilemaps, text, bars, particles, boards) and scripts' alike.
 /// Each frame the renderer goes through the entities back to front (see <see cref="DrawOrder"/>) and asks each of an
-/// entity's drawable components, in <see cref="DrawStep"/> order, to <see cref="Draw"/> itself.
+/// entity's drawable components, in <see cref="DrawStep"/> order, to <see cref="Draw"/> itself. A running game is drawn
+/// between its last two steps: transforms are placed there by themselves, and what a component draws from its own state
+/// gets there through <see cref="Drawing.Blend"/> (keep what changes in a <see cref="Smoothed{T}"/>).
 /// </summary>
 /// <example>
 /// <code>
@@ -157,14 +159,44 @@ public sealed class Drawing
     public Drawing(List<SpriteDraw> draws, Entity entity, Box view, float lineWidth, bool isPlaying)
     {
         _draws = draws;
-        Entity = entity;
+        _entity = entity;
         View = view;
         LineWidth = lineWidth;
         IsPlaying = isPlaying;
     }
 
     /// <summary>The entity being drawn.</summary>
-    public Entity Entity { get; internal set; }
+    public Entity Entity
+    {
+        get => _entity;
+        internal set
+        {
+            _entity = value;
+            _blendKnown = false;
+        }
+    }
+
+    private Entity _entity;
+
+    // The entity's blend, worked out the first time it's asked for.
+    private StepBlend _blend;
+    private bool _blendKnown;
+
+    /// <summary>
+    /// How far this frame is between the game's last two steps, for <see cref="Entity"/>: draw what changes once a step
+    /// from a component's own state (not its transform, which is placed between steps already) between what it was and
+    /// is, so it moves smoothly on a fast screen. Things are drawn as they are in the editor, while the game is held
+    /// still, and for an entity that jumped in the last step; see <see cref="StepBlend"/>.
+    /// </summary>
+    public StepBlend Blend
+    {
+        get
+        {
+            if (!_blendKnown)
+                (_blend, _blendKnown) = (StepBlend.For(_entity.Scene, _entity), true);
+            return _blend;
+        }
+    }
 
     /// <summary>The part of the world the camera sees (ignoring its rotation): its middle and half its size.</summary>
     public Box View { get; internal set; }
@@ -177,6 +209,14 @@ public sealed class Drawing
 
     /// <summary>A thin line's width in world units: about two pixels on a 720-pixel-high screen, whatever the zoom.</summary>
     public float LineWidth { get; internal set; }
+
+    // What `value` is drawn as: the blend is only worked out for one that changed in the last step, so the thousands of
+    // sprites that didn't cost nothing.
+    internal Color Smooth(in Smoothed<Color> value) =>
+        value.ChangedIn != 0 && value.ChangedIn == _entity.Scene?.Step ? Blend.Of(value) : value.Value;
+
+    internal float Smooth(in Smoothed<float> value) =>
+        value.ChangedIn != 0 && value.ChangedIn == _entity.Scene?.Step ? Blend.Of(value) : value.Value;
 
     /// <summary>True while the game runs; false in the editor, where nothing has started.</summary>
     public bool IsPlaying { get; internal set; }

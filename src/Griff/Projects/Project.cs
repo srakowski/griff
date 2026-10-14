@@ -64,6 +64,24 @@ public sealed class Project
         await SaveManifestAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// How many steps a second the game takes (see <see cref="Time.StepRate"/>): set in the editor with Game &gt; Step Rate,
+    /// <see cref="Time.DefaultStepRate"/> unless it's changed. Exported games and games played in the editor start with it.
+    /// </summary>
+    public int StepRate => Math.Clamp(Manifest.StepRate ?? Time.DefaultStepRate, Time.MinStepRate, Time.MaxStepRate);
+
+    /// <summary>
+    /// Sets <see cref="StepRate"/> (kept between <see cref="Time.MinStepRate"/> and <see cref="Time.MaxStepRate"/>) and
+    /// saves the manifest straight away, so it can be undone as part of an edit. The usual rate isn't written.
+    /// </summary>
+    public void SetStepRate(int rate)
+    {
+        rate = Math.Clamp(rate, Time.MinStepRate, Time.MaxStepRate);
+        Manifest = Manifest with { StepRate = rate == Time.DefaultStepRate ? null : rate };
+        using var stream = File.Create(ManifestPath);
+        JsonSerializer.Serialize(stream, Manifest, JsonOptions);
+    }
+
     private async Task SaveManifestAsync(CancellationToken cancellationToken)
     {
         await using var stream = File.Create(ManifestPath);

@@ -40,6 +40,60 @@ public sealed class DebugDraw
     /// <summary>The shapes to draw this frame.</summary>
     public IEnumerable<DebugShape> Shapes => Enabled ? _shapes.Select(s => s.Shape) : [];
 
+    /// <summary>True if there's anything to draw.</summary>
+    internal bool HasShapes => Enabled && _shapes.Count > 0;
+
+    // The shapes the step before the last drew for that step alone, to draw the last step's between them.
+    private readonly List<DebugShape> _was = [];
+
+    /// <summary>
+    /// The shapes to draw this frame, between the last two steps as <paramref name="blend"/> says: when the last step drew
+    /// the same shapes as the one before (as a script calling the same Debug lines each Update does), each is drawn between
+    /// the two, so they keep up with what they're drawn over. Otherwise, and for shapes kept up for some seconds, as they are.
+    /// </summary>
+    internal IEnumerable<DebugShape> ShapesAt(StepBlend blend)
+    {
+        if (!Enabled)
+            yield break;
+        var step = _time.Frame;
+        blend = blend.For(step);
+        var paired = blend.IsBetween && Matches(step);
+        var i = 0;
+        foreach (var (shape, frame, until) in _shapes)
+        {
+            if (!paired || frame != step || !double.IsNegativeInfinity(until))
+            {
+                yield return shape;
+                continue;
+            }
+
+            var was = _was[i++];
+            yield return (was, shape) switch
+            {
+                (DebugLine a, DebugLine b) => b with { From = blend.Between(a.From, b.From), To = blend.Between(a.To, b.To) },
+                (DebugCircle a, DebugCircle b) => b with { Center = blend.Between(a.Center, b.Center), Radius = blend.Between(a.Radius, b.Radius) },
+                (DebugText a, DebugText b) => b with { Position = blend.Between(a.Position, b.Position) },
+                _ => shape,
+            };
+        }
+    }
+
+    // Whether the last step's own shapes are the same kinds, in the same order, as the step before's.
+    private bool Matches(long step)
+    {
+        var i = 0;
+        foreach (var (shape, frame, until) in _shapes)
+        {
+            if (frame != step || !double.IsNegativeInfinity(until))
+                continue;
+            if (i >= _was.Count || _was[i].GetType() != shape.GetType())
+                return false;
+            i++;
+        }
+
+        return i == _was.Count && i > 0;
+    }
+
     /// <summary>A line from <paramref name="from"/> to <paramref name="to"/>.</summary>
     public void Line(Vector2 from, Vector2 to, Color? color = null, float seconds = 0) =>
         Add(new DebugLine(from, to, color ?? DefaultColor), seconds);
@@ -99,13 +153,28 @@ public sealed class DebugDraw
         Text(Flat(position), text, color, seconds, size);
 
     /// <summary>Forgets every shape, including ones meant to last longer.</summary>
-    public void Clear() => _shapes.Clear();
+    public void Clear()
+    {
+        _shapes.Clear();
+        _was.Clear();
+    }
 
-    /// <summary>Drops shapes whose time is up. Called by the game at the start of each frame, after time moves on.</summary>
+    /// <summary>
+    /// Drops shapes whose time is up, keeping what the last step drew for itself to draw this one's between. Called by
+    /// the game at the start of each step, after time moves on.
+    /// </summary>
     internal void BeginFrame()
     {
-        if (_shapes.Count > 0)
-            _shapes.RemoveAll(s => s.Frame < _time.Frame && s.Until <= _time.Total);
+        _was.Clear();
+        if (_shapes.Count == 0)
+            return;
+        foreach (var (shape, frame, until) in _shapes)
+        {
+            if (frame == _time.Frame - 1 && double.IsNegativeInfinity(until))
+                _was.Add(shape);
+        }
+
+        _shapes.RemoveAll(s => s.Frame < _time.Frame && s.Until <= _time.Total);
     }
 
     // A shape lasts at least until the next frame starts (counted in frames, so it goes even while Time.Scale is 0),

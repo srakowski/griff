@@ -114,6 +114,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         text.AppendLine(CultureInfo.InvariantCulture, $"Project: {project.Name} ({project.RootPath})");
         text.AppendLine(CultureInfo.InvariantCulture, $"Start scene: {(project.StartScenePath is { } start ? Path.GetRelativePath(project.AssetsPath, start) : "none")}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Scenes: {string.Join(", ", project.FindScenes().Select(s => Path.GetRelativePath(project.AssetsPath, s)))}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Step rate: {project.StepRate} steps a second (Game_StepRate sets it)");
         if (workspace.EditScene is { } scene)
         {
             text.AppendLine(CultureInfo.InvariantCulture, $"Open scene: {Path.GetRelativePath(project.AssetsPath, scene.FilePath)}{(scene.IsDirty ? " (unsaved changes)" : "")}, {scene.Scene.Count} entities");

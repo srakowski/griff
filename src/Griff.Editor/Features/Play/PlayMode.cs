@@ -108,6 +108,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// <summary>Player <paramref name="number"/>'s window (null for player 1, who plays in the Game tab).</summary>
     internal Window? PlayerWindowOf(int number) => _players.FirstOrDefault(p => p.Number == number)?.Window;
 
+    /// <summary>Has every running game (the Game tab's and other players') take <paramref name="rate"/> steps a second from now on.</summary>
+    public void UseStepRate(int rate)
+    {
+        foreach (var game in AllGames())
+            game.Time.StepRate = rate;
+    }
+
     private IEnumerable<Game> AllGames()
     {
         if (_runner?.Game is { } host)
@@ -292,7 +299,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _runner.Game.Title = project.Name;
             _runner.Game.Components = _workspace.Components;
             _runner.Game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
-            (_runner.Game.Input as InputState)?.UseControls(project.Controls);
+            _runner.Game.UseProjectSettings(project);
         }
         _runner.Game.SceneName = _sceneName;
         _runner.Game.SceneChanged += OnGameSceneChanged;
@@ -353,7 +360,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.SceneName = _sceneName;
         game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Net.PlayerName = $"Player {number}";
-        (game.Input as InputState)?.UseControls(project.Controls);
+        game.UseProjectSettings(project);
         game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Faulted += OnFaulted;
         runner.Start();

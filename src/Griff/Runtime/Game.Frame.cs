@@ -53,6 +53,7 @@ public sealed partial class Game
     internal T AddSystem<T>(T system, Behavior? owner) where T : GameSystem
     {
         ArgumentNullException.ThrowIfNull(system);
+        Crowds.ThrowIfRunning("add systems");
         if (_systems.Contains(system))
             throw new InvalidOperationException($"{system.Name} is already running.");
         if (IsBuiltIn(system))
@@ -74,6 +75,7 @@ public sealed partial class Game
     /// <summary>Stops running <paramref name="system"/> (one a script added). Returns whether it was running.</summary>
     public bool RemoveSystem(GameSystem system)
     {
+        Crowds.ThrowIfRunning("remove systems");
         if (IsBuiltIn(system) || !_systems.Remove(system))
             return false;
         system.IsRemoved = true;
@@ -275,9 +277,9 @@ public sealed partial class Game
                     continue;
                 }
 
-                var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+                var (started, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
                 step.Run();
-                profiler.AddCost(step.Name, step.CostKind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+                profiler.AddCost(step.Name, step.CostKind, Stopwatch.GetTimestamp() - started, Workers.AllocatedBytes() - allocated);
             }
         }
     }
@@ -433,6 +435,7 @@ public sealed partial class Game
         {
             (_updating, _fixedUpdating, _lateUpdating) = (With(running, BehaviorHooks.Update), With(running, BehaviorHooks.FixedUpdate),
                 With(running, BehaviorHooks.LateUpdate));
+            (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns) = (RunsOf(_updating), RunsOf(_fixedUpdating), RunsOf(_lateUpdating));
             _hooksFor = running;
         }
 
@@ -473,91 +476,18 @@ public sealed partial class Game
     }
 
     // While a panel pauses the game, only the scripts on open panels run.
-    private void UpdateScripts()
-    {
-        if (Profiler is { } profiler)
-        {
-            RunScriptsTimed(profiler, _updating, BehaviorHooks.Update);
-            return;
-        }
-
-        foreach (var behavior in _updating)
-        {
-            if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
-                behavior.RunUpdate();
-        }
-    }
+    private void UpdateScripts() => RunScripts(_updating, _updatingRuns, BehaviorHooks.Update);
 
     // Just before bodies move, in steps where game time moves: not while paused (by a panel, or Time.Scale 0) or frozen in
     // a hit stop, when physics doesn't step either.
     private void FixedUpdateScripts()
     {
-        if (Time.Delta <= 0)
-            return;
-        if (Profiler is { } profiler)
-        {
-            RunScriptsTimed(profiler, _fixedUpdating, BehaviorHooks.FixedUpdate);
-            return;
-        }
-
-        foreach (var behavior in _fixedUpdating)
-        {
-            if (behavior.Entity?.Scene == Scene)
-                behavior.RunFixedUpdate();
-        }
+        if (Time.Delta > 0)
+            RunScripts(_fixedUpdating, _fixedUpdatingRuns, BehaviorHooks.FixedUpdate);
     }
 
     // After everything has moved and the camera has followed, before what's pinned to the screen is put in place.
-    private void LateUpdateScripts()
-    {
-        if (Profiler is { } profiler)
-        {
-            RunScriptsTimed(profiler, _lateUpdating, BehaviorHooks.LateUpdate);
-            return;
-        }
-
-        foreach (var behavior in _lateUpdating)
-        {
-            if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
-                behavior.RunLateUpdate();
-        }
-    }
-
-    // The scripts' `hook` as the loops above run it, timing each run of scripts of one kind (a scene's bunnies all at once)
-    // and the garbage they make, for a profiler: a script's own cost, whichever of its hooks it's spent in.
-    private void RunScriptsTimed(FrameProfiler profiler, Behavior[] scripts, BehaviorHooks hook)
-    {
-        Type? kind = null;
-        long started = 0, allocated = 0;
-        foreach (var behavior in scripts)
-        {
-            if (behavior.Entity?.Scene != Scene || (hook != BehaviorHooks.FixedUpdate && PausedThisFrame && !InOpenPanel(behavior.Entity)))
-                continue;
-            var type = behavior.GetType();
-            if (type != kind)
-            {
-                if (kind is not null)
-                    profiler.AddCost(kind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
-                (kind, started, allocated) = (type, Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
-            }
-
-            switch (hook)
-            {
-                case BehaviorHooks.Update:
-                    behavior.RunUpdate();
-                    break;
-                case BehaviorHooks.FixedUpdate:
-                    behavior.RunFixedUpdate();
-                    break;
-                default:
-                    behavior.RunLateUpdate();
-                    break;
-            }
-        }
-
-        if (kind is not null)
-            profiler.AddCost(kind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
-    }
+    private void LateUpdateScripts() => RunScripts(_lateUpdating, _lateUpdatingRuns, BehaviorHooks.LateUpdate);
 
     private void LayOutHuds()
     {

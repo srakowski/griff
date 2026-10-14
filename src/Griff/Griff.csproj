@@ -7,4 +7,9 @@
     <NoWarn>$(NoWarn);CS1591;CS1573;CS0419</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Tests reach the switches between the ways a big scene runs (one thread or chunks), to check they agree. -->
+    <InternalsVisibleTo Include="Griff.Tests" />
+  </ItemGroup>
+
 </Project>

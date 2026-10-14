@@ -38,14 +38,31 @@ public abstract class Behavior : Component, IHealthListener
     /// </summary>
     protected IInput Input => Game.InputOf(Entity);
 
-    protected IAudio Audio => Game.Audio;
+    protected IAudio Audio
+    {
+        get
+        {
+            Crowds.ThrowIfRunning("play sounds");
+            return Game.Audio;
+        }
+    }
 
     /// <summary>Draws lines, boxes, circles and text over the game for a frame; see <see cref="DebugDraw"/>.</summary>
-    protected DebugDraw Debug => Game.Debug;
+    protected DebugDraw Debug
+    {
+        get
+        {
+            Crowds.ThrowIfRunning("draw debug shapes");
+            return Game.Debug;
+        }
+    }
 
     internal bool IsStarted { get; private set; }
 
-    /// <summary>Which of Update, FixedUpdate and LateUpdate its type has, worked out once a type: the game calls only those.</summary>
+    /// <summary>
+    /// Which of Update, FixedUpdate and LateUpdate its type has, worked out once a type: the game calls only those. And
+    /// whether it's a crowd script (see <see cref="CrowdAttribute"/>).
+    /// </summary>
     internal BehaviorHooks Hooks { get; }
 
     protected Behavior() => Hooks = HooksOf(GetType());
@@ -56,7 +73,8 @@ public abstract class Behavior : Component, IHealthListener
     private static BehaviorHooks HooksOf(Type type) => s_hooks.GetValue(type, static type => new StrongBox<BehaviorHooks>(
         (Overrides(type, nameof(Update)) ? BehaviorHooks.Update : 0) |
         (Overrides(type, nameof(FixedUpdate)) ? BehaviorHooks.FixedUpdate : 0) |
-        (Overrides(type, nameof(LateUpdate)) ? BehaviorHooks.LateUpdate : 0))).Value;
+        (Overrides(type, nameof(LateUpdate)) ? BehaviorHooks.LateUpdate : 0) |
+        (type.IsDefined(typeof(CrowdAttribute), inherit: true) ? BehaviorHooks.Crowd : 0))).Value;
 
     // Whether a type between `type` and Behavior overrides Behavior's method `name`.
     private static bool Overrides(Type type, string name)
@@ -286,4 +304,7 @@ internal enum BehaviorHooks : byte
     Update = 1,
     FixedUpdate = 2,
     LateUpdate = 4,
+
+    /// <summary>Not a step: a crowd script (see <see cref="CrowdAttribute"/>).</summary>
+    Crowd = 8,
 }

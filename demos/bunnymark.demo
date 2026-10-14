@@ -18,11 +18,27 @@ play
 wait: 3
 explain: game | Bunnies pour in | Each bunny is a sprite and a short script, copied from a prefab: an ordinary entity, just like a game's. The frame rate and the count show in the corner.
 wait: 3
-explain: game | Big scenes | Each frame draws every bunny as it comes to it, in one pass, then puts the draws back to front by their keys, moving as few as it can. It calls each script only for the steps it has, and draws the sprites in a few big batches, making no garbage. An exported game keeps fifty thousand bunnies at sixty frames a second.
+explain: game | Big scenes | A big frame is built across the computer's cores: each takes a chunk of bunnies, draws them and puts them back to front, and the chunks are merged a stretch at a time. The bunnies' scripts run across the cores too, and the sprites are drawn in a few big batches, making no garbage. An exported game keeps a hundred thousand bunnies at sixty frames a second.
 wait: 6
 explain: game | The count | When it has found the count and held it, it shows it along the bottom with how the hold went, and saves it with the best so far.
 tap: Space
 wait: 2
 explain: game | Again | Space starts a new run.
+stop
+
+chapter: Across the cores | A crowd of scripts
+code: Assets/Scripts/Bunny.cs | Bunny.cs
+say: The Bunny script is marked Crowd. It changes nothing but its own bunny, so the game runs a crowd of them at once, spread across the cores, rather than one after another. Each gets random numbers of its own, so a run plays out the same however many cores share it, and anything that would change something else, like spawning or sending a message, stops with a message saying why.
+hidecode
+select: BunnyMark
+set: BunnyMark.HoldCount = 20000
+set: BunnyMark.HoldSeconds = 30
+menu: Game > Profiler
+play
+wait: 4
+expectprofiler: entities = 20006
+expectprofiler: cost = Bunny
+expectprofiler: cost = Sprite
+explain: profiler:costs | Twenty thousand bunnies | The profiler times the crowd of Bunny scripts as one, and the bunnies' sprites as they're drawn on every core at once: the time the frame waits for them.
 stop
 say: Exported games are measured the same way: a script in the tools folder builds a game from this template, plays it, and prints the count with the hold's frame rate, one percent low and garbage collections, so changes to the engine can say how much faster they made it.

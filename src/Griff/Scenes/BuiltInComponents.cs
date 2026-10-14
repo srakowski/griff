@@ -368,6 +368,7 @@ public sealed class Sprite : Component, IDrawable, INetState
     {
         if (HasEffects && Entity?.Scene is { } scene && EffectsListedIn != scene)
         {
+            Crowds.ThrowIfRunning("flash or blink sprites");
             scene.SpriteEffects.Add(this);
             EffectsListedIn = scene;
         }
@@ -431,10 +432,11 @@ public sealed class Sprite : Component, IDrawable, INetState
     internal Matrix4x4 QuadMatrix =>
         QuadMatrixAt(_size.ChangedIn != 0 && _size.ChangedIn == Entity?.Scene?.Step ? StepBlend.For(Entity.Scene, Entity).Of(_size) : _size.Value);
 
+    private Matrix4x4 QuadMatrixAt(Vector2 size) => QuadMatrixAt(size, Entity!.Transform.WorldMatrix);
+
     // Scaled along the entity's own axes: its world matrix's first two rows, as multiplying by a scale would.
-    private Matrix4x4 QuadMatrixAt(Vector2 size)
+    private Matrix4x4 QuadMatrixAt(Vector2 size, Matrix4x4 quad)
     {
-        var quad = Entity!.Transform.WorldMatrix;
         var (x, y) = (size.X * (FlipX ? -1 : 1), size.Y * (FlipY ? -1 : 1));
         (quad.M11, quad.M12, quad.M13, quad.M14) = (quad.M11 * x, quad.M12 * x, quad.M13 * x, quad.M14 * x);
         (quad.M21, quad.M22, quad.M23, quad.M24) = (quad.M21 * y, quad.M22 * y, quad.M23 * y, quad.M24 * y);
@@ -463,6 +465,25 @@ public sealed class Sprite : Component, IDrawable, INetState
 
         foreach (var (world, source) in Pieces(size))
             drawing.Add(new SpriteDraw(world, Image, tint, Entity!) { Source = source, Flash = flash });
+    }
+
+    /// <summary>
+    /// Draws it as <see cref="IDrawable.Draw"/> does, its entity placed at <paramref name="world"/> in this frame (its
+    /// <see cref="Transform.WorldMatrix"/>, worked out already): a big scene's frame, built a chunk of entities a thread.
+    /// </summary>
+    internal void Draw(Drawing drawing, in Matrix4x4 world)
+    {
+        if (IsSliced)
+        {
+            ((IDrawable)this).Draw(drawing);
+            return;
+        }
+
+        if (IsBlinkedOut)
+            return;
+        var tint = drawing.Tint(this, drawing.Smooth(_tint));
+        var flash = FlashAt(drawing.Smooth(_flashLeft));
+        drawing.Add(new SpriteDraw(QuadMatrixAt(drawing.Smooth(_size), world), Image, tint, Entity!) { Source = FrameRect, Flash = flash });
     }
 }
 

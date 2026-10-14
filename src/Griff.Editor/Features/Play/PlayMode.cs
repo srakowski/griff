@@ -486,9 +486,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         // The profiler shows what keeping rewind snapshots costs the game's frames, as the editor's own work.
         if (runner.Game.Profiler is { } profiler)
         {
-            var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            var (started, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
             timeline.Record(_runtime.Scene, runner.Game.Time.Total);
-            profiler.AddCost("Rewind", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+            profiler.AddCost("Rewind", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, Workers.AllocatedBytes() - allocated);
         }
         else
             timeline.Record(_runtime.Scene, runner.Game.Time.Total);
@@ -506,9 +506,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
         }
 
-        var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        var (started, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
         FollowGame();
-        profiler.AddCost("Editor Panels", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+        profiler.AddCost("Editor Panels", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, Workers.AllocatedBytes() - allocated);
     }
 
     // The Inspector, the Hierarchy and the rewind bar keep up with the game.

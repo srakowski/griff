@@ -220,6 +220,7 @@ public sealed class Scene
     public void Add(Entity entity, Entity? parent = null, int? index = null)
     {
         ArgumentNullException.ThrowIfNull(entity);
+        Crowds.ThrowIfRunning("add entities");
         if (entity.Scene is not null)
             throw new InvalidOperationException($"\"{entity.Name}\" is already in a scene.");
         if (entity.Parent is not null)
@@ -276,6 +277,7 @@ public sealed class Scene
     /// <summary>Removes <paramref name="entity"/> and its descendants. They keep their own hierarchy.</summary>
     public void Remove(Entity entity)
     {
+        Crowds.ThrowIfRunning("remove entities");
         EnsureInScene(entity);
         Detach(entity);
         foreach (var e in entity.SelfAndDescendants())
@@ -294,6 +296,7 @@ public sealed class Scene
     /// <summary>Moves <paramref name="entity"/> under a new parent (or to the root) at <paramref name="index"/>.</summary>
     public void Move(Entity entity, Entity? newParent, int? index = null)
     {
+        Crowds.ThrowIfRunning("move entities in the hierarchy");
         EnsureInScene(entity);
         EnsureInScene(newParent);
         if (newParent is not null && newParent.IsSelfOrDescendantOf(entity))

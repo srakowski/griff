@@ -223,6 +223,26 @@ public class SceneToolsTests
         public long Steps => 1234567890123;
     }
 
+    /// <summary>Drifts along.</summary>
+    [Griff.Runtime.Crowd]
+    public sealed class Drifter : Griff.Runtime.Behavior
+    {
+        /// <summary>How fast, in units a second.</summary>
+        public float Speed { get; set; } = 1;
+    }
+
+    [Fact]
+    public void Describing_a_crowd_script_says_it_changes_nothing_but_its_own_entity()
+    {
+        _host.Components.Register<Drifter>();
+
+        var described = Run("component_describe", """{"component": "Drifter"}""").Text;
+
+        Assert.Contains("A crowd script ([Crowd]): the game runs a crowd of these at once", described);
+        Assert.Contains("- speed: a number", described);
+        Assert.DoesNotContain("crowd", Run("component_describe", """{"component": "Sprite"}""").Text, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Long_numbers_a_component_shows_while_playing_are_shown_too()
     {

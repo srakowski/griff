@@ -95,9 +95,11 @@ public static partial class ProjectTemplates
     private const string BunnyScript = """
         /// <summary>
         /// Falls, bounces off the floor and the sides of the view, and never settles: each landing hops it back up by a
-        /// different amount, as in the original BunnyMark. BunnyMark adds them by the thousand.
+        /// different amount, as in the original BunnyMark. BunnyMark adds them by the thousand. A crowd script: it changes
+        /// nothing but its own bunny, so the game runs thousands of them at once, across the cores.
         /// </summary>
         [Category("Benchmark")]
+        [Crowd]
         public class Bunny : Behavior
         {
             /// <summary>Units a second, right and up. A bunny added without one takes a random one.</summary>

@@ -133,20 +133,20 @@ public sealed class GameRunner : IDisposable
         // time is the game starting up.
         if (!IsPaused && !first && Game.Profiler is { } profiler)
         {
-            // The garbage counted is this thread's, the game's: the editor's own work between frames isn't counted.
+            // The garbage counted is this thread's and the workers', the game's: the editor's own work between frames isn't counted.
             profiler.BeginFrame();
             var steps = Game.Time.Frame;
-            var (allocated, collections) = (GC.GetAllocatedBytesForCurrentThread(), GC.CollectionCount(0));
+            var (allocated, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
             var started = Stopwatch.GetTimestamp();
             RunSafely(stepOnce: false, seconds);
             var stepped = Stopwatch.GetTimestamp();
             // Building the picture times its own parts (what each kind of thing drawn costs: see FrameCostKind.Build).
             RenderLatest(out var built, out var builtAllocated);
             var drawn = Stopwatch.GetTimestamp();
-            profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, GC.GetAllocatedBytesForCurrentThread() - builtAllocated);
+            profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, Workers.AllocatedBytes() - builtAllocated);
             profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
                 Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0,
-                GC.GetAllocatedBytesForCurrentThread() - allocated, GC.CollectionCount(0) - collections));
+                Workers.AllocatedBytes() - allocated, GC.CollectionCount(0) - collections));
             return;
         }
 
@@ -215,7 +215,7 @@ public sealed class GameRunner : IDisposable
         }
         catch (Exception ex)
         {
-            (built, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
             if (!_drawFaulted)
             {
                 _drawFaulted = true;
@@ -226,7 +226,7 @@ public sealed class GameRunner : IDisposable
             return;
         }
 
-        (built, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
         _drawFaulted = false;
         _lastFrame = frame;
         _surface.Render(_lastFrame);

@@ -777,6 +777,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             text.AppendLine(entry.Summary.PlainText);
         if (GameModule.Of(descriptor.Type) is { } module)
             text.AppendLine(CultureInfo.InvariantCulture, $"Part of the {module.Name} module: {DocComments.Summary(module.GetType()).FirstSentence}");
+        if (descriptor.Type.IsDefined(typeof(CrowdAttribute), inherit: true))
+            text.AppendLine("A crowd script ([Crowd]): the game runs a crowd of these at once, across the cores, so each changes nothing but its own entity (spawning, destroying, messages, sounds and the like throw from it).");
         if (entry is not null && !entry.Remarks.IsEmpty)
             text.AppendLine().AppendLine(entry.Remarks.PlainText);
         if (descriptor.Requires.Count > 0)

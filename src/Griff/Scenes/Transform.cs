@@ -93,25 +93,27 @@ public sealed class Transform : Component
         get
         {
             if (!_localKept)
-            {
-                // Most things in a 2D game never turn: they're only scaled and moved, with no turn to work out.
-                if (_rotation == Vector3.Zero)
-                {
-                    _local = Matrix4x4.CreateScale(_scale);
-                    _local.Translation = _position;
-                }
-                else
-                {
-                    _local = Matrix4x4.CreateScale(_scale) *
-                             Matrix4x4.CreateFromQuaternion(RotationQuaternion) *
-                             Matrix4x4.CreateTranslation(_position);
-                }
-
-                _localKept = true;
-            }
-
+                (_local, _localKept) = (Local(), true);
             return _local;
         }
+    }
+
+    // Its local matrix as it is now, kept or worked out (and not kept): what drawing a frame reads, writing nothing.
+    private Matrix4x4 LocalNow() => _localKept ? _local : Local();
+
+    private Matrix4x4 Local()
+    {
+        // Most things in a 2D game never turn: they're only scaled and moved, with no turn to work out.
+        if (_rotation == Vector3.Zero)
+        {
+            var local = Matrix4x4.CreateScale(_scale);
+            local.Translation = _position;
+            return local;
+        }
+
+        return Matrix4x4.CreateScale(_scale) *
+               Matrix4x4.CreateFromQuaternion(RotationQuaternion) *
+               Matrix4x4.CreateTranslation(_position);
     }
 
     /// <summary>
@@ -196,6 +198,23 @@ public sealed class Transform : Component
         return drawn;
     }
 
+    /// <summary>
+    /// For an entity at the top of the hierarchy: its <see cref="WorldMatrix"/>, without keeping anything it works out, so
+    /// threads drawing a big scene's entities at once each write nothing but what they draw (see SceneRenderer).
+    /// </summary>
+    internal Matrix4x4 RootDrawn(Scene scene)
+    {
+        if (scene.DrawStamp != 0)
+        {
+            if (_drawnFor == scene.DrawStamp)
+                return _drawn;
+            if (_movedStep == scene.Step && _jumpedStep != scene.Step)
+                return Glided(scene);
+        }
+
+        return _worldKept && _worldParent is null ? _world : LocalNow();
+    }
+
     // Its own matrix part way from where it was as the last step began to where it is. A move too far to have been made
     // in one step (a respawn, a jump across the screen), a big turn or a flip is drawn as it ends up.
     private Matrix4x4 Glided(Scene scene)
@@ -208,7 +227,7 @@ public sealed class Transform : Component
         var scale = _fromScale == _scale || !SameSigns(_fromScale, _scale) ? _scale : Vector3.Lerp(_fromScale, _scale, t);
         if (rotation == _rotation && scale == _scale)
         {
-            var local = LocalMatrix;
+            var local = LocalNow();
             local.Translation = position;
             return local;
         }

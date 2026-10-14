@@ -34,6 +34,8 @@ public sealed class Entity
         {
             if (_isEnabled == value)
                 return;
+            if (Scene is not null)
+                Crowds.ThrowIfRunning("enable or disable entities");
             _isEnabled = value;
             Scene?.EnabledChanged();
         }
@@ -145,6 +147,13 @@ public sealed class Entity
     // Its sprite, when that's all it draws (as most things are): drawn without going through its components.
     internal Sprite? SoleSprite { get; private set; }
 
+    // A crowd script (see CrowdAttribute) can't change what an entity in the scene is made of.
+    private void ThrowIfInCrowd()
+    {
+        if (Scene is not null)
+            Crowds.ThrowIfRunning("add or remove components");
+    }
+
     private void ComponentsChanged()
     {
         var roles = ComponentRoles.None;
@@ -166,6 +175,7 @@ public sealed class Entity
     public Component AddComponent(Component component, int? index = null)
     {
         ArgumentNullException.ThrowIfNull(component);
+        ThrowIfInCrowd();
         if (component is Transform)
             throw new InvalidOperationException("An entity has exactly one Transform.");
         if (component.Entity is not null)
@@ -184,6 +194,7 @@ public sealed class Entity
     /// <returns>False if the component isn't attached to this entity.</returns>
     public bool RemoveComponent(Component component)
     {
+        ThrowIfInCrowd();
         if (component is Transform)
             throw new InvalidOperationException("The Transform can't be removed.");
         if (!_components.Remove(component))
@@ -198,6 +209,7 @@ public sealed class Entity
     /// <summary>Moves <paramref name="component"/> to <paramref name="index"/> among the components; the Transform stays first.</summary>
     public void MoveComponent(Component component, int index)
     {
+        ThrowIfInCrowd();
         if (component is Transform)
             throw new InvalidOperationException("The Transform stays first.");
         var from = _components.IndexOf(component);
@@ -212,6 +224,7 @@ public sealed class Entity
     /// <summary>Swaps <paramref name="existing"/> for <paramref name="replacement"/> at the same position (used by script reload).</summary>
     public void ReplaceComponent(Component existing, Component replacement)
     {
+        ThrowIfInCrowd();
         if (existing is Transform || replacement is Transform)
             throw new InvalidOperationException("The Transform can't be replaced.");
         if (replacement.Entity is not null)

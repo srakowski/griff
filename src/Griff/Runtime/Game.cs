@@ -164,6 +164,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void LoadScene(string nameOrPath, float fade, Color? color = null)
     {
+        Crowds.ThrowIfRunning("change scenes");
         if (SceneLoader is null)
             throw new InvalidOperationException("This game can't load scenes (no scene loader is set).");
 
@@ -201,6 +202,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void KeepBetweenScenes(Entity entity)
     {
+        Crowds.ThrowIfRunning("keep entities between scenes");
         if (!_kept.Contains(entity))
             _kept.Add(entity);
     }
@@ -208,6 +210,7 @@ public sealed partial class Game : IGameContext
     /// <summary>Asks the host to close the game; in the editor, play mode stops.</summary>
     public void Quit()
     {
+        Crowds.ThrowIfRunning("quit the game");
         if (IsQuitting)
             return;
         IsQuitting = true;
@@ -314,6 +317,7 @@ public sealed partial class Game : IGameContext
     /// <example><code>Game.Send("PlayerDied"); Game.Send("ScoreChanged", 10);</code></example>
     public int Send(string message, object? data = null)
     {
+        Crowds.ThrowIfRunning("send messages");
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
         // On the host, everyone else's machine hears it too (their HUD counts it, their sound players play).
@@ -376,11 +380,17 @@ public sealed partial class Game : IGameContext
     /// Calls <paramref name="action"/> with the data of every <paramref name="message"/> sent from now on, until cancelled.
     /// With an <paramref name="owner"/>, it stops if that entity leaves the scene.
     /// </summary>
-    public MessageListener On(string message, Action<object?> action, Entity? owner = null) =>
-        _messages.Add(new MessageListener(message, action, owner, null));
+    public MessageListener On(string message, Action<object?> action, Entity? owner = null)
+    {
+        Crowds.ThrowIfRunning("listen for messages");
+        return _messages.Add(new MessageListener(message, action, owner, null));
+    }
 
-    internal MessageListener On(string message, Action<object?> action, Behavior owner) =>
-        _messages.Add(new MessageListener(message, action, null, owner));
+    internal MessageListener On(string message, Action<object?> action, Behavior owner)
+    {
+        Crowds.ThrowIfRunning("listen for messages");
+        return _messages.Add(new MessageListener(message, action, null, owner));
+    }
 
     /// <summary>Stops every message listener <paramref name="owner"/> started.</summary>
     internal void StopListening(Behavior owner) => _messages.StopAll(owner);
@@ -395,6 +405,7 @@ public sealed partial class Game : IGameContext
     /// <summary>Adds a new copy of a prefab ("Bullet" or "Prefabs/Bullet.prefab") to the scene.</summary>
     public Entity Spawn(string prefab, Entity? parent = null)
     {
+        Crowds.ThrowIfRunning("spawn");
         if (PrefabLoader is null)
             throw new InvalidOperationException("This game can't spawn prefabs (no prefab loader is set).");
         return Spawn(PrefabLoader(prefab), parent);
@@ -406,6 +417,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public Entity Spawn(string prefab, Vector2 position, Entity? parent = null)
     {
+        Crowds.ThrowIfRunning("spawn");
         if (PrefabLoader is null)
             throw new InvalidOperationException("This game can't spawn prefabs (no prefab loader is set).");
         var entity = PrefabLoader(prefab);
@@ -416,6 +428,7 @@ public sealed partial class Game : IGameContext
     /// <summary>Removes <paramref name="entity"/> and its children at the end of the frame.</summary>
     public void Destroy(Entity entity)
     {
+        Crowds.ThrowIfRunning("destroy entities");
         if (!_pendingDestroy.Contains(entity))
             _pendingDestroy.Add(entity);
     }
@@ -438,6 +451,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void HitStop(float seconds = 0.08f)
     {
+        Crowds.ThrowIfRunning("stop time");
         // A network game is shared: one player's big hit can't freeze everyone's.
         if (seconds > 0 && !Net.IsOnline)
             Time.Freeze(seconds);
@@ -450,6 +464,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void SlowMotion(float scale = 0.3f, float seconds = 0.6f)
     {
+        Crowds.ThrowIfRunning("slow time");
         if (seconds > 0 && float.IsFinite(scale) && !Net.IsOnline)
             Time.SlowDown(Math.Clamp(scale, 0, 1), seconds);
     }
@@ -461,6 +476,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public void FlashScreen(Color? color = null, float seconds = 0.15f)
     {
+        Crowds.ThrowIfRunning("flash the screen");
         if (!(seconds > 0))
             return;
         (_screenFlash, _screenFlashSeconds) = (color ?? Color.White, seconds);
@@ -494,8 +510,11 @@ public sealed partial class Game : IGameContext
     }
 
     /// <summary>Shakes the camera the game is viewed through, if there is one. See <see cref="Camera.Shake"/>.</summary>
-    public void ShakeCamera(float strength = 0.3f, float duration = 0.25f) =>
+    public void ShakeCamera(float strength = 0.3f, float duration = 0.25f)
+    {
+        Crowds.ThrowIfRunning("shake the camera");
         Rendering.SceneRenderer.FindCamera(Scene)?.GetComponent<Camera>()?.Shake(strength, duration);
+    }
 
     /// <summary>Calls OnDestroy on every started behavior. The game can't be ticked afterwards.</summary>
     public void Stop()
@@ -515,6 +534,7 @@ public sealed partial class Game : IGameContext
 
     private Coroutine StartCoroutine(Coroutine coroutine)
     {
+        Crowds.ThrowIfRunning("start coroutines");
         _coroutines.Add(coroutine);
         coroutine.Run(this);
         return coroutine;
@@ -532,6 +552,7 @@ public sealed partial class Game : IGameContext
 
     private GameTimer AddTimer(GameTimer timer)
     {
+        Crowds.ThrowIfRunning("start timers");
         _timers.Add(timer);
         return timer;
     }
@@ -539,6 +560,7 @@ public sealed partial class Game : IGameContext
     // A new tween replaces an unfinished one with the same key (the same kind of tween on the same entity).
     private Tween AddTween(Tween tween)
     {
+        Crowds.ThrowIfRunning("start tweens");
         if (tween.Key is not null)
         {
             foreach (var other in _tweens.Where(t => Equals(t.Key, tween.Key)))

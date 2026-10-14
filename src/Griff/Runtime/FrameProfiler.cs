@@ -169,7 +169,7 @@ public sealed class FrameProfiler
     /// <summary>
     /// Adds what a step of the frame (or a system a script added, or the editor's own work) took to the frame under way:
     /// <paramref name="ticks"/> of <see cref="Stopwatch"/> time, making <paramref name="allocated"/> bytes of garbage (as
-    /// <see cref="GC.GetAllocatedBytesForCurrentThread"/> counts them). A name added twice in a frame adds up.
+    /// <see cref="Workers.AllocatedBytes"/> counts them). A name added twice in a frame adds up.
     /// </summary>
     public void AddCost(string name, FrameCostKind kind, long ticks, long allocated) => Track(name, name, kind).Add(ticks, allocated);
 
@@ -351,7 +351,7 @@ internal sealed class BuildTimer(FrameProfiler profiler)
     public void Begin(string part)
     {
         (_key, _name) = (part, part);
-        (_started, _allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        (_started, _allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
     }
 
     /// <summary>What runs from here on is part <paramref name="part"/> of the build (Sorting, Lights...).</summary>
@@ -382,7 +382,7 @@ internal sealed class BuildTimer(FrameProfiler profiler)
 
     private void Close(object? next, string name)
     {
-        var (now, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        var (now, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
         if (_key is not null)
             profiler.Track(_key, _name, FrameCostKind.Build).Add(now - _started, allocated - _allocated);
         (_key, _name, _started, _allocated) = (next, name, now, allocated);

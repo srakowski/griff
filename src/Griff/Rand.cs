@@ -19,7 +19,23 @@ public static class Rand
     private static Random Source => _threadRandom ??= new Random();
 
     /// <summary>Restarts the sequence so the same calls give the same numbers.</summary>
+    /// <remarks>
+    /// The scripts of a crowd (see <see cref="Runtime.CrowdAttribute"/>) each get numbers of their own, from a seed the
+    /// crowd takes from this sequence each time it runs: the same calls still give the same numbers, however many cores
+    /// share the crowd.
+    /// </remarks>
     public static void Seed(int seed) => _threadRandom = new Random(seed);
+
+    // Draws this thread's numbers from `source` from now on (null: its own sequence again), returning where they came from.
+    internal static Random? Use(Random? source)
+    {
+        var previous = _threadRandom;
+        _threadRandom = source;
+        return previous;
+    }
+
+    // A seed for a crowd's scripts' numbers, taken from this thread's sequence.
+    internal static int NextSeed() => Source.Next();
 
     /// <summary>A number from 0 up to (not including) 1.</summary>
     public static float Value => Source.NextSingle();

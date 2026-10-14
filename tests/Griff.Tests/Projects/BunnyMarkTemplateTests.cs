@@ -22,9 +22,9 @@ public sealed class BunnyMarkTemplateTests : IDisposable
             Directory.Delete(_root, recursive: true);
     }
 
-    private async Task<(Game Game, Component BunnyMark)> Create()
+    private async Task<(Game Game, Component BunnyMark)> Create(string? folder = null)
     {
-        var project = await Project.CreateAsync(_root, "Bunnies", ProjectTemplates.Get("BunnyMark"));
+        var project = await Project.CreateAsync(folder ?? _root, "Bunnies", ProjectTemplates.Get("BunnyMark"));
         var registry = ComponentRegistry.CreateDefault();
         var compiled = new ScriptHost(registry).ReloadFolder(project.AssetsPath, []);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));
@@ -142,6 +142,38 @@ public sealed class BunnyMarkTemplateTests : IDisposable
         Assert.Equal(40, game.SaveData.GetInt("fps"));
         Assert.Contains("Held 1,234 bunnies for 1 s: 40 fps", game.Find("Status")!.GetComponent<Text>()!.Value);
         Assert.False(game.SaveData.Has("best"));
+    }
+
+    // The bunnies are a crowd: their scripts run across the cores, and they bounce about the view the same on any number.
+    [Fact]
+    public async Task Bunnies_AreACrowd_ThatBouncesTheSameOnAnyNumberOfCores()
+    {
+        string Bounce(int workers)
+        {
+            var count = Workers.Count;
+            try
+            {
+                Workers.Count = workers;
+                Rand.Seed(12);
+                var (game, bunnyMark) = Create(Path.Combine(_root, $"On {workers}")).GetAwaiter().GetResult();
+                Set(bunnyMark, "HoldCount", 5000);
+                Set(bunnyMark, "HoldSeconds", 60f);
+                Run(game, 1 / 60.0);
+                for (var i = 0; i < 120; i++)
+                    Run(game, 1 / 60.0);
+                var bunnies = game.FindAll("Bunny");
+                Assert.True(bunnies.All(b => b.Components.Any(c => c.GetType().IsDefined(typeof(CrowdAttribute), true))));
+                Assert.All(bunnies, b => Assert.InRange(b.Transform.Position.Y, -4.75f, 4.75f));
+                return string.Join(";", bunnies.Select(b => $"{b.Transform.Position.X:R},{b.Transform.Position.Y:R}"));
+            }
+            finally
+            {
+                Workers.Count = count;
+            }
+        }
+
+        await Task.Yield();
+        Assert.Equal(Bounce(1), Bounce(16));
     }
 
     [Fact]

@@ -54,6 +54,7 @@ public sealed class SaveData
     /// <returns>False if there was no value called <paramref name="key"/>.</returns>
     public bool Delete(string key)
     {
+        Crowds.ThrowIfRunning("save");
         if (!_values.Remove(key))
             return false;
         Write();
@@ -63,6 +64,7 @@ public sealed class SaveData
     /// <summary>Forgets every value, e.g. for a "reset progress" button.</summary>
     public void Clear()
     {
+        Crowds.ThrowIfRunning("save");
         _values.Clear();
         Write();
     }
@@ -86,6 +88,7 @@ public sealed class SaveData
 
     private void Put(string key, JsonNode? value)
     {
+        Crowds.ThrowIfRunning("save");
         ArgumentNullException.ThrowIfNull(key);
         if (value is null)
             _values.Remove(key);

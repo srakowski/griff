@@ -12,7 +12,7 @@ namespace Griff.Rendering;
 /// component that draws is an <see cref="IDrawable"/>, changed by its entity's <see cref="IDrawEffect"/>s, and a running
 /// game's systems add what the game itself draws (see <see cref="Runtime.GameSystem"/>'s Draw).
 /// </summary>
-public static class SceneRenderer
+public static partial class SceneRenderer
 {
     public const float DefaultCameraSize = 5f;
 
@@ -108,9 +108,7 @@ public static class SceneRenderer
         var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse ?? [];
-        timer?.Mark(ClearingPart);
-        sprites.Clear();
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer);
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer, reuse: true);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
@@ -222,16 +220,17 @@ public static class SceneRenderer
     /// Draws the scene's entities (those <paramref name="include"/> takes, or all) back to front into
     /// <paramref name="sprites"/>, culled to <paramref name="view"/>, and then, with <paramref name="overWorld"/>, what
     /// goes over the world (ropes, wires) between them and what's pinned to the screen. Returns how many draws at the
-    /// end are pinned to the screen when it had to split them for that, or -1.
+    /// end are pinned to the screen when it had to split them for that, or -1. With <paramref name="reuse"/>,
+    /// <paramref name="sprites"/> holds last frame's draws, to be replaced; otherwise the draws are added after what it holds.
     /// </summary>
     internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld,
-        BuildTimer? timer = null)
+        BuildTimer? timer = null, bool reuse = false)
     {
         var scratch = t_scratch ?? new Scratch();
         t_scratch = null;
         try
         {
-            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer);
+            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse);
         }
         finally
         {
@@ -261,6 +260,9 @@ public static class SceneRenderer
         public List<Block> Blocks { get; } = [];
 
         public SpriteDraw[] Spare { get; set; } = [];
+
+        // For a big scene's frame, built in chunks.
+        public ChunkedScratch? Chunked { get; set; }
     }
 
     // One pass over the entities, in hierarchy order: each is drawn as it's found, its draws kept together where they
@@ -270,9 +272,32 @@ public static class SceneRenderer
     // With a timer (a profiler's), each entity's own work counts to the kind of thing it draws first, and each drawable's
     // drawing to its own kind.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse)
     {
         var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
+        if (include is null && scene.Entities.Count >= ChunkedFrom)
+        {
+            DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY);
+        }
+        else
+        {
+            scratch.Chunked?.LetGo();
+            if (reuse)
+            {
+                timer?.Mark(ClearingPart);
+                sprites.Clear();
+            }
+
+            DrawEach(scene, view, cameraSize, playing, sprites, include, overs, scratch, timer, sortByY);
+        }
+
+        return DrawOverWorld(scene, view, cameraSize, playing, sprites, overs, timer);
+    }
+
+    // The scene's entities one by one, on this thread.
+    private static void DrawEach(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool sortByY)
+    {
         var drawables = scratch.Drawables;
         var entries = scratch.Entries;
         var first = sprites.Count;
@@ -304,7 +329,12 @@ public static class SceneRenderer
 
         timer?.Mark(SortingPart);
         PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
+    }
 
+    // What goes over the world (ropes, wires), after it and under what's pinned to the screen. Returns how many draws at
+    // the end are pinned to the screen when it had to split them for that, or -1.
+    private static int DrawOverWorld(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, List<IDrawable>? overs, BuildTimer? timer)
+    {
         if (overs is not { Count: > 0 })
             return -1;
 

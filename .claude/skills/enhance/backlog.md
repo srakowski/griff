@@ -6,6 +6,18 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Web
+
+First, at the user's request (2026-10-14): a game playable in a browser comes before the rest. The proof goes first to
+find out early what the browser needs; the export of whole games follows once scripts, text and drawing don't depend
+on Windows.
+
+- [ ] Prove a web export: the smallest build that draws a sprite and reads input in a browser.
+- [ ] Compile a project's scripts into the exported game at export time, instead of loading them at runtime.
+- [ ] Rasterize text without WPF.
+- [ ] Put rendering behind a renderer interface, with OpenGL as its first implementation and WebGL for the browser.
+- [ ] Add a web export of whole games, with sound and saves, from the Build menu.
+
 ### Physics
 
 - [ ] Make stacks of rotating bodies settle and rest without jittering.
@@ -17,14 +29,9 @@ grows. The headings only group items; build order is top to bottom.
 ### Platforms
 
 - [ ] Make the game player open and draw in its own window without WPF.
-- [ ] Rasterize text without WPF.
 - [ ] Move the player's input and sound off anything still tied to WPF, with controllers through GameInput or Windows.Gaming.Input, so the same player can be hosted as a UWP app.
-- [ ] Compile a project's scripts into the exported game at export time, instead of loading them at runtime.
 - [ ] Make scene loading and components safe for Native AOT (no runtime code generation, nothing trimmed away), and publish exported games with Native AOT.
-- [ ] Put rendering behind a renderer interface, with OpenGL as its first implementation.
 - [ ] Add a Direct3D 11 renderer that draws the same as the OpenGL one (Xbox has no OpenGL).
-- [ ] Prove a web export: the smallest build that draws a sprite and reads input in a browser.
-- [ ] Add a web export of whole games, with sound and saves, from the Build menu.
 - [ ] Prove an Xbox export: the smallest x64 UWP package that draws a sprite and reads a controller on an Xbox Series X in Developer Mode.
   - Xbox games must use Direct3D (feature level 11.0 in Game Mode on Series X|S), and .NET reaches UWP only through Native AOT, which Microsoft has in preview for .NET 9 and later. This item proves .NET, Native AOT and Direct3D work on the console before the rest is built. Testing needs the user's console in Developer Mode (a Partner Center developer account): build the package, then ask the user to deploy it through the Xbox Device Portal and report back. Retail release goes through ID@Xbox and is out of scope.
 - [ ] Add an Xbox export of whole games from the Build menu, as an x64 UWP package.

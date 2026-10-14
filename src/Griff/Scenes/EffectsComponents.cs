@@ -27,6 +27,7 @@ public enum ScreenPalette
 [Category("Rendering")]
 [ComponentName("Griff.ScreenEffects")]
 [Requires(typeof(Camera), Note = "it changes what the camera shows")]
+[NetLocal]
 public sealed class ScreenEffects : Component
 {
     /// <summary>How much the corners and edges darken, from 0 (not at all) to 1 (a spyglass). 0.4 frames a scene softly.</summary>
@@ -98,8 +99,47 @@ public enum WeatherKind
 [ComponentName("Griff.Weather")]
 [WorksWith(typeof(SoundSource), Note = "for the sound of the rain or wind")]
 [WorksWith(typeof(Light), Note = "for rain glinting in the dark")]
-public sealed class Weather : Component
+[NetLocal]
+public sealed class Weather : Component, IDrawable
 {
+    int? IDrawable.DrawOrder => Order;
+
+    // Over the view wherever it is, so not moved with a parallax layer.
+    int IDrawable.DrawStep => DrawSteps.View;
+
+    /// <summary>
+    /// One quad per raindrop, snowflake, leaf or ember, wrapped into the view so it's always full however far the camera
+    /// goes: rain as streaks along the way it falls, leaves turning, embers flickering.
+    /// </summary>
+    void IDrawable.Draw(Drawing drawing)
+    {
+        if (Drops.Count == 0)
+            return;
+        var view = drawing.View;
+        var z = Entity!.Transform.WorldPosition.Z;
+        var area = Area;
+        var corner = view.Center - area / 2;
+        var slant = MathF.Atan2(Wind, 18 * Math.Max(Speed, 0.05f));
+        foreach (var drop in Drops)
+        {
+            var position = new Vector2(corner.X + Wrap(drop.Position.X - corner.X, area.X), corner.Y + Wrap(drop.Position.Y - corner.Y, area.Y));
+            var color = new Color(drop.Color.R * Tint.R, drop.Color.G * Tint.G, drop.Color.B * Tint.B, drop.Color.A * Tint.A);
+            var shape = Kind switch
+            {
+                WeatherKind.Rain => Matrix4x4.CreateScale(0.035f, drop.Size, 1) * Matrix4x4.CreateRotationZ(slant),
+                // A leaf flutters: it narrows and widens as it turns over.
+                WeatherKind.Leaves => Matrix4x4.CreateScale(drop.Size * (0.35f + 0.65f * MathF.Abs(MathF.Cos(drop.Phase * 2))), drop.Size * 0.55f, 1) *
+                                      Matrix4x4.CreateRotationZ(drop.Angle),
+                _ => Matrix4x4.CreateScale(drop.Size, drop.Size, 1),
+            };
+            if (Kind == WeatherKind.Embers)
+                color = color with { A = color.A * (0.55f + 0.45f * MathF.Sin(drop.Phase)) };
+            drawing.Add(new SpriteDraw(shape * Matrix4x4.CreateTranslation(position.X, position.Y, z), null, color, Entity));
+        }
+
+        static float Wrap(float value, float length) => length > 0 ? value - MathF.Floor(value / length) * length : value;
+    }
+
     /// <summary>Rain, snow, leaves or embers.</summary>
     public WeatherKind Kind { get; set; }
 

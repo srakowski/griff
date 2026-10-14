@@ -111,8 +111,22 @@ public sealed class Weld : Component
 /// </summary>
 [Category("Contraptions")]
 [ComponentName("Griff.Rope")]
-public sealed class Rope : Component
+public sealed class Rope : Component, IDrawable
 {
+    // Over the world, from this end to the other.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => DrawSteps.OverWorld;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        var entity = Entity!;
+        var other = Other?.Scene == entity.Scene ? Other : Contraptions.Find(entity, To);
+        if (other is null || !other.IsActive || !(Width > 0))
+            return;
+        drawing.Line(Contraptions.CenterOf(entity) + Offset, Contraptions.CenterOf(other) + OtherOffset, Width, Color);
+    }
+
     /// <summary>The entity at the other end, by name. The nearest one with that name is used.</summary>
     [EntityName]
     public string? To { get; set; }
@@ -222,8 +236,16 @@ public enum GateKind
 /// </summary>
 [Category("Wiring")]
 [ComponentName("Griff.WireGate")]
-public sealed class WireGate : Component
+public sealed class WireGate : Component, IDrawable
 {
+    // Over the world, and over the wires: it says what it is.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => Contraptions.LabelStep;
+
+    void IDrawable.Draw(Drawing drawing) =>
+        drawing.Text(Label, Contraptions.CenterOf(Entity!), Contraptions.LabelSize(Entity!), Color.White);
+
     /// <summary>What it works out from its inputs A and B: logic (And, Or, Not...), sums or comparisons.</summary>
     public GateKind Kind { get; set; }
 
@@ -339,8 +361,19 @@ public sealed class WireLamp : Component
 /// <summary>Shows a number wired to its input "Value", on its <see cref="Text"/> (or over it, without one).</summary>
 [Category("Wiring")]
 [ComponentName("Griff.WireDisplay")]
-public sealed class WireDisplay : Component
+public sealed class WireDisplay : Component, IDrawable
 {
+    // Without a Text of its own, it shows the number over the world, like a gate's label.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => Contraptions.LabelStep;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        if (Entity!.GetComponent<Text>() is null)
+            drawing.Text(Shown, Contraptions.CenterOf(Entity), Contraptions.LabelSize(Entity), Color.White);
+    }
+
     /// <summary>The number shown. Wire something to its "Value", or set it.</summary>
     public float Value { get; set; }
 
@@ -363,8 +396,30 @@ public sealed class WireDisplay : Component
 /// </remarks>
 [Category("Wiring")]
 [ComponentName("Griff.Wire")]
-public sealed class Wire : Component
+public sealed class Wire : Component, IDrawable
 {
+    // Over the world, from the output's entity to this one, brighter while it carries a signal (and always in the editor).
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => DrawSteps.OverWorld + 10;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        var entity = Entity!;
+        if (!Visible)
+            return;
+        var source = Source?.Scene == entity.Scene ? Source : Contraptions.Find(entity, From);
+        if (source is null || !source.IsActive)
+            return;
+        var (a, b) = (Contraptions.CenterOf(source), Contraptions.CenterOf(entity));
+        var live = !drawing.IsPlaying || Signal > 0;
+        var color = live ? Color : Color with { R = Color.R * 0.45f, G = Color.G * 0.45f, B = Color.B * 0.45f };
+        var thickness = drawing.LineWidth;
+        drawing.Line(a, b, thickness * 1.6f, color);
+        drawing.Quad(a, new Vector2(thickness * 4), color);
+        drawing.Quad(b, new Vector2(thickness * 4), color);
+    }
+
     /// <summary>The input on this entity it drives, e.g. "On" or "Power".</summary>
     public string? Input { get; set; } = "Power";
 
@@ -386,4 +441,49 @@ public sealed class Wire : Component
     public float Signal { get; internal set; }
 
     internal Entity? Source { get; set; }
+}
+
+/// <summary>Where the parts of a contraption are, for ropes and wires: shared by the game and how they're drawn.</summary>
+internal static class Contraptions
+{
+    // Labels on wiring parts go over the wires.
+    public const int LabelStep = DrawSteps.OverWorld + 100;
+
+    /// <summary>The middle of an entity: its collider's, or its position.</summary>
+    public static Vector2 CenterOf(Entity entity)
+    {
+        if (entity.GetComponent<Collider>() is { } collider)
+            return collider.WorldBounds.Center;
+        var position = entity.Transform.WorldPosition;
+        return new Vector2(position.X, position.Y);
+    }
+
+    /// <summary>The entity called <paramref name="name"/> nearest to <paramref name="from"/> (not itself), or null.</summary>
+    public static Entity? Find(Entity from, string? name)
+    {
+        name = name?.Trim();
+        if (string.IsNullOrEmpty(name) || from.Scene is not { } scene)
+            return null;
+        var here = CenterOf(from);
+        Entity? best = null;
+        var bestDistance = float.PositiveInfinity;
+        foreach (var entity in scene.Entities)
+        {
+            if (entity == from || entity.Name != name)
+                continue;
+            var distance = Vector2.DistanceSquared(CenterOf(entity), here);
+            if (distance < bestDistance)
+                (best, bestDistance) = (entity, distance);
+        }
+
+        return best;
+    }
+
+    /// <summary>How big a part's label is: big enough to read on it, small enough to fit.</summary>
+    public static float LabelSize(Entity entity)
+    {
+        if (entity.GetComponent<Collider>() is { } collider)
+            return Math.Clamp(collider.WorldBounds.HalfSize.Y * 0.8f, 0.15f, 1f);
+        return 0.35f;
+    }
 }

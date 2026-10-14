@@ -2,96 +2,42 @@ using System.Globalization;
 using System.Numerics;
 using Griff.Runtime;
 using Griff.Scenes;
+using static Griff.Rendering.OverlayShapes;
 
 namespace Griff.Rendering;
 
-// Sandbox extras over the world: ropes, wires and gate labels (in the editor too), and while the game runs, the block
-// being dug or built on, what the tools are doing, and the HUD: the hotbar, the crafting list, the tools and the spawn
-// list. Things pinned to the screen (menus, panels) still go on top.
-public static partial class SceneRenderer
+// Sandbox extras over the world while the game runs: the block being dug or built on, what the tools are doing, and the
+// HUD: the hotbar, the crafting list, the tools and the spawn list. Things pinned to the screen (menus, panels) still go
+// on top. (Ropes, wires and gate labels draw themselves, in the editor too.)
+internal static class SandboxDrawing
 {
     private static readonly Color Accent = Color.FromBytes(0x4C, 0x9A, 0xFF);
     private static readonly Color SlotFace = Color.FromBytes(0x2B, 0x32, 0x40);
     private static readonly Color SlotHover = Color.FromBytes(0x3E, 0x47, 0x58);
 
-    private static List<SpriteDraw> WithSandbox(Scene scene, Game? game, List<SpriteDraw> sprites, Entity? camera, View view, float cameraSize)
+    /// <summary>Draws a sandbox's extras into <paramref name="frame"/>, over the world and under what's pinned to the screen.</summary>
+    public static void Draw(FrameDrawing frame)
     {
-        var thickness = cameraSize / 180;
-        var firstPerson = game?.FirstPersonView is not null;
+        var game = frame.Game;
+        var thickness = frame.LineWidth;
+        var firstPerson = game.FirstPersonView is not null;
         var overlays = new List<SpriteDraw>();
         if (!firstPerson)
         {
-            overlays.AddRange(RopeDraws(scene));
-            overlays.AddRange(WireDraws(scene, game, thickness));
-            if (game is not null)
-            {
-                overlays.AddRange(BuilderDraws(game, thickness));
-                overlays.AddRange(ToolDraws(game, thickness));
-            }
+            overlays.AddRange(BuilderDraws(game, thickness));
+            overlays.AddRange(ToolDraws(game, thickness));
         }
 
-        var hud = game?.Sandbox.Hud is { } layout ? SandboxHudDraws(game, layout, thickness).ToList() : [];
-        if (firstPerson && game is not null)
-            hud.InsertRange(0, FirstPersonDigDraws(game, view));
+        var hud = game.Sandbox.Hud is { } layout ? SandboxHudDraws(game, layout, thickness).ToList() : [];
+        if (firstPerson)
+            hud.InsertRange(0, FirstPersonDigDraws(game, frame.View));
         if (overlays.Count == 0 && hud.Count == 0)
-            return sprites;
-
-        var world = sprites.Where(d => !IsOnScreen(d.Entity, camera)).ToList();
-        world.AddRange(overlays);
-        world.AddRange(hud);
-        world.AddRange(sprites.Where(d => IsOnScreen(d.Entity, camera)));
-        return world;
+            return;
+        overlays.AddRange(hud);
+        frame.AddOverWorld(overlays);
     }
 
     // ----- In the world -----
-
-    private static IEnumerable<SpriteDraw> RopeDraws(Scene scene)
-    {
-        foreach (var rope in scene.Active<Rope>())
-        {
-            var other = rope.Other?.Scene == scene ? rope.Other : WirePorts.Find(rope.Entity!, rope.To);
-            if (other is null || !other.IsActive || !(rope.Width > 0))
-                continue;
-            var a = Game.CenterOf(rope.Entity!) + rope.Offset;
-            var b = Game.CenterOf(other) + rope.OtherOffset;
-            yield return LineDraw(a, b, rope.Width, rope.Color);
-        }
-    }
-
-    // Wires run from the output's entity to the input's, brighter while they carry a signal; gates say what they are.
-    private static IEnumerable<SpriteDraw> WireDraws(Scene scene, Game? game, float thickness)
-    {
-        foreach (var wire in scene.All<Wire>())
-        {
-            if (!wire.Visible || !wire.Entity!.IsActive)
-                continue;
-            var source = wire.Source?.Scene == scene ? wire.Source : WirePorts.Find(wire.Entity!, wire.From);
-            if (source is null || !source.IsActive)
-                continue;
-            var (a, b) = (Game.CenterOf(source), Game.CenterOf(wire.Entity!));
-            var live = game is null || wire.Signal > 0;
-            var color = live ? wire.Color : wire.Color with { R = wire.Color.R * 0.45f, G = wire.Color.G * 0.45f, B = wire.Color.B * 0.45f };
-            yield return LineDraw(a, b, thickness * 1.6f, color);
-            yield return Quad(a, new Vector2(thickness * 4), color);
-            yield return Quad(b, new Vector2(thickness * 4), color);
-        }
-
-        foreach (var gate in scene.Active<WireGate>())
-            yield return Label(gate.Label, Game.CenterOf(gate.Entity!), LabelSize(gate.Entity!), Color.White, TextAlign.Center);
-        foreach (var display in scene.Active<WireDisplay>())
-        {
-            if (display.Entity!.GetComponent<Text>() is null)
-                yield return Label(display.Shown, Game.CenterOf(display.Entity), LabelSize(display.Entity), Color.White, TextAlign.Center);
-        }
-    }
-
-    // Big enough to read on the part, small enough to fit.
-    private static float LabelSize(Entity entity)
-    {
-        if (entity.GetComponent<Collider>() is { } collider)
-            return Math.Clamp(Physics.BoundsOf(collider).HalfSize.Y * 0.8f, 0.15f, 1f);
-        return 0.35f;
-    }
 
     // The block a builder points at, cracking as it's dug, or the outline of where a block would go.
     private static IEnumerable<SpriteDraw> BuilderDraws(Game game, float thickness)
@@ -122,7 +68,7 @@ public static partial class SceneRenderer
                 var tile = blocks?.TileOf(builder.Item) ?? -1;
                 if (tile >= 0 && map.ImageOf(tile) is { } tileImage)
                     yield return new SpriteDraw(Matrix4x4.CreateScale(cell.X, cell.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), tileImage,
-                        new Color(1, 1, 1, 0.4f), ScreenEntity) { Source = map.TileRect(tile) };
+                        new Color(1, 1, 1, 0.4f), SceneRenderer.ScreenEntity) { Source = map.TileRect(tile) };
                 foreach (var line in Outline(center, cell, thickness, builder.Highlight with { A = builder.Highlight.A * 0.6f }))
                     yield return line;
             }
@@ -149,11 +95,11 @@ public static partial class SceneRenderer
     }
 
     // A first-person dig shows as a bar under the crosshair.
-    private static IEnumerable<SpriteDraw> FirstPersonDigDraws(Game game, View view)
+    private static IEnumerable<SpriteDraw> FirstPersonDigDraws(Game game, Box view)
     {
         if (game.FirstPersonViewer?.GetComponent<BlockBuilder>() is not { Progress: > 0 } builder)
             yield break;
-        var u = view.Half.Y * 2 / 100;
+        var u = view.HalfSize.Y * 2 / 100;
         foreach (var draw in Meter(view.Center - new Vector2(0, 5 * u), 10 * u, 0.9f * u, builder.Progress, Color.White))
             yield return draw;
     }
@@ -343,7 +289,7 @@ public static partial class SceneRenderer
         if (tile >= 0 && world!.ImageOf(tile) is { } image)
         {
             yield return new SpriteDraw(Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), image,
-                world.Tint, ScreenEntity) { Source = world.TileRect(tile) };
+                world.Tint, SceneRenderer.ScreenEntity) { Source = world.TileRect(tile) };
             yield break;
         }
 
@@ -354,21 +300,4 @@ public static partial class SceneRenderer
 
     private static Tilemap? WorldOf(Game game) =>
         game.Scene.Entities.Where(e => e.IsActive).Select(e => e.GetComponent<Tilemap>()).FirstOrDefault(t => t?.Entity?.GetComponent<Blocks>() is not null);
-
-    // ----- Glowing blocks -----
-
-    private static IEnumerable<LightDraw> GlowDraws(Scene scene)
-    {
-        foreach (var blocks in scene.Active<Blocks>())
-        {
-            if (string.IsNullOrWhiteSpace(blocks.GlowingTiles) || blocks.Entity!.GetComponent<Tilemap>() is not { } map || !(blocks.GlowRadius > 0))
-                continue;
-            var scale = new Vector2(map.Entity!.Transform.WorldMatrix.M11, map.Entity.Transform.WorldMatrix.M12).Length();
-            foreach (var (x, y, tile) in map.Cells())
-            {
-                if (blocks.Glows(tile))
-                    yield return new LightDraw(Game.CellWorld(map, x, y), blocks.GlowRadius * scale, blocks.GlowColor, 1);
-            }
-        }
-    }
 }

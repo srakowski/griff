@@ -17,7 +17,9 @@ public sealed partial class Game
     private static readonly GamepadButton[] CursorButtons = [GamepadButton.DPadLeft, GamepadButton.DPadRight, GamepadButton.DPadUp, GamepadButton.DPadDown];
 
     /// <summary>What this screen's tactics controls show: the cells lit, the way a unit would go, the cursor.</summary>
-    internal TacticsView Tactics { get; } = new();
+    internal TacticsView Tactics => _tactics.State;
+
+    private readonly TacticsSystem _tactics = new();
 
     // After turns are taken and before anything moves, so a unit sent off this frame takes its first step this frame.
     private void RunTactics()
@@ -515,6 +517,18 @@ public sealed partial class Game
         else if (Foes(selected, grid).Any(f => f.Cell == cursor) && !InRange(selected, m, here, cursor) && AttackSpot(selected, m, grid, cursor) is { } spot)
             view.Path.AddRange([here, .. spot.Path]);
     }
+}
+
+/// <summary>Keeps what the tactics controls show, and draws it: the cells in reach, the way, the cursor, health bars.</summary>
+internal sealed class TacticsSystem : GameSystem
+{
+    public override string Name => "Tactics";
+
+    public TacticsView State { get; private set; } = new();
+
+    protected override void SceneChanged() => State = new TacticsView();
+
+    protected override void Draw(FrameDrawing frame) => Rendering.TacticsDrawing.Draw(frame);
 }
 
 /// <summary>What a screen's tactics controls show this frame, for drawing.</summary>

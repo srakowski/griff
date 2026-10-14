@@ -1,0 +1,26 @@
+title: Components that draw themselves
+intro: Any component, a script's as much as Griff's, can now draw itself and say what it sends in a network game. The renderer no longer keeps a list of what draws.
+project: Platformer | Halo Heights
+
+chapter: A script that draws | A halo for the hero
+say: Griff's sprites, tilemaps, bars and boards all draw themselves now, through one small interface. A script can use the same one.
+write: Scripts/Halo.cs | drawable-components/Halo.cs
+code: Assets/Scripts/Halo.cs | Halo.cs
+say: Halo is an ordinary script that also says it's drawable. Its Draw method adds a ring and a label around its entity, the way a sprite adds its picture.
+say: Its Pulse is a value only the running game keeps. Marking it Sent means a network game sends it to every player, just like a saved property.
+hidecode
+select: Player
+add: Halo
+explain: scene | Drawn in the Scene view | The ring shows straight away in the Scene view, drawn from the same quads the game draws.
+set: Halo.Radius = 1.4
+say: Change its radius in the Inspector and the ring follows.
+
+chapter: In the game | Drawing in place, and over the world
+play
+wait: 1.5
+explain: game | Pulsing round the player | In the game the ring pulses, and goes wherever the player goes.
+hold: Right 1.5
+say: The red marks come from a game system. Its Draw runs once every entity has drawn itself, and adds marks over the world, under the HUD. It's the same way Griff draws a strategy game's fog or a tactics game's reachable cells.
+wait: 1
+stop
+say: Drawing and networking are open to every component now, so a component you write draws and plays online the same way Griff's own do.

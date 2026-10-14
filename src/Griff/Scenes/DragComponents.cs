@@ -16,8 +16,11 @@ namespace Griff.Scenes;
 [WorksWith(typeof(DropTarget), Note = "places to drop it")]
 [WorksWith(typeof(Grabber), Note = "picks it up with a button")]
 [ComponentName("Griff.Draggable")]
-public sealed class Draggable : Component
+public sealed class Draggable : Component, IDrawEffect
 {
+    // Held, it (and what's inside it) draws over everything else.
+    bool IDrawEffect.DrawsOnTop => IsHeld;
+
     /// <summary>What kind of thing it is, e.g. "Card" or "Red Gem": a <see cref="DropTarget"/>'s Accepts names the kinds it takes.</summary>
     public string? Kind { get; set; }
 

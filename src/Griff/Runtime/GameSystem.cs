@@ -34,7 +34,8 @@ public enum FramePhase
 /// one with <c>AddSystem</c> (it stops when that script's entity goes) or <see cref="Game.AddSystem"/> (for the rest of
 /// the game). A game has one system of each type: adding another replaces it. Override <see cref="Update"/> to do
 /// something every frame, for a whole kind of thing at once; something the system keeps track of in a scene is
-/// forgotten in <see cref="SceneChanged"/>.
+/// forgotten in <see cref="SceneChanged"/>. Override <see cref="Draw"/> to draw what the system knows of that no one
+/// entity draws (a HUD, markers over things); an entity's own look is a component's (see <see cref="Scenes.IDrawable"/>).
 /// </summary>
 /// <example>
 /// <code>
@@ -84,6 +85,15 @@ public abstract class GameSystem
     {
     }
 
+    /// <summary>
+    /// Called as each frame is drawn, after every entity has drawn itself and the systems before this one have drawn, to
+    /// add to what's drawn or change it: see <see cref="FrameDrawing"/>. Griff's own systems draw a strategy
+    /// game's fog and HUD, a tactics game's reachable cells and a first-person view this way.
+    /// </summary>
+    protected virtual void Draw(FrameDrawing frame)
+    {
+    }
+
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
     internal Behavior? Owner { get; set; }
 
@@ -94,6 +104,12 @@ public abstract class GameSystem
     internal void RunUpdate() => Update();
 
     internal void RunSceneChanged() => SceneChanged();
+
+    internal void RunDraw(FrameDrawing frame)
+    {
+        if (!IsRemoved)
+            Draw(frame);
+    }
 }
 
 /// <summary>

@@ -1,11 +1,11 @@
 using System.Numerics;
-using Griff.Scenes;
 
-namespace Griff.Rendering;
+namespace Griff.Scenes;
 
-// A match-3 board: its backdrop, the picked-up gem's cell and the cursors, then its gems, each where it's sliding or
-// falling to and shrinking as it clears. Without a tileset image each kind of gem is a square of its own color.
-public static partial class SceneRenderer
+// A match-3 board draws its tilemap itself: its backdrop, the picked-up gem's cell and the cursors, then its gems, each
+// where it's sliding or falling to and shrinking as it clears. Without a tileset image each kind of gem is a square of its
+// own color.
+public sealed partial class MatchBoard
 {
     // A color for each kind of gem on a board with no tileset image, in the order of its Gems.
     private static readonly Color[] GemColors =
@@ -17,6 +17,19 @@ public static partial class SceneRenderer
 
     // How much of its cell a colored gem fills, leaving a gap between neighbors.
     private const float GemFill = 0.82f;
+
+    // Drawn in place of its tilemap's tiles, at the tilemap's order.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => DrawSteps.Tiles;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        if (Entity!.GetComponent<Tilemap>() is not { } map)
+            return;
+        foreach (var draw in BoardDraws(Entity, map, this))
+            drawing.Add(draw);
+    }
 
     private static IEnumerable<SpriteDraw> BoardDraws(Entity entity, Tilemap map, MatchBoard board)
     {

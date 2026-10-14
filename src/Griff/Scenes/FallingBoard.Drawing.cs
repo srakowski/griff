@@ -1,12 +1,11 @@
 using System.Numerics;
-using Griff.Scenes;
 
-namespace Griff.Rendering;
+namespace Griff.Scenes;
 
 // A falling-block board: its backdrop, the blocks that have landed (full rows shrinking away as they clear), an outline
 // where the piece will land, the piece itself, and the pieces coming next in a box to the right. Without a tileset image
 // each kind of piece is a square of its own color.
-public static partial class SceneRenderer
+public sealed partial class FallingBoard
 {
     // A color for each shape on a board with no tileset image, in the order of FallingBoard.AllShapes (I J L O S T Z).
     private static readonly Color[] PieceColors =
@@ -22,6 +21,19 @@ public static partial class SceneRenderer
 
     // Cells across the box of pieces coming next, and down for each one.
     private const int PreviewWidth = 5, PreviewSlot = 3;
+
+    // Drawn in place of its tilemap's tiles, at the tilemap's order.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => DrawSteps.Tiles;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        if (Entity!.GetComponent<Tilemap>() is not { } map)
+            return;
+        foreach (var draw in FallingDraws(Entity, map, this))
+            drawing.Add(draw);
+    }
 
     private static IEnumerable<SpriteDraw> FallingDraws(Entity entity, Tilemap map, FallingBoard board)
     {

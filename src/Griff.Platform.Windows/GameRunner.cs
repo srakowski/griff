@@ -61,6 +61,8 @@ public sealed class GameRunner : IDisposable
 
     public bool IsPaused { get; set; }
 
+    private bool _drawFaulted;
+
     /// <summary>
     /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
     /// (and over the view) rather than wherever the real one is. Moving the real mouse over the game clears it.
@@ -148,9 +150,29 @@ public sealed class GameRunner : IDisposable
         Ticked?.Invoke(this, EventArgs.Empty);
     }
 
+    // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
+    // and the last good frame stays up.
     private void RenderLatest()
     {
-        _lastFrame = SceneRenderer.Build(Game, _surface.Aspect);
+        RenderFrame frame;
+        try
+        {
+            frame = SceneRenderer.Build(Game, _surface.Aspect, recycle: _lastFrame);
+        }
+        catch (Exception ex)
+        {
+            if (!_drawFaulted)
+            {
+                _drawFaulted = true;
+                IsPaused = true;
+                Faulted?.Invoke(this, ex);
+            }
+
+            return;
+        }
+
+        _drawFaulted = false;
+        _lastFrame = frame;
         _surface.Render(_lastFrame);
     }
 

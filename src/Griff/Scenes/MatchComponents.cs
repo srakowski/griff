@@ -25,8 +25,11 @@ namespace Griff.Scenes;
 [Requires(typeof(Tilemap), Note = "holds the gems")]
 [WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Count Moves) or the gems of a kind cleared (Count Gem)")]
 [ComponentName("Griff.MatchBoard")]
-public sealed class MatchBoard : Component
+public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, INetState
 {
+    // The board as it is mid-move (gems sliding, falling, clearing), as lines.
+    void INetState.Network(NetState state) => state.Add<IReadOnlyList<string>>(() => MatchView.Write(this).ToArray(), lines => MatchView.Read(this, lines));
+
     private string? _gems = "0-5";
     private bool[] _gemSet = Tilemap.ParseTileSet("0-5");
 

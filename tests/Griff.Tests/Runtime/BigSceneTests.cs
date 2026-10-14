@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -42,5 +43,27 @@ public sealed class BigSceneTests
         var perFrame = (GC.GetAllocatedBytesForCurrentThread() - before) / 10;
 
         Assert.True(perFrame == 0, $"A frame allocated {perFrame:N0} bytes.");
+    }
+
+    [Fact]
+    public void Drawing_a_frame_of_sprites_into_the_last_one_allocates_next_to_nothing()
+    {
+        // The frame itself (a few small objects) is new each time; the list of thousands of draws is the last frame's.
+        var game = new Game(Bunnies(2000), new InputState());
+        RenderFrame? frame = null;
+        for (var i = 0; i < 30; i++)
+        {
+            game.Tick(1 / 60.0);
+            frame = SceneRenderer.Build(game, 16 / 9f, frame);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 20; i++)
+            frame = SceneRenderer.Build(game, 16 / 9f, frame);
+        var perFrame = (GC.GetAllocatedBytesForCurrentThread() - before) / 20;
+
+        // A list of 2,000 draws is over 250 KB; what's left is the frame's own few objects.
+        Assert.Equal(2000, frame!.Sprites.Count);
+        Assert.True(perFrame < 16 * 1024, $"A frame allocated {perFrame:N0} bytes.");
     }
 }

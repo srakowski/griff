@@ -573,8 +573,23 @@ internal static class ItemEffects
 [Category("Rendering")]
 [Requires(typeof(Sprite), Note = "the copies left behind")]
 [ComponentName("Griff.Trail")]
-public sealed class Trail : Component
+public sealed class Trail : Component, IDrawable
 {
+    // Drawn with its sprite, just behind it.
+    int? IDrawable.DrawOrder => null;
+
+    int IDrawable.DrawStep => DrawSteps.Trail;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        foreach (var copy in _copies)
+        {
+            var opacity = OpacityOf(copy);
+            if (opacity > 0)
+                drawing.Add(new SpriteDraw(copy.World, copy.Image, copy.Tint with { A = copy.Tint.A * opacity }, Entity!) { Source = copy.Source, Flash = Color });
+        }
+    }
+
     private readonly List<TrailCopy> _copies = [];
     private Vector2? _last;
     private float _sinceCopy;

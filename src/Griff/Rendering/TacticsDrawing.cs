@@ -1,26 +1,40 @@
 using System.Numerics;
 using Griff.Runtime;
 using Griff.Scenes;
+using static Griff.Rendering.OverlayShapes;
 
 namespace Griff.Rendering;
 
 // A tactics game's extras: the cells the picked (or hovered) unit can walk to and hit, drawn on the ground just over its
 // map; the way it would go, the cursor and health bars over the units; and units that have had their go, dimmed.
-public static partial class SceneRenderer
+internal static class TacticsDrawing
 {
-    private static List<SpriteDraw> WithTactics(Game game, List<SpriteDraw> sprites, float cameraSize)
+    /// <summary>Draws a tactics game's extras into <paramref name="frame"/>, among the world's draws (not in first person).</summary>
+    public static void Draw(FrameDrawing frame)
     {
+        var game = frame.Game;
+        if (game.FirstPersonView is { } fp && game.ViewerOf(fp) is not null)
+            return;
         var view = game.Tactics;
         if (view.Controls is not { } controls)
-            return sprites;
+            return;
         var units = game.Scene.Active<TacticsUnit>();
         if (units.Count == 0)
-            return sprites;
+            return;
 
         var grid = view.Grid;
         var cell = Vector2.Distance(grid.Center((0, 0)), grid.Center((1, 0)));
         var done = units.Where(u => u.IsDone).Select(u => u.Entity!).ToList();
-        var list = sprites.Select(d => done.Count > 0 && done.Any(d.Entity.IsSelfOrDescendantOf) ? d with { Tint = Times(d.Tint, controls.DoneTint) } : d).ToList();
+        var list = frame.Sprites;
+        if (done.Count > 0)
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (done.Any(list[i].Entity.IsSelfOrDescendantOf))
+                    list[i] = list[i] with { Tint = Times(list[i].Tint, controls.DoneTint) };
+            }
+        }
+
         bool OfUnit(SpriteDraw d) => units.Any(u => d.Entity.IsSelfOrDescendantOf(u.Entity!));
 
         // On the ground: just over the map (its layers too), else under the units.
@@ -50,7 +64,7 @@ public static partial class SceneRenderer
             }
         }
 
-        var thickness = cameraSize / 180;
+        var thickness = frame.LineWidth;
         if (view.Path.Count > 1)
         {
             for (var i = 1; i < view.Path.Count; i++)
@@ -63,7 +77,6 @@ public static partial class SceneRenderer
 
         var top = list.FindLastIndex(OfUnit);
         list.InsertRange(top < 0 ? ground + 1 + lit.Count : top + 1, over);
-        return list;
     }
 
     private static Color Times(Color a, Color b) => new(a.R * b.R, a.G * b.G, a.B * b.B, a.A * b.A);

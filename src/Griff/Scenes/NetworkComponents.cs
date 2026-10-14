@@ -17,6 +17,7 @@ namespace Griff.Scenes;
 [WorksWith(typeof(PlayerSpawn), Note = "where players appear (on other entities)")]
 [WorksWith(typeof(Scoreboard), Note = "who's playing, their scores and pings")]
 [ComponentName("Griff.Multiplayer")]
+[NetLocal]
 public sealed class Multiplayer : Component
 {
     /// <summary>The port a game is hosted on unless something says otherwise.</summary>
@@ -162,6 +163,7 @@ public enum TextFieldUse
 [Category("UI")]
 [Requires(typeof(Text), Note = "shows what's typed")]
 [ComponentName("Griff.TextField")]
+[NetLocal]
 public sealed class TextField : Component
 {
     /// <summary>What's typed in it.</summary>
@@ -195,6 +197,7 @@ public sealed class TextField : Component
 [Category("Multiplayer")]
 [Requires(typeof(Text), Note = "shows the list")]
 [ComponentName("Griff.Scoreboard")]
+[NetLocal]
 public sealed class Scoreboard : Component
 {
     /// <summary>A line on top, e.g. "Players". Empty has none.</summary>

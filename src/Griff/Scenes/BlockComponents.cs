@@ -115,9 +115,23 @@ public sealed class WorldGenerator : Component
 [WorksWith(typeof(WorldGenerator), Note = "to make the world")]
 [WorksWith(typeof(BlockBuilder), Note = "on the player, to dig and build")]
 [ComponentName("Griff.Blocks")]
-public sealed class Blocks : Component
+public sealed class Blocks : Component, ILightSource
 {
     private IReadOnlyList<string> _items = [];
+
+    // Its glowing blocks light up the dark around them.
+    void ILightSource.AddLights(List<LightSpot> lights)
+    {
+        if (string.IsNullOrWhiteSpace(GlowingTiles) || Entity!.GetComponent<Tilemap>() is not { } map || !(GlowRadius > 0))
+            return;
+        var world = Entity.Transform.WorldMatrix;
+        var scale = new System.Numerics.Vector2(world.M11, world.M12).Length();
+        foreach (var (x, y, tile) in map.Cells())
+        {
+            if (Glows(tile))
+                lights.Add(new LightSpot(System.Numerics.Vector2.Transform(map.CellCenter(x, y), world), GlowRadius * scale, GlowColor, 1));
+        }
+    }
     private Dictionary<int, string> _drops = [];
     private string? _dropsText;
     private string? _hardness;
@@ -354,12 +368,14 @@ public sealed class BlockBuilder : Component
 
     /// <summary>How far through breaking <see cref="Target"/> it is, from 0 to 1.</summary>
     [DoNotSerialize]
+    [Sent]
     public float Progress { get; internal set; }
 
     internal Tilemap? Map { get; set; }
 
     internal float PlaceCooldown { get; set; }
 
+    [Sent]
     internal int Cracks { get; set; }
 }
 

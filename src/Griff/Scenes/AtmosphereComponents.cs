@@ -202,6 +202,7 @@ public sealed class SoundSource : Component
 /// </summary>
 [Category("Audio")]
 [ComponentName("Griff.BackgroundMusic")]
+[NetLocal]
 public sealed class BackgroundMusic : Component
 {
     /// <summary>The music to play, e.g. "Music/theme.wav". Make one with Audio &gt; New Music.</summary>

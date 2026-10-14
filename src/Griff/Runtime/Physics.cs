@@ -65,13 +65,7 @@ public sealed class Physics
     public static Box BoundsOf(BoxCollider collider) => collider.WorldBox;
 
     /// <summary>World-space circle of a collider. The radius scales with the larger of the entity's X and Y scale.</summary>
-    public static Circle BoundsOf(CircleCollider collider)
-    {
-        var world = collider.Entity!.Transform.WorldMatrix;
-        var scale = ScaleOf(world);
-        var center = new Vector2(world.M41, world.M42) + collider.Offset * scale;
-        return new Circle(center, collider.Radius * Math.Max(scale.X, scale.Y));
-    }
+    public static Circle BoundsOf(CircleCollider collider) => collider.WorldCircle;
 
     /// <summary>The world-space box around either kind of collider.</summary>
     public static Box BoundsOf(Collider collider) => collider switch

@@ -25,6 +25,7 @@ public enum Anchor
 /// <remarks>The camera's rotation is ignored. In the Scene view the entity shows where its transform puts it.</remarks>
 [Category("UI")]
 [ComponentName("ScreenAnchor")]
+[NetLocal]
 public sealed class ScreenAnchor : Component
 {
     /// <summary>The corner, edge or middle of the screen it stays by, at its position from there in world units.</summary>
@@ -112,8 +113,12 @@ public enum ButtonAction
 [WorksWith(typeof(Sprite), Note = "a background")]
 [WorksWith(typeof(Text), Note = "a label")]
 [ComponentName("Button")]
-public sealed class Button : Component
+[NetLocal]
+public sealed class Button : Component, IDrawEffect
 {
+    // Under the mouse or held, it shades its own sprite and label.
+    Color IDrawEffect.Tint(IDrawable drawn, Color color) => drawn is Sprite or Text ? Shade(color) : color;
+
     /// <summary>The clickable area, centered on the entity, in world units before the transform's scale. Rotation is ignored.</summary>
     public Vector2 Size { get; set; } = new(3, 1);
 
@@ -256,8 +261,14 @@ public enum BarDirection
 /// </summary>
 [Category("UI")]
 [ComponentName("Bar")]
-public sealed class Bar : Component
+public sealed class Bar : Component, IDrawable
 {
+    int? IDrawable.DrawOrder => Order;
+
+    int IDrawable.DrawStep => DrawSteps.Bar;
+
+    void IDrawable.Draw(Drawing drawing) => drawing.Bar(Size, Direction, Fraction, TrailFraction, Background, Fill, Trail);
+
     private float? _trail;
     private float _trailHold;
     private float _lastFraction = float.NaN;
@@ -346,8 +357,23 @@ public sealed class Bar : Component
 /// </summary>
 [Category("UI")]
 [ComponentName("Slider")]
-public sealed class Slider : Component
+[NetLocal]
+public sealed class Slider : Component, IDrawable
 {
+    int? IDrawable.DrawOrder => Order;
+
+    int IDrawable.DrawStep => DrawSteps.Slider;
+
+    // The track filled up to the value, and the handle: a little taller than the bar, at the end of the filled part.
+    void IDrawable.Draw(Drawing drawing)
+    {
+        var fraction = Fraction;
+        drawing.Bar(Size, BarDirection.Right, fraction, fraction, Background, Shade(Fill), Color.Transparent);
+        var size = Vector2.Abs(Size);
+        if (Knob.A > 0 && size.Y > 0)
+            drawing.Rect(new Vector2(-size.X / 2 + fraction * size.X, 0), new Vector2(size.Y * 0.5f, size.Y * 1.5f), Shade(Knob));
+    }
+
     /// <summary>Where it's set, from <see cref="Min"/> to <see cref="Max"/>.</summary>
     public float Value { get; set; } = 1;
 
@@ -443,6 +469,7 @@ public sealed class Slider : Component
 [Category("UI")]
 [Requires(typeof(Button))]
 [ComponentName("Toggle")]
+[NetLocal]
 public sealed class Toggle : Component
 {
     /// <summary>Whether it's on now; each click flips it.</summary>
@@ -477,6 +504,7 @@ public sealed class Toggle : Component
 /// <remarks>Panels are hidden when the game starts unless <see cref="Open"/> is ticked, so they can be laid out in the Scene view.</remarks>
 [Category("UI")]
 [ComponentName("Panel")]
+[NetLocal]
 public sealed class Panel : Component
 {
     /// <summary>
@@ -541,6 +569,7 @@ public sealed class Panel : Component
 [Category("UI")]
 [Requires(typeof(Button))]
 [ComponentName("Choice")]
+[NetLocal]
 public sealed class Choice : Component
 {
     /// <summary>What can be picked, one per row.</summary>

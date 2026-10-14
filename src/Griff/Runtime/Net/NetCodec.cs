@@ -10,6 +10,12 @@ internal static class NetCodec
 {
     public static bool Same(object? a, object? b) => ValueCodec.AreEqual(a, b);
 
+    /// <summary>True if a value of <paramref name="type"/> can be sent (see <see cref="Write"/>).</summary>
+    public static bool CanSend(Type type) =>
+        type == typeof(bool) || type == typeof(int) || type == typeof(float) || type == typeof(double) || type == typeof(string) || type.IsEnum ||
+        type == typeof(Color) || type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion) ||
+        type == typeof(IReadOnlyList<string>);
+
     public static void Write(NetWriter w, Type type, object? value)
     {
         if (type == typeof(bool)) w.Bool((bool)value!);

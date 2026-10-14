@@ -348,7 +348,7 @@ public class LevelPieceTests
         map.Tiles = ["gh"];
         _scene.Add(entity);
 
-        var sources = SceneRenderer.TileDraws(entity, map).Select(d => d.Source).ToList();
+        var sources = map.TileDraws().Select(d => d.Source).ToList();
         Assert.Equal(map.TileRect(16 + 2), sources[0]);
         Assert.Equal(map.TileRect(16 + 8), sources[1]);
     }

@@ -79,6 +79,7 @@ public sealed class FirstPersonView : Component
 [Requires(typeof(Collider))]
 [WorksWith(typeof(Weapon), Note = "shoots where it looks")]
 [ComponentName("Griff.FirstPersonMovement")]
+[PlayerMovement]
 public sealed class FirstPersonMovement : Component
 {
     /// <summary>Walking speed, in world units per second.</summary>

@@ -12,6 +12,7 @@ namespace Griff.Scenes;
 [ComponentName("Griff.BeatClock")]
 [WorksWith(typeof(BackgroundMusic), Note = "the music it keeps time with")]
 [WorksWith(typeof(BeatPulse), Note = "things that bop on its beat")]
+[NetLocal]
 public sealed class BeatClock : Component
 {
     /// <summary>
@@ -129,8 +130,20 @@ public sealed class BeatClock : Component
 [Category("Audio")]
 [ComponentName("Griff.BeatPulse")]
 [WorksWith(typeof(BeatClock), Note = "somewhere in the scene, keeping the beat")]
-public sealed class BeatPulse : Component
+public sealed class BeatPulse : Component, IDrawEffect
 {
+    // Drawn bigger about its middle, its children with it.
+    System.Numerics.Matrix4x4? IDrawEffect.DrawTransform
+    {
+        get
+        {
+            if (Scale == 1)
+                return null;
+            var center = Entity!.Transform.WorldPosition;
+            return System.Numerics.Matrix4x4.CreateScale(Scale, Scale, 1, new System.Numerics.Vector3(center.X, center.Y, 0));
+        }
+    }
+
     /// <summary>How much bigger it's drawn on the beat: 0.15 is 15% bigger. Below 0 shrinks it instead.</summary>
     public float Size { get; set; } = 0.15f;
 

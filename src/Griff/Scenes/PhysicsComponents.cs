@@ -27,6 +27,9 @@ public abstract class Collider : Component
     /// </summary>
     [Names(NameKind.Layer, Many = true)]
     public abstract string? IgnoreLayers { get; set; }
+
+    /// <summary>The box around the shape in the world, from its entity's position and scale (not its rotation).</summary>
+    public abstract Box WorldBounds { get; }
 }
 
 /// <summary>Matching collision layer names: case doesn't matter, and an empty layer is called "Default".</summary>
@@ -85,6 +88,9 @@ public sealed class BoxCollider : Collider
             return new Box(new Vector2(world.M41, world.M42) + Offset * scale, Size * scale / 2);
         }
     }
+
+    /// <inheritdoc/>
+    public override Box WorldBounds => WorldBox;
 }
 
 /// <summary>
@@ -110,6 +116,21 @@ public sealed class CircleCollider : Collider
 
     /// <inheritdoc/>
     public override string? IgnoreLayers { get; set; }
+
+    /// <summary>The circle it covers in the world. Its radius scales with the larger of the entity's X and Y scale.</summary>
+    public Circle WorldCircle
+    {
+        get
+        {
+            var world = Entity!.Transform.WorldMatrix;
+            var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
+            var center = new Vector2(world.M41, world.M42) + Offset * scale;
+            return new Circle(center, Radius * Math.Max(scale.X, scale.Y));
+        }
+    }
+
+    /// <inheritdoc/>
+    public override Box WorldBounds => WorldCircle.Bounds;
 }
 
 /// <summary>Makes an entity with a <see cref="Collider"/> move under velocity and gravity and collide with solids.</summary>
@@ -119,6 +140,7 @@ public sealed class CircleCollider : Collider
 public sealed class Body : Component
 {
     /// <summary>World units per second.</summary>
+    [Sent(ByMover = true)]
     public Vector2 Velocity { get; set; }
 
     /// <summary>Multiplier on world gravity. 0 for top-down games or floating things.</summary>

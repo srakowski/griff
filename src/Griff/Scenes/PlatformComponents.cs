@@ -30,8 +30,12 @@ public sealed class Ladder : Component
 [WorksWith(typeof(GridMovement), Note = "pushed a cell at a time by grid movers")]
 [WorksWith(typeof(Goal), Note = "places on the grid to push it to")]
 [ComponentName("Griff.Pushable")]
-public sealed class Pushable : Component
+public sealed class Pushable : Component, IDrawEffect
 {
+    // Resting on a goal, its sprite turns the goal's color, as faded as it was.
+    Color IDrawEffect.Tint(IDrawable drawn, Color color) =>
+        drawn is Sprite && GoalTint is { } onGoal ? onGoal with { A = onGoal.A * color.A } : color;
+
     /// <summary>The collision layers that can push it, e.g. "Player". Empty lets any body push it.</summary>
     [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Player";
@@ -126,8 +130,11 @@ public sealed class Bouncer : Component
 [Category("Level")]
 [Requires(typeof(Collider))]
 [ComponentName("Griff.Crumble")]
-public sealed class Crumble : Component
+public sealed class Crumble : Component, IDrawEffect
 {
+    // About to go, it's drawn shaken off its place (with whatever is inside it); its collider stays put.
+    Matrix4x4? IDrawEffect.DrawTransform => ShakeOffset != Vector2.Zero ? Matrix4x4.CreateTranslation(ShakeOffset.X, ShakeOffset.Y, 0) : null;
+
     /// <summary>Seconds it shakes, once stood on, before it falls away.</summary>
     public float Delay { get; set; } = 0.5f;
 

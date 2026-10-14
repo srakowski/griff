@@ -46,6 +46,7 @@ public sealed class Faction : Component
 
     /// <summary>True once it has no buildings left.</summary>
     [DoNotSerialize]
+    [Sent]
     public bool IsDefeated { get; internal set; }
 
     /// <summary>Raised when it loses its last building.</summary>
@@ -201,6 +202,7 @@ public sealed class Unit : Component
 
     /// <summary>What it's doing now.</summary>
     [DoNotSerialize]
+    [Sent]
     public UnitOrder Order { get; internal set; }
 
     /// <summary>Where it's headed, for <see cref="UnitOrder.Move"/> and <see cref="UnitOrder.AttackMove"/>.</summary>
@@ -283,8 +285,14 @@ public sealed class Unit : Component
 [WorksWith(typeof(Health), Note = "so it can be destroyed")]
 [WorksWith(typeof(Fighter), Note = "makes it a tower")]
 [ComponentName("Griff.Building")]
-public sealed class Building : Component
+public sealed class Building : Component, INetState
 {
+    // A building with no rally point. (Not NaN, which never equals itself, so it would be sent again and again.)
+    private static readonly Vector2 NoRally = new(float.MaxValue);
+
+    // Its rally point, for everyone's view of it.
+    void INetState.Network(NetState state) => state.Add(() => Rally ?? NoRally, rally => Rally = rally != NoRally ? rally : null);
+
     /// <summary>The team it's on: a <see cref="Faction"/>'s Team.</summary>
     public string? Team { get; set; } = "Player";
 
@@ -345,8 +353,15 @@ public sealed class Building : Component
 [Category("Strategy")]
 [Requires(typeof(Building))]
 [ComponentName("Griff.Producer")]
-public sealed class Producer : Component
+public sealed class Producer : Component, INetState
 {
+    // What it's training, for everyone's command card.
+    void INetState.Network(NetState state) => state.Add<IReadOnlyList<string>>(() => QueueList.ToArray(), queue =>
+    {
+        QueueList.Clear();
+        QueueList.AddRange(queue ?? []);
+    });
+
     /// <summary>The prefabs it trains, e.g. "Worker" or "Soldier, Archer". Each needs a <see cref="Unit"/>.</summary>
     [Names(NameKind.Prefab, Many = true)]
     public string? Trains { get; set; } = "Worker";
@@ -360,6 +375,7 @@ public sealed class Producer : Component
 
     /// <summary>How far along the first in line is, from 0 to 1.</summary>
     [DoNotSerialize]
+    [Sent]
     public float Progress { get; internal set; }
 
     /// <summary>Raised with each unit it finishes.</summary>
@@ -403,6 +419,7 @@ public sealed class Worker : Component
 
     /// <summary>How much it's carrying.</summary>
     [DoNotSerialize]
+    [Sent]
     public int Load { get; internal set; }
 
     /// <summary>The resource it goes back to after dropping off a load.</summary>
@@ -504,6 +521,7 @@ public sealed class Fighter : Component
 [Requires(typeof(Camera))]
 [WorksWith(typeof(FogOfWar), Note = "hides what the team can't see")]
 [ComponentName("Griff.Commander")]
+[NetLocal]
 public sealed class Commander : Component
 {
     /// <summary>The team the player commands: a <see cref="Faction"/>'s Team.</summary>
@@ -555,6 +573,7 @@ public sealed class Commander : Component
 [Category("Strategy")]
 [Requires(typeof(Commander))]
 [ComponentName("Griff.FogOfWar")]
+[NetLocal]
 public sealed class FogOfWar : Component
 {
     /// <summary>The size of a square of fog, in world units. Smaller is smoother but slower.</summary>

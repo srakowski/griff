@@ -18,8 +18,35 @@ public readonly record struct Particle(Vector2 Position, Vector2 Velocity, float
 [Category("Rendering")]
 [WorksWith(typeof(Lifetime), Note = "for one-off effects")]
 [ComponentName("ParticleEmitter")]
-public sealed class ParticleEmitter : Component
+public sealed class ParticleEmitter : Component, IDrawable
 {
+    int? IDrawable.DrawOrder => Order;
+
+    int IDrawable.DrawStep => DrawSteps.Particles;
+
+    void IDrawable.Draw(Drawing drawing)
+    {
+        foreach (var draw in ParticleDraws())
+            drawing.Add(draw);
+    }
+
+    /// <summary>One quad per live particle, in world space at the emitter's depth.</summary>
+    public IEnumerable<SpriteDraw> ParticleDraws()
+    {
+        var entity = Entity!;
+        var z = entity.Transform.WorldPosition.Z;
+        var image = string.IsNullOrEmpty(Image) ? null : Image;
+        foreach (var particle in _particles)
+        {
+            var progress = particle.Progress;
+            var size = SizeAt(progress);
+            if (size <= 0)
+                continue;
+            var world = Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(particle.Position.X, particle.Position.Y, z);
+            yield return new SpriteDraw(world, image, ColorAt(progress), entity);
+        }
+    }
+
     private readonly List<Particle> _particles = [];
     private float _pending;
     private bool _started;

@@ -98,7 +98,7 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        _builtInSystems = [_levels, _puzzles, _drags, _panels, _strategy, _firstPerson, _sandboxes];
+        _builtInSystems = [_levels, _puzzles, _drags, _panels, _strategy, _firstPerson, _sandboxes, _tactics];
         foreach (var system in _builtInSystems)
         {
             system.Attach(this);
@@ -121,7 +121,7 @@ public sealed partial class Game
         Step(FramePhase.Logic, "Lobby", RunLobby);
         Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _puzzles);
         Step(FramePhase.Logic, "Turns", RunTurns);
-        Step(FramePhase.Logic, "Tactics", RunTactics);
+        Step(FramePhase.Logic, "Tactics", RunTactics, _tactics);
         Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
 
         // Before anything moves, so a move taken back this frame isn't stepped on from where it was.

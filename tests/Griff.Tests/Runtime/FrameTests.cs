@@ -55,8 +55,10 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        Assert.Equal(["Levels", "Puzzles", "Dragging", "Panels", "Strategy", "First Person", "Sandbox"], game.Systems.Select(s => s.Name));
+        // Tactics keeps what its controls show (and draws it), so it's a system too; its step's place in the frame is unchanged.
+        Assert.Equal(["Levels", "Puzzles", "Dragging", "Panels", "Strategy", "First Person", "Sandbox", "Tactics"], game.Systems.Select(s => s.Name));
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
+        Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
         Assert.Equal("Levels", game.Frame.Single(s => s.Name == "Doors").System?.Name);
         Assert.Null(game.Frame.Single(s => s.Name == "Physics").System);
     }
@@ -121,7 +123,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(7, game.Systems.Count);
+        Assert.Equal(8, game.Systems.Count);
     }
 
     [Fact]

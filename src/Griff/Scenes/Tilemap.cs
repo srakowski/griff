@@ -18,7 +18,7 @@ namespace Griff.Scenes;
 /// </remarks>
 [Category("Rendering")]
 [ComponentName("Tilemap")]
-public sealed class Tilemap : Component
+public sealed partial class Tilemap : Component, IDrawable
 {
     /// <summary>The character for an empty cell.</summary>
     public const char Empty = '.';

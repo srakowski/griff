@@ -64,12 +64,16 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 DrawCameraFrame(drawingContext, entity, camera, selection.IsSelected(entity));
             if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
                 DrawParticles(drawingContext, entity, emitter);
+            DrawOtherDrawables(drawingContext, entity, overWorld: false);
 
             // Entities with nothing solid to see (including emitters) get a marker so they can be found and clicked.
             if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null &&
                 entity.GetComponent<Text>() is null && entity.GetComponent<Camera>() is null)
                 DrawMarker(drawingContext, entity);
         }
+
+        foreach (var entity in _document.Scene.Entities.Where(SceneViewModel.IsShown))
+            DrawOtherDrawables(drawingContext, entity, overWorld: true);
 
         DrawLights(drawingContext);
         DrawColliders(drawingContext);
@@ -202,11 +206,85 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         dc.Pop();
     }
 
+    // Whatever else an entity draws (a bar, a slider, a rope or wire over the world, a script's shapes) as the game draws it,
+    // from its quads. Sprites, tilemaps, text and particles have their own drawing above, and a component that draws a
+    // tilemap in place of its tiles (a match-3 board) is left to the game: here you paint the tiles.
+    private void DrawOtherDrawables(DrawingContext dc, Entity entity, bool overWorld)
+    {
+        foreach (var component in entity.Components)
+        {
+            if (component is not IDrawable drawable || component is Sprite or Tilemap or Text or ParticleEmitter or IDrawsTilemap ||
+                drawable.DrawStep >= DrawSteps.OverWorld != overWorld)
+                continue;
+            IReadOnlyList<SpriteDraw> draws;
+            try
+            {
+                var (min, max) = (viewport.ToWorld(new Point(0, viewport.Size.Height)), viewport.ToWorld(new Point(viewport.Size.Width, 0)));
+                draws = SceneRenderer.DrawsOf(drawable, new Box((min + max) / 2, (max - min) / 2), (float)(2 / viewport.Zoom));
+            }
+            catch (Exception)
+            {
+                // A script's Draw that fails in the editor draws nothing here; the game reports it when it runs.
+                continue;
+            }
+
+            DrawQuads(dc, draws);
+        }
+    }
+
+    // Quads as the game draws them: images (or their part of one) tinted, solid colors, and text.
+    private void DrawQuads(DrawingContext dc, IReadOnlyList<SpriteDraw> draws)
+    {
+        foreach (var draw in draws)
+        {
+            if (draw.HoleRadius > 0 || draw.Tint.A <= 0)
+                continue;
+            dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(draw.World)));
+            if (draw.Text is { Length: > 0 } text)
+            {
+                var formatted = Griff.Platform.Windows.WpfText.Format(text,
+                    Griff.Platform.Windows.WpfText.TypefaceFor(draw.Font, workspace.Project?.AssetsPath), draw.Align,
+                    new SolidColorBrush(System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte)),
+                    style.PixelsPerDip);
+                var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace) + 8;
+                formatted.MaxTextWidth = width;
+                var left = draw.Align switch { TextAlign.Left => 0, TextAlign.Right => -width, _ => -width / 2 };
+                var lines = text.Split('\n').Length;
+                var scale = 1 / Griff.Platform.Windows.WpfText.LineHeight;
+                dc.PushTransform(new MatrixTransform(new Matrix(scale, 0, 0, -scale, 0, 0)));
+                dc.DrawText(formatted, new Point(left, -Griff.Platform.Windows.WpfText.LineHeight * lines / 2));
+                dc.Pop();
+            }
+            else if (LoadImage(draw.Image) is { } loaded)
+            {
+                // Images are stored top-down; flip Y back since world space is Y-up.
+                dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 0));
+                dc.PushOpacity(draw.Tint.A);
+                var brush = new ImageBrush(Tinted(loaded, draw.Tint))
+                {
+                    Viewbox = new Rect(draw.Source.X, draw.Source.Y, draw.Source.Z, draw.Source.W),
+                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+                };
+                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+                dc.DrawRectangle(brush, null, new Rect(-0.5, -0.5, 1, 1));
+                dc.Pop();
+                dc.Pop();
+            }
+            else
+            {
+                var color = System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte);
+                dc.DrawRectangle(new SolidColorBrush(color), null, new Rect(-0.5, -0.5, 1, 1));
+            }
+
+            dc.Pop();
+        }
+    }
+
     // Particle images are tinted like sprites; without one, particles are tinted squares.
     private void DrawParticles(DrawingContext dc, Entity entity, ParticleEmitter emitter)
     {
         var image = LoadImage(emitter.Image);
-        foreach (var draw in SceneRenderer.ParticleDraws(entity, emitter))
+        foreach (var draw in emitter.ParticleDraws())
         {
             var center = viewport.ToScreen(new Vector2(draw.World.M41, draw.World.M42));
             var half = draw.World.M11 * viewport.Zoom / 2;

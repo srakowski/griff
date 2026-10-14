@@ -25,19 +25,7 @@ public sealed class LayerTests
     // Binds the core's source and finds every Runtime or Rendering symbol named inside a Griff.Scenes type.
     private static IEnumerable<string> ScenesUses()
     {
-        var source = Path.Combine(RepoRoot(), "src", "Griff");
-        var trees = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(source, path))
-            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest), path))
-            .Append(CSharpSyntaxTree.ParseText(ImplicitUsings))
-            .ToList();
-        var compilation = CSharpCompilation.Create("Griff", trees, PlatformReferences(),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-
-        // Anything unbound would hide a use; the core needs nothing beyond the platform.
-        var unbound = compilation.GetDiagnostics().Where(d => d.Id is "CS0246" or "CS0234" or "CS0103").Take(5).ToList();
-        Assert.True(unbound.Count == 0, string.Join("\n", unbound));
-
+        var (compilation, trees) = Core();
         foreach (var tree in trees.Where(DeclaresScenes))
         {
             var model = compilation.GetSemanticModel(tree);
@@ -52,13 +40,35 @@ public sealed class LayerTests
         }
     }
 
+    /// <summary>The core's source (src/Griff), parsed and bound: for tests about what its code uses.</summary>
+    internal static (CSharpCompilation Compilation, List<SyntaxTree> Trees) Core() => CoreSource.Value;
+
+    private static readonly Lazy<(CSharpCompilation Compilation, List<SyntaxTree> Trees)> CoreSource = new(Bind);
+
+    private static (CSharpCompilation Compilation, List<SyntaxTree> Trees) Bind()
+    {
+        var source = Path.Combine(RepoRoot(), "src", "Griff");
+        var trees = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutput(source, path))
+            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest), path))
+            .Append(CSharpSyntaxTree.ParseText(ImplicitUsings))
+            .ToList();
+        var compilation = CSharpCompilation.Create("Griff", trees, PlatformReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        // Anything unbound would hide a use; the core needs nothing beyond the platform.
+        var unbound = compilation.GetDiagnostics().Where(d => d.Id is "CS0246" or "CS0234" or "CS0103").Take(5).ToList();
+        Assert.True(unbound.Count == 0, string.Join("\n", unbound));
+        return (compilation, trees);
+    }
+
     // Only these files need binding, which keeps the test quick.
     private static bool DeclaresScenes(SyntaxTree tree) =>
         tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
             .Any(n => n.Name.ToString() is var ns && (ns == "Griff.Scenes" || ns.StartsWith("Griff.Scenes.", StringComparison.Ordinal)));
 
     // The type a name refers to: the type itself, or the type that declares the member.
-    private static INamedTypeSymbol? Used(ISymbol? symbol) => symbol switch
+    internal static INamedTypeSymbol? Used(ISymbol? symbol) => symbol switch
     {
         INamedTypeSymbol type => type.OriginalDefinition,
         IMethodSymbol { ReducedFrom: { } extension } => extension.ContainingType,
@@ -72,7 +82,7 @@ public sealed class LayerTests
         return ns == layer || ns.StartsWith(layer + ".", StringComparison.Ordinal);
     }
 
-    private static string Name(ISymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat.WithGenericsOptions(SymbolDisplayGenericsOptions.None));
+    internal static string Name(ISymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat.WithGenericsOptions(SymbolDisplayGenericsOptions.None));
 
     private static bool IsBuildOutput(string project, string path)
     {

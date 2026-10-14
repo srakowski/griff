@@ -341,4 +341,6 @@ internal sealed class FirstPersonSystem : GameSystem
     public FirstPersonState State { get; private set; } = new();
 
     protected override void SceneChanged() => State = new FirstPersonState();
+
+    protected override void Draw(FrameDrawing frame) => Rendering.FirstPersonDrawing.Draw(frame);
 }

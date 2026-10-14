@@ -1248,4 +1248,6 @@ internal sealed class StrategySystem : GameSystem
     public StrategyState State { get; private set; } = new();
 
     protected override void SceneChanged() => State = new StrategyState();
+
+    protected override void Draw(FrameDrawing frame) => Rendering.StrategyDrawing.Draw(frame);
 }

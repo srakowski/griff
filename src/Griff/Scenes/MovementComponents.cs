@@ -15,6 +15,7 @@ namespace Griff.Scenes;
 [Requires(typeof(Collider))]
 [WorksWith(typeof(Animation), Note = "plays Idle, Run, Jump and Fall clips")]
 [ComponentName("Griff.PlatformerMovement")]
+[PlayerMovement]
 public sealed class PlatformerMovement : Component
 {
     /// <summary>Running speed, in world units per second.</summary>
@@ -200,6 +201,7 @@ public sealed class PlatformerMovement : Component
 [Requires(typeof(Collider))]
 [WorksWith(typeof(Animation), Note = "plays Idle and Run clips")]
 [ComponentName("Griff.TopDownMovement")]
+[PlayerMovement]
 public sealed class TopDownMovement : Component
 {
     /// <summary>World units per second.</summary>
@@ -286,6 +288,7 @@ public sealed class TopDownMovement : Component
 [WorksWith(typeof(GridPatrol), Note = "walks a route of cells on its own")]
 [WorksWith(typeof(Pushable), Note = "a crate pushed a cell at a time")]
 [ComponentName("Griff.GridMovement")]
+[PlayerMovement]
 public sealed class GridMovement : Component
 {
     /// <summary>

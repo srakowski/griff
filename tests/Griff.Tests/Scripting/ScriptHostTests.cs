@@ -72,6 +72,47 @@ public class ScriptHostTests
     }
 
     [Fact]
+    public void Scripts_CanDrawAndSayWhatTheySend()
+    {
+        // A script component that draws itself and sends a value it keeps while playing, and a system that draws a HUD.
+        const string source = """
+            public class Shield : Behavior, IDrawable, INetState
+            {
+                public float Radius { get; set; } = 1;
+
+                [Sent]
+                public float Charge { get; private set; }
+
+                [NotSent]
+                public float Spin { get; set; }
+
+                public int? DrawOrder => 5;
+
+                public void Draw(Drawing drawing)
+                {
+                    var at = drawing.Entity.Transform.WorldPosition;
+                    drawing.Circle(new Vector2(at.X, at.Y), Radius, drawing.LineWidth * 2, drawing.Tint(this, Color.Cyan));
+                    drawing.Text($"{Charge:0}", new Vector2(at.X, at.Y + Radius), 0.4f, Color.White);
+                }
+
+                public void Network(NetState state) => state.Add(() => Spin > 0, spinning => Spin = spinning ? 1 : 0);
+
+                protected override void Start() => AddSystem(new ShieldHud());
+            }
+
+            public class ShieldHud : GameSystem
+            {
+                protected override void Draw(FrameDrawing frame) =>
+                    frame.AddOverWorld([FrameDrawing.Label("Shields up", frame.View.Center, 0.5f, Color.White)]);
+            }
+            """;
+
+        var result = _host.Reload([new ScriptSource("Shield.cs", source)], []);
+
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+    }
+
+    [Fact]
     public void Scripts_CanUseSwitchesInventoriesAndTrails()
     {
         // The README's puzzle examples, as a script would write them.

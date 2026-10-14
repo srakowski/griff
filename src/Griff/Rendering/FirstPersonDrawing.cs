@@ -8,8 +8,28 @@ namespace Griff.Rendering;
 // strip of the screen. Solid tilemaps and Blocks are walls, sprites and particles stand in the world as billboards hidden
 // behind whatever wall is nearer, and the weapon in hand, crosshair and minimap go over it. Everything is ordinary quads
 // across the camera's view, so the renderer needs nothing new; the HUD (things pinned to the screen) still goes on top.
-public static partial class SceneRenderer
+internal static class FirstPersonDrawing
 {
+    /// <summary>
+    /// Draws the world through the first-person viewer's eyes in place of the top-down view, lit by itself, with what's
+    /// pinned to the screen over it; the camera's view (unturned and unshaken) only places the HUD.
+    /// </summary>
+    public static void Draw(FrameDrawing frame)
+    {
+        var game = frame.Game;
+        if (game.FirstPersonView is not { } fp || game.ViewerOf(fp) is not { } viewer)
+            return;
+        var camera = frame.Camera;
+        var (size, aspect) = (frame.CameraSize, frame.Aspect);
+        var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
+        frame.View = new Box(center, frame.View.HalfSize);
+        frame.ViewProjection = Matrix4x4.CreateTranslation(-center.X, -center.Y, 0) * Matrix4x4.CreateOrthographic(size * 2 * aspect, size * 2, -1000f, 1000f);
+        var sprites = FirstPersonDraws(game, fp, viewer, camera, frame.View, aspect);
+        sprites.AddRange(frame.DrawEntities(frame.IsOnScreen));
+        frame.Sprites = sprites;
+        frame.Lit = false;
+    }
+
     // How dark walls facing north and south are next to those facing east and west.
     private const float SideShade = 0.72f;
 
@@ -36,7 +56,7 @@ public static partial class SceneRenderer
     /// The first-person view through <paramref name="viewer"/>'s eyes, as quads over <paramref name="view"/> (the camera's
     /// view of the world, unrotated), back to front.
     /// </summary>
-    private static List<SpriteDraw> FirstPersonDraws(Game game, FirstPersonView fp, Entity viewer, Entity? camera, View view, float aspect)
+    private static List<SpriteDraw> FirstPersonDraws(Game game, FirstPersonView fp, Entity viewer, Entity? camera, Box view, float aspect)
     {
         var scene = game.Scene;
         var draws = new List<SpriteDraw>();
@@ -58,8 +78,8 @@ public static partial class SceneRenderer
         var bob = MathF.Max(0, fp.Bob);
         var eyeHeight = fp.EyeHeight + MathF.Sin(phase * 2) * 0.025f * bob * stride;
         var shake = camera?.GetComponent<Camera>()?.ShakeOffset ?? Vector2.Zero;
-        var horizon = -MathF.Tan((movement?.Pitch ?? 0) * MathF.PI / 180) * vertical + shake.Y / view.Half.Y;
-        var nudge = shake.X / view.Half.X;
+        var horizon = -MathF.Tan((movement?.Pitch ?? 0) * MathF.PI / 180) * vertical + shake.Y / view.HalfSize.Y;
+        var nudge = shake.X / view.HalfSize.X;
         var wallHeight = MathF.Max(0.01f, fp.WallHeight);
         var lighting = Lighting.For(scene, camera);
 
@@ -304,7 +324,7 @@ public static partial class SceneRenderer
         var time = game.Time.Total;
         foreach (var entity in game.Scene.Entities)
         {
-            if (!entity.IsActive || entity.IsSelfOrDescendantOf(viewer) || IsOnScreen(entity, camera) || entity.GetComponent<Block>() is not null)
+            if (!entity.IsActive || entity.IsSelfOrDescendantOf(viewer) || SceneRenderer.IsOnScreen(entity, camera) || entity.GetComponent<Block>() is not null)
                 continue;
             var billboard = entity.GetComponent<Billboard>();
             var scale = billboard?.Scale ?? 1;
@@ -483,20 +503,20 @@ public static partial class SceneRenderer
     }
 
     // Clip space (-1..1 across and up the screen) to the camera's view of the world, where draws are placed.
-    private readonly record struct ScreenSpace(View View)
+    private readonly record struct ScreenSpace(Box View)
     {
-        public float Aspect => View.Half.Y > 0 ? View.Half.X / View.Half.Y : 1;
+        public float Aspect => View.HalfSize.Y > 0 ? View.HalfSize.X / View.HalfSize.Y : 1;
 
         public SpriteDraw Rect(float left, float bottom, float right, float top, Color tint, string? image = null, Vector4? source = null, Entity? entity = null)
         {
-            var world = Matrix4x4.CreateScale((right - left) * View.Half.X, (top - bottom) * View.Half.Y, 1) *
-                        Matrix4x4.CreateTranslation(View.Center.X + (left + right) / 2 * View.Half.X, View.Center.Y + (top + bottom) / 2 * View.Half.Y, 0);
-            return new SpriteDraw(world, image, tint, entity ?? ScreenEntity) { Source = source ?? new Vector4(0, 0, 1, 1) };
+            var world = Matrix4x4.CreateScale((right - left) * View.HalfSize.X, (top - bottom) * View.HalfSize.Y, 1) *
+                        Matrix4x4.CreateTranslation(View.Center.X + (left + right) / 2 * View.HalfSize.X, View.Center.Y + (top + bottom) / 2 * View.HalfSize.Y, 0);
+            return new SpriteDraw(world, image, tint, entity ?? SceneRenderer.ScreenEntity) { Source = source ?? new Vector4(0, 0, 1, 1) };
         }
 
         // A quad given in a space where one unit is half the screen's height both ways (so turning it keeps its shape).
         public SpriteDraw Draw(Matrix4x4 square, Color tint) =>
-            new(square * Matrix4x4.CreateScale(View.Half.Y, View.Half.Y, 1) * Matrix4x4.CreateTranslation(View.Center.X, View.Center.Y, 0), null, tint, ScreenEntity);
+            new(square * Matrix4x4.CreateScale(View.HalfSize.Y, View.HalfSize.Y, 1) * Matrix4x4.CreateTranslation(View.Center.X, View.Center.Y, 0), null, tint, SceneRenderer.ScreenEntity);
     }
 
     // The light on a point of the floor plan: daylight, or in a dark scene, the ambient light and every light reaching it.

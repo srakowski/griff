@@ -764,8 +764,6 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         if (descriptor.Version > 1)
             text.AppendLine(CultureInfo.InvariantCulture, $"Saved data version: {descriptor.Version} (older scenes are upgraded as they load).");
 
-        text.AppendLine().AppendLine("Properties (key: kind = default. meaning):");
-        var docs = entry?.Properties.ToDictionary(p => p.Name) ?? [];
         Component? sample = null;
         try
         {
@@ -775,6 +773,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             // Documented without defaults.
         }
+
+        foreach (var line in DrawingAndNetwork(descriptor.Type, sample))
+            text.AppendLine(line);
+
+        text.AppendLine().AppendLine("Properties (key: kind = default. meaning):");
+        var docs = entry?.Properties.ToDictionary(p => p.Name) ?? [];
 
         // Listed as the Inspector lists them: ungrouped first, then under each group's heading.
         var ordered = descriptor.Properties.Where(p => p.Group is null)
@@ -795,6 +799,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 text.Append(CultureInfo.InvariantCulture, $" (Only used when {shownWhen}.)");
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
+            if (property.Info.IsDefined(typeof(NotSentAttribute), true))
+                text.Append(" (Not sent in a network game: each machine has its own.)");
             if (property.EntityName is { } entityName)
                 text.Append(entityName switch
                 {
@@ -819,11 +825,37 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             foreach (var property in live)
             {
                 var meaning = DocComments.Summary(property) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
-                text.AppendLine(CultureInfo.InvariantCulture, $"- {JsonNamingPolicy.CamelCase.ConvertName(property.Name)}: {AgentValues.Describe(property.PropertyType)}{meaning}");
+                var sent = property.IsDefined(typeof(SentAttribute), true) ? " (Sent in a network game.)" : "";
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {JsonNamingPolicy.CamelCase.ConvertName(property.Name)}: {AgentValues.Describe(property.PropertyType)}{meaning}{sent}");
             }
         }
 
         return ToolResult.Ok(text.ToString());
+    }
+
+    // How a component draws and what it does in a network game, as it says through Griff's extension points.
+    private static IEnumerable<string> DrawingAndNetwork(Type type, Component? sample)
+    {
+        if (sample is IDrawable drawable)
+        {
+            var step = drawable.DrawStep;
+            yield return step >= DrawSteps.OverWorld
+                ? "Draws itself over the whole world, under what's pinned to the screen."
+                : drawable.DrawOrder is { } order
+                    ? $"Draws itself (its entity draws at Order {order} unless it has a Sprite, whose order counts)."
+                    : "Draws itself, along with the rest of its entity (it doesn't set the entity's draw order).";
+        }
+
+        if (typeof(IDrawEffect).IsAssignableFrom(type))
+            yield return "Changes how its entity is drawn (a tint, a shake or drawing it on top).";
+        if (typeof(ILightSource).IsAssignableFrom(type))
+            yield return "Gives off light in a dark scene.";
+        if (type.IsDefined(typeof(NetLocalAttribute), true))
+            yield return "In a network game, each machine keeps its own entity with this on it: it isn't sent.";
+        if (type.IsDefined(typeof(PlayerMovementAttribute), true))
+            yield return "In a network game, the player it moves for runs it on their own machine and sends where they are.";
+        if (typeof(INetState).IsAssignableFrom(type))
+            yield return "In a network game, it also sends values of its own besides its properties.";
     }
 
     // --- Helpers ---

@@ -208,6 +208,19 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Describing_a_component_says_how_it_draws_and_what_it_sends()
+    {
+        Assert.Contains("Draws itself (its entity draws at Order 0", Run("component_describe", """{"component": "Sprite"}""").Text);
+        Assert.Contains("Draws itself, along with the rest of its entity", Run("component_describe", """{"component": "Trail"}""").Text);
+        Assert.Contains("Draws itself over the whole world", Run("component_describe", """{"component": "Wire"}""").Text);
+        Assert.Contains("Changes how its entity is drawn", Run("component_describe", """{"component": "Button"}""").Text);
+        Assert.Contains("each machine keeps its own entity", Run("component_describe", """{"component": "Camera"}""").Text);
+        Assert.Contains("the player it moves for runs it", Run("component_describe", """{"component": "PlatformerMovement"}""").Text);
+        var worker = Run("component_describe", """{"component": "Worker"}""").Text;
+        Assert.Contains("- load: a whole number. How much it's carrying. (Sent in a network game.)", worker);
+    }
+
+    [Fact]
     public void A_match_boards_moves_and_goals_are_set_like_any_field_and_read_back_live()
     {
         Run("entity_create", """{"entity": {"name": "Board", "components": {"MatchBoard": {"moves": 20, "targetScore": 1000, "collect": "0:15", "swaps": 5, "cleared": "0:15"}}}}""");

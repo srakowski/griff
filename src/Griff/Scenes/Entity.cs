@@ -123,6 +123,9 @@ public sealed class Entity
     /// <summary>All components, starting with <see cref="Transform"/>.</summary>
     public IReadOnlyList<Component> Components => _components;
 
+    // The same list, for going through it without allocating an enumerator (the renderer does, for every entity, every frame).
+    internal List<Component> ComponentList => _components;
+
     public T AddComponent<T>() where T : Component, new() => (T)AddComponent(new T());
 
     /// <summary>Attaches <paramref name="component"/>, at <paramref name="index"/> if given (used by undo).</summary>

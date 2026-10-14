@@ -6,6 +6,7 @@ namespace Griff.Scenes;
 [Category("Rendering")]
 [WorksWith(typeof(Follow), Note = "to follow the player")]
 [ComponentName("Camera")]
+[NetLocal]
 public sealed class Camera : Component
 {
     /// <summary>Half the visible height, in world units. Width follows the window's aspect ratio.</summary>
@@ -117,7 +118,7 @@ public enum TextAlign
 /// <summary>Draws a line (or lines) of text at the entity. Scripts set <see cref="Value"/>.</summary>
 [Category("Rendering")]
 [ComponentName("Text")]
-public sealed class Text : Component
+public sealed class Text : Component, IDrawable
 {
     /// <summary>What it says. Several lines are fine.</summary>
     public string? Value { get; set; } = "Text";
@@ -152,14 +153,39 @@ public sealed class Text : Component
 
     /// <summary>Sets what <see cref="Shown"/> is for the current <see cref="Value"/>. Called by the game.</summary>
     internal void SetShown(string? shown) => _shown = (Value, shown);
+
+    int? IDrawable.DrawOrder => Order;
+
+    int IDrawable.DrawStep => DrawSteps.Text;
+
+    // A typewriter shows only as much as it has typed so far; a button shades its text under the mouse.
+    void IDrawable.Draw(Drawing drawing)
+    {
+        var value = Entity!.GetComponent<Typewriter>() is { } typewriter ? typewriter.Visible(Shown) : Shown;
+        if (string.IsNullOrEmpty(value))
+            return;
+        var world = Matrix4x4.CreateScale(Size, Size, 1) * Entity.Transform.WorldMatrix;
+        drawing.Add(new SpriteDraw(world, null, drawing.Tint(this, Color), Entity, value)
+        {
+            Font = string.IsNullOrWhiteSpace(Font) ? null : Font,
+            Align = Align,
+        });
+    }
 }
 
 /// <summary>Draws an image (or a solid rectangle when no image is set) at the entity's transform.</summary>
 [Category("Rendering")]
 [WorksWith(typeof(Animation), Note = "to play frames of a sprite sheet")]
 [ComponentName("Sprite")]
-public sealed class Sprite : Component
+public sealed class Sprite : Component, IDrawable, INetState
 {
+    // An animation picks the frame on every machine by itself.
+    void INetState.Network(NetState state)
+    {
+        if (Entity?.GetComponent<Animation>() is not null)
+            state.Skip(nameof(Frame));
+    }
+
     /// <summary>Image path relative to the project's Assets folder, e.g. "Sprites/player.png".</summary>
     public string? Image { get; set; }
 
@@ -170,9 +196,11 @@ public sealed class Sprite : Component
     public System.Numerics.Vector2 Size { get; set; } = System.Numerics.Vector2.One;
 
     /// <summary>Draws the image mirrored left to right (movement components flip it to face the way they go).</summary>
+    [Sent(ByMover = true)]
     public bool FlipX { get; set; }
 
     /// <summary>Draws the image upside down.</summary>
+    [Sent(ByMover = true)]
     public bool FlipY { get; set; }
 
     /// <summary>Higher draws on top. Ties are broken by Z position, then hierarchy order.</summary>
@@ -301,6 +329,28 @@ public sealed class Sprite : Component
     // The whole sprite's quad in the world, flips included.
     internal Matrix4x4 QuadMatrix =>
         Matrix4x4.CreateScale(Size.X * (FlipX ? -1 : 1), Size.Y * (FlipY ? -1 : 1), 1) * Entity!.Transform.WorldMatrix;
+
+    int? IDrawable.DrawOrder => Order;
+
+    int IDrawable.DrawStep => DrawSteps.Sprite;
+
+    // Blinked out, it draws nothing this frame. Its entity's effects can shade it (a button under the mouse, a crate on its goal).
+    void IDrawable.Draw(Drawing drawing)
+    {
+        if (IsBlinkedOut)
+            return;
+        var tint = drawing.Tint(this, Tint);
+        var flash = FlashOverlay;
+        if (!IsSliced)
+        {
+            // One quad, without going through Pieces: a frame of thousands of sprites makes nothing to collect.
+            drawing.Add(new SpriteDraw(QuadMatrix, Image, tint, Entity!) { Source = FrameRect, Flash = flash });
+            return;
+        }
+
+        foreach (var (world, source) in Pieces())
+            drawing.Add(new SpriteDraw(world, Image, tint, Entity!) { Source = source, Flash = flash });
+    }
 }
 
 /// <summary>One named animation of an <see cref="Animation"/>'s <see cref="Animation.Clips"/>.</summary>
@@ -333,6 +383,7 @@ public sealed class Animation : Component
     public bool Loop { get; set; } = true;
 
     /// <summary>Whether it's playing now; off holds the frame it's on.</summary>
+    [Sent(ByMover = true)]
     public bool Playing { get; set; } = true;
 
     /// <summary>
@@ -353,6 +404,7 @@ public sealed class Animation : Component
     /// The clip playing, by name, e.g. "Idle". While it names one of <see cref="Clips"/>, its frames are shown instead of
     /// <see cref="FirstFrame"/> and <see cref="FrameCount"/>. Set it in the Inspector to pick the clip the game starts with.
     /// </summary>
+    [Sent(ByMover = true)]
     public string? Clip { get; set; }
 
     /// <summary>Seconds into the current animation; restart by setting to 0.</summary>

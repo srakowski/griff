@@ -483,13 +483,7 @@ public sealed partial class Game
     private static float ScaleOf(Entity entity) => new Vector2(entity.Transform.WorldMatrix.M11, entity.Transform.WorldMatrix.M12).Length();
 
     // The middle of an entity: its collider's, or its position.
-    internal static Vector2 CenterOf(Entity entity)
-    {
-        if (entity.GetComponent<Collider>() is { } collider)
-            return Physics.BoundsOf(collider).Center;
-        var position = entity.Transform.WorldPosition;
-        return new Vector2(position.X, position.Y);
-    }
+    internal static Vector2 CenterOf(Entity entity) => Contraptions.CenterOf(entity);
 }
 
 /// <summary>What the sandbox features keep track of while a scene runs.</summary>
@@ -557,4 +551,6 @@ internal sealed class SandboxSystem : GameSystem
     public SandboxState State { get; private set; } = new();
 
     protected override void SceneChanged() => State = new SandboxState();
+
+    protected override void Draw(FrameDrawing frame) => Rendering.SandboxDrawing.Draw(frame);
 }

@@ -244,6 +244,7 @@ public sealed class Follow : Component
 [Category("Rendering")]
 [WorksWith(typeof(Sprite), Note = "to repeat a strip of background")]
 [ComponentName("Parallax")]
+[NetLocal]
 public sealed class Parallax : Component
 {
     /// <summary>

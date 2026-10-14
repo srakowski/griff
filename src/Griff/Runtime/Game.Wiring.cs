@@ -74,25 +74,7 @@ public static class WirePorts
     /// The entity a <see cref="Wire.From"/>, <see cref="Weld.To"/> or <see cref="Rope.To"/> name means for
     /// <paramref name="from"/>: the nearest other entity with that name, or null.
     /// </summary>
-    public static Entity? Find(Entity from, string? name)
-    {
-        name = name?.Trim();
-        if (string.IsNullOrEmpty(name) || from.Scene is not { } scene)
-            return null;
-        var here = Game.CenterOf(from);
-        Entity? best = null;
-        var bestDistance = float.PositiveInfinity;
-        foreach (var entity in scene.Entities)
-        {
-            if (entity == from || entity.Name != name)
-                continue;
-            var distance = Vector2.DistanceSquared(Game.CenterOf(entity), here);
-            if (distance < bestDistance)
-                (best, bestDistance) = (entity, distance);
-        }
-
-        return best;
-    }
+    public static Entity? Find(Entity from, string? name) => Contraptions.Find(from, name);
 }
 
 // Wiring with no code: buttons, sensors and gates drive lamps, thrusters, displays, and anything that can be switched on.

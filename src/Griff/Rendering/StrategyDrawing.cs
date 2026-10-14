@@ -2,50 +2,49 @@ using System.Globalization;
 using System.Numerics;
 using Griff.Runtime;
 using Griff.Scenes;
+using static Griff.Rendering.OverlayShapes;
 
 namespace Griff.Rendering;
 
 // A strategy game's extras over the world: enemies hidden in the fog, buildings going up drawn see-through, the fog of
 // war, selection rings, health bars, orders, the building being placed, the selection box, and the HUD (resources,
 // minimap, what's selected, the command card). Things pinned to the screen (menus, panels) still go on top.
-public static partial class SceneRenderer
+internal static class StrategyDrawing
 {
-    private static readonly Color Mine = Color.FromBytes(0x57, 0xD3, 0x6B);
-    private static readonly Color Theirs = Color.FromBytes(0xE5, 0x53, 0x4B);
-    private static readonly Color Neutral = Color.FromBytes(0xE3, 0xB3, 0x41);
-    private static readonly Color HudBack = new(0.07f, 0.08f, 0.1f, 0.92f);
-    private static readonly Color HudEdge = Color.FromBytes(0x3A, 0x3F, 0x4B);
-    private static readonly Color HudText = Color.FromBytes(0xE6, 0xE8, 0xEC);
-    private static readonly Color HudDim = Color.FromBytes(0x8A, 0x90, 0x9C);
     private static readonly Color Busy = Color.FromBytes(0x4C, 0x9A, 0xFF);
 
-    private static List<SpriteDraw> WithStrategy(Game game, List<SpriteDraw> sprites, Entity? camera, Vector2 center, Vector2 half, float cameraSize)
+    /// <summary>Draws a strategy game's extras into <paramref name="frame"/>, while one is being played.</summary>
+    public static void Draw(FrameDrawing frame)
     {
+        var game = frame.Game;
+        if (!game.Rts.IsActive)
+            return;
+
         // Enemy units in the fog aren't drawn; buildings going up are see-through.
         var looks = new Dictionary<Entity, float>();
-        var world = new List<SpriteDraw>();
-        var screen = new List<SpriteDraw>();
-        foreach (var draw in sprites)
+        var kept = new List<SpriteDraw>();
+        foreach (var draw in frame.Sprites)
         {
-            if (IsOnScreen(draw.Entity, camera))
+            if (frame.IsOnScreen(draw.Entity))
             {
-                screen.Add(draw);
+                kept.Add(draw);
                 continue;
             }
 
             var look = LookOf(game, draw.Entity, looks);
             if (look <= 0)
                 continue;
-            world.Add(look < 1 ? draw with { Tint = draw.Tint with { A = draw.Tint.A * look } } : draw);
+            kept.Add(look < 1 ? draw with { Tint = draw.Tint with { A = draw.Tint.A * look } } : draw);
         }
 
-        var thickness = cameraSize / 180;
-        world.AddRange(FogDraws(game, center, half));
-        world.AddRange(MarkingDraws(game, thickness));
+        frame.Sprites = kept;
+        var thickness = frame.LineWidth;
+        var over = new List<SpriteDraw>();
+        over.AddRange(FogDraws(game, frame.View.Center, frame.View.HalfSize));
+        over.AddRange(MarkingDraws(game, thickness));
         if (game.Rts is { Commander.Hud: true, Hud: { } hud })
-            world.AddRange(HudDraws(game, hud, thickness));
-        world.AddRange(screen);
-        return world;
+            over.AddRange(HudDraws(game, hud, thickness));
+        frame.AddOverWorld(over);
     }
 
     // 0 hidden, 1 as it is, in between see-through: for what a draw belongs to (the unit or building it's part of).
@@ -206,9 +205,6 @@ public static partial class SceneRenderer
         }
     }
 
-    private static Color HealthColor(float fraction) =>
-        fraction > 0.6f ? Mine : fraction > 0.3f ? Neutral : Theirs;
-
     // ----- The HUD -----
 
     private static IEnumerable<SpriteDraw> HudDraws(Game game, StrategyHud hud, float thickness)
@@ -258,7 +254,7 @@ public static partial class SceneRenderer
         var map = hud.Minimap;
         var (mapCenter, mapSize) = game.Map();
         var scale = map.Width / mapSize.X;
-        var background = rts.Commander?.Entity?.GetComponent<Camera>()?.Background ?? DefaultBackground;
+        var background = rts.Commander?.Entity?.GetComponent<Camera>()?.Background ?? SceneRenderer.DefaultBackground;
         yield return Quad(map.Center, new Vector2(map.Width, map.Height) + new Vector2(thickness * 4), HudEdge);
         yield return Quad(map.Center, new Vector2(map.Width, map.Height), background);
 
@@ -474,46 +470,5 @@ public static partial class SceneRenderer
             var y = hud.Panel.Top + 3.5f * u;
             yield return Label(tip, new Vector2(hud.Card.Right, y), 2.2f * u, HudText, TextAlign.Right);
         }
-    }
-
-    // ----- Shapes -----
-
-    private static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
-
-    // A solid rectangle in the world, belonging to the screen rather than any entity.
-    private static SpriteDraw Quad(Vector2 center, Vector2 size, Color color) =>
-        new(Matrix4x4.CreateScale(size.X, size.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), null, color, ScreenEntity);
-
-    private static SpriteDraw Label(string text, Vector2 at, float size, Color color, TextAlign align) =>
-        new(Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, 0), null, color, ScreenEntity, text) { Align = align };
-
-    private static IEnumerable<SpriteDraw> Outline(Vector2 center, Vector2 size, float thickness, Color color)
-    {
-        var half = size / 2;
-        var (a, b, c, d) = (center + new Vector2(-half.X, -half.Y), center + new Vector2(half.X, -half.Y), center + half, center + new Vector2(-half.X, half.Y));
-        yield return LineDraw(a, b, thickness, color);
-        yield return LineDraw(b, c, thickness, color);
-        yield return LineDraw(c, d, thickness, color);
-        yield return LineDraw(d, a, thickness, color);
-    }
-
-    private static IEnumerable<SpriteDraw> Circle(Vector2 center, float radius, float thickness, Color color)
-    {
-        const int segments = 20;
-        for (var i = 0; i < segments; i++)
-        {
-            var a = MathF.Tau * i / segments;
-            var b = MathF.Tau * (i + 1) / segments;
-            yield return LineDraw(center + radius * new Vector2(MathF.Cos(a), MathF.Sin(a)), center + radius * new Vector2(MathF.Cos(b), MathF.Sin(b)), thickness, color);
-        }
-    }
-
-    // A bar: dark behind, filled from the left.
-    private static IEnumerable<SpriteDraw> Meter(Vector2 center, float width, float height, float fraction, Color fill)
-    {
-        yield return Quad(center, new Vector2(width + height * 0.3f, height * 1.3f), new Color(0, 0, 0, 0.7f));
-        fraction = Math.Clamp(fraction, 0, 1);
-        if (fraction > 0)
-            yield return Quad(new Vector2(center.X - width / 2 + width * fraction / 2, center.Y), new Vector2(width * fraction, height), fill);
     }
 }

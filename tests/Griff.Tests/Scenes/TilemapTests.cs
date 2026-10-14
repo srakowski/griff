@@ -272,7 +272,7 @@ public class TilemapTests
         map.SetTile(0, 0, 1);
         map.SetTile(1, 0, 101);
 
-        var draws = SceneRenderer.TileDraws(entity, map).ToList();
+        var draws = map.TileDraws().ToList();
 
         Assert.Equal(["a.png", "b.png"], draws.Select(d => d.Image));
         Assert.Equal([new Vector4(0.5f, 0, 0.5f, 0.5f), new Vector4(0.5f, 0, 0.5f, 1)], draws.Select(d => d.Source));

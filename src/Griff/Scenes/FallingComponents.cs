@@ -19,8 +19,11 @@ namespace Griff.Scenes;
 [Requires(typeof(Tilemap), Note = "holds the blocks that have landed")]
 [WorksWith(typeof(Counter), Note = "shows the score (Count Score), the rows cleared (\"Lines\") or the level (\"Level Up\", starting at 1)")]
 [ComponentName("Griff.FallingBoard")]
-public sealed class FallingBoard : Component
+public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, INetState
 {
+    // The piece falling, what's coming and rows clearing, as lines.
+    void INetState.Network(NetState state) => state.Add<IReadOnlyList<string>>(() => FallingView.Write(this).ToArray(), lines => FallingView.Read(this, lines));
+
     /// <summary>Every shape there is, in the order their tiles go: each lands as <see cref="FirstTile"/> plus its place here.</summary>
     public const string AllShapes = "IJLOSTZ";
 

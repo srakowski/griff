@@ -4,8 +4,8 @@ namespace Griff.Scenes;
 
 // A tilemap draws one quad per tile, and only the tiles in view when it can: a big world doesn't draw all of itself every
 // frame. A component that draws the map itself (a match-3 board) takes its place. Tiles go back to front, row by row (by
-// diagonal on an isometric map), so tall ones overlap those behind them; a map that sorts by Y sorts each row among the
-// sprites.
+// diagonal on an isometric map), so tall ones overlap those behind them (and a hex row's pictures overlap the points of
+// the row above); a map that sorts by Y sorts each row among the sprites.
 public sealed partial class Tilemap
 {
     int? IDrawable.DrawOrder => Order;
@@ -35,7 +35,7 @@ public sealed partial class Tilemap
 
     /// <summary>
     /// One quad per tile (in the world), back to front, of those in <paramref name="cull"/> (and a cell around it) or all
-    /// of them. Without an image, tiles are solid squares of the tint.
+    /// of them. Without an image, tiles are solid shapes of the tint: squares, diamonds or hexagons (three quads each).
     /// </summary>
     public IEnumerable<SpriteDraw> TileDraws(Box? cull = null) => TileDraws(cull, Tint).Select(d => d.Draw);
 
@@ -73,12 +73,32 @@ public sealed partial class Tilemap
             var shown = ShownTile(x, y, tile);
             var tileset = TilesetOf(shown);
             var (center, size) = PictureOf(x, y);
+            if (tileset.Image is null && Shape == TileShape.Hex)
+            {
+                foreach (var part in HexParts)
+                    yield return (new SpriteDraw(part * Matrix4x4.CreateScale(TileSize * seamless, TileSize * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world, null, tint, entity) { Source = new Vector4(0, 0, 1, 1) }, x, y);
+                continue;
+            }
+
             var matrix = tileset.Image is null && Shape == TileShape.Isometric
                 ? diamond * Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0)) * world
                 : Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
             yield return (new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) }, x, y);
         }
     }
+
+    // Without a picture, a hex tile is its hexagon (a tile wide and tall, round its middle): three quads that don't overlap,
+    // each a parallelogram from the middle to three corners in a row, so a see-through tint is even all over.
+    private static readonly Matrix4x4[] HexParts =
+    [
+        Parallelogram(new Vector2(0, 0.5f), new Vector2(0.5f, -0.25f)),
+        Parallelogram(new Vector2(0.5f, -0.25f), new Vector2(-0.5f, -0.25f)),
+        Parallelogram(new Vector2(-0.5f, -0.25f), new Vector2(0, 0.5f)),
+    ];
+
+    // Turns the unit quad (-0.5 to 0.5 both ways) into the parallelogram with corners at the origin, a, a + b and b.
+    private static Matrix4x4 Parallelogram(Vector2 a, Vector2 b) =>
+        new(a.X, a.Y, 0, 0, b.X, b.Y, 0, 0, 0, 0, 1, 0, (a.X + b.X) / 2, (a.Y + b.Y) / 2, 0, 1);
 
     /// <summary>
     /// Every non-empty cell and its tile in the order they're drawn: row by row, or on an isometric map diagonal by
@@ -114,6 +134,14 @@ public sealed partial class Tilemap
         {
             var local = Vector2.Transform(view.Center + corner * view.HalfSize, toLocal);
             (min, max) = (Vector2.Min(min, local), Vector2.Max(max, local));
+        }
+
+        if (Shape == TileShape.Hex)
+        {
+            // Rows are three quarters of a tile apart, and a hexagon reaches a quarter tile past its row on each side.
+            var (size, row) = (TileSize, TileSize * 0.75f);
+            return CellsBetween((int)MathF.Floor(min.X / size) - 1, (int)MathF.Floor(max.X / size) + 1,
+                (int)MathF.Floor(-max.Y / row) - 1, (int)MathF.Floor(-min.Y / row) + 1);
         }
 
         if (Shape != TileShape.Isometric)

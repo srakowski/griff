@@ -84,12 +84,13 @@ public sealed partial class Physics
 
     /// <summary>
     /// Like <see cref="BoundsOf(Tilemap)"/>, also saying which runs are one-way platforms. Empty unless the map is
-    /// <see cref="Tilemap.Solid"/> and square (an isometric map's are diamonds: see <see cref="IsometricShapes"/>);
+    /// <see cref="Tilemap.Solid"/> and square (an isometric map's are diamonds: see <see cref="IsometricShapes"/>; hex maps
+    /// don't collide yet);
     /// background tiles are left out.
     /// </summary>
     public static IEnumerable<(Box Box, bool OneWay)> TileShapes(Tilemap tilemap)
     {
-        if (!tilemap.Solid || tilemap.Shape == TileShape.Isometric)
+        if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
             yield break;
 
         var world = tilemap.Entity!.Transform.WorldMatrix;
@@ -109,7 +110,7 @@ public sealed partial class Physics
     /// </summary>
     public static IEnumerable<(Box Cell, bool Rising)> SlopeShapes(Tilemap tilemap)
     {
-        if (!tilemap.Solid || tilemap.Shape == TileShape.Isometric)
+        if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
             yield break;
 
         var world = tilemap.Entity!.Transform.WorldMatrix;

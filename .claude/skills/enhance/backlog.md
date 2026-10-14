@@ -8,8 +8,8 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Views
 
-- [ ] Add hex tilemaps, drawn and painted.
 - [ ] Make grid movement and turn-based play work on hex maps.
+- [ ] Make solid hex maps collide: bodies meet each hexagon's sides and slide along them, raycasts and overlaps see them, and they cast shadows.
 
 ### Profiler
 
@@ -128,6 +128,10 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Add hex tilemaps, drawn and painted. (2026-10-14)
+  - A tilemap's Shape can be Hex: hexagons pointing up and down, a tile wide and tall, in rows 3/4 of a tile apart with odd rows shifted half a tile right (odd-r offset rows, so Tiles stays rows of characters). `CellAt` finds the hexagon by nearest middle (stretched to regular hexagons), `CellCenter`, `OutlineOf` (a block's jagged outline, a cell's six corners), `PictureOf`, `Bounds` and the new `Neighbors(x, y)` (six on a hex map, four otherwise) follow it; `PointAt`/`GridAt` are linear on hex maps (rows 3/4 apart, odd rows' shift not counted). Flood fill spreads to the six neighbors, painting above the top row grows the map two rows at a time (so odd rows stay shifted), the Scene view draws, outlines and previews hexagons, culling works, and a tile with no tileset is three non-overlapping parallelograms. Sort By Y works a row at a time.
+  - Checked through the MCP: `component_describe` shows Hex with its description; built a 5 by 5 board with `entity_create` and a hex tileset written with `asset_write`, read it back, filled, painted above the top (the map moved up 2.25 for two rows of a 1.5 tile) and painted a rectangle through `ui_invoke` on SceneViewModel, and the game and Scene view screenshots showed the hexagons fitting together (a see-through tileless map evenly tinted). Demo `demos/hex-tilemaps.demo`; its first check once found the fill leaking past the river (a brush click seemingly landing off its hexagon), then passed three times in a row and played through.
+  - Left for later: hex maps don't collide or cast shadows (new item after the hex grid movement one), autotiles join on a square's four sides, and there are no flat-topped hexagons in columns.
 - [x] Add an Isometric template. (2026-10-14)
   - A sunny ruined courtyard on a 12 by 12 isometric map (`ProjectTemplates.Isometric.cs`, art painted in `TemplateArt.Isometric.cs`: a tileset of grass, flowers, path, dirt, stone, mossy stone, hedge and low wall, and the hero, gardener, slime, crate and plate): a floor that doesn't collide, a solid wall layer that sorts by Y (tall walls along the back and an old shed, low walls along the front so they don't hide what's behind them), a hero with Isometric Top-down Movement, a sword and a dash, five gems (one in the shed, one behind the hedge), a slime that chases on sight round the walls, a crate pushed up into the hedge's corner onto a plate for a bonus gem, the gardener with dialogue choices and a portrait, score, hearts, pause menu and music. Built from the same no-code pieces as the other templates, so it combines with what the Mashups foundations add.
   - Camera Sort By Y now compares sprites by the bottoms of their pictures (where they stand) rather than their middles, so a tall hero and the rows of an isometric map sort by feet; the old advice to offset a sprite in a child entity didn't work (a child sorts by its own position).

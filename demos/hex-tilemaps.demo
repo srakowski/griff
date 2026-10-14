@@ -1,0 +1,60 @@
+title: Hex tilemaps
+intro: A tilemap's cells can now be hexagons: painted, filled and grown in the Scene view, and drawn the same in the game.
+project: Empty | Hex Board
+write: Tiles/hex.png | hex-tilemaps/hex.png
+
+chapter: Hexagons | Shape: Hex
+create: Tilemap
+set: Transform.Position = -4, 3, 0
+pickimage: Tilemap.Image = Tiles/hex.png
+set: Tilemap.Columns = 4
+set: Tilemap.Tint = #FFFFFF
+set: Tilemap.Tile Size = 1.5
+say: Here's a tileset of hexagons: grass, water, sand and forest, each in a square tile with its points at the top and bottom.
+set: Tilemap.Shape = Hex
+explain: field:Tilemap.Shape | Shape | A tilemap's Shape can now be Hex. Its cells become hexagons in rows three quarters of a tile apart, with every other row shifted half a tile to the right, so they fit together.
+look: 0.5, 0, 4.5
+click: tiles:Rectangle
+click: tiles:0
+scenedrag: -3.25, 2.25 > 4.25, -2.25
+expecttile: Tilemap 0, 0 = 0
+expecttile: Tilemap 5, 4 = 0
+explain: world:-5, 4, 6, -4 | Painting follows the hexagons | The rectangle paints whole rows of hexagons, and the outline under the pointer is the hexagon it will paint.
+
+chapter: Rivers and fills | The six neighbors
+click: tiles:Brush
+click: tiles:1
+sceneclick: 1.25, 2.25
+sceneclick: 0.5, 1.125
+sceneclick: -0.25, 0
+sceneclick: -1, -1.125
+sceneclick: -1.75, -2.25
+expecttile: Tilemap 3, 0 = 1
+expecttile: Tilemap 2, 1 = 1
+expecttile: Tilemap 2, 2 = 1
+expecttile: Tilemap 1, 3 = 1
+expecttile: Tilemap 1, 4 = 1
+explain: world:-3, 3, 2.5, -3 | A river | The brush paints the hexagon under the pointer. Each of these touches the next along a side, so the river runs unbroken from the top to the bottom.
+click: tiles:Fill
+click: tiles:2
+scenehover: -3.25, 2.25
+explain: world:-4.5, 3, 1, -3 | Fill spreads to six neighbors | The fill tool shows what it would cover: the grass on this side of the river, spreading to the six hexagons round each cell, and no further.
+sceneclick: -3.25, 2.25
+expecttile: Tilemap 0, 4 = 2
+expecttile: Tilemap 2, 0 = 2
+expecttile: Tilemap 3, 1 = 0
+
+chapter: Growing the map | Painting above it
+click: tiles:Brush
+click: tiles:3
+sceneclick: 4.25, 0
+sceneclick: 3.5, -1.125
+sceneclick: 5, -1.125
+sceneclick: -1, 3.375
+expecttile: Tilemap 1, 1 = 3
+expecttile: Tilemap 0, 2 = 2
+explain: world:-5, 5, 6, -3 | Two rows at a time | Painting above the top row grows the map up two rows at once, so the shifted rows stay the shifted ones. The map moves up to make room, and every tile stays where it was.
+play
+wait: 1.5
+say: The game draws the hexagons just as the Scene view does. Grid movement and turns on hex maps come next.
+stop

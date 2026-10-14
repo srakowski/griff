@@ -205,8 +205,9 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.DrawImage(Tinted(image, tilemap.Tint), rect);
                 dc.Pop();
             }
-            else if (tilemap.Shape == TileShape.Isometric)
+            else if (tilemap.Shape != TileShape.Square)
             {
+                // A diamond or hexagon, from its corners.
                 dc.DrawGeometry(fill, new Pen(fill, bleed * 2), Polygon(tilemap.OutlineOf(x, y, x, y)));
             }
             else
@@ -434,7 +435,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     DrawOutline(outline, solid);
             }
 
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape != TileShape.Isometric))
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Square))
             {
                 foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
                 {
@@ -668,7 +669,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var accent = style.Brush("Brush.Accent");
         dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(tilemap.Entity!.Transform.WorldMatrix)));
 
-        // Squares on a square map, diamonds on an isometric one.
+        // Squares on a square map, diamonds on an isometric one, hexagons on a hex one.
         var extent = Polygon(tilemap.OutlineOf(0, 0, Math.Max(1, tilemap.Width) - 1, Math.Max(1, tilemap.Height) - 1));
         dc.DrawGeometry(null, new Pen(style.Brush("Brush.Text.Tertiary"), 1 / viewport.Zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
 

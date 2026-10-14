@@ -238,4 +238,35 @@ public class SceneTilePaintTests
             Assert.DoesNotContain(nameof(Tilemap.TileHeight), Shown());
         });
     }
+
+    [Fact]
+    public void AHexMap_PaintsTheHexagonUnderThePointer_FillsItsSixNeighbors_AndGrowsUpTwoRowsAtATime()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+            map.Shape = TileShape.Hex;
+            map.TileSize = 2;
+            model.BrushTile = 2;
+
+            // Cell 1, 1 is in an odd row, shifted half a tile right: its middle is 4 across and 2.5 down.
+            Assert.Equal((1, 1), model.CellAt(new Vector2(4, -2.5f)));
+            Assert.Equal((1, 0), model.CellAt(new Vector2(3, -1)));
+
+            // The two empty cells in the middle row are walled in by their six neighbors.
+            Assert.Equal(2, model.FillTiles(1, 1));
+            Assert.Equal(["1111", "1221", "1111"], map.Tiles);
+            document.History.Undo();
+
+            // Painting above the top row adds two rows, so the odd rows stay the shifted ones, and moves the map up two
+            // rows (three quarters of a tile each) so its tiles stay put.
+            var before = map.Entity!.Transform.Position;
+            model.PaintTile(0, -1);
+            Assert.Equal(["", "2", "1111", "1..1", "1111"], map.Tiles);
+            Assert.Equal(before + new Vector3(0, 3, 0), map.Entity.Transform.Position);
+            Assert.Equal((1, 3), model.CellAt(new Vector2(4, -2.5f)));
+            document.History.Undo();
+            Assert.Equal(before, map.Entity.Transform.Position);
+        });
+    }
 }

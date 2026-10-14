@@ -4,8 +4,8 @@ namespace Griff.Scenes;
 
 /// <summary>
 /// A grid of tiles from one or more tileset images, drawn and (optionally) collided with as a whole. The grid starts
-/// at the entity's position and runs right and down, or on an isometric map (see <see cref="Shape"/>) as diamonds
-/// running down to the right and down to the left. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
+/// at the entity's position and runs right and down, on an isometric map (see <see cref="Shape"/>) as diamonds
+/// running down to the right and down to the left, and on a hex map as rows of hexagons. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
 /// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
 /// A tilemap with no <see cref="Image"/> on an entity inside another tilemap's is one of its layers (see
 /// <see cref="LayerOf"/>), painted on its own: it uses that map's tilesets, tile size and tile settings, while its
@@ -160,7 +160,10 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// right from the entity's position (the top corner of cell 0, 0) and its rows down to the left. Tiles, painting,
     /// <see cref="CellAt"/> and <see cref="CellCenter"/> all follow it, and so do collisions: on an isometric map a body
     /// meets a solid tile's diamond with the diamond under its collider (see <see cref="Body"/>), sliding along the
-    /// walls, and grid movers step from diamond to diamond. A layer's is its map's (see <see cref="LayerOf"/>).
+    /// walls, and grid movers step from diamond to diamond. <see cref="TileShape.Hex"/> makes the cells hexagons
+    /// pointing up and down, a tile wide and a tile tall, in rows three quarters of a tile apart with every odd row (the
+    /// second, fourth...) shifted half a tile to the right, the entity's position at the top left of cell 0, 0's picture;
+    /// hex maps are drawn and painted but don't collide yet. A layer's is its map's (see <see cref="LayerOf"/>).
     /// </summary>
     public TileShape Shape
     {
@@ -170,7 +173,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>
     /// Width and height of one cell in world units, before the transform's scale; on an isometric map, a diamond's width
-    /// (it's half as tall). A layer's is its map's (see <see cref="LayerOf"/>).
+    /// (it's half as tall), and on a hex map a hexagon's width and height (its rows are three quarters of it apart). A
+    /// layer's is its map's (see <see cref="LayerOf"/>).
     /// </summary>
     public float TileSize
     {
@@ -422,7 +426,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// <summary>
     /// The grid with every cell in the rectangle between two corner cells (either way round) set to
     /// <paramref name="tile"/>, leaving this map alone. Like <see cref="Painted"/>, the grid grows left and up to take
-    /// in a rectangle reaching past those edges; clearing (-1) only reaches the cells already in the grid.
+    /// in a rectangle reaching past those edges (a hex map up an even number of rows, so its odd rows stay the shifted
+    /// ones); clearing (-1) only reaches the cells already in the grid.
     /// </summary>
     public (IReadOnlyList<string> Tiles, int ShiftX, int ShiftY) PaintedRect(int fromX, int fromY, int toX, int toY, int tile)
     {
@@ -439,6 +444,9 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
         var shiftX = Math.Max(0, -left);
         var shiftY = Math.Max(0, -top);
+        // A hex map's odd rows are the shifted ones, so it grows up two rows at a time to keep each row's shift.
+        if (Shape == TileShape.Hex && shiftY % 2 == 1)
+            shiftY++;
         var rows = _tiles.Select(r => shiftX > 0 && r.Length > 0 ? new string(Empty, shiftX) + r : r).ToList();
         rows.InsertRange(0, Enumerable.Repeat("", shiftY));
         while (rows.Count <= bottom + shiftY)
@@ -480,7 +488,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>
     /// The cells a paint-bucket fill from cell (<paramref name="x"/>, <paramref name="y"/>) reaches: that cell and every
-    /// cell joined to it side by side through cells holding the same tile (or all empty), within the grid's
+    /// cell joined to it side by side (see <see cref="Neighbors"/>) through cells holding the same tile (or all empty), within the grid's
     /// <see cref="Width"/> and <see cref="Height"/>. Empty when the cell is outside the grid.
     /// </summary>
     public IReadOnlyList<(int X, int Y)> FillRegion(int x, int y)
@@ -498,10 +506,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
         while (open.TryPop(out var cell))
         {
             region.Add(cell);
-            Visit(cell.X + 1, cell.Y);
-            Visit(cell.X - 1, cell.Y);
-            Visit(cell.X, cell.Y + 1);
-            Visit(cell.X, cell.Y - 1);
+            foreach (var (nx, ny) in Neighbors(cell.X, cell.Y))
+                Visit(nx, ny);
         }
 
         return region;
@@ -525,20 +531,51 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public (int X, int Y) CellAt(Vector2 local)
     {
         var size = TileSize > 0 ? TileSize : 1;
+        if (Shape == TileShape.Hex)
+            return HexAt(local, size);
         if (Shape != TileShape.Isometric)
             return ((int)MathF.Floor(local.X / size), (int)MathF.Floor(-local.Y / size));
         var grid = GridAt(local);
         return ((int)MathF.Floor(grid.X), (int)MathF.Floor(grid.Y));
     }
 
+    // The hexagon a point is in: the one whose middle is nearest, measured with the hexagons stretched up and down until
+    // they're regular (a tile tall, they're a little squat), where each one holds the points nearer its middle than any
+    // other's.
+    private static (int X, int Y) HexAt(Vector2 local, float size)
+    {
+        var stretch = 2 / MathF.Sqrt(3);
+        var row = (int)MathF.Floor(-local.Y / (size * 0.75f));
+        var (best, nearest) = ((0, 0), float.PositiveInfinity);
+        for (var y = row - 1; y <= row + 1; y++)
+        {
+            var column = (int)MathF.Floor(local.X / size - (y & 1) * 0.5f);
+            for (var x = column - 1; x <= column + 1; x++)
+            {
+                var away = local - HexCenter(x, y, size);
+                var distance = away.X * away.X + away.Y * away.Y * stretch * stretch;
+                if (distance < nearest)
+                    (best, nearest) = ((x, y), distance);
+            }
+        }
+
+        return best;
+    }
+
+    // The middle of hexagon x, y on a hex map: odd rows are shifted half a tile right, and rows are 3/4 of a tile apart.
+    private static Vector2 HexCenter(int x, int y, float size) => new((x + 0.5f + (y & 1) * 0.5f) * size, -(y * 0.75f + 0.5f) * size);
+
     /// <summary>
     /// How many columns (X) and rows (Y) along the grid <paramref name="local"/>, a point in the entity's own space, is
-    /// from its start: the other way from <see cref="PointAt"/>, so cell x, y holds the points from (x, y) to (x + 1,
-    /// y + 1). On an isometric map that turns the diamonds into squares, where walls run straight along the grid.
+    /// from its start: the other way from <see cref="PointAt"/>, so on a square or isometric map cell x, y holds the
+    /// points from (x, y) to (x + 1, y + 1). On an isometric map that turns the diamonds into squares, where walls run
+    /// straight along the grid; on a hex map rows are three quarters of a tile apart, and odd rows' shift isn't counted.
     /// </summary>
     public Vector2 GridAt(Vector2 local)
     {
         var size = TileSize > 0 ? TileSize : 1;
+        if (Shape == TileShape.Hex)
+            return new Vector2(local.X / size, -local.Y / (size * 0.75f));
         if (Shape != TileShape.Isometric)
             return new Vector2(local.X / size, -local.Y / size);
 
@@ -549,28 +586,98 @@ public sealed partial class Tilemap : Component, ISortsInParts
         return new Vector2((down + across) / 2, (down - across) / 2);
     }
 
-    /// <summary>The center of cell (<paramref name="x"/>, <paramref name="y"/>) in the entity's own space.</summary>
-    public Vector2 CellCenter(int x, int y) => PointAt(x + 0.5f, y + 0.5f);
+    /// <summary>
+    /// The center of cell (<paramref name="x"/>, <paramref name="y"/>) in the entity's own space (on a hex map, odd rows'
+    /// are half a tile further right).
+    /// </summary>
+    public Vector2 CellCenter(int x, int y) => Shape == TileShape.Hex ? HexCenter(x, y, TileSize) : PointAt(x + 0.5f, y + 0.5f);
 
     /// <summary>
     /// The point <paramref name="x"/> columns and <paramref name="y"/> rows along the grid from its start (the entity's
     /// position), in the entity's own space: whole numbers are the corners between cells, so (x + 0.5, y + 0.5) is cell
     /// x, y's center. On a square map that's right and down; on an isometric one, down to the right and down to the left.
+    /// On a hex map it's right and down by rows three quarters of a tile apart, not counting odd rows' shift (use
+    /// <see cref="CellCenter"/> for a hexagon's middle).
     /// </summary>
     public Vector2 PointAt(float x, float y)
     {
         var size = TileSize;
-        return Shape == TileShape.Isometric ? new Vector2((x - y) * size / 2, -(x + y) * size / 4) : new Vector2(x * size, -y * size);
+        return Shape switch
+        {
+            TileShape.Isometric => new Vector2((x - y) * size / 2, -(x + y) * size / 4),
+            TileShape.Hex => new Vector2(x * size, -y * size * 0.75f),
+            _ => new Vector2(x * size, -y * size),
+        };
     }
 
     /// <summary>
     /// The outline of the cells from (<paramref name="left"/>, <paramref name="top"/>) to (<paramref name="right"/>,
-    /// <paramref name="bottom"/>), corners included, in the entity's own space: its four corners, from the grid's start
-    /// (top left, or top on an isometric map) round the way the columns run. A square on a square map, a diamond on an
-    /// isometric one.
+    /// <paramref name="bottom"/>), corners included, in the entity's own space, from the grid's start (top left, or top
+    /// on an isometric map) round the way the columns run. A square on a square map, a diamond on an isometric one, and
+    /// on a hex map the hexagons' edges all the way round: a single cell's six corners from its top left one.
     /// </summary>
-    public Vector2[] OutlineOf(int left, int top, int right, int bottom) =>
-        [PointAt(left, top), PointAt(right + 1, top), PointAt(right + 1, bottom + 1), PointAt(left, bottom + 1)];
+    public Vector2[] OutlineOf(int left, int top, int right, int bottom) => Shape == TileShape.Hex
+        ? HexOutline(left, top, right, bottom)
+        : [PointAt(left, top), PointAt(right + 1, top), PointAt(right + 1, bottom + 1), PointAt(left, bottom + 1)];
+
+    // Round the edge of a block of hexagons, clockwise from the top left corner of its top left cell: along the top row's
+    // peaks, down the right column's sides, back along the bottom row and up the left column. Worked out in half tiles
+    // across and quarter tiles down, where every corner is a whole number, so corners two cells share come out the same
+    // and are kept once.
+    private Vector2[] HexOutline(int left, int top, int right, int bottom)
+    {
+        var corners = new List<(int X, int Y)>();
+        for (var x = left; x <= right; x++)
+            Add(x, top, -1, -1, 0, -2);
+        for (var y = top; y <= bottom; y++)
+        {
+            Add(right, y, 1, -1, 1, 1);
+            // An odd row sticks out on the right: round its bottom corner to the row below.
+            if (y < bottom && (y & 1) == 1)
+                Add(right, y, 0, 2);
+        }
+
+        for (var x = right; x >= left; x--)
+            Add(x, bottom, 0, 2, -1, 1);
+        for (var y = bottom; y >= top; y--)
+        {
+            Add(left, y, -1, 1, -1, -1);
+            // An even row sticks out on the left: round its top corner to the row above.
+            if (y > top && (y & 1) == 0)
+                Add(left, y, 0, -2);
+        }
+
+        if (corners.Count > 1 && corners[^1] == corners[0])
+            corners.RemoveAt(corners.Count - 1);
+        var size = TileSize;
+        return corners.Select(c => new Vector2(c.X * size / 2, -c.Y * size / 4)).ToArray();
+
+        // Corners of cell x, y, each as half tiles across and quarter tiles down from its middle.
+        void Add(int x, int y, params int[] offsets)
+        {
+            var (middleX, middleY) = (2 * x + 1 + (y & 1), 3 * y + 2);
+            for (var i = 0; i < offsets.Length; i += 2)
+            {
+                var corner = (middleX + offsets[i], middleY + offsets[i + 1]);
+                if (corners.Count == 0 || corners[^1] != corner)
+                    corners.Add(corner);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cells that share a side with cell (<paramref name="x"/>, <paramref name="y"/>), inside the grid or not: the
+    /// four above, right, below and left of it, or on a hex map the six round it, clockwise from the top left (the two
+    /// in the row above, which for an odd row are its own column and the one to its right and for an even row the one to
+    /// its left and its own; the one to its right; the two below, the same way; the one to its left).
+    /// </summary>
+    public IEnumerable<(int X, int Y)> Neighbors(int x, int y)
+    {
+        if (Shape != TileShape.Hex)
+            return [(x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)];
+        var shift = y & 1;
+        return [(x - 1 + shift, y - 1), (x + shift, y - 1), (x + 1, y), (x + shift, y + 1), (x - 1 + shift, y + 1), (x - 1, y)];
+    }
 
     /// <summary>
     /// The box the grid's tiles cover in the entity's own space, (min, max): all its cells, and on an isometric map the
@@ -588,8 +695,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>
     /// Where cell (<paramref name="x"/>, <paramref name="y"/>)'s picture is drawn in the entity's own space: its middle and
-    /// size. On a square map that's the cell; on an isometric one it's a tile wide and <see cref="TileHeight"/> tall,
-    /// standing on the cell's bottom corner.
+    /// size. On a square map that's the cell, and on a hex map a tile-sized square round the hexagon; on an isometric one
+    /// it's a tile wide and <see cref="TileHeight"/> tall, standing on the cell's bottom corner.
     /// </summary>
     public (Vector2 Center, Vector2 Size) PictureOf(int x, int y)
     {
@@ -602,7 +709,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
 
     /// <summary>
     /// Which row cell (<paramref name="x"/>, <paramref name="y"/>) is drawn in, back (0) to front: its row on a square
-    /// map, its diagonal (x + y) on an isometric one. A map that sorts by Y sorts each of these among the sprites.
+    /// or hex map, its diagonal (x + y) on an isometric one. A map that sorts by Y sorts each of these among the sprites.
     /// </summary>
     public int DepthOf(int x, int y) => Shape == TileShape.Isometric ? x + y : y;
 
@@ -1111,6 +1218,12 @@ public enum TileShape
 
     /// <summary>Diamonds twice as wide as they're tall, for an isometric view.</summary>
     Isometric,
+
+    /// <summary>
+    /// Hexagons pointing up and down, a tile wide and tall, in rows three quarters of a tile apart with every odd row
+    /// shifted half a tile right: for board games, strategy and tactics.
+    /// </summary>
+    Hex,
 }
 
 /// <summary>A run of tiles that animate one after another; see <see cref="Tilemap.AnimatedTiles"/>.</summary>

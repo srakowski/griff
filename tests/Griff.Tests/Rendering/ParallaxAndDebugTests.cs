@@ -116,6 +116,22 @@ public class ParallaxAndDebugTests
     }
 
     [Fact]
+    public void SortByY_ComparesWhereSpritesStand_TheBottomsOfTheirPictures()
+    {
+        _camera.GetComponent<Camera>()!.SortByY = true;
+        // A tree whose middle is above the hero's, but whose trunk stands lower down: the hero is behind it.
+        var hero = AddSprite("Hero", new Vector2(0, 0), new Vector2(1, 1));
+        var tree = AddSprite("Tree", new Vector2(0, 1), new Vector2(1, 4));
+        // Turned on its side, a tall sprite stands on its turned bottom edge.
+        var log = AddSprite("Log", new Vector2(3, 1.2f), new Vector2(1, 4));
+        log.Transform.Rotation = new Vector3(0, 0, 90);
+
+        var order = SceneRenderer.Build(_scene, 1).Sprites.Select(d => d.Entity).ToList();
+
+        Assert.Equal([log, hero, tree], order);
+    }
+
+    [Fact]
     public void SortByY_StillRespectsOrder()
     {
         _camera.GetComponent<Camera>()!.SortByY = true;

@@ -338,14 +338,17 @@ public static class SceneRenderer
     private static bool Describe(Entity entity, bool sortByY, List<IDrawable> drawables, List<IDrawable>? overs, out Drawn entry)
     {
         Vector3 position;
+        Matrix4x4 world;
         if (entity.SoleSprite is { } sole)
         {
-            position = entity.Transform.WorldPosition;
-            entry = new Drawn(entity, sole, 0, 0, IsLifted(entity), sole.Order, position.Z, sortByY ? position.Y : 0);
+            world = entity.Transform.WorldMatrix;
+            position = world.Translation;
+            entry = new Drawn(entity, sole, 0, 0, IsLifted(entity), sole.Order, position.Z, sortByY ? FeetOf(sole, world) : 0);
             return true;
         }
 
         drawables.Clear();
+        Sprite? firstSprite = null;
         int? spriteOrder = null, ownOrder = null;
         var orderStep = int.MaxValue;
         foreach (var component in entity.ComponentList)
@@ -366,8 +369,8 @@ public static class SceneRenderer
                 at--;
             drawables.Insert(at, drawable);
 
-            if ((component.Roles & ComponentRoles.Sprite) != 0)
-                spriteOrder ??= Unsafe.As<Sprite>(component).Order;
+            if ((component.Roles & ComponentRoles.Sprite) != 0 && firstSprite is null)
+                (firstSprite, spriteOrder) = (Unsafe.As<Sprite>(component), Unsafe.As<Sprite>(component).Order);
             else if (step < orderStep && drawable.DrawOrder is { } own)
                 (ownOrder, orderStep) = (own, step);
         }
@@ -378,9 +381,19 @@ public static class SceneRenderer
             return false;
         }
 
-        position = entity.Transform.WorldPosition;
-        entry = new Drawn(entity, null, 0, 0, IsLifted(entity), entityOrder, position.Z, sortByY ? position.Y : 0);
+        world = entity.Transform.WorldMatrix;
+        position = world.Translation;
+        var y = !sortByY ? 0 : firstSprite is not null ? FeetOf(firstSprite, world) : position.Y;
+        entry = new Drawn(entity, null, 0, 0, IsLifted(entity), entityOrder, position.Z, y);
         return true;
+    }
+
+    // What a sprite sorts by when the camera sorts by Y: the bottom of its picture on the screen, where a character's feet
+    // are (or a tree's trunk meets the ground), so a tall sprite and a short one beside it sort by where they stand.
+    private static float FeetOf(Sprite sprite, in Matrix4x4 world)
+    {
+        var size = sprite.Size;
+        return world.M42 - (MathF.Abs(world.M12 * size.X) + MathF.Abs(world.M22 * size.Y)) / 2;
     }
 
     // Lifted ones last, then by Order, then Z, then (sorting by Y) higher up first, keeping hierarchy order among equals

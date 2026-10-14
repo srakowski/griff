@@ -42,7 +42,7 @@ public class ComponentCatalogTests
     {
         var summary = Entry<Body>().Summary;
 
-        Assert.Equal("Makes an entity with a Collider move under velocity and gravity and collide with solids.", summary.PlainText);
+        Assert.StartsWith("Makes an entity with a Collider move under velocity and gravity and collide with solids. On an isometric Tilemap,", summary.PlainText);
         Assert.Contains(summary.Paragraphs[0], r => r is { Kind: DocRunKind.Reference, Text: "Collider" } && r.Target == typeof(Collider));
     }
 

@@ -64,5 +64,5 @@ explain: game | Blocked | The pillar's diamond is down to the right, so pressing
 tap: Left
 wait: 0.3
 expectat: Player = -2, -2.5
-say: Chasers, patrols, crates and pathfinding step over the diamonds the same way, and an Isometric template is next.
+say: Chasers, patrols, crates and pathfinding step over the diamonds the same way, and the Isometric template puts it all together.
 stop

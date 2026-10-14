@@ -1,0 +1,48 @@
+title: The Isometric template
+intro: A sunny courtyard seen at a slant, where the hero walks behind and in front of its walls. No code.
+project: Isometric | Courtyard
+
+chapter: The courtyard | An isometric map, a layer of walls, and feet on the diamonds
+say: The new Isometric template is a ruined courtyard seen at a slant, built from no-code pieces.
+select: Courtyard
+explain: field:Tilemap.Shape | Shape | The courtyard is an isometric tilemap, its cells diamonds. This is the ground, grass, flowers, a path and dirt, and it doesn't collide.
+select: Walls
+explain: field:Tilemap.SortByY | Sort By Y | The stone walls, the hedge and the low walls along the front are a layer of their own: solid, and drawn a diagonal row at a time among the sprites.
+select: Player
+explain: field:TopDownMovement.Isometric | Isometric | The hero is a top-down mover with Isometric on, so it walks along the slanted ground.
+explain: field:BoxCollider.Offset | At its feet | Its collider is a flat box at its feet, and the diamond inside it is what meets the walls.
+select: Main Camera
+explain: field:Camera.SortByY | Sort By Y | The camera sorts by Y too, and sprites now sort by the bottoms of their pictures, where they stand. So a tall hero and a short slime sort by their feet, not their middles.
+deselect
+
+chapter: Behind and in front | Round the back of the shed
+play
+wait: 0.5
+hold: Up+Right 2
+hold: Up+Left 2.5
+expectvalue: Score.Text.Value = Score: 1
+explain: game | Behind the shed | Along the back of the courtyard the hero walks behind the old shed, whose walls hide their legs, to the gem in the far corner.
+stop
+
+chapter: The crate | Pushed into the hedge's corner
+select: Player
+set: Transform.Position = 3, -2.5, 0
+deselect
+play
+wait: 0.5
+hold: Up 1.5
+wait: 0.3
+explain: game | Onto the plate | Pushed up into the hedge's corner, the crate presses the plate, and a bonus gem turns up below.
+stop
+
+chapter: The gardener | Someone to talk to
+select: Player
+set: Transform.Position = -1, -0.5, 0
+deselect
+play
+wait: 0.5
+tap: E
+wait: 1.5
+explain: game | The gardener | The gardener talks from the diamonds around them, with a name and a portrait, and answers what the hero asks. The hero stands just in front of them, so the hero is drawn over them.
+stop
+say: A gem in the shed, one behind the hedge and more in the corners, a slime that chases you once it sees you, and a sword to fight it with. That's the Isometric template.

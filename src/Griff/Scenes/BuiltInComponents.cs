@@ -34,8 +34,9 @@ public sealed class Camera : Component
 
     /// <summary>
     /// For top-down games: among things with the same Order and Z, whatever is lower down draws in front, so the player
-    /// walks behind a tree's top and in front of its trunk. Compares entities' positions, so put a tall sprite's pivot
-    /// at its feet (offset it within a child entity).
+    /// walks behind a tree's top and in front of its trunk. A sprite sorts by the bottom of its picture, where it stands
+    /// (a character's feet, a tree's trunk), so tall and short sprites side by side sort by where they stand; anything
+    /// else that draws sorts by its position. A tilemap that sorts by Y puts each row of tiles at its cells' middle.
     /// </summary>
     public bool SortByY { get; set; }
 

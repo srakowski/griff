@@ -51,7 +51,7 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Genres: physics games
 
-Built-in genres wait until the engine work above is done (the user's call, 2026-10-13): the genre blocks below come after Architecture, Views, Profiler, Physics, Platforms and Debugger, and before 3D and VR.
+Built-in genres wait until the engine work above is done (the user's call, 2026-10-13): the genre blocks below come after Architecture, Views, Profiler, Physics, Platforms and Debugger, and before 3D and VR. Until Mashups below gives every component actions and outputs, new genre pieces send a message for each thing that happens and let a Counter count what matters, so they're easy to connect later.
 
 - [ ] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts.
 - [ ] Add a Physics template, in the Angry Birds style.
@@ -92,6 +92,26 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 - [ ] Add VR movement: teleport and smooth movement, with comfort options (snap turning, a vignette while moving).
 - [ ] Add a VR template.
   - Testing VR needs a headset: check what tests and the MCP can, then ask the user to try it on their headset and report back.
+
+### Mashups
+
+The goal: a jam themed "combine genres" is easy in Griff. Any genre's pieces drive and read any other's without code,
+genres share a scene and hand off between scenes, and small mixes show it off. Two rules carry it: what a component
+does is an action anything can trigger, and what it knows is an output anything can read; both are found the way
+components are, so script and plugin components join in the same way built-in ones do.
+
+- [ ] Let anything trigger anything in one go: components name their actions (Switch On, Off and Toggle; Door Open and Lock; Spawner Spawn; Shooter Fire; Mover Step; Health Damage and Heal by an amount; TurnOrder End Turn; Panel Open and Close; a board's Pause, Restart and Shuffle; Dialogue Start; Sound Play; Set Flag), found by an attribute so a script component's methods count too; any entity gets Triggers in the Inspector ("when this message arrives, from anyone or a named entity, do this action on these entities"); wires fire an action on their rising edge as well as holding Power; messages go to everyone, a named entity or its children, so two boards can be told apart; and the Scene view draws a line from each trigger to what it drives.
+  - The no-code half of every mashup ("a match fires the cannon", "the beat ends the turn"). Today only Counter, SoundPlayer, Panel and DungeonGenerator hear a message without code, nothing can damage, spawn or fire once, and Power only holds things on. Actions and outputs reach component_describe by themselves.
+- [ ] Let anything read anything in one go: components name their outputs (a board's score, moves, chain and lines, goals covered, the dungeon floor, the round and whose turn it is, the beat, a faction's resources, a hotbar's blocks, units left), and each output is a wire port and something a Counter, a Bar and a Text can show; a Counter sends a message or turns on when it reaches a value, and can count one per message (the beat sends its number, so a Counter on it adds 0, 1, 2...); and flags work outside dialogue: switches, doors, spawners and panels can need a flag, and a trigger can set one.
+- [ ] Let genres share a scene in one go: boards, the strategy camera and tactics controls take input only while they have focus (Controllable, as the movement components have, and a Focus action), so a match-3 minigame and a platformer don't both move on the arrow keys; strategy, move history, turns and the sandbox tools work for a group or an area instead of the whole scene, with no "first one found"; pausing can stop a group instead of the whole game; and a Viewport draws any camera, first person included, into part of the screen, for split views, minimaps and a raycast window in a 2D game.
+  - Today strategy turns on fog and its HUD for every sprite once any Unit exists, first person replaces the 2D world draw, MoveHistory rewinds every grid mover, and dialogue and panels pause the whole game.
+- [ ] Let games move between genres in one go: a scene can open another on top as a minigame and get its result back (won or lost, and a score) as a message; doors arrive at a named spot in the next scene; scenes remember their state when you come back; Keep Between Scenes becomes a component; and inventory, health and counters carry over and save.
+- [ ] Share the core ideas across genres in one go: one idea of a team (Strategy's Faction, Tactics sides, Team), one of items and resources (inventory, strategy resources, block world items, and what cards and shops will cost), and one grid (a board's cells line up with a tilemap's, and settled board pieces can be solid, so a platformer can climb a falling-blocks stack).
+  - Old scenes keep loading: [FormerName] and component upgrade steps carry their data across.
+- [ ] Put everything on the beat and on turns in one go: Beats on grid movement, turns, falling blocks' gravity, match-3 cascades and tactics, with an on-beat judgment any action can use (on the beat for a bonus); and any mover can take turns, so a dungeon crawler moves to the music or a platformer goes turn by turn.
+- [ ] Make the newer genres mashup-ready in one go: cards, adventures, visual novels, rhythm, fighting, physics puzzlers and pinball (built above) name their actions and outputs and take focus the way the items above set out, so a card can spawn an enemy, a rhythm note can fire a weapon, a pinball bumper can hurt a boss and a hotspot can open any door; and a test fails for a genre module that names no action or no output, so later genres can't skip it.
+- [ ] Add a Mashup template and New Project from two templates in one go: a hub scene with doors into small mixes, each made without code (match-3 battles that hurt a tactics enemy, a dungeon crawler on the beat, falling blocks a platformer climbs, a pinball table that fights a boss, cards that build a platformer level); and New Project can start from two templates at once, joined by a hub.
+  - A demo for each mix. Record in the commit which mixes needed a script, and turn each into an item.
 
 ### Just for fun
 

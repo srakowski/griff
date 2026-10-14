@@ -171,13 +171,13 @@ public interface ILightSource
 /// </summary>
 public sealed class Drawing
 {
-    private readonly List<SpriteDraw> _draws;
+    private List<SpriteDraw> _draws;
 
     /// <summary>A drawing that adds to <paramref name="draws"/>, for <paramref name="entity"/>.</summary>
     public Drawing(List<SpriteDraw> draws, Entity entity, Box view, float lineWidth, bool isPlaying)
     {
         _draws = draws;
-        _entity = entity;
+        _entity = _first = entity;
         View = view;
         LineWidth = lineWidth;
         IsPlaying = isPlaying;
@@ -247,6 +247,29 @@ public sealed class Drawing
 
     /// <summary>Adds a quad as it is.</summary>
     public void Add(in SpriteDraw draw) => _draws.Add(draw);
+
+    // What's drawn so far, to add to in bulk.
+    internal List<SpriteDraw> Draws => _draws;
+
+    // Used again for another frame (see SceneRenderer): adding to `draws`, as if new.
+    internal void Reset(List<SpriteDraw> draws, Box view, float lineWidth, bool isPlaying)
+    {
+        (_draws, Entity, View, LineWidth, IsPlaying, CanCull) = (draws, _first, view, lineWidth, isPlaying, true);
+        Sorts.Clear();
+    }
+
+    // Done with until it's used again: it lets go of the frame's draws and entities, so they can be collected.
+    internal void Release()
+    {
+        (_draws, Entity) = (_released ??= [], _first);
+        _released.Clear();
+        Sorts.Clear();
+    }
+
+    private List<SpriteDraw>? _released;
+
+    // The entity it was made for (what's drawn for the screen, in a frame), which it goes back to.
+    private readonly Entity _first;
 
     /// <summary>
     /// Sorts what's added from here on (up to the next call) by world height <paramref name="y"/> instead of by the

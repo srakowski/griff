@@ -1,0 +1,39 @@
+title: Shadows without garbage
+intro: A dark scene with a light that casts shadows, five thousand bunnies and walls of tiles: its picture is built every frame without making any garbage.
+project: BunnyMark | Dark Bunnies
+
+chapter: Into the dark | A light that casts shadows, and walls of tiles
+create: Light
+rename: Lamp
+set: Light.Radius = 8
+explain: field:Light.Shadows | Shadows | A lamp in the middle, with Shadows on: walls and solid tiles block its light.
+set: Light.Shadows = true
+expectvalue: Lamp.Light.Shadows = true
+select: Main Camera
+set: Camera.Ambient = #262638
+expectvalue: Main Camera.Camera.Ambient = #262638
+say: A dark ambient light on the camera puts the whole scene in the dark.
+create: Tilemap
+rename: Walls
+set: Transform.Position = -9.5, 5.5, 0
+set: Tilemap.Tiles = 00000000000000000000\n0..................0\n0...0.........0....0\n0..................0\n0..........0.......0\n0...0.........0....0\n0..................0\n0....0.............0\n0..................0\n0..................0\n0..................0\n00000000000000000000
+expectvalue: Walls.Tilemap.Solid = true
+say: Walls and pillars of tiles, painted without a tileset, so each is a square of the map's color.
+select: BunnyMark
+set: BunnyMark.HoldCount = 5000
+set: BunnyMark.HoldSeconds = 60
+
+chapter: No garbage | What the Profiler shows
+menu: Game > Profiler
+play
+wait: 4
+expectprofiler: frames
+expectprofiler: cost = Lights
+explain: game | Five thousand bunnies in the dark | The bunnies bounce about in the lamp's light, and the pillars cast shadows across them. Every frame, the sides of everything that blocks light are worked out afresh, and each light's shadows from them.
+expectprofiler: no garbage = Lights
+expectprofiler: no garbage = Tilemap
+explain: profiler:costs | Lights, with no garbage | Building the picture is split by what's drawn. The Lights row is the lights and their shadows: it used to make over four hundred kilobytes of garbage a frame here, and took about a millisecond. Now it makes none, and takes a fraction of that.
+explain: profiler:costs | Tilemaps and systems too | The walls of tiles are drawn without garbage now as well, and so is every system's drawing, like Tactics, with no tactics in the scene.
+explain: profiler:garbage | Garbage a frame | So the frame's garbage is what the editor itself makes, following the game. An exported game's dark scene doesn't keep the garbage collector busy.
+stop
+say: The frame is built into the last one: its lists of draws, lights and shadows are used again, so nothing is thrown away.

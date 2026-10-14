@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using Griff.Rendering;
 using Griff.Scenes;
@@ -8,7 +9,7 @@ namespace Griff.Runtime;
 /// A running game's frame as it's being drawn, handed to each <see cref="GameSystem"/> in turn once every entity has
 /// drawn itself: first to see the world their own way (a first-person view, in DrawView), then to add what the game
 /// knows of and no single entity draws (a strategy game's fog and HUD, a tactics game's reachable cells) or change
-/// what's there (hide what's in the fog), in Draw.
+/// what's there (hide what's in the fog), in Draw. It's used again for the next frame, so don't keep it.
 /// </summary>
 public sealed class FrameDrawing
 {
@@ -19,6 +20,24 @@ public sealed class FrameDrawing
     internal FrameDrawing(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
         List<SpriteDraw> sprites, int screenCount)
     {
+        Reset(game, scene, camera, cameraSize, aspect, view, viewProjection, sprites, screenCount);
+    }
+
+    // Done with until the next frame: it lets go of this one's game, scene and draws, so they can be collected.
+    internal void Release()
+    {
+        (Game, Scene, Camera, _sprites) = (null!, null!, null, _released ??= []);
+        _released.Clear();
+    }
+
+    private List<SpriteDraw>? _released;
+
+    // Starts drawing a new frame with this, as if it were new.
+    [MemberNotNull(nameof(Game), nameof(Scene), nameof(_sprites))]
+    internal void Reset(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
+        List<SpriteDraw> sprites, int screenCount)
+    {
+        Lit = true;
         Game = game!;
         Scene = scene;
         Camera = camera;
@@ -31,13 +50,13 @@ public sealed class FrameDrawing
     }
 
     /// <summary>The game being drawn.</summary>
-    public Game Game { get; }
+    public Game Game { get; private set; }
 
     /// <summary>Its scene.</summary>
-    public Scene Scene { get; }
+    public Scene Scene { get; private set; }
 
     /// <summary>The camera's entity, or null if the scene has none (a default camera at the origin is used).</summary>
-    public Entity? Camera { get; }
+    public Entity? Camera { get; private set; }
 
     /// <summary>
     /// How far this frame is between the game's last two steps, for what a system draws from the game's own state (see
@@ -52,10 +71,10 @@ public sealed class FrameDrawing
     public StepBlend BlendOf(Entity entity) => StepBlend.For(Scene, entity);
 
     /// <summary>Half the height of the camera's view, in world units.</summary>
-    public float CameraSize { get; }
+    public float CameraSize { get; private set; }
 
     /// <summary>The screen's width divided by its height.</summary>
-    public float Aspect { get; }
+    public float Aspect { get; private set; }
 
     /// <summary>A thin line's width in world units: about two pixels on a 720-pixel-high screen, whatever the zoom.</summary>
     public float LineWidth => CameraSize / 180;

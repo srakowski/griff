@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -6,11 +7,17 @@ namespace Griff.Rendering;
 
 /// <summary>
 /// One side of something that blocks light, in the world. Its outside is on the left going from <see cref="A"/> to
-/// <see cref="B"/>, so the sides of a shape go round it clockwise. <see cref="Owner"/> is the shape it belongs to: an
-/// entity, or a tile cell.
+/// <see cref="B"/>, so the sides of a shape go round it clockwise. <see cref="Owner"/> is what it belongs to: an entity
+/// (its colliders), or a <see cref="Tilemap"/> (the tile at <see cref="Cell"/>).
 /// </summary>
 public readonly record struct ShadowEdge(Vector2 A, Vector2 B, object? Owner = null)
 {
+    /// <summary>For a side of a tile, the tile's cell (column, row) in the <see cref="Tilemap"/> that's its <see cref="Owner"/>.</summary>
+    public (int X, int Y) Cell { get; init; }
+
+    // Whether this side and `other` belong to the same shape: an entity, or one tile.
+    internal bool SameShape(in ShadowEdge other) => ReferenceEquals(Owner, other.Owner) && Cell == other.Cell;
+
     /// <summary>Which way the side faces: out of the shape it belongs to.</summary>
     public Vector2 Outward => Vector2.Normalize(new Vector2(A.Y - B.Y, B.X - A.X));
 
@@ -49,30 +56,43 @@ public static class Shadows
     public static List<ShadowEdge> Edges(Scene scene)
     {
         var edges = new List<ShadowEdge>();
-        foreach (var entity in scene.Entities.Where(e => e.IsActive))
+        AddEdges(scene, edges);
+        return edges;
+    }
+
+    /// <summary>
+    /// Adds every side of everything in the scene that blocks light to <paramref name="edges"/>: the solid tilemaps' tiles,
+    /// then the colliders, each in hierarchy order. Once <paramref name="edges"/> has room for them it makes no garbage, so
+    /// a dark scene's frame can work them out afresh each time.
+    /// </summary>
+    public static void AddEdges(Scene scene, List<ShadowEdge> edges)
+    {
+        foreach (var tilemap in scene.Active<Tilemap>())
         {
             // Isometric maps don't block light yet.
-            if (entity.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Square } tilemap)
+            if (!tilemap.Solid)
+                continue;
+            if (tilemap.Shape == TileShape.Square)
                 AddTiles(edges, tilemap);
-            else if (entity.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Hex } hex)
-                AddHexTiles(edges, hex);
-            foreach (var collider in entity.GetComponents<Collider>())
-            {
-                if (collider.IsTrigger || collider is BoxCollider { OneWay: true })
-                    continue;
-                if (collider is BoxCollider box)
-                {
-                    var bounds = Physics.BoundsOf(box);
-                    AddBox(edges, bounds.Min, bounds.Max, entity);
-                }
-                else if (collider is CircleCollider circle)
-                {
-                    AddCircle(edges, Physics.BoundsOf(circle), entity);
-                }
-            }
+            else if (tilemap.Shape == TileShape.Hex)
+                AddHexTiles(edges, tilemap);
         }
 
-        return edges;
+        foreach (var collider in scene.Active<Collider>())
+        {
+            if (collider.IsTrigger || collider is BoxCollider { OneWay: true })
+                continue;
+            var entity = collider.Entity!;
+            if (collider is BoxCollider box)
+            {
+                var bounds = Physics.BoundsOf(box);
+                AddBox(edges, bounds.Min, bounds.Max, entity);
+            }
+            else if (collider is CircleCollider circle)
+            {
+                AddCircle(edges, Physics.BoundsOf(circle), entity);
+            }
+        }
     }
 
     /// <summary>
@@ -81,28 +101,38 @@ public static class Shadows
     /// </summary>
     public static List<ShadowEdge> CastersFor(IReadOnlyList<ShadowEdge> edges, Light light)
     {
+        var casters = new List<ShadowEdge>();
+        AddCasters(edges is List<ShadowEdge> list ? CollectionsMarshal.AsSpan(list) : edges.ToArray(), light, casters);
+        return casters;
+    }
+
+    /// <summary>
+    /// Adds the sides of <paramref name="edges"/> that cast <paramref name="light"/>'s shadows to
+    /// <paramref name="casters"/>, as <see cref="CastersFor"/> picks them, making no garbage once it has room for them.
+    /// </summary>
+    public static void AddCasters(ReadOnlySpan<ShadowEdge> edges, Light light, List<ShadowEdge> casters)
+    {
         var center = light.WorldCenter;
         var owner = light.Entity;
         var radius = light.Radius;
-        var casters = new List<ShadowEdge>();
-        var inside = new Dictionary<object, bool>();
-        for (var i = 0; i < edges.Count; i++)
+        // A shape's sides come together: whether the light is in it (or carried by it) is worked out once for them all.
+        var shape = -1;
+        var inside = false;
+        for (var i = 0; i < edges.Length; i++)
         {
-            var edge = edges[i];
+            ref readonly var edge = ref edges[i];
             if (!edge.FacesAwayFrom(center) || DistanceTo(edge, center) >= radius)
                 continue;
-            if (edge.Owner is { } shape)
+            if (edge.Owner is not null)
             {
-                if (!inside.TryGetValue(shape, out var isInside))
-                    inside[shape] = isInside = IsOwnedBy(shape, owner) || Contains(shape, center);
-                if (isInside)
+                if (shape < 0 || !edges[shape].SameShape(edge))
+                    (shape, inside) = (i, IsOwnedBy(edge.Owner, owner) || Contains(edge, center));
+                if (inside)
                     continue;
             }
 
             casters.Add(edge);
         }
-
-        return casters;
     }
 
     /// <summary>True if nothing in <paramref name="casters"/> stands between <paramref name="light"/> and <paramref name="point"/>.</summary>
@@ -133,23 +163,26 @@ public static class Shadows
         Vector2 Away(Vector2 p) => p - light is var d && d.LengthSquared() > 1e-12f ? Vector2.Normalize(d) : Vector2.Zero;
     }
 
-    // Whether a shape that blocks light (an entity's colliders, or a tile cell) has the point inside it.
-    private static bool Contains(object shape, Vector2 point)
+    // Whether the shape an edge belongs to (an entity's colliders, or a tile) has the point inside it.
+    private static bool Contains(in ShadowEdge edge, Vector2 point)
     {
-        if (shape is Entity entity)
+        if (edge.Owner is Entity entity)
         {
-            return entity.GetComponents<Collider>().Any(c => !c.IsTrigger && c switch
+            foreach (var component in entity.ComponentList)
             {
-                BoxCollider box => Physics.BoundsOf(box).Contains(point),
-                CircleCollider circle => Physics.BoundsOf(circle).Contains(point),
-                _ => false,
-            });
+                if (component is not Collider { IsTrigger: false } collider)
+                    continue;
+                if (collider is BoxCollider box ? Physics.BoundsOf(box).Contains(point) : collider is CircleCollider circle && Physics.BoundsOf(circle).Contains(point))
+                    return true;
+            }
+
+            return false;
         }
 
-        if (shape is TileCell(var tilemap, var x, var y) && Matrix4x4.Invert(tilemap.Entity!.Transform.WorldMatrix, out var toLocal))
+        if (edge.Owner is Tilemap tilemap && Matrix4x4.Invert(tilemap.Entity!.Transform.WorldMatrix, out var toLocal))
         {
             var local = Vector2.Transform(point, toLocal);
-            return tilemap.CellAt(local) == (x, y);
+            return tilemap.CellAt(local) == edge.Cell;
         }
 
         return false;
@@ -166,10 +199,11 @@ public static class Shadows
         return Vector2.Distance(point, edge.A + ab * t);
     }
 
-    // The owner of a tile's sides.
-    private sealed record TileCell(Tilemap Tilemap, int X, int Y);
-
     private static void Add(List<ShadowEdge> edges, Vector2 a, Vector2 b, object owner) => edges.Add(new ShadowEdge(a, b, owner));
+
+    // A side of a tile: the map owns it, with the tile's cell.
+    private static void Add(List<ShadowEdge> edges, Vector2 a, Vector2 b, Tilemap tilemap, (int X, int Y) cell) =>
+        edges.Add(new ShadowEdge(a, b, tilemap) { Cell = cell });
 
     // Clockwise: up the left side, along the top, down the right, back along the bottom.
     private static void AddBox(List<ShadowEdge> edges, Vector2 min, Vector2 max, object owner)
@@ -199,18 +233,19 @@ public static class Shadows
     private static void AddHexTiles(List<ShadowEdge> edges, Tilemap tilemap)
     {
         var world = tilemap.Entity!.Transform.WorldMatrix;
-        foreach (var (x, y, _) in tilemap.Cells())
+        var (width, height) = (tilemap.Width, tilemap.Height);
+        for (var y = 0; y < height; y++)
         {
-            if (!tilemap.IsBlocked(x, y))
-                continue;
-            var corners = tilemap.OutlineOf(x, y, x, y);
-            var cell = new TileCell(tilemap, x, y);
-            var i = 0;
-            foreach (var (nx, ny) in tilemap.Neighbors(x, y))
+            for (var x = 0; x < width; x++)
             {
-                if (!tilemap.IsBlocked(nx, ny))
-                    Add(edges, Vector2.Transform(corners[i], world), Vector2.Transform(corners[(i + 1) % corners.Length], world), cell);
-                i++;
+                if (!tilemap.IsBlocked(x, y))
+                    continue;
+                for (var side = 0; side < 6; side++)
+                {
+                    var (nx, ny) = Tilemap.NeighborOf(x, y, side);
+                    if (!tilemap.IsBlocked(nx, ny))
+                        Add(edges, Vector2.Transform(tilemap.HexCorner(x, y, side), world), Vector2.Transform(tilemap.HexCorner(x, y, (side + 1) % 6), world), tilemap, (x, y));
+                }
             }
         }
     }
@@ -220,53 +255,63 @@ public static class Shadows
     {
         var world = tilemap.Entity!.Transform.WorldMatrix;
         var half = tilemap.TileSize / 2;
-        foreach (var (x, y, tile) in tilemap.Cells())
+        var (width, height) = (tilemap.Width, tilemap.Height);
+        for (var y = 0; y < height; y++)
         {
-            var slope = tilemap.SlopeOf(tile);
-            if (!tilemap.IsBlocked(x, y) && slope == 0)
-                continue;
-            var center = tilemap.CellCenter(x, y);
-            var bottomLeft = Vector2.Transform(center + new Vector2(-half, -half), world);
-            var topLeft = Vector2.Transform(center + new Vector2(-half, half), world);
-            var topRight = Vector2.Transform(center + new Vector2(half, half), world);
-            var bottomRight = Vector2.Transform(center + new Vector2(half, -half), world);
-            var cell = new TileCell(tilemap, x, y);
-
-            // Rows count down the screen: y - 1 is the cell above.
-            var openLeft = !tilemap.IsBlocked(x - 1, y);
-            var openAbove = !tilemap.IsBlocked(x, y - 1);
-            var openRight = !tilemap.IsBlocked(x + 1, y);
-            var openBelow = !tilemap.IsBlocked(x, y + 1);
-            if (slope > 0)
-            {
-                // Rising: solid below the line from bottom left to top right.
-                Add(edges, bottomLeft, topRight, cell);
-                if (openRight)
-                    Add(edges, topRight, bottomRight, cell);
-                if (openBelow)
-                    Add(edges, bottomRight, bottomLeft, cell);
-                continue;
-            }
-
-            if (slope < 0)
-            {
-                // Falling: solid below the line from top left to bottom right.
-                if (openLeft)
-                    Add(edges, bottomLeft, topLeft, cell);
-                Add(edges, topLeft, bottomRight, cell);
-                if (openBelow)
-                    Add(edges, bottomRight, bottomLeft, cell);
-                continue;
-            }
-
-            if (openLeft)
-                Add(edges, bottomLeft, topLeft, cell);
-            if (openAbove)
-                Add(edges, topLeft, topRight, cell);
-            if (openRight)
-                Add(edges, topRight, bottomRight, cell);
-            if (openBelow)
-                Add(edges, bottomRight, bottomLeft, cell);
+            for (var x = 0; x < width; x++)
+                AddTile(edges, tilemap, world, half, x, y);
         }
+    }
+
+    // One cell's sides, as AddTiles says.
+    private static void AddTile(List<ShadowEdge> edges, Tilemap tilemap, in Matrix4x4 world, float half, int x, int y)
+    {
+        if (tilemap.GetTile(x, y) is not (var tile and >= 0))
+            return;
+        var slope = tilemap.SlopeOf(tile);
+        if (!tilemap.IsBlocked(x, y) && slope == 0)
+            return;
+        var center = tilemap.CellCenter(x, y);
+        var bottomLeft = Vector2.Transform(center + new Vector2(-half, -half), world);
+        var topLeft = Vector2.Transform(center + new Vector2(-half, half), world);
+        var topRight = Vector2.Transform(center + new Vector2(half, half), world);
+        var bottomRight = Vector2.Transform(center + new Vector2(half, -half), world);
+        var cell = (x, y);
+
+        // Rows count down the screen: y - 1 is the cell above.
+        var openLeft = !tilemap.IsBlocked(x - 1, y);
+        var openAbove = !tilemap.IsBlocked(x, y - 1);
+        var openRight = !tilemap.IsBlocked(x + 1, y);
+        var openBelow = !tilemap.IsBlocked(x, y + 1);
+        if (slope > 0)
+        {
+            // Rising: solid below the line from bottom left to top right.
+            Add(edges, bottomLeft, topRight, tilemap, cell);
+            if (openRight)
+                Add(edges, topRight, bottomRight, tilemap, cell);
+            if (openBelow)
+                Add(edges, bottomRight, bottomLeft, tilemap, cell);
+            return;
+        }
+
+        if (slope < 0)
+        {
+            // Falling: solid below the line from top left to bottom right.
+            if (openLeft)
+                Add(edges, bottomLeft, topLeft, tilemap, cell);
+            Add(edges, topLeft, bottomRight, tilemap, cell);
+            if (openBelow)
+                Add(edges, bottomRight, bottomLeft, tilemap, cell);
+            return;
+        }
+
+        if (openLeft)
+            Add(edges, bottomLeft, topLeft, tilemap, cell);
+        if (openAbove)
+            Add(edges, topLeft, topRight, tilemap, cell);
+        if (openRight)
+            Add(edges, topRight, bottomRight, tilemap, cell);
+        if (openBelow)
+            Add(edges, bottomRight, bottomLeft, tilemap, cell);
     }
 }

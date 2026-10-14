@@ -6,10 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Profiler
-
-- [ ] Make building a dark scene's picture garbage-free: a light that casts shadows makes about 430 KB and 1 ms a frame with 5,000 BunnyMark bunnies in the dark (the Profiler's Lights row; `Shadows.Edges`/`CastersFor`), a tilemap without a tileset 800 B a frame, and the Tactics system's Draw about 200 B with no tactics in the scene.
-
 ### Physics
 
 - [ ] Make physics bodies rotate (spin, torque, rotated box colliders) as an option per body, so existing components and templates keep working unchanged.
@@ -120,6 +116,7 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Make building a dark scene's picture garbage-free: a light that casts shadows makes about 430 KB and 1 ms a frame with 5,000 BunnyMark bunnies in the dark (the Profiler's Lights row; `Shadows.Edges`/`CastersFor`), a tilemap without a tileset 800 B a frame, and the Tactics system's Draw about 200 B with no tactics in the scene. (2026-10-14)
 - [x] Hold 100,000 bunnies at 60 fps in one go: build the frame and run scripts on several cores (split the frame build across cores and merge the sorted runs), run a crowd of the same script in one pass instead of a call per entity, and skip the sort when nothing changed order; BunnyMark holds 100,000 with 1% lows at 60 and no garbage collections, recorded in the README. (2026-10-14)
   - Done as: `Workers` (the game's thread and up to 15 others taking chunks in turn; `Workers.Count`, 1 for everything on one thread), a frame of 2,048 entities or more built in chunks of 1,024 (each chunk draws its plain sprites, top-level sole sprites with no effects or parallax, without writing to their transforms, and puts them back to front among themselves, skipping the sort when they're in order; the game's thread draws the rest in hierarchy order, merges the runs a stretch at a time, falling back to one key sort when they're mixed, and the chunks copy their draws straight into last frame's list, overwritten rather than cleared), and `[Crowd]` scripts (a run of one crowd type runs as one pass across the cores, each script with its own `Rand` stream from the crowd's seed and its place, those inside other entities after on the game's thread; spawning, destroying, messages, timers, sounds, debug drawing, flashes, saving, component and hierarchy changes throw). The BunnyMark template's `Bunny` is a crowd script; `component_describe` says when a script is one; the profiler counts worker garbage (`Workers.AllocatedBytes`).
   - Measured alternating before (b24c768) and after with four other editors open: exported BunnyMark holds 100,000 at 60 fps, 1% low 60, 0 collections in 3 runs of 3 (before 30 / 30 in 3 of 3); finds 127,932 / 144,686 / 127,932 (before 76,283 / 78,666 / 78,666). BunnyBench 100,000: CPU 7.4 ms (steps 1.6, build 2.9, draw 2.8) against 18.0 (4.4, 10.7, 2.7); 8.9 against 22.1 with two steps; 15.0 on one thread. A Debug editor holds 50,000 at 55 fps (1% low 30) against 19.6 (12). `CoresTests` compares every template's frames and mixed crowds draw for draw and bit for bit, built in chunks on 1 and many threads against one thread, and crowds of scripts on 1, 5 and 16 threads.

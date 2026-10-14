@@ -37,9 +37,17 @@ public static partial class SceneRenderer
     /// big scene's frames don't keep the garbage collector busy. <paramref name="recycle"/> can't be used after.
     /// </summary>
     public static RenderFrame Build(Runtime.Game game, float aspect, RenderFrame? recycle) =>
-        Build(game.Scene, aspect, game, recycle?.Sprites as List<SpriteDraw>);
+        Build(game.Scene, aspect, game, new Recycled(recycle));
 
-    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse = null)
+    // A frame the caller is done with, to fill again: its lists of draws and of lights (with their shadows' lists) too.
+    private readonly record struct Recycled(RenderFrame? Frame)
+    {
+        public List<SpriteDraw>? Sprites => Frame?.Sprites as List<SpriteDraw>;
+
+        public List<LightDraw>? Lights => Frame?.Lights as List<LightDraw>;
+    }
+
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Recycled reuse = default)
     {
         // While something profiles the game, each part of the build is timed (see FrameCostKind.Build).
         if (game?.Profiler is { } profiler)
@@ -47,7 +55,7 @@ public static partial class SceneRenderer
         return Build(scene, aspect, game, reuse, null);
     }
 
-    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse, BuildTimer? timer)
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer)
     {
         // A running game is drawn between its last two steps: everything that moved in the last one (the camera too) is
         // placed part way there, so it moves smoothly whatever the screen's frame rate.
@@ -67,7 +75,7 @@ public static partial class SceneRenderer
     private const string CameraPart = "Camera", ClearingPart = "Clearing", SortingPart = "Sorting", SystemsPart = "Systems", LightsPart = "Lights",
         ScreenPart = "Screen";
 
-    private static RenderFrame BuildTimed(Scene scene, float aspect, Runtime.Game game, List<SpriteDraw>? reuse, BuildTimer timer)
+    private static RenderFrame BuildTimed(Scene scene, float aspect, Runtime.Game game, Recycled reuse, BuildTimer timer)
     {
         timer.Begin(CameraPart);
         try
@@ -99,7 +107,7 @@ public static partial class SceneRenderer
         return true;
     }
 
-    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse, BuildTimer? timer)
+    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer)
     {
         var camera = FindCamera(scene);
         var component = camera?.GetComponent<Camera>();
@@ -107,28 +115,20 @@ public static partial class SceneRenderer
         var drawn = component?.Drawn(StepBlend.For(scene, camera));
         var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
-        var sprites = reuse ?? [];
+        var sprites = reuse.Sprites ?? [];
         var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer, reuse: true);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
-        var frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
+        // The last frame's drawing is used again, unless a frame being built round this one has it.
+        var frame = (t_scratch ??= new Scratch()).Frame;
+        t_scratch.Frame = null;
+        if (frame is null)
+            frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
+        else
+            frame.Reset(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
         if (game is not null)
-        {
-            // A system that sees the world its own way (first person) draws it first; every system then draws over it.
-            var systems = game.Systems.ToArray();
-            foreach (var system in systems)
-            {
-                timer?.Mark(system);
-                system.RunDrawView(frame);
-            }
-
-            foreach (var system in systems)
-            {
-                timer?.Mark(system);
-                system.RunDraw(frame);
-            }
-        }
+            DrawSystems(game, frame, timer);
 
         timer?.Mark(LightsPart);
 
@@ -145,9 +145,14 @@ public static partial class SceneRenderer
         var dark = component?.IsDark == true && frame.Lit;
         var litCount = sprites.Count;
         if (dark)
-            litCount = PutScreenLast(sprites, camera);
+            litCount = PutScreenLast(sprites, camera, t_scratch ??= new Scratch());
 
-        IReadOnlyList<LightDraw> lights = dark ? LightsIn(scene, view) : [];
+        // The last frame's lights are replaced, their shadows' lists kept for this frame's.
+        var lights = reuse.Lights;
+        if (lights is not null)
+            LetGoOf(lights);
+        if (dark)
+            AddLights(scene, view, lights ??= [], t_scratch ??= new Scratch());
         timer?.Mark(ScreenPart);
 
         if (game is not null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
@@ -163,25 +168,55 @@ public static partial class SceneRenderer
         if (game is { Debug.HasShapes: true })
             sprites.AddRange(DebugDraws(game.Debug.ShapesAt(blend), size));
 
-        return new RenderFrame
+        frame.Release();
+        (t_scratch ??= new Scratch()).Frame = frame;
+        var built = reuse.Frame ?? new RenderFrame();
+        built.Background = drawn?.Background ?? DefaultBackground;
+        built.ViewProjection = viewProjection;
+        built.Sprites = sprites;
+        built.Camera = camera;
+        built.Ambient = dark ? ambient : Color.White;
+        built.Lights = lights ?? [];
+        built.LitCount = dark ? litCount : sprites.Count;
+        var effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown : null;
+        built.Effects = effects;
+        built.Look = effects?.Drawn(StepBlend.For(scene, camera)) ?? default;
+        return built;
+    }
+
+    // The game's systems draw, in the order they were added: those that see the world their own way (first person) first,
+    // then every system over that. The list is copied first (a system may add or remove one as it draws), into one kept
+    // for the next frame.
+    private static void DrawSystems(Runtime.Game game, FrameDrawing frame, BuildTimer? timer)
+    {
+        var scratch = t_scratch ??= new Scratch();
+        // A system drawing a frame of its own (a picture in picture) uses lists of its own.
+        var systems = scratch.Systems is { Count: 0 } spare ? spare : [];
+        systems.AddRange(game.Systems);
+        try
         {
-            Background = drawn?.Background ?? DefaultBackground,
-            ViewProjection = viewProjection,
-            Sprites = sprites,
-            Camera = camera,
-            Ambient = dark ? ambient : Color.White,
-            Lights = lights,
-            LitCount = dark ? litCount : sprites.Count,
-            Effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } effects ? effects : null,
-            Look = camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown.Drawn(StepBlend.For(scene, camera)) : default,
-        };
+            foreach (var system in systems)
+            {
+                timer?.Mark(system);
+                system.RunDrawView(frame);
+            }
+
+            foreach (var system in systems)
+            {
+                timer?.Mark(system);
+                system.RunDraw(frame);
+            }
+        }
+        finally
+        {
+            systems.Clear();
+        }
     }
 
     // Moves the draws pinned to the screen after the others, each keeping their order, in place (by way of the scratch's
     // spare, so a big dark scene's frame makes no garbage). Returns how many draws aren't pinned.
-    private static int PutScreenLast(List<SpriteDraw> sprites, Entity? camera)
+    private static int PutScreenLast(List<SpriteDraw> sprites, Entity? camera, Scratch scratch)
     {
-        var scratch = t_scratch ??= new Scratch();
         var drawn = CollectionsMarshal.AsSpan(sprites);
         var (world, screen) = (0, 0);
         foreach (ref readonly var draw in drawn)
@@ -263,6 +298,28 @@ public static partial class SceneRenderer
 
         // For a big scene's frame, built in chunks.
         public ChunkedScratch? Chunked { get; set; }
+
+        // The systems drawing this frame, and what they draw with: one kept from frame to frame (taken while in use).
+        public List<GameSystem> Systems { get; } = [];
+
+        public FrameDrawing? Frame { get; set; }
+
+        // What the entities draw with, one at a time, and what goes over the world (ropes, wires) with.
+        public Drawing? Drawing;
+
+        public Drawing? OverDrawing;
+
+        // What goes over the world, while it's drawn.
+        public List<SpriteDraw> Over { get; } = [];
+
+        // Every side of what blocks light in the scene, while the lights are worked out.
+        public List<ShadowEdge> Edges { get; } = [];
+
+        // Lists for lights' shadows (see LightDraw.Casters), from frames done with, to use again.
+        public List<List<ShadowEdge>> Casters { get; } = [];
+
+        // The light an ILightSource gives off, while it's asked.
+        public List<LightSpot> Spots { get; } = [];
     }
 
     // One pass over the entities, in hierarchy order: each is drawn as it's found, its draws kept together where they
@@ -291,7 +348,16 @@ public static partial class SceneRenderer
             DrawEach(scene, view, cameraSize, playing, sprites, include, overs, scratch, timer, sortByY);
         }
 
-        return DrawOverWorld(scene, view, cameraSize, playing, sprites, overs, timer);
+        return overs is { Count: > 0 } ? DrawOverWorld(scene, view, cameraSize, playing, sprites, overs, scratch, timer) : -1;
+    }
+
+    // A drawing that adds to `draws`: the one kept in `kept`, set up afresh, or a new one kept there. Released once done with.
+    private static Drawing DrawingFor(ref Drawing? kept, List<SpriteDraw> draws, Box view, float cameraSize, bool playing)
+    {
+        if (kept is null)
+            return kept = new Drawing(draws, ScreenEntity, view, cameraSize / 180, playing);
+        kept.Reset(draws, view, cameraSize / 180, playing);
+        return kept;
     }
 
     // The scene's entities one by one, on this thread.
@@ -302,9 +368,12 @@ public static partial class SceneRenderer
         var entries = scratch.Entries;
         var first = sprites.Count;
         sprites.EnsureCapacity(first + scene.Entities.Count + 16);
-        var drawing = new Drawing(sprites, ScreenEntity, view, cameraSize / 180, playing);
-        foreach (var entity in scene.Entities)
+        var drawing = DrawingFor(ref scratch.Drawing, sprites, view, cameraSize, playing);
+        // By index: going through a list of them as such would make garbage.
+        var entities = scene.Entities;
+        for (var e = 0; e < entities.Count; e++)
         {
+            var entity = entities[e];
             if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)))
                 continue;
             timer?.Mark(LeadOf(entity));
@@ -327,37 +396,50 @@ public static partial class SceneRenderer
             }
         }
 
+        drawing.Release();
         timer?.Mark(SortingPart);
         PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
     }
 
     // What goes over the world (ropes, wires), after it and under what's pinned to the screen. Returns how many draws at
     // the end are pinned to the screen when it had to split them for that, or -1.
-    private static int DrawOverWorld(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, List<IDrawable>? overs, BuildTimer? timer)
+    private static int DrawOverWorld(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, List<IDrawable> overs,
+        Scratch scratch, BuildTimer? timer)
     {
-        if (overs is not { Count: > 0 })
-            return -1;
-
-        // Over the world: lower steps first, in hierarchy order within a step.
-        var over = new List<SpriteDraw>();
-        var overDrawing = new Drawing(over, ScreenEntity, view, cameraSize / 180, playing);
-        foreach (var drawable in overs.Select((d, i) => (d, i)).OrderBy(x => x.d.DrawStep).ThenBy(x => x.i).Select(x => x.d))
+        // Over the world: lower steps first, in hierarchy order within a step (the order they're listed in).
+        for (var i = 1; i < overs.Count; i++)
         {
-            overDrawing.Entity = ((Component)drawable).Entity!;
-            Draw(drawable, overDrawing, timer);
+            var drawable = overs[i];
+            var at = i;
+            for (; at > 0 && overs[at - 1].DrawStep > drawable.DrawStep; at--)
+                overs[at] = overs[at - 1];
+            overs[at] = drawable;
         }
 
-        timer?.Mark(SortingPart);
-        if (over.Count == 0)
-            return -1;
-        var camera = FindCamera(scene);
-        var screen = sprites.Where(d => IsOnScreen(d.Entity, camera)).ToList();
-        var world = sprites.Where(d => !IsOnScreen(d.Entity, camera)).ToList();
-        sprites.Clear();
-        sprites.AddRange(world);
-        sprites.AddRange(over);
-        sprites.AddRange(screen);
-        return screen.Count;
+        var over = scratch.Over;
+        var overDrawing = DrawingFor(ref scratch.OverDrawing, over, view, cameraSize, playing);
+        try
+        {
+            foreach (var drawable in overs)
+            {
+                overDrawing.Entity = ((Component)drawable).Entity!;
+                Draw(drawable, overDrawing, timer);
+            }
+
+            timer?.Mark(SortingPart);
+            if (over.Count == 0)
+                return -1;
+            var count = sprites.Count;
+            var world = PutScreenLast(sprites, FindCamera(scene), scratch);
+            sprites.InsertRange(world, over);
+            return count - world;
+        }
+        finally
+        {
+            // The draws would otherwise keep the entities they belong to from being collected.
+            over.Clear();
+            overDrawing.Release();
+        }
     }
 
     // An entity's draws from `start` to `end` as an entry for each stretch that sorts at its own height (see
@@ -838,19 +920,8 @@ public static partial class SceneRenderer
     {
         var camera = FindCamera(scene);
         var size = camera?.GetComponent<Camera>()?.Drawn(StepBlend.For(scene, camera)).Size ?? DefaultCameraSize;
-        return LightsIn(scene, new Box(ViewCenter(camera), new Vector2(size * aspect, size)));
-    }
-
-    private static List<LightDraw> LightsIn(Scene scene, Box view)
-    {
         var lights = new List<LightDraw>();
-        foreach (var draw in LightDraws(scene))
-        {
-            var reach = view.HalfSize + new Vector2(draw.Radius);
-            if (MathF.Abs(draw.Center.X - view.Center.X) <= reach.X && MathF.Abs(draw.Center.Y - view.Center.Y) <= reach.Y)
-                lights.Add(draw);
-        }
-
+        AddLights(scene, new Box(ViewCenter(camera), new Vector2(size * aspect, size)), lights, null);
         return lights;
     }
 
@@ -860,27 +931,93 @@ public static partial class SceneRenderer
     /// </summary>
     public static IEnumerable<LightDraw> LightDraws(Scene scene)
     {
+        var lights = new List<LightDraw>();
+        AddLights(scene, null, lights, null);
+        return lights;
+    }
+
+    // Adds the lights reaching into `view` (or all of them) to `lights`, as LightDraws gives them. With `scratch`, the
+    // sides that block light are listed in its list and each light's shadows go in a list from it, so a dark scene's frame
+    // makes no garbage; the shadows' lists come back to it with LetGoOf.
+    private static void AddLights(Scene scene, Box? view, List<LightDraw> lights, Scratch? scratch)
+    {
         List<ShadowEdge>? edges = null;
         foreach (var light in scene.Active<Light>())
         {
             // A light that grows, dims or flickers does it between steps too.
             var (center, radius, color, intensity, softness) = light.Drawn(StepBlend.For(scene, light.Entity));
-            if (!(radius > 0) || !(intensity > 0))
+            if (!(radius > 0) || !(intensity > 0) || !Reaches(view, center, radius))
                 continue;
             var draw = new LightDraw(center, radius, new Color(color.R * intensity, color.G * intensity, color.B * intensity), softness);
             if (light.Shadows)
-                draw = draw with { Casters = Shadows.CastersFor(edges ??= Shadows.Edges(scene), light) };
-            yield return draw;
+            {
+                if (edges is null)
+                {
+                    edges = scratch?.Edges ?? [];
+                    edges.Clear();
+                    Shadows.AddEdges(scene, edges);
+                }
+
+                var casters = CastersList(scratch);
+                Shadows.AddCasters(CollectionsMarshal.AsSpan(edges), light, casters);
+                draw = draw with { Casters = casters };
+            }
+
+            lights.Add(draw);
         }
 
-        var spots = new List<LightSpot>();
+        // The scene's sides are kept no longer than they're needed: they hold on to the entities they belong to.
+        if (edges is not null && scratch is not null)
+            edges.Clear();
+
+        var spots = scratch?.Spots ?? [];
         foreach (var source in scene.Active<ILightSource>())
         {
             spots.Clear();
             source.AddLights(spots);
             foreach (var spot in spots)
-                yield return new LightDraw(spot.Center, spot.Radius, spot.Color, spot.Softness);
+            {
+                if (Reaches(view, spot.Center, spot.Radius))
+                    lights.Add(new LightDraw(spot.Center, spot.Radius, spot.Color, spot.Softness));
+            }
         }
+
+        spots.Clear();
+
+        // A light's reach overlaps the view (or there's no view).
+        static bool Reaches(Box? view, Vector2 center, float radius)
+        {
+            if (view is not { } box)
+                return true;
+            var reach = box.HalfSize + new Vector2(radius);
+            return MathF.Abs(center.X - box.Center.X) <= reach.X && MathF.Abs(center.Y - box.Center.Y) <= reach.Y;
+        }
+    }
+
+    // A list for a light's shadows: one kept from a frame done with, or a new one.
+    private static List<ShadowEdge> CastersList(Scratch? scratch)
+    {
+        if (scratch?.Casters is not { Count: > 0 } pool)
+            return [];
+        var casters = pool[^1];
+        pool.RemoveAt(pool.Count - 1);
+        return casters;
+    }
+
+    // Empties a frame's lights that it's done with, keeping their shadows' lists (emptied) to use again.
+    private static void LetGoOf(List<LightDraw> lights)
+    {
+        var pool = (t_scratch ??= new Scratch()).Casters;
+        foreach (var light in lights)
+        {
+            if (light.Casters is List<ShadowEdge> casters)
+            {
+                casters.Clear();
+                pool.Add(casters);
+            }
+        }
+
+        lights.Clear();
     }
 
     // ----- The screen -----

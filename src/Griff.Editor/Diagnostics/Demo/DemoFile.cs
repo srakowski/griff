@@ -574,9 +574,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.CloseFloating(a);
                 break;
             case "expectprofiler":
-                // "expectprofiler: frames", "expectprofiler: recording = false", "expectprofiler: entities = 2006" or
-                // "expectprofiler: cost = Bunny": what the Profiler panel shows (it has recorded frames; it's recording or not;
-                // the entities it counted; a cost for a kind of script or a step).
+                // "expectprofiler: frames", "expectprofiler: recording = false", "expectprofiler: entities = 2006",
+                // "expectprofiler: cost = Bunny" or "expectprofiler: no garbage = Lights": what the Profiler panel shows (it has
+                // recorded frames; it's recording or not; the entities it counted; a cost for a kind of script or a step, or
+                // one that makes no garbage).
                 await ExpectProfiler(a);
                 break;
             case "expectlayout":
@@ -1553,7 +1554,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         return new Rect(scene.Left + (scene.Width - width) / 2, scene.Top + 30, width, scene.Height * 0.7);
     }
 
-    // "frames" (it has recorded some), "recording = true|false", "entities = <n>" (as it last counted them), or "cost = <name>".
+    // "frames" (it has recorded some), "recording = true|false", "entities = <n>" (as it last counted them), "cost = <name>",
+    // or "no garbage = <name>" (a cost it shows that makes no garbage).
     private async Task ExpectProfiler(string text)
     {
         var profiler = DemoUi.Profiler;
@@ -1567,7 +1569,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 (() => profiler.Counts.Entities == entities, () => $"{profiler.Counts.Entities} entities"),
             "cost" when value.Length > 0 => (() => profiler.Costs.Any(c => c.Name == value),
                 () => $"costs for {string.Join(", ", profiler.Costs.Take(8).Select(c => c.Name))}"),
-            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n> | cost = <script, step or part of the build>"),
+            "no garbage" when value.Length > 0 => (() => profiler.Costs.Any(c => c.Name == value && c.Garbage.Length == 0),
+                () => profiler.Costs.FirstOrDefault(c => c.Name == value) is { } cost ? $"{value} making {cost.Garbage}" : $"no cost for {value}"),
+            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n> | cost = <script, step or part of the build> | no garbage = <one of those>"),
         };
         if (!await Until(holds, 5000))
             throw new InvalidOperationException($"Expected the Profiler to show {text}, but it shows {shows()}.");

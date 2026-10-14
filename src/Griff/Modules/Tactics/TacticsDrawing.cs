@@ -19,9 +19,14 @@ internal static class TacticsDrawing
         if (view.Controls is not { } controls)
             return;
         var units = game.Scene.Active<TacticsUnit>();
-        if (units.Count == 0)
-            return;
+        if (units.Count > 0)
+            Draw(view, frame, controls, units);
+    }
 
+    // Apart from the checks above, so a game with no tactics in it doesn't pay for what this captures (its lambdas'
+    // closure is made as the method starts, before any return).
+    private static void Draw(TacticsView view, FrameDrawing frame, TacticsControls controls, ComponentList<TacticsUnit> units)
+    {
         var grid = view.Grid;
         var cell = Vector2.Distance(grid.Center((0, 0)), grid.Center((1, 0)));
         var done = units.Where(u => u.IsDone).Select(u => u.Entity!).ToList();

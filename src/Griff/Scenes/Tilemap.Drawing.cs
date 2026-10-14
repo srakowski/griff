@@ -20,24 +20,19 @@ public sealed partial class Tilemap
                 return;
         }
 
-        var depth = -1;
-        foreach (var (draw, x, y) in TileDraws(drawing.CanCull ? drawing.View : null, drawing.Smooth(_tint)))
-        {
-            if (SortByY && DepthOf(x, y) != depth)
-            {
-                depth = DepthOf(x, y);
-                drawing.SortAt(DepthY(depth));
-            }
-
-            drawing.Add(draw);
-        }
+        AddTileDraws(drawing.Draws, drawing.CanCull ? drawing.View : null, drawing.Smooth(_tint), SortByY ? drawing : null);
     }
 
     /// <summary>
     /// One quad per tile (in the world), back to front, of those in <paramref name="cull"/> (and a cell around it) or all
     /// of them. Without an image, tiles are solid shapes of the tint: squares, diamonds or hexagons (three quads each).
     /// </summary>
-    public IEnumerable<SpriteDraw> TileDraws(Box? cull = null) => TileDraws(cull, Tint).Select(d => d.Draw);
+    public IEnumerable<SpriteDraw> TileDraws(Box? cull = null)
+    {
+        var draws = new List<SpriteDraw>();
+        AddTileDraws(draws, cull, Tint, null);
+        return draws;
+    }
 
     /// <summary>With <see cref="SortByY"/>, each row of tiles (see <see cref="DepthOf"/>) and the height it sorts at.</summary>
     public IEnumerable<(int Part, float Y)> SortParts()
@@ -59,7 +54,9 @@ public sealed partial class Tilemap
         return Vector2.Transform(middle, world).Y;
     }
 
-    private IEnumerable<(SpriteDraw Draw, int X, int Y)> TileDraws(Box? cull, Color tint)
+    // Adds the tiles' quads (see TileDraws) to `draws`, making no garbage once it has room for them: a big map is drawn
+    // every frame. With `sorting`, each row of tiles sorts at its own height (see Drawing.SortAt).
+    private void AddTileDraws(List<SpriteDraw> draws, Box? cull, Color tint, Drawing? sorting)
     {
         var entity = Entity!;
         var world = entity.Transform.WorldMatrix;
@@ -67,22 +64,55 @@ public sealed partial class Tilemap
         // the background show between them as the camera moves. The image is stretched, not extended, so nothing bleeds in.
         const float seamless = 1.004f;
         var diamond = Diamond(TileSize * seamless);
-        foreach (var (x, y, tile) in cull is { } view ? CellsIn(world, view) : BackToFront())
+        var (fromX, toX, fromY, toY) = cull is { } view ? CellRangeIn(world, view) : (0, int.MaxValue, 0, int.MaxValue);
+        (fromX, toX) = (Math.Max(0, fromX), Math.Min(Width - 1, toX));
+        (fromY, toY) = (Math.Max(0, fromY), Math.Min(Height - 1, toY));
+        var depth = -1;
+        if (Shape != TileShape.Isometric)
         {
+            for (var y = fromY; y <= toY; y++)
+            {
+                for (var x = fromX; x <= toX; x++)
+                {
+                    if (GetTile(x, y) is var tile and >= 0)
+                        Add(x, y, tile);
+                }
+            }
+
+            return;
+        }
+
+        for (var d = fromX + fromY; d <= toX + toY; d++)
+        {
+            for (var x = Math.Max(fromX, d - toY); x <= Math.Min(toX, d - fromY); x++)
+            {
+                if (GetTile(x, d - x) is var tile and >= 0)
+                    Add(x, d - x, tile);
+            }
+        }
+
+        void Add(int x, int y, int tile)
+        {
+            if (sorting is not null && DepthOf(x, y) != depth)
+            {
+                depth = DepthOf(x, y);
+                sorting.SortAt(DepthY(depth));
+            }
+
             var shown = ShownTile(x, y, tile);
             var tileset = TilesetOf(shown);
             var (center, size) = PictureOf(x, y);
             if (tileset.Image is null && Shape == TileShape.Hex)
             {
                 foreach (var part in HexParts)
-                    yield return (new SpriteDraw(part * Matrix4x4.CreateScale(TileSize * seamless, TileSize * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world, null, tint, entity) { Source = new Vector4(0, 0, 1, 1) }, x, y);
-                continue;
+                    draws.Add(new SpriteDraw(part * Matrix4x4.CreateScale(TileSize * seamless, TileSize * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world, null, tint, entity) { Source = new Vector4(0, 0, 1, 1) });
+                return;
             }
 
             var matrix = tileset.Image is null && Shape == TileShape.Isometric
                 ? diamond * Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0)) * world
                 : Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
-            yield return (new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) }, x, y);
+            draws.Add(new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) });
         }
     }
 
@@ -151,15 +181,16 @@ public sealed partial class Tilemap
         }
     }
 
-    // The cells of the map inside a view (and a cell around it), back to front.
-    private IEnumerable<(int X, int Y, int Tile)> CellsIn(Matrix4x4 world, Box view)
+    // The columns and rows of the map's cells inside a view (and a cell around it), not yet kept within the grid.
+    private (int FromX, int ToX, int FromY, int ToY) CellRangeIn(Matrix4x4 world, Box view)
     {
         if (!Matrix4x4.Invert(world, out var toLocal) || !(TileSize > 0))
-            return BackToFront();
+            return (0, int.MaxValue, 0, int.MaxValue);
 
         var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
-        foreach (var corner in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(1, 1), new Vector2(-1, 1) })
+        for (var i = 0; i < 4; i++)
         {
+            var corner = new Vector2(i is 1 or 2 ? 1 : -1, i < 2 ? -1 : 1);
             var local = Vector2.Transform(view.Center + corner * view.HalfSize, toLocal);
             (min, max) = (Vector2.Min(min, local), Vector2.Max(max, local));
         }
@@ -168,27 +199,27 @@ public sealed partial class Tilemap
         {
             // Rows are three quarters of a tile apart, and a hexagon reaches a quarter tile past its row on each side.
             var (size, row) = (TileSize, TileSize * 0.75f);
-            return CellsBetween((int)MathF.Floor(min.X / size) - 1, (int)MathF.Floor(max.X / size) + 1,
+            return ((int)MathF.Floor(min.X / size) - 1, (int)MathF.Floor(max.X / size) + 1,
                 (int)MathF.Floor(-max.Y / row) - 1, (int)MathF.Floor(-min.Y / row) + 1);
         }
 
         if (Shape != TileShape.Isometric)
         {
             var size = TileSize;
-            return CellsBetween((int)MathF.Floor(min.X / size) - 1, (int)MathF.Floor(max.X / size) + 1,
+            return ((int)MathF.Floor(min.X / size) - 1, (int)MathF.Floor(max.X / size) + 1,
                 (int)MathF.Floor(-max.Y / size) - 1, (int)MathF.Floor(-min.Y / size) + 1);
         }
 
         // A tile standing up from a cell below the view can reach up into it.
         min.Y -= Math.Max(0, TileHeight - 0.5f) * TileSize;
         var (fromX, toX, fromY, toY) = (int.MaxValue, int.MinValue, int.MaxValue, int.MinValue);
-        foreach (var corner in new[] { min, new Vector2(max.X, min.Y), max, new Vector2(min.X, max.Y) })
+        for (var i = 0; i < 4; i++)
         {
-            var (x, y) = CellAt(corner);
+            var (x, y) = CellAt(new Vector2(i is 1 or 2 ? max.X : min.X, i < 2 ? min.Y : max.Y));
             (fromX, toX, fromY, toY) = (Math.Min(fromX, x), Math.Max(toX, x), Math.Min(fromY, y), Math.Max(toY, y));
         }
 
-        return CellsBetween(fromX - 1, toX + 1, fromY - 1, toY + 1);
+        return (fromX - 1, toX + 1, fromY - 1, toY + 1);
     }
 
     // The non-empty cells from columns fromX to toX and rows fromY to toY (kept within the grid), back to front.

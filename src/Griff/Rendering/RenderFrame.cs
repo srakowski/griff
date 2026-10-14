@@ -22,39 +22,43 @@ public readonly record struct LightDraw(Vector2 Center, float Radius, Color Colo
     }
 }
 
-/// <summary>Everything a renderer needs for one frame, in draw order (back to front).</summary>
+/// <summary>
+/// Everything a renderer needs for one frame, in draw order (back to front). A running game's frames are built into the
+/// last one the game is done with (see <see cref="SceneRenderer.Build(Runtime.Game, float, RenderFrame?)"/>), so one isn't
+/// kept once it's handed back.
+/// </summary>
 public sealed class RenderFrame
 {
-    public required Color Background { get; init; }
+    public Color Background { get; internal set; }
 
     /// <summary>World to clip space (-1..1) for the active camera.</summary>
-    public required Matrix4x4 ViewProjection { get; init; }
+    public Matrix4x4 ViewProjection { get; internal set; }
 
-    public required IReadOnlyList<SpriteDraw> Sprites { get; init; }
+    public IReadOnlyList<SpriteDraw> Sprites { get; internal set; } = [];
 
     /// <summary>The camera used, or null if the scene has none (a default camera at the origin is used).</summary>
-    public Entity? Camera { get; init; }
+    public Entity? Camera { get; internal set; }
 
     /// <summary>
     /// The light everything gets without a light (see <see cref="Scenes.Camera.Ambient"/>). White means the scene isn't
     /// dark and <see cref="Lights"/> are ignored.
     /// </summary>
-    public Color Ambient { get; init; } = Color.White;
+    public Color Ambient { get; internal set; } = Color.White;
 
     /// <summary>The lights in view, when the scene is dark.</summary>
-    public IReadOnlyList<LightDraw> Lights { get; init; } = [];
+    public IReadOnlyList<LightDraw> Lights { get; internal set; } = [];
 
     /// <summary>
     /// How many of the first <see cref="Sprites"/> the darkness and lights apply to; those after (the HUD, menus, fades,
     /// debug shapes) are drawn over it as they are.
     /// </summary>
-    public int LitCount { get; init; }
+    public int LitCount { get; internal set; }
 
     /// <summary>The camera's <see cref="ScreenEffects"/>, applied to the whole finished screen; null if it has none in use.</summary>
-    public ScreenEffects? Effects { get; init; }
+    public ScreenEffects? Effects { get; internal set; }
 
     /// <summary>The <see cref="Effects"/>' settings as this frame is drawn with them: between the game's last two steps, as a tween of them goes.</summary>
-    public ScreenLook Look { get; init; }
+    public ScreenLook Look { get; internal set; }
 
     /// <summary>True if the scene is dark, so the renderer darkens the first <see cref="LitCount"/> sprites and adds lights.</summary>
     public bool IsDark => Ambient.R < 1 || Ambient.G < 1 || Ambient.B < 1;

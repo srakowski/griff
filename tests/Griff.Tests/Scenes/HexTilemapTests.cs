@@ -218,6 +218,17 @@ public class HexTilemapTests
     }
 
     [Fact]
+    public void A_cells_corners_and_neighbors_one_at_a_time_are_those_its_outline_and_neighbors_list()
+    {
+        var map = Map();
+        foreach (var (x, y) in new[] { (0, 0), (1, 0), (0, 1), (3, 1), (2, 4), (-1, 3) })
+        {
+            Assert.Equal(map.OutlineOf(x, y, x, y), Enumerable.Range(0, 6).Select(i => map.HexCorner(x, y, i)));
+            Assert.Equal(map.Neighbors(x, y), Enumerable.Range(0, 6).Select(i => Tilemap.NeighborOf(x, y, i)));
+        }
+    }
+
+    [Fact]
     public void Shape_SavesAndLoads()
     {
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());

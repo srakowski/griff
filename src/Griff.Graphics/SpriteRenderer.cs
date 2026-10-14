@@ -339,7 +339,9 @@ public sealed class SpriteRenderer : IDisposable
         if (sprite.HoleRadius > 0)
         {
             Flush();
-            DrawShapes(1, [(sprite.World * viewProjection, sprite.Tint, sprite.HoleRadius)]);
+            BeginShapes(1);
+            WriteShape(sprite.World * viewProjection, sprite.Tint, sprite.HoleRadius);
+            EndShapes();
             return;
         }
 
@@ -408,11 +410,23 @@ public sealed class SpriteRenderer : IDisposable
         _gl.ClearColor(frame.Ambient.R, frame.Ambient.G, frame.Ambient.B, 1f);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
         _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
-        DrawShapes(0, frame.Lights.Where(l => l.Casters.Count == 0).Select(l => LightQuad(l, frame.ViewProjection)));
+        // By index, here and below: going through the lists as such would make garbage every frame.
+        var lights = frame.Lights;
+        BeginShapes(0);
+        for (var i = 0; i < lights.Count; i++)
+        {
+            if (lights[i].Casters.Count == 0)
+                WriteLight(lights[i], frame.ViewProjection);
+        }
+
+        EndShapes();
 
         // A light with shadows on its own: its shadows mark the stencil, and it's added up only where they didn't.
-        foreach (var light in frame.Lights.Where(l => l.Casters.Count > 0))
+        for (var i = 0; i < lights.Count; i++)
         {
+            var light = lights[i];
+            if (light.Casters.Count == 0)
+                continue;
             _gl.Enable(EnableCap.StencilTest);
             _gl.ClearStencil(0);
             _gl.Clear(ClearBufferMask.StencilBufferBit);
@@ -423,7 +437,9 @@ public sealed class SpriteRenderer : IDisposable
             _gl.ColorMask(true, true, true, true);
             _gl.StencilFunc(StencilFunction.Equal, 0, 0xFF);
             _gl.StencilOp(StencilOp.Keep, StencilOp.Keep, StencilOp.Keep);
-            DrawShapes(0, [LightQuad(light, frame.ViewProjection)]);
+            BeginShapes(0);
+            WriteLight(light, frame.ViewProjection);
+            EndShapes();
             _gl.Disable(EnableCap.StencilTest);
         }
 
@@ -466,17 +482,19 @@ public sealed class SpriteRenderer : IDisposable
         _gl.Enable(EnableCap.Blend);
     }
 
-    private static (Matrix4x4 ToClip, Color Color, float Parameter) LightQuad(LightDraw light, Matrix4x4 viewProjection) =>
-        (Matrix4x4.CreateScale(light.Radius * 2, light.Radius * 2, 1) * Matrix4x4.CreateTranslation(light.Center.X, light.Center.Y, 0) * viewProjection,
-         light.Color, light.Softness);
+    private void WriteLight(in LightDraw light, in Matrix4x4 viewProjection) =>
+        WriteShape(Matrix4x4.CreateScale(light.Radius * 2, light.Radius * 2, 1) * Matrix4x4.CreateTranslation(light.Center.X, light.Center.Y, 0) * viewProjection,
+            light.Color, light.Softness);
 
     // Each casting side's shadow as two quads fanned from its near end (the second folds its last corner onto itself).
     private void DrawShadows(LightDraw light, Matrix4x4 viewProjection)
     {
         _gl.UseProgram(_shapeProgram);
         _gl.Uniform1(_shapeMode, 0);
-        foreach (var edge in light.Casters)
+        var casters = light.Casters;
+        for (var i = 0; i < casters.Count; i++)
         {
+            var edge = casters[i];
             var (a, b, farB, farMiddle, farA) = Shadows.Shadow(edge, light.Center, light.Radius * 2);
             WriteCorners(viewProjection, a, b, farB, farMiddle);
             WriteCorners(viewProjection, a, farMiddle, farA, farA);
@@ -496,19 +514,23 @@ public sealed class SpriteRenderer : IDisposable
             Corners23 = Pair(ToClip(p2.X, p2.Y, viewProjection), ToClip(p3.X, p3.Y, viewProjection)),
         };
 
-    // Lights (mode 0) or holes (mode 1) with the shape program, each quad already in clip space; the sprite program is
-    // back on afterwards.
-    private void DrawShapes(int mode, IEnumerable<(Matrix4x4 ToClip, Color Color, float Parameter)> quads)
+    // Lights (mode 0) or holes (mode 1) with the shape program: BeginShapes, a WriteShape for each quad (already in clip
+    // space), then EndShapes, which puts the sprite program back on.
+    private void BeginShapes(int mode)
     {
         _gl.UseProgram(_shapeProgram);
         _gl.Uniform1(_shapeMode, mode);
-        foreach (var (toClip, color, parameter) in quads)
-        {
-            WriteQuad(toClip, new Vector4(0, 0, 1, 1), color, new Color(parameter, 0, 0, 0));
-            if (_quadCount == MaxQuads)
-                DrawBatch();
-        }
+    }
 
+    private void WriteShape(in Matrix4x4 toClip, Color color, float parameter)
+    {
+        WriteQuad(toClip, new Vector4(0, 0, 1, 1), color, new Color(parameter, 0, 0, 0));
+        if (_quadCount == MaxQuads)
+            DrawBatch();
+    }
+
+    private void EndShapes()
+    {
         DrawBatch();
         _gl.UseProgram(_program);
     }

@@ -378,7 +378,16 @@ public sealed partial class Tilemap : Component, ISortsInParts
     }
 
     /// <summary>Number of columns: the length of the longest row.</summary>
-    public int Width => _tiles.Length == 0 ? 0 : _tiles.Max(r => r.Length);
+    public int Width
+    {
+        get
+        {
+            var width = 0;
+            foreach (var row in _tiles)
+                width = Math.Max(width, row.Length);
+            return width;
+        }
+    }
 
     /// <summary>Number of rows.</summary>
     public int Height => _tiles.Length;
@@ -678,6 +687,39 @@ public sealed partial class Tilemap : Component, ISortsInParts
             return [(x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)];
         var shift = y & 1;
         return [(x - 1 + shift, y - 1), (x + shift, y - 1), (x + 1, y), (x + shift, y + 1), (x - 1 + shift, y + 1), (x - 1, y)];
+    }
+
+    // Neighbor `side` (0 to 5) of a cell on a hex map, as Neighbors counts them.
+    internal static (int X, int Y) NeighborOf(int x, int y, int side)
+    {
+        var shift = y & 1;
+        return side switch
+        {
+            0 => (x - 1 + shift, y - 1),
+            1 => (x + shift, y - 1),
+            2 => (x + 1, y),
+            3 => (x + shift, y + 1),
+            4 => (x - 1 + shift, y + 1),
+            _ => (x - 1, y),
+        };
+    }
+
+    // Corner `corner` (0 to 5) of a cell on a hex map in the entity's own space, clockwise from its top left as
+    // OutlineOf gives a single cell's: the side from corner i to corner i + 1 is the one it shares with neighbor i.
+    internal Vector2 HexCorner(int x, int y, int corner)
+    {
+        // In half tiles across and quarter tiles down from the cell's middle, as HexOutline works them out.
+        var (dx, dy) = corner switch
+        {
+            0 => (-1, -1),
+            1 => (0, -2),
+            2 => (1, -1),
+            3 => (1, 1),
+            4 => (0, 2),
+            _ => (-1, 1),
+        };
+        var size = TileSize;
+        return new Vector2((2 * x + 1 + (y & 1) + dx) * size / 2, -(3 * y + 2 + dy) * size / 4);
     }
 
     /// <summary>

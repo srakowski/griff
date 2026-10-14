@@ -9,13 +9,15 @@
 // building the frame to draw, drawing it with OpenGL (into a hidden window: the CPU's part), and the GPU's part. It
 // prints the median, mean, 99th percentile and worst of each, and the garbage collections and bytes allocated meanwhile.
 // The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline] [--profile] [--workers n]
+//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline] [--profile] [--workers n] [--dark]
 // --steps 2 takes two steps every frame, as a frame after a missed one does; --no-draw leaves OpenGL out; --by-step
 // also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first; --timeline keeps
 // rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind (the settling
 // that follows each, on another thread, is reported after); --profile times the frames as the editor's Profiler does
 // (Game.Profiler set: each step, kind of script and part of the build timed, which costs a little) and prints its costs;
-// --workers sets how many threads share a big scene's work (Workers.Count; 1 does it all on the game's thread).
+// --workers sets how many threads share a big scene's work (Workers.Count; 1 does it all on the game's thread); --dark
+// puts the bunnies in the dark, among walls (a tilemap without a tileset) and crates, lit by a light that casts shadows
+// and one that doesn't.
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
@@ -34,6 +36,7 @@ var steps = Arg("--steps", 1);
 var draw = !args.Contains("--no-draw");
 var rewind = args.Contains("--timeline");
 var profile = args.Contains("--profile");
+var dark = args.Contains("--dark");
 Workers.Count = Arg("--workers", Workers.Count);
 
 var root = Path.Combine(Path.GetTempPath(), "griff-bunnybench-" + Guid.NewGuid().ToString("N")[..8]);
@@ -59,6 +62,8 @@ try
     game.UseProjectSettings(loaded.Project);
     for (var i = 0; i < count; i++)
         game.Spawn("Bunny", new Vector2(-8.69f, 4.75f));
+    if (dark)
+        PutInTheDark(scene);
 
     using var gpu = draw ? new HiddenGl(project.AssetsPath) : null;
 
@@ -179,6 +184,42 @@ int Arg(string name, int fallback)
 {
     var at = Array.IndexOf(args, name);
     return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], CultureInfo.InvariantCulture, out var value) && value > 0 ? value : fallback;
+}
+
+// The dark: the camera's ambient light dim, a light in the middle that casts shadows and one in a corner that doesn't,
+// walls of a tilemap without a tileset round the edge and in pillars, and a few crates (sprites with box colliders).
+static void PutInTheDark(Griff.Scenes.Scene scene)
+{
+    scene.Entities.First(e => e.Name == "Main Camera").GetComponent<Griff.Scenes.Camera>()!.Ambient = new Griff.Color(0.15f, 0.15f, 0.22f);
+    var lamp = new Griff.Scenes.Entity("Lamp");
+    var light = lamp.AddComponent<Griff.Scenes.Light>();
+    (light.Radius, light.Shadows) = (8, true);
+    scene.Add(lamp);
+    var glow = new Griff.Scenes.Entity("Glow");
+    glow.Transform.Position = new Vector3(-6, 3, 0);
+    glow.AddComponent<Griff.Scenes.Light>().Radius = 4;
+    scene.Add(glow);
+
+    var walls = new Griff.Scenes.Entity("Walls");
+    walls.Transform.Position = new Vector3(-9.5f, 5.5f, 0);
+    var map = walls.AddComponent<Griff.Scenes.Tilemap>();
+    map.TileSize = 1;
+    map.FillRect(0, 0, 19, 0, 0);
+    map.FillRect(0, 11, 19, 11, 0);
+    map.FillRect(0, 0, 0, 11, 0);
+    map.FillRect(19, 0, 19, 11, 0);
+    foreach (var (x, y) in new[] { (5, 4), (14, 4), (5, 7), (14, 7), (9, 3), (10, 8) })
+        map.SetTile(x, y, 0);
+    scene.Add(walls);
+
+    foreach (var x in new[] { -3f, 3f })
+    {
+        var crate = new Griff.Scenes.Entity("Crate");
+        crate.Transform.Position = new Vector3(x, -2, 0);
+        crate.AddComponent<Griff.Scenes.Sprite>().Size = Vector2.One;
+        crate.AddComponent<Griff.Scenes.BoxCollider>().Size = Vector2.One;
+        scene.Add(crate);
+    }
 }
 
 // Wraps each of the game's steps in a timer, adding up what each costs by name. (What each step runs is internal to

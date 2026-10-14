@@ -362,6 +362,49 @@ public sealed class CoresTests
         });
     }
 
+    // In the dark, the lights and their shadows too: the same on any number of threads, built into the last frame without garbage.
+    [Fact]
+    public void A_dark_frame_with_shadows_is_the_same_built_in_chunks_and_makes_no_garbage()
+    {
+        var game = Rendering.DarkFrameTests.DarkWorld(3000);
+        for (var i = 0; i < 5; i++)
+            game.Tick(1 / 60.0);
+
+        var one = With(1, chunked: false, () => SceneRenderer.Build(game, 16 / 9f));
+        Assert.True(one.IsDark);
+        Assert.Contains(one.Lights, l => l.Casters.Count > 0);
+        foreach (var (workers, context) in new[] { (16, "on 16 threads"), (1, "on one thread") })
+        {
+            var chunked = With(workers, chunked: true, () => SceneRenderer.Build(game, 16 / 9f));
+            AssertSameFrame(one, chunked, context);
+            Assert.Equal(Rendering.DarkFrameTests.Describe(one.Lights), Rendering.DarkFrameTests.Describe(chunked.Lights));
+        }
+
+        With(8, chunked: true, () =>
+        {
+            RenderFrame? frame = null;
+            for (var i = 0; i < 20; i++)
+            {
+                game.Tick(1 / 60.0);
+                frame = SceneRenderer.Build(game, 16 / 9f, frame);
+            }
+
+            var least = long.MaxValue;
+            for (var attempt = 0; attempt < 40 && least > 0; attempt++)
+            {
+                if (attempt > 0)
+                    Thread.Sleep(50);
+                var before = Workers.AllocatedBytes();
+                for (var i = 0; i < 10; i++)
+                    frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
+            }
+
+            Assert.True(least == 0, $"A frame allocated {least:N0} bytes.");
+            return 0;
+        });
+    }
+
     // ----- Crowds of scripts -----
 
     // Hops about with random kicks, as a BunnyMark bunny does; inside another entity, it follows where that is drawn.

@@ -78,7 +78,7 @@ public sealed class FloatingPanels(DockGroup group)
 /// Where the tool panels are: docked around the document area in splits and tabbed groups, or floating in windows of
 /// their own. Dragging a panel's tab calls <see cref="Dock"/>, <see cref="Tab"/> or <see cref="Float"/>, and so can an
 /// agent (ui_invoke on PanelLayout); <see cref="Summary"/> says where everything is. Panels are named by their id or
-/// title (Hierarchy, Inspector, Assets, Output), and the document area is "Documents". The layout is kept between
+/// title (Hierarchy, Inspector, Assets, Output, Profiler), and the document area is "Documents". The layout is kept between
 /// sessions, layouts can be saved by name (<see cref="Save"/>, <see cref="Load"/>), and <see cref="Reset"/> puts every
 /// panel back where it starts out.
 /// </summary>

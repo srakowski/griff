@@ -60,6 +60,12 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public string? SceneName { get; set; }
 
+    /// <summary>
+    /// Where the frames the game shows are timed, for a profiler (the editor's Profiler panel sets one while it's on
+    /// screen); null, as it starts, times nothing. The host that runs the game adds each frame it shows.
+    /// </summary>
+    public FrameProfiler? Profiler { get; set; }
+
     /// <summary>The view's width divided by its height. Set by the host each frame; <see cref="ScreenAnchor"/> uses it.</summary>
     public float ViewAspect { get; set; } = 16f / 9f;
 

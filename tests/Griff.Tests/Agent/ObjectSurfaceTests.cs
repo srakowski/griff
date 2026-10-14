@@ -76,6 +76,21 @@ public class ObjectSurfaceTests
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement;
 
+    /// <summary>A record's values are set as it's made, not after (a profiler's summary, shared by whoever reads it).</summary>
+    public sealed record Reading(double Fps, string Label);
+
+    [Fact]
+    public void A_records_values_are_read_only()
+    {
+        var reading = new Reading(60, "Smooth");
+        var description = ObjectSurface.Describe(reading, null).ToJsonString(ToolResult.Compact);
+
+        Assert.Contains("\"Fps\":60", description);
+        Assert.DoesNotContain("settable", description);
+        Assert.Contains("can't be changed", Assert.Throws<AgentException>(() => ObjectSurface.Set(reading, "Fps", Json("30"))).Message);
+        Assert.Equal(60, reading.Fps);
+    }
+
     [Fact]
     public void Describe_ShowsValuesCommandsMethodsAndWhatCanBeSet()
     {

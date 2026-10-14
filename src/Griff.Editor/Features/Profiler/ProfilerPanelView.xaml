@@ -1,0 +1,121 @@
+<UserControl x:Class="Griff.Editor.Features.Profiler.ProfilerPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:profiler="clr-namespace:Griff.Editor.Features.Profiler"
+             xmlns:runtime="clr-namespace:Griff.Runtime;assembly=Griff"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=profiler:ProfilerPanel}"
+             d:DesignHeight="240" d:DesignWidth="800">
+    <UserControl.Resources>
+        <Style x:Key="Swatch" TargetType="Border">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Margin" Value="10,0,5,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="Count" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Mono}">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- Panel toolbar: recording, then how the frames in the graph went -->
+        <Border DockPanel.Dock="Top"
+                Padding="4,2"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <ToggleButton x:Name="RecordButton"
+                              IsChecked="{Binding IsRecording, Mode=OneWay}"
+                              Style="{StaticResource Style.ToggleButton.Toolbar}"
+                              ToolTip="Record the game's frames (off holds the graph still)">
+                    <TextBlock Foreground="{DynamicResource Brush.Status.Error}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Record}" />
+                </ToggleButton>
+                <Button x:Name="ClearButton" Margin="2,0,0,0" Style="{StaticResource Style.Button.Toolbar}" ToolTip="Clear the frames recorded">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Clear}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <TextBlock x:Name="Rate" Margin="6,0,0,0" VerticalAlignment="Center"
+                           ToolTip="The frame rate over the frames in the graph, and its 1% low: the rate of the slowest 1% of frames">
+                    <Run FontWeight="SemiBold" Text="{Binding Summary.Fps, StringFormat={}{0:0} fps, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.LowFps, StringFormat={}  1% low {0:0}, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.AverageMs, StringFormat={}  ·  frames {0:0.0} ms, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.WorstMs, StringFormat={}  (worst {0:0.0}), Mode=OneWay}" />
+                </TextBlock>
+                <Border Style="{StaticResource Swatch}" Background="{DynamicResource Brush.Accent}" />
+                <TextBlock VerticalAlignment="Center" ToolTip="What the game's steps take a frame, on average: scripts, physics and everything else that moves it on">
+                    <Run Text="Steps" /><Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.StepMs, StringFormat={} {0:0.00} ms, Mode=OneWay}" />
+                </TextBlock>
+                <Border Style="{StaticResource Swatch}" Background="{DynamicResource Brush.Status.Info}" />
+                <TextBlock VerticalAlignment="Center" ToolTip="What building the picture of the frame takes, on average: finding what to draw and putting it in order">
+                    <Run Text="Build" /><Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.BuildMs, StringFormat={} {0:0.00} ms, Mode=OneWay}" />
+                </TextBlock>
+                <Border Style="{StaticResource Swatch}" Background="{DynamicResource Brush.Status.Success}" />
+                <TextBlock VerticalAlignment="Center" ToolTip="What drawing the frame takes, on average: handing it to the graphics card">
+                    <Run Text="Draw" /><Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.DrawMs, StringFormat={} {0:0.00} ms, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- What the scene holds -->
+        <Border DockPanel.Dock="Right"
+                Width="230"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="1,0,0,0">
+            <DockPanel x:Name="CountsPanel" Margin="8,6,8,4">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Entities" ToolTip="Every entity in the playing scene" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Counts.Entities, StringFormat={}{0:N0}}" />
+                    <TextBlock Grid.Row="1" Text="Active" ToolTip="Those enabled, with every parent enabled: what the game runs and draws" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Counts.Active, StringFormat={}{0:N0}}" />
+                    <TextBlock Grid.Row="2" Text="Drawn a frame" ToolTip="Sprites, shapes, tiles and text drawn in the newest frame" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Summary.Draws, StringFormat={}{0:N0}}" />
+                </Grid>
+                <TextBlock DockPanel.Dock="Top" Margin="0,0,0,2" Style="{StaticResource Style.Text.Overline}" Text="ACTIVE COMPONENTS" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="ComponentList" ItemsSource="{Binding Components}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="runtime:ComponentCount">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Type.Name}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Count, StringFormat={}{0:N0}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- The frames -->
+        <Grid Margin="6">
+            <profiler:FrameGraph x:Name="Graph"
+                                 Frames="{Binding Frames}"
+                                 Version="{Binding Version}"
+                                 FrameBrush="{DynamicResource Brush.Control.Hover}"
+                                 StepBrush="{DynamicResource Brush.Accent}"
+                                 BuildBrush="{DynamicResource Brush.Status.Info}"
+                                 DrawBrush="{DynamicResource Brush.Status.Success}"
+                                 LineBrush="{DynamicResource Brush.Text.Tertiary}" />
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource Brush.Text.Tertiary}"
+                       Text="{Binding Hint}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

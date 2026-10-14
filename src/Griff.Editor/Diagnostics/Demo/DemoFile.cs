@@ -573,6 +573,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "closefloat: Output": close the floating window the panel is in, putting its panels back.
                 await ui.CloseFloating(a);
                 break;
+            case "expectprofiler":
+                // "expectprofiler: frames", "expectprofiler: recording = false" or "expectprofiler: entities = 2006": what the
+                // Profiler panel shows (it has recorded frames; it's recording or not; the entities it counted).
+                await ExpectProfiler(a);
+                break;
             case "expectlayout":
                 // "expectlayout: Hierarchy | (Documents / Assets, Output) | Inspector": where the panels are, as PanelLayout.Summary says.
                 if (!await Until(() => ui.Panels!.Layout.Summary == a, 3000))
@@ -1485,6 +1490,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "color" => ui.ColorPart(name),
             "transform" => DemoUi.TransformPart(name),
             "filter" => DemoUi.FilterBox(name),
+            "profiler" => DemoUi.ProfilerPart(name),
             "pick" when name.Split('.', 2) is [var component, var field] =>
                 DemoUi.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
@@ -1493,7 +1499,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 
@@ -1544,6 +1550,24 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var scene = DemoUi.ScreenRect(sceneView);
         var width = Math.Min(scene.Width * 0.78, 1500);
         return new Rect(scene.Left + (scene.Width - width) / 2, scene.Top + 30, width, scene.Height * 0.7);
+    }
+
+    // "frames" (it has recorded some), "recording = true|false", or "entities = <n>" (as it last counted them).
+    private async Task ExpectProfiler(string text)
+    {
+        var profiler = DemoUi.Profiler;
+        var (what, value) = Split2(text, '=');
+        var (holds, shows) = what.ToLowerInvariant() switch
+        {
+            "frames" => ((Func<bool>)(() => profiler.Frames.Count > 0), (Func<string>)(() => $"{profiler.Frames.Count} frames")),
+            "recording" when bool.TryParse(value, out var recording) =>
+                (() => profiler.IsRecording == recording, () => profiler.IsRecording ? "recording" : "not recording"),
+            "entities" when int.TryParse(value, CultureInfo.InvariantCulture, out var entities) =>
+                (() => profiler.Counts.Entities == entities, () => $"{profiler.Counts.Entities} entities"),
+            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n>"),
+        };
+        if (!await Until(holds, 5000))
+            throw new InvalidOperationException($"Expected the Profiler to show {text}, but it shows {shows()}.");
     }
 
     // ----- Parsing helpers -----

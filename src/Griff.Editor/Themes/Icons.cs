@@ -44,6 +44,7 @@ public static class Icons
     public const string Pause = "\uE769";
     public const string Step = "\uE893";
     public const string Stop = "\uE71A";
+    public const string Record = "\uE7C8";
 
     // Tools and panels
     public const string Hierarchy = "\uE8FD";
@@ -56,6 +57,7 @@ public static class Icons
     public const string Code = "\uE943";
     public const string Console = "\uE756";
     public const string Gamepad = "\uE7FC";
+    public const string Profiler = "\uE9D9";
 
     // Status
     public const string Error = "\uEA39";

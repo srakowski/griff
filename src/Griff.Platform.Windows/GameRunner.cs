@@ -24,6 +24,7 @@ public sealed class GameRunner : IDisposable
     private readonly InputState _input = new();
     // When the compositor let the last frame go (a Stopwatch timestamp): frames are timed from one to the next.
     private long _lastShown;
+    private bool _shownAny;
     private RenderFrame? _lastFrame;
     private Vector2 _mouseNdc;
     private Point? _mousePixel;
@@ -125,6 +126,23 @@ public sealed class GameRunner : IDisposable
     {
         var seconds = (double)Math.Max(0, shownAt - _lastShown) / Stopwatch.Frequency;
         _lastShown = shownAt;
+        var first = !_shownAny;
+        _shownAny = true;
+
+        // Timed only while something profiles the game (see Game.Profiler), and only frames it plays: not the first, whose
+        // time is the game starting up.
+        if (!IsPaused && !first && Game.Profiler is { } profiler)
+        {
+            var steps = Game.Time.Frame;
+            var started = Stopwatch.GetTimestamp();
+            RunSafely(stepOnce: false, seconds);
+            var stepped = Stopwatch.GetTimestamp();
+            RenderLatest(out var built);
+            var drawn = Stopwatch.GetTimestamp();
+            profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
+                Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0));
+            return;
+        }
 
         if (!IsPaused)
         {
@@ -178,7 +196,10 @@ public sealed class GameRunner : IDisposable
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
     // and the last good frame stays up.
-    private void RenderLatest()
+    private void RenderLatest() => RenderLatest(out _);
+
+    // `built` is when the frame was built, before it's drawn (a Stopwatch timestamp).
+    private void RenderLatest(out long built)
     {
         RenderFrame frame;
         try
@@ -187,6 +208,7 @@ public sealed class GameRunner : IDisposable
         }
         catch (Exception ex)
         {
+            built = Stopwatch.GetTimestamp();
             if (!_drawFaulted)
             {
                 _drawFaulted = true;
@@ -197,10 +219,13 @@ public sealed class GameRunner : IDisposable
             return;
         }
 
+        built = Stopwatch.GetTimestamp();
         _drawFaulted = false;
         _lastFrame = frame;
         _surface.Render(_lastFrame);
     }
+
+    private static float Milliseconds(long from, long to) => (float)((to - from) * 1000.0 / Stopwatch.Frequency);
 
     private void UpdateMouseWorld()
     {

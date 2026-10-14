@@ -75,6 +75,23 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     public bool IsPaused => _runner?.IsPaused == true;
 
+    /// <summary>
+    /// Where the Game tab's game times its frames (see <see cref="Griff.Runtime.Game.Profiler"/>), from now on and in every
+    /// game played after; null times nothing. The Profiler panel sets it while it's on screen.
+    /// </summary>
+    public FrameProfiler? Profiler
+    {
+        get => _profiler;
+        set
+        {
+            _profiler = value;
+            if (_runner is not null)
+                _runner.Game.Profiler = value;
+        }
+    }
+
+    private FrameProfiler? _profiler;
+
     /// <summary>How many players are playing: 1, or more with Play with Players (the Game tab is player 1, the host).</summary>
     public int PlayerCount => _runner is null ? 0 : 1 + _players.Count;
 
@@ -312,6 +329,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _runner.Game.UseProjectSettings(project);
         }
         _runner.Game.SceneName = _sceneName;
+        _runner.Game.Profiler = _profiler;
         _runner.Game.SceneChanged += OnGameSceneChanged;
         _runner.Game.Stepped += OnStepped;
         _runner.Game.QuitRequested += OnGameQuit;

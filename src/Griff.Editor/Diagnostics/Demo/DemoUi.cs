@@ -297,6 +297,21 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
 
     public static InspectorView Inspector => (InspectorView)PanelContent("Inspector");
 
+    /// <summary>The Profiler panel's view model.</summary>
+    public static Features.Profiler.ProfilerPanel Profiler => (Features.Profiler.ProfilerPanel)PanelContent("Profiler").DataContext;
+
+    /// <summary>A part of the Profiler panel: its graph, the frame rate over it, the counts, the components, or the Record and Clear buttons.</summary>
+    public static FrameworkElement ProfilerPart(string name) => PanelContent("Profiler").FindName(name.ToLowerInvariant() switch
+    {
+        "graph" => "Graph",
+        "rate" => "Rate",
+        "counts" => "CountsPanel",
+        "components" => "ComponentList",
+        "record" => "RecordButton",
+        "clear" => "ClearButton",
+        _ => throw new FormatException("profiler:graph, rate, counts, components, record or clear"),
+    }) as FrameworkElement ?? throw new InvalidOperationException($"No profiler:{name}.");
+
     public static Border? ComponentHeader(string component) =>
         Descendants<Border>(Inspector).FirstOrDefault(b => b.DataContext is ComponentSection s && s.IsNamed(component) && b.Child is DockPanel);
 

@@ -1,0 +1,31 @@
+title: Profiler
+intro: See how a game runs while it plays: a graph of its frames, the frame rate, and what the scene holds.
+project: BunnyMark | Profiler
+
+chapter: Open the Profiler | Game > Profiler
+select: BunnyMark
+explain: field:BunnyMark.HoldCount | Hold Count | BunnyMark can put a number of bunnies in straight away. Five thousand give the profiler something to measure.
+set: BunnyMark.HoldCount = 5000
+set: BunnyMark.HoldSeconds = 60
+menu: Game > Profiler
+explain: panel:Profiler | The Profiler | The Profiler sits beside Assets and Output. It times the game only while it's on screen, so hidden away it costs nothing.
+play
+wait: 3
+expectprofiler: frames
+expectprofiler: entities = 5006
+explain: profiler:graph | Every frame | Each bar is one frame, the newest on the right. Orange is the game's steps, blue is building the picture, and green is drawing it. The grey above them is time to spare, up to the dashed line where a frame at sixty a second ends.
+explain: profiler:rate | The frame rate | Above it are the frame rate and its one percent low, the rate of the slowest frames, then the average and worst frame, and what each part takes.
+explain: profiler:counts | What the scene holds | Beside it, how many entities the scene holds, how many are active, and how many things were drawn in the last frame.
+explain: profiler:components | Components | Then how many of each component the active entities have, the most first.
+
+chapter: Hold it still | Record and Clear
+click: profiler:record
+expectprofiler: recording = false
+explain: profiler:graph | Paused | Turning Record off holds the graph still to look at, while the game plays on.
+click: profiler:record
+expectprofiler: recording = true
+click: profiler:clear
+expectprofiler: frames
+explain: profiler:graph | Afresh | Clear starts the graph again, and so does every Play.
+stop
+say: Agents can open the profiler, pause it, clear it and read its numbers too.

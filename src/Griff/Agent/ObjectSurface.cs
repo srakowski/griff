@@ -49,7 +49,7 @@ public static partial class ObjectSurface
                 continue;
 
             var shown = TryGet(property, target, out var value) ? Shown(value) : "(can't be read now)";
-            if (property.SetMethod?.IsPublic == true && (IsLeaf(property.PropertyType) || Nullable.GetUnderlyingType(property.PropertyType) is not null))
+            if (CanSet(property) && (IsLeaf(property.PropertyType) || Nullable.GetUnderlyingType(property.PropertyType) is not null))
                 values[property.Name] = new JsonObject { ["value"] = shown, ["settable"] = AgentValues.Describe(property.PropertyType) };
             else
                 values[property.Name] = shown;
@@ -94,7 +94,7 @@ public static partial class ObjectSurface
             throw new AgentException("Set a property, not a list item.");
         var property = FindProperty(owner.GetType(), member)
             ?? throw new AgentException($"{owner.GetType().Name} has no property \"{member}\". {Listing(owner)}");
-        if (property.SetMethod?.IsPublic != true)
+        if (!CanSet(property))
             throw new AgentException($"{owner.GetType().Name}.{property.Name} can't be changed.");
 
         try
@@ -418,6 +418,11 @@ public static partial class ObjectSurface
         : IsLeaf(type) ? AgentValues.Describe(type)
         : type.IsGenericType ? $"{type.Name.Split('`')[0]}<{string.Join(", ", type.GetGenericArguments().Select(FriendlyType))}>"
         : type.Name;
+
+    // A public setter, but not an init-only one: those are set as the object is made (a record's values), not after.
+    private static bool CanSet(PropertyInfo property) =>
+        property.SetMethod is { IsPublic: true } setter
+        && !setter.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(System.Runtime.CompilerServices.IsExternalInit));
 
     private static bool IsLeaf(Type type) =>
         type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal) || type == typeof(Guid)

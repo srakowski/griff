@@ -72,7 +72,7 @@ public sealed class DeleteLayoutCommand(PanelLayout layout, IDialogService dialo
     }
 }
 
-/// <summary>Puts every panel back where it starts out (Hierarchy on the left, Inspector on the right, Assets and Output under the scene), closing floating windows.</summary>
+/// <summary>Puts every panel back where it starts out (Hierarchy on the left, Inspector on the right, Assets, Output and Profiler under the scene), closing floating windows.</summary>
 public sealed class ResetLayoutCommand(PanelLayout layout) : EditorCommand
 {
     public override string Id => "View.ResetLayout";

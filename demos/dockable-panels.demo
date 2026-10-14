@@ -5,28 +5,28 @@ project: Platformer | Dockable Panels
 chapter: Dock it on a side | Drag a tab to the window's edge
 explain: panel:Inspector | The Inspector | Every panel can move. Drag its tab, and a box shows where it will go before you let go.
 dock: Inspector > left
-expectlayout: Inspector | Hierarchy | (Documents / Assets, Output)
+expectlayout: Inspector | Hierarchy | (Documents / Assets, Output, Profiler)
 explain: panel:Inspector | Docked on the left | Dropped right by the window's left edge, the Inspector docks along that whole side.
 
 chapter: Beside or together | Next to another panel, or tabbed with it
 dock: Output > right of Documents
-expectlayout: Inspector | Hierarchy | ((Documents | Output) / Assets)
+expectlayout: Inspector | Hierarchy | ((Documents | Output) / Assets, Profiler)
 explain: panel:Output | Beside the scene | Dropped near the edge of the Scene view, the Output panel docks beside it.
 dock: Assets > bottom of Hierarchy
-expectlayout: Inspector | (Hierarchy / Assets) | Documents | Output
+expectlayout: Inspector | (Hierarchy / Assets) | ((Documents | Output) / Profiler)
 explain: panel:Assets | Under the Hierarchy | Near the bottom of another panel, it docks underneath that one.
 dock: Inspector > Hierarchy
-expectlayout: (Hierarchy, Inspector / Assets) | Documents | Output
+expectlayout: (Hierarchy, Inspector / Assets) | ((Documents | Output) / Profiler)
 explain: panel:Inspector | Tabbed together | Dropped on another panel's tabs, it joins them as another tab.
 
 chapter: Float it | A window of its own
 float: Output > 150, -60
-expectlayout: (Hierarchy, Inspector / Assets) | Documents; floating: Output
+expectlayout: (Hierarchy, Inspector / Assets) | (Documents / Profiler); floating: Output
 explain: float:Output | Floating | Dropped over the middle of the scene, or outside the editor, a panel floats in its own window. Put it on another screen if you have one; the editor's shortcuts still work in it.
 dock: Assets > Output
-expectlayout: Hierarchy, Inspector | Documents; floating: Output, Assets
+expectlayout: Hierarchy, Inspector | (Documents / Profiler); floating: Output, Assets
 explain: float:Output | Tabbed in the window | Floating windows take more tabs too.
 closefloat: Output
-expectlayout: Hierarchy, Inspector | (Documents / Assets, Output)
+expectlayout: Hierarchy, Inspector | (Documents / Assets, Output, Profiler)
 explain: panel:Assets | Back again | Closing a floating window puts its panels back with the ones they started beside.
 say: Agents can move panels too, through the panel layout, which also says where everything is.

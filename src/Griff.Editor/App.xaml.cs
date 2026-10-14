@@ -22,6 +22,7 @@ using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Prefabs;
+using Griff.Editor.Features.Profiler;
 using Griff.Editor.Features.Projects;
 using Griff.Editor.Features.Scenes;
 using Griff.Editor.Features.SceneView;
@@ -55,6 +56,7 @@ public partial class App : Application
         new ArtModule(),
         new ControlsModule(),
         new OutputModule(),
+        new ProfilerModule(),
         new DesignSystemModule(),
         new AgentModule(),
     ];

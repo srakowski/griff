@@ -464,6 +464,9 @@ public sealed partial class NetSession : IDisposable
     /// <summary>This machine's address on the local network, for others to join.</summary>
     public static string LocalAddress()
     {
+        // Finding it binds a socket to the network's address, which tests mustn't (see UdpNetSocket.ForceLoopback).
+        if (UdpNetSocket.ForceLoopback)
+            return "127.0.0.1";
         try
         {
             using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);

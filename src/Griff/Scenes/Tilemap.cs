@@ -163,7 +163,8 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// walls, and grid movers step from diamond to diamond. <see cref="TileShape.Hex"/> makes the cells hexagons
     /// pointing up and down, a tile wide and a tile tall, in rows three quarters of a tile apart with every odd row (the
     /// second, fourth...) shifted half a tile to the right, the entity's position at the top left of cell 0, 0's picture;
-    /// hex maps are drawn and painted but don't collide yet. A layer's is its map's (see <see cref="LayerOf"/>).
+    /// grid movers step from hexagon to hexagon on them (and Tactics units walk and fight over them), but bodies don't
+    /// collide with them yet. A layer's is its map's (see <see cref="LayerOf"/>).
     /// </summary>
     public TileShape Shape
     {

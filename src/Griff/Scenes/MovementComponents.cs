@@ -298,7 +298,9 @@ public sealed class TopDownMovement : Component
 /// with a <see cref="Pushable"/> it's a crate that grid movers push a cell at a time by stepping into it. On an isometric
 /// map it steps from diamond to diamond: up goes up to the right, right down to the right, down down to the left and left
 /// up to the left, and two ways held together go that way on the screen (with <see cref="Diagonal"/>, every way pressed
-/// goes that way on the screen).
+/// goes that way on the screen). On a hex map it steps from hexagon to hexagon, six ways: left and right along the row,
+/// up or down with left or right held to the hexagon up or down that side, and up or down alone zigzagging straight up or
+/// down the screen.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -332,7 +334,10 @@ public sealed class GridMovement : Component
     [ShownWhen(nameof(Repeat))]
     public float RepeatDelay { get; set; }
 
-    /// <summary>Steps diagonally too, when two ways are held. It never cuts a wall's corner.</summary>
+    /// <summary>
+    /// Steps diagonally too, when two ways are held. It never cuts a wall's corner. A hex map's six ways are all along its
+    /// hexagons' sides, so there it changes nothing.
+    /// </summary>
     public bool Diagonal { get; set; }
 
     /// <summary>Never steps off the edge of its <see cref="Map"/>, even where there's no wall.</summary>
@@ -357,7 +362,8 @@ public sealed class GridMovement : Component
 
     /// <summary>
     /// The way it faces, one cell's step as a unit vector (diagonals are (±1, ±1)): down to start with. Like
-    /// <see cref="Step"/>'s ways, it's along the grid: on an isometric map, (0, 1) faces up to the right.
+    /// <see cref="Step"/>'s ways, it's along the grid: on an isometric map, (0, 1) faces up to the right, and on a hex map
+    /// (1, 1) faces the hexagon up to the right and (0, 1) straight up the screen.
     /// </summary>
     [DoNotSerialize]
     public Vector2 Facing { get; set; } = -Vector2.UnitY;
@@ -380,7 +386,8 @@ public sealed class GridMovement : Component
 
     /// <summary>
     /// Steps one cell <paramref name="x"/> across and <paramref name="y"/> up (each -1, 0 or 1) once the step under way
-    /// ends, as if the player pressed that way, even when it isn't <see cref="Controllable"/>. Blocked like a press is.
+    /// ends, as if the player pressed that way, even when it isn't <see cref="Controllable"/>. Blocked like a press is. On a
+    /// hex map, (1, 1) is the hexagon up to the right and (0, 1) the one above that keeps it heading straight up.
     /// </summary>
     public void Step(int x, int y) => Queued = (Math.Sign(x), Math.Sign(y));
 
@@ -483,7 +490,7 @@ public sealed class GridChase : Component, IGridDriver
 
     /// <summary>
     /// How many steps from the target it stops: 1 stops next to it (diagonally next to it too, if its grid movement is
-    /// Diagonal), 2 keeps a cell between them, for one that shoots. 0 walks into the target's cell; a target with a solid
+    /// Diagonal; on a hex map, in any of the six hexagons round it), 2 keeps a cell between them, for one that shoots. 0 walks into the target's cell; a target with a solid
     /// collider blocks it, so it bumps into it each step instead (Bumped, and its Bump Sound): a roguelike's attack.
     /// </summary>
     public int StopDistance { get; set; } = 1;
@@ -528,7 +535,8 @@ public sealed class GridPatrol : Component, IGridDriver
 
     /// <summary>
     /// Where to go, in cells from where it's placed (x right, y up): "x y" pairs separated by semicolons, e.g. "4 0" or
-    /// "4 0; 4 -3; 0 -3". The start (0 0) is always the first point.
+    /// "4 0; 4 -3; 0 -3". The start (0 0) is always the first point. On a hex map they're columns and rows, so "0 2" is
+    /// straight up the screen and "0 1" the row above, half a hexagon to one side.
     /// </summary>
     public string? Points
     {
@@ -602,9 +610,21 @@ public sealed class GridPatrol : Component, IGridDriver
 }
 
 // The cells grid movers step between: a tilemap's (its transform and tile size), or with none, world units centered on
-// whole numbers. Rows count down either way, so a way (x right, y up) changes the cell by Offset(way).
+// whole numbers. Rows count down either way, so a way (x right, y up) changes the cell by Offset(way), except on a hex
+// map, where a way up or down goes to one of the two hexagons above or below (see Step).
 internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4x4 ToLocal)
 {
+    // The six hexagons round one in an even row and in an odd (shifted) row, as changes of cell: clockwise from the top
+    // left, as Tilemap.Neighbors lists them.
+    private static readonly (int X, int Y)[] HexEven = [(-1, -1), (0, -1), (1, 0), (0, 1), (-1, 1), (-1, 0)];
+    private static readonly (int X, int Y)[] HexOdd = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 0)];
+    private static readonly (int X, int Y)[] FourWays = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    private static readonly (int X, int Y)[] EightWays = [.. FourWays, (1, 1), (-1, 1), (1, -1), (-1, -1)];
+
+    // The six ways along a hex map's grid (x right, y up): right and left along the row, and up and down to the right and
+    // left, into the rows above and below.
+    private static readonly (int X, int Y)[] HexWays = [(1, 0), (1, 1), (-1, 1), (-1, 0), (-1, -1), (1, -1)];
+
     public static GridCells Of(Tilemap? map)
     {
         if (map?.Entity is null || !Matrix4x4.Invert(map.Entity.Transform.WorldMatrix, out var toLocal))
@@ -627,9 +647,20 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
     /// <summary>Whether its cells are an isometric map's diamonds.</summary>
     public bool IsIsometric => Map is { Shape: TileShape.Isometric };
 
-    /// <summary>A way along the grid (x right, y up, a step's worth) as it looks in the world: on an isometric map, (0, 1) is up to the right.</summary>
-    public Vector2 InWorld(Vector2 way) =>
-        Map is null ? way : Vector2.TransformNormal(Map.PointAt(way.X, -way.Y), World);
+    /// <summary>Whether its cells are a hex map's hexagons.</summary>
+    public bool IsHex => Map is { Shape: TileShape.Hex };
+
+    /// <summary>
+    /// A way along the grid (x right, y up, a step's worth) as it looks in the world: on an isometric map, (0, 1) is up to
+    /// the right; on a hex map, (1, 1) is up to the right, to the hexagon half a tile across in the row above.
+    /// </summary>
+    public Vector2 InWorld(Vector2 way)
+    {
+        if (Map is null)
+            return way;
+        var across = IsHex && MathF.Abs(way.Y) > 1e-3f ? way.X / 2 : way.X;
+        return Vector2.TransformNormal(Map.PointAt(across, -way.Y), World);
+    }
 
     /// <summary>A world offset as a way along the grid (x right, y up, in cells): the other way from <see cref="InWorld"/>.</summary>
     public Vector2 WayOf(Vector2 offset)
@@ -638,6 +669,118 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
             return offset;
         var grid = Map.GridAt(Vector2.TransformNormal(offset, ToLocal));
         return new Vector2(grid.X, -grid.Y);
+    }
+
+    /// <summary>
+    /// The way (x right, y up) to face to look along a world offset: on a hex map, the one of its six ways nearest the
+    /// offset's direction; on others, along the grid's longer axis, or both if it steps diagonally. Down, for none.
+    /// </summary>
+    public Vector2 Toward(Vector2 offset, bool diagonal)
+    {
+        if (!IsHex)
+        {
+            // Along the grid: the longer axis, or both if it steps diagonally.
+            var grid = WayOf(offset);
+            var (x, y) = (MathF.Abs(grid.X) > 1e-3f ? MathF.Sign(grid.X) : 0, MathF.Abs(grid.Y) > 1e-3f ? MathF.Sign(grid.Y) : 0);
+            if (diagonal || x == 0 || y == 0)
+                return x == 0 && y == 0 ? -Vector2.UnitY : new Vector2(x, y);
+            return MathF.Abs(grid.X) >= MathF.Abs(grid.Y) ? new Vector2(x, 0) : new Vector2(0, y);
+        }
+
+        if (offset.LengthSquared() < 1e-8f)
+            return -Vector2.UnitY;
+        var (best, nearest) = (HexWays[0], float.NegativeInfinity);
+        var along = Vector2.Normalize(offset);
+        foreach (var way in HexWays)
+        {
+            var dot = Vector2.Dot(Vector2.Normalize(InWorld(new Vector2(way.X, way.Y))), along);
+            if (dot > nearest)
+                (best, nearest) = (way, dot);
+        }
+
+        return new Vector2(best.X, best.Y);
+    }
+
+    /// <summary>
+    /// A way to step from a cell, as one of the grid's own: on a hex map, straight up or down (0, ±1) is to the hexagon
+    /// above or below on the right from an even row and on the left from an odd one, so holding it zigzags straight up the
+    /// screen; every other way, and every way on other maps, is itself.
+    /// </summary>
+    public (int X, int Y) Resolve((int X, int Y) cell, (int X, int Y) way) =>
+        IsHex && way.X == 0 && way.Y != 0 ? ((cell.Y & 1) == 0 ? 1 : -1, way.Y) : way;
+
+    /// <summary>The cell a step (x right, y up) from a cell goes into: on a hex map, the hexagon that way (see <see cref="Resolve"/>).</summary>
+    public (int X, int Y) Step((int X, int Y) cell, (int X, int Y) way)
+    {
+        if (!IsHex || way.Y == 0)
+            return (cell.X + way.X, cell.Y - way.Y);
+        way = Resolve(cell, way);
+        var shift = cell.Y & 1;
+        return (cell.X + (way.X > 0 ? shift : shift - 1), cell.Y - Math.Sign(way.Y));
+    }
+
+    /// <summary>The way (x right, y up) a step from one cell into a neighbouring one goes: the other way from <see cref="Step"/>.</summary>
+    public (int X, int Y) WayBetween((int X, int Y) from, (int X, int Y) to)
+    {
+        var (dx, dy) = (to.X - from.X, to.Y - from.Y);
+        if (!IsHex || dy == 0)
+            return (dx, -dy);
+        return (dx == (from.Y & 1) ? 1 : -1, -Math.Sign(dy));
+    }
+
+    /// <summary>
+    /// The cells next to one, as changes of cell (column, then row down): the six hexagons round it on a hex map, else the
+    /// four beside it, or eight with the diagonals.
+    /// </summary>
+    public (int X, int Y)[] Neighbours((int X, int Y) cell, bool diagonal) =>
+        IsHex ? ((cell.Y & 1) == 0 ? HexEven : HexOdd) : diagonal ? EightWays : FourWays;
+
+    /// <summary>
+    /// What covers a cell's shape in the world, shrunk to <paramref name="scale"/> of it round its middle, as transforms of
+    /// the unit quad: a square, a diamond or a hexagon (see <see cref="Tilemap.CellShape"/>).
+    /// </summary>
+    public IEnumerable<Matrix4x4> Shape((int X, int Y) cell, float scale)
+    {
+        if (Map is null)
+            return [Matrix4x4.CreateScale(scale, scale, 1) * Matrix4x4.CreateTranslation(new Vector3(Center(cell), 0))];
+        var world = World;
+        return Map.CellShape(cell.X, cell.Y, scale).Select(m => m * world);
+    }
+
+    /// <summary>A cell's corners in the world, round its edge, shrunk to <paramref name="scale"/> of it round its middle.</summary>
+    public Vector2[] Corners((int X, int Y) cell, float scale)
+    {
+        var middle = Center(cell);
+        if (Map is null)
+            return [middle + new Vector2(-0.5f, 0.5f) * scale, middle + new Vector2(0.5f, 0.5f) * scale, middle + new Vector2(0.5f, -0.5f) * scale, middle + new Vector2(-0.5f, -0.5f) * scale];
+        var world = World;
+        return Map.OutlineOf(cell.X, cell.Y, cell.X, cell.Y).Select(p => middle + (Vector2.Transform(p, world) - middle) * scale).ToArray();
+    }
+
+    /// <summary>Whether one cell is next to another (see <see cref="Neighbours"/>; on a square map, diagonally too).</summary>
+    public bool AreNeighbours((int X, int Y) a, (int X, int Y) b)
+    {
+        var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+        if (IsHex)
+            return Array.IndexOf(Neighbours(a, false), (dx, dy)) >= 0;
+        return Math.Abs(dx) <= 1 && Math.Abs(dy) <= 1 && (dx, dy) != (0, 0);
+    }
+
+    /// <summary>
+    /// The fewest steps from one cell to another with nothing in the way: across and down, or with diagonal steps the
+    /// longer of the two, and on a hex map the hexagons between them, whichever way they lie.
+    /// </summary>
+    public int Steps((int X, int Y) a, (int X, int Y) b, bool diagonal)
+    {
+        if (IsHex)
+        {
+            // As axial coordinates, where each row's start is pulled back half a cell a row so the rows line up.
+            var (q, r) = (b.X - (b.Y - (b.Y & 1)) / 2 - (a.X - (a.Y - (a.Y & 1)) / 2), b.Y - a.Y);
+            return (Math.Abs(q) + Math.Abs(r) + Math.Abs(q + r)) / 2;
+        }
+
+        var (dx, dy) = (Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        return diagonal ? Math.Max(dx, dy) : dx + dy;
     }
 }
 
@@ -654,7 +797,8 @@ public interface IGridDriver
     bool StepTakesAction => true;
 
     /// <summary>
-    /// The way it wants to step next (one cell: x right, y up), or null for none: asked where the game is run, while its
+    /// The way it wants to step next (one cell: x right, y up; on a hex map, (±1, ±1) for the hexagons in the rows above
+    /// and below), or null for none: asked where the game is run, while its
     /// entity is between steps and no other step (a script's, one pressed) is waiting.
     /// </summary>
     (int X, int Y)? NextStep(GridMovement movement) => null;

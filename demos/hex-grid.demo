@@ -1,0 +1,81 @@
+title: Stepping on hex maps
+intro: Grid movers now step from hexagon to hexagon, six ways, and tactics units walk and fight over hex maps.
+project: Empty | Hex Steps
+
+# A hex field: a floor that doesn't collide, and a layer of walls round it with a pillar in the middle. Cell x, y's
+# middle is at (-4.25 + x + half a tile on odd rows, 2 - three quarters of a tile a row).
+create: Tilemap
+rename: Field
+set: Transform.Position = -4.75, 2.5, 0
+set: Tilemap.Shape = Hex
+set: Tilemap.Tint = #6FA860
+set: Tilemap.Tiles = 111111111\n111111111\n111111111\n111111111\n111111111\n111111111
+set: Tilemap.Solid = false
+click: tiles:layer:+
+rename: Walls
+set: Tilemap.Tint = #8A8178
+set: Tilemap.Tiles = 222222222\n2.......2\n2...2...2\n2.......2\n2.......2\n222222222
+set: Tilemap.Solid = true
+expecttile: Walls 4, 2 = 2
+expecttile: Walls 3, 2 = -1
+look: 0, 0, 3.5
+
+chapter: Six ways | Grid Movement on a hex map
+deselect
+create: Grid Player
+set: Transform.Position = -1.75, -0.25, 0
+expectat: Player = -1.75, -0.25
+explain: world:-5, 2.75, 5, -2.5 | A hex map | Here's a hex map with walls round it and a pillar in the middle, and a grid player. On a hex map, a grid player now steps from hexagon to hexagon.
+play
+wait: 0.5
+expectat: Player = -1.75, -0.25
+tap: Right
+wait: 0.4
+expectat: Player = -0.75, -0.25
+say: Left and right step along the row.
+hold: Up+Left 0.05
+wait: 0.4
+expectat: Player = -1.25, 0.5
+explain: game | Up and to one side | Up with left or right held steps to the hexagon up on that side.
+tap: Up
+wait: 0.4
+expectat: Player = -0.75, 1.25
+tap: Down
+wait: 0.4
+expectat: Player = -1.25, 0.5
+tap: Down
+wait: 0.4
+expectat: Player = -0.75, -0.25
+explain: game | Straight up and down | Up or down alone zigzags between the two hexagons above or below, so holding it walks straight up or down the screen.
+hold: Up+Right 0.05
+wait: 0.4
+expectat: Player = -0.75, -0.25
+explain: game | Walls | The pillar is up to the right, so stepping that way bumps into it. Chasers, patrols, crates and turns all step over the hexagons the same way.
+stop
+
+chapter: Tactics on hexagons | Reach and range in hexagons
+select: Player
+key: Delete
+deselect
+create: Tactics Unit
+rename: Knight
+set: Transform.Position = -2.25, 0.5, 0
+create: Tactics Unit
+rename: Orc
+set: Transform.Position = 1.25, -0.25, 0
+expectat: Knight = -2.25, 0.5
+expectat: Orc = 1.25, -0.25
+say: Now a knight for Blue and an orc for Red, which the computer plays.
+play
+wait: 0.6
+gameclick: Knight
+wait: 0.4
+explain: game | Lit as hexagons | Picking the knight lights the hexagons it can walk to in blue, counted in steps round the pillar, and the ones it could hit from them in red.
+gameclick: Orc
+wait: 1.6
+expectvalue: Orc.Health.Current = 2
+explain: game | Walk up and strike | Clicking the orc walks the knight round the pillar, a hexagon at a time, into one of the six hexagons next to it, and hits it.
+wait: 2
+expectvalue: Knight.Health.Current = 2
+say: Then the computer's orc hits back from where it stands. Tactics, turns and grid movement now all work on hex maps.
+stop

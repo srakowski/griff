@@ -62,7 +62,7 @@ public sealed partial class Game
         // A player waiting while the computer takes its turn still hears its keys, so a step pressed then is taken as the
         // turn comes back.
         var controls = waits && byTurns && ComputersTurn() ? ControlsOf(entity) : InputOf(entity);
-        var way = m.Controllable && !driven ? GridWay(m, controls.Move, grid.IsIsometric) : (X: 0, Y: 0);
+        var way = m.Controllable && !driven ? GridWay(m, controls.Move, grid) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
         m.HeldFor = way == m.Held ? m.HeldFor + Time.Delta : 0;
         m.Held = way;
@@ -144,14 +144,14 @@ public sealed partial class Game
         }
 
         // Which way it faces on the screen: on an isometric map, every step along the grid is a diagonal, seen from behind
-        // (Up) going up the screen and from the front (Down) coming down it.
+        // (Up) going up the screen and from the front (Down) coming down it; so is every step between a hex map's rows.
         var seen = grid.InWorld(m.Facing);
         if (m.FlipSprite && MathF.Abs(seen.X) > 1e-4f)
             Face(entity, MathF.Sign(seen.X));
 
         if (entity.GetComponent<Animation>() is not { } animation || IsPlayingAttack(entity, animation))
             return;
-        var facingUpOrDown = grid.IsIsometric ? MathF.Abs(seen.Y) > 1e-4f : MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
+        var facingUpOrDown = grid.IsIsometric || grid.IsHex ? MathF.Abs(seen.Y) > 1e-4f : MathF.Abs(m.Facing.Y) > MathF.Abs(m.Facing.X);
         var suffix = facingUpOrDown ? (seen.Y > 0 ? "Up" : "Down") : "";
         if (m.Stepping)
             PlayFirst(animation, "Walk" + suffix, "Run" + suffix, "Walk", "Run");
@@ -165,11 +165,14 @@ public sealed partial class Game
         var entity = m.Entity!;
         var direction = new Vector2(way.X, way.Y);
         m.Facing = direction;
-        var offset = GridCells.Offset(way);
-        var target = (m.Cell.X + offset.X, m.Cell.Y + offset.Y);
+        // On a hex map, straight up or down the screen is to one of the two hexagons there: a crate is pushed that way.
+        var target = grid.Step(m.Cell, way);
+        var along = grid.Resolve(m.Cell, way);
+        var offset = (X: target.Item1 - m.Cell.X, Y: target.Item2 - m.Cell.Y);
         var walls = GridWalls.Gather(this, m, grid);
         var free = walls.IsFree(target);
-        if (free && offset.X != 0 && offset.Y != 0)
+        // A diagonal step can't cut a wall's corner (a hex map's six neighbours each share a side).
+        if (free && !grid.IsHex && offset.X != 0 && offset.Y != 0)
             free = walls.IsFree((m.Cell.X + offset.X, m.Cell.Y)) && walls.IsFree((m.Cell.X, m.Cell.Y + offset.Y));
 
         // Something it can hurt in the way is hit instead.
@@ -183,9 +186,10 @@ public sealed partial class Game
             return;
         }
 
-        // A crate in the way (straight ahead, never diagonally) is pushed a cell along first, if it can go.
-        var row = !free && (offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay
-            ? CratesPushed(entity, way, inTheWay)
+        // A crate in the way (straight ahead, never diagonally; on a hex map, any of the six ways) is pushed a cell along
+        // first, if it can go.
+        var row = !free && (grid.IsHex || offset.X == 0 || offset.Y == 0) && !walls.IsWall(target) && walls.MoverIn(target) is { } inTheWay
+            ? CratesPushed(entity, along, inTheWay)
             : null;
         if (!free && row is null)
         {
@@ -203,7 +207,7 @@ public sealed partial class Game
         for (var i = 0; i < _systems.Count; i++)
             _systems[i].RunGridStepStarting(m);
         if (row is not null)
-            Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
+            Push(entity, row, along, progress, Math.Max(0.02f, m.StepTime));
         StartGridStep(m, grid, target, direction, progress, glide: null);
         // A tactics unit's walk is all one go, used up as it attacks or waits.
         if (!StepsTakeActions(entity))
@@ -334,7 +338,6 @@ public sealed partial class Game
     private List<GridMovement>? CratesPushed(Entity pusher, (int X, int Y) way, Entity first)
     {
         var layer = pusher.GetComponent<Collider>()?.Layer;
-        var offset = GridCells.Offset(way);
         var row = new List<GridMovement>();
         for (var crate = first; ;)
         {
@@ -346,7 +349,7 @@ public sealed partial class Game
             var grid = GridCells.Of(m.FindMap());
             var cell = m.Started ? m.Cell : grid.CellAt(Flat(crate.Transform.WorldPosition));
             var walls = GridWalls.Gather(this, m, grid);
-            var next = (cell.X + offset.X, cell.Y + offset.Y);
+            var next = grid.Step(cell, way);
             if (walls.IsWall(next))
                 return null;
             if (walls.MoverIn(next) is not { } behind)
@@ -367,7 +370,6 @@ public sealed partial class Game
             return;
         }
 
-        var offset = GridCells.Offset(way);
         foreach (var crate in row)
         {
             crate.Facing = direction;
@@ -375,7 +377,7 @@ public sealed partial class Game
             var grid = GridCells.Of(crate.FindMap());
             if (!crate.Started)
                 (crate.Started, crate.Cell) = (true, grid.CellAt(Flat(crate.Entity!.Transform.WorldPosition)));
-            StartGridStep(crate, grid, (crate.Cell.X + offset.X, crate.Cell.Y + offset.Y), direction, progress, glide);
+            StartGridStep(crate, grid, grid.Step(crate.Cell, way), direction, progress, glide);
             crate.Entity!.GetComponent<Pushable>()?.RaisePushed(pusher, direction);
         }
     }
@@ -389,15 +391,19 @@ public sealed partial class Game
         var pusher = Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id);
         (int X, int Y) way = (Math.Sign(direction.X), Math.Sign(direction.Y));
-        if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0) && CratesPushed(pusher, way, crate) is { } row)
+        if (pusher?.GetComponent<GridMovement>() is { } mover && (way.X == 0 || way.Y == 0 || GridCells.Of(mover.FindMap()).IsHex) &&
+            CratesPushed(pusher, way, crate) is { } row)
             Push(pusher, row, way, 0, Math.Max(0.02f, mover.StepTime));
     }
 
     // The way pressed as a step: four-way, the axis pressed most recently winning, unless it steps diagonally. On an
     // isometric map, where the grid runs diagonally on the screen, two ways held together step to the diamond that way;
-    // stepping diagonally too, every way pressed is turned onto the grid, so it goes that way on the screen.
-    private static (int X, int Y) GridWay(GridMovement m, Vector2 move, bool isometric)
+    // stepping diagonally too, every way pressed is turned onto the grid, so it goes that way on the screen. On a hex map
+    // it's six-way: left and right along the row, two ways held together to the hexagon up or down that side, and up or
+    // down alone zigzag straight up or down the screen (see GridCells.Resolve).
+    private static (int X, int Y) GridWay(GridMovement m, Vector2 move, GridCells grid)
     {
+        var isometric = grid.IsIsometric;
         var x = MathF.Abs(move.X) > GridDeadZone ? Math.Sign(move.X) : 0;
         var y = MathF.Abs(move.Y) > GridDeadZone ? Math.Sign(move.Y) : 0;
         if (x != 0 && m.LastRaw.X == 0)
@@ -405,6 +411,8 @@ public sealed partial class Game
         if (y != 0 && m.LastRaw.Y == 0)
             m.PreferVertical = true;
         m.LastRaw = (x, y);
+        if (grid.IsHex)
+            return (x, y);
         if (isometric && m.Diagonal)
             return (Math.Sign(x - y), Math.Sign(x + y));
         if (isometric && x != 0 && y != 0)
@@ -459,9 +467,7 @@ public sealed partial class Game
     private (int X, int Y)? ChaseStep(GridMovement m, GridCells grid, GridChase chase, Entity target)
     {
         var theirs = target.GetComponent<GridMovement>() is { Started: true } mover ? mover.Cell : grid.CellAt(Flat(target.Transform.WorldPosition));
-        var steps = m.Diagonal
-            ? Math.Max(Math.Abs(theirs.X - m.Cell.X), Math.Abs(theirs.Y - m.Cell.Y))
-            : Math.Abs(theirs.X - m.Cell.X) + Math.Abs(theirs.Y - m.Cell.Y);
+        var steps = grid.Steps(m.Cell, theirs, m.Diagonal);
         var near = steps <= Math.Max(0, chase.StopDistance);
         if (near && !chase.WasNear)
             chase.RaiseReached();
@@ -469,7 +475,7 @@ public sealed partial class Game
         if (near)
         {
             if (steps > 0)
-                m.Facing = WayTowards(grid.WayOf(Flat(target.Transform.WorldPosition) - Flat(m.Entity!.Transform.WorldPosition)), m.Diagonal);
+                m.Facing = grid.Toward(Flat(target.Transform.WorldPosition) - Flat(m.Entity!.Transform.WorldPosition), m.Diagonal);
             return null;
         }
 
@@ -519,18 +525,18 @@ public sealed partial class Game
         var walls = GridWalls.Gather(this, m, grid, except: target);
         var next = FindGridStep(m, walls, goal, avoidMovers: true) ?? FindGridStep(m, walls, goal, avoidMovers: false);
         if (next is { } into)
-            return (into.X - m.Cell.X, m.Cell.Y - into.Y);
+            return grid.WayBetween(m.Cell, into);
         if (!closerIfNoWay)
             return null;
 
-        int Distance((int X, int Y) c) => Math.Abs(goal.X - c.X) + Math.Abs(goal.Y - c.Y);
+        int Distance((int X, int Y) c) => grid.Steps(c, goal, diagonal: false);
         (int X, int Y)? best = null;
         var bestDistance = Distance(m.Cell);
-        foreach (var (dx, dy) in Neighbours(m.Diagonal))
+        foreach (var (dx, dy) in grid.Neighbours(m.Cell, m.Diagonal))
         {
             var cell = (m.Cell.X + dx, m.Cell.Y + dy);
             if (Distance(cell) < bestDistance && CanPass(walls, m.Cell, (dx, dy), avoidMovers: true, goal))
-                (best, bestDistance) = ((dx, -dy), Distance(cell));
+                (best, bestDistance) = (grid.WayBetween(m.Cell, cell), Distance(cell));
         }
 
         return best;
@@ -561,12 +567,10 @@ public sealed partial class Game
         (int X, int Y) CellOf(int index) => (index % width + minX, index / width + minY);
         bool Inside((int X, int Y) c) => c.X >= minX && c.Y >= minY && c.X <= maxX && c.Y <= maxY;
 
-        // Every step takes as long, so the fewest steps win; a diagonal costs a hair more, so it walks straight when it can.
-        float Estimate((int X, int Y) c)
-        {
-            var (dx, dy) = (Math.Abs(c.X - goal.X), Math.Abs(c.Y - goal.Y));
-            return m.Diagonal ? Math.Max(dx, dy) : dx + dy;
-        }
+        // Every step takes as long, so the fewest steps win; a diagonal costs a hair more, so it walks straight when it can
+        // (a hex map's six ways are all straight).
+        var grid = walls.Grid;
+        float Estimate((int X, int Y) c) => grid.Steps(c, goal, m.Diagonal);
 
         var cost = new float[count];
         Array.Fill(cost, float.PositiveInfinity);
@@ -575,7 +579,6 @@ public sealed partial class Game
         var startIndex = IndexOf(start);
         cost[startIndex] = 0;
         open.Enqueue(startIndex, Estimate(start));
-        var neighbours = Neighbours(m.Diagonal);
         while (open.TryDequeue(out var current, out var priority))
         {
             var cell = CellOf(current);
@@ -590,13 +593,13 @@ public sealed partial class Game
             if (priority > cost[current] + Estimate(cell) + 1e-4f)
                 continue; // A stale entry: this cell was reached more cheaply since.
 
-            foreach (var (dx, dy) in neighbours)
+            foreach (var (dx, dy) in grid.Neighbours(cell, m.Diagonal))
             {
                 var next = (cell.X + dx, cell.Y + dy);
                 if (!Inside(next) || !CanPass(walls, cell, (dx, dy), avoidMovers, goal))
                     continue;
                 var index = IndexOf(next);
-                var nextCost = cost[current] + (dx != 0 && dy != 0 ? 1.001f : 1);
+                var nextCost = cost[current] + (!grid.IsHex && dx != 0 && dy != 0 ? 1.001f : 1);
                 if (nextCost >= cost[index])
                     continue;
                 cost[index] = nextCost;
@@ -608,29 +611,14 @@ public sealed partial class Game
         return null;
     }
 
-    // Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner. The goal
-    // is open whoever stands in it (it's where the target is).
+    // Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner (a hex
+    // map's neighbours all share a side). The goal is open whoever stands in it (it's where the target is).
     internal static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
     {
         bool Open((int X, int Y) c) => !walls.IsWall(c) && (!avoidMovers || c == goal || walls.MoverIn(c) is null);
         if (!Open((from.X + by.X, from.Y + by.Y)))
             return false;
-        return by.X == 0 || by.Y == 0 || (Open((from.X + by.X, from.Y)) && Open((from.X, from.Y + by.Y)));
-    }
-
-    private static readonly (int X, int Y)[] FourWays = [(1, 0), (-1, 0), (0, 1), (0, -1)];
-    private static readonly (int X, int Y)[] EightWays = [.. FourWays, (1, 1), (-1, 1), (1, -1), (-1, -1)];
-
-    internal static (int X, int Y)[] Neighbours(bool diagonal) => diagonal ? EightWays : FourWays;
-
-    // The way (x right, y up) a grid mover faces to look along an offset along its grid (see GridCells.WayOf): the longer
-    // axis, or both if it steps diagonally.
-    internal static Vector2 WayTowards(Vector2 offset, bool diagonal)
-    {
-        var (x, y) = (MathF.Abs(offset.X) > 1e-3f ? MathF.Sign(offset.X) : 0, MathF.Abs(offset.Y) > 1e-3f ? MathF.Sign(offset.Y) : 0);
-        if (diagonal || x == 0 || y == 0)
-            return x == 0 && y == 0 ? -Vector2.UnitY : new Vector2(x, y);
-        return MathF.Abs(offset.X) >= MathF.Abs(offset.Y) ? new Vector2(x, 0) : new Vector2(0, y);
+        return walls.Grid.IsHex || by.X == 0 || by.Y == 0 || (Open((from.X + by.X, from.Y)) && Open((from.X, from.Y + by.Y)));
     }
 
     // At the end of its move, a patrol counts how far it is from where it was placed, however it got there (stepping,
@@ -670,6 +658,9 @@ public sealed partial class Game
 
         /// <summary>The width and height of its map in cells (its widest layer), or null with no map.</summary>
         public (int Width, int Height)? Size { get; }
+
+        /// <summary>The cells it's about.</summary>
+        public GridCells Grid => _grid;
 
         public static GridWalls Gather(Game game, GridMovement m, GridCells grid, Entity? except = null)
         {

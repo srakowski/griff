@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Views
 
-- [ ] Make grid movement and turn-based play work on hex maps.
 - [ ] Make solid hex maps collide: bodies meet each hexagon's sides and slide along them, raycasts and overlaps see them, and they cast shadows.
 
 ### Profiler
@@ -128,6 +127,8 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Make grid movement and turn-based play work on hex maps. (2026-10-14)
+  - GridCells does the hex work: `Step(cell, way)` (ways stay x right, y up; (±1, ±1) are the hexagons in the rows above and below, and (0, ±1) alone resolves by row parity so holding it zigzags straight up the screen), `WayBetween`, `Neighbours(cell)` (six, by parity), `Steps` (axial hex distance), `Toward` (nearest of the six ways) and `Shape`/`Corners` for lighting cells. Grid movers, chasers' A*, patrols, pushed crates (any of the six ways), bump attacks, roguelike turns and Tactics (reach, range, the computer, the cursor) all go through it; Diagonal does nothing on hex. Tactics now lights cells and the cursor in their own shape (hexagons, and diamonds on isometric maps, closing that gap). Left for later: sight (raycasts) sees through hex walls until hex collision, close-up attacks swing up or down for the four slanted ways, and dungeons generate on square maps only.
 - [x] Add hex tilemaps, drawn and painted. (2026-10-14)
   - A tilemap's Shape can be Hex: hexagons pointing up and down, a tile wide and tall, in rows 3/4 of a tile apart with odd rows shifted half a tile right (odd-r offset rows, so Tiles stays rows of characters). `CellAt` finds the hexagon by nearest middle (stretched to regular hexagons), `CellCenter`, `OutlineOf` (a block's jagged outline, a cell's six corners), `PictureOf`, `Bounds` and the new `Neighbors(x, y)` (six on a hex map, four otherwise) follow it; `PointAt`/`GridAt` are linear on hex maps (rows 3/4 apart, odd rows' shift not counted). Flood fill spreads to the six neighbors, painting above the top row grows the map two rows at a time (so odd rows stay shifted), the Scene view draws, outlines and previews hexagons, culling works, and a tile with no tileset is three non-overlapping parallelograms. Sort By Y works a row at a time.
   - Checked through the MCP: `component_describe` shows Hex with its description; built a 5 by 5 board with `entity_create` and a hex tileset written with `asset_write`, read it back, filled, painted above the top (the map moved up 2.25 for two rows of a 1.5 tile) and painted a rectangle through `ui_invoke` on SceneViewModel, and the game and Scene view screenshots showed the hexagons fitting together (a see-through tileless map evenly tinted). Demo `demos/hex-tilemaps.demo`; its first check once found the fill leaking past the river (a brush click seemingly landing off its hexagon), then passed three times in a row and played through.

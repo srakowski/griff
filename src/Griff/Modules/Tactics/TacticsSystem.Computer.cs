@@ -52,7 +52,7 @@ internal sealed partial class TacticsSystem
         var m = unit.Entity!.GetComponent<GridMovement>()!;
         var grid = GridCells.Of(m.FindMap());
         var here = CellOf(m, grid);
-        return Foes(unit, grid).Select(f => Steps(here, f.Cell, m.Diagonal)).DefaultIfEmpty(int.MaxValue).Min();
+        return Foes(unit, grid).Select(f => grid.Steps(here, f.Cell, m.Diagonal)).DefaultIfEmpty(int.MaxValue).Min();
     }
 
     // One move of a computer unit's go: an attack, a walk, or once it has walked, an attack from there or a wait. False if
@@ -64,7 +64,7 @@ internal sealed partial class TacticsSystem
         var here = CellOf(m, grid);
         var foes = Foes(unit, grid).ToList();
         if (unit.HasMoved)
-            return BestFoe(unit, foes.Where(f => InRange(unit, m, here, f.Cell)), _ => 0) is { } foe && Order(unit, TacticsOrder.Attack, null, foe);
+            return BestFoe(unit, foes.Where(f => InRange(unit, grid, m, here, f.Cell)), _ => 0) is { } foe && Order(unit, TacticsOrder.Attack, null, foe);
 
         var walls = Game.GridWalls.Gather(Game, m, grid);
         var reach = unit.Stance == TacticsStance.Hold
@@ -73,7 +73,7 @@ internal sealed partial class TacticsSystem
 
         // The best foe it can reach to hit, and the fewest steps it takes to.
         int? StepsToHit((Entity Entity, (int X, int Y) Cell) foe) =>
-            reach.Where(r => InRange(unit, m, r.Key, foe.Cell)).Select(r => (int?)r.Value.Steps).Min();
+            reach.Where(r => InRange(unit, grid, m, r.Key, foe.Cell)).Select(r => (int?)r.Value.Steps).Min();
         var reachable = foes.Where(f => StepsToHit(f) is not null).ToList();
         if (BestFoe(unit, reachable, f => StepsToHit(f)!.Value) is { } target)
             return Order(unit, TacticsOrder.Attack, null, target);
@@ -87,7 +87,7 @@ internal sealed partial class TacticsSystem
         if (Away(best) == int.MaxValue)
         {
             // No way round to them: as close as the crow flies.
-            int Near((int X, int Y) cell) => foes.Min(f => Steps(cell, f.Cell, m.Diagonal));
+            int Near((int X, int Y) cell) => foes.Min(f => grid.Steps(cell, f.Cell, m.Diagonal));
             best = reach.Keys.OrderBy(Near).ThenBy(c => reach[c].Steps).First();
             if (Near(best) >= Near(here))
                 return false;
@@ -122,9 +122,10 @@ internal sealed partial class TacticsSystem
         (maxX, maxY) = (Math.Max(maxX, here.X) + Game.GridSearchMargin, Math.Max(maxY, here.Y) + Game.GridSearchMargin);
         bool Inside((int X, int Y) c) => c.X >= minX && c.Y >= minY && c.X <= maxX && c.Y <= maxY;
 
+        var grid = walls.Grid;
         var away = new Dictionary<(int X, int Y), int>();
         var frontier = new Queue<(int X, int Y)>();
-        foreach (var cell in foes.SelectMany(f => RangeCells(unit, m, f.Cell)).Where(c => Inside(c) && !walls.IsWall(c)))
+        foreach (var cell in foes.SelectMany(f => RangeCells(unit, grid, m, f.Cell)).Where(c => Inside(c) && !walls.IsWall(c)))
         {
             if (away.TryAdd(cell, 0))
                 frontier.Enqueue(cell);
@@ -132,7 +133,7 @@ internal sealed partial class TacticsSystem
 
         while (frontier.TryDequeue(out var cell) && away.Count < Game.GridSearchLimit)
         {
-            foreach (var (dx, dy) in Game.Neighbours(m.Diagonal))
+            foreach (var (dx, dy) in walls.Grid.Neighbours(cell, m.Diagonal))
             {
                 var next = (cell.X + dx, cell.Y + dy);
                 if (Inside(next) && !away.ContainsKey(next) && Game.CanPass(walls, cell, (dx, dy), avoidMovers: false, next))

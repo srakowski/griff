@@ -117,7 +117,7 @@ internal sealed partial class TacticsSystem : GameSystem
             case TacticsOrder.Attack when target is not null && IsFoe(unit, target):
             {
                 var theirs = CellOf(target, grid);
-                if (InRange(unit, m, here, theirs))
+                if (InRange(unit, grid, m, here, theirs))
                 {
                     Strike(unit, m, grid, target);
                     return true;
@@ -167,7 +167,7 @@ internal sealed partial class TacticsSystem : GameSystem
         if (unit.AttackAfter is { } target)
         {
             unit.AttackAfter = null;
-            if (target.Scene == Scene && IsFoe(unit, target) && InRange(unit, m, here, CellOf(target, grid)))
+            if (target.Scene == Scene && IsFoe(unit, target) && InRange(unit, grid, m, here, CellOf(target, grid)))
             {
                 Strike(unit, m, grid, target);
                 return;
@@ -182,10 +182,9 @@ internal sealed partial class TacticsSystem : GameSystem
     private void Strike(TacticsUnit unit, GridMovement m, GridCells grid, Entity target)
     {
         var entity = unit.Entity!;
-        var way = Game.WayTowards(Game.Flat(target.Transform.WorldPosition) - Game.Flat(entity.Transform.WorldPosition), m.Diagonal);
+        var way = grid.Toward(Game.Flat(target.Transform.WorldPosition) - Game.Flat(entity.Transform.WorldPosition), m.Diagonal);
         var here = CellOf(m, grid);
-        var offset = GridCells.Offset(((int)way.X, (int)way.Y));
-        Game.Lunge(m, grid, (here.X + offset.X, here.Y + offset.Y), way, 0);
+        Game.Lunge(m, grid, grid.Step(here, ((int)way.X, (int)way.Y)), way, 0);
         if (Health.Of(target) is { } health && health.Damage(unit.Damage, entity))
         {
             Game.PlayIfSet(unit.AttackSound);
@@ -251,7 +250,7 @@ internal sealed partial class TacticsSystem : GameSystem
             var next = new List<(int X, int Y)>();
             foreach (var cell in frontier)
             {
-                foreach (var (dx, dy) in Game.Neighbours(m.Diagonal))
+                foreach (var (dx, dy) in walls.Grid.Neighbours(cell, m.Diagonal))
                 {
                     var to = (cell.X + dx, cell.Y + dy);
                     if (reach.ContainsKey(to) || !Game.CanPass(walls, cell, (dx, dy), avoidMovers: true, start))
@@ -282,33 +281,28 @@ internal sealed partial class TacticsSystem : GameSystem
     private (List<(int X, int Y)> Path, (int X, int Y) Cell)? AttackSpot(TacticsUnit unit, GridMovement m, GridCells grid, (int X, int Y) foe)
     {
         var reach = Reach(unit, m, Game.GridWalls.Gather(Game, m, grid), CellOf(m, grid));
-        var best = reach.Where(p => InRange(unit, m, p.Key, foe))
-            .OrderBy(p => p.Value.Steps).ThenByDescending(p => Steps(p.Key, foe, m.Diagonal)).Select(p => (Cell: p.Key, Found: true)).FirstOrDefault();
+        var best = reach.Where(p => InRange(unit, grid, m, p.Key, foe))
+            .OrderBy(p => p.Value.Steps).ThenByDescending(p => grid.Steps(p.Key, foe, m.Diagonal)).Select(p => (Cell: p.Key, Found: true)).FirstOrDefault();
         return best.Found ? (PathTo(reach, best.Cell), best.Cell) : null;
     }
 
-    // Steps between two cells: across and down, or with diagonal steps, the longer of the two.
-    private static int Steps((int X, int Y) a, (int X, int Y) b, bool diagonal)
+    // Whether a cell is in a unit's range from another: steps between them (see GridCells.Steps) from its Min Range to its
+    // Range.
+    private static bool InRange(TacticsUnit unit, GridCells grid, GridMovement m, (int X, int Y) from, (int X, int Y) to)
     {
-        var (dx, dy) = (Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
-        return diagonal ? Math.Max(dx, dy) : dx + dy;
-    }
-
-    private static bool InRange(TacticsUnit unit, GridMovement m, (int X, int Y) from, (int X, int Y) to)
-    {
-        var steps = Steps(from, to, m.Diagonal);
+        var steps = grid.Steps(from, to, m.Diagonal);
         return steps >= Math.Max(1, unit.MinRange) && steps <= unit.Range;
     }
 
     // The cells a unit could hit from a cell (whatever's in them), on its map.
-    private static IEnumerable<(int X, int Y)> RangeCells(TacticsUnit unit, GridMovement m, (int X, int Y) from)
+    private static IEnumerable<(int X, int Y)> RangeCells(TacticsUnit unit, GridCells grid, GridMovement m, (int X, int Y) from)
     {
         for (var dy = -unit.Range; dy <= unit.Range; dy++)
         {
             for (var dx = -unit.Range; dx <= unit.Range; dx++)
             {
                 var cell = (from.X + dx, from.Y + dy);
-                if (InRange(unit, m, from, cell))
+                if (InRange(unit, grid, m, from, cell))
                     yield return cell;
             }
         }
@@ -333,7 +327,7 @@ internal sealed partial class TacticsSystem : GameSystem
     private IEnumerable<(Entity Entity, (int X, int Y) Cell)> TargetsFrom(TacticsUnit unit, GridCells grid, (int X, int Y) from)
     {
         var m = unit.Entity!.GetComponent<GridMovement>()!;
-        return Foes(unit, grid).Where(f => InRange(unit, m, from, f.Cell));
+        return Foes(unit, grid).Where(f => InRange(unit, grid, m, from, f.Cell));
     }
 
     // The cell something stands in: a grid mover's own (the one it's heading into), else the one its middle is in.
@@ -384,7 +378,7 @@ internal sealed partial class TacticsSystem : GameSystem
                 view.HeldFor -= Game.CursorRepeatEvery;
             var from = controls.Cursor ?? (selected is not null ? CellOf(m, grid) : ((int X, int Y)?)null) ??
                 units.Where(u => u.CanAct && MayCommand(u, Game.Net.LocalPlayer)).Select(u => ((int X, int Y)?)CellOf(u.Entity!, grid)).FirstOrDefault();
-            controls.Cursor = from is { } f ? Clamp(controls.Cursor is null ? f : (f.X + way.X, f.Y - way.Y)) : null;
+            controls.Cursor = from is { } f ? Clamp(controls.Cursor is null ? f : grid.Step(f, way)) : null;
         }
 
         var confirm = controls.ConfirmAction?.Trim();
@@ -428,7 +422,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var m = selected.Entity!.GetComponent<GridMovement>()!;
         var here = CellOf(m, grid);
         if (Foes(selected, grid).FirstOrDefault(f => f.Cell == cell).Entity is { } foe &&
-            (InRange(selected, m, here, cell) || (!selected.HasMoved && AttackSpot(selected, m, grid, cell) is not null)))
+            (InRange(selected, grid, m, here, cell) || (!selected.HasMoved && AttackSpot(selected, m, grid, cell) is not null)))
         {
             SendOrder(selected, TacticsOrder.Attack, target: foe);
             return;
@@ -493,9 +487,9 @@ internal sealed partial class TacticsSystem : GameSystem
         var reach = shown.HasMoved ? new() { [here] = (here, 0) } : Reach(shown, m, walls, here);
         view.Moves.AddRange(reach.Keys.Where(k => k != here));
         var friends = units.Where(u => u != shown && !IsFoe(shown, u.Entity!)).Select(u => CellOf(u.Entity!, grid)).ToHashSet();
-        var attacks = new HashSet<(int X, int Y)>(reach.Keys.SelectMany(k => RangeCells(shown, m, k))
+        var attacks = new HashSet<(int X, int Y)>(reach.Keys.SelectMany(k => RangeCells(shown, grid, m, k))
             .Where(k => !reach.ContainsKey(k) && !walls.IsWall(k) && !friends.Contains(k)));
-        foreach (var (_, cell) in Foes(shown, grid).Where(f => reach.Keys.Any(k => InRange(shown, m, k, f.Cell))))
+        foreach (var (_, cell) in Foes(shown, grid).Where(f => reach.Keys.Any(k => InRange(shown, grid, m, k, f.Cell))))
             attacks.Add(cell);
         view.Attacks.AddRange(attacks);
 
@@ -504,7 +498,7 @@ internal sealed partial class TacticsSystem : GameSystem
             return;
         if (reach.ContainsKey(cursor) && cursor != here)
             view.Path.AddRange([here, .. PathTo(reach, cursor)]);
-        else if (Foes(selected, grid).Any(f => f.Cell == cursor) && !InRange(selected, m, here, cursor) && AttackSpot(selected, m, grid, cursor) is { } spot)
+        else if (Foes(selected, grid).Any(f => f.Cell == cursor) && !InRange(selected, grid, m, here, cursor) && AttackSpot(selected, m, grid, cursor) is { } spot)
             view.Path.AddRange([here, .. spot.Path]);
     }
 }

@@ -66,8 +66,7 @@ public sealed partial class Tilemap
         // A hair bigger than a cell, so neighbors overlap: edges computed tile by tile can round apart and let a hairline of
         // the background show between them as the camera moves. The image is stretched, not extended, so nothing bleeds in.
         const float seamless = 1.004f;
-        // Without a picture, an isometric tile is its diamond: a square turned an eighth and squashed to half its height.
-        var diamond = Matrix4x4.CreateScale(TileSize * seamless / MathF.Sqrt(2), TileSize * seamless / MathF.Sqrt(2), 1) * Matrix4x4.CreateRotationZ(MathF.PI / 4) * Matrix4x4.CreateScale(1, 0.5f, 1);
+        var diamond = Diamond(TileSize * seamless);
         foreach (var (x, y, tile) in cull is { } view ? CellsIn(world, view) : BackToFront())
         {
             var shown = ShownTile(x, y, tile);
@@ -84,6 +83,35 @@ public sealed partial class Tilemap
                 ? diamond * Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0)) * world
                 : Matrix4x4.CreateScale(size.X * seamless, size.Y * seamless, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world;
             yield return (new SpriteDraw(matrix, tileset.Image, tint, entity) { Source = tileset.Image is null ? new Vector4(0, 0, 1, 1) : tileset.Rect(shown) }, x, y);
+        }
+    }
+
+    // Without a picture, an isometric tile is its diamond, this wide: a square turned an eighth and squashed to half its height.
+    private static Matrix4x4 Diamond(float width) =>
+        Matrix4x4.CreateScale(width / MathF.Sqrt(2), width / MathF.Sqrt(2), 1) * Matrix4x4.CreateRotationZ(MathF.PI / 4) * Matrix4x4.CreateScale(1, 0.5f, 1);
+
+    /// <summary>
+    /// What covers cell (<paramref name="x"/>, <paramref name="y"/>)'s shape in the entity's own space, shrunk to
+    /// <paramref name="scale"/> of it round its middle, as transforms of the unit quad (-0.5 to 0.5 each way): a square, an
+    /// isometric map's diamond, or a hex map's hexagon in three parts that don't overlap. For lighting cells up, as
+    /// Tactics shows where a unit can go.
+    /// </summary>
+    public IEnumerable<Matrix4x4> CellShape(int x, int y, float scale = 1)
+    {
+        var middle = Matrix4x4.CreateTranslation(new Vector3(CellCenter(x, y), 0));
+        var size = TileSize * scale;
+        switch (Shape)
+        {
+            case TileShape.Hex:
+                foreach (var part in HexParts)
+                    yield return part * Matrix4x4.CreateScale(size, size, 1) * middle;
+                break;
+            case TileShape.Isometric:
+                yield return Diamond(size) * middle;
+                break;
+            default:
+                yield return Matrix4x4.CreateScale(size, size, 1) * middle;
+                break;
         }
     }
 

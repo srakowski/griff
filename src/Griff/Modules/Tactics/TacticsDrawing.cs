@@ -43,11 +43,21 @@ internal static class TacticsDrawing
         if (ground < 0)
             ground = Math.Max(-1, list.FindIndex(OfUnit) - 1);
         var faint = view.Faint ? 0.5f : 1;
+        // Each cell lit in its own shape: a square, or an isometric map's diamond or a hex map's hexagon.
+        var shaped = grid.Map is { Shape: not TileShape.Square };
         var lit = new List<SpriteDraw>();
+        void Light((int X, int Y) c, Color color)
+        {
+            if (!shaped)
+                lit.Add(Quad(grid.Center(c), new Vector2(cell * 0.94f), color));
+            else
+                lit.AddRange(grid.Shape(c, 0.94f).Select(m => new SpriteDraw(m, null, color, SceneRenderer.ScreenEntity)));
+        }
+
         foreach (var c in view.Moves)
-            lit.Add(Quad(grid.Center(c), new Vector2(cell * 0.94f), Faded(controls.MoveColor, faint)));
+            Light(c, Faded(controls.MoveColor, faint));
         foreach (var c in view.Attacks)
-            lit.Add(Quad(grid.Center(c), new Vector2(cell * 0.94f), Faded(controls.AttackColor, faint)));
+            Light(c, Faded(controls.AttackColor, faint));
         list.InsertRange(ground + 1, lit);
 
         // Over the units: health bars, the way the picked unit would go, and the cursor.
@@ -74,7 +84,19 @@ internal static class TacticsDrawing
         }
 
         if (view.Cursor is { } cursor && controls.CursorColor.A > 0)
-            over.AddRange(Outline(grid.Center(cursor), new Vector2(cell * 0.96f), thickness * 1.6f, controls.CursorColor));
+        {
+            if (!shaped)
+            {
+                over.AddRange(Outline(grid.Center(cursor), new Vector2(cell * 0.96f), thickness * 1.6f, controls.CursorColor));
+            }
+            else
+            {
+                // Round a diamond's or a hexagon's edge.
+                var corners = grid.Corners(cursor, 0.96f);
+                for (var i = 0; i < corners.Length; i++)
+                    over.Add(LineDraw(corners[i], corners[(i + 1) % corners.Length], thickness * 1.6f, controls.CursorColor));
+            }
+        }
 
         var top = list.FindLastIndex(OfUnit);
         list.InsertRange(top < 0 ? ground + 1 + lit.Count : top + 1, over);

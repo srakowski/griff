@@ -152,14 +152,14 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
             return null;
         var next = Path[0];
         Path.RemoveAt(0);
-        var (dx, dy) = (next.X - movement.Cell.X, next.Y - movement.Cell.Y);
-        if (Math.Abs(dx) > 1 || Math.Abs(dy) > 1 || (dx == 0 && dy == 0))
+        var grid = GridCells.Of(movement.FindMap());
+        if (!grid.AreNeighbours(movement.Cell, next))
         {
             Path.Clear();
             return null;
         }
 
-        return (dx, -dy);
+        return grid.WayBetween(movement.Cell, next);
     }
 
     // Its way is blocked: it stops where it is.

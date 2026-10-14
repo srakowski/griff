@@ -56,5 +56,5 @@ expecttile: Tilemap 0, 2 = 2
 explain: world:-5, 5, 6, -3 | Two rows at a time | Painting above the top row grows the map up two rows at once, so the shifted rows stay the shifted ones. The map moves up to make room, and every tile stays where it was.
 play
 wait: 1.5
-say: The game draws the hexagons just as the Scene view does. Grid movement and turns on hex maps come next.
+say: The game draws the hexagons just as the Scene view does, and grid movers and tactics units step from hexagon to hexagon on them.
 stop

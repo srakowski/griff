@@ -56,7 +56,7 @@ internal static partial class TemplateArt
     }
 
     // A knight in a blue tunic with a sword, from the side, facing right.
-    private static Canvas HeroArt()
+    internal static Canvas HeroArt()
     {
         var c = new Canvas(32, 32, 81);
         var tunic = Rgb(0x4C, 0x7C, 0xE8);

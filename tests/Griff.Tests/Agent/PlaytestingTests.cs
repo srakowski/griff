@@ -2,6 +2,8 @@ using System.Numerics;
 using System.Text.Json;
 using Griff.Agent;
 using Griff.Input;
+using Griff.Modules.Strategy;
+using Griff.Modules.Tactics;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -215,9 +217,9 @@ public class PlaytestingTests
         controls.Selected = knight;
         game.Tick(1 / 60f);
 
-        Assert.Equal(", in cell (1, 1), can act: reaches 3 cells, can hit Orc", Playtesting.Tactics(knight));
-        Assert.Equal(", in cell (2, 1), waiting for its side's turn", Playtesting.Tactics(orc));
-        Assert.Equal("", Playtesting.Tactics(level));
+        Assert.Equal(", in cell (1, 1), can act: reaches 3 cells, can hit Orc", Playtesting.Reports(knight));
+        Assert.Equal(", in cell (2, 1), waiting for its side's turn", Playtesting.Reports(orc));
+        Assert.Equal("", Playtesting.Reports(level));
         Assert.Equal("Mouse: at (-5, 5), picked Knight.", Playtesting.Mouse(game));
     }
 }

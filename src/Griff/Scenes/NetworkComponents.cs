@@ -31,7 +31,7 @@ public sealed class Multiplayer : Component
 
     /// <summary>
     /// The entity each player plays as: one in the scene (the host plays that one, everyone else a copy) or a prefab.
-    /// Empty gives players no character, as in a strategy game where each player commands a <see cref="Faction"/>.
+    /// Empty gives players no character, as in a strategy game where each player commands a Faction.
     /// </summary>
     [EntityName]
     public string? Player { get; set; } = "Player";
@@ -39,7 +39,7 @@ public sealed class Multiplayer : Component
     /// <summary>
     /// Team names, e.g. "Blue, Red", for team games: players join the team with the fewest, play at a spawn for their
     /// team, and can't hurt each other unless <see cref="FriendlyFire"/> is on. In a strategy game they're the
-    /// <see cref="Faction"/> teams players take: "Player, Enemy". Empty is everyone for themselves.
+    /// Faction teams players take: "Player, Enemy". Empty is everyone for themselves.
     /// </summary>
     [Group("Teams")]
     public string? Teams { get; set; }

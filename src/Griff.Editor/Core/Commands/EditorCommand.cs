@@ -14,6 +14,12 @@ public abstract class EditorCommand : ICommand
     /// <summary>Stable identifier, e.g. "File.Save". Used for lookup, keymaps and a future command palette.</summary>
     public abstract string Id { get; }
 
+    /// <summary>
+    /// The type whose /// summary says what the command does, for agents (it's their tool's description): the command's
+    /// own, unless it stands for something else, as an Entity menu preset's command does for the preset.
+    /// </summary>
+    public virtual Type DescribedBy => GetType();
+
     /// <summary>Display text. Use '_' to mark the access key.</summary>
     public abstract string Text { get; }
 

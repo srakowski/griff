@@ -3,7 +3,8 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 // The frame: every step the game takes in a Tick, in phases, and the systems they belong to. Griff's own steps are
-// listed in BuildFrame in the order they run; scripts' systems run after them in their phase.
+// listed in BuildFrame in the order they run, with each module's (see GameModule) put in next to the steps they name;
+// scripts' systems run after them in their phase.
 public sealed partial class Game
 {
     private static readonly FramePhase[] Phases = Enum.GetValues<FramePhase>();
@@ -76,7 +77,16 @@ public sealed partial class Game
     internal IEnumerable<GameSystem> AddedSystems => _systems.Where(s => !IsBuiltIn(s));
 
     /// <summary>The running system of type <typeparamref name="T"/>, if there is one.</summary>
-    public T? GetSystem<T>() where T : GameSystem => _systems.OfType<T>().FirstOrDefault();
+    public T? GetSystem<T>() where T : GameSystem
+    {
+        foreach (var system in _systems)
+        {
+            if (system is T found)
+                return found;
+        }
+
+        return null;
+    }
 
     /// <summary>Advances the game by <paramref name="seconds"/>, one <see cref="Frame"/> step after another.</summary>
     public void Tick(double seconds)
@@ -98,12 +108,7 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        _builtInSystems = [_levels, _puzzles, _drags, _panels, _strategy, _firstPerson, _sandboxes, _tactics];
-        foreach (var system in _builtInSystems)
-        {
-            system.Attach(this);
-            _systems.Add(system);
-        }
+        GameSystem[] core = [_levels, _puzzles, _drags, _panels, _firstPerson, _sandboxes];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
         Step(FramePhase.Begin, "Panels", SyncPanels, _panels);
@@ -121,7 +126,6 @@ public sealed partial class Game
         Step(FramePhase.Logic, "Lobby", RunLobby);
         Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _puzzles);
         Step(FramePhase.Logic, "Turns", RunTurns);
-        Step(FramePhase.Logic, "Tactics", RunTactics, _tactics);
         Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
 
         // Before anything moves, so a move taken back this frame isn't stepped on from where it was.
@@ -140,9 +144,6 @@ public sealed partial class Game
         Step(FramePhase.Simulate, "Tools", RunTools, _sandboxes);
         Step(FramePhase.Simulate, "Other Players' Tools", RunOtherPlayersTools, _sandboxes);
         Step(FramePhase.Simulate, "Dragging", RunDragging, _drags);
-        Step(FramePhase.Simulate, "Match Boards", RunMatchBoards);
-        Step(FramePhase.Simulate, "Falling Boards", RunFallingBoards);
-        Step(FramePhase.Simulate, "Strategy", RunStrategy, _strategy);
         Step(FramePhase.Simulate, "Attacks", RunAttacks);
         Step(FramePhase.Simulate, "Idle Grid Movers", PassIdleGridMovers);
         Step(FramePhase.Simulate, "Timers", RunTimers);
@@ -201,6 +202,24 @@ public sealed partial class Game
         Step(FramePhase.End, "Audio", () => Audio.Advance(Time.UnscaledDelta));
         Step(FramePhase.End, "Settings", SaveSettings);
         Step(FramePhase.End, "Network", () => Net.EndFrame(Time.UnscaledDelta));
+
+        // Then each module's systems, their steps put in next to the steps they follow or go before.
+        var setup = new GameSetup(this);
+        foreach (var module in GameModule.All)
+        {
+            setup.Module = module;
+            module.AddTo(setup);
+        }
+
+        var steps = setup.Place(_builtInSteps);
+        _builtInSteps.Clear();
+        _builtInSteps.AddRange(steps);
+        _builtInSystems = [.. core, .. setup.Systems];
+        foreach (var system in _builtInSystems)
+        {
+            system.Attach(this);
+            _systems.Add(system);
+        }
 
         BuildPhases();
     }

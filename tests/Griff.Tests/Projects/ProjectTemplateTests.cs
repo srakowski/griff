@@ -1,5 +1,9 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.FallingBlocks;
+using Griff.Modules.Match3;
+using Griff.Modules.Strategy;
+using Griff.Modules.Tactics;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;

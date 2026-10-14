@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
+using Griff.Modules.Strategy;
+using Griff.Modules.Tactics;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

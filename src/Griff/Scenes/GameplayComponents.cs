@@ -367,14 +367,14 @@ public sealed class Counter : Component
 
     /// <summary>
     /// Count the moves taken instead of a message: in a grid puzzle its <see cref="MoveHistory"/>'s, so an undo counts one
-    /// back, e.g. "Moves: {0}"; on a <see cref="MatchBoard"/> its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many
+    /// back, e.g. "Moves: {0}"; on a Match Board its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many
     /// are left, e.g. "Moves: {3}".
     /// </summary>
     public bool CountMoves { get; set; }
 
     /// <summary>
-    /// Count the scene's <see cref="MatchBoard"/>'s score instead of a message, with <c>{2}</c> its Target Score and
-    /// <c>{3}</c> how far there is to go, e.g. "Score: {0} / {2}"; or a <see cref="FallingBoard"/>'s.
+    /// Count the scene's Match Board's score instead of a message, with <c>{2}</c> its Target Score and <c>{3}</c> how
+    /// far there is to go, e.g. "Score: {0} / {2}"; or a Falling Board's (see <see cref="ICounterSource"/>).
     /// </summary>
     public bool CountScore { get; set; }
 
@@ -385,7 +385,7 @@ public sealed class Counter : Component
     public bool CountFloor { get; set; }
 
     /// <summary>
-    /// Count the gems of this kind (a tile number) cleared on the scene's <see cref="MatchBoard"/> instead of a message,
+    /// Count the gems of this kind (a tile number) cleared on the scene's Match Board instead of a message,
     /// with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}". -1
     /// counts no gems.
     /// </summary>
@@ -670,4 +670,18 @@ internal interface IHealthListener
     void Damaged(float amount, Entity? source);
 
     void Died();
+}
+
+/// <summary>
+/// A component a <see cref="Counter"/> can count from instead of a message, when it counts moves, a score or gems (Count
+/// Moves, Count Score, Count Gem): a match board's swaps, score or gems cleared, a falling-block board's score. The counter
+/// shows the first one in the scene that counts what it asks for. A script component can implement it too.
+/// </summary>
+public interface ICounterSource
+{
+    /// <summary>
+    /// What <paramref name="counter"/> shows of this, and what that's out of (its Total, <c>{2}</c> in its Format; 0 for
+    /// nothing), or null if this doesn't count what the counter asks for.
+    /// </summary>
+    (int Value, int Total)? CountFor(Counter counter);
 }

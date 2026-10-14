@@ -13,6 +13,9 @@ public sealed partial class Game
     // The scene's turn order as of this frame, so asking whether something is waiting doesn't look through the scene.
     private TurnOrder? _turnOrder;
 
+    /// <summary>The scene's turn order as of this frame, if it has one.</summary>
+    internal TurnOrder? TurnOrderNow => _turnOrder;
+
     // Before anything acts, so a turn taker whose turn has just ended doesn't get another frame.
     private void RunTurns()
     {
@@ -148,8 +151,9 @@ public sealed partial class Game
         foreach (var taker in takers.Where(t => TurnOrder.SameSide(SideOf(t), side)))
         {
             taker.ActionsUsed = 0;
-            if (taker.Entity!.GetComponent<TacticsUnit>() is { } unit)
-                FreshGo(unit);
+            var components = taker.Entity!.Components;
+            for (var i = 0; i < components.Count; i++)
+                (components[i] as ITurnReady)?.TurnBegins();
         }
 
         if (startsIn <= 0)
@@ -251,7 +255,7 @@ public sealed partial class Game
     private bool HasTakers(IReadOnlyList<TurnTaker> takers, string side) => takers.Any(t => TurnOrder.SameSide(SideOf(t), side));
 
     // The side a turn taker acts for: its own, or in a network game with teams, its player's team.
-    private string SideOf(TurnTaker taker)
+    internal string SideOf(TurnTaker taker)
     {
         if (Net.IsOnline && Net.PlayerById(NetSession.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
             return player.Team;
@@ -270,7 +274,7 @@ public sealed partial class Game
     }
 
     // An attack swung or a shot fired on its turn uses one of its turn taker's actions.
-    private void UseAction(Entity entity)
+    internal void UseAction(Entity entity)
     {
         if (TurnTaker.Of(entity) is { Actions: > 0 } taker && _turnOrder is { } order && Acts(order, taker))
         {

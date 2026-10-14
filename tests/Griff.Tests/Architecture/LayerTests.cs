@@ -22,6 +22,48 @@ public sealed class LayerTests
             "or move the code up a layer):\n" + string.Join("\n", uses));
     }
 
+    // A module keeps the same layers: the files its components are declared in (with the types that go with them, such
+    // as a board's rules) are data, and its systems and drawing use them, not the other way round.
+    [Fact]
+    public void ModuleComponents_DoNotUseRuntimeOrRendering()
+    {
+        var (compilation, trees) = Core();
+        var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
+        var system = compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
+        var uses = new List<string>();
+        foreach (var tree in trees.Where(t => t.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
+                     .Any(n => n.Name.ToString().StartsWith("Griff.Modules.", StringComparison.Ordinal))))
+        {
+            var model = compilation.GetSemanticModel(tree);
+            var types = tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => model.GetDeclaredSymbol(d)).OfType<INamedTypeSymbol>().ToList();
+            if (!types.Any(t => DerivesFrom(t, component)))
+                continue;
+            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                if (name.Ancestors().OfType<BaseTypeDeclarationSyntax>().LastOrDefault() is not { } declaration || model.GetDeclaredSymbol(declaration) is not { } user)
+                    continue;
+                if (Used(model.GetSymbolInfo(name).Symbol) is { } used &&
+                    (InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering") || DerivesFrom(used, system)))
+                    uses.Add($"{Name(user)} -> {Name(used)}");
+            }
+        }
+
+        Assert.True(uses.Count == 0,
+            "A module's components are data and mustn't use Griff.Runtime, Griff.Rendering or its systems (move the code to " +
+            "its system):\n" + string.Join("\n", uses.Distinct().Order()));
+    }
+
+    private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
+    {
+        for (var t = type.BaseType; t is not null; t = t.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(t, baseType))
+                return true;
+        }
+
+        return false;
+    }
+
     // Binds the core's source and finds every Runtime or Rendering symbol named inside a Griff.Scenes type.
     private static IEnumerable<string> ScenesUses()
     {

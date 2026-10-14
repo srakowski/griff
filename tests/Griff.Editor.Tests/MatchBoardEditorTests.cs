@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
+using Griff.Modules.FallingBlocks;
+using Griff.Modules.Match3;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

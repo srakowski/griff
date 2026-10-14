@@ -3,6 +3,7 @@ using System.IO;
 using System.Numerics;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
+using Griff.Modules.Strategy;
 using Griff.Rendering;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

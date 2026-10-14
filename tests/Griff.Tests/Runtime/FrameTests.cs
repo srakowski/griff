@@ -55,10 +55,14 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        // Tactics keeps what its controls show (and draws it), so it's a system too; its step's place in the frame is unchanged.
-        Assert.Equal(["Levels", "Puzzles", "Dragging", "Panels", "Strategy", "First Person", "Sandbox", "Tactics"], game.Systems.Select(s => s.Name));
+        // Griff's core systems, then each module's in module order (Falling Blocks, Match-3, Strategy, Tactics): every step of
+        // a module's belongs to one of its systems, in the place in the frame it had before modules.
+        Assert.Equal(["Levels", "Puzzles", "Dragging", "Panels", "First Person", "Sandbox", "Falling Boards", "Match Boards", "Strategy", "Tactics"],
+            game.Systems.Select(s => s.Name));
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
         Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
+        Assert.Equal("Match Boards", game.Frame.Single(s => s.Name == "Match Boards").System?.Name);
+        Assert.Equal("Falling Boards", game.Frame.Single(s => s.Name == "Falling Boards").System?.Name);
         Assert.Equal("Levels", game.Frame.Single(s => s.Name == "Doors").System?.Name);
         Assert.Null(game.Frame.Single(s => s.Name == "Physics").System);
     }
@@ -123,7 +127,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(8, game.Systems.Count);
+        Assert.Equal(10, game.Systems.Count);
     }
 
     [Fact]

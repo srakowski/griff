@@ -71,9 +71,9 @@ public sealed partial class Game
     }
 
     // Paused at any point this frame: the press that clicks Resume doesn't also jump, or work a lever.
-    private bool PausedThisFrame => _pausedAtStart || Time.IsPaused;
+    internal bool PausedThisFrame => _pausedAtStart || Time.IsPaused;
 
-    private Panel? PanelNamed(string name) =>
+    internal Panel? PanelNamed(string name) =>
         Scene.Entities.Where(e => e.Name == name.Trim()).SelectMany(e => e.GetComponents<Panel>()).FirstOrDefault();
 
     private static bool Inside(Entity entity, Panel panel) => panel.Entity is { } owner && entity.IsSelfOrDescendantOf(owner);
@@ -184,8 +184,8 @@ public sealed partial class Game
             return;
         }
 
-        // In a strategy game, Esc cancels placing a building or picking a target before it opens a pause menu.
-        if (clicked.Count > 0 || TopPanel is not null || Rts.Placing is not null || Rts.Targeting is not null)
+        // Back cancels what a system has under way (a building being placed) before it opens a pause menu.
+        if (clicked.Count > 0 || TopPanel is not null || SystemClaimsBack())
             return;
         foreach (var panel in Scene.All<Panel>())
         {
@@ -243,6 +243,17 @@ public sealed partial class Game
             if (text.Value is { } value && value.Contains('{'))
                 text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));
         }
+    }
+
+    private bool SystemClaimsBack()
+    {
+        foreach (var system in _systems)
+        {
+            if (system.HasBack)
+                return true;
+        }
+
+        return false;
     }
 }
 

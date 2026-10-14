@@ -78,15 +78,19 @@ internal static class TemplateSounds
         scene.Add(entity);
     }
 
-    /// <summary>Fills in the sound of everything in <paramref name="entity"/> that makes one and has none yet.</summary>
+    /// <summary>Sets a sound with <paramref name="set"/> to <paramref name="sound"/> if it has none yet (<paramref name="current"/> is empty).</summary>
+    public static void Set(string? current, Action<string> set, string sound)
+    {
+        if (string.IsNullOrWhiteSpace(current))
+            set(sound);
+    }
+
+    /// <summary>
+    /// Fills in the sound of everything of Griff's core in <paramref name="entity"/> that makes one and has none yet. A
+    /// module's template fills in its own components' too (see <see cref="ProjectTemplate.WireSounds"/>).
+    /// </summary>
     public static void Wire(Entity entity)
     {
-        static void Set(string? current, Action<string> set, string sound)
-        {
-            if (string.IsNullOrWhiteSpace(current))
-                set(sound);
-        }
-
         var isPlayer = entity.GetComponent<Collider>()?.Layer == "Player";
         foreach (var component in entity.Components)
         {
@@ -114,13 +118,6 @@ internal static class TemplateSounds
                     break;
                 case BumpAttack b:
                     Set(b.Sound, s => b.Sound = s, Swing);
-                    break;
-                case TacticsUnit t:
-                    Set(t.AttackSound, s => t.AttackSound = s, t.Range > 1 ? Shoot : Swing);
-                    break;
-                case TacticsControls t:
-                    Set(t.SelectSound, s => t.SelectSound = s, Select);
-                    Set(t.CancelSound, s => t.CancelSound = s, Switch);
                     break;
                 case Inventory i when i.ItemUses.Count > 0:
                     Set(i.UseSound, s => i.UseSound = s, PowerUp);
@@ -152,13 +149,6 @@ internal static class TemplateSounds
                     break;
                 case Slider sl:
                     Set(sl.Sound, s => sl.Sound = s, Select);
-                    break;
-                case Fighter f:
-                    Set(f.Sound, s => f.Sound = s, string.IsNullOrWhiteSpace(f.Projectile) ? Swing : Shoot);
-                    break;
-                case Commander c:
-                    Set(c.OrderSound, s => c.OrderSound = s, Select);
-                    Set(c.ReadySound, s => c.ReadySound = s, PowerUp);
                     break;
                 case Choice ch:
                     Set(ch.Sound, s => ch.Sound = s, Select);

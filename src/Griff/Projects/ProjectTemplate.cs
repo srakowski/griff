@@ -30,6 +30,13 @@ public abstract class ProjectTemplate
     /// <summary>The music it comes with, if <see cref="HasSounds"/>.</summary>
     protected virtual MusicRecipe Music => MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Volume = 0.7f };
 
+    /// <summary>
+    /// Fills in the sound of everything in <paramref name="entity"/> that makes one and has none yet, from the sounds every
+    /// template with sounds comes with: Griff's core components' (<see cref="TemplateSounds.Wire"/>), and a module's
+    /// template adds its own components'.
+    /// </summary>
+    protected internal virtual void WireSounds(Entity entity) => TemplateSounds.Wire(entity);
+
     /// <summary>Builds the start scene.</summary>
     protected abstract Scene BuildStartScene();
 
@@ -58,7 +65,7 @@ public abstract class ProjectTemplate
         if (HasSounds)
         {
             foreach (var entity in prefabs.Values.SelectMany(p => p.SelfAndDescendants()))
-                TemplateSounds.Wire(entity);
+                WireSounds(entity);
         }
 
         return prefabs;
@@ -75,7 +82,7 @@ public abstract class ProjectTemplate
         if (!HasSounds)
             return scene;
         foreach (var entity in scene.Entities)
-            TemplateSounds.Wire(entity);
+            WireSounds(entity);
         TemplateSounds.AddMusic(scene);
         return scene;
     }

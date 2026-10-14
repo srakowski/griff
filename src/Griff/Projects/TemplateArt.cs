@@ -1,9 +1,10 @@
 namespace Griff.Projects;
 
 /// <summary>
-/// The pictures the Top-down, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3, Falling Blocks, Roguelike, Tactics and BunnyMark templates come with, painted in code as small pixel art:
+/// The pictures the Top-down, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Roguelike and BunnyMark templates come with, painted in code as small pixel art:
 /// a guide's portrait, a tileset of walls, enemies, pickups, and the guns held in hand. Saved as PNGs in Textures/, so
-/// they open (and can be repainted) in any editor.
+/// they open (and can be repainted) in any editor. A module's template paints its own (Match3Art, TacticsArt) with the
+/// same canvas.
 /// </summary>
 internal static partial class TemplateArt
 {
@@ -481,10 +482,41 @@ internal static partial class TemplateArt
         return c;
     }
 
-    private static Pixel Rgb(byte r, byte g, byte b) => new(r, g, b, 255);
+    // A regular polygon's corners around (cx, cy), the first at the given angle (0 is straight right).
+    internal static (float X, float Y)[] Ring(int corners, float cx, float cy, float radius, float start) =>
+        Enumerable.Range(0, corners).Select(i => start + i * MathF.Tau / corners)
+            .Select(a => (cx + radius * MathF.Cos(a), cy - radius * MathF.Sin(a))).ToArray();
+
+    internal static (float X, float Y)[] Star(float cx, float cy, float outer, float inner) =>
+        Enumerable.Range(0, 10).Select(i => (Angle: MathF.PI / 2 + i * MathF.PI / 5, Radius: i % 2 == 0 ? outer : inner))
+            .Select(p => (cx + p.Radius * MathF.Cos(p.Angle), cy - p.Radius * MathF.Sin(p.Angle))).ToArray();
+
+    // Fills the pixels whose middles are inside the polygon.
+    internal static void Polygon(Canvas c, (float X, float Y)[] points, Pixel color)
+    {
+        for (var y = 0; y < c.Height; y++)
+        {
+            for (var x = 0; x < c.Width; x++)
+            {
+                var (px, py) = (x + 0.5f, y + 0.5f);
+                var inside = false;
+                for (int i = 0, j = points.Length - 1; i < points.Length; j = i++)
+                {
+                    var (a, b) = (points[i], points[j]);
+                    if ((a.Y > py) != (b.Y > py) && px < (b.X - a.X) * (py - a.Y) / (b.Y - a.Y) + a.X)
+                        inside = !inside;
+                }
+
+                if (inside)
+                    c.Set(x, y, color);
+            }
+        }
+    }
+
+    internal static Pixel Rgb(byte r, byte g, byte b) => new(r, g, b, 255);
 
     /// <summary>One RGBA pixel.</summary>
-    private readonly record struct Pixel(byte R, byte G, byte B, byte A)
+    internal readonly record struct Pixel(byte R, byte G, byte B, byte A)
     {
         public static readonly Pixel Clear = new(0, 0, 0, 0);
 
@@ -494,7 +526,7 @@ internal static partial class TemplateArt
     }
 
     /// <summary>A little picture to paint on, pixel by pixel, top-left first.</summary>
-    private sealed class Canvas(int width, int height, int seed = 0)
+    internal sealed class Canvas(int width, int height, int seed = 0)
     {
         private readonly Pixel[] _pixels = new Pixel[width * height];
 

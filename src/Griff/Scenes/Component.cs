@@ -216,3 +216,16 @@ public sealed class ShownWhenAttribute(string property) : Attribute
     /// <summary>For an enum: the values the other has to be one of, rather than any but its first.</summary>
     public object[]? Is { get; init; }
 }
+
+/// <summary>
+/// A component that tells an agent playing the game (the MCP's play tool) what it's up to, beyond where its entity is: a
+/// tactics unit's cell and whether it can act, the unit the mouse has picked. A script component can implement it too.
+/// </summary>
+public interface IPlaytestReport
+{
+    /// <summary>Added after where its entity is, when the agent watches it, e.g. <c>, in cell (3, 1), can act</c>; empty for nothing.</summary>
+    string Report();
+
+    /// <summary>Added after where the mouse is, once the agent has used it, e.g. <c>, picked Knight</c>; empty for nothing.</summary>
+    string MouseReport() => "";
+}

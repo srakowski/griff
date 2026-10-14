@@ -30,7 +30,7 @@ public sealed class Ladder : Component
 [WorksWith(typeof(GridMovement), Note = "pushed a cell at a time by grid movers")]
 [WorksWith(typeof(Goal), Note = "places on the grid to push it to")]
 [ComponentName("Griff.Pushable")]
-public sealed class Pushable : Component, IDrawEffect
+public sealed class Pushable : Component, IDrawEffect, IGridDriver
 {
     // Resting on a goal, its sprite turns the goal's color, as faded as it was.
     Color IDrawEffect.Tint(IDrawable drawn, Color color) =>

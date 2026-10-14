@@ -53,7 +53,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
     private string Describe(EditorCommand command)
     {
         var text = new StringBuilder();
-        var summary = DocComments.Summary(command.GetType());
+        var summary = DocComments.Summary(command.DescribedBy);
         text.Append(summary.IsEmpty ? command.DisplayText.TrimEnd('.') + "." : summary.PlainText);
         if (command.Placement is { } placement)
         {

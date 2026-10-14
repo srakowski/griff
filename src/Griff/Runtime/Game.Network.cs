@@ -58,9 +58,18 @@ public sealed partial class Game
     internal bool LocalInputBlocked => AnyPanelPauses();
 
     /// <summary>The mouse is over this machine's HUD, so a click there isn't meant for the world.</summary>
-    internal bool MouseOnUi =>
-        Sandbox.MouseOnHud || (Rts.Hud?.Covers(Input.MouseWorld) ?? false) ||
-        Scene.Entities.Any(e => e.GetComponent<Button>() is { IsHovered: true });
+    internal bool MouseOnUi => Sandbox.MouseOnHud || SystemHasMouse() || Scene.Entities.Any(e => e.GetComponent<Button>() is { IsHovered: true });
+
+    private bool SystemHasMouse()
+    {
+        foreach (var system in _systems)
+        {
+            if (system.HasMouse)
+                return true;
+        }
+
+        return false;
+    }
 
     // ----- Called by the session -----
 
@@ -68,7 +77,7 @@ public sealed partial class Game
     internal void NetSceneStarted()
     {
         Scene.PreferNamed = Net.IsOnline ? e => Net.IsMine(e) && NetSession.OwnerIdOf(e) != 0 : null;
-        AssignCommanders();
+        NetPlayersChanged();
     }
 
     /// <summary>The session ended: this machine carries on by itself.</summary>
@@ -136,7 +145,7 @@ public sealed partial class Game
         }
     }
 
-    /// <summary>Something a player's machine asked the host to do for them (a strategy order, crafting).</summary>
+    /// <summary>Something a player's machine asked the host to do for them (an order for their units, crafting).</summary>
     internal void RunNetCommand(NetPlayer? player, string name, object? args)
     {
         if (_netCommands.TryGetValue(name, out var command))
@@ -307,34 +316,21 @@ public sealed partial class Game
         }
     }
 
-    // In a game with teams, a strategy player commands their team's faction; computer players leave human teams alone.
-    private void AssignCommanders()
+    /// <summary>The list of players changed (someone joined or left, or changed team), or a network game's scene started.</summary>
+    internal void NetPlayersChanged()
     {
-        if (!Net.IsOnline || Net.TeamNames().Count == 0)
+        if (!Net.IsOnline)
             return;
-        if (Net.LocalPlayer is { Team.Length: > 0 } me)
-        {
-            foreach (var commander in Scene.All<Commander>())
-            {
-                if (SameTeam(commander.Team, me.Team))
-                    continue;
-                commander.Team = me.Team;
-                LookAtOwnBase(commander);
-            }
-        }
+        foreach (var system in _systems.ToList())
+            system.RunPlayersChanged();
     }
-
-    /// <summary>The list of players changed (someone joined or left, or changed team).</summary>
-    internal void NetPlayersChanged() => AssignCommanders();
 
     // What players' machines can ask the host to do for them.
     private void ListenForCommands()
     {
-        OnNetCommand(StrategyCommand, RunStrategyOrder);
         OnNetCommand(EndTurnCommand, RunEndTurn);
         OnNetCommand(GridStepCommand, RunGridStep);
         OnNetCommand(GridPushCommand, RunGridPush);
         OnNetCommand(BumpCommand, RunBump);
-        OnNetCommand(TacticsCommand, RunTacticsOrder);
     }
 }

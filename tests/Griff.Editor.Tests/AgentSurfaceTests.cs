@@ -5,6 +5,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Features.Agent;
+using Griff.Modules.Strategy;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Tests;
@@ -30,7 +31,7 @@ public class AgentSurfaceTests
             var name = CommandTools.ToolName(command.Id);
             Assert.True(tools.ContainsKey(name), $"{command.Id} has no tool");
             // Agents choose tools by their descriptions: a command needs a /// <summary> saying what it does.
-            Assert.False(DocComments.Summary(command.GetType()).IsEmpty, $"{command.GetType().Name} ({command.Id}) has no /// <summary>; agents need one to know what it does.");
+            Assert.False(DocComments.Summary(command.DescribedBy).IsEmpty, $"{command.DescribedBy.Name} ({command.Id}) has no /// <summary>; agents need one to know what it does.");
         });
     });
 

@@ -211,3 +211,13 @@ public sealed class TurnTaker : Component
 
     internal void RaiseTurnEnded() => TurnEnded?.Invoke(this);
 }
+
+/// <summary>
+/// A component on a <see cref="TurnTaker"/>'s entity that gets ready as each of its side's turns begins, before the turn
+/// is announced (a tactics unit can walk and attack again). Griff calls it; a script component can implement it too.
+/// </summary>
+public interface ITurnReady
+{
+    /// <summary>Called as its side's turn begins.</summary>
+    void TurnBegins();
+}

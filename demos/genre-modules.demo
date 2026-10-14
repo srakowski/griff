@@ -1,0 +1,48 @@
+title: Genres in one place
+intro: Match-3, Falling Blocks, Strategy and Tactics are now modules: each genre's components, systems, drawing, templates and Entity menu items live together, and Griff's core names none of them.
+project: Empty | Module Garden
+
+chapter: A genre is a module | Match-3, from one folder
+say: A match board still comes from the Entity menu, but the menu item, the board, the system that runs it and the Match-3 template now all live in the Match-3 module.
+create: Match Board
+explain: component:MatchBoard | From the Match-3 module | Griff's core doesn't know this component by name. It reaches it through extension points, the same ones a script can use.
+deselect
+create: Text
+rename: Score
+set: Transform.Position = 0, 4.5, 0
+add: Counter
+set: Counter.Count Score = true
+set: Counter.Format = Score: {0}
+explain: field:Counter.CountScore | Counted through an interface | A counter used to look for a match board itself. Now the board says what it counts, so any component, a script's too, can feed a counter.
+write: Scripts/AutoSwap.cs | genre-modules/AutoSwap.cs
+code: Assets/Scripts/AutoSwap.cs | AutoSwap.cs
+say: This script plays the board by itself. It names the Match Board without any using line: scripts get every module's types, just as they get Griff's.
+hidecode
+deselect
+create: Empty
+rename: Bot
+add: AutoSwap
+play
+wait: 4
+explain: game | Swaps, and the score counting | The board swaps, clears and refills, and the counter shows its score.
+stop
+
+chapter: Joining in | A script that steers grid movement
+say: Grid movement used to check for tactics units by name. Now anything that steers a grid mover is a grid driver: chasers, patrols, pushed crates, tactics units, and scripts.
+write: Scripts/Wanderer.cs | genre-modules/Wanderer.cs
+code: Assets/Scripts/Wanderer.cs | Wanderer.cs
+say: Wanderer is a grid driver. Each time its mover is between steps, it says which way to step next, so it walks a square by itself.
+hidecode
+select: Board
+menu: Entity > Delete
+deselect
+create: Grid Player
+set: Transform.Position = -7, 2, 0
+add: Wanderer
+play
+wait: 1
+hold: Up 1
+explain: game | Walking its own square | The arrow keys don't move it now. It walks its square, one cell at a time, the way Griff's own enemies and units steer.
+wait: 2
+stop
+say: Strategy and Tactics are modules too, with their own systems, drawing and network commands, and the next genres move the same way.

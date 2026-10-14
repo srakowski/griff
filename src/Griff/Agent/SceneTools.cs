@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Griff.Editing;
+using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -751,6 +752,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         text.AppendLine();
         if (entry is not null && !entry.Summary.IsEmpty)
             text.AppendLine(entry.Summary.PlainText);
+        if (GameModule.Of(descriptor.Type) is { } module)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Part of the {module.Name} module: {DocComments.Summary(module.GetType()).FirstSentence}");
         if (entry is not null && !entry.Remarks.IsEmpty)
             text.AppendLine().AppendLine(entry.Remarks.PlainText);
         if (descriptor.Requires.Count > 0)

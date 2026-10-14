@@ -94,6 +94,26 @@ public abstract class GameSystem
     {
     }
 
+    /// <summary>
+    /// True while the mouse is over something the system draws on the screen (a strategy game's HUD, say), so a click there
+    /// isn't meant for the world: Griff's own controls leave it alone, and in a network game the host is told.
+    /// </summary>
+    protected virtual bool MouseOnHud => false;
+
+    /// <summary>
+    /// True while Back (Esc, the gamepad's B) would cancel something the system has under way (a strategy game's building
+    /// being placed, a target being picked), so it does that first: a panel that opens on a key (a pause menu) waits.
+    /// </summary>
+    protected virtual bool ClaimsBack => false;
+
+    /// <summary>
+    /// Called in a network game as each scene starts and whenever the players change (someone joins, leaves or changes
+    /// team), to settle who plays what (a strategy player commands their own team).
+    /// </summary>
+    protected virtual void PlayersChanged()
+    {
+    }
+
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
     internal Behavior? Owner { get; set; }
 
@@ -104,6 +124,16 @@ public abstract class GameSystem
     internal void RunUpdate() => Update();
 
     internal void RunSceneChanged() => SceneChanged();
+
+    internal bool HasMouse => !IsRemoved && MouseOnHud;
+
+    internal bool HasBack => !IsRemoved && ClaimsBack;
+
+    internal void RunPlayersChanged()
+    {
+        if (!IsRemoved)
+            PlayersChanged();
+    }
 
     internal void RunDraw(FrameDrawing frame)
     {

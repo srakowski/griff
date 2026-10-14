@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Griff.Runtime;
 using Griff.Scenes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -38,8 +39,11 @@ public static class ScriptCompiler
 {
     public const string ImplicitUsingsPath = "<griff implicit usings>";
 
-    /// <summary>The usings every script gets without writing them.</summary>
-    public const string ImplicitUsings = """
+    /// <summary>
+    /// The usings every script gets without writing them: System's common namespaces, Griff's, and each module's (see
+    /// <see cref="GameModule"/>), so a script names a Match Board or a Unit as it does a Sprite.
+    /// </summary>
+    public static string ImplicitUsings { get; } = """
         global using System;
         global using System.Collections;
         global using System.Collections.Generic;
@@ -49,7 +53,8 @@ public static class ScriptCompiler
         global using Griff.Input;
         global using Griff.Runtime;
         global using Griff.Scenes;
-        """;
+
+        """ + string.Concat(GameModule.All.Select(m => $"global using {m.Namespace};{Environment.NewLine}"));
 
     private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
 

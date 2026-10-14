@@ -373,7 +373,7 @@ public sealed partial class Game
         entity.Transform.Position += delta;
     }
 
-    private void PlayIfSet(string? sound)
+    internal void PlayIfSet(string? sound)
     {
         if (!string.IsNullOrWhiteSpace(sound))
             PlayShared(sound.Trim());

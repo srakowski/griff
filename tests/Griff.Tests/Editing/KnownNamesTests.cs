@@ -1,4 +1,5 @@
 using Griff.Editing;
+using Griff.Modules.Strategy;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;

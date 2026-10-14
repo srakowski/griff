@@ -440,7 +440,7 @@ public sealed class GridMovement : Component
 [WorksWith(typeof(GridPatrol), Note = "walks its route until it spots its target")]
 [WorksWith(typeof(Attack), Note = "swings at the target once it's next to it")]
 [ComponentName("Griff.GridChase")]
-public sealed class GridChase : Component
+public sealed class GridChase : Component, IGridDriver
 {
     /// <summary>The name of the entity to chase, e.g. "Player". In a network game it chases the nearest player.</summary>
     [EntityName]
@@ -497,7 +497,7 @@ public sealed class GridChase : Component
 [Requires(typeof(GridMovement))]
 [WorksWith(typeof(GridChase), Note = "walks its route until it spots its target")]
 [ComponentName("Griff.GridPatrol")]
-public sealed class GridPatrol : Component
+public sealed class GridPatrol : Component, IGridDriver
 {
     private string? _points = "4 0";
     private (int X, int Y)[] _path = [(0, 0), (4, 0)];
@@ -599,4 +599,28 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
         Map is null ? new Vector2(cell.X, -cell.Y) : Vector2.Transform(Map.CellCenter(cell.X, cell.Y), World);
 
     public static (int X, int Y) Offset((int X, int Y) way) => (way.X, -way.Y);
+}
+
+/// <summary>
+/// A component that moves its entity's <see cref="GridMovement"/> itself, so the player's keys don't: a chaser, a patrol,
+/// a crate that's pushed, a tactics unit sent somewhere. A script component can implement it to steer a grid mover too.
+/// </summary>
+public interface IGridDriver
+{
+    /// <summary>
+    /// Whether each step it takes uses one of its <see cref="TurnTaker"/>'s actions, when moves are taken in turns. False
+    /// for one whose walk is all one go (a tactics unit's, used up as it attacks or waits).
+    /// </summary>
+    bool StepTakesAction => true;
+
+    /// <summary>
+    /// The way it wants to step next (one cell: x right, y up), or null for none: asked where the game is run, while its
+    /// entity is between steps and no other step (a script's, one pressed) is waiting.
+    /// </summary>
+    (int X, int Y)? NextStep(GridMovement movement) => null;
+
+    /// <summary>Called when a step it was moving along couldn't be taken (something's in the way), so it stops where it is.</summary>
+    void StepBlocked()
+    {
+    }
 }

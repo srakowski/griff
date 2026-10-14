@@ -115,7 +115,7 @@ public static partial class ProjectTemplates
     }
 
     // A one-shot burst that cleans itself up; pickups spawn it, in their own color, when collected.
-    private static Entity Sparkle()
+    internal static Entity Sparkle()
     {
         var entity = new Entity("Sparkle");
         entity.Transform.Position = new Vector3(0, 0, 0.5f);
@@ -609,7 +609,7 @@ public static partial class ProjectTemplates
     /// A pause menu with no code: Pause (Esc, P or Start) opens it and stops the game, and Resume, Esc or B closes it.
     /// Restart starts the level over and, with a <paramref name="menuScene"/>, Menu goes back to it.
     /// </summary>
-    private static void AddPauseMenu(Scene scene, string? menuScene)
+    internal static void AddPauseMenu(Scene scene, string? menuScene)
     {
         var panel = new Entity("Paused");
         panel.Transform.Position = new Vector3(0, 0, 3);
@@ -684,7 +684,7 @@ public static partial class ProjectTemplates
         return entity;
     }
 
-    private static Entity Label(string name, Vector2 position, string value, float size, Color color)
+    internal static Entity Label(string name, Vector2 position, string value, float size, Color color)
     {
         var entity = new Entity(name);
         entity.Transform.Position = new Vector3(position, 0);
@@ -697,7 +697,7 @@ public static partial class ProjectTemplates
     }
 
     /// <summary>A button with a colored background and a label, which does <paramref name="action"/> by itself.</summary>
-    private static Entity MenuButton(string label, Vector2 position, Scenes.ButtonAction action, string? scene, Key shortcut, Color color, int order = 100)
+    internal static Entity MenuButton(string label, Vector2 position, Scenes.ButtonAction action, string? scene, Key shortcut, Color color, int order = 100)
     {
         var size = new Vector2(4, 1.1f);
         var entity = new Entity(label);
@@ -906,7 +906,7 @@ public static partial class ProjectTemplates
     }
 
     /// <summary>A solid, visible box: sprite plus matching collider.</summary>
-    private static Entity Box(string name, Vector2 position, Vector2 size, Color color)
+    internal static Entity Box(string name, Vector2 position, Vector2 size, Color color)
     {
         var entity = new Entity(name);
         entity.Transform.Position = new Vector3(position, 0);
@@ -1178,4 +1178,39 @@ public static partial class ProjectTemplates
         }
 
         """;
+
+    // Puts a child inside an entity that isn't in a scene yet (a prefab, or something about to be added).
+    internal static void WithChild(Entity parent, Entity child)
+    {
+        var scratch = new Scene();
+        scratch.Add(parent);
+        scratch.Add(child, parent);
+        scratch.Remove(parent);
+    }
+
+    // Shown when the game's won or lost: what happened, and a button to play again.
+    internal static Entity EndPanel(string name, string heading, string detail, Color color)
+    {
+        var panel = new Entity(name) { IsEnabled = false };
+        panel.Transform.Position = new Vector3(0, 1.5f, 2);
+        var backdrop = panel.AddComponent<Sprite>();
+        backdrop.Size = new Vector2(12, 5.5f);
+        backdrop.Tint = new Color(0.07f, 0.08f, 0.1f, 0.94f);
+        backdrop.Order = 400;
+        var anchor = panel.AddComponent<ScreenAnchor>();
+        anchor.Anchor = Anchor.Center;
+        anchor.Offset = new Vector2(0, 1.5f);
+        var end = panel.AddComponent<Panel>();
+        end.PauseGame = false;
+        end.CloseOnBack = false;
+
+        var title = Label("Heading", new Vector2(0, 1.4f), heading, 1.4f, color);
+        title.GetComponent<Text>()!.Order = 401;
+        WithChild(panel, title);
+        var line = Label("Detail", new Vector2(0, 0.1f), detail, 0.5f, Color.FromBytes(0xB4, 0xB9, 0xC4));
+        line.GetComponent<Text>()!.Order = 401;
+        WithChild(panel, line);
+        WithChild(panel, MenuButton("Play Again", new Vector2(0, -1.6f), Scenes.ButtonAction.RestartScene, null, Key.Enter, Color.FromBytes(0x4C, 0x9A, 0xFF), order: 410));
+        return panel;
+    }
 }

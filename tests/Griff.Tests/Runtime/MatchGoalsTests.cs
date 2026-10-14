@@ -1,3 +1,4 @@
+using Griff.Modules.Match3;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;

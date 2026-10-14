@@ -9,11 +9,11 @@ namespace Griff.Runtime;
 public sealed partial class Game
 {
     // How far the stick has to lean before it counts as a way.
-    private const float GridDeadZone = 0.4f;
+    internal const float GridDeadZone = 0.4f;
 
     // How far past the two ends a search for a way goes with no map to keep it in, in cells; and the most cells it looks at.
-    private const int GridSearchMargin = 12;
-    private const int GridSearchLimit = 250_000;
+    internal const int GridSearchMargin = 12;
+    internal const int GridSearchLimit = 250_000;
 
     // The most crates one step pushes along in a row.
     private const int GridPushRowLimit = 16;
@@ -47,10 +47,8 @@ public sealed partial class Game
         }
 
         // A chaser or a patrol steps on its own, never with the player's keys; their minds run where the game is run. A
-        // crate only moves when it's pushed, and a tactics unit walks where it's sent.
-        var tactics = entity.GetComponent<TacticsUnit>();
-        var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null ||
-                     entity.GetComponent<Pushable>() is not null || tactics is not null;
+        // crate only moves when it's pushed, and a tactics unit walks where it's sent: each is a grid driver.
+        var driven = HasDriver(entity);
         // Waiting for their turn, they finish the step under way and go no further. Taking turns a step at a time, each
         // step uses an action.
         var waits = Waiting(entity);
@@ -115,8 +113,8 @@ public sealed partial class Game
             var next = m.Queued ?? (waits ? null : m.Buffered);
             if (next is null && !waits && way != (0, 0) && (pressed || (m.Repeat && m.HeldFor >= m.RepeatDelay)))
                 next = way;
-            if (next is null && minds && tactics is not null)
-                next = WalkStep(tactics, m);
+            if (next is null && minds && driven)
+                next = DriversStep(m);
             var decided = false;
             var thinks = chase is not null || patrol is not null;
             if (next is null && thinks && (m.Rest <= 0 || byTurns))
@@ -134,8 +132,8 @@ public sealed partial class Game
             {
                 TryGridStep(m, grid, step, Math.Min(spare, stepTime) / stepTime);
                 // A unit whose way is blocked stops where it is.
-                if (tactics is not null && !m.Stepping)
-                    tactics.Path.Clear();
+                if (driven && !m.Stepping)
+                    DriversBlocked(entity);
                 // Blocked (by the player, another enemy, a closed door): try again in a step's time, not every frame.
                 if (decided && !m.Stepping && !byTurns)
                     m.Rest = stepTime;
@@ -204,12 +202,57 @@ public sealed partial class Game
             Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
         StartGridStep(m, grid, target, direction, progress, glide: null);
         // A tactics unit's walk is all one go, used up as it attacks or waits.
-        if (entity.GetComponent<TacticsUnit>() is not null)
+        if (!StepsTakeActions(entity))
             return;
         UseAction(entity);
         // A player's own machine moves their character: the host, running the turns, hears of the step.
         if (!Runs(entity) && StepsByTurns(entity))
             Net.SendCommand(GridStepCommand, null);
+    }
+
+    // What moves a grid mover itself (see IGridDriver), looked at without allocating: this runs for every mover each frame.
+    private static bool HasDriver(Entity entity)
+    {
+        var components = entity.Components;
+        for (var i = 0; i < components.Count; i++)
+        {
+            if (components[i] is IGridDriver)
+                return true;
+        }
+
+        return false;
+    }
+
+    // The first step one of its drivers wants to take.
+    private static (int X, int Y)? DriversStep(GridMovement m)
+    {
+        var components = m.Entity!.Components;
+        for (var i = 0; i < components.Count; i++)
+        {
+            if (components[i] is IGridDriver driver && driver.NextStep(m) is { } step)
+                return step;
+        }
+
+        return null;
+    }
+
+    private static void DriversBlocked(Entity entity)
+    {
+        var components = entity.Components;
+        for (var i = 0; i < components.Count; i++)
+            (components[i] as IGridDriver)?.StepBlocked();
+    }
+
+    private static bool StepsTakeActions(Entity entity)
+    {
+        var components = entity.Components;
+        for (var i = 0; i < components.Count; i++)
+        {
+            if (components[i] is IGridDriver { StepTakesAction: false })
+                return false;
+        }
+
+        return true;
     }
 
     // Sets off from its cell into the next, over its own Step Time or the glide given.
@@ -240,7 +283,7 @@ public sealed partial class Game
     }
 
     // Stays in its cell, lunging part way toward the next and back over a step's time.
-    private static void Lunge(GridMovement m, GridCells grid, (int X, int Y) toward, Vector2 direction, float progress)
+    internal static void Lunge(GridMovement m, GridCells grid, (int X, int Y) toward, Vector2 direction, float progress)
     {
         m.From = m.To = grid.Center(m.Cell);
         m.Lunge = (grid.Center(toward) - m.From) * 0.35f;
@@ -557,7 +600,7 @@ public sealed partial class Game
 
     // Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner. The goal
     // is open whoever stands in it (it's where the target is).
-    private static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
+    internal static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
     {
         bool Open((int X, int Y) c) => !walls.IsWall(c) && (!avoidMovers || c == goal || walls.MoverIn(c) is null);
         if (!Open((from.X + by.X, from.Y + by.Y)))
@@ -568,10 +611,10 @@ public sealed partial class Game
     private static readonly (int X, int Y)[] FourWays = [(1, 0), (-1, 0), (0, 1), (0, -1)];
     private static readonly (int X, int Y)[] EightWays = [.. FourWays, (1, 1), (-1, 1), (1, -1), (-1, -1)];
 
-    private static (int X, int Y)[] Neighbours(bool diagonal) => diagonal ? EightWays : FourWays;
+    internal static (int X, int Y)[] Neighbours(bool diagonal) => diagonal ? EightWays : FourWays;
 
     // The way (x right, y up) a grid mover faces to look along an offset: the longer axis, or both if it steps diagonally.
-    private static Vector2 WayTowards(Vector2 offset, bool diagonal)
+    internal static Vector2 WayTowards(Vector2 offset, bool diagonal)
     {
         var (x, y) = (MathF.Abs(offset.X) > 1e-3f ? MathF.Sign(offset.X) : 0, MathF.Abs(offset.Y) > 1e-3f ? MathF.Sign(offset.Y) : 0);
         if (diagonal || x == 0 || y == 0)
@@ -594,7 +637,7 @@ public sealed partial class Game
     // Where a grid mover can't go, gathered once so a search can ask about many cells: off its map (when it has to stay
     // on), solid tiles on any tilemap, solid colliders over a cell's middle, and the cells other grid movers are in or
     // heading into. Layers either side passes through don't count.
-    private sealed class GridWalls
+    internal sealed class GridWalls
     {
         private readonly GridCells _grid;
         private readonly bool _stayOnMap;
@@ -690,5 +733,5 @@ public sealed partial class Game
     }
 
     // Puts it at a world position, whatever its parent.
-    private static void MoveTo(Entity entity, Vector2 world) => Shift(entity, world - Flat(entity.Transform.WorldPosition));
+    internal static void MoveTo(Entity entity, Vector2 world) => Shift(entity, world - Flat(entity.Transform.WorldPosition));
 }

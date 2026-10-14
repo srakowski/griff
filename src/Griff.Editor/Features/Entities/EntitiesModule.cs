@@ -39,13 +39,10 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateGridPlayerCommand>()
             .AddCommand<CreateGridEnemyCommand>()
             .AddCommand<CreateTurnOrderCommand>()
-            .AddCommand<CreateTacticsUnitCommand>()
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
             .AddCommand<CreateGoalCommand>()
-            .AddCommand<CreateMatchBoardCommand>()
-            .AddCommand<CreateFallingBoardCommand>()
             .AddCommand<CreateDungeonCommand>()
             .AddCommand<GenerateDungeonCommand>()
             .AddCommand<CreateLightCommand>()
@@ -63,7 +60,44 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<RevertToPrefabCommand>()
             .AddCommand<LockEntityCommand>()
             .AddCommand<HideEntityCommand>();
+
+        // The modules' presets (Create Match Board, Create Tactics Unit), each a command of its own.
+        foreach (var preset in EntityPreset.All)
+            services.AddSingleton<EditorCommand>(sp => new PresetCommand(preset, sp.GetRequiredService<IWorkspace>(), sp.GetRequiredService<ISelection>()));
     }
+}
+
+/// <summary>
+/// Creates what a module's <see cref="EntityPreset"/> makes, from the Entity menu: a command standing for the preset, with
+/// its id, text and description (the preset's /// summary).
+/// </summary>
+public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public EntityPreset Preset => preset;
+
+    public override string Id => preset.Id;
+
+    public override string Text => preset.Text;
+
+    public override string? Icon => Icons.Add;
+
+    public override Type DescribedBy => preset.GetType();
+
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: preset.Order);
+
+    protected override string EntityName => Scene is { } scene ? preset.EntityName(scene) : "Entity";
+
+    protected override void Configure(Entity entity)
+    {
+        if (Scene is { } scene)
+            preset.Configure(entity, scene);
+    }
+
+    protected override IEnumerable<Entity> CreateChildren() => Scene is { } scene ? preset.CreateChildren(scene) : [];
+
+    protected override IEnumerable<IEdit> EditScene(Scene scene) => preset.EditScene(scene);
+
+    protected override Entity? InsideOf(Entity? selected) => preset.InsideOf(selected);
 }
 
 /// <summary>Creates an entity as a child of the selection (or at the root) and selects it.</summary>
@@ -557,10 +591,11 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
             entity.AddComponent(GridTurnTaker(entity, order));
     }
 
-    // Grid players, enemies and other movers: not the crates they push, which don't take turns, nor tactics units, which
-    // take theirs side by side.
+    // Grid players, enemies and other movers: not the crates they push, which don't take turns, nor those whose walk is
+    // all one go (tactics units), which take theirs side by side.
     internal static IEnumerable<Entity> GridMovers(Scene scene) =>
-        scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null && e.GetComponent<Pushable>() is null && e.GetComponent<TacticsUnit>() is null);
+        scene.Entities.Where(e => e.GetComponent<GridMovement>() is not null && e.GetComponent<Pushable>() is null &&
+                                  !e.Components.OfType<IGridDriver>().Any(d => !d.StepTakesAction));
 
     // One action a turn, on the first side a person plays if it's a player, or the first the computer plays if it moves on
     // its own.
@@ -572,104 +607,6 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
             ? sides.FirstOrDefault(s => order!.IsComputer(s)) ?? "Enemy"
             : sides.FirstOrDefault(s => !order!.IsComputer(s)) ?? "Player";
         return new TurnTaker { Side = side, Actions = 1 };
-    }
-}
-
-/// <summary>
-/// Creates a tactics unit: a box sprite in its side's color with a collider, a <see cref="Body"/> without gravity, a
-/// <see cref="GridMovement"/>, a <see cref="Health"/> of 3, a <see cref="TacticsUnit"/> and a <see cref="TurnTaker"/> with
-/// one action, on whichever side has the fewest units so far, so creating a few makes two even teams facing each other.
-/// A scene with no turn order gets one (Blue, played by you, and Red, played by the computer; clear its Computer Sides for
-/// two people taking turns at one keyboard) with an End Turn button, and one with no <see cref="TacticsControls"/> gets
-/// those, to pick units with the mouse. All in one undo step.
-/// </summary>
-public sealed class CreateTacticsUnitCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
-{
-    // The colors of the first sides, in turn order; any further sides are gray.
-    private static readonly Griff.Color[] SideColors =
-    [
-        Griff.Color.FromBytes(0x4C, 0x8D, 0xF0), Griff.Color.FromBytes(0xE0, 0x55, 0x4A), Griff.Color.FromBytes(0x57, 0xAB, 0x5A),
-        Griff.Color.FromBytes(0xE8, 0xC5, 0x4A),
-    ];
-
-    public override string Id => "Entity.CreateTacticsUnit";
-    public override string Text => "Create Tactics Unit";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
-    protected override string EntityName => $"{Side().Name} Unit";
-
-    private TurnOrder? Order => Scene?.Entities.Select(e => e.GetComponent<TurnOrder>()).FirstOrDefault(o => o is not null);
-
-    // Beside another unit or the map, never inside them (making several in a row selects each in turn), so each stands
-    // where it's put.
-    protected override Entity? InsideOf(Entity? selected)
-    {
-        var parent = selected;
-        while (parent is not null && (parent.GetComponent<TacticsUnit>() is not null || parent.GetComponent<Tilemap>() is not null || parent.GetComponent<TurnOrder>() is not null))
-            parent = parent.Parent;
-        return parent;
-    }
-
-    // The side with the fewest units (the first, of those), where it comes in the turn order, and how many it has.
-    private (string Name, int Index, int Count) Side()
-    {
-        var sides = Order?.SideList is { Count: > 0 } list ? list : ["Blue", "Red"];
-        var units = Scene?.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null).Select(e => e.GetComponent<TurnTaker>()?.Side).ToList() ?? [];
-        return sides.Select((side, i) => (side, i, units.Count(u => TurnOrder.SameSide(u, side)))).MinBy(s => s.Item3);
-    }
-
-    protected override void Configure(Entity entity)
-    {
-        var (side, index, count) = Side();
-        var size = new System.Numerics.Vector2(0.8f, 0.8f);
-        var sprite = entity.AddComponent<Sprite>();
-        (sprite.Size, sprite.Tint) = (size, index < SideColors.Length ? SideColors[index] : Griff.Color.FromBytes(0x9A, 0x9A, 0x9A));
-        entity.AddComponent<BoxCollider>().Size = size;
-        entity.AddComponent<Body>().GravityScale = 0;
-        entity.AddComponent<GridMovement>().StepTime = 0.12f;
-        entity.AddComponent<Health>().InvincibleTime = 0;
-        entity.AddComponent<TacticsUnit>();
-        var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
-
-        // The first side down the left, the second down the right, a cell apart.
-        var x = index % 2 == 0 ? -2.5f : 2.5f;
-        entity.Transform.Position = new System.Numerics.Vector3(x, 1.5f - 2 * count, 0);
-    }
-
-    protected override IEnumerable<IEdit> EditScene(Scene scene)
-    {
-        if (Order is null)
-        {
-            var turns = new Entity("Turns");
-            var anchor = turns.AddComponent<ScreenAnchor>();
-            (anchor.Anchor, anchor.Offset) = (Anchor.TopRight, new System.Numerics.Vector2(-0.6f, -0.7f));
-            var text = turns.AddComponent<Griff.Scenes.Text>();
-            (text.Value, text.Size, text.Align, text.Order) = ("Blue's turn", 0.6f, TextAlign.Right, 150);
-            var order = turns.AddComponent<TurnOrder>();
-            // The computer plays Red, taking as long as its units need.
-            (order.Sides, order.ComputerSides, order.ComputerTurnTime) = ("Blue, Red", "Red", 0);
-            yield return new AddEntityEdit(scene, turns);
-
-            var size = new System.Numerics.Vector2(3, 0.9f);
-            var end = new Entity("End Turn");
-            var endAnchor = end.AddComponent<ScreenAnchor>();
-            (endAnchor.Anchor, endAnchor.Offset) = (Anchor.BottomRight, new System.Numerics.Vector2(-1.9f, 0.8f));
-            var sprite = end.AddComponent<Sprite>();
-            (sprite.Size, sprite.Tint, sprite.Order) = (size, Griff.Color.FromBytes(0x3A, 0x3F, 0x4B), 150);
-            var label = end.AddComponent<Griff.Scenes.Text>();
-            (label.Value, label.Size, label.Order) = ("End Turn", 0.45f, 151);
-            var button = end.AddComponent<Griff.Scenes.Button>();
-            (button.Size, button.Action, button.Navigable) = (size, ButtonAction.EndTurn, false);
-            yield return new AddEntityEdit(scene, end, turns);
-        }
-
-        if (!scene.Entities.Any(e => e.GetComponent<TacticsControls>() is not null))
-        {
-            var tactics = new Entity("Tactics");
-            tactics.AddComponent<TacticsControls>();
-            yield return new AddEntityEdit(scene, tactics);
-        }
     }
 }
 
@@ -772,49 +709,6 @@ public sealed class CreateGoalCommand(IWorkspace workspace, ISelection selection
 }
 
 /// <summary>
-/// Creates a match-3 board: an 8 by 8 <see cref="Tilemap"/> of six kinds of gem with a <see cref="MatchBoard"/>, centered
-/// on the scene's middle and dealt already so it shows; each game deals it afresh. Swap gems to line up three of a kind.
-/// </summary>
-public sealed class CreateMatchBoardCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
-{
-    public override string Id => "Entity.CreateMatchBoard";
-    public override string Text => "Create Match Board";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
-    protected override string EntityName => "Board";
-
-    protected override void Configure(Entity entity)
-    {
-        var map = entity.AddComponent<Tilemap>();
-        map.Solid = false;
-        var board = entity.AddComponent<MatchBoard>();
-        entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
-        board.DealInto(map, new Random());
-    }
-}
-
-/// <summary>
-/// Creates a falling-block board: a <see cref="Tilemap"/> with a <see cref="FallingBoard"/> 10 cells across and 20 down,
-/// centered on the scene's middle. Pieces fall into it as the game runs: slide them with left and right, turn them with
-/// up, drop them with Space, and fill rows to clear them.
-/// </summary>
-public sealed class CreateFallingBoardCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
-{
-    public override string Id => "Entity.CreateFallingBoard";
-    public override string Text => "Create Falling Board";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
-    protected override string EntityName => "Board";
-
-    protected override void Configure(Entity entity)
-    {
-        entity.AddComponent<Tilemap>().Solid = false;
-        var board = entity.AddComponent<FallingBoard>();
-        entity.Transform.Position = new System.Numerics.Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
-    }
-}
-
-/// <summary>
 /// Creates a dungeon: a <see cref="Tilemap"/> with a <see cref="DungeonGenerator"/> 48 cells across and 32 down, centered
 /// on the scene's middle, showing a dungeon made from a new seed: rooms and corridors cut from solid wall (Fill Walls), so
 /// they show without a tileset. The game makes its own each time it starts (its Seed is 0); set a Seed to keep one, and
@@ -825,7 +719,7 @@ public sealed class CreateDungeonCommand(IWorkspace workspace, ISelection select
     public override string Id => "Entity.CreateDungeon";
     public override string Text => "Create D_ungeon";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
     protected override string EntityName => "Dungeon";
 
     protected override void Configure(Entity entity)
@@ -897,7 +791,7 @@ public sealed class CreateLightCommand(IWorkspace workspace, ISelection selectio
     public override string Id => "Entity.CreateLight";
     public override string Text => "Create Lig_ht";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 20);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
     protected override string EntityName => "Light";
     protected override void Configure(Entity entity) => entity.AddComponent<Light>();
 }
@@ -908,7 +802,7 @@ public sealed class CreateWeatherCommand(IWorkspace workspace, ISelection select
     public override string Id => "Entity.CreateWeather";
     public override string Text => "Create Weather";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 23);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 25);
     protected override string EntityName => "Weather";
     protected override void Configure(Entity entity) => entity.AddComponent<Weather>();
 }
@@ -921,7 +815,7 @@ public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection
     public override string Id => "Entity.CreateRoom";
     public override string Text => "Create Roo_m";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 23);
     protected override string EntityName => "Room";
 
     protected override void Configure(Entity entity)
@@ -942,7 +836,7 @@ public sealed class CreateHitboxCommand(IWorkspace workspace, ISelection selecti
     public override string Id => "Entity.CreateHitbox";
     public override string Text => "Add Atta_ck";
     public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 24);
 
     protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
 

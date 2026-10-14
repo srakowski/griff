@@ -1,5 +1,6 @@
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
+using Griff.Modules.Strategy;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

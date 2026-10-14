@@ -369,7 +369,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             if (entity.GetComponent<Inventory>() is { } inventory && inventory.Items.Count > 0)
                 line.Append(CultureInfo.InvariantCulture, $", carrying {string.Join(", ", inventory.Items)}");
             line.Append(Playtesting.Dragging(entity));
-            line.Append(Playtesting.Tactics(entity));
+            line.Append(Playtesting.Reports(entity));
             log.AppendLine(line.ToString());
         }
 

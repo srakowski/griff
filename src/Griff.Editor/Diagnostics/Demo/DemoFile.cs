@@ -9,6 +9,7 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
+using Griff.Modules.Strategy;
 using Griff.Projects;
 
 namespace Griff.Editor.Diagnostics.Demo;
@@ -366,7 +367,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "afford: 180 Gold | 60": the player can pay for it.
                 var (cost, affordSeconds) = Split2(a);
                 await WaitInGame($"{cost} to spend", Seconds(affordSeconds),
-                    game => game.FactionOf(game.Find<Griff.Scenes.Commander>()?.Team)?.CanAfford(cost) == true);
+                    game => game.FactionOf(game.Find<Griff.Modules.Strategy.Commander>()?.Team)?.CanAfford(cost) == true);
                 break;
             case "have":
                 // "have: 9 Soldier | 90": the player has at least that many.
@@ -1086,7 +1087,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         if (CurrentGame is not { } game)
             return;
         var mouse = game.Input.MouseWorld;
-        var team = game.Find<Griff.Scenes.Commander>()?.Team;
+        var team = game.Find<Griff.Modules.Strategy.Commander>()?.Team;
         var sandbox = game.Find<Griff.Scenes.Inventory>() is { } inventory ? $"; carrying {string.Join(", ", inventory.Items)}" : "";
         if (game.Tools is { } tools)
             sandbox += $"; tool {tools.Current}{(game.ToolFirst is { } first ? $" after {first.Name}" : "")}{(game.Grabbed is { } held ? $" holding {held.Name}" : "")}";
@@ -1317,12 +1318,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     // Each team's fighters, workers and buildings.
     private static string Standings(Griff.Runtime.Game game) =>
-        string.Join("; ", game.FindAll<Griff.Scenes.Faction>().Select(f =>
+        string.Join("; ", game.FindAll<Griff.Modules.Strategy.Faction>().Select(f =>
         {
-            var units = game.FindAll<Griff.Scenes.Unit>().Where(u => Mine(u.Team, f.Team)).ToList();
-            var buildings = game.FindAll<Griff.Scenes.Building>().Count(b => Mine(b.Team, f.Team));
-            return $"{f.Team}: {units.Count(u => u.Entity!.GetComponent<Griff.Scenes.Fighter>() is not null)} fighters, " +
-                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Scenes.Worker>() is not null)} workers, {buildings} buildings, {f.Resources}";
+            var units = game.FindAll<Griff.Modules.Strategy.Unit>().Where(u => Mine(u.Team, f.Team)).ToList();
+            var buildings = game.FindAll<Griff.Modules.Strategy.Building>().Count(b => Mine(b.Team, f.Team));
+            return $"{f.Team}: {units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Fighter>() is not null)} fighters, " +
+                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Worker>() is not null)} workers, {buildings} buildings, {f.Resources}";
         }));
 
     private static bool Mine(string? team, string? player) => string.Equals(team?.Trim(), player?.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -1330,10 +1331,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     // The player's own: whoever the Commander commands.
     private static IEnumerable<Griff.Scenes.Entity> PlayersOwn(Griff.Runtime.Game game, string name)
     {
-        var team = game.Find<Griff.Scenes.Commander>()?.Team;
+        var team = game.Find<Griff.Modules.Strategy.Commander>()?.Team;
         return game.Scene.Entities.Where(e => e.Name == name && e.IsActive &&
-            (e.GetComponent<Griff.Scenes.Unit>() is { } unit ? Mine(unit.Team, team) :
-             e.GetComponent<Griff.Scenes.Building>() is { IsBuilt: true } building && Mine(building.Team, team)));
+            (e.GetComponent<Griff.Modules.Strategy.Unit>() is { } unit ? Mine(unit.Team, team) :
+             e.GetComponent<Griff.Modules.Strategy.Building>() is { IsBuilt: true } building && Mine(building.Team, team)));
     }
 
     private static double Seconds(string text) => text.Length > 0 ? double.Parse(text, CultureInfo.InvariantCulture) : 60;

@@ -39,13 +39,13 @@ public sealed partial class Game
     }
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    private ComponentList<T> Active<T>() where T : Component => Where(Scene.Active<T>(), Runs);
+    internal ComponentList<T> Active<T>() where T : Component => Where(Scene.Active<T>(), Runs);
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own.
     private ComponentList<T> Moving<T>() where T : Component => Where(Scene.Active<T>(), Moves);
 
     // Everything showing, wherever it's run: for what only changes how things look.
-    private ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
+    internal ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
 
     // Everything this machine runs, active or not.
     private ComponentList<T> RunHere<T>() where T : Component => Where(Scene.All<T>(), Runs);
@@ -246,7 +246,7 @@ public sealed partial class Game
         return hit is null || hit.Value.Entity.IsSelfOrDescendantOf(target);
     }
 
-    private static void Face(Entity entity, int direction)
+    internal static void Face(Entity entity, int direction)
     {
         if (entity.GetComponent<Sprite>() is { } sprite)
             sprite.FlipX = direction < 0;
@@ -953,7 +953,7 @@ public sealed partial class Game
             prompt.IsEnabled = show;
     }
 
-    private static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
+    internal static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
 }
 
 /// <summary>Doors and conversations: who just came through a door, the dialogues seen and touched, and the one being said.</summary>

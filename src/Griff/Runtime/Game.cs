@@ -88,6 +88,12 @@ public sealed partial class Game : IGameContext
 
     private readonly IInput _input;
 
+    /// <summary>This machine's own controls, even while the host runs another player's tools for them (see <see cref="Input"/>).</summary>
+    internal IInput LocalInput => _input;
+
+    /// <summary>True if <paramref name="entity"/> goes at the end of this frame (see <see cref="Destroy"/>).</summary>
+    internal bool IsDestroying(Entity entity) => _pendingDestroy.Contains(entity);
+
     public Time Time { get; } = new();
 
     public Physics Physics { get; } = new();
@@ -750,7 +756,7 @@ public sealed partial class Game : IGameContext
     }
 
     // What collects for a collider: its own entity's body, or the nearest ancestor's (a player's hitbox child).
-    private static Entity? BodyOwner(Entity entity)
+    internal static Entity? BodyOwner(Entity entity)
     {
         for (var e = entity; e is not null; e = e.Parent)
         {
@@ -788,7 +794,7 @@ public sealed partial class Game : IGameContext
             if (counter.CountMoves && Showing<MoveHistory>().FirstOrDefault() is { } history)
                 counter.Add(history.Moves - counter.Value);
             else if (counter.CountMoves || counter.CountScore || counter.CountGem >= 0)
-                CountBoard(counter);
+                CountFromSource(counter);
 
             if (counter.Shown is null)
             {
@@ -816,26 +822,19 @@ public sealed partial class Game : IGameContext
         }
     }
 
-    // A counter showing the scene's match board: its swaps out of its Moves, its score out of its Target Score, or the
-    // gems of a kind cleared out of how many it asks for. Or a falling-block board's score.
-    private void CountBoard(Counter counter)
+    // A counter showing what a component in the scene counts (see ICounterSource): a match board's swaps out of its Moves,
+    // its score out of its Target Score or the gems of a kind cleared out of how many it asks for, a falling-block board's
+    // score. The first that counts what the counter asks for.
+    private void CountFromSource(Counter counter)
     {
-        if (Showing<MatchBoard>().FirstOrDefault() is not { } board)
+        foreach (var source in Scene.Active<ICounterSource>())
         {
-            if (counter.CountScore && Showing<FallingBoard>().FirstOrDefault() is { } falling)
-            {
-                counter.Total = 0;
-                counter.Add(falling.Score - counter.Value);
-            }
-
+            if (source.CountFor(counter) is not { } count)
+                continue;
+            counter.Total = count.Total;
+            counter.Add(count.Value - counter.Value);
             return;
         }
-
-        var (value, total) = counter.CountMoves ? (board.Swaps, board.Moves)
-            : counter.CountScore ? (board.Score, board.TargetScore)
-            : (board.ClearedOf(counter.CountGem), board.ToCollect(counter.CountGem));
-        counter.Total = total;
-        counter.Add(value - counter.Value);
     }
 
     // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.

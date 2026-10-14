@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.Match3;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -33,7 +34,7 @@ public sealed class Match3TemplateTests : IDisposable
             var loaded = GameLoader.LoadScene(project, _registry, name);
             foreach (var board in loaded.Entities.SelectMany(e => e.GetComponents<MatchBoard>()))
             {
-                var level = Enumerable.Range(0, ProjectTemplates.MatchLevels.Count).FirstOrDefault(i => ProjectTemplates.MatchLevelScene(i) == name);
+                var level = Enumerable.Range(0, Match3Template.MatchLevels.Count).FirstOrDefault(i => Match3Template.MatchLevelScene(i) == name);
                 board.Seed = Seeds[level];
                 setUp?.Invoke(board);
             }
@@ -158,17 +159,17 @@ public sealed class Match3TemplateTests : IDisposable
     {
         var (_, game) = await Create();
         var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)).OrderBy(b => b.Entity!.Name).ToList();
-        Assert.Equal(ProjectTemplates.MatchLevels.Count, buttons.Count);
+        Assert.Equal(Match3Template.MatchLevels.Count, buttons.Count);
         Assert.Equal("1. First Sparkle", buttons[0].Entity!.GetComponent<Text>()!.Value);
         Assert.True(buttons[0].IsUsable);
         Assert.All(buttons.Skip(1), b => Assert.False(b.IsUsable, b.Entity!.Name));
 
         // Enter plays the first.
         Tap(game, Key.Enter, after: 0.8);
-        for (var i = 0; i < ProjectTemplates.MatchLevels.Count; i++)
+        for (var i = 0; i < Match3Template.MatchLevels.Count; i++)
         {
-            var (name, moves, target, _, _, _) = ProjectTemplates.MatchLevels[i];
-            Assert.Equal(ProjectTemplates.MatchLevelScene(i), game.SceneName);
+            var (name, moves, target, _, _, _) = Match3Template.MatchLevels[i];
+            Assert.Equal(Match3Template.MatchLevelScene(i), game.SceneName);
             Assert.Equal($"{i + 1}. {name}", TextOf(game, "Level Name"));
             Assert.Equal(target > 0 ? $"Score: 0 / {target}" : "Score: 0", TextOf(game, "Score"));
             Assert.Equal($"Moves: {moves}", TextOf(game, "Moves"));
@@ -183,14 +184,14 @@ public sealed class Match3TemplateTests : IDisposable
             Assert.Equal($"Moves: {board.MovesLeft}", TextOf(game, "Moves"));
             Assert.StartsWith($"Score: {board.Score}", complete.Children.Single(c => c.Name == "Detail").GetComponent<Text>()!.Value);
             foreach (var kind in board.Kinds().Where(k => board.ToCollect(k) > 0))
-                Assert.Equal($"{board.ClearedOf(kind)} / {board.ToCollect(kind)}", TextOf(game, ProjectTemplates.GemNames[kind]));
+                Assert.Equal($"{board.ClearedOf(kind)} / {board.ToCollect(kind)}", TextOf(game, Match3Template.GemNames[kind]));
             Assert.True(game.SaveData.Has($"complete-level{i + 1}"));
 
             // Enter goes on to the next level, or back to the menu after the last.
-            var last = i == ProjectTemplates.MatchLevels.Count - 1;
+            var last = i == Match3Template.MatchLevels.Count - 1;
             Assert.Equal(last ? "Menu" : "Next", game.Focused!.Entity!.Name);
             Tap(game, Key.Enter, after: 0.8);
-            Assert.Equal(last ? "Main" : ProjectTemplates.MatchLevelScene(i + 1), game.SceneName);
+            Assert.Equal(last ? "Main" : Match3Template.MatchLevelScene(i + 1), game.SceneName);
         }
 
         Assert.All(game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)), b => Assert.True(b.IsUsable, b.Entity!.Name));
@@ -223,10 +224,10 @@ public sealed class Match3TemplateTests : IDisposable
     public async Task Levels_HaveTheirStonesWhereTheLayoutSays_AndTheBoardAndHudOnScreen()
     {
         var project = await Project.CreateAsync(_root, "Gems", ProjectTemplates.Get("Match3"));
-        for (var i = 0; i < ProjectTemplates.MatchLevels.Count; i++)
+        for (var i = 0; i < Match3Template.MatchLevels.Count; i++)
         {
-            var (_, _, _, collect, gems, layout) = ProjectTemplates.MatchLevels[i];
-            var scene = GameLoader.LoadScene(project, _registry, ProjectTemplates.MatchLevelScene(i));
+            var (_, _, _, collect, gems, layout) = Match3Template.MatchLevels[i];
+            var scene = GameLoader.LoadScene(project, _registry, Match3Template.MatchLevelScene(i));
             var entity = scene.Entities.Single(e => e.Name == "Board");
             var board = entity.GetComponent<MatchBoard>()!;
             Assert.Equal(gems, board.Gems);
@@ -250,7 +251,7 @@ public sealed class Match3TemplateTests : IDisposable
             // A gem with a count for each kind it asks for.
             Assert.Equal(collect, board.Collect);
             foreach (var kind in board.Kinds().Where(k => board.ToCollect(k) > 0))
-                Assert.Equal(kind, scene.Entities.Single(e => e.Name == $"{ProjectTemplates.GemNames[kind]} Icon").GetComponent<Sprite>()!.Frame);
+                Assert.Equal(kind, scene.Entities.Single(e => e.Name == $"{Match3Template.GemNames[kind]} Icon").GetComponent<Sprite>()!.Frame);
         }
     }
 
@@ -259,7 +260,7 @@ public sealed class Match3TemplateTests : IDisposable
     {
         var project = await Project.CreateAsync(_root, "Gems", ProjectTemplates.Get("Match3"));
         var serializer = new SceneSerializer(_registry);
-        Assert.Equal(1 + ProjectTemplates.MatchLevels.Count, project.FindScenes().Count());
+        Assert.Equal(1 + Match3Template.MatchLevels.Count, project.FindScenes().Count());
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();
 
         var files = entities.SelectMany(e => e.Components)

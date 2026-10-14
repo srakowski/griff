@@ -26,6 +26,16 @@ public sealed class Scene
     // Something in an index needs bringing up to date before it's read.
     private bool _indexesChanged;
 
+    // Drawing a running game between its steps (see Transform): the step the game is taking on this scene (or took last),
+    // the step it became the game's scene in (nothing glides into a scene on its first), and while a frame of the game is
+    // drawn between two steps, which drawing it is (0 otherwise), how far between them, and the furthest anything moving
+    // in a step glides rather than jumps.
+    internal long Step;
+    internal long FirstStep = -1;
+    internal long DrawStamp;
+    internal float DrawBlend;
+    internal float GlideLimit;
+
     public IReadOnlyList<Entity> Roots => _roots;
 
     /// <summary>Every entity in the scene, depth first, as it is now: adding or removing entities while going through it is safe.</summary>
@@ -226,6 +236,8 @@ public sealed class Scene
         {
             e.Scene = this;
             e.ForgetActive();
+            // Something new is drawn where it starts out, not glided there from wherever it was made.
+            e.Transform.Jumped();
             _byId.Add(e.Id, e);
             if (_ordered)
                 e.Order = _nextOrder++;
@@ -278,6 +290,8 @@ public sealed class Scene
         Insert(entity, newParent, index);
         foreach (var e in entity.SelfAndDescendants())
         {
+            // Its position now means somewhere else (it's from the new parent): drawn where it is, not glided.
+            e.Transform.Jumped();
             foreach (var component in e.Components)
                 ComponentMoved(component);
         }

@@ -39,6 +39,41 @@ public static class SceneRenderer
 
     private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse = null)
     {
+        // A running game is drawn between its last two steps: everything that moved in the last one (the camera too) is
+        // placed part way there, so it moves smoothly whatever the screen's frame rate.
+        if (game is null || !BlendSteps(scene, game))
+            return BuildNow(scene, aspect, game, reuse);
+        try
+        {
+            return BuildNow(scene, aspect, game, reuse);
+        }
+        finally
+        {
+            scene.DrawStamp = 0;
+        }
+    }
+
+    // Each frame drawn between steps has its own stamp, so a transform knows the matrix it worked out is this frame's.
+    private static long s_drawStamps;
+
+    // Turns on drawing between the game's last two steps, unless it would draw everything as it is anyway: no step yet,
+    // the scene came in on the last one, or the game is drawn right at its last step.
+    private static bool BlendSteps(Scene scene, Runtime.Game game)
+    {
+        var blend = game.Time.Blend;
+        if (blend >= 1 || scene.Step <= 0 || scene.Step == scene.FirstStep)
+            return false;
+
+        // Moving further than this in one step (a quarter of the camera's view, top to bottom) is jumping there.
+        var size = FindCamera(scene)?.GetComponent<Camera>()?.Size ?? DefaultCameraSize;
+        scene.GlideLimit = Math.Max(size, 1) * 0.5f;
+        scene.DrawBlend = Math.Max(0, blend);
+        scene.DrawStamp = Interlocked.Increment(ref s_drawStamps);
+        return true;
+    }
+
+    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse)
+    {
         var camera = FindCamera(scene);
         var component = camera?.GetComponent<Camera>();
         var size = component?.Size ?? DefaultCameraSize;

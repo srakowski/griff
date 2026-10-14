@@ -208,22 +208,19 @@ public partial class App : Application, IDisposable
         game.Net.PlayerJoined += p => Console.WriteLine($"{p.Name} joined ({game.Net.Players.Count} playing)");
         game.Net.PlayerLeft += p => Console.WriteLine($"{p.Name} left");
         var clock = Stopwatch.StartNew();
-        var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(1000.0 / 60) };
+        // The game takes its fixed steps as real time passes, however unevenly the timer fires.
+        var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(1000.0 / 120) };
         timer.Tick += (_, _) =>
         {
             var seconds = clock.Elapsed.TotalSeconds;
             clock.Restart();
             try
             {
-                game.Tick(Math.Min(seconds, 0.1));
+                game.Advance(seconds);
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Game error: {ex.Message}");
-            }
-            finally
-            {
-                (game.Input as InputState)?.EndFrame();
             }
         };
         timer.Start();

@@ -4,9 +4,10 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Runs a scene: each <see cref="Tick"/> takes the steps of a <see cref="Frame"/>, phase by phase, from starting new
-/// behaviors through physics to sound. Spawning and destroying during a frame are safe; destroys take effect at the end
-/// of the frame.
+/// Runs a scene in steps of the same length (see <see cref="Runtime.Time.FixedDelta"/>): each frame the screen shows,
+/// <see cref="Advance"/> takes as many as the real time since the last one holds, each going through the parts of the
+/// game's <see cref="Frame"/>, phase by phase, from starting new behaviors through physics to sound. Spawning and
+/// destroying during a step are safe; destroys take effect at the end of the step.
 /// </summary>
 public sealed partial class Game : IGameContext
 {
@@ -583,6 +584,9 @@ public sealed partial class Game : IGameContext
         SystemsSceneEnding();
 
         var next = SceneLoader!(name);
+
+        // Nothing glides into the new scene: after this step it's drawn as it is.
+        next.Step = next.FirstStep = Scene.Step;
 
         // Kept entities move across still running; a kept child goes along with a kept ancestor.
         _kept.RemoveAll(e => e.Scene != Scene);

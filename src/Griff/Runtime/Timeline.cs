@@ -20,7 +20,7 @@ public sealed class Timeline(SceneSerializer serializer, int capacity = 200, int
 
     public double TimeAt(int index) => _snapshots[index].Time;
 
-    /// <summary>Call once per game frame. Takes a snapshot every few frames and drops the oldest past capacity.</summary>
+    /// <summary>Call once per step of the game. Takes a snapshot every few steps and drops the oldest past capacity.</summary>
     public void Record(Scene scene, double time, bool force = false)
     {
         if (!force && ++_framesSinceSnapshot < framesPerSnapshot)

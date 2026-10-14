@@ -2,7 +2,10 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-/// <summary>The parts of a frame, in the order they run. See <see cref="Game.Frame"/> for every step in each.</summary>
+/// <summary>
+/// The parts of a step of the game (its frame), in the order they run. See <see cref="Game.Frame"/> for every step in
+/// each.
+/// </summary>
 public enum FramePhase
 {
     /// <summary>Time moves on, input is read and new scripts start.</summary>
@@ -17,7 +20,7 @@ public enum FramePhase
     /// <summary>Everything else moves on: boards, attacks, timers, tweens, spawners, animations, particles.</summary>
     Simulate,
 
-    /// <summary>Bodies move and collide.</summary>
+    /// <summary>Scripts' <c>FixedUpdate</c> pushes bodies, then they move and collide.</summary>
     Physics,
 
     /// <summary>What the physics step caused (pickups, damage, doors, switches), then destroys and scene changes.</summary>
@@ -74,7 +77,10 @@ public abstract class GameSystem
 
     protected Time Time => Game.Time;
 
-    /// <summary>Called every frame in <see cref="Phase"/>.</summary>
+    /// <summary>
+    /// Called every step of the game (60 a second, see <see cref="Runtime.Time.StepRate"/>) in <see cref="Phase"/>. A
+    /// system that pushes bodies runs in <see cref="FramePhase.Simulate"/>, just before they move.
+    /// </summary>
     protected virtual void Update()
     {
     }

@@ -190,11 +190,8 @@ public static partial class ProjectTemplates
             public bool IsDone { get; private set; }
 
             private readonly List<Entity> _bunnies = new();
-            private bool _timing;
-            private int _frames;
-            private float _seconds;
-            private int _shownFrames;
-            private float _shownSeconds;
+            private long _shownFrom;
+            private double _shownSince;
 
             protected override void Start() => StartCoroutine(Run());
 
@@ -206,19 +203,12 @@ public static partial class ProjectTemplates
                     StartCoroutine(Run());
                 }
 
-                if (_timing)
+                // The frame rate shown is counted on its own, a few times a second, so it moves even between steps. Frames
+                // are what the screen shows: the game itself always takes 60 steps a second, as long as it keeps up.
+                if (Time.RealTotal - _shownSince >= 0.25)
                 {
-                    _frames++;
-                    _seconds += Time.UnscaledDelta;
-                }
-
-                // The frame rate shown is counted on its own, a few times a second, so it moves even between steps.
-                _shownFrames++;
-                _shownSeconds += Time.UnscaledDelta;
-                if (_shownSeconds >= 0.25f)
-                {
-                    Show("Stats", $"{_shownFrames / _shownSeconds:0} fps\n{Count:N0} bunnies");
-                    (_shownFrames, _shownSeconds) = (0, 0);
+                    Show("Stats", $"{(Time.DrawnFrames - _shownFrom) / (Time.RealTotal - _shownSince):0} fps\n{Count:N0} bunnies");
+                    (_shownFrom, _shownSince) = (Time.DrawnFrames, Time.RealTotal);
                 }
             }
 
@@ -254,16 +244,15 @@ public static partial class ProjectTemplates
                 Show("Status", $"Holds {Held:N0} bunnies at {TargetFps:0} fps (best {best:N0}). Space to run it again.");
             }
 
-            // Times the frames at the count now. New bunnies start on the next frame and gone ones go at the end of this
-            // one, so the two frames that add or take them away aren't timed.
+            // Times the frames the screen shows at the count now. New bunnies start on the next step and gone ones go at the
+            // end of this one, so the two steps that add or take them away aren't timed.
             private IEnumerator TimeFrames()
             {
                 yield return null;
                 yield return null;
-                (_frames, _seconds, _timing) = (0, 0, true);
-                yield return WaitUntil(() => _seconds >= Window);
-                _timing = false;
-                Fps = _frames / _seconds;
+                var (frames, since) = (Time.DrawnFrames, Time.RealTotal);
+                yield return WaitUntil(() => Time.RealTotal - since >= Window);
+                Fps = (float)((Time.DrawnFrames - frames) / (Time.RealTotal - since));
             }
 
             private void Add(int count)

@@ -296,6 +296,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         }
         _runner.Game.SceneName = _sceneName;
         _runner.Game.SceneChanged += OnGameSceneChanged;
+        _runner.Game.Stepped += OnStepped;
         _runner.Game.QuitRequested += OnGameQuit;
         _runner.Start();
     }
@@ -442,15 +443,22 @@ public sealed class PlayMode : ObservableObject, IDisposable
         });
     }
 
+    // Each step of the game counts towards the next rewind snapshot, however many the screen's frames take.
+    private void OnStepped(object? sender, EventArgs e)
+    {
+        if (_runtime is null || _runner is not { IsPaused: false } runner || runner.Game != sender || _timeline is not { } timeline)
+            return;
+        timeline.Record(_runtime.Scene, runner.Game.Time.Total);
+        _position = timeline.Count - 1;
+    }
+
     private void OnTicked(object? sender, EventArgs e)
     {
         if (_runtime is null)
             return;
 
-        if (_runner is { IsPaused: false } runner && _timeline is { } timeline)
+        if (_runner is { IsPaused: false })
         {
-            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
-            _position = timeline.Count - 1;
             OnPropertyChanged(nameof(TimelineCount));
             OnPropertyChanged(nameof(TimelinePosition));
             OnPropertyChanged(nameof(SecondsBehind));

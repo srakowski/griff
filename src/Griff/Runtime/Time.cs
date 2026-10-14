@@ -1,24 +1,69 @@
 namespace Griff.Runtime;
 
-/// <summary>Frame timing. <see cref="Delta"/> is scaled; multiply speeds by it for frame-rate independence.</summary>
+/// <summary>
+/// Game time. The game moves in steps of <see cref="FixedDelta"/> (a sixtieth of a second unless <see cref="StepRate"/>
+/// says otherwise), whatever the screen's frame rate, so the same input gives the same game on any machine; the screen
+/// is drawn between the last two steps (see <see cref="Blend"/>). <see cref="Delta"/> is a step's game time: multiply
+/// speeds by it.
+/// </summary>
 public sealed class Time
 {
-    /// <summary>Longest step a single frame may take, so a stall (breakpoint, window drag) doesn't teleport things.</summary>
+    /// <summary>
+    /// The most real time a single frame may cover, so a stall (breakpoint, window drag) doesn't teleport things: a frame
+    /// takes at most this much in steps (6 at 60 a second), and the game slows down rather than falling further behind.
+    /// </summary>
     public const float MaxDelta = 0.1f;
 
-    /// <summary>Seconds since the previous frame, after <see cref="Scale"/>.</summary>
+    /// <summary>The fewest steps a second <see cref="StepRate"/> takes.</summary>
+    public const int MinStepRate = 10;
+
+    /// <summary>The most steps a second <see cref="StepRate"/> takes.</summary>
+    public const int MaxStepRate = 240;
+
+    /// <summary>Game seconds this step covers, after <see cref="Scale"/>: <see cref="FixedDelta"/> at normal speed.</summary>
     public float Delta { get; private set; }
 
-    /// <summary>Seconds since the previous frame, ignoring <see cref="Scale"/>.</summary>
+    /// <summary>Real seconds this step covers, ignoring <see cref="Scale"/>: <see cref="FixedDelta"/> as the game runs.</summary>
     public float UnscaledDelta { get; private set; }
 
     /// <summary>Scaled seconds since the game started.</summary>
     public double Total { get; private set; }
 
+    /// <summary>How many steps the game has taken since it started.</summary>
     public long Frame { get; private set; }
 
     /// <summary>1 is normal speed, 0.5 is slow motion, 0 pauses gameplay.</summary>
     public float Scale { get; set; } = 1f;
+
+    /// <summary>
+    /// How many steps the game takes a second: 60 unless a script changes it (say, 120 for a game whose fast bodies need
+    /// finer steps). Each step is <see cref="FixedDelta"/> long. From 10 to 240.
+    /// </summary>
+    public int StepRate
+    {
+        get => _stepRate;
+        set => _stepRate = Math.Clamp(value, MinStepRate, MaxStepRate);
+    }
+
+    private int _stepRate = 60;
+
+    /// <summary>Real seconds each step covers: 1 / <see cref="StepRate"/>.</summary>
+    public float FixedDelta => (float)StepSeconds;
+
+    internal double StepSeconds => 1.0 / _stepRate;
+
+    /// <summary>
+    /// How far the screen being drawn is between the game's last two steps, from 0 (the one before) to 1 (the last):
+    /// what's drawn is placed that far from where it was to where it is, so it moves smoothly on any screen. 1 when the
+    /// game is stepped by hand or held still.
+    /// </summary>
+    public float Blend { get; internal set; } = 1;
+
+    /// <summary>Frames the screen has shown (one each <see cref="Game.Advance"/> or <see cref="Game.Tick"/>), where <see cref="Frame"/> counts steps.</summary>
+    public long DrawnFrames { get; private set; }
+
+    /// <summary>Real seconds since the game started, counted frame by frame as the screen shows them, stalls included.</summary>
+    public double RealTotal { get; private set; }
 
     /// <summary>
     /// True while a <see cref="Scenes.Panel"/> that pauses the game is open (a pause menu): <see cref="Delta"/> is 0
@@ -57,6 +102,7 @@ public sealed class Time
         (_slowScale, _slowSeconds, _slowLeft) = (scale, seconds, Math.Max(seconds, _slowScale == scale ? _slowLeft : 0));
     }
 
+    // One step, covering `seconds` of real time.
     internal void Advance(double seconds)
     {
         UnscaledDelta = Math.Clamp((float)seconds, 0f, MaxDelta);
@@ -67,6 +113,13 @@ public sealed class Time
         Delta = frozen || IsPaused ? 0 : UnscaledDelta * Scale * slow;
         Total += Delta;
         Frame++;
+    }
+
+    // A frame the screen shows, `seconds` of real time after the last.
+    internal void CountFrame(double seconds)
+    {
+        DrawnFrames++;
+        RealTotal += seconds;
     }
 
     private float SlowMotionAt(float left)

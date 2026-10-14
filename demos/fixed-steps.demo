@@ -1,0 +1,46 @@
+title: Fixed steps
+intro: The game now moves in steps of a sixtieth of a second, whatever the screen's frame rate, and is drawn smoothly in between.
+project: Platformer | Steady Steps
+
+chapter: Steps, not frames | The same game on every screen
+say: Until now, the game moved once for every frame the screen showed, by however long that frame took. A fast screen and a slow one played slightly different games.
+say: Now the game moves in fixed steps, sixty a second. A fast screen's frame may take no step, a slow one's two, and the same input always gives the same result.
+write: Scripts/StepMeter.cs | fixed-steps/StepMeter.cs
+code: Assets/Scripts/StepMeter.cs | StepMeter.cs
+say: This little script shows both: the steps the game takes a second, and the frames the screen shows.
+hidecode
+create: Text
+rename: Step Meter
+add: StepMeter
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = Bottom
+set: ScreenAnchor.Offset = 0, 0.9
+play
+wait: 2
+explain: game | Steps and frames | Sixty steps a second, always. The screen draws as many frames as it can show, and each one is placed between the last two steps, so things glide smoothly on a fast screen.
+hold: Right 1.5
+tap: Space
+wait: 1
+stop
+
+chapter: Fixed Update | Pushing bodies just before they move
+say: Scripts get Fixed Update. It runs every step just before bodies move, and only while game time moves: the place to push a body.
+write: Scripts/Floaty.cs | fixed-steps/Floaty.cs
+code: Assets/Scripts/Floaty.cs | Floaty.cs
+say: Floaty pushes its crate up whenever it sinks below its height, so it bobs there. M slows the game down, and H freezes it for a moment.
+hidecode
+create: Crate
+add: Floaty
+explain: component:Floaty | Floaty | Lift and Height, set in the Inspector like any script's.
+play
+wait: 2.5
+explain: game | Bobbing | The crate bobs, pushed in Fixed Update every step.
+tap: M
+wait: 2
+explain: game | Slow motion | Slow motion still moves in sixty steps a second, each a shorter stretch of game time, so it stays smooth.
+wait: 1.5
+tap: H
+explain: game | Hit stop | A hit stop freezes game time. Update keeps running, but Fixed Update and physics wait, so the crate hangs where it is.
+wait: 1
+stop
+say: Rewind, slow motion, hit stop and network games all go by the steps, and a test plays the same input at thirty, sixty and a hundred and forty four frames a second and gets exactly the same game.

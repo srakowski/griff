@@ -197,6 +197,25 @@ public class SceneToolsTests
         Assert.Contains("- beat: a whole number. The beat it's on", described);
     }
 
+    /// <summary>Counts the steps the game has taken.</summary>
+    public sealed class StepCounter : Component
+    {
+        /// <summary>Steps taken.</summary>
+        public long Steps => 1234567890123;
+    }
+
+    [Fact]
+    public void Long_numbers_a_component_shows_while_playing_are_shown_too()
+    {
+        // Time.Frame and Time.DrawnFrames are longs: a script showing them is read like any other number.
+        _host.Components.Register<StepCounter>();
+        Run("entity_create", """{"entity": {"name": "Counter", "components": {"StepCounter": {}}}}""");
+        _host.IsPlaying = true;
+
+        Assert.Contains("\"steps\": 1234567890123", Run("entity_get", """{"entity": "Counter"}""").Text);
+        Assert.Contains("- steps: a whole number", Run("component_describe", """{"component": "StepCounter"}""").Text);
+    }
+
     [Fact]
     public void Cells_a_component_shows_while_playing_are_x_y_arrays()
     {

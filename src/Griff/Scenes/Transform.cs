@@ -25,6 +25,22 @@ public sealed class Transform : Component
     // Goes up each time the world matrix is worked out again, so children know theirs is out of date.
     private int _worldStamp;
 
+    // Drawing a running game between its steps: where it was as the step it last moved in began, which step that was,
+    // and the last step it jumped in (teleported, added to the scene, moved to another parent), which it isn't glided
+    // over. Then the matrix it's drawn with in the frame being drawn, which drawing that is, and whether that's simply its
+    // world matrix (neither it nor anything it's in glides).
+    private Vector3 _fromPosition;
+    private Vector3 _fromRotation;
+    private Vector3 _fromScale = Vector3.One;
+    private long _movedStep = -1;
+    private long _jumpedStep = -1;
+    private Matrix4x4 _drawn;
+    private long _drawnFor;
+    private bool _drawnAsIs;
+
+    // A turn bigger than this in one step is drawn where it ends up rather than swung through.
+    private const float MaxGlideDegrees = 90;
+
     /// <summary>Where it is, in world units, from its parent's position (or the world's middle, with none). Y is up.</summary>
     public Vector3 Position
     {
@@ -33,6 +49,7 @@ public sealed class Transform : Component
         {
             if (_position == value)
                 return;
+            Moving();
             _position = value;
             Moved();
         }
@@ -46,6 +63,7 @@ public sealed class Transform : Component
         {
             if (_rotation == value)
                 return;
+            Moving();
             _rotation = value;
             Moved();
         }
@@ -59,6 +77,7 @@ public sealed class Transform : Component
         {
             if (_scale == value)
                 return;
+            Moving();
             _scale = value;
             Moved();
         }
@@ -88,24 +107,117 @@ public sealed class Transform : Component
         }
     }
 
-    /// <summary>Transform from this entity's space to world space. Kept until it, or something it's inside, moves.</summary>
-    public Matrix4x4 WorldMatrix
-    {
-        get
-        {
-            var parent = Entity?.Parent?.Transform;
-            if (parent is null)
-            {
-                if (!_worldKept || _worldParent is not null)
-                    Keep(LocalMatrix, null);
-                return _world;
-            }
+    /// <summary>
+    /// Transform from this entity's space to world space. Kept until it, or something it's inside, moves. While a running
+    /// game's frame is being drawn, it's where the entity is drawn: part way from where it was at the game's last step but
+    /// one to where it is (see <see cref="Runtime.Time.Blend"/>).
+    /// </summary>
+    public Matrix4x4 WorldMatrix => Entity?.Scene is { DrawStamp: not 0 } scene ? Drawn(scene) : World();
 
-            var parentWorld = parent.WorldMatrix;
-            if (!_worldKept || _worldParent != parent || _worldParentStamp != parent._worldStamp)
-                Keep(LocalMatrix * parentWorld, parent);
+    private Matrix4x4 World()
+    {
+        var parent = Entity?.Parent?.Transform;
+        if (parent is null)
+        {
+            if (!_worldKept || _worldParent is not null)
+                Keep(LocalMatrix, null);
             return _world;
         }
+
+        var parentWorld = parent.World();
+        if (!_worldKept || _worldParent != parent || _worldParentStamp != parent._worldStamp)
+            Keep(LocalMatrix * parentWorld, parent);
+        return _world;
+    }
+
+    /// <summary>
+    /// Moves it straight to <paramref name="position"/> (in its parent's space), drawn there from the next frame on rather
+    /// than glided there over the step as ordinary movement is: for a respawn, a portal, wrapping round the screen.
+    /// (Moves too far to have been made in one step are drawn that way anyway.)
+    /// </summary>
+    public void Teleport(Vector3 position)
+    {
+        Position = position;
+        Jumped();
+    }
+
+    /// <summary>Like <see cref="Teleport(Vector3)"/>, keeping its Z.</summary>
+    public void Teleport(Vector2 position) => Teleport(new Vector3(position, _position.Z));
+
+    // Not glided over the step the game is taking: drawn where it is at the end of it.
+    internal void Jumped()
+    {
+        if (Entity?.Scene is { } scene)
+            _jumpedStep = scene.Step;
+    }
+
+    // About to move: the first time in a step, it remembers where it was as the step began.
+    private void Moving()
+    {
+        if (Entity?.Scene is not { } scene || scene.Step == _movedStep)
+            return;
+        (_fromPosition, _fromRotation, _fromScale, _movedStep) = (_position, _rotation, _scale, scene.Step);
+    }
+
+    // Where it's drawn in the frame being drawn: glided from where it was to where it is if it moved in the last step, in
+    // wherever its parent is drawn.
+    private Matrix4x4 Drawn(Scene scene)
+    {
+        if (_drawnFor == scene.DrawStamp)
+            return _drawn;
+
+        var glides = _movedStep == scene.Step && _jumpedStep != scene.Step;
+        var parent = Entity!.Parent?.Transform;
+        Matrix4x4 drawn;
+        bool asIs;
+        if (parent is null)
+        {
+            asIs = !glides;
+            drawn = asIs ? World() : Glided(scene);
+        }
+        else
+        {
+            var parentDrawn = parent.Drawn(scene);
+            asIs = !glides && parent._drawnAsIs;
+            drawn = asIs ? World() : (glides ? Glided(scene) : LocalMatrix) * parentDrawn;
+        }
+
+        (_drawn, _drawnAsIs, _drawnFor) = (drawn, asIs, scene.DrawStamp);
+        return drawn;
+    }
+
+    // Its own matrix part way from where it was as the last step began to where it is. A move too far to have been made
+    // in one step (a respawn, a jump across the screen), a big turn or a flip is drawn as it ends up.
+    private Matrix4x4 Glided(Scene scene)
+    {
+        var t = scene.DrawBlend;
+        var position = Vector3.DistanceSquared(_fromPosition, _position) <= scene.GlideLimit * scene.GlideLimit
+            ? Vector3.Lerp(_fromPosition, _position, t)
+            : _position;
+        var rotation = _fromRotation == _rotation
+            ? _rotation
+            : new Vector3(Turn(_fromRotation.X, _rotation.X, t), Turn(_fromRotation.Y, _rotation.Y, t), Turn(_fromRotation.Z, _rotation.Z, t));
+        var scale = _fromScale == _scale || !SameSigns(_fromScale, _scale) ? _scale : Vector3.Lerp(_fromScale, _scale, t);
+        if (rotation == _rotation && scale == _scale)
+        {
+            var local = LocalMatrix;
+            local.Translation = position;
+            return local;
+        }
+
+        return Matrix4x4.CreateScale(scale) *
+               Matrix4x4.CreateFromQuaternion(Quaternion.CreateFromYawPitchRoll(ToRadians(rotation.Y), ToRadians(rotation.X), ToRadians(rotation.Z))) *
+               Matrix4x4.CreateTranslation(position);
+
+        // The short way round, so an angle kept between -180 and 180 doesn't spin all the way back as it crosses over.
+        static float Turn(float from, float to, float t)
+        {
+            var delta = ((to - from) % 360 + 540) % 360 - 180;
+            return MathF.Abs(delta) > MaxGlideDegrees ? to : from + delta * t;
+        }
+
+        static bool SameSigns(Vector3 a, Vector3 b) =>
+            MathF.Sign(a.X) == MathF.Sign(b.X) && MathF.Sign(a.Y) == MathF.Sign(b.Y) && MathF.Sign(a.Z) == MathF.Sign(b.Z);
     }
 
     private void Keep(Matrix4x4 world, Transform? parent)

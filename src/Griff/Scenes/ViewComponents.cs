@@ -142,11 +142,17 @@ public sealed class Follow : Component
             return;
         }
 
-        var next = !_placed || Smoothing <= 0 ? goal : Vector2.Lerp(current, goal, 1 - MathF.Exp(-Smoothing * seconds));
+        var snapping = !_placed;
+        var next = snapping || Smoothing <= 0 ? goal : Vector2.Lerp(current, goal, 1 - MathF.Exp(-Smoothing * seconds));
         if (_target is not null)
             _placed = true;
-        if (next != current)
-            SetWorld(transform, next);
+        if (next == current)
+            return;
+        SetWorld(transform, next);
+
+        // Snapped to its target (a level starting, a respawn): drawn there at once, not glided over.
+        if (snapping)
+            transform.Jumped();
     }
 
     // A target's speed, from its body if it has one, else from how far it moved; smoothed so a stop doesn't jolt the view.

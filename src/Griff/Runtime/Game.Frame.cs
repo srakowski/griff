@@ -147,16 +147,102 @@ public sealed partial class Game
         }
     }
 
-    /// <summary>Advances the game by <paramref name="seconds"/>, one <see cref="Frame"/> step after another.</summary>
+    /// <summary>
+    /// Raised after each step the game takes (see <see cref="Advance"/>), once its input is done with: controls set here
+    /// count for the next step. The editor keeps its rewind snapshots here.
+    /// </summary>
+    public event EventHandler? Stepped;
+
+    /// <summary>
+    /// A frame of the screen, <paramref name="seconds"/> of real time after the last: takes as many steps of
+    /// <see cref="Time.FixedDelta"/> as that time holds (none on a fast screen's frame, two on a slow one's), keeping the
+    /// rest for the next frame, so the game moves the same on any machine. <see cref="Time.Blend"/> then says how far
+    /// between its last two steps to draw it. Presses (and typing, scrolling, mouse movement) count in the next step taken,
+    /// once: a frame with no step keeps them for the next. A frame covers at most <see cref="Time.MaxDelta"/>; a longer
+    /// one (a stall) slows the game down rather than running a burst of steps.
+    /// </summary>
+    public void Advance(double seconds)
+    {
+        ThrowIfStopped();
+        if (!(seconds > 0))
+            seconds = 0;
+        Time.CountFrame(seconds);
+
+        // A frame within a hair of a whole number of steps (a 60 Hz screen's, give or take the timer's jitter) counts as
+        // exactly that: a steady screen then takes the same steps every frame, rather than now and then none and then two
+        // (which looks uneven, and doubles the work of a frame that may already be full). The game may run a touch slow
+        // for it, on a screen a touch slower than its step rate, but never skips.
+        var step = Time.StepSeconds;
+        var whole = Math.Round(seconds / step);
+        if (whole is >= 1 and <= MaxSnappedSteps && Math.Abs(seconds - whole * step) < step * FrameSnap)
+            seconds = whole * step;
+        _owed = Math.Min(_owed + seconds, Math.Max(Time.MaxDelta, step));
+        while (_owed >= step - StepTolerance && !_stopped)
+        {
+            _owed -= step;
+            try
+            {
+                Step(step);
+            }
+            finally
+            {
+                // What was pressed counted in this step, and doesn't again in the next.
+                (LocalInput as InputState)?.EndFrame();
+            }
+
+            Stepped?.Invoke(this, EventArgs.Empty);
+        }
+
+        Time.Blend = (float)Math.Clamp(_owed / step, 0, 1);
+    }
+
+    /// <summary>
+    /// Takes one step of exactly <paramref name="seconds"/> (at most <see cref="Time.MaxDelta"/>), as a frame of its own
+    /// drawn as it ends (<see cref="Time.Blend"/> 1): stepping a game by hand, for tests and tools, or one step at a time
+    /// while paused. The caller ends the input's frame (<see cref="InputState.EndFrame"/>) after. A running game uses
+    /// <see cref="Advance"/>.
+    /// </summary>
     public void Tick(double seconds)
+    {
+        ThrowIfStopped();
+        Time.CountFrame(seconds);
+        Step(seconds);
+        Time.Blend = 1;
+        Stepped?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Draws things where they are now, rather than between the last two steps, until the game next takes a step: for a
+    /// host holding the game still (the editor paused, or rewound), so what's on the screen is what the Inspector shows.
+    /// </summary>
+    public void ShowAsIs() => Time.Blend = 1;
+
+    // How much real time the game owes in steps: what's left of the frames so far, less than a step.
+    private double _owed;
+
+    // Frame times measured in floating point land a hair either side of a step; within this, it's a step.
+    private const double StepTolerance = 1e-7;
+
+    // How close to a whole number of steps (as a share of a step, 2 ms at 60 a second) a frame counts as exactly that many,
+    // for frames of up to this many steps.
+    private const double FrameSnap = 0.12;
+    private const int MaxSnappedSteps = 4;
+
+    private void ThrowIfStopped()
     {
         if (_stopped)
             throw new InvalidOperationException("The game has stopped.");
+    }
 
+    // One step: each phase's steps in turn.
+    private void Step(double seconds)
+    {
         _tickSeconds = seconds;
+        // What moves in it remembers where it was as it began, to be drawn between the two.
+        Scene.Step = Time.Frame + 1;
         foreach (var phase in Phases)
         {
-            // Read again each phase: a system added in an earlier one (by a script's Start) runs this frame.
+            // Read again each phase: a system added in an earlier one (by a script's Start) runs this step.
             foreach (var step in _phases[(int)phase])
                 step.Run();
         }
@@ -212,6 +298,8 @@ public sealed partial class Game
         Step(FramePhase.Simulate, "Typewriters", RunTypewriters);
         Step(FramePhase.Simulate, "Pickup Spin", RunPickupSpin);
 
+        // Scripts push bodies just before they move.
+        Step(FramePhase.Physics, "Fixed Scripts", FixedUpdateScripts);
         Step(FramePhase.Physics, "Physics", StepPhysics);
         Step(FramePhase.Physics, "Carrying", CarryHeld, _drags);
 
@@ -320,6 +408,19 @@ public sealed partial class Game
         {
             if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
                 behavior.RunUpdate();
+        }
+    }
+
+    // Just before bodies move, in steps where game time moves: not while paused (by a panel, or Time.Scale 0) or frozen in
+    // a hit stop, when physics doesn't step either.
+    private void FixedUpdateScripts()
+    {
+        if (Time.Delta <= 0)
+            return;
+        foreach (var behavior in _running)
+        {
+            if (behavior.Entity?.Scene == Scene)
+                behavior.RunFixedUpdate();
         }
     }
 

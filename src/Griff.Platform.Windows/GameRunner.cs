@@ -12,15 +12,18 @@ using Griff.Scenes;
 namespace Griff.Platform.Windows;
 
 /// <summary>
-/// Runs a <see cref="Game"/> on the WPF UI thread: ticks it once per frame the screen shows (see
-/// <see cref="FramePacer"/>), renders to a <see cref="GameSurface"/>, and feeds keyboard input from <paramref name="keySource"/> and mouse input from the surface.
+/// Runs a <see cref="Game"/> on the WPF UI thread: advances it once per frame the screen shows (see
+/// <see cref="FramePacer"/>), which takes the game's fixed steps that frame's time holds, renders it to a
+/// <see cref="GameSurface"/> between its last two steps, and feeds keyboard input from <paramref name="keySource"/> and
+/// mouse input from the surface.
 /// </summary>
 public sealed class GameRunner : IDisposable
 {
     private readonly GameSurface _surface;
     private readonly UIElement _keySource;
     private readonly InputState _input = new();
-    private readonly Stopwatch _clock = new();
+    // When the compositor let the last frame go (a Stopwatch timestamp): frames are timed from one to the next.
+    private long _lastShown;
     private RenderFrame? _lastFrame;
     private Vector2 _mouseNdc;
     private Point? _mousePixel;
@@ -49,7 +52,10 @@ public sealed class GameRunner : IDisposable
         _input.IsMouseInView = false;
     }
 
-    /// <summary>Raised after every tick, e.g. so the editor can refresh its panels.</summary>
+    /// <summary>
+    /// Raised after every frame in which the game took a step (and after <see cref="Step"/>), e.g. so the editor can
+    /// refresh its panels. <see cref="Game.Stepped"/> is raised for each step.
+    /// </summary>
     public event EventHandler? Ticked;
 
     /// <summary>Raised when gameplay code throws. The game pauses so the error can be fixed.</summary>
@@ -59,7 +65,19 @@ public sealed class GameRunner : IDisposable
 
     public bool IsRunning { get; private set; }
 
-    public bool IsPaused { get; set; }
+    /// <summary>Holds the game still (the editor's pause), drawn as it is rather than between steps.</summary>
+    public bool IsPaused
+    {
+        get => _isPaused;
+        set
+        {
+            _isPaused = value;
+            if (value)
+                Game.ShowAsIs();
+        }
+    }
+
+    private bool _isPaused;
 
     private bool _drawFaulted;
 
@@ -74,14 +92,14 @@ public sealed class GameRunner : IDisposable
         if (IsRunning)
             return;
         IsRunning = true;
-        _clock.Restart();
+        _lastShown = Stopwatch.GetTimestamp();
         _pacer = new FramePacer(_surface.Dispatcher, OnFrame);
     }
 
-    /// <summary>Advances exactly one frame (for frame-stepping while paused).</summary>
-    public void Step(double seconds = 1.0 / 60)
+    /// <summary>Takes exactly one step of the game (for stepping through it while paused).</summary>
+    public void Step()
     {
-        TickSafely(seconds);
+        RunSafely(stepOnce: true, 0);
         RenderLatest();
     }
 
@@ -103,14 +121,14 @@ public sealed class GameRunner : IDisposable
         Game.Stop();
     }
 
-    private void OnFrame()
+    private void OnFrame(long shownAt)
     {
-        var seconds = _clock.Elapsed.TotalSeconds;
-        _clock.Restart();
+        var seconds = (double)Math.Max(0, shownAt - _lastShown) / Stopwatch.Frequency;
+        _lastShown = shownAt;
 
         if (!IsPaused)
         {
-            TickSafely(seconds);
+            RunSafely(stepOnce: false, seconds);
         }
         else if (_lockCenter is not null)
         {
@@ -127,15 +145,21 @@ public sealed class GameRunner : IDisposable
         RenderLatest();
     }
 
-    private void TickSafely(double seconds)
+    // A frame of the screen: the game takes the steps `seconds` holds (ending the input's frame after each), or with
+    // `stepOnce`, exactly one.
+    private void RunSafely(bool stepOnce, double seconds)
     {
+        var steps = Game.Time.Frame;
         try
         {
             UpdateMouseWorld();
             UpdateMouseLock();
             XInputGamepad.Poll(_input);
             Game.ViewAspect = _surface.Aspect;
-            Game.Tick(seconds);
+            if (stepOnce)
+                Game.Tick(Game.Time.FixedDelta);
+            else
+                Game.Advance(seconds);
         }
         catch (Exception ex)
         {
@@ -144,10 +168,12 @@ public sealed class GameRunner : IDisposable
         }
         finally
         {
-            _input.EndFrame();
+            if (stepOnce)
+                _input.EndFrame();
         }
 
-        Ticked?.Invoke(this, EventArgs.Empty);
+        if (Game.Time.Frame != steps)
+            Ticked?.Invoke(this, EventArgs.Empty);
     }
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,

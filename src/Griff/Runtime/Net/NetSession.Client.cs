@@ -529,11 +529,14 @@ public sealed partial class NetSession
             var k = span > 1e-6 ? (float)Math.Clamp((at - t0) / span, 0, 1) : 1;
 
             // A jump too far to have been walked (a respawn, a teleport) snaps instead of sliding there.
-            if (span > 0 && Vector3.Distance(p0, p1) / span > 60)
+            var jumped = span > 0 && Vector3.Distance(p0, p1) / span > 60;
+            if (jumped)
                 k = 1;
             transform.Position = Vector3.Lerp(p0, p1, k);
             transform.Rotation = new Vector3(Angle(r0.X, r1.X, k), Angle(r0.Y, r1.Y, k), Angle(r0.Z, r1.Z, k));
             transform.Scale = Vector3.Lerp(s0, s1, k);
+            if (jumped)
+                transform.Jumped();
             if (k >= 1 && samples.Count == 2)
             {
                 samples.RemoveAt(0);

@@ -391,7 +391,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 property.GetIndexParameters().Length > 0)
                 continue;
             var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            if (ValueCodec.IsSupported(type) || AgentValues.IsTuple(type) || typeof(Entity).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type))
+            if (ValueCodec.IsSupported(type) || AgentValues.IsNumber(type) || AgentValues.IsTuple(type) || typeof(Entity).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type))
                 yield return property;
         }
     }

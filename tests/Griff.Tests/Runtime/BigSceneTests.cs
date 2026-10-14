@@ -37,10 +37,7 @@ public sealed class BigSceneTests
         for (var i = 0; i < 5; i++)
             game.Tick(1 / 60.0);
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 10; i++)
-            game.Tick(1 / 60.0);
-        var perFrame = (GC.GetAllocatedBytesForCurrentThread() - before) / 10;
+        var perFrame = Allocations.PerCall(() => game.Tick(1 / 60.0), 10);
 
         Assert.True(perFrame == 0, $"A frame allocated {perFrame:N0} bytes.");
     }
@@ -57,10 +54,7 @@ public sealed class BigSceneTests
             frame = SceneRenderer.Build(game, 16 / 9f, frame);
         }
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 20; i++)
-            frame = SceneRenderer.Build(game, 16 / 9f, frame);
-        var perFrame = (GC.GetAllocatedBytesForCurrentThread() - before) / 20;
+        var perFrame = Allocations.PerCall(() => frame = SceneRenderer.Build(game, 16 / 9f, frame), 20, enough: 16 * 1024 - 1);
 
         // A list of 2,000 draws is over 250 KB; what's left is the frame's own few objects.
         Assert.Equal(2000, frame!.Sprites.Count);

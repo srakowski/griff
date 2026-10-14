@@ -3,8 +3,9 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Base class for gameplay scripts. Override <see cref="Start"/> and <see cref="Update"/>;
-/// public read/write properties are saved with the scene and editable in the inspector.
+/// Base class for gameplay scripts. Override <see cref="Start"/> and <see cref="Update"/> (every step of the game), and
+/// <see cref="FixedUpdate"/> to push bodies just before they move; public read/write properties are saved with the scene
+/// and editable in the inspector.
 /// </summary>
 /// <example>
 /// <code>
@@ -48,13 +49,30 @@ public abstract class Behavior : Component, IHealthListener
     {
     }
 
-    /// <summary>Called every frame while the behavior and its entity are enabled.</summary>
+    /// <summary>
+    /// Called every step of the game while the behavior and its entity are enabled: 60 times a second (see
+    /// <see cref="Runtime.Time.StepRate"/>) whatever the screen's frame rate, with <see cref="Runtime.Time.Delta"/> the
+    /// step's game time, so the same input plays the same everywhere. The screen is drawn between steps, so what moves
+    /// here moves smoothly. Read the controls here: a press counts in one step. While a panel pauses the game, only the
+    /// scripts on open panels update.
+    /// </summary>
     protected virtual void Update()
     {
     }
 
     /// <summary>
-    /// Called every frame after <see cref="Update"/>, once everything else has moved: physics, pickups and damage, and
+    /// Called every step just before bodies move (after <see cref="Update"/> and everything else that runs before physics),
+    /// and only while game time moves: not while the game is paused, at a <see cref="Runtime.Time.Scale"/> of 0, or frozen by
+    /// a hit stop, when physics doesn't step either. <see cref="Runtime.Time.Delta"/> is the time the bodies are about to
+    /// move by. The place to push bodies: set velocities, add forces.
+    /// </summary>
+    /// <example><code>protected override void FixedUpdate() => GetComponent&lt;Body&gt;()!.Velocity += new Vector2(3, 0) * Time.Delta;</code></example>
+    protected virtual void FixedUpdate()
+    {
+    }
+
+    /// <summary>
+    /// Called every step after <see cref="Update"/>, once everything else has moved: physics, pickups and damage, and
     /// cameras following their targets. Good for a camera of your own, or something that stays by what moved. Screen
     /// anchors are placed afterwards, so they stay pinned to wherever the camera ends up.
     /// </summary>
@@ -194,6 +212,8 @@ public abstract class Behavior : Component, IHealthListener
     }
 
     internal void RunUpdate() => Update();
+
+    internal void RunFixedUpdate() => FixedUpdate();
 
     internal void RunLateUpdate() => LateUpdate();
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Griff.Runtime;
+using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Tests.Runtime;
@@ -255,6 +256,137 @@ public class FrameProfilerTests
         Assert.DoesNotContain("Scripts", costs.Keys);
         Assert.DoesNotContain("Late Scripts", costs.Keys);
         Assert.DoesNotContain("Fixed Scripts", costs.Keys);
+    }
+
+    [Fact]
+    public void A_profiled_game_splits_building_its_picture_by_what_is_drawn_with_the_garbage_each_makes()
+    {
+        var scene = new Scene();
+        var camera = new Entity("Camera");
+        camera.AddComponent<Camera>().Ambient = new Color(0.2f, 0.2f, 0.3f);
+        scene.Add(camera);
+        for (var i = 0; i < 3; i++)
+        {
+            var bunny = new Entity($"Bunny {i}");
+            bunny.AddComponent<Sprite>();
+            bunny.AddComponent<Bunny>();
+            scene.Add(bunny);
+        }
+
+        var level = new Entity("Level");
+        level.AddComponent<Tilemap>().Tiles = ["###", "#.#", "###"];
+        scene.Add(level);
+        var score = new Entity("Score");
+        score.AddComponent<Text>().Value = "Score: 0";
+        scene.Add(score);
+        var sparks = new Entity("Sparks");
+        sparks.AddComponent<ParticleEmitter>();
+        scene.Add(sparks);
+        var lamp = new Entity("Lamp");
+        lamp.AddComponent<Light>();
+        scene.Add(lamp);
+        var doodle = new Entity("Doodle");
+        doodle.AddComponent<Doodle>();
+        scene.Add(doodle);
+
+        var game = new Game(scene, new InputState());
+        game.AddSystem(new Overlay());
+
+        // Not profiled: the build isn't timed.
+        var profiler = new FrameProfiler();
+        game.Tick(1 / 60.0);
+        SceneRenderer.Build(game, 16 / 9f);
+        profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        Assert.Empty(profiler.Costs());
+        profiler.Clear();
+
+        // The first few frames get things ready (what the sprites draw is worked out once): they're left out.
+        game.Profiler = profiler;
+        long built = 0;
+        for (var i = 0; i < 6; i++)
+        {
+            if (i == 3)
+                profiler.Clear();
+            profiler.BeginFrame();
+            game.Tick(1 / 60.0);
+            var started = Stopwatch.GetTimestamp();
+            SceneRenderer.Build(game, 16 / 9f);
+            built = Stopwatch.GetTimestamp() - started;
+            profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        }
+
+        var costs = profiler.Costs();
+        var build = costs.Where(c => c.Kind == FrameCostKind.Build).ToDictionary(c => c.Name);
+        // Griff's own systems' drawing (Tactics, Levels...) is there too.
+        Assert.Subset(build.Keys.ToHashSet(), new HashSet<string> { "Camera", "Clearing", "Doodle", "Lights", "Overlay", "ParticleEmitter", "Screen", "Sorting", "Sprite", "Systems", "Text", "Tilemap" });
+        Assert.DoesNotContain(costs, c => c.Name == "Build");
+
+        // A script that draws counts its drawing apart from its Update; the garbage each part makes is its own.
+        Assert.Equal(FrameCostKind.Script, costs.Single(c => c.Name == "Bunny").Kind);
+        Assert.True(build["Doodle"].Allocated >= 5_000, $"{build["Doodle"].Allocated}");
+        Assert.True(build["Overlay"].Allocated >= 3_000, $"{build["Overlay"].Allocated}");
+        Assert.True(build["Sprite"].Allocated < 1_000, $"{build["Sprite"].Allocated}");
+        Assert.True(build["Doodle"].Ms > 0);
+
+        // The parts are the whole build, timed from inside it.
+        var parts = profiler.Costs(frames: 1).Where(c => c.Kind == FrameCostKind.Build).Sum(c => c.Ms);
+        Assert.InRange(parts, 0, built * 1000.0 / Stopwatch.Frequency + 1e-3);
+    }
+
+    [Fact]
+    public void Timing_a_build_makes_no_garbage_of_its_own_once_it_has_seen_what_is_drawn()
+    {
+        var scene = new Scene();
+        for (var i = 0; i < 200; i++)
+        {
+            var bunny = new Entity("Bunny");
+            bunny.AddComponent<Sprite>();
+            scene.Add(bunny);
+        }
+
+        var game = new Game(scene, new InputState()) { Profiler = new FrameProfiler() };
+        RenderFrame? frame = null;
+        long Frames(int count)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < count; i++)
+            {
+                var profiler = game.Profiler;
+                profiler?.BeginFrame();
+                frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                profiler?.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+            }
+
+            return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        Frames(5);
+        var timed = Frames(20);
+        game.Profiler = null;
+        Frames(5);
+        var untimed = Frames(20);
+        Assert.Equal(untimed, timed);
+    }
+
+    // Draws a ring, making garbage as it does.
+    public class Doodle : Behavior, IDrawable
+    {
+        [DoNotSerialize]
+        public byte[]? Last { get; private set; }
+
+        public void Draw(Drawing drawing)
+        {
+            Last = new byte[5_000];
+            drawing.Circle(System.Numerics.Vector2.Zero, 1, 0.1f, Color.White);
+        }
+    }
+
+    // Draws over the whole frame, making garbage as it does.
+    public sealed class Overlay : GameSystem
+    {
+        public byte[]? Last { get; private set; }
+
+        protected override void Draw(FrameDrawing frame) => Last = new byte[3_000];
     }
 
     public class Bunny : Behavior

@@ -139,10 +139,10 @@ public sealed class GameRunner : IDisposable
             var (allocated, collections) = (GC.GetAllocatedBytesForCurrentThread(), GC.CollectionCount(0));
             var started = Stopwatch.GetTimestamp();
             RunSafely(stepOnce: false, seconds);
-            var (stepped, steppedAllocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            var stepped = Stopwatch.GetTimestamp();
+            // Building the picture times its own parts (what each kind of thing drawn costs: see FrameCostKind.Build).
             RenderLatest(out var built, out var builtAllocated);
             var drawn = Stopwatch.GetTimestamp();
-            profiler.AddCost("Build", FrameCostKind.Picture, built - stepped, builtAllocated - steppedAllocated);
             profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, GC.GetAllocatedBytesForCurrentThread() - builtAllocated);
             profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
                 Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0,

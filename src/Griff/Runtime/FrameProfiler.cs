@@ -32,7 +32,7 @@ public sealed record FrameSummary(
     public string Garbage => FrameCost.Bytes(Allocated);
 }
 
-/// <summary>What a cost in a frame is for: one of Griff's steps, a system a script added, a kind of script, the picture, or the editor's own work.</summary>
+/// <summary>What a cost in a frame is for: one of Griff's steps, a system a script added, a kind of script, part of building the picture, drawing it, or the editor's own work.</summary>
 public enum FrameCostKind
 {
     /// <summary>One of Griff's own steps of the frame (see <see cref="Game.Frame"/>), named for what it runs: Physics, Animations, Particles.</summary>
@@ -44,8 +44,20 @@ public enum FrameCostKind
     /// <summary>Every script of one kind (a <see cref="Behavior"/> class): their Update, FixedUpdate and LateUpdate together.</summary>
     Script,
 
-    /// <summary>Building the picture of the frame (Build) and drawing it (Draw), as a whole.</summary>
+    /// <summary>
+    /// Drawing the picture the frame built (Draw), as a whole. (Building it is split into its parts: see <see cref="Build"/>.)
+    /// </summary>
     Picture,
+
+    /// <summary>
+    /// Part of building the picture of the frame, in the order they come: Camera (finding the view); Clearing (emptying
+    /// the last frame's draws to reuse them); what each kind of component that draws adds (Sprite, Tilemap, Text,
+    /// ParticleEmitter, a script's own drawing), with its entities' upkeep (where each is, what it sorts by); Sorting
+    /// (putting it all back to front); Systems (getting the frame ready for them) and each system's Draw, named for the
+    /// system; Lights (which lights reach the view, and their shadows, when it's dark); Screen (fades, flashes and debug
+    /// shapes over it all).
+    /// </summary>
+    Build,
 
     /// <summary>Work the editor does for the game it plays that an exported game doesn't (keeping rewind snapshots, its panels following the game).</summary>
     Editor,
@@ -80,7 +92,9 @@ public sealed record FrameCost(string Name, FrameCostKind Kind, double Ms, doubl
 /// </summary>
 /// <remarks>
 /// While it's set, the game also times each of its steps, each kind of script and each system a script added, and the
-/// garbage each makes (see <see cref="AddCost(string, FrameCostKind, long, long)"/>); <see cref="Costs"/> sums them up.
+/// garbage each makes (see <see cref="AddCost(string, FrameCostKind, long, long)"/>), and building its picture times what
+/// each kind of component draws and each part of the build (see <see cref="FrameCostKind.Build"/>); <see cref="Costs"/>
+/// sums them up.
 /// What's added between one frame and the next counts in the next frame added. Keeping track of a cost allocates nothing
 /// once it's been seen, so it doesn't count as garbage itself.
 /// </remarks>
@@ -94,9 +108,10 @@ public sealed class FrameProfiler
     private int _next;
 
     // What each step, kind of script and system cost in each frame held (by the frame's place in _samples), and in the
-    // frame under way; found by its name (a step's or system's) or its type (a script's).
-    private readonly Dictionary<object, CostTrack> _costs = [];
+    // frame under way; found by its name (a step's or system's) or its type (a script's, a drawable's), and its kind.
+    private readonly Dictionary<(object Key, FrameCostKind Kind), CostTrack> _costs = [];
     private readonly List<CostTrack> _tracks = [];
+    private BuildTimer? _buildTimer;
 
     public FrameProfiler(int capacity = DefaultCapacity)
     {
@@ -159,7 +174,17 @@ public sealed class FrameProfiler
     public void AddCost(string name, FrameCostKind kind, long ticks, long allocated) => Track(name, name, kind).Add(ticks, allocated);
 
     /// <summary>Adds what scripts of type <paramref name="script"/> took to the frame under way, as <see cref="AddCost(string, FrameCostKind, long, long)"/> does.</summary>
-    public void AddCost(Type script, long ticks, long allocated) => Track(script, script.Name, FrameCostKind.Script).Add(ticks, allocated);
+    public void AddCost(Type script, long ticks, long allocated) => AddCost(script, FrameCostKind.Script, ticks, allocated);
+
+    /// <summary>
+    /// Adds what things of type <paramref name="type"/> took to the frame under way, counted as <paramref name="kind"/>
+    /// (a script's Update is a <see cref="FrameCostKind.Script"/>, its drawing part of the <see cref="FrameCostKind.Build"/>),
+    /// as <see cref="AddCost(string, FrameCostKind, long, long)"/> does. It's named for the type.
+    /// </summary>
+    public void AddCost(Type type, FrameCostKind kind, long ticks, long allocated) => Track(type, type.Name, kind).Add(ticks, allocated);
+
+    // Times the parts of building a frame (see SceneRenderer), one set for this profiler.
+    internal BuildTimer BuildTimer => _buildTimer ??= new BuildTimer(this);
 
     /// <summary>Forgets the costs added since the last frame: the next frame's start from nothing.</summary>
     public void BeginFrame()
@@ -168,12 +193,12 @@ public sealed class FrameProfiler
             track.Discard();
     }
 
-    private CostTrack Track(object key, string name, FrameCostKind kind)
+    internal CostTrack Track(object key, string name, FrameCostKind kind)
     {
-        if (!_costs.TryGetValue(key, out var track))
+        if (!_costs.TryGetValue((key, kind), out var track))
         {
             track = new CostTrack(name, kind, Capacity);
-            _costs.Add(key, track);
+            _costs.Add((key, kind), track);
             _tracks.Add(track);
         }
 
@@ -219,7 +244,7 @@ public sealed class FrameProfiler
     }
 
     // One thing's costs, a frame at a time.
-    private sealed class CostTrack(string name, FrameCostKind kind, int capacity)
+    internal sealed class CostTrack(string name, FrameCostKind kind, int capacity)
     {
         public readonly string Name = name;
         public readonly FrameCostKind Kind = kind;
@@ -305,6 +330,62 @@ public sealed class FrameProfiler
         var slow = times[Math.Min(count - 1, (int)(count * 0.99))];
         return new FrameSummary(count, total > 0 ? count * 1000 / total : 0, slow > 0 ? 1000 / slow : 0, total / count, worst,
             step / count, build / count, draw / count, steps / count, draws / count, allocated / count, mostAllocated, collections);
+    }
+}
+
+/// <summary>
+/// Times the parts of building a frame for a <see cref="FrameProfiler"/>, as <see cref="FrameCostKind.Build"/> costs:
+/// whatever runs from one <see cref="Mark(string)"/> to the next counts to the first, so a crowd of one kind costs one
+/// pair of timestamps however big it is, and the parts add up to the whole build. Making none of its own garbage, it
+/// counts only the build's.
+/// </summary>
+internal sealed class BuildTimer(FrameProfiler profiler)
+{
+    // What's being timed now (a part's name, a kind of component's type, a system) and what it's called, or null between builds.
+    private object? _key;
+    private string _name = "";
+    private long _started;
+    private long _allocated;
+
+    /// <summary>Starts timing a build, with its first part.</summary>
+    public void Begin(string part)
+    {
+        (_key, _name) = (part, part);
+        (_started, _allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+    }
+
+    /// <summary>What runs from here on is part <paramref name="part"/> of the build (Sorting, Lights...).</summary>
+    public void Mark(string part)
+    {
+        if (_key is string current && current == part)
+            return;
+        Close(part, part);
+    }
+
+    /// <summary>What runs from here on is drawing things of type <paramref name="type"/> (a drawable component).</summary>
+    public void Mark(Type type)
+    {
+        if (!ReferenceEquals(_key, type))
+            Close(type, type.Name);
+    }
+
+    /// <summary>What runs from here on is a system's drawing: systems of one type count together, by the name of the first.</summary>
+    public void Mark(GameSystem system)
+    {
+        var type = system.GetType();
+        if (!ReferenceEquals(_key, type))
+            Close(type, system.Name);
+    }
+
+    /// <summary>Ends the build: the part under way is the last.</summary>
+    public void End() => Close(null, "");
+
+    private void Close(object? next, string name)
+    {
+        var (now, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        if (_key is not null)
+            profiler.Track(_key, _name, FrameCostKind.Build).Add(now - _started, allocated - _allocated);
+        (_key, _name, _started, _allocated) = (next, name, now, allocated);
     }
 }
 

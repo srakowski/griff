@@ -1,5 +1,5 @@
 title: Profiler
-intro: See how a game runs while it plays: a graph of its frames, the frame rate, what each script and step costs, the garbage it makes, and what the scene holds.
+intro: See how a game runs while it plays: a graph of its frames, the frame rate, what each script, step and kind of thing drawn costs, the garbage it makes, and what the scene holds.
 project: BunnyMark | Profiler
 
 chapter: Open the Profiler | Game > Profiler
@@ -17,7 +17,10 @@ explain: profiler:graph | Every frame | Each bar is one frame, the newest on the
 explain: profiler:rate | The frame rate | Above it are the frame rate and its one percent low, the rate of the slowest frames, then the average and worst frame, and what each part takes.
 expectprofiler: cost = Bunny
 explain: profiler:garbage | Garbage | Then the garbage a frame makes: memory taken for a moment and let go, which the garbage collector has to clear up, holding up a frame now and then. A smooth game makes next to none.
-explain: profiler:costs | Costs a frame | Here is where the time goes. Every bunny's script together, Griff's own steps like physics and particles, building and drawing the picture, and the editor's own work, each with what it takes a frame and the garbage it makes, the most first.
+explain: profiler:costs | Costs a frame | Here is where the time goes. Every bunny's script together, Griff's own steps like physics and particles, drawing the picture, and the editor's own work, each with what it takes a frame and the garbage it makes, the most first.
+expectprofiler: cost = Sprite
+expectprofiler: cost = Sorting
+explain: profiler:costs | Building the picture | Building the picture is split by what's drawn, marked build. Here the bunnies' sprites take nearly all of it, then sorting them back to front. Text, tilemaps, particles, lights and each system's drawing get rows of their own, with the garbage each makes, so you can see which part to make faster.
 explain: profiler:counts | What the scene holds | Beside it, how many entities the scene holds, how many are active, and how many things were drawn in the last frame.
 explain: profiler:components | Components | Then how many of each component the active entities have, the most first.
 

@@ -88,6 +88,35 @@ public class LightingTests
     }
 
     [Fact]
+    public void Dark_PutsTheHudLast_InOrder_WithoutMakingGarbage_InABigScene()
+    {
+        _camera.Ambient = Color.Black;
+        for (var i = 0; i < 2000; i++)
+        {
+            var hud = AddSprite($"Hud {i}", Vector2.Zero);
+            hud.GetComponent<Sprite>()!.Order = 10;
+            if (i % 100 == 0)
+                hud.AddComponent<ScreenAnchor>();
+        }
+
+        var game = new Game(_scene, new InputState());
+        RenderFrame? frame = null;
+        for (var i = 0; i < 10; i++)
+        {
+            game.Tick(1 / 60.0);
+            frame = SceneRenderer.Build(game, 16 / 9f, frame);
+        }
+
+        var names = frame!.Sprites.Select(d => d.Entity.Name).ToList();
+        Assert.Equal(1980, frame.LitCount);
+        Assert.Equal(Enumerable.Range(0, 2000).Where(i => i % 100 != 0).Concat(Enumerable.Range(0, 20).Select(i => i * 100)).Select(i => $"Hud {i}"), names);
+
+        // A list of 2,000 draws is over 250 KB; what's left is the frame's own few objects.
+        var perFrame = Runtime.Allocations.PerCall(() => frame = SceneRenderer.Build(game, 16 / 9f, frame), 20, enough: 16 * 1024 - 1);
+        Assert.True(perFrame < 16 * 1024, $"A frame allocated {perFrame:N0} bytes.");
+    }
+
+    [Fact]
     public void Dark_LeavesWhatRidesInsideTheCameraUndarkened()
     {
         _camera.Ambient = Color.Black;

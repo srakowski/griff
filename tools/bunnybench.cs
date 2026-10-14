@@ -9,11 +9,12 @@
 // building the frame to draw, drawing it with OpenGL (into a hidden window: the CPU's part), and the GPU's part. It
 // prints the median, mean, 99th percentile and worst of each, and the garbage collections and bytes allocated meanwhile.
 // The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline]
+//   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline] [--profile]
 // --steps 2 takes two steps every frame, as a frame after a missed one does; --no-draw leaves OpenGL out; --by-step
 // also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first; --timeline keeps
 // rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind (the settling
-// that follows each, on another thread, is reported after).
+// that follows each, on another thread, is reported after); --profile times the frames as the editor's Profiler does
+// (Game.Profiler set: each step, kind of script and part of the build timed, which costs a little) and prints its costs.
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
@@ -31,6 +32,7 @@ var frames = Arg("--frames", 600);
 var steps = Arg("--steps", 1);
 var draw = !args.Contains("--no-draw");
 var rewind = args.Contains("--timeline");
+var profile = args.Contains("--profile");
 
 var root = Path.Combine(Path.GetTempPath(), "griff-bunnybench-" + Guid.NewGuid().ToString("N")[..8]);
 try
@@ -88,6 +90,16 @@ try
             game.Advance(step);
     }
 
+    // --profile times the frames as the editor's Profiler does, after a frame's warming up with it.
+    var profiler = profile ? new FrameProfiler(frames) : null;
+    game.Profiler = profiler;
+    if (profiler is not null)
+    {
+        game.Advance(step * steps);
+        frame = SceneRenderer.Build(game, 16 / 9f, frame);
+        profiler.BeginFrame();
+    }
+
     GC.Collect();
     GC.WaitForPendingFinalizers();
     GC.Collect();
@@ -105,12 +117,17 @@ try
         clock.Restart();
         frame = SceneRenderer.Build(game, 16 / 9f, frame);
         buildTimes[i] = clock.Elapsed.TotalMilliseconds;
-        if (gpu is null)
-            continue;
-        clock.Restart();
-        gpu.Draw(frame);
-        drawTimes[i] = clock.Elapsed.TotalMilliseconds;
-        gpuTimes[i] = gpu.Finish();
+        if (gpu is not null)
+        {
+            clock.Restart();
+            gpu.Draw(frame);
+            drawTimes[i] = clock.Elapsed.TotalMilliseconds;
+            gpuTimes[i] = gpu.Finish();
+        }
+
+        // The costs timed since the last frame are this one's.
+        profiler?.Add(new FrameSample((float)(stepTimes[i] + buildTimes[i] + drawTimes[i]), (float)stepTimes[i], (float)buildTimes[i],
+            (float)drawTimes[i], steps, frame.Sprites.Count));
     }
 
     allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
@@ -134,6 +151,13 @@ try
     {
         foreach (var (name, ms) in byStep.OrderByDescending(s => s.Value).Take(10))
             Console.WriteLine($"    {name}: {ms / frames / steps:0.000} ms");
+    }
+
+    if (profiler is not null)
+    {
+        Console.WriteLine("  Profiled (with the profiler's own timing in):");
+        foreach (var cost in profiler.Costs().Take(16))
+            Console.WriteLine($"    {cost.Name} ({cost.Kind.ToString().ToLowerInvariant()}): {cost.Ms:0.000} ms{(cost.Garbage is { Length: > 0 } garbage ? ", " + garbage : "")}");
     }
 
     return 0;

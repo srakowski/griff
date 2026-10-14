@@ -41,17 +41,42 @@ public static class SceneRenderer
 
     private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse = null)
     {
+        // While something profiles the game, each part of the build is timed (see FrameCostKind.Build).
+        if (game?.Profiler is { } profiler)
+            return BuildTimed(scene, aspect, game, reuse, profiler.BuildTimer);
+        return Build(scene, aspect, game, reuse, null);
+    }
+
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse, BuildTimer? timer)
+    {
         // A running game is drawn between its last two steps: everything that moved in the last one (the camera too) is
         // placed part way there, so it moves smoothly whatever the screen's frame rate.
         if (game is null || !BlendSteps(scene, game))
-            return BuildNow(scene, aspect, game, reuse);
+            return BuildNow(scene, aspect, game, reuse, timer);
         try
         {
-            return BuildNow(scene, aspect, game, reuse);
+            return BuildNow(scene, aspect, game, reuse, timer);
         }
         finally
         {
             scene.DrawStamp = 0;
+        }
+    }
+
+    // The parts of a timed build that aren't a kind of thing drawn: from one mark to the next counts to the first.
+    private const string CameraPart = "Camera", ClearingPart = "Clearing", SortingPart = "Sorting", SystemsPart = "Systems", LightsPart = "Lights",
+        ScreenPart = "Screen";
+
+    private static RenderFrame BuildTimed(Scene scene, float aspect, Runtime.Game game, List<SpriteDraw>? reuse, BuildTimer timer)
+    {
+        timer.Begin(CameraPart);
+        try
+        {
+            return Build(scene, aspect, game, reuse, timer);
+        }
+        finally
+        {
+            timer.End();
         }
     }
 
@@ -74,7 +99,7 @@ public static class SceneRenderer
         return true;
     }
 
-    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse)
+    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, List<SpriteDraw>? reuse, BuildTimer? timer)
     {
         var camera = FindCamera(scene);
         var component = camera?.GetComponent<Camera>();
@@ -83,20 +108,31 @@ public static class SceneRenderer
         var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse ?? [];
+        timer?.Mark(ClearingPart);
         sprites.Clear();
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true);
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
+        timer?.Mark(SystemsPart);
         var frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
         if (game is not null)
         {
             // A system that sees the world its own way (first person) draws it first; every system then draws over it.
             var systems = game.Systems.ToArray();
             foreach (var system in systems)
+            {
+                timer?.Mark(system);
                 system.RunDrawView(frame);
+            }
+
             foreach (var system in systems)
+            {
+                timer?.Mark(system);
                 system.RunDraw(frame);
+            }
         }
+
+        timer?.Mark(LightsPart);
 
         sprites = frame.Sprites;
         view = frame.View;
@@ -111,11 +147,10 @@ public static class SceneRenderer
         var dark = component?.IsDark == true && frame.Lit;
         var litCount = sprites.Count;
         if (dark)
-        {
-            var screen = sprites.Where(d => IsOnScreen(d.Entity, camera)).ToList();
-            sprites = sprites.Where(d => !IsOnScreen(d.Entity, camera)).Concat(screen).ToList();
-            litCount = sprites.Count - screen.Count;
-        }
+            litCount = PutScreenLast(sprites, camera);
+
+        IReadOnlyList<LightDraw> lights = dark ? LightsIn(scene, view) : [];
+        timer?.Mark(ScreenPart);
 
         if (game is not null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
         {
@@ -137,11 +172,44 @@ public static class SceneRenderer
             Sprites = sprites,
             Camera = camera,
             Ambient = dark ? ambient : Color.White,
-            Lights = dark ? LightsIn(scene, view) : [],
+            Lights = lights,
             LitCount = dark ? litCount : sprites.Count,
             Effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } effects ? effects : null,
             Look = camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown.Drawn(StepBlend.For(scene, camera)) : default,
         };
+    }
+
+    // Moves the draws pinned to the screen after the others, each keeping their order, in place (by way of the scratch's
+    // spare, so a big dark scene's frame makes no garbage). Returns how many draws aren't pinned.
+    private static int PutScreenLast(List<SpriteDraw> sprites, Entity? camera)
+    {
+        var scratch = t_scratch ??= new Scratch();
+        var drawn = CollectionsMarshal.AsSpan(sprites);
+        var (world, screen) = (0, 0);
+        foreach (ref readonly var draw in drawn)
+        {
+            if (IsOnScreen(draw.Entity, camera))
+                screen++;
+        }
+
+        if (screen == 0)
+            return drawn.Length;
+        if (scratch.Spare.Length < screen)
+            scratch.Spare = new SpriteDraw[Math.Max(screen, scratch.Spare.Length * 2)];
+        var spare = scratch.Spare.AsSpan(0, screen);
+        screen = 0;
+        for (var i = 0; i < drawn.Length; i++)
+        {
+            if (IsOnScreen(drawn[i].Entity, camera))
+                spare[screen++] = drawn[i];
+            else
+                drawn[world++] = drawn[i];
+        }
+
+        spare.CopyTo(drawn[world..]);
+        // The copies would otherwise keep the entities they belong to from being collected.
+        spare.Clear();
+        return world;
     }
 
     // ----- Entities -----
@@ -156,13 +224,14 @@ public static class SceneRenderer
     /// goes over the world (ropes, wires) between them and what's pinned to the screen. Returns how many draws at the
     /// end are pinned to the screen when it had to split them for that, or -1.
     /// </summary>
-    internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld)
+    internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld,
+        BuildTimer? timer = null)
     {
         var scratch = t_scratch ?? new Scratch();
         t_scratch = null;
         try
         {
-            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch);
+            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer);
         }
         finally
         {
@@ -198,8 +267,10 @@ public static class SceneRenderer
     // land, and then those runs of draws are put back to front by what their entities sort by. An entity's drawable
     // components are called in that order too (hierarchy order, then DrawStep order within the entity), whatever order
     // their draws end up in.
+    // With a timer (a profiler's), each entity's own work counts to the kind of thing it draws first, and each drawable's
+    // drawing to its own kind.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer)
     {
         var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
         var drawables = scratch.Drawables;
@@ -209,11 +280,13 @@ public static class SceneRenderer
         var drawing = new Drawing(sprites, ScreenEntity, view, cameraSize / 180, playing);
         foreach (var entity in scene.Entities)
         {
-            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)) ||
-                !Describe(entity, sortByY, drawables, overs, out var entry))
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)))
+                continue;
+            timer?.Mark(LeadOf(entity));
+            if (!Describe(entity, sortByY, drawables, overs, out var entry))
                 continue;
             var start = sprites.Count;
-            DrawEntity(entity, entry.Sole, drawables, drawing, sprites);
+            DrawEntity(entity, entry.Sole, drawables, drawing, sprites, timer);
             // What draws nothing this frame (blinked out, out of view) has nothing to put in order.
             if (drawing.Sorts.Count > 0)
             {
@@ -229,6 +302,7 @@ public static class SceneRenderer
             }
         }
 
+        timer?.Mark(SortingPart);
         PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
 
         if (overs is not { Count: > 0 })
@@ -240,9 +314,10 @@ public static class SceneRenderer
         foreach (var drawable in overs.Select((d, i) => (d, i)).OrderBy(x => x.d.DrawStep).ThenBy(x => x.i).Select(x => x.d))
         {
             overDrawing.Entity = ((Component)drawable).Entity!;
-            drawable.Draw(overDrawing);
+            Draw(drawable, overDrawing, timer);
         }
 
+        timer?.Mark(SortingPart);
         if (over.Count == 0)
             return -1;
         var camera = FindCamera(scene);
@@ -552,20 +627,20 @@ public static class SceneRenderer
     // An entity's draws, component by component. On a parallax layer (the entity or an ancestor) they shift with it, and
     // its sprite may repeat across the view; otherwise its and its ancestors' effects move them (a shake, a beat).
     // Steps from DrawSteps.View on are drawn where they say.
-    private static void DrawEntity(Entity entity, Sprite? sole, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
+    private static void DrawEntity(Entity entity, Sprite? sole, List<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites, BuildTimer? timer)
     {
         if (sole is not null)
         {
             IDrawable drawable = sole;
-            DrawEntity(entity, new ReadOnlySpan<IDrawable>(ref drawable), drawing, sprites);
+            DrawEntity(entity, new ReadOnlySpan<IDrawable>(ref drawable), drawing, sprites, timer);
         }
         else
         {
-            DrawEntity(entity, CollectionsMarshal.AsSpan(drawables), drawing, sprites);
+            DrawEntity(entity, CollectionsMarshal.AsSpan(drawables), drawing, sprites, timer);
         }
     }
 
-    private static void DrawEntity(Entity entity, ReadOnlySpan<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites)
+    private static void DrawEntity(Entity entity, ReadOnlySpan<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites, BuildTimer? timer)
     {
         var parallax = ParallaxOf(entity);
         drawing.Entity = entity;
@@ -576,10 +651,10 @@ public static class SceneRenderer
         {
             var start = sprites.Count;
             for (; i < end && drawables[i].DrawStep < DrawSteps.View; i++)
-                drawables[i].Draw(drawing);
+                Draw(drawables[i], drawing, timer);
             MoveByEffects(entity, sprites, start);
             for (; i < end; i++)
-                drawables[i].Draw(drawing);
+                Draw(drawables[i], drawing, timer);
             return;
         }
 
@@ -590,7 +665,7 @@ public static class SceneRenderer
         {
             var drawable = drawables[i];
             var from = sprites.Count;
-            drawable.Draw(drawing);
+            Draw(drawable, drawing, timer);
             if (drawable.DrawStep >= DrawSteps.View)
                 continue;
             for (var d = from; d < sprites.Count; d++)
@@ -600,6 +675,31 @@ public static class SceneRenderer
             if (repeats && drawable is Sprite sprite && sprites.Count > from)
                 Repeat(sprite, sprites, from, by, parallax, drawing.View);
         }
+    }
+
+    // A drawable component draws, timed as its kind while a profiler times the build.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Draw(IDrawable drawable, Drawing drawing, BuildTimer? timer)
+    {
+        timer?.Mark(drawable.GetType());
+        drawable.Draw(drawing);
+    }
+
+    // The kind of thing an entity draws first, for a profiler: its sprite when that's all it draws, or else its drawable
+    // component of the lowest step.
+    private static Type LeadOf(Entity entity)
+    {
+        if (entity.SoleSprite is { } sole)
+            return sole.GetType();
+        Component? lead = null;
+        var step = int.MaxValue;
+        foreach (var component in entity.ComponentList)
+        {
+            if ((component.Roles & ComponentRoles.Drawable) != 0 && Unsafe.As<IDrawable>(component).DrawStep is var drawStep && drawStep < step)
+                (lead, step) = (component, drawStep);
+        }
+
+        return lead?.GetType() ?? typeof(Entity);
     }
 
     // Moves the draws from `start` on by the effects of the entity and what it's inside.

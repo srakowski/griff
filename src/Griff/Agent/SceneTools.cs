@@ -567,6 +567,10 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         if (updates.Count == 0)
             throw new AgentException("Give \"entity\" and \"changes\", or \"updates\".");
 
+        // Checked before anything changes: a change it doesn't know would otherwise be left out without a word.
+        foreach (var (entity, changes) in updates)
+            CheckChanges(entity, changes);
+
         var notes = new List<string>();
         var first = updates[0].Changes.ValueKind == JsonValueKind.Object && Prop(updates[0].Changes, "name") is { ValueKind: JsonValueKind.String } renamed
             ? renamed.GetString()! : updates[0].Entity.Name;
@@ -582,6 +586,25 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         foreach (var note in notes.Distinct())
             text.Append("Note: ").Append(note).AppendLine();
         return ToolResult.Ok(text.ToString().TrimEnd());
+    }
+
+    private static readonly string[] ChangeKeys = ["name", "enabled", "locked", "hidden", "parent", "index", "position", "rotation", "scale", "components", "remove"];
+
+    // Fails on a change it doesn't know, saying where a component's properties go when it names one ({"Light": {...}}).
+    private void CheckChanges(Entity entity, JsonElement changes)
+    {
+        if (changes.ValueKind != JsonValueKind.Object)
+            throw new AgentException("\"changes\" should be an object.");
+        foreach (var change in changes.EnumerateObject())
+        {
+            if (ChangeKeys.Contains(change.Name, StringComparer.OrdinalIgnoreCase))
+                continue;
+            var component = host.Components.All.FirstOrDefault(d => d.Name.Equals(ParseKey(change.Name).Type, StringComparison.OrdinalIgnoreCase) ||
+                d.DisplayName.Replace(" ", "").Equals(ParseKey(change.Name).Type.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+            throw new AgentException(component is not null
+                ? $"\"{change.Name}\" in the changes to {entity.Name} is a component: put it in \"components\", e.g. {{\"components\": {{\"{change.Name}\": {{...}}}}}}."
+                : $"The changes to {entity.Name} can't include \"{change.Name}\": they take {string.Join(", ", ChangeKeys)}.");
+        }
     }
 
     private void Apply(Scene scene, Entity entity, JsonElement changes, List<string> notes)

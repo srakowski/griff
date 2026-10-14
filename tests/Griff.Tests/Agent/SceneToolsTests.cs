@@ -151,6 +151,25 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Update_FailsOnAChangeItDoesNotKnow_ChangingNothing()
+    {
+        Run("entity_create", """{"entity": {"name": "Torch", "components": {"Light": {"radius": 3}}}}""");
+        var undoBefore = _host.History.UndoDescription;
+
+        // A component's properties go in "components": named at the top, they'd otherwise be left out without a word.
+        var result = Run("entity_update", """{"entity": "Torch", "changes": {"name": "Big Torch", "Light": {"radius": 8}}}""");
+        Assert.True(result.IsError);
+        Assert.Contains("\"components\"", result.Text);
+        var typo = Run("entity_update", """{"updates": [{"entity": "Torch", "changes": {"positon": [1, 1]}}]}""");
+        Assert.True(typo.IsError);
+        Assert.Contains("positon", typo.Text);
+
+        Assert.Equal("Torch", Named("Torch").Name);
+        Assert.Equal(3, Named("Torch").GetComponent<Light>()!.Radius);
+        Assert.Equal(undoBefore, _host.History.UndoDescription);
+    }
+
+    [Fact]
     public void Update_TheSecondOfAKind()
     {
         Run("entity_create", """{"entity": {"name": "Lamp", "components": [{"type": "Light", "radius": 1}, {"type": "Light", "radius": 2}]}}""");

@@ -1567,7 +1567,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 (() => profiler.Counts.Entities == entities, () => $"{profiler.Counts.Entities} entities"),
             "cost" when value.Length > 0 => (() => profiler.Costs.Any(c => c.Name == value),
                 () => $"costs for {string.Join(", ", profiler.Costs.Take(8).Select(c => c.Name))}"),
-            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n> | cost = <script or step>"),
+            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n> | cost = <script, step or part of the build>"),
         };
         if (!await Until(holds, 5000))
             throw new InvalidOperationException($"Expected the Profiler to show {text}, but it shows {shows()}.");

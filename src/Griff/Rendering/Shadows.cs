@@ -51,7 +51,8 @@ public static class Shadows
         var edges = new List<ShadowEdge>();
         foreach (var entity in scene.Entities.Where(e => e.IsActive))
         {
-            if (entity.GetComponent<Tilemap>() is { Solid: true } tilemap)
+            // Isometric maps don't block light yet.
+            if (entity.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Square } tilemap)
                 AddTiles(edges, tilemap);
             foreach (var collider in entity.GetComponents<Collider>())
             {
@@ -146,7 +147,7 @@ public static class Shadows
         if (shape is TileCell(var tilemap, var x, var y) && Matrix4x4.Invert(tilemap.Entity!.Transform.WorldMatrix, out var toLocal))
         {
             var local = Vector2.Transform(point, toLocal);
-            return (int)MathF.Floor(local.X / tilemap.TileSize) == x && (int)MathF.Floor(-local.Y / tilemap.TileSize) == y;
+            return tilemap.CellAt(local) == (x, y);
         }
 
         return false;

@@ -98,7 +98,7 @@ build: standalone
 | `tap: <Key>` / `hold: <Key> <seconds>` | Press a key in the running game, e.g. `hold: Right 1.5`, `tap: Space`. `hold: LeftShift+Right 1` holds both. |
 | `type: <text>` | Type into whatever has focus (`\n` presses Enter). Quotes keep spaces at the ends: `type: " * 2"`. |
 | `wait: <seconds>` | Pause the demo. |
-| `write: <path> \| <file>` | Write a file kept beside the demo (`<file>`, relative to the `.demo`) into the project's Assets at `<path>`, as an agent's `asset_write` does: a script compiles straight away, and the demo fails if it doesn't. E.g. `write: Scripts/Wind.cs \| game-systems/Wind.cs`, then `code: Assets/Scripts/Wind.cs` to show it. |
+| `write: <path> \| <file>` | Write a file kept beside the demo (`<file>`, relative to the `.demo`: a script, or a picture such as a tileset) into the project's Assets at `<path>`, as an agent's `asset_write` does: a script compiles straight away, and the demo fails if it doesn't. E.g. `write: Scripts/Wind.cs \| game-systems/Wind.cs`, then `code: Assets/Scripts/Wind.cs` to show it. |
 | `code: <file> [\| <title>]` / `hidecode` | Type a file (relative to the project) out in the code card. |
 | `save` | Ctrl+S: saves the script in a script tab (and recompiles), the scene anywhere else. |
 | `edit: <Component>` | Click a script component's Edit Script button in the Inspector, opening it in the script editor. |

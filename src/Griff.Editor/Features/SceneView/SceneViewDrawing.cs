@@ -52,9 +52,18 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         DrawGrid(drawingContext);
 
-        foreach (var entity in SceneViewModel.DrawOrder(_document.Scene))
+        var parts = SceneViewModel.DrawParts(_document.Scene).ToList();
+        // A map that sorts by Y has its tiles drawn a row at a time, each among the rest where the game draws it.
+        var byRow = parts.Where(p => p.Depth is not null).Select(p => p.Entity).ToHashSet();
+        foreach (var (entity, depth) in parts)
         {
-            if (entity.GetComponent<Tilemap>() is { } tilemap)
+            if (depth is { } row)
+            {
+                DrawTilemap(drawingContext, entity, entity.GetComponent<Tilemap>()!, row);
+                continue;
+            }
+
+            if (entity.GetComponent<Tilemap>() is { } tilemap && !byRow.Contains(entity))
                 DrawTilemap(drawingContext, entity, tilemap);
             if (entity.GetComponent<Sprite>() is { } sprite)
                 DrawSprite(drawingContext, entity, sprite);
@@ -173,9 +182,9 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         dc.Pop();
     }
 
-    private void DrawTilemap(DrawingContext dc, Entity entity, Tilemap tilemap)
+    // A map's tiles back to front, or with `depth` just that row of them (for a map that sorts by Y).
+    private void DrawTilemap(DrawingContext dc, Entity entity, Tilemap tilemap, int? depth = null)
     {
-        var size = tilemap.TileSize;
         // A hair of overlap hides the anti-aliased seams WPF would draw between neighbouring tiles.
         var bleed = 0.5 / viewport.Zoom;
         var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
@@ -184,10 +193,10 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var otherLayer = model.PaintTarget is { } painting && painting != tilemap && painting.BaseMap == tilemap.BaseMap;
         dc.PushOpacity(tilemap.Tint.A * (otherLayer ? 0.35 : 1));
 
-        foreach (var (x, y, tile) in tilemap.Cells())
+        foreach (var (x, y, tile) in depth is { } row ? tilemap.CellsAtDepth(row) : tilemap.BackToFront())
         {
-            var center = tilemap.CellCenter(x, y);
-            var rect = new Rect(center.X - size / 2 - bleed, center.Y - size / 2 - bleed, size + bleed * 2, size + bleed * 2);
+            var (center, size) = tilemap.PictureOf(x, y);
+            var rect = new Rect(center.X - size.X / 2 - bleed, center.Y - size.Y / 2 - bleed, size.X + bleed * 2, size.Y + bleed * 2);
             // Autotiles show the piece that joins their neighbors, as in the game.
             if (TileImage(tilemap, tilemap.ShownTile(x, y, tile)) is { } image)
             {
@@ -195,6 +204,10 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 2 * center.Y));
                 dc.DrawImage(Tinted(image, tilemap.Tint), rect);
                 dc.Pop();
+            }
+            else if (tilemap.Shape == TileShape.Isometric)
+            {
+                dc.DrawGeometry(fill, new Pen(fill, bleed * 2), Polygon(tilemap.OutlineOf(x, y, x, y)));
             }
             else
             {
@@ -404,7 +417,8 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, viewport.ToScreen(circle.Center), radius, radius);
             }
 
-            foreach (var tilemap in entity.GetComponents<Tilemap>())
+            // Isometric maps don't collide yet.
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape != TileShape.Isometric))
             {
                 foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
                 {
@@ -613,24 +627,39 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         dc.DrawGeometry(null, pen, geometry);
     }
 
+    // A closed shape through points in whatever space is pushed (a tilemap's own, for its cells).
+    private static StreamGeometry Polygon(Vector2[] points)
+    {
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(points[0].X, points[0].Y), true, true);
+            for (var i = 1; i < points.Length; i++)
+                context.LineTo(new Point(points[i].X, points[i].Y), true, false);
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
     // While painting: the grid's extent, the cell under the cursor (or the rectangle being dragged, or the area a fill
     // would cover), a palette of the tileset's tiles, and the tools.
     private void DrawPaintOverlay(DrawingContext dc, Tilemap tilemap)
     {
         var accent = style.Brush("Brush.Accent");
-        var size = tilemap.TileSize;
         dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(tilemap.Entity!.Transform.WorldMatrix)));
 
-        var extent = new Rect(0, -Math.Max(1, tilemap.Height) * size, Math.Max(1, tilemap.Width) * size, Math.Max(1, tilemap.Height) * size);
-        dc.DrawRectangle(null, new Pen(style.Brush("Brush.Text.Tertiary"), 1 / viewport.Zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
+        // Squares on a square map, diamonds on an isometric one.
+        var extent = Polygon(tilemap.OutlineOf(0, 0, Math.Max(1, tilemap.Width) - 1, Math.Max(1, tilemap.Height) - 1));
+        dc.DrawGeometry(null, new Pen(style.Brush("Brush.Text.Tertiary"), 1 / viewport.Zoom) { DashStyle = new DashStyle([4, 4], 0) }, extent);
 
         var color = input.Erasing ? "Brush.Status.Error" : "Brush.Accent";
         var outline = new Pen(style.Brush(color), 2 / viewport.Zoom);
-        Rect Cells(int left, int top, int right, int bottom) => new(left * size, -(bottom + 1) * size, (right - left + 1) * size, (bottom - top + 1) * size);
+        Geometry Cells(int left, int top, int right, int bottom) => Polygon(tilemap.OutlineOf(left, top, right, bottom));
         if (input.RectangleFrom is var (fx, fy) && input.HoverCell is var (tx, ty))
         {
             var box = Cells(Math.Min(fx, tx), Math.Min(fy, ty), Math.Max(fx, tx), Math.Max(fy, ty));
-            dc.DrawRectangle(style.Faded(color, 0.2), outline, box);
+            dc.DrawGeometry(style.Faded(color, 0.2), outline, box);
         }
         else if (input.HoverCell is var (hx, hy))
         {
@@ -645,10 +674,10 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
                 var shade = style.Faded(color, 0.2);
                 foreach (var (x, y) in _fillPreview)
-                    dc.DrawRectangle(shade, null, Cells(x, y, x, y));
+                    dc.DrawGeometry(shade, null, Cells(x, y, x, y));
             }
 
-            dc.DrawRectangle(null, outline, Cells(hx, hy, hx, hy));
+            dc.DrawGeometry(null, outline, Cells(hx, hy, hx, hy));
         }
 
         dc.Pop();

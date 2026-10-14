@@ -196,7 +196,7 @@ public sealed class Follow : Component
     {
         var world = entity.Transform.WorldMatrix;
         if (entity.GetComponent<Tilemap>() is { Width: > 0 } tilemap)
-            return Transformed(new Vector2(0, -tilemap.Height * tilemap.TileSize), new Vector2(tilemap.Width * tilemap.TileSize, 0), world);
+            return tilemap.Bounds() is var (min, max) ? Transformed(min, max, world) : null;
         if (entity.GetComponent<BoxCollider>() is { } box)
             return box.WorldBox;
         if (entity.GetComponent<Sprite>() is { } sprite)

@@ -4,7 +4,8 @@ namespace Griff.Scenes;
 
 /// <summary>
 /// A grid of tiles from one or more tileset images, drawn and (optionally) collided with as a whole. The grid starts
-/// at the entity's position and runs right and down. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
+/// at the entity's position and runs right and down, or on an isometric map (see <see cref="Shape"/>) as diamonds
+/// running down to the right and down to the left. Paint it in the Scene view, edit <see cref="Tiles"/> as text in the
 /// inspector, or change it from scripts with <see cref="SetTile"/>, <see cref="FillRect"/> and <see cref="FloodFill"/>.
 /// A tilemap with no <see cref="Image"/> on an entity inside another tilemap's is one of its layers (see
 /// <see cref="LayerOf"/>), painted on its own: it uses that map's tilesets, tile size and tile settings, while its
@@ -18,7 +19,7 @@ namespace Griff.Scenes;
 /// </remarks>
 [Category("Rendering")]
 [ComponentName("Tilemap")]
-public sealed partial class Tilemap : Component, IDrawable
+public sealed partial class Tilemap : Component, ISortsInParts
 {
     /// <summary>The character for an empty cell.</summary>
     public const char Empty = '.';
@@ -50,6 +51,8 @@ public sealed partial class Tilemap : Component, IDrawable
     private string[] _moreTilesets = [];
     private TilesetCache? _tilesets;
     private float _tileSize = 1f;
+    private TileShape _shape;
+    private float _tileHeight = 0.5f;
 
     // Bumped when a tile setting the collision caches depend on changes, so a layer's caches see its base map's changes.
     private int _settingsVersion;
@@ -101,18 +104,27 @@ public sealed partial class Tilemap : Component, IDrawable
         }
     }
 
-    /// <summary>On a layer, the tileset settings it takes from its map aren't its own, so the Inspector hides them.</summary>
-    public override bool Uses(string property) => LayerOf is null || !TilesetSettings.Contains(property);
+    /// <summary>
+    /// On a layer, the tileset settings it takes from its map aren't its own, so the Inspector hides them; and
+    /// <see cref="TileHeight"/> only means something on an isometric map.
+    /// </summary>
+    public override bool Uses(string property) =>
+        (LayerOf is null || !TilesetSettings.Contains(property)) && (property != nameof(TileHeight) || Shape == TileShape.Isometric);
 
-    /// <summary>On a layer, which map it's a layer of.</summary>
-    public override string? SetupNote() => LayerOf is { } owner
-        ? $"A layer of {owner.Entity?.Name ?? "its tilemap"}: drawn with its tilesets, tile size and tile settings."
-        : null;
+    /// <summary>On a layer, which map it's a layer of; and a map sorting by Y in a scene whose camera doesn't.</summary>
+    public override string? SetupNote()
+    {
+        if (LayerOf is { } owner)
+            return $"A layer of {owner.Entity?.Name ?? "its tilemap"}: drawn with its tilesets, tile size and tile settings.";
+        if (SortByY && Entity?.Scene is { } scene && !scene.Entities.Any(e => e.GetComponent<Camera>() is { SortByY: true }))
+            return "Turn on the camera's Sort By Y too, so its rows sort among the sprites.";
+        return null;
+    }
 
     // What a layer takes from its base map.
     private static readonly HashSet<string> TilesetSettings =
     [
-        nameof(Columns), nameof(Rows), nameof(MoreTilesets), nameof(TileSize), nameof(BackgroundTiles), nameof(OneWayTiles),
+        nameof(Columns), nameof(Rows), nameof(MoreTilesets), nameof(Shape), nameof(TileSize), nameof(TileHeight), nameof(BackgroundTiles), nameof(OneWayTiles),
         nameof(AnimatedTiles), nameof(LadderTiles), nameof(SlopeUpTiles), nameof(SlopeDownTiles), nameof(AutoTiles),
     ];
 
@@ -142,12 +154,49 @@ public sealed partial class Tilemap : Component, IDrawable
         set => _moreTilesets = value?.ToArray() ?? [];
     }
 
-    /// <summary>Width and height of one cell in world units, before the transform's scale. A layer's is its map's (see <see cref="LayerOf"/>).</summary>
+    /// <summary>
+    /// How the cells are laid out: <see cref="TileShape.Square"/> in rows and columns, or
+    /// <see cref="TileShape.Isometric"/> as diamonds twice as wide as they're tall, the grid's columns running down to the
+    /// right from the entity's position (the top corner of cell 0, 0) and its rows down to the left. Tiles, painting,
+    /// <see cref="CellAt"/> and <see cref="CellCenter"/> all follow it. A layer's is its map's (see <see cref="LayerOf"/>).
+    /// Isometric maps don't collide yet.
+    /// </summary>
+    public TileShape Shape
+    {
+        get => LayerOf is { } owner ? owner.Shape : _shape;
+        set => _shape = value;
+    }
+
+    /// <summary>
+    /// Width and height of one cell in world units, before the transform's scale; on an isometric map, a diamond's width
+    /// (it's half as tall). A layer's is its map's (see <see cref="LayerOf"/>).
+    /// </summary>
     public float TileSize
     {
         get => LayerOf is { } owner ? owner.TileSize : _tileSize;
         set => _tileSize = value;
     }
+
+    /// <summary>
+    /// On an isometric map, how tall each tile's picture is drawn, in tile widths: 0.5 (the default) is a flat diamond,
+    /// and 1 a square picture standing on its diamond, a block or wall as tall again (a tileset of 32 by 32 pixel tiles
+    /// with a 32 by 16 diamond at the bottom). A picture stands on its cell's bottom corner. A layer's is its map's.
+    /// </summary>
+    public float TileHeight
+    {
+        get => LayerOf is { } owner ? owner.TileHeight : _tileHeight;
+        set => _tileHeight = value;
+    }
+
+    /// <summary>
+    /// Draws each row of tiles (each diagonal row, on an isometric map) in depth among the sprites, as the camera's
+    /// <see cref="Camera.SortByY"/> does for things that move: whatever stands lower down draws in front, so a character
+    /// walks behind a wall and in front of it. Needs the camera's Sort By Y on too. Off, the map draws as one, behind
+    /// what's lower in the Hierarchy at its <see cref="Order"/>: right for floors, so put walls and props on a layer of
+    /// their own (see <see cref="LayerOf"/>) and turn this on there. The tiles always draw back to front among
+    /// themselves.
+    /// </summary>
+    public bool SortByY { get; set; }
 
     /// <summary>Multiplies the tiles' colors: white leaves them as they are, and a lower alpha fades them.</summary>
     public Color Tint
@@ -475,11 +524,75 @@ public sealed partial class Tilemap : Component, IDrawable
     public (int X, int Y) CellAt(Vector2 local)
     {
         var size = TileSize > 0 ? TileSize : 1;
-        return ((int)MathF.Floor(local.X / size), (int)MathF.Floor(-local.Y / size));
+        if (Shape != TileShape.Isometric)
+            return ((int)MathF.Floor(local.X / size), (int)MathF.Floor(-local.Y / size));
+
+        // In half widths across and quarter widths (half a diamond's height) down, those are the column less the row and
+        // the column plus the row.
+        var across = local.X / (size / 2);
+        var down = -local.Y / (size / 4);
+        return ((int)MathF.Floor((down + across) / 2), (int)MathF.Floor((down - across) / 2));
     }
 
     /// <summary>The center of cell (<paramref name="x"/>, <paramref name="y"/>) in the entity's own space.</summary>
-    public Vector2 CellCenter(int x, int y) => new((x + 0.5f) * TileSize, -(y + 0.5f) * TileSize);
+    public Vector2 CellCenter(int x, int y) => PointAt(x + 0.5f, y + 0.5f);
+
+    /// <summary>
+    /// The point <paramref name="x"/> columns and <paramref name="y"/> rows along the grid from its start (the entity's
+    /// position), in the entity's own space: whole numbers are the corners between cells, so (x + 0.5, y + 0.5) is cell
+    /// x, y's center. On a square map that's right and down; on an isometric one, down to the right and down to the left.
+    /// </summary>
+    public Vector2 PointAt(float x, float y)
+    {
+        var size = TileSize;
+        return Shape == TileShape.Isometric ? new Vector2((x - y) * size / 2, -(x + y) * size / 4) : new Vector2(x * size, -y * size);
+    }
+
+    /// <summary>
+    /// The outline of the cells from (<paramref name="left"/>, <paramref name="top"/>) to (<paramref name="right"/>,
+    /// <paramref name="bottom"/>), corners included, in the entity's own space: its four corners, from the grid's start
+    /// (top left, or top on an isometric map) round the way the columns run. A square on a square map, a diamond on an
+    /// isometric one.
+    /// </summary>
+    public Vector2[] OutlineOf(int left, int top, int right, int bottom) =>
+        [PointAt(left, top), PointAt(right + 1, top), PointAt(right + 1, bottom + 1), PointAt(left, bottom + 1)];
+
+    /// <summary>
+    /// The box the grid's tiles cover in the entity's own space, (min, max): all its cells, and on an isometric map the
+    /// pictures standing up from them (see <see cref="TileHeight"/>). One cell for an empty map.
+    /// </summary>
+    public (Vector2 Min, Vector2 Max) Bounds()
+    {
+        var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
+        foreach (var corner in OutlineOf(0, 0, Math.Max(1, Width) - 1, Math.Max(1, Height) - 1))
+            (min, max) = (Vector2.Min(min, corner), Vector2.Max(max, corner));
+        if (Shape == TileShape.Isometric)
+            max.Y += Math.Max(0, TileHeight - 0.5f) * TileSize;
+        return (min, max);
+    }
+
+    /// <summary>
+    /// Where cell (<paramref name="x"/>, <paramref name="y"/>)'s picture is drawn in the entity's own space: its middle and
+    /// size. On a square map that's the cell; on an isometric one it's a tile wide and <see cref="TileHeight"/> tall,
+    /// standing on the cell's bottom corner.
+    /// </summary>
+    public (Vector2 Center, Vector2 Size) PictureOf(int x, int y)
+    {
+        if (Shape != TileShape.Isometric)
+            return (CellCenter(x, y), new Vector2(TileSize));
+        var size = new Vector2(TileSize, TileSize * Math.Max(0, TileHeight));
+        var bottom = PointAt(x + 1, y + 1);
+        return (bottom with { Y = bottom.Y + size.Y / 2 }, size);
+    }
+
+    /// <summary>
+    /// Which row cell (<paramref name="x"/>, <paramref name="y"/>) is drawn in, back (0) to front: its row on a square
+    /// map, its diagonal (x + y) on an isometric one. A map that sorts by Y sorts each of these among the sprites.
+    /// </summary>
+    public int DepthOf(int x, int y) => Shape == TileShape.Isometric ? x + y : y;
+
+    /// <summary>How many rows <see cref="DepthOf"/> gives, back to front.</summary>
+    public int Depths => Shape == TileShape.Isometric ? Math.Max(0, Width + Height - 1) : Height;
 
     /// <summary>
     /// The part of its tileset's image showing <paramref name="tile"/> (see <see cref="TilesetOf"/>): (u, v, width,
@@ -973,6 +1086,16 @@ public sealed record Tileset(string? Image, int Columns, int Rows, int First)
 
     /// <summary>The line <see cref="Parse"/> reads back, as <see cref="Tilemap.MoreTilesets"/> holds it: "Tiles/props.png 4x4".</summary>
     public string ToLine() => $"{Image} {Columns}x{Rows}";
+}
+
+/// <summary>How a <see cref="Tilemap"/>'s cells are laid out; see <see cref="Tilemap.Shape"/>.</summary>
+public enum TileShape
+{
+    /// <summary>Squares in rows and columns.</summary>
+    Square,
+
+    /// <summary>Diamonds twice as wide as they're tall, for an isometric view.</summary>
+    Isometric,
 }
 
 /// <summary>A run of tiles that animate one after another; see <see cref="Tilemap.AnimatedTiles"/>.</summary>

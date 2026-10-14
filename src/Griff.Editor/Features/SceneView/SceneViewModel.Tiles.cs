@@ -358,7 +358,8 @@ public sealed partial class SceneViewModel
             if (shiftX == 0 && shiftY == 0)
                 return;
             var transform = tilemap.Entity!.Transform;
-            var shift = new Vector3(-shiftX * tilemap.TileSize, shiftY * tilemap.TileSize, 0);
+            // Back by the columns and rows added before the old ones (on an isometric map, up the diagonals).
+            var shift = new Vector3(tilemap.PointAt(-shiftX, -shiftY), 0);
             document.Execute(new SetPropertyEdit(transform, positionProperty, transform.Position + Vector3.TransformNormal(shift, transform.LocalMatrix)));
 
             // What's inside it (its layers, and anything else) stays where it was, so the layers stay lined up.

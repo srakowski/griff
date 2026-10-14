@@ -410,11 +410,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Overlay.TypeCode(CodeCardRect(), codeTitle.Length > 0 ? codeTitle : file, File.ReadAllText(full).ReplaceLineEndings("\n").TrimEnd(), options.Fast ? 2 : 18);
                 break;
             case "write":
-                // A file kept beside the demo, written into Assets the way an agent's asset_write does: a script compiles at once.
+                // A file kept beside the demo (a script, a picture), written into Assets the way an agent's asset_write does: a
+                // script compiles at once.
                 var (assetFile, sourceFile) = Split2(a);
                 var written = Path.Combine(workspace.Project!.AssetsPath, assetFile);
                 Directory.CreateDirectory(Path.GetDirectoryName(written)!);
-                File.WriteAllText(written, File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, sourceFile)));
+                File.WriteAllBytes(written, File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, sourceFile)));
                 if (assetFile.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && workspace.ReloadScripts() is { Success: false } failed)
                     throw new InvalidOperationException($"{assetFile} doesn't compile: {string.Join("; ", failed.Diagnostics.Where(d => d.IsError))}");
                 break;

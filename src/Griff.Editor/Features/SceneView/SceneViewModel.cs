@@ -151,6 +151,14 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && IsShown(e)));
 
     /// <summary>
+    /// <see cref="DrawOrder"/> with each row of a tilemap that sorts by Y in its own place, as the game draws them (see
+    /// <see cref="SceneRenderer.DrawParts"/>): the entity, and the row or null for the whole of it.
+    /// </summary>
+    public static IEnumerable<(Entity Entity, int? Depth)> DrawParts(Scene scene) =>
+        SceneRenderer.DrawParts(scene).Where(p => !p.Entity.IsHiddenInHierarchy)
+            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && IsShown(e)).Select(e => (e, (int?)null)));
+
+    /// <summary>
     /// Whether the Scene view shows an entity: it's active (it and its parents enabled) and not hidden in the editor
     /// (see <see cref="Entity.IsHiddenInHierarchy"/>). The game shows hidden ones as usual.
     /// </summary>
@@ -401,7 +409,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
         if (entity.GetComponent<Sprite>() is { } sprite)
             (min, max) = (-sprite.Size / 2, sprite.Size / 2);
         else if (entity.GetComponent<Tilemap>() is { Height: > 0 } tilemap)
-            (min, max) = (new Vector2(0, -tilemap.Height * tilemap.TileSize), new Vector2(tilemap.Width * tilemap.TileSize, 0));
+            (min, max) = tilemap.Bounds();
         else if (entity.GetComponent<Camera>() is { } camera)
         {
             max = new Vector2((float)(camera.Size * CameraAspect), camera.Size);

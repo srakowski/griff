@@ -1,0 +1,59 @@
+title: Isometric tilemaps
+intro: A tilemap's cells can now be diamonds: painted in the Scene view, standing up as blocks, and sorted in depth with what walks among them.
+project: Empty | Iso Garden
+write: Tiles/iso.png | isometric-tilemaps/iso.png
+
+chapter: Diamonds | Shape: Isometric
+create: Tilemap
+set: Transform.Position = 0, 0, 0
+pickimage: Tilemap.Image = Tiles/iso.png
+set: Tilemap.Columns = 3
+set: Tilemap.Tint = #FFFFFF
+set: Tilemap.Tile Size = 2
+say: Here's a tileset drawn for an isometric view: a patch of grass, a stone block and a crate, each sitting on a diamond.
+set: Tilemap.Shape = Isometric
+explain: field:Tilemap.Shape | Shape | A tilemap's new Shape setting turns its cells into diamonds, twice as wide as they're tall. The grid runs down to the right and down to the left from the map's position.
+look: 0, -3, 4
+click: tiles:Rectangle
+click: tiles:0
+scenedrag: 0, -0.5 > 0, -5.5
+expecttile: Tilemap 5, 5 = 0
+expecttile: Tilemap 0, 5 = 0
+explain: world:-6, 0, 6, -6 | Painting follows the diamonds | The brush, the rectangle and the fill all paint the diamond under the pointer, and the outline and the map's edge are diamonds too.
+
+chapter: Standing up | Tile Height, on a layer of walls
+set: Tilemap.Tile Height = 1
+explain: field:Tilemap.TileHeight | Tile Height | Tile Height says how tall each tile's picture is, in tile widths. A half is a flat diamond, a floor. One is a square picture: a block standing on its diamond, as tall again.
+click: tiles:layer:+
+rename: Walls
+click: tiles:Rectangle
+click: tiles:1
+scenedrag: 3, -2 > 0, -3.5
+click: tiles:Brush
+click: tiles:2
+sceneclick: -2, -2.5
+expecttile: Walls 3, 3 = 1
+expecttile: Walls 1, 3 = 2
+explain: world:-4, 0, 5, -5 | Back to front | Walls and crates go on a layer of their own. The tiles are drawn back to front, a diagonal at a time, so each block overlaps the ones behind it.
+
+chapter: In front and behind | Sort By Y
+deselect
+create: Sprite
+rename: Player
+set: Sprite.Size = 0.6, 1.2
+set: Sprite.Tint = #E04848
+set: Transform.Position = 0, -2.5, 0
+explain: entity:Player | Behind a wall | The player stands just behind the block in the middle, but for now it's drawn over the whole wall layer.
+select: Walls
+set: Tilemap.Sort By Y = true
+explain: component:Tilemap | Sort By Y | Turn on Sort By Y on the walls, and each diagonal row of blocks is drawn in its own place among the sprites. The Inspector reminds us the camera needs Sort By Y as well.
+select: Main Camera
+set: Camera.Sort By Y = true
+select: Player
+explain: world:-2, -1, 2, -4 | Hidden behind it | Now the block in front hides the player, the way it should.
+set: Transform.Position = 2, -3.15, 0
+explain: world:0, -1, 4, -4 | And in front | Stepping out in front of the wall, the player draws over it. The floor sorts as one, under everything standing on it.
+play
+wait: 1.5
+say: The game draws it just the same. Isometric maps don't collide yet: walking and blocking come next, then an Isometric template.
+stop

@@ -215,8 +215,18 @@ public static class SceneRenderer
             var start = sprites.Count;
             DrawEntity(entity, entry.Sole, drawables, drawing, sprites);
             // What draws nothing this frame (blinked out, out of view) has nothing to put in order.
-            if (sprites.Count > start)
+            if (drawing.Sorts.Count > 0)
+            {
+                if (sortByY)
+                    AddSorted(entries, entry, start, sprites.Count, drawing.Sorts);
+                else if (sprites.Count > start)
+                    entries.Add(entry with { First = start, Count = sprites.Count - start });
+                drawing.Sorts.Clear();
+            }
+            else if (sprites.Count > start)
+            {
                 entries.Add(entry with { First = start, Count = sprites.Count - start });
+            }
         }
 
         PutBackToFront(sprites, first, CollectionsMarshal.AsSpan(entries), sortByY, scratch);
@@ -243,6 +253,22 @@ public static class SceneRenderer
         sprites.AddRange(over);
         sprites.AddRange(screen);
         return screen.Count;
+    }
+
+    // An entity's draws from `start` to `end` as an entry for each stretch that sorts at its own height (see
+    // Drawing.SortAt), and one at the entity's own for any before the first.
+    private static void AddSorted(List<Drawn> entries, Drawn entry, int start, int end, List<(int At, float Y)> sorts)
+    {
+        var (from, y) = (start, entry.Y);
+        foreach (var (at, sortY) in sorts)
+        {
+            if (at > from)
+                entries.Add(entry with { First = from, Count = at - from, Y = y });
+            (from, y) = (Math.Max(from, at), sortY);
+        }
+
+        if (end > from)
+            entries.Add(entry with { First = from, Count = end - from, Y = y });
     }
 
     // Puts the draws from `first` on (each entry's run of them, the runs in hierarchy order) back to front, each run kept
@@ -432,6 +458,44 @@ public static class SceneRenderer
 
         var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
         return order.IsEmpty ? entries.Select(d => d.Entity).ToList() : order.ToArray().Select(at => entries[at].Entity).ToList();
+    }
+
+    /// <summary>
+    /// Like <see cref="DrawOrder"/>, but with each part of what sorts in parts (<see cref="ISortsInParts"/>, when the
+    /// camera sorts by Y) in its own place among the rest, as the game draws them: the entity and the part (a tilemap's
+    /// row of tiles), or null for the whole entity. An entity drawn in parts comes first at its own place, for what else
+    /// it draws, then each of its parts.
+    /// </summary>
+    public static IReadOnlyList<(Entity Entity, int? Part)> DrawParts(Scene scene)
+    {
+        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
+        var drawables = new List<IDrawable>();
+        var entries = new List<Drawn>();
+        var partOf = new List<int?>();
+        foreach (var entity in scene.Entities)
+        {
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || !Describe(entity, sortByY, drawables, null, out var entry))
+                continue;
+            entries.Add(entry);
+            partOf.Add(null);
+            if (!sortByY)
+                continue;
+            foreach (var component in entity.ComponentList)
+            {
+                if (component is not ISortsInParts parted)
+                    continue;
+                foreach (var (part, y) in parted.SortParts())
+                {
+                    entries.Add(entry with { Y = y });
+                    partOf.Add(part);
+                }
+            }
+        }
+
+        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
+        return order.IsEmpty
+            ? entries.Select((d, i) => (d.Entity, partOf[i])).ToList()
+            : order.ToArray().Select(at => (entries[at].Entity, partOf[at])).ToList();
     }
 
     /// <summary>

@@ -138,6 +138,20 @@ public interface IDrawEffect
 /// </summary>
 public interface IDrawsTilemap;
 
+/// <summary>
+/// A drawable whose draws sort in several places among the rest when the camera sorts by Y, each part at its own height
+/// (it marks them with <see cref="Drawing.SortAt"/> as it draws): a tilemap sorting its rows of tiles by Y. Tools that
+/// show the order without drawing (the editor's Scene view) ask it for the parts.
+/// </summary>
+public interface ISortsInParts : IDrawable
+{
+    /// <summary>
+    /// Its parts back to front, each a number it knows them by and the world height it sorts at; none when it sorts as one
+    /// with its entity.
+    /// </summary>
+    IEnumerable<(int Part, float Y)> SortParts();
+}
+
 /// <summary>A spot of light a component gives off (see <see cref="ILightSource"/>): its middle in the world, how far it reaches, its color and softness.</summary>
 public readonly record struct LightSpot(Vector2 Center, float Radius, Color Color, float Softness);
 
@@ -233,6 +247,16 @@ public sealed class Drawing
 
     /// <summary>Adds a quad as it is.</summary>
     public void Add(in SpriteDraw draw) => _draws.Add(draw);
+
+    /// <summary>
+    /// Sorts what's added from here on (up to the next call) by world height <paramref name="y"/> instead of by the
+    /// entity's position, when the camera sorts by Y (<see cref="Camera.SortByY"/>): what's lower down draws in front. A
+    /// tilemap sorting by Y calls it for each row of tiles, so a character passes in front of a wall and behind it.
+    /// </summary>
+    public void SortAt(float y) => Sorts.Add((_draws.Count, y));
+
+    // Where the entity's draws start sorting by their own height, and that height (see SortAt).
+    internal List<(int At, float Y)> Sorts { get; } = [];
 
     /// <summary>
     /// The color <paramref name="drawn"/> (one of the entity's own components) draws in instead of

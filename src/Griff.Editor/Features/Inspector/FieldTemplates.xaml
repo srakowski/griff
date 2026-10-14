@@ -191,9 +191,11 @@
                                 VerticalScrollBarVisibility="Auto" />
     </DataTemplate>
 
-    <!-- Choices named as they read ("Ping Pong"), each explained in its tooltip -->
+    <!-- Choices named as they read ("Ping Pong"), each explained in its tooltip. The pick is set just after the click is
+         done (Delay), since a choice can change which fields show (a tilemap's Shape) and remake the section, and with it
+         this box, which mustn't happen while the box is still selecting. -->
     <DataTemplate x:Key="Field.Enum" DataType="inspector:PropertyField">
-        <ComboBox ItemsSource="{Binding EnumChoices, Mode=OneTime}" SelectedValue="{Binding EnumValue}" SelectedValuePath="Value">
+        <ComboBox ItemsSource="{Binding EnumChoices, Mode=OneTime}" SelectedValue="{Binding EnumValue, Delay=1}" SelectedValuePath="Value">
             <ComboBox.ItemTemplate>
                 <DataTemplate DataType="inspector:EnumChoice">
                     <TextBlock Text="{Binding Label, Mode=OneTime}" ToolTip="{Binding Tip, Mode=OneTime}" />

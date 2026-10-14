@@ -8,7 +8,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ### Views
 
-- [ ] Add isometric tilemaps: diamond tiles drawn, painted and depth sorted.
 - [ ] Add movement and collision on isometric maps.
 - [ ] Add an Isometric template.
 - [ ] Add hex tilemaps, drawn and painted.
@@ -104,6 +103,8 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 ## Done
 
 <!-- /enhance moves finished items here: "- [x] <item> (YYYY-MM-DD)", plus a short note on anything left for later. -->
+- [x] Add isometric tilemaps: diamond tiles drawn, painted and depth sorted. (2026-10-14)
+  - `Tilemap.Shape` (Square or Isometric), `TileHeight` (how tall pictures stand on their diamonds) and `SortByY` (each row, or diagonal, sorted among the sprites through a new `Drawing.SortAt` and the `ISortsInParts` extension point, so the renderer still names no tilemap). Painting, hover, fills and growing up-left follow the diamonds; the Scene view draws sorted rows in the game's order. Fixed on the way: picking a choice that changes which fields show (Shape) remade the Inspector mid-click and threw; the dropdown now applies its pick just after the click. Isometric maps don't collide or cast shadows yet (the next item).
 - [x] Build a frame in one pass over the entities: each is gone through twice (once for what it sorts by, then to draw it), now 6.5 of the 10 ms an exported game spends on a frame of 50,000 BunnyMark bunnies (`tools\bunnybench.cs`). Draw each entity as it's found and sort the draws' ranges by key, keeping the order scripts' drawables are called in sensible. (2026-10-14)
   - Each entity is drawn as it's found, in hierarchy order, and the runs of draws are put back to front: merged when the entities are in order but for a few stretches (`StableSort.TryMerge`), else sorted by key, then moved as little as they can (the biggest block in place, the rest through a spare array). Script drawables are now called in hierarchy order (documented on `IDrawable`). Every template's frames, editor and played, were checked draw for draw against the two-pass build. BunnyBench at 50,000: build 6.5 to 5.4 ms; exported BunnyMark finds 75,224 to 78,666 (was 65,270 to 69,349). Left in Status: a crowd after its HUD in the hierarchy still has its draws moved once a frame (about 0.5 ms at 50,000).
 - [x] Take a big scene's rewind snapshot without making a frame late: a snapshot is still written all at once between two steps (20,000 BunnyMark bunnies take 3.5 ms, 15 ms in a Debug editor), so big scenes are snapshotted less often (two seconds apart at 20,000 in a Debug editor) to keep their 1% low. Write only what changed since the last snapshot (components that know when a property is set, or per-component records), or spread the work so no frame pays for all of it, and measure with BunnyBench's `--timeline` and the BunnyMark template's Hold Count. (2026-10-14)

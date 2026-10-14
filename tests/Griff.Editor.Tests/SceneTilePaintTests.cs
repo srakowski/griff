@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.SceneView;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
@@ -191,6 +192,50 @@ public class SceneTilePaintTests
             Assert.Equal(107, model.BrushTile);
             Assert.Equal(100, model.PaletteTileset!.First);
             Assert.Throws<ArgumentOutOfRangeException>(() => model.ShowTileset(3));
+        });
+    }
+
+    [Fact]
+    public void AnIsometricMap_PaintsTheDiamondUnderThePointer_AndGrowsUpTheDiagonals()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, model, map) = Open(services);
+            map.Shape = TileShape.Isometric;
+            map.TileSize = 2;
+            model.BrushTile = 2;
+
+            // Cell 1, 1 is a diamond centered 1.5 units down from the map's top corner.
+            Assert.Equal((1, 1), model.CellAt(new Vector2(0, -1.5f)));
+            Assert.Equal((2, 0), model.CellAt(new Vector2(2, -1)));
+
+            // Painting up and left of the top corner grows the grid there, and moves the map up so its tiles stay put.
+            var before = map.Entity!.Transform.Position;
+            model.PaintRectangle(-1, -1, -1, -1);
+            Assert.Equal(["2", ".1111", ".1..1", ".1111"], map.Tiles);
+            Assert.Equal(before + new Vector3(0, 1, 0), map.Entity.Transform.Position);
+            Assert.Equal((2, 2), model.CellAt(new Vector2(0, -1.5f)));
+            document.History.Undo();
+            Assert.Equal(before, map.Entity.Transform.Position);
+        });
+    }
+
+    [Fact]
+    public void TheInspector_ShowsTileHeight_OnceTheShapeIsIsometric()
+    {
+        EditorHost.Run(services =>
+        {
+            var (document, _, _, map) = Open(services);
+            var inspector = services.GetRequiredService<InspectorPanel>();
+            IEnumerable<string> Shown() => inspector.Components.Single(c => c.Title == nameof(Tilemap)).Properties.Select(p => p.PropertyName);
+            Assert.DoesNotContain(nameof(Tilemap.TileHeight), Shown());
+
+            inspector.Components.Single(c => c.Title == nameof(Tilemap)).Properties.Single(p => p.PropertyName == nameof(Tilemap.Shape)).EnumValue = "Isometric";
+
+            Assert.Equal(TileShape.Isometric, map.Shape);
+            Assert.Contains(nameof(Tilemap.TileHeight), Shown());
+            document.History.Undo();
+            Assert.DoesNotContain(nameof(Tilemap.TileHeight), Shown());
         });
     }
 }

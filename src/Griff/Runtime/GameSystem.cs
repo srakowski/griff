@@ -1,3 +1,5 @@
+using Griff.Scenes;
+
 namespace Griff.Runtime;
 
 /// <summary>The parts of a frame, in the order they run. See <see cref="Game.Frame"/> for every step in each.</summary>
@@ -88,9 +90,71 @@ public abstract class GameSystem
     /// <summary>
     /// Called as each frame is drawn, after every entity has drawn itself and the systems before this one have drawn, to
     /// add to what's drawn or change it: see <see cref="FrameDrawing"/>. Griff's own systems draw a strategy
-    /// game's fog and HUD, a tactics game's reachable cells and a first-person view this way.
+    /// game's fog and HUD, a tactics game's reachable cells and a block world's hotbar this way.
     /// </summary>
     protected virtual void Draw(FrameDrawing frame)
+    {
+    }
+
+    /// <summary>
+    /// Called as each frame is drawn, before any system's <see cref="Draw"/>, for a system that sees the world its own way
+    /// (a first-person view) to draw it in place of the camera's view from above: set <see cref="FrameDrawing.Sprites"/>,
+    /// <see cref="FrameDrawing.View"/> and <see cref="FrameDrawing.ViewProjection"/>. Every system then draws over it.
+    /// </summary>
+    protected virtual void DrawView(FrameDrawing frame)
+    {
+    }
+
+    /// <summary>
+    /// The entity the game is seen through while the system draws the world through someone's eyes (a first-person view's
+    /// player), or null: sounds are then heard from it, facing the way it faces, and <see cref="Game.Eyes"/> is it.
+    /// </summary>
+    protected virtual Entity? Eyes => null;
+
+    /// <summary>
+    /// True if the game is seen through <paramref name="entity"/>'s eyes on the screen of whoever plays it (in a network
+    /// game, each player's own character): their controls aim the way it faces rather than with the mouse.
+    /// </summary>
+    protected virtual bool LooksThrough(Entity entity) => false;
+
+    /// <summary>
+    /// Called early in each frame's Simulate phase (and on the host of a network game, again for each other player, as
+    /// them: see <see cref="RunForPlayer"/>) to lay out what the system shows on the screen for the view as it is now,
+    /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click.
+    /// </summary>
+    protected virtual void LayOutHud()
+    {
+    }
+
+    /// <summary>The buttons the system shows on the screen this frame (a hotbar's slots, a tool picker), with what each does.</summary>
+    protected virtual IReadOnlyList<HudButton> HudButtons => [];
+
+    /// <summary>A short message the system's HUD is showing (something made, a tool's next step), or null.</summary>
+    protected virtual string? Notice => null;
+
+    /// <summary>
+    /// On the host of a network game, runs the system's controls that are one player's own (a hotbar, building tools) for
+    /// <paramref name="player"/>, as them: <see cref="Game.Input"/> is their keys and mouse, the view is their screen, and
+    /// what the system keeps for a player should be theirs (see <see cref="Game.ActingFor"/>). Called once a frame for each
+    /// other player with a character, after the system's <see cref="LayOutHud"/> for them.
+    /// </summary>
+    protected virtual void RunForPlayer(NetPlayer player)
+    {
+    }
+
+    /// <summary>
+    /// Called as a grid mover sets off on a step it chose (a player's, with the crates it pushes), before anything moves: a
+    /// puzzle's move history remembers where everything was.
+    /// </summary>
+    protected virtual void GridStepStarting(GridMovement mover)
+    {
+    }
+
+    /// <summary>
+    /// Called as the game is about to leave its scene, for another or because it's stopping, while the scene is still there:
+    /// to keep what the scene leaves behind (a block world saved).
+    /// </summary>
+    protected virtual void SceneEnding()
     {
     }
 
@@ -139,6 +203,44 @@ public abstract class GameSystem
     {
         if (!IsRemoved)
             Draw(frame);
+    }
+
+    internal void RunDrawView(FrameDrawing frame)
+    {
+        if (!IsRemoved)
+            DrawView(frame);
+    }
+
+    internal Entity? SeenThrough => IsRemoved ? null : Eyes;
+
+    internal bool SeesThrough(Entity entity) => !IsRemoved && LooksThrough(entity);
+
+    internal void RunLayOutHud()
+    {
+        if (!IsRemoved)
+            LayOutHud();
+    }
+
+    internal IReadOnlyList<HudButton> Buttons => IsRemoved ? [] : HudButtons;
+
+    internal string? ShownNotice => IsRemoved ? null : Notice;
+
+    internal void RunForOtherPlayer(NetPlayer player)
+    {
+        if (!IsRemoved)
+            RunForPlayer(player);
+    }
+
+    internal void RunGridStepStarting(GridMovement mover)
+    {
+        if (!IsRemoved)
+            GridStepStarting(mover);
+    }
+
+    internal void RunSceneEnding()
+    {
+        if (!IsRemoved)
+            SceneEnding();
     }
 }
 

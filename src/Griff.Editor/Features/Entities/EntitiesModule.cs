@@ -42,9 +42,6 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateLadderCommand>()
             .AddCommand<CreateSpringCommand>()
             .AddCommand<CreateCrateCommand>()
-            .AddCommand<CreateGoalCommand>()
-            .AddCommand<CreateDungeonCommand>()
-            .AddCommand<GenerateDungeonCommand>()
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
@@ -61,9 +58,11 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<LockEntityCommand>()
             .AddCommand<HideEntityCommand>();
 
-        // The modules' presets (Create Match Board, Create Tactics Unit), each a command of its own.
+        // The modules' presets (Create Match Board, Create Tactics Unit) and actions (Generate Dungeon), each a command of its own.
         foreach (var preset in EntityPreset.All)
             services.AddSingleton<EditorCommand>(sp => new PresetCommand(preset, sp.GetRequiredService<IWorkspace>(), sp.GetRequiredService<ISelection>()));
+        foreach (var action in EntityAction.All)
+            services.AddSingleton<EditorCommand>(sp => new EntityActionCommand(action, sp.GetRequiredService<IWorkspace>(), sp.GetRequiredService<ISelection>()));
     }
 }
 
@@ -98,6 +97,42 @@ public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISe
     protected override IEnumerable<IEdit> EditScene(Scene scene) => preset.EditScene(scene);
 
     protected override Entity? InsideOf(Entity? selected) => preset.InsideOf(selected);
+}
+
+/// <summary>
+/// Does what a module's <see cref="EntityAction"/> does to the selected entity, from the Entity menu: a command standing for
+/// the action, with its id, text, icon and description (the action's /// summary), its edits one undo step.
+/// </summary>
+public sealed class EntityActionCommand(EntityAction action, IWorkspace workspace, ISelection selection) : EditorCommand
+{
+    public EntityAction Action => action;
+
+    public override string Id => action.Id;
+
+    public override string Text => action.Text;
+
+    public override string? Icon => action.Icon is { } name ? typeof(Icons).GetField(name)?.GetValue(null) as string : null;
+
+    public override Type DescribedBy => action.GetType();
+
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: action.Order);
+
+    protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is { } entity && action.AppliesTo(entity);
+
+    protected override Task ExecuteCoreAsync()
+    {
+        if (workspace.Scene is not { } document || selection.Entity is not { } entity || !action.AppliesTo(entity))
+            throw new InvalidOperationException(action.NotApplicable);
+
+        using (document.History.BeginGroup(action.Text.Replace("_", "")))
+        {
+            foreach (var edit in action.Edits(entity, document.Scene, workspace.Components))
+                document.Execute(edit);
+        }
+
+        document.History.Seal();
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Creates an entity as a child of the selection (or at the root) and selects it.</summary>
@@ -680,108 +715,6 @@ public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selectio
             body.GravityScale = 0;
             entity.AddComponent<GridMovement>();
         }
-    }
-}
-
-/// <summary>
-/// Creates a goal for grid crates: a flat square drawn under them with a <see cref="Goal"/> whose All Covered Message is
-/// "Solved", sent once every goal in the scene has a crate on it. The first goal in a scene also gets a
-/// <see cref="MoveHistory"/>, so the player can undo moves (Z) and restart (R).
-/// </summary>
-public sealed class CreateGoalCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
-{
-    public override string Id => "Entity.CreateGoal";
-    public override string Text => "Create Goa_l";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
-    protected override string EntityName => "Goal";
-
-    protected override void Configure(Entity entity)
-    {
-        var sprite = entity.AddComponent<Sprite>();
-        sprite.Size = new System.Numerics.Vector2(0.6f, 0.6f);
-        sprite.Tint = Griff.Color.FromBytes(0xE8, 0xC5, 0x4A, 0xCC);
-        sprite.Order = -1;
-        entity.AddComponent<Goal>().AllCoveredMessage = "Solved";
-        if (Scene is { } scene && !scene.Entities.Any(e => e.GetComponent<MoveHistory>() is not null))
-            entity.AddComponent<MoveHistory>();
-    }
-}
-
-/// <summary>
-/// Creates a dungeon: a <see cref="Tilemap"/> with a <see cref="DungeonGenerator"/> 48 cells across and 32 down, centered
-/// on the scene's middle, showing a dungeon made from a new seed: rooms and corridors cut from solid wall (Fill Walls), so
-/// they show without a tileset. The game makes its own each time it starts (its Seed is 0); set a Seed to keep one, and
-/// use Generate Dungeon to see it. It puts the entity called "Player" in the first room.
-/// </summary>
-public sealed class CreateDungeonCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
-{
-    public override string Id => "Entity.CreateDungeon";
-    public override string Text => "Create D_ungeon";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 21);
-    protected override string EntityName => "Dungeon";
-
-    protected override void Configure(Entity entity)
-    {
-        var map = entity.AddComponent<Tilemap>();
-        map.Tint = Griff.Color.FromBytes(0x48, 0x4B, 0x55);
-        var dungeon = entity.AddComponent<DungeonGenerator>();
-        dungeon.FillWalls = true;
-        entity.Transform.Position = new System.Numerics.Vector3(-dungeon.Width / 2f, dungeon.Height / 2f, 0);
-        map.Tiles = Griff.Runtime.DungeonGen.Generate(dungeon, Random.Shared.Next(1, int.MaxValue)).Tiles;
-    }
-}
-
-/// <summary>
-/// Makes the selected dungeon now, to see what it looks like: its tilemap filled with rooms and corridors, its Players
-/// put in the first room and its Exit in the furthest, as one undo step. With a Seed, it's the first floor the game will
-/// make; with Seed 0, a new one each time (the game still makes its own). Spawns only appear in the game.
-/// </summary>
-public sealed class GenerateDungeonCommand(IWorkspace workspace, ISelection selection) : EditorCommand
-{
-    public override string Id => "Entity.GenerateDungeon";
-    public override string Text => "_Generate Dungeon";
-    public override string? Icon => Icons.Shuffle;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 1, Order: 9);
-
-    protected override bool CanExecuteCore() =>
-        workspace.Scene is not null && selection.Entity?.GetComponent<DungeonGenerator>() is not null && selection.Entity.GetComponent<Tilemap>() is not null;
-
-    protected override Task ExecuteCoreAsync()
-    {
-        if (workspace.Scene is not { } document || selection.Entity is not { } entity ||
-            entity.GetComponent<DungeonGenerator>() is not { } dungeon || entity.GetComponent<Tilemap>() is not { } map)
-            throw new InvalidOperationException("Select a dungeon (an entity with a Dungeon Generator) to generate it.");
-
-        var layout = Griff.Runtime.DungeonGen.Generate(dungeon, dungeon.Seed != 0 ? dungeon.Seed : Random.Shared.Next(1, int.MaxValue));
-        var moves = new List<(Entity Entity, (int X, int Y) Cell)>();
-        var players = (dungeon.Players ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .SelectMany(name => document.Scene.Entities.Where(e => e.Name == name)).Distinct().ToList();
-        for (var i = 0; i < players.Count; i++)
-            moves.Add((players[i], layout.Players[Math.Min(i, layout.Players.Count - 1)]));
-        if (!string.IsNullOrWhiteSpace(dungeon.Exit) && document.Scene.FindNamed(dungeon.Exit.Trim()) is { } exit)
-            moves.Add((exit, layout.Exit));
-
-        using (document.History.BeginGroup("Generate Dungeon"))
-        {
-            document.Execute(new SetPropertyEdit(map, workspace.Components.Get(typeof(Tilemap)).Properties.Single(p => p.Name == nameof(Tilemap.Tiles)), layout.Tiles));
-            if (moves.Count > 0)
-            {
-                var world = entity.Transform.WorldMatrix;
-                document.Execute(new SetPositionsEdit(moves.Select(m => m.Entity.Transform).ToList(), moves.Select(m =>
-                {
-                    var at = System.Numerics.Vector2.Transform(map.CellCenter(m.Cell.X, m.Cell.Y), world);
-                    var local = new System.Numerics.Vector3(at, m.Entity.Transform.WorldPosition.Z);
-                    if (m.Entity.Parent is { } parent && System.Numerics.Matrix4x4.Invert(parent.Transform.WorldMatrix, out var toParent))
-                        local = System.Numerics.Vector3.Transform(local, toParent);
-                    return local with { Z = m.Entity.Transform.Position.Z };
-                }).ToList()));
-            }
-        }
-
-        document.History.Seal();
-        return Task.CompletedTask;
     }
 }
 

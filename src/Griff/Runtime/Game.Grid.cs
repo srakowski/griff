@@ -196,8 +196,9 @@ public sealed partial class Game
             return;
         }
 
-        // A player's step is a move to undo, remembered before anything goes.
-        RecordMove(entity);
+        // Systems hear of it before anything goes (a puzzle's move history remembers where everything was).
+        for (var i = 0; i < _systems.Count; i++)
+            _systems[i].RunGridStepStarting(m);
         if (row is not null)
             Push(entity, row, way, progress, Math.Max(0.02f, m.StepTime));
         StartGridStep(m, grid, target, direction, progress, glide: null);

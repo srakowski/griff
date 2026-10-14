@@ -379,10 +379,10 @@ public sealed partial class Game
             PlayShared(sound.Trim());
     }
 
-    private static float MoveTowards(float from, float to, float step) =>
+    internal static float MoveTowards(float from, float to, float step) =>
         MathF.Abs(to - from) <= step ? to : from + MathF.Sign(to - from) * step;
 
-    private static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
+    internal static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
     {
         var gap = to - from;
         var length = gap.Length();

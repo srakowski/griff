@@ -58,7 +58,10 @@ public sealed partial class Game
     internal bool LocalInputBlocked => AnyPanelPauses();
 
     /// <summary>The mouse is over this machine's HUD, so a click there isn't meant for the world.</summary>
-    internal bool MouseOnUi => Sandbox.MouseOnHud || SystemHasMouse() || Scene.Entities.Any(e => e.GetComponent<Button>() is { IsHovered: true });
+    internal bool MouseOnUi => MouseOnHud || Scene.Entities.Any(e => e.GetComponent<Button>() is { IsHovered: true });
+
+    /// <summary>The mouse is over something a system shows on the screen (see <see cref="GameSystem.MouseOnHud"/>).</summary>
+    internal bool MouseOnHud => SystemHasMouse();
 
     private bool SystemHasMouse()
     {
@@ -154,6 +157,17 @@ public sealed partial class Game
 
     internal void OnNetCommand(string name, Action<NetPlayer?, object?> command) => _netCommands[name] = command;
 
+    /// <summary>Something the host told this player's machine (what the host's run of their tools wants shown here).</summary>
+    internal void RunHostCommand(string name, object? args)
+    {
+        if (_hostCommands.TryGetValue(name, out var command))
+            command(args);
+    }
+
+    internal void OnHostCommand(string name, Action<object?> command) => _hostCommands[name] = command;
+
+    private readonly Dictionary<string, Action<object?>> _hostCommands = new(StringComparer.Ordinal);
+
     // ----- Running a player's tools for them, on the host -----
 
     // The player whose hotbar, tools and building the host is running right now, with their controls.
@@ -161,10 +175,16 @@ public sealed partial class Game
     private IInput? _actingInput;
 
     /// <summary>
-    /// On the host of a network game, runs <paramref name="run"/> once for each other player: as if their keys were this
-    /// machine's, their screen this one, with their own HUD and tool state. For the sandbox's single-player tools.
+    /// The other player the host is running tools for right now (see <see cref="GameSystem.RunForPlayer"/>), or null when
+    /// it's this machine's own player: what a system keeps for a player should be theirs while it's set.
     /// </summary>
-    private void ForEachRemotePlayer(Action run)
+    internal NetPlayer? ActingFor => _acting;
+
+    /// <summary>
+    /// On the host of a network game, runs <paramref name="run"/> once for each other player with a character: as if their
+    /// keys were this machine's and their screen this one. For one player's own tools (a hotbar, building tools).
+    /// </summary>
+    private void ForEachRemotePlayer(Action<NetPlayer> run)
     {
         if (!Net.IsHost)
             return;
@@ -172,24 +192,20 @@ public sealed partial class Game
         {
             if (player.IsLocal || player.Input is null || player.Avatar is null)
                 continue;
-            if (player.Sandbox?.World != _sandboxes.State)
-                player.Sandbox = new SandboxState(_sandboxes.State);
             (_acting, _actingInput) = (player, player.Input);
             try
             {
-                run();
+                run(player);
             }
             finally
             {
                 (_acting, _actingInput) = (null, null);
             }
-
-            Net.SendSandboxUi(player, player.Sandbox);
         }
     }
 
     // What this player has (their hotbar, their tools): in a network game, what's on their own character.
-    private ComponentList<T> Mine<T>() where T : Component => Net.IsOnline ? MineOnline<T>() : Active<T>();
+    internal ComponentList<T> Mine<T>() where T : Component => Net.IsOnline ? MineOnline<T>() : Active<T>();
 
     private ComponentList<T> MineOnline<T>() where T : Component
     {
@@ -202,10 +218,10 @@ public sealed partial class Game
     }
 
     // A menu open on this machine (not counting another player's, whose tools the host is running for them).
-    private bool PanelOpenHere => _acting is null && TopPanel is not null;
+    internal bool PanelOpenHere => _acting is null && TopPanel is not null;
 
     // The view a HUD is laid out for: this machine's camera, or the screen of the player the host is acting for.
-    private (Vector2 Center, float HalfHeight, float Aspect) HudView()
+    internal (Vector2 Center, float HalfHeight, float Aspect) HudView()
     {
         if (_acting?.Input is { HasView: true } input)
             return input.View;
@@ -215,17 +231,19 @@ public sealed partial class Game
         return (center, size, ViewAspect);
     }
 
-    // True if the game is in first person and its player sees through this entity's eyes.
-    private bool LooksThrough(Entity entity) =>
-        FirstPersonView is { } view && (ViewerOf(view) == entity ||
-                                        (Net.IsOnline && entity.GetComponent<FirstPersonMovement>() is not null && view.Viewer?.Trim() == entity.Name));
-
-    /// <summary>A player's machine heard what the host's tools are telling its player (a notice, ports to pick).</summary>
-    internal void ShowSandboxUi(string? notice, float noticeLeft, Entity? picking, IReadOnlyList<string> ports, bool outputs)
+    /// <summary>
+    /// True if the game is seen through <paramref name="entity"/>'s eyes on its player's screen (see
+    /// <see cref="GameSystem.LooksThrough"/>): a first-person game's player, and online each player's own character.
+    /// </summary>
+    public bool LooksThrough(Entity entity)
     {
-        if (notice is not null)
-            (_sandboxes.State.Notice, _sandboxes.State.NoticeLeft) = (notice, noticeLeft);
-        _sandboxes.State.Picking = picking is not null && ports.Count > 0 ? (picking, ports, outputs) : null;
+        for (var i = 0; i < _systems.Count; i++)
+        {
+            if (_systems[i].SeesThrough(entity))
+                return true;
+        }
+
+        return false;
     }
 
     // ----- Helpers for Griff's components -----

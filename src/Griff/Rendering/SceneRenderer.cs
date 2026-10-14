@@ -51,7 +51,11 @@ public static class SceneRenderer
         var frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
         if (game is not null)
         {
-            foreach (var system in game.Systems.ToArray())
+            // A system that sees the world its own way (first person) draws it first; every system then draws over it.
+            var systems = game.Systems.ToArray();
+            foreach (var system in systems)
+                system.RunDrawView(frame);
+            foreach (var system in systems)
                 system.RunDraw(frame);
         }
 

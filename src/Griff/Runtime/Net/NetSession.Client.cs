@@ -226,17 +226,11 @@ public sealed partial class NetSession
                 case NetMessage.Shake:
                     _game.ShakeCamera(r.Float(), r.Float());
                     break;
-                case NetMessage.SandboxUi:
+                case NetMessage.HostCommand:
                 {
-                    var notice = r.String();
-                    var left = r.Float();
-                    var picking = MirrorEntity(r.VarUInt());
-                    var outputs = r.Bool();
-                    var ports = new List<string>();
-                    var count = r.VarUInt();
-                    for (var i = 0; i < count; i++)
-                        ports.Add(r.String() ?? "");
-                    _game.ShowSandboxUi(notice, left, picking, ports, outputs);
+                    var name = r.String() ?? "";
+                    var args = ReadData(ref r);
+                    _game.RunHostCommand(name, args);
                     break;
                 }
             }

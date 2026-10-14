@@ -6,7 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Tests;
 
-/// <summary>The Entity menu's presets that come from modules (see EntityPreset): each a command, and a tool for agents.</summary>
+/// <summary>
+/// The Entity menu's presets and actions that come from modules (see EntityPreset, EntityAction): each a command, and a tool
+/// for agents.
+/// </summary>
 public sealed class ModulePresetEditorTests
 {
     [Fact]
@@ -42,5 +45,26 @@ public sealed class ModulePresetEditorTests
         Assert.Equal(
             ["Entity.CreateCrate", "Entity.CreateGoal", "Entity.CreateMatchBoard", "Entity.CreateFallingBoard", "Entity.CreateDungeon", "Entity.CreateLight"],
             menu.Skip(menu.IndexOf("Entity.CreateCrate")).Take(6));
+    });
+
+    [Fact]
+    public void EachAction_IsACommand_OnTheSelection_DescribedByTheAction() => EditorHost.Run(services =>
+    {
+        var commands = services.GetRequiredService<CommandRegistry>();
+        var tools = services.GetRequiredService<AgentServer>().Tools;
+
+        Assert.NotEmpty(EntityAction.All);
+        foreach (var action in EntityAction.All)
+        {
+            var command = Assert.IsType<EntityActionCommand>(commands.Get(action.Id));
+            Assert.Same(action, command.Action);
+            Assert.Equal(action.Text, command.Text);
+            Assert.Equal(new MenuPlacement(Menus.Entity, 1, action.Order), command.Placement);
+            Assert.Equal(action.GetType(), command.DescribedBy);
+            Assert.False(command.CanExecute());
+            Assert.StartsWith(DocComments.Summary(action.GetType()).FirstSentence.TrimEnd('.'), tools[CommandTools.ToolName(action.Id)].Description);
+        }
+
+        Assert.Equal(Griff.Editor.Themes.Icons.Shuffle, commands.Get("Entity.GenerateDungeon").Icon);
     });
 }

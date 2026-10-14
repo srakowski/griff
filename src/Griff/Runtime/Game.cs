@@ -321,11 +321,28 @@ public sealed partial class Game : IGameContext
         foreach (var panel in panels)
             OpenPanel(panel);
 
-        // And dungeons go down to their next floor on theirs, at the start of the next frame.
-        var dungeons = Active<DungeonGenerator>().Where(d => d.NextFloorMessage?.Trim() == message).ToList();
-        foreach (var dungeon in dungeons)
-            dungeon.NextFloor();
-        return heard + counters.Count + players.Count + panels.Count + dungeons.Count;
+        // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
+        var done = 0;
+        var hearers = Scene.Active<IHearsMessages>();
+        if (hearers.Count > 0)
+        {
+            foreach (var hearer in hearers.ToList())
+            {
+                if (hearer is Component { Entity: { } entity } && Runs(entity) && hearer.Hear(message, data))
+                    done++;
+            }
+        }
+
+        return heard + counters.Count + players.Count + panels.Count + done;
+    }
+
+    /// <summary>The middle of an entity: its collider's, or its position.</summary>
+    internal static Vector2 CenterOf(Entity entity)
+    {
+        if (entity.GetComponent<Collider>() is { } collider)
+            return collider.WorldBounds.Center;
+        var position = entity.Transform.WorldPosition;
+        return new Vector2(position.X, position.Y);
     }
 
     private static int CountOf(object? data) => data switch
@@ -463,7 +480,7 @@ public sealed partial class Game : IGameContext
             behavior.RunDestroy();
         Net.Leave("The game closed.");
         SaveSettings();
-        SaveWorlds();
+        SystemsSceneEnding();
         StopSoundSources();
         Audio.StopAll();
     }
@@ -563,7 +580,7 @@ public sealed partial class Game : IGameContext
     // The lambdas here capture what's staying, so they're kept out of the step every frame takes.
     private void SwitchScene(string name)
     {
-        SaveWorlds();
+        SystemsSceneEnding();
 
         var next = SceneLoader!(name);
 
@@ -782,18 +799,7 @@ public sealed partial class Game : IGameContext
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
                 counter.Add(ItemCount(counter.Item) - counter.Value);
-            if (counter.CountGoals)
-            {
-                var goals = Showing<Goal>();
-                counter.Total = goals.Count;
-                counter.Add(goals.Count(g => g.IsCovered) - counter.Value);
-            }
-
-            if (counter.CountFloor && Showing<DungeonGenerator>().FirstOrDefault() is { } dungeon)
-                counter.Add(dungeon.Floor - counter.Value);
-            if (counter.CountMoves && Showing<MoveHistory>().FirstOrDefault() is { } history)
-                counter.Add(history.Moves - counter.Value);
-            else if (counter.CountMoves || counter.CountScore || counter.CountGem >= 0)
+            if (counter.CountsFromSource)
                 CountFromSource(counter);
 
             if (counter.Shown is null)
@@ -822,9 +828,10 @@ public sealed partial class Game : IGameContext
         }
     }
 
-    // A counter showing what a component in the scene counts (see ICounterSource): a match board's swaps out of its Moves,
-    // its score out of its Target Score or the gems of a kind cleared out of how many it asks for, a falling-block board's
-    // score. The first that counts what the counter asks for.
+    // A counter showing what a component in the scene counts (see ICounterSource): the goals covered out of how many there
+    // are, a move history's moves, a match board's swaps out of its Moves, its score out of its Target Score or the gems of
+    // a kind cleared out of how many it asks for, a falling-block board's score, a dungeon's floor. The first that counts
+    // what the counter asks for.
     private void CountFromSource(Counter counter)
     {
         foreach (var source in Scene.Active<ICounterSource>())
@@ -883,7 +890,7 @@ public sealed partial class Game : IGameContext
     private static bool IsWall(Entity entity) =>
         entity.GetComponent<Tilemap>() is { Solid: true } || entity.GetComponents<Collider>().Any(c => !c.IsTrigger);
 
-    private static string? LayerOf(Entity entity) =>
+    internal static string? LayerOf(Entity entity) =>
         entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;
 
     // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.

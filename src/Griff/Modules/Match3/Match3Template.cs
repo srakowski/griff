@@ -231,7 +231,7 @@ public sealed class Match3Template : ProjectTemplate
             row.GetComponent<ScreenAnchor>()!.Offset += new Vector2(0.9f, 0);
             var counter = row.AddComponent<Counter>();
             counter.Message = null;
-            counter.CountGem = kind;
+            counter.CountKind = kind;
             counter.Format = "{0} / {2}";
 
             var icon = new Entity($"{gemName} Icon");

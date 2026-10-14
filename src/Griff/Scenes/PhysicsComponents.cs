@@ -161,12 +161,12 @@ public sealed class Body : Component
 
     /// <summary>
     /// Holds it still where it is, like a wall: it doesn't fall or move, and other bodies bump into it. Untick it (or
-    /// grab it with <see cref="SandboxTools"/>) and it moves again. Welded to it, a whole contraption holds still.
+    /// grab it with the Sandbox Tools) and it moves again. Welded to it, a whole contraption holds still.
     /// </summary>
     public bool Frozen { get; set; }
 
     /// <summary>
-    /// How heavy it is, for pushes from a <see cref="Thruster"/> and for sharing movement with what it's welded or roped
+    /// How heavy it is, for pushes from a Thruster and for sharing movement with what it's welded or roped
     /// to: a heavy crate drags a light balloon down, a light one is lifted. 1 is a crate.
     /// </summary>
     public float Mass { get; set; } = 1;

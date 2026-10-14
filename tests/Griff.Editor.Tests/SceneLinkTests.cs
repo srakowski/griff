@@ -1,5 +1,6 @@
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.SceneView;
+using Griff.Modules.Contraptions;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -181,7 +181,7 @@ public interface IInput
     /// <summary>
     /// Set it to ask for the mouse, as a first-person game does: once the player clicks the game, the cursor is hidden and
     /// kept inside it so <see cref="MouseDelta"/> never runs out, until Esc (or switching away) gives it back.
-    /// <see cref="Scenes.FirstPersonMovement"/> asks for it by itself.
+    /// A first-person game's First Person Movement asks for it by itself.
     /// </summary>
     bool WantsMouseLock { get; set; }
 

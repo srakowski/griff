@@ -184,7 +184,7 @@ public class MatchGoalsTests
         var board = Board(Chain, b => (b.TargetScore, b.Moves, b.Collect) = (500, 10, "5:12"));
         var score = Counter(c => (c.CountScore, c.Format) = (true, "Score: {0} / {2}"));
         var moves = Counter(c => (c.CountMoves, c.Format) = (true, "Moves: {3}"));
-        var fives = Counter(c => (c.CountGem, c.Format) = (5, "{0} / {2}, {3} to go"));
+        var fives = Counter(c => (c.CountKind, c.Format) = (5, "{0} / {2}, {3} to go"));
         // Listens for the board's Score Message, as a plain score counter does.
         var heard = Counter(c => c.Format = "{0}");
         Run(Frame);

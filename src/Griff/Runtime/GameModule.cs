@@ -51,7 +51,8 @@ public abstract class GameModule
     /// <summary>
     /// Adds what the module runs to a game as it's made: its systems (<see cref="GameSetup.AddSystem{T}"/>), each step of
     /// theirs next to the step of the frame it has to follow or go before (<see cref="GameSetup.StepAfter"/>), and the
-    /// commands players' machines send the host (<see cref="GameSetup.OnNetCommand"/>).
+    /// commands players' machines send the host (<see cref="GameSetup.OnNetCommand"/>) and the host sends a player's
+    /// machine (<see cref="GameSetup.OnHostCommand"/>).
     /// </summary>
     protected internal abstract void AddTo(GameSetup game);
 
@@ -109,6 +110,13 @@ public sealed class GameSetup
     /// "griff.rts"): <paramref name="run"/> is called on the host with the player who asked and what they sent with it.
     /// </summary>
     public void OnNetCommand(string name, Action<NetPlayer?, object?> run) => Game.OnNetCommand(name, run);
+
+    /// <summary>
+    /// Something the host of a network game can tell one player's machine (what its run of that player's tools wants shown
+    /// there), by a name unique to the module: <paramref name="run"/> is called on that machine with what the host sent.
+    /// The host sends it with <c>Game.Net.SendCommandTo</c>.
+    /// </summary>
+    public void OnHostCommand(string name, Action<object?> run) => Game.OnHostCommand(name, run);
 
     private void AddStep(string anchor, bool before, string name, GameSystem system, Action run)
     {

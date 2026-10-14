@@ -4,6 +4,8 @@ using System.Numerics;
 using System.Windows;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
+using Griff.Modules.BlockWorlds;
+using Griff.Modules.Contraptions;
 using Griff.Rendering;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

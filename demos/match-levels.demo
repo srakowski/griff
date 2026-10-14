@@ -31,7 +31,7 @@ set: ScreenAnchor.Offset = 0, 0.5
 add: Counter
 set: Counter.CountMoves = true
 set: Counter.Format = Moves left: {3}
-explain: field:Counter.CountMoves | Count Moves | Count Moves counts the board's swaps, and brace three is how many are left. Count Gem does the same for the gems of one kind cleared.
+explain: field:Counter.CountMoves | Count Moves | Count Moves counts the board's swaps, and brace three is how many are left. Count Kind does the same for the gems of one kind cleared.
 deselect
 create: Panel
 rename: Won

@@ -37,7 +37,7 @@ internal enum NetMessage : byte
     Sound,
     Rumble,
     Shake,
-    SandboxUi,
+    HostCommand,
 
     // Players to host.
     Input = 32,

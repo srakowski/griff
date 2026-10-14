@@ -88,6 +88,65 @@ public sealed partial class Game
         return null;
     }
 
+    /// <summary>
+    /// The entity the game is seen through, when a system draws the world through someone's eyes (a first-person view's
+    /// player); null when the camera looks down on it. Sounds are heard from it, facing the way it faces.
+    /// </summary>
+    public Entity? Eyes
+    {
+        get
+        {
+            for (var i = 0; i < _systems.Count; i++)
+            {
+                if (_systems[i].SeenThrough is { } eyes)
+                    return eyes;
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>The buttons the systems show on the screen this frame (a hotbar's slots, building tools), each with what it does.</summary>
+    public IReadOnlyList<HudButton> HudButtons
+    {
+        get
+        {
+            List<HudButton>? all = null;
+            IReadOnlyList<HudButton> only = [];
+            foreach (var system in _systems)
+            {
+                var buttons = system.Buttons;
+                if (buttons.Count == 0)
+                    continue;
+                if (only.Count == 0)
+                {
+                    only = buttons;
+                    continue;
+                }
+
+                all ??= [.. only];
+                all.AddRange(buttons);
+            }
+
+            return all ?? only;
+        }
+    }
+
+    /// <summary>A short message a system's HUD is showing (something made, a tool's next step), or null.</summary>
+    public string? Notice
+    {
+        get
+        {
+            foreach (var system in _systems)
+            {
+                if (system.ShownNotice is { } notice)
+                    return notice;
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>Advances the game by <paramref name="seconds"/>, one <see cref="Frame"/> step after another.</summary>
     public void Tick(double seconds)
     {
@@ -108,7 +167,7 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        GameSystem[] core = [_levels, _puzzles, _drags, _panels, _firstPerson, _sandboxes];
+        GameSystem[] core = [_levels, _switches, _drags, _panels];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
         Step(FramePhase.Begin, "Panels", SyncPanels, _panels);
@@ -116,33 +175,24 @@ public sealed partial class Game
         Step(FramePhase.Begin, "Input", () => (Input as InputState)?.BeginFrame(Time.UnscaledDelta));
         Step(FramePhase.Begin, "Debug Drawing", Debug.BeginFrame);
         Step(FramePhase.Begin, "Network", () => Net.BeginFrame(Time.UnscaledDelta));
-
-        // Dungeons are made first, so what starts this frame starts on the floor (spawns included).
-        Step(FramePhase.Begin, "Dungeons", RunDungeons);
         Step(FramePhase.Begin, "Script Start", StartScripts);
 
-        Step(FramePhase.Logic, "Worlds", StartWorlds, _sandboxes);
         Step(FramePhase.Logic, "Menus", UpdateMenus);
         Step(FramePhase.Logic, "Lobby", RunLobby);
-        Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _puzzles);
+        Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _switches);
         Step(FramePhase.Logic, "Turns", RunTurns);
         Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
-
-        // Before anything moves, so a move taken back this frame isn't stepped on from where it was.
-        Step(FramePhase.Logic, "Move History", RunMoveHistory);
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
         Step(FramePhase.Logic, "Enemies", RunEnemies);
         Step(FramePhase.Logic, "Movement", RunMovement);
-        Step(FramePhase.Logic, "First Person", RunFirstPerson, _firstPerson);
         Step(FramePhase.Logic, "Item Uses", RunItemUses);
 
         Step(FramePhase.Scripts, "Scripts", UpdateScripts);
 
-        Step(FramePhase.Simulate, "Sandbox HUD", RunSandboxHud, _sandboxes);
-        Step(FramePhase.Simulate, "Blocks", RunBlocks, _sandboxes);
-        Step(FramePhase.Simulate, "Tools", RunTools, _sandboxes);
-        Step(FramePhase.Simulate, "Other Players' Tools", RunOtherPlayersTools, _sandboxes);
+        // Whatever systems show on the screen is laid out first, so a click on it isn't taken for one in the world.
+        Step(FramePhase.Simulate, "HUD", LayOutHuds);
+        Step(FramePhase.Simulate, "Other Players' Tools", RunOtherPlayersTools);
         Step(FramePhase.Simulate, "Dragging", RunDragging, _drags);
         Step(FramePhase.Simulate, "Attacks", RunAttacks);
         Step(FramePhase.Simulate, "Idle Grid Movers", PassIdleGridMovers);
@@ -162,19 +212,14 @@ public sealed partial class Game
         Step(FramePhase.Simulate, "Typewriters", RunTypewriters);
         Step(FramePhase.Simulate, "Pickup Spin", RunPickupSpin);
 
-        Step(FramePhase.Physics, "Thrusters", RunThrusters, _sandboxes);
-        Step(FramePhase.Physics, "Welds", GroupWelds, _sandboxes);
         Step(FramePhase.Physics, "Physics", StepPhysics);
-        Step(FramePhase.Physics, "Ropes", RunRopes, _sandboxes);
         Step(FramePhase.Physics, "Carrying", CarryHeld, _drags);
 
         Step(FramePhase.Resolve, "Pickups", RunPickups);
         Step(FramePhase.Resolve, "Checkpoints", RunCheckpoints);
         Step(FramePhase.Resolve, "Doors", RunDoors, _levels);
         Step(FramePhase.Resolve, "Dialogues", RunDialogues, _levels);
-        Step(FramePhase.Resolve, "Switches", RunSwitches, _puzzles);
-        Step(FramePhase.Resolve, "Goals", RunGoals, _puzzles);
-        Step(FramePhase.Resolve, "Wiring", RunWiring);
+        Step(FramePhase.Resolve, "Switches", RunSwitches, _switches);
         Step(FramePhase.Resolve, "Bouncers", RunBouncers);
         Step(FramePhase.Resolve, "Crumbles", RunCrumbles);
         Step(FramePhase.Resolve, "Touch Damage", RunTouchDamage);
@@ -288,17 +333,41 @@ public sealed partial class Game
         }
     }
 
-    // The host runs each other player's tools for them, as them.
+    private void LayOutHuds()
+    {
+        // By index: a button pressed while laying out may do anything.
+        for (var i = 0; i < _systems.Count; i++)
+            _systems[i].RunLayOutHud();
+    }
+
+    // The host runs each other player's tools for them, as them: each system lays out its HUD for their screen, then runs
+    // their controls.
     private void RunOtherPlayersTools()
     {
         if (!Net.IsHost)
             return;
-        ForEachRemotePlayer(() =>
+        ForEachRemotePlayer(player =>
         {
-            RunSandboxHud();
-            RunBlockPlayers();
-            RunTools();
+            LayOutHuds();
+            for (var i = 0; i < _systems.Count; i++)
+                _systems[i].RunForOtherPlayer(player);
         });
+    }
+
+    // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
+    private void RunTrails()
+    {
+        foreach (var trail in Scene.Active<Trail>())
+            trail.Advance(Time.Delta);
+    }
+
+    private void RunAnimatedTiles()
+    {
+        foreach (var tilemap in Scene.Active<Tilemap>())
+        {
+            if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
+                tilemap.AnimationTime += Time.Delta;
+        }
     }
 
     private void RunAnimations()
@@ -342,6 +411,13 @@ public sealed partial class Game
             _touches.Add((trigger, other));
             _touches.Add((other, trigger));
         }
+    }
+
+    // The scene is about to go (for another, or the game is stopping): systems keep what it leaves behind.
+    private void SystemsSceneEnding()
+    {
+        foreach (var system in _systems.ToList())
+            system.RunSceneEnding();
     }
 
     // A new scene: systems whose script stayed behind go, and the rest forget the last scene, Griff's first.

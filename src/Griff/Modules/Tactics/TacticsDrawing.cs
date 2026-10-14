@@ -14,7 +14,7 @@ internal static class TacticsDrawing
     public static void Draw(TacticsView view, FrameDrawing frame)
     {
         var game = frame.Game;
-        if (game.FirstPersonView is { } fp && game.ViewerOf(fp) is not null)
+        if (game.Eyes is not null)
             return;
         if (view.Controls is not { } controls)
             return;

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Griff.Agent;
 using Griff.Editing;
+using Griff.Modules.Contraptions;
 using Griff.Modules.Match3;
 using Griff.Modules.Strategy;
 using Griff.Scenes;
@@ -238,7 +239,7 @@ public class SceneToolsTests
         var described = Run("component_describe", """{"component": "MatchBoard"}""").Text;
         Assert.Contains("## Score and Goals", described);
         Assert.Contains("- collect: text = null. Gems to clear to win the level", described);
-        Assert.Contains("- countGem: a whole number = -1. Count the gems of this kind", Run("component_describe", """{"component": "Counter"}""").Text);
+        Assert.Contains("- countKind: a whole number = -1. Count the things of one kind", Run("component_describe", """{"component": "Counter"}""").Text);
     }
 
     [Fact]

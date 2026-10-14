@@ -999,12 +999,12 @@ internal sealed partial class StrategySystem : GameSystem
 
     private void Ready(string text)
     {
-        Notice(text);
+        ShowNotice(text);
         if (Rts.Commander?.ReadySound is { } sound && !string.IsNullOrWhiteSpace(sound))
             Game.Audio.Play(sound.Trim());
     }
 
-    internal void Notice(string text)
+    internal void ShowNotice(string text)
     {
         if (_orderingFor is not null)
             return;

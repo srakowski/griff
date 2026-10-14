@@ -22,13 +22,12 @@ public sealed class Ladder : Component
 /// (when its <see cref="Body"/>'s Gravity Scale is 0). It pushes crates in front of it in turn, and stops at walls. Needs
 /// a <see cref="Body"/> and a solid collider. Give it a layer (say "Crate") to have it hold a pressure plate down. With a
 /// <see cref="GridMovement"/> too it's a Sokoban crate: a grid mover stepping into it pushes it a cell (gliding along with
-/// it), unless a wall or another crate is in the way, and resting on a <see cref="Goal"/> covers it.
+/// it), unless a wall or another crate is in the way, and resting on a puzzle's Goal covers it.
 /// </summary>
 [Category("Level")]
 [Requires(typeof(Body))]
 [Requires(typeof(Collider), Note = "solid, not a trigger")]
 [WorksWith(typeof(GridMovement), Note = "pushed a cell at a time by grid movers")]
-[WorksWith(typeof(Goal), Note = "places on the grid to push it to")]
 [ComponentName("Griff.Pushable")]
 public sealed class Pushable : Component, IDrawEffect, IGridDriver
 {
@@ -53,7 +52,7 @@ public sealed class Pushable : Component, IDrawEffect, IGridDriver
     [Group("Grid")]
     public bool PushesRow { get; set; }
 
-    /// <summary>What kind of crate it is, e.g. "Red": a <see cref="Goal"/>'s Accepts names the kinds that cover it.</summary>
+    /// <summary>What kind of crate it is, e.g. "Red": a Goal's Accepts names the kinds that cover it.</summary>
     public string? Kind { get; set; }
 
     /// <summary>The goal it rests on, or null. Kept up to date while the game runs.</summary>

@@ -237,7 +237,7 @@ internal sealed partial class StrategySystem
             if (ctrl)
             {
                 Rts.Groups[n] = MySelected(commander).ToList();
-                Notice($"Group {n}: {Rts.Groups[n].Count} selected.");
+                ShowNotice($"Group {n}: {Rts.Groups[n].Count} selected.");
             }
             else if (Rts.Groups.TryGetValue(n, out var group))
             {
@@ -460,7 +460,7 @@ internal sealed partial class StrategySystem
                     buttons.Add(new CardButton(name, HotkeyOf(name, info?.Hotkey), tip, faction?.CanAfford(info?.Cost) ?? true, () =>
                     {
                         if (faction?.Lacking(info?.Cost) is { } lacking)
-                            Notice($"Not enough {lacking}.");
+                            ShowNotice($"Not enough {lacking}.");
                         else
                             (Rts.Placing, Rts.Targeting) = (building, null);
                     })
@@ -485,7 +485,7 @@ internal sealed partial class StrategySystem
                     var best = producers.Where(p => p.Options().Contains(unit, StringComparer.OrdinalIgnoreCase))
                         .OrderBy(p => p.QueueList.Count).FirstOrDefault() ?? producer;
                     if (Train(best, unit) is { } why)
-                        Notice(why);
+                        ShowNotice(why);
                     else if (_orderingFor is null && Rts.Commander?.OrderSound is { } sound && !string.IsNullOrWhiteSpace(sound))
                         Game.Audio.Play(sound.Trim());
                 })
@@ -534,7 +534,7 @@ internal sealed partial class StrategySystem
         {
             if (!Rts.PlaceOk)
             {
-                Notice("Can't build there.");
+                ShowNotice("Can't build there.");
                 return;
             }
 
@@ -557,7 +557,7 @@ internal sealed partial class StrategySystem
 
         if (!Rts.PlaceOk)
         {
-            Notice("Can't build there.");
+            ShowNotice("Can't build there.");
             return;
         }
 
@@ -565,7 +565,7 @@ internal sealed partial class StrategySystem
         var worker = workers.FirstOrDefault(w => w.Entity!.GetComponent<Unit>()?.Order != UnitOrder.Build) ?? workers[0];
         if (PlaceBuilding(worker, building, Rts.PlaceAt, out var why) is null)
         {
-            Notice(why ?? "Can't build there.");
+            ShowNotice(why ?? "Can't build there.");
             return;
         }
 

@@ -7,8 +7,10 @@ namespace Griff.Tests.Architecture;
 /// <summary>
 /// Guards Griff's modules (see GameModule): each genre lives in a folder of its own under src/Griff/Modules, in a namespace
 /// to match, registered once by its module class, and the core names none of them. A module plugs in through extension
-/// points instead: its systems and their steps (GameModule.AddTo), components that draw themselves and say what they
-/// send, and interfaces Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport).
+/// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw, DrawView, Eyes, LayOutHud,
+/// RunForPlayer, GridStepStarting, SceneEnding...), components that draw themselves and say what they send, and interfaces
+/// Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport, IHearsMessages,
+/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone.
 /// </summary>
 public sealed class ModuleTests
 {
@@ -44,6 +46,32 @@ public sealed class ModuleTests
         Assert.True(named.Count == 0,
             "Griff's core names a module's types, which it should reach through an extension point (a GameSystem's hooks, " +
             "the interfaces Griff's components call, drawing and network attributes):\n" + string.Join("\n", named.Distinct().Order()));
+    }
+
+    // A module stands alone: it builds on the core, not on another module, so any one can go without breaking the rest.
+    [Fact]
+    public void EachModule_NamesNoOtherModule()
+    {
+        var (compilation, trees) = LayerTests.Core();
+        var named = new List<string>();
+        foreach (var tree in trees.Where(IsModuleFile))
+        {
+            var own = $"{ModulesNamespace}.{FolderOf(tree)}";
+            var model = compilation.GetSemanticModel(tree);
+            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                var symbol = model.GetSymbolInfo(name).Symbol;
+                var used = symbol is INamespaceSymbol ns ? ns : (ISymbol?)LayerTests.Used(symbol);
+                if (used is null || !InModules(used))
+                    continue;
+                var where = used is INamespaceSymbol n ? n.ToDisplayString() : used.ContainingNamespace.ToDisplayString();
+                if (where != ModulesNamespace && where != own && !where.StartsWith(own + ".", StringComparison.Ordinal))
+                    named.Add($"{FolderOf(tree)}/{Path.GetFileName(tree.FilePath)}: {LayerTests.Name(used)}");
+            }
+        }
+
+        Assert.True(named.Count == 0,
+            "A module names another module's types; it should reach it through the core's extension points:\n" + string.Join("\n", named.Distinct().Order()));
     }
 
     [Fact]

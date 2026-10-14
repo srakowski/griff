@@ -51,11 +51,5 @@ public sealed class NetPlayer
 
     internal Dictionary<NetObject, Ghost> Ghosts { get; } = [];
 
-    /// <summary>What the sandbox tools keep for this player while the host runs them on their behalf.</summary>
-    internal SandboxState? Sandbox { get; set; }
-
     internal uint AvatarId { get; set; }
-
-    // What the host last told this player's machine about their sandbox tools, to send only changes.
-    internal string? LastUi { get; set; }
 }

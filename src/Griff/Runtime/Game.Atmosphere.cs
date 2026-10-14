@@ -148,11 +148,28 @@ public sealed partial class Game
             Audio.Play(sound, volume, 0, pitch);
     }
 
+    // Where a sound is heard from when the game is seen through someone's eyes (first person): their ears, turned the way
+    // they face.
+    private (float Loudness, float Pan)? EyesHearing(Vector2 position, float range)
+    {
+        if (Eyes is not { } viewer)
+            return null;
+        var at = viewer.Transform.WorldPosition;
+        var offset = position - new Vector2(at.X, at.Y);
+        var distance = offset.Length();
+        var angle = viewer.Transform.Rotation.Z * MathF.PI / 180;
+        var right = new Vector2(MathF.Sin(angle), -MathF.Cos(angle));
+        var pan = distance > 1e-3f ? Vector2.Dot(offset / distance, right) * 0.7f : 0;
+        var reach = range > 0 ? range : 24;
+        var t = Math.Clamp(distance / reach, 0, 1);
+        return ((1 - t) * (1 - t), pan);
+    }
+
     // How loud something at a position sounds (0 to 1) and which side it's on (-1 to 1), heard from the middle of the
     // view. With a range, it fades out to nothing that far away; without, it's full on screen and fades over a screen's width.
     private (float Loudness, float Pan) Hearing(Vector2 position, float range)
     {
-        if (FirstPersonHearing(position, range) is { } heard)
+        if (EyesHearing(position, range) is { } heard)
             return heard;
         var camera = SceneRenderer.FindCamera(Scene);
         var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;

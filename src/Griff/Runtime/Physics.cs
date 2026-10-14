@@ -180,7 +180,7 @@ public sealed class Physics
     }
 
     /// <summary>
-    /// Bodies welded together (see <see cref="Weld"/>), set by the game before each step: each group moves as one, with
+    /// Bodies welded together (a contraption's Welds), set by the game before each step: each group moves as one, with
     /// one velocity shared by weight, and its members don't collide with each other. An anchored group (welded to
     /// something without a body, or with a frozen member) holds still.
     /// </summary>

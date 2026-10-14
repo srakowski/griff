@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.Contraptions;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -432,8 +433,8 @@ public sealed class ContraptionTests
         }
     }
 
-    private static void Pick(Game game, InputState input, HudButtonKind kind, string label) =>
-        Click(game, input, game.SandboxButtons.Single(b => b.Kind == kind && b.Label == label).Rect.Center);
+    private static void Pick(Game game, InputState input, string kind, string label) =>
+        Click(game, input, game.HudButtons.Single(b => b.Kind == kind && b.Label == label).Rect.Center);
 
     [Fact]
     public void TheSpawnTool_PutsDownThePickedProp_WithANameOfItsOwn()
@@ -441,10 +442,10 @@ public sealed class ContraptionTests
         var scene = new Scene();
         var (game, input, _, _) = Sandbox(scene);
 
-        Pick(game, input, HudButtonKind.Tool, "Spawn");
+        Pick(game, input, ToolHud.Tool, "Spawn");
         Click(game, input, new Vector2(0, 3));
         Click(game, input, new Vector2(2, 3));
-        Pick(game, input, HudButtonKind.Prop, "Lamp");
+        Pick(game, input, ToolHud.Prop, "Lamp");
         Click(game, input, new Vector2(4, 3));
 
         Assert.Equal(["Crate", "Crate 2"], scene.Entities.Where(e => e.Name.StartsWith("Crate", StringComparison.Ordinal)).Select(e => e.Name));
@@ -490,14 +491,14 @@ public sealed class ContraptionTests
         var c = Crate(scene, "C", new Vector2(4, 0.5f));
         var (game, input, _, _) = Sandbox(scene);
 
-        Pick(game, input, HudButtonKind.Tool, "Weld");
+        Pick(game, input, ToolHud.Tool, "Weld");
         Click(game, input, At(a));
         Assert.Equal(a, game.ToolFirst);
         Click(game, input, At(b));
         var weld = Assert.Single(a.GetComponents<Weld>());
         Assert.Equal("B", weld.To);
 
-        Pick(game, input, HudButtonKind.Tool, "Rope");
+        Pick(game, input, ToolHud.Tool, "Rope");
         Click(game, input, At(b));
         Click(game, input, At(c));
         var rope = Assert.Single(b.GetComponents<Rope>());
@@ -518,12 +519,12 @@ public sealed class ContraptionTests
         gate.Entity.AddComponent<BoxCollider>();
         var (game, input, _, _) = Sandbox(scene);
 
-        Pick(game, input, HudButtonKind.Tool, "Wire");
+        Pick(game, input, ToolHud.Tool, "Wire");
         Click(game, input, new Vector2(0, 2));
         Assert.Equal(button, game.ToolFirst);
         Click(game, input, new Vector2(3, 2));
-        Assert.Equal(["A", "B", "Power", "Show"], game.SandboxButtons.Where(x => x.Kind == HudButtonKind.Port).Select(x => x.Label));
-        Pick(game, input, HudButtonKind.Port, "A");
+        Assert.Equal(["A", "B", "Power", "Show"], game.HudButtons.Where(x => x.Kind == ToolHud.Port).Select(x => x.Label));
+        Pick(game, input, ToolHud.Port, "A");
 
         var wire = Assert.Single(gate.Entity.GetComponents<Wire>());
         Assert.Equal(("A", "Button", "On"), (wire.Input, wire.From, wire.Output));
@@ -545,7 +546,7 @@ public sealed class ContraptionTests
         WireUp(b, "Power", "A", "Speed");
         var (game, input, player, _) = Sandbox(scene);
 
-        Pick(game, input, HudButtonKind.Tool, "Remove");
+        Pick(game, input, ToolHud.Tool, "Remove");
         Click(game, input, At(a));
         Click(game, input, At(player));
 
@@ -568,7 +569,7 @@ public sealed class ContraptionTests
         Assert.Equal(SandboxTool.Spawn, tools.Current);
 
         // A click on the spawn list picks a prop rather than spawning one under it.
-        Pick(game, input, HudButtonKind.Prop, "Crate");
+        Pick(game, input, ToolHud.Prop, "Crate");
         Assert.Null(game.Find("Crate"));
     }
 

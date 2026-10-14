@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
+using Griff.Modules.Dungeons;
 using Griff.Runtime;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

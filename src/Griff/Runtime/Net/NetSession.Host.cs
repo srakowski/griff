@@ -139,27 +139,18 @@ public sealed partial class NetSession
         return SpawnAvatar(player, fresh: true);
     }
 
-    /// <summary>Tells a player's machine what the host's run of their sandbox tools wants shown: a notice, ports to pick from.</summary>
-    internal void SendSandboxUi(NetPlayer player, SandboxState state)
+    /// <summary>
+    /// Tells one player's machine something (what the host's run of their tools wants shown there): <paramref name="name"/>
+    /// is run there with <paramref name="data"/> (see <see cref="GameSetup.OnHostCommand"/>), once they're in this scene.
+    /// </summary>
+    internal void SendCommandTo(NetPlayer player, string name, object? data)
     {
-        if (player.Connection is not { } connection || player.ReadyEpoch != _epoch)
+        if (!IsHost || player.Connection is not { } connection || player.ReadyEpoch != _epoch)
             return;
-        var notice = state.NoticeLeft > 0 ? state.Notice : null;
-        var picking = state.Picking is { } p && _known.GetValueOrDefault(p.Entity) is { } obj ? (obj.Id, p.Ports, p.Outputs) : default((uint, IReadOnlyList<string>, bool)?);
-        var key = $"{notice}|{picking?.Item1}|{picking?.Item3}|{(picking is { } k ? string.Join(",", k.Item2) : "")}";
-        if (key == player.LastUi)
-            return;
-        player.LastUi = key;
         var w = new NetWriter();
-        w.Byte((byte)NetMessage.SandboxUi);
-        w.String(notice);
-        w.Float(state.NoticeLeft);
-        w.VarUInt(picking?.Item1 ?? 0);
-        w.Bool(picking?.Item3 ?? false);
-        var ports = picking?.Item2 ?? [];
-        w.VarUInt((uint)ports.Count);
-        foreach (var port in ports)
-            w.String(port);
+        w.Byte((byte)NetMessage.HostCommand);
+        w.String(name);
+        WriteData(w, data);
         connection.SendReliable(w.Span);
     }
 

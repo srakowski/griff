@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.Dungeons;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;

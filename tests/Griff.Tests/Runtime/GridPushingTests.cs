@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.Puzzles;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;

@@ -62,14 +62,39 @@ public sealed class ComponentRegistry
 
         _byName.Add(descriptor.Name, descriptor);
         _byType.Add(type, descriptor);
+        LinkBack(descriptor);
         return descriptor;
     }
+
+    // Components that list themselves on another's Works With (WorksWithAttribute.Back), both ways round: this one on those
+    // registered already, and those that listed themselves on this one.
+    private void LinkBack(ComponentDescriptor descriptor)
+    {
+        var type = descriptor.Type;
+        foreach (var link in type.GetCustomAttributes<WorksWithAttribute>().Where(a => a.Back is not null))
+        {
+            _backLinks.Add((link.Type, new ComponentLink(type, link.Back) { Back = true }));
+            if (_byType.TryGetValue(link.Type, out var target))
+                target.AddWorksWith(new ComponentLink(type, link.Back) { Back = true });
+        }
+
+        foreach (var (target, link) in _backLinks)
+        {
+            if (target == type && _byType.ContainsKey(link.Type))
+                descriptor.AddWorksWith(link);
+        }
+    }
+
+    private readonly List<(Type Target, ComponentLink Link)> _backLinks = [];
 
     /// <summary>Removes a type, e.g. a script being replaced by a newer build. Built-ins can be removed too, so be careful.</summary>
     public bool Unregister(Type type)
     {
         if (!_byType.Remove(type, out var descriptor))
             return false;
+        _backLinks.RemoveAll(l => l.Link.Type == type);
+        foreach (var other in _byType.Values)
+            other.RemoveWorksWith(type);
         _byName.Remove(descriptor.Name);
         foreach (var former in descriptor.FormerNames)
             _byFormerName.Remove(former);

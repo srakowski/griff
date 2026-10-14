@@ -111,6 +111,12 @@ public sealed class WorksWithAttribute(Type type) : Attribute
 
     /// <summary>What the two do together, shown with the suggestion.</summary>
     public string? Note { get; init; }
+
+    /// <summary>
+    /// Lists this component on the other one's own list too, with this note: for a module's component (or a script's)
+    /// that goes well with one of Griff's core components, which can't name it, e.g. a Goal on a Pushable's list.
+    /// </summary>
+    public string? Back { get; init; }
 }
 
 /// <summary>

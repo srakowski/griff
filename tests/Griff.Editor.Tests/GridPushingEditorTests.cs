@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows.Threading;
 using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
+using Griff.Modules.Puzzles;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -1,4 +1,5 @@
 using Griff.Input;
+using Griff.Modules.Puzzles;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -125,10 +126,10 @@ public sealed class PuzzleTemplateTests : IDisposable
     public async Task EveryLevel_IsSolvedByPlayingIt_WhichOpensSolved_AndTheNextLevelsButton()
     {
         var (_, game) = await Create();
-        for (var i = 0; i < ProjectTemplates.PuzzleLevels.Count; i++)
+        for (var i = 0; i < PuzzleTemplate.PuzzleLevels.Count; i++)
         {
-            var (name, rows) = ProjectTemplates.PuzzleLevels[i];
-            game.LoadScene(ProjectTemplates.PuzzleLevelScene(i));
+            var (name, rows) = PuzzleTemplate.PuzzleLevels[i];
+            game.LoadScene(PuzzleTemplate.PuzzleLevelScene(i));
             Run(game, 0.2);
             Assert.Equal($"{i + 1}. {name}", game.Find("Level Name")!.GetComponent<Text>()!.Value);
             var goals = rows.Sum(r => r.Count(c => c is '.' or '*' or '+'));
@@ -151,10 +152,10 @@ public sealed class PuzzleTemplateTests : IDisposable
             Assert.All(game.FindAll("Goal"), g => Assert.True(g.GetComponent<Goal>()!.IsCovered));
 
             // Enter goes on to the next level, or back to the menu after the last.
-            var last = i == ProjectTemplates.PuzzleLevels.Count - 1;
+            var last = i == PuzzleTemplate.PuzzleLevels.Count - 1;
             Assert.Equal(last ? "Menu" : "Next", game.Focused!.Entity!.Name);
             Tap(game, Key.Enter, after: 0.8);
-            Assert.Equal(last ? "Main" : ProjectTemplates.PuzzleLevelScene(i + 1), game.SceneName);
+            Assert.Equal(last ? "Main" : PuzzleTemplate.PuzzleLevelScene(i + 1), game.SceneName);
         }
 
         // Every level's button on the menu works now.
@@ -166,7 +167,7 @@ public sealed class PuzzleTemplateTests : IDisposable
     {
         var (_, game) = await Create();
         var buttons = game.FindAll<Button>().Where(b => b.Entity!.Name.StartsWith("Level", StringComparison.Ordinal)).OrderBy(b => b.Entity!.Name).ToList();
-        Assert.Equal(ProjectTemplates.PuzzleLevels.Count, buttons.Count);
+        Assert.Equal(PuzzleTemplate.PuzzleLevels.Count, buttons.Count);
         Assert.True(buttons[0].IsUsable);
         Assert.All(buttons.Skip(1), b => Assert.False(b.IsUsable, b.Entity!.Name));
         Assert.Equal("1. First Push", buttons[0].Entity!.GetComponent<Text>()!.Value);
@@ -177,7 +178,7 @@ public sealed class PuzzleTemplateTests : IDisposable
         Assert.NotNull(game.Find("Player"));
 
         // Solving it opens the second.
-        foreach (var move in Solve(ProjectTemplates.PuzzleLevels[0].Rows))
+        foreach (var move in Solve(PuzzleTemplate.PuzzleLevels[0].Rows))
             Tap(game, Keys[move]);
         Run(game, 0.2);
         Assert.True(game.SaveData.Has("solved-level1"));
@@ -219,9 +220,9 @@ public sealed class PuzzleTemplateTests : IDisposable
     public async Task Levels_FillTheView_WithTheHudOnScreen()
     {
         var (_, game) = await Create();
-        for (var i = 0; i < ProjectTemplates.PuzzleLevels.Count; i++)
+        for (var i = 0; i < PuzzleTemplate.PuzzleLevels.Count; i++)
         {
-            game.LoadScene(ProjectTemplates.PuzzleLevelScene(i));
+            game.LoadScene(PuzzleTemplate.PuzzleLevelScene(i));
             Run(game, 0.1);
             var size = game.Find("Main Camera")!.GetComponent<Camera>()!.Size;
             var map = game.Find("Level")!.GetComponent<Tilemap>()!;
@@ -230,7 +231,7 @@ public sealed class PuzzleTemplateTests : IDisposable
             Assert.InRange(width / 2f, 0, size * 16 / 9f - 0.5f);
 
             // Walls are solid, the floor isn't, and the corners outside the walls are left empty.
-            var rows = ProjectTemplates.PuzzleLevels[i].Rows;
+            var rows = PuzzleTemplate.PuzzleLevels[i].Rows;
             for (var y = 0; y < rows.Length; y++)
             {
                 for (var x = 0; x < rows[y].Length; x++)
@@ -248,7 +249,7 @@ public sealed class PuzzleTemplateTests : IDisposable
         var project = await Project.CreateAsync(_root, "Puzzle", ProjectTemplates.Get("Puzzle"));
         var serializer = new SceneSerializer(_registry);
         var entities = project.FindScenes().SelectMany(p => serializer.LoadFromString(File.ReadAllText(p)).Entities).ToList();
-        Assert.Equal(1 + ProjectTemplates.PuzzleLevels.Count, project.FindScenes().Count());
+        Assert.Equal(1 + PuzzleTemplate.PuzzleLevels.Count, project.FindScenes().Count());
 
         var files = entities.SelectMany(e => e.Components)
             .SelectMany(c => c.GetType().GetProperties()

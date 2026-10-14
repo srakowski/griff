@@ -2,6 +2,7 @@ using System.Text.Json;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Inspector;
+using Griff.Modules.Contraptions;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 

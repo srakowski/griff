@@ -684,6 +684,18 @@ public static partial class ProjectTemplates
         return entity;
     }
 
+    // A line of help in a corner of the screen.
+    internal static Entity Help(string text, Anchor corner)
+    {
+        var help = Label("Help", Vector2.Zero, text, 0.32f, Color.FromBytes(0xE6, 0xE8, 0xEC));
+        help.GetComponent<Text>()!.Align = TextAlign.Left;
+        help.GetComponent<Text>()!.Order = 200;
+        var anchor = help.AddComponent<ScreenAnchor>();
+        anchor.Anchor = corner;
+        anchor.Offset = new Vector2(0.4f, corner == Anchor.TopLeft ? -0.45f : 0.45f);
+        return help;
+    }
+
     internal static Entity Label(string name, Vector2 position, string value, float size, Color color)
     {
         var entity = new Entity(name);

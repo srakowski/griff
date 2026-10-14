@@ -17,7 +17,7 @@ public sealed class ComponentDescriptor
         Properties = DiscoverProperties(type);
         Category = type.GetCustomAttribute<CategoryAttribute>()?.Name;
         Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
-        WorksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
+        _worksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
         FormerNames = type.GetCustomAttributes<FormerNameAttribute>(inherit: false)
             .SelectMany(a => a.Name.Contains('.') || type.Namespace is null ? [a.Name] : new[] { a.Name, $"{type.Namespace}.{a.Name}" })
             .Where(n => n != Name)
@@ -47,8 +47,22 @@ public sealed class ComponentDescriptor
     /// <summary>Components it needs on the same entity, from <see cref="RequiresAttribute"/>.</summary>
     public IReadOnlyList<ComponentLink> Requires { get; }
 
-    /// <summary>Components that go well with it, from <see cref="WorksWithAttribute"/>.</summary>
-    public IReadOnlyList<ComponentLink> WorksWith { get; }
+    /// <summary>
+    /// Components that go well with it, from <see cref="WorksWithAttribute"/>: its own, then those of other registered
+    /// components that list themselves here (<see cref="WorksWithAttribute.Back"/>).
+    /// </summary>
+    public IReadOnlyList<ComponentLink> WorksWith => _worksWith;
+
+    private readonly List<ComponentLink> _worksWith;
+
+    // Another component lists itself on this one's list (see WorksWithAttribute.Back), or stops doing so.
+    internal void AddWorksWith(ComponentLink link)
+    {
+        if (!_worksWith.Any(l => l.Type == link.Type))
+            _worksWith.Add(link);
+    }
+
+    internal void RemoveWorksWith(Type type) => _worksWith.RemoveAll(l => l.Type == type && l.Back);
 
     /// <summary>
     /// Names it was saved under before, from <see cref="FormerNameAttribute"/> (a short one also with the class's
@@ -151,6 +165,9 @@ public sealed class ComponentDescriptor
 /// </summary>
 public sealed record ComponentLink(Type Type, string? Note)
 {
+    // Put on the list by the other component (see WorksWithAttribute.Back).
+    internal bool Back { get; init; }
+
     /// <summary>True if <paramref name="entity"/> has a component of this type (or a subtype).</summary>
     public bool IsMetBy(Entity entity) => entity.Components.Any(c => Type.IsInstanceOfType(c));
 }

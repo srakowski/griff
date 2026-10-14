@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.FirstPerson;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;

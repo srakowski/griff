@@ -360,36 +360,37 @@ public sealed class Counter : Component
     public string? Item { get; set; }
 
     /// <summary>
-    /// Count the <see cref="Goal"/>s in the scene that are covered instead of a message, with <c>{2}</c> in
-    /// <see cref="Format"/> for how many goals there are, e.g. "Crates: {0} / {2}".
+    /// Count the goals in the scene that are covered instead of a message (a grid puzzle's Goals, with crates on them), with
+    /// <c>{2}</c> in <see cref="Format"/> for how many goals there are, e.g. "Crates: {0} / {2}".
     /// </summary>
     public bool CountGoals { get; set; }
 
     /// <summary>
-    /// Count the moves taken instead of a message: in a grid puzzle its <see cref="MoveHistory"/>'s, so an undo counts one
-    /// back, e.g. "Moves: {0}"; on a Match Board its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many
-    /// are left, e.g. "Moves: {3}".
+    /// Count the moves taken instead of a message: in a grid puzzle its Move History's, so an undo counts one back, e.g.
+    /// "Moves: {0}"; on a Match Board its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many are left, e.g.
+    /// "Moves: {3}".
     /// </summary>
     public bool CountMoves { get; set; }
 
     /// <summary>
-    /// Count the scene's Match Board's score instead of a message, with <c>{2}</c> its Target Score and <c>{3}</c> how
-    /// far there is to go, e.g. "Score: {0} / {2}"; or a Falling Board's (see <see cref="ICounterSource"/>).
+    /// Count the scene's score instead of a message: a Match Board's, with <c>{2}</c> its Target Score and <c>{3}</c> how
+    /// far there is to go, e.g. "Score: {0} / {2}"; or a Falling Board's.
     /// </summary>
     public bool CountScore { get; set; }
 
     /// <summary>
-    /// Count the floor the scene's <see cref="DungeonGenerator"/> is on instead of a message, e.g. "Floor {0}": it reads
-    /// the dungeon, so it's right even in a panel that was closed as the floors went by.
+    /// Count the floor the scene's dungeon (a Dungeon Generator) is on instead of a message, e.g. "Floor {0}": it reads the
+    /// dungeon, so it's right even in a panel that was closed as the floors went by.
     /// </summary>
     public bool CountFloor { get; set; }
 
     /// <summary>
-    /// Count the gems of this kind (a tile number) cleared on the scene's Match Board instead of a message,
-    /// with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}". -1
-    /// counts no gems.
+    /// Count the things of one kind (a number, such as a tile) instead of a message: on a Match Board, the gems of that tile
+    /// cleared, with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}".
+    /// -1 counts no kind.
     /// </summary>
-    public int CountGem { get; set; } = -1;
+    [FormerName("CountGem")]
+    public int CountKind { get; set; } = -1;
 
     /// <summary>
     /// What the count is out of, for a counter that counts goals, a match board's moves, score or gems (<c>{2}</c> in
@@ -434,7 +435,10 @@ public sealed class Counter : Component
     }
 
     // Counts an item, goals, moves, a board's score or gems rather than its Message.
-    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountGoals || CountMoves || CountScore || CountFloor || CountGem >= 0;
+    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountsFromSource;
+
+    // Counts what a component in the scene counts (see ICounterSource) rather than a message or an item.
+    internal bool CountsFromSource => CountGoals || CountMoves || CountScore || CountFloor || CountKind >= 0;
 
     // What the game last showed, and the entity's own scale (so a pop springs back to it).
     internal int? Shown { get; set; }
@@ -673,9 +677,10 @@ internal interface IHealthListener
 }
 
 /// <summary>
-/// A component a <see cref="Counter"/> can count from instead of a message, when it counts moves, a score or gems (Count
-/// Moves, Count Score, Count Gem): a match board's swaps, score or gems cleared, a falling-block board's score. The counter
-/// shows the first one in the scene that counts what it asks for. A script component can implement it too.
+/// A component a <see cref="Counter"/> can count from instead of a message, when it counts goals, moves, a score, a floor
+/// or things of a kind (Count Goals, Count Moves, Count Score, Count Floor, Count Kind): a puzzle's covered goals and moves,
+/// a match board's swaps, score or gems cleared, a falling-block board's score, a dungeon's floor. The counter shows the
+/// first one in the scene that counts what it asks for. A script component can implement it too.
 /// </summary>
 public interface ICounterSource
 {
@@ -684,4 +689,24 @@ public interface ICounterSource
     /// nothing), or null if this doesn't count what the counter asks for.
     /// </summary>
     (int Value, int Total)? CountFor(Counter counter);
+}
+
+/// <summary>
+/// A component that does something when a message is sent with <c>Game.Send</c>, with no script listening: a dungeon going
+/// down a floor on its Next Floor Message. Called where the game is run (offline, or on the host), for those on active
+/// entities. A script component can implement it too.
+/// </summary>
+public interface IHearsMessages
+{
+    /// <summary>Hears <paramref name="message"/> sent with <paramref name="data"/>; returns true if it did something with it.</summary>
+    bool Hear(string message, object? data);
+}
+
+/// <summary>
+/// A component that picks things with the number keys and the mouse wheel (a block world's hotbar): other controls on its
+/// entity that could use them too (building tools) leave them to it and are picked another way. A script component can
+/// implement it too.
+/// </summary>
+public interface IClaimsNumberKeys
+{
 }

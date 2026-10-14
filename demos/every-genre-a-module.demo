@@ -1,0 +1,49 @@
+title: Every genre a module
+intro: Block worlds, contraptions, dungeons, first person and grid puzzles are now modules too: each genre in one place, plugged into Griff's core through extension points, so the core names no genre at all.
+project: Empty | Module Garden
+
+chapter: Puzzles are a module | Goals and undo, from one folder
+say: Goals for crates and undo for grid puzzles used to be part of the game itself. Now they're the Puzzles module, with their own system, template and Entity menu item.
+create: Grid Player
+deselect
+create: Crate
+set: Transform.Position = 1, 0, 0
+deselect
+create: Goal
+set: Transform.Position = 3, 0, 0
+explain: component:Goal | From the Puzzles module | Create Goal still makes a goal, and the first one in a scene a move history too. Both come from the Puzzles module now.
+explain: component:MoveHistory | Undo and restart | Grid movement doesn't know about undo any more. It tells the game's systems a step is about to be taken, and the puzzle system remembers where everything was.
+deselect
+create: Text
+rename: Crates
+set: Transform.Position = 0, 3, 0
+add: Counter
+set: Counter.Count Goals = true
+set: Counter.Format = Crates: {0} / {2}
+explain: field:Counter.CountGoals | Counted through an interface | The counter asks whatever in the scene counts goals. A goal answers, the way a match board answers for its score.
+play
+wait: 0.5
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.6
+expectat: Crate = 3, 0
+expectvalue: Crates.Text.Value = Crates: 1 / 1
+explain: game | The crate on its goal | The counter shows one of one covered.
+tap: Z
+wait: 0.6
+expectat: Crate = 2, 0
+expectvalue: Crates.Text.Value = Crates: 0 / 1
+explain: game | One move taken back | Z puts the worker and the crate back where they were, and the count goes back with them.
+stop
+
+chapter: Dungeons are a module | Create Dungeon, and an action on the selection
+say: Dungeons moved the same way. Create Dungeon is the module's preset, and Generate Dungeon is a new kind of extension point: something a module does to the selected entity, which the editor makes into a menu command and a tool for agents.
+deselect
+create: Dungeon
+look: 0, 0, 18
+set: DungeonGenerator.Seed = 7
+menu: Entity > Generate Dungeon
+explain: scene | Generated in the editor | The same command as before, now found in the Dungeons module rather than written into the editor.
+explain: field:DungeonGenerator.NextFloorMessage | Hearing a message | A dungeon going down a floor on its message used to be a check inside the game's Send. Now the dungeon says it hears messages, as any component can.
+say: Block worlds, contraptions and first person are modules too, each drawing its own HUD and view through hooks any system can use. Turns, grid movement and switches stay in the core, because so much builds on them. And no module names another, so each genre stands on its own.

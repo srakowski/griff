@@ -1,5 +1,7 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.BlockWorlds;
+using Griff.Modules.FirstPerson;
 using Griff.Modules.Strategy;
 using Griff.Projects;
 using Griff.Runtime;

@@ -24,7 +24,7 @@ namespace Griff.Modules.Match3;
 /// </remarks>
 [Category("Gameplay")]
 [Requires(typeof(Tilemap), Note = "holds the gems")]
-[WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Count Moves) or the gems of a kind cleared (Count Gem)")]
+[WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Count Moves) or the gems of a kind cleared (Count Kind)")]
 [ComponentName("Griff.MatchBoard")]
 public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, INetState, ICounterSource
 {
@@ -36,7 +36,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     (int Value, int Total)? ICounterSource.CountFor(Counter counter) =>
         counter.CountMoves ? (Swaps, Moves)
         : counter.CountScore ? (Score, TargetScore)
-        : counter.CountGem >= 0 ? (ClearedOf(counter.CountGem), ToCollect(counter.CountGem))
+        : counter.CountKind >= 0 ? (ClearedOf(counter.CountKind), ToCollect(counter.CountKind))
         : null;
 
     private string? _gems = "0-5";

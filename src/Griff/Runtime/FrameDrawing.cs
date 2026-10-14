@@ -5,10 +5,10 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// A running game's frame as it's being drawn, handed to each <see cref="GameSystem"/> in turn (its Draw) once every
-/// entity has drawn itself: the systems add what the game knows of and no single entity draws (a strategy game's fog
-/// and HUD, a tactics game's reachable cells), change what's there (hide what's in the fog), or see the world their own
-/// way (first person).
+/// A running game's frame as it's being drawn, handed to each <see cref="GameSystem"/> in turn once every entity has
+/// drawn itself: first to see the world their own way (a first-person view, in DrawView), then to add what the game
+/// knows of and no single entity draws (a strategy game's fog and HUD, a tactics game's reachable cells) or change
+/// what's there (hide what's in the fog), in Draw.
 /// </summary>
 public sealed class FrameDrawing
 {

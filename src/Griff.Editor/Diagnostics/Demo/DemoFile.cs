@@ -9,6 +9,8 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
+using Griff.Modules.Contraptions;
+using Griff.Modules.FirstPerson;
 using Griff.Modules.Strategy;
 using Griff.Projects;
 
@@ -1074,7 +1076,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
         // The game didn't take the mouse (say the window isn't active): turn the viewer as the mouse would have.
         options.Log("FORCED mouselook: the game didn't take the mouse");
-        if (RunningGame.FirstPersonViewer is { } viewer && viewer.GetComponent<Griff.Scenes.FirstPersonMovement>() is { } movement)
+        if (RunningGame.FirstPersonViewer is { } viewer && viewer.GetComponent<FirstPersonMovement>() is { } movement)
             viewer.Transform.Rotation -= new System.Numerics.Vector3(0, 0, (float)(x * movement.MouseSensitivity));
         await options.Control.Delay(seconds * 1000);
     }
@@ -1091,7 +1093,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var sandbox = game.Find<Griff.Scenes.Inventory>() is { } inventory ? $"; carrying {string.Join(", ", inventory.Items)}" : "";
         if (game.Tools is { } tools)
             sandbox += $"; tool {tools.Current}{(game.ToolFirst is { } first ? $" after {first.Name}" : "")}{(game.Grabbed is { } held ? $" holding {held.Name}" : "")}";
-        if (game.SandboxNotice is { } notice)
+        if (game.Notice is { } notice)
             sandbox += $"; \"{notice}\"";
         options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}{sandbox}");
     }
@@ -1174,8 +1176,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             throw new InvalidOperationException($"{world.X}, {world.Y} is off screen; move the camera there first (minimap:).");
         if (RunningGame.StrategyHud?.Covers(world) == true)
             throw new InvalidOperationException($"{world.X}, {world.Y} is under the HUD; move the camera first (minimap:).");
-        if (RunningGame.SandboxButtons.Any(b => b.Rect.Contains(world)))
-            throw new InvalidOperationException($"{world.X}, {world.Y} is under the sandbox HUD (gamebutton: clicks its buttons).");
+        if (RunningGame.HudButtons.Any(b => b.Rect.Contains(world)))
+            throw new InvalidOperationException($"{world.X}, {world.Y} is under a HUD button (gamebutton: clicks them).");
     }
 
     /// <summary>Where the minimap shows a world point, on screen.</summary>
@@ -1238,12 +1240,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     private async Task<Point> SandboxButtonPoint(string label)
     {
         var (kind, name) = label.Contains(':') ? Split2(label, ':') : ("", label.Trim());
-        Griff.Runtime.HudButton? Find() => RunningGame.SandboxButtons.FirstOrDefault(b =>
-            b.Label.Equals(name, StringComparison.OrdinalIgnoreCase) && (kind.Length == 0 || b.Kind.ToString().Equals(kind, StringComparison.OrdinalIgnoreCase)));
+        Griff.Runtime.HudButton? Find() => RunningGame.HudButtons.FirstOrDefault(b =>
+            b.Label.Equals(name, StringComparison.OrdinalIgnoreCase) && (kind.Length == 0 || b.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase)));
         if (Find() is null)
             await Until(() => Find() is not null, 1500);
         var button = Find() ?? throw new InvalidOperationException(
-            $"No \"{label}\" on the sandbox HUD (it has {string.Join(", ", RunningGame.SandboxButtons.Select(b => b.Label))}).");
+            $"No \"{label}\" on the HUD (it has {string.Join(", ", RunningGame.HudButtons.Select(b => b.Label))}).");
         await Input.MoveTo(GameScreenPoint(button.Rect.Center));
         await Task.Delay(40);
         return GameScreenPoint((Find() ?? button).Rect.Center);
@@ -1255,7 +1257,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     /// </summary>
     private Rect HudRect(string part)
     {
-        if (RunningGame.StrategyHud is null && RunningGame.SandboxHud is not null)
+        if (RunningGame.StrategyHud is null && RunningGame.HudButtons.Count > 0)
             return SandboxHudRect(part);
         var hud = RunningGame.StrategyHud ?? throw new InvalidOperationException("The game has no strategy HUD (Commander).");
         var area = part.ToLowerInvariant() switch
@@ -1273,17 +1275,18 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     {
         var kind = part.ToLowerInvariant() switch
         {
-            "hotbar" => Griff.Runtime.HudButtonKind.Slot,
-            "crafting" => Griff.Runtime.HudButtonKind.Recipe,
-            "tools" => Griff.Runtime.HudButtonKind.Tool,
-            "props" => Griff.Runtime.HudButtonKind.Prop,
-            "ports" => Griff.Runtime.HudButtonKind.Port,
+            "hotbar" => Griff.Modules.BlockWorlds.BlockHud.Slot,
+            "crafting" => Griff.Modules.BlockWorlds.BlockHud.Recipe,
+            "tools" => ToolHud.Tool,
+            "props" => ToolHud.Prop,
+            "ports" => ToolHud.Port,
             _ => throw new FormatException($"Unknown HUD part \"{part}\" (hotbar, crafting, tools, props, ports)."),
         };
-        var rects = RunningGame.SandboxButtons.Where(b => b.Kind == kind).Select(b => b.Rect).ToList();
+        var rects = RunningGame.HudButtons.Where(b => b.Kind == kind).Select(b => b.Rect).ToList();
         if (rects.Count == 0)
             throw new InvalidOperationException($"The sandbox HUD isn't showing its {part}.");
-        var margin = RunningGame.SandboxHud!.Unit;
+        // A hundredth of the view's height, the HUD's unit.
+        var margin = (float)(Griff.Rendering.SceneRenderer.FindCamera(RunningGame.Scene)?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Rendering.SceneRenderer.DefaultCameraSize) * 2 / 100;
         var topLeft = new System.Numerics.Vector2(rects.Min(r => r.X) - margin, rects.Max(r => r.Top) + margin);
         var bottomRight = new System.Numerics.Vector2(rects.Max(r => r.Right) + margin, rects.Min(r => r.Y) - margin);
         return new Rect(GameScreenPoint(topLeft), GameScreenPoint(bottomRight));

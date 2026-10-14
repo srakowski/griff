@@ -122,15 +122,8 @@ internal static class TemplateSounds
                 case Inventory i when i.ItemUses.Count > 0:
                     Set(i.UseSound, s => i.UseSound = s, PowerUp);
                     break;
-                case DungeonGenerator d:
-                    Set(d.FloorSound, s => d.FloorSound = s, PowerUp);
-                    break;
                 case Shooter s:
                     Set(s.Sound, v => s.Sound = v, Shoot);
-                    break;
-                case Weapon w:
-                    Set(w.Sound, s => w.Sound = s, Shoot);
-                    Set(w.EmptySound, s => w.EmptySound = s, Select);
                     break;
                 case Checkpoint c:
                     Set(c.Sound, s => c.Sound = s, PowerUp);
@@ -152,20 +145,6 @@ internal static class TemplateSounds
                     break;
                 case Choice ch:
                     Set(ch.Sound, s => ch.Sound = s, Select);
-                    break;
-                case Blocks b:
-                    Set(b.DigSound, s => b.DigSound = s, Dig);
-                    Set(b.BreakSound, s => b.BreakSound = s, Hit);
-                    Set(b.PlaceSound, s => b.PlaceSound = s, Place);
-                    break;
-                case Crafting c:
-                    Set(c.Sound, s => c.Sound = s, PowerUp);
-                    break;
-                case SandboxTools t:
-                    Set(t.Sound, s => t.Sound = s, Place);
-                    break;
-                case WireButton w:
-                    Set(w.Sound, s => w.Sound = s, Switch);
                     break;
             }
         }

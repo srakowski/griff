@@ -1,5 +1,7 @@
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.BlockWorlds;
+using Griff.Modules.FirstPerson;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -293,7 +295,7 @@ public sealed class BlockWorldTests
         input.SetKey(Key.C, false);
         Run(game, input, Frame);
         Assert.True(crafting.IsOpen);
-        var row = Assert.Single(game.SandboxButtons, b => b.Kind == HudButtonKind.Recipe);
+        var row = Assert.Single(game.HudButtons, b => b.Kind == BlockHud.Recipe);
 
         input.MouseWorld = row.Rect.Center;
         input.SetMouseButton(MouseButton.Left, true);

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -120,6 +121,164 @@ public class FrameProfilerTests
         for (var i = 0; i < 2; i++)
             Assert.Null(counter.Count(scene));
         Assert.Equal(10, counter.Count(scene)!.Entities);
+    }
+
+    [Fact]
+    public void Sums_up_the_garbage_a_frame_makes_and_the_collections()
+    {
+        var profiler = new FrameProfiler(capacity: 10);
+        profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0, Allocated: 0));
+        profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0, Allocated: 3000, Collections: 1));
+        profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0, Allocated: 1000));
+
+        var summary = profiler.Summarize();
+        Assert.Equal(4000 / 3.0, summary.Allocated, 3);
+        Assert.Equal(3000, summary.MostAllocated);
+        Assert.Equal(1, summary.Collections);
+        Assert.Equal("1.3 KB", summary.Garbage);
+        Assert.Equal("0 B", FrameSummary.None.Garbage);
+        Assert.Equal("1.5 MB", FrameCost.Bytes(1.5 * 1024 * 1024));
+    }
+
+    [Fact]
+    public void Sums_up_what_each_thing_cost_a_frame_the_most_first()
+    {
+        var profiler = new FrameProfiler(capacity: 4);
+        var ms = Stopwatch.Frequency / 1000;
+
+        // Two frames: physics twice in the first (it adds up), bunnies in both; a step seen once, then gone.
+        profiler.AddCost("Physics", FrameCostKind.Step, 1 * ms, 0);
+        profiler.AddCost("Physics", FrameCostKind.Step, 1 * ms, 0);
+        profiler.AddCost(typeof(Bunny), 3 * ms, 200);
+        profiler.AddCost("Gone", FrameCostKind.Step, 5 * ms, 0);
+        profiler.Add(new FrameSample(16, 10, 1, 1, 1, 0));
+        profiler.AddCost(typeof(Bunny), 1 * ms, 0);
+        profiler.AddCost("Physics", FrameCostKind.Step, 2 * ms, 0);
+        profiler.Add(new FrameSample(16, 10, 1, 1, 1, 0));
+
+        var costs = profiler.Costs();
+        Assert.Equal(["Gone", "Bunny", "Physics"], costs.Select(c => c.Name));
+        var bunny = costs[1];
+        Assert.Equal(FrameCostKind.Script, bunny.Kind);
+        Assert.Equal(2, bunny.Ms, 2);
+        Assert.Equal(3, bunny.WorstMs, 2);
+        Assert.Equal(100, bunny.Allocated, 3);
+        Assert.Equal(2 / 12.0, bunny.Share, 3);
+        Assert.Equal("100 B", bunny.Garbage);
+        Assert.Equal("", costs[2].Garbage);
+        Assert.Equal("Bunny (script): 2.00 ms, 100 B", bunny.Label);
+
+        // Just the newest frame: what didn't run in it is left out.
+        Assert.Equal(["Physics", "Bunny"], profiler.Costs(frames: 1).Select(c => c.Name));
+
+        // Costs added and then dropped with BeginFrame don't count; Clear forgets them all.
+        profiler.AddCost("Gone", FrameCostKind.Step, 50 * ms, 0);
+        profiler.BeginFrame();
+        profiler.Add(new FrameSample(16, 10, 1, 1, 1, 0));
+        Assert.Empty(profiler.Costs(frames: 1));
+        profiler.Clear();
+        Assert.Empty(profiler.Costs());
+        profiler.Add(new FrameSample(16, 10, 1, 1, 1, 0));
+        Assert.Empty(profiler.Costs());
+    }
+
+    [Fact]
+    public void Keeping_track_of_costs_makes_no_garbage_of_its_own_once_it_has_seen_them()
+    {
+        var profiler = new FrameProfiler();
+        for (var frame = 0; frame < 2; frame++)
+        {
+            profiler.AddCost("Physics", FrameCostKind.Step, 10, 0);
+            profiler.AddCost(typeof(Bunny), 10, 0);
+            profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var frame = 0; frame < 100; frame++)
+        {
+            profiler.BeginFrame();
+            profiler.AddCost("Physics", FrameCostKind.Step, 10, 0);
+            profiler.AddCost(typeof(Bunny), 10, 0);
+            profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    [Fact]
+    public void A_profiled_game_times_each_kind_of_script_each_step_and_each_system_with_the_garbage_they_make()
+    {
+        var scene = new Scene();
+        for (var i = 0; i < 3; i++)
+        {
+            var bunny = new Entity($"Bunny {i}");
+            bunny.AddComponent(new Bunny());
+            scene.Add(bunny);
+        }
+
+        var litter = new Entity("Litter");
+        litter.AddComponent(new Litterbug());
+        scene.Add(litter);
+
+        var game = new Game(scene, new InputState());
+        var system = game.AddSystem(new Busy());
+
+        // Not profiled: nothing is timed.
+        var profiler = new FrameProfiler();
+        game.Tick(1 / 60.0);
+        profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        Assert.Empty(profiler.Costs());
+        profiler.Clear();
+
+        game.Profiler = profiler;
+        for (var i = 0; i < 3; i++)
+        {
+            profiler.BeginFrame();
+            game.Tick(1 / 60.0);
+            profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
+        }
+
+        var costs = profiler.Costs().ToDictionary(c => c.Name);
+        Assert.Equal(FrameCostKind.Script, costs["Bunny"].Kind);
+        Assert.Equal(FrameCostKind.Script, costs["Litterbug"].Kind);
+        Assert.Equal(FrameCostKind.System, costs["Busy"].Kind);
+        Assert.Equal(FrameCostKind.Step, costs["Physics"].Kind);
+        Assert.Equal(FrameCostKind.Step, costs["Animations"].Kind);
+        Assert.True(costs["Bunny"].Ms > 0);
+        Assert.Equal(4, system.Updates);
+
+        // The litterbug's garbage is its own: at least the 10,000 bytes it allocates in each of its Update and LateUpdate.
+        Assert.True(costs["Litterbug"].Allocated >= 20_000, $"{costs["Litterbug"].Allocated}");
+        Assert.True(costs["Bunny"].Allocated < 1000, $"{costs["Bunny"].Allocated}");
+
+        // The steps that run scripts are timed a kind of script at a time, not as steps of their own.
+        Assert.DoesNotContain("Scripts", costs.Keys);
+        Assert.DoesNotContain("Late Scripts", costs.Keys);
+        Assert.DoesNotContain("Fixed Scripts", costs.Keys);
+    }
+
+    public class Bunny : Behavior
+    {
+        protected override void Update() => Entity!.Transform.Position += new System.Numerics.Vector3(1, 0, 0);
+
+        protected override void FixedUpdate() => Entity!.Transform.Position -= new System.Numerics.Vector3(1, 0, 0);
+    }
+
+    public class Litterbug : Behavior
+    {
+        [DoNotSerialize]
+        public byte[]? Last { get; private set; }
+
+        protected override void Update() => Last = new byte[10_000];
+
+        protected override void LateUpdate() => Last = new byte[10_000];
+    }
+
+    public sealed class Busy : GameSystem
+    {
+        public int Updates { get; private set; }
+
+        protected override void Update() => Updates++;
     }
 
     [Fact]

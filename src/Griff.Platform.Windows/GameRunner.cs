@@ -133,14 +133,20 @@ public sealed class GameRunner : IDisposable
         // time is the game starting up.
         if (!IsPaused && !first && Game.Profiler is { } profiler)
         {
+            // The garbage counted is this thread's, the game's: the editor's own work between frames isn't counted.
+            profiler.BeginFrame();
             var steps = Game.Time.Frame;
+            var (allocated, collections) = (GC.GetAllocatedBytesForCurrentThread(), GC.CollectionCount(0));
             var started = Stopwatch.GetTimestamp();
             RunSafely(stepOnce: false, seconds);
-            var stepped = Stopwatch.GetTimestamp();
-            RenderLatest(out var built);
+            var (stepped, steppedAllocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            RenderLatest(out var built, out var builtAllocated);
             var drawn = Stopwatch.GetTimestamp();
+            profiler.AddCost("Build", FrameCostKind.Picture, built - stepped, builtAllocated - steppedAllocated);
+            profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, GC.GetAllocatedBytesForCurrentThread() - builtAllocated);
             profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
-                Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0));
+                Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0,
+                GC.GetAllocatedBytesForCurrentThread() - allocated, GC.CollectionCount(0) - collections));
             return;
         }
 
@@ -196,10 +202,11 @@ public sealed class GameRunner : IDisposable
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
     // and the last good frame stays up.
-    private void RenderLatest() => RenderLatest(out _);
+    private void RenderLatest() => RenderLatest(out _, out _);
 
-    // `built` is when the frame was built, before it's drawn (a Stopwatch timestamp).
-    private void RenderLatest(out long built)
+    // `built` is when the frame was built, before it's drawn (a Stopwatch timestamp), and `allocated` the bytes this thread
+    // had allocated by then.
+    private void RenderLatest(out long built, out long allocated)
     {
         RenderFrame frame;
         try
@@ -208,7 +215,7 @@ public sealed class GameRunner : IDisposable
         }
         catch (Exception ex)
         {
-            built = Stopwatch.GetTimestamp();
+            (built, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
             if (!_drawFaulted)
             {
                 _drawFaulted = true;
@@ -219,7 +226,7 @@ public sealed class GameRunner : IDisposable
             return;
         }
 
-        built = Stopwatch.GetTimestamp();
+        (built, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
         _drawFaulted = false;
         _lastFrame = frame;
         _surface.Render(_lastFrame);

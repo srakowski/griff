@@ -57,8 +57,16 @@ public sealed class ProfilerPanelTests
         profiler.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
         for (var i = 0; i < 10; i++)
-            profiler.Frames.Add(new FrameSample(20, 3, 4, 1, 1, 50));
+        {
+            profiler.Frames.AddCost("Physics", FrameCostKind.Step, System.Diagnostics.Stopwatch.Frequency / 1000, 64);
+            profiler.Frames.Add(new FrameSample(20, 3, 4, 1, 1, 50, Allocated: 2048));
+        }
+
         profiler.Refresh();
+        Assert.Equal("2.0 KB", profiler.Summary.Garbage);
+        var physics = Assert.Single(profiler.Costs);
+        Assert.Equal(("Physics", 1.0, 64.0), (physics.Name, Math.Round(physics.Ms, 3), physics.Allocated));
+        Assert.Contains(nameof(ProfilerPanel.Costs), changed);
         Assert.Equal(50, profiler.Summary.Fps, 3);
         Assert.Equal(3, profiler.Summary.StepMs, 3);
         Assert.Equal(50, profiler.Summary.Draws, 3);
@@ -69,6 +77,7 @@ public sealed class ProfilerPanelTests
         Wait(services.GetRequiredService<ClearProfilerCommand>().ExecuteAsync());
         Assert.Equal(0, profiler.Frames.Count);
         Assert.Same(FrameSummary.None, profiler.Summary);
+        Assert.Empty(profiler.Costs);
         Assert.Same(SceneCounts.None, profiler.Counts);
     });
 

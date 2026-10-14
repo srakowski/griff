@@ -9,16 +9,17 @@ namespace Griff.Editor.Features.Profiler;
 /// <summary>
 /// The Profiler panel: how the game playing in the Game tab is running. A graph of its last ten seconds of frames, each
 /// split into the game's steps, building the picture and drawing it (the rest is time to spare), the frame rate with its
-/// 1% low, and how many entities the scene holds with how many of each component the active ones have. It records while
-/// it's on screen (see <see cref="IsOnScreen"/>) and <see cref="IsRecording"/>; otherwise the game isn't timed at all.
+/// 1% low and the garbage a frame makes, what each kind of script and each of the game's steps costs a frame, and how
+/// many entities the scene holds with how many of each component the active ones have. It records while it's on screen
+/// (see <see cref="IsOnScreen"/>) and <see cref="IsRecording"/>; otherwise the game isn't timed at all.
 /// </summary>
-/// <remarks>
-/// <see cref="Components"/> is one row per kind of component, which is where what each costs a frame will go.
-/// </remarks>
 public sealed class ProfilerPanel : ToolPanel
 {
     /// <summary>How often what the panel shows catches up with the game while it records.</summary>
     public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(0.1);
+
+    /// <summary>Less time a frame than <see cref="Costs"/> shows, in milliseconds: it would show as 0.00.</summary>
+    public const double Negligible = 0.005;
 
     private readonly PlayMode _play;
     private readonly DispatcherTimer _timer;
@@ -29,6 +30,7 @@ public sealed class ProfilerPanel : ToolPanel
     // Counts the playing scene a slice each refresh, so a big one doesn't hold up a frame.
     private readonly SceneCounter _counter = new();
     private FrameSummary _summary = FrameSummary.None;
+    private IReadOnlyList<FrameCost> _costs = [];
     private SceneCounts _counts = SceneCounts.None;
 
     public ProfilerPanel(PlayMode play)
@@ -86,6 +88,19 @@ public sealed class ProfilerPanel : ToolPanel
         private set => SetProperty(ref _summary, value);
     }
 
+    /// <summary>
+    /// What each kind of script, each of the game's steps (physics, animations, particles...), each system a script added,
+    /// building and drawing the picture, and the editor's own work (rewind snapshots, its panels following the game) cost
+    /// a frame over the frames in the graph, the most first: the time each took on average and at worst, the garbage each
+    /// made, and its share of the frame's work. Those that took less than <see cref="Negligible"/> and made no
+    /// garbage (most of Griff's steps, in a game that doesn't use what they run) are left out.
+    /// </summary>
+    public IReadOnlyList<FrameCost> Costs
+    {
+        get => _costs;
+        private set => SetProperty(ref _costs, value);
+    }
+
     /// <summary>How many entities the playing scene holds and how many are active, counted a slice at a time while it records (a big scene's every second or two, so a frame isn't held up).</summary>
     public SceneCounts Counts
     {
@@ -116,6 +131,7 @@ public sealed class ProfilerPanel : ToolPanel
         _counter.Restart();
         _shown = -1;
         Summary = FrameSummary.None;
+        Costs = [];
         Counts = SceneCounts.None;
         Refresh();
     }
@@ -130,6 +146,7 @@ public sealed class ProfilerPanel : ToolPanel
         {
             _shown = Frames.Recorded;
             Summary = Frames.Summarize();
+            Costs = Frames.Costs().Where(c => c.Ms >= Negligible || c.Allocated >= 1).ToList();
             OnPropertyChanged(nameof(Version));
         }
 

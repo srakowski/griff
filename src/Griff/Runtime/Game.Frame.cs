@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -247,11 +248,37 @@ public sealed partial class Game
         _tickSeconds = seconds;
         // What moves in it remembers where it was as it began, to be drawn between the two.
         Scene.Step = Time.Frame + 1;
+        if (Profiler is { } profiler)
+        {
+            StepTimed(profiler);
+            return;
+        }
+
         foreach (var phase in Phases)
         {
             // Read again each phase: a system added in an earlier one (by a script's Start) runs this step.
             foreach (var step in _phases[(int)phase])
                 step.Run();
+        }
+    }
+
+    // The same, timing each step and the garbage it makes for a profiler. Scripts are timed a kind at a time, as they run.
+    private void StepTimed(FrameProfiler profiler)
+    {
+        foreach (var phase in Phases)
+        {
+            foreach (var step in _phases[(int)phase])
+            {
+                if (step.TimesItself)
+                {
+                    step.Run();
+                    continue;
+                }
+
+                var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+                step.Run();
+                profiler.AddCost(step.Name, step.CostKind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+            }
         }
     }
 
@@ -281,7 +308,7 @@ public sealed partial class Game
         Step(FramePhase.Logic, "Movement", RunMovement);
         Step(FramePhase.Logic, "Item Uses", RunItemUses);
 
-        Step(FramePhase.Scripts, "Scripts", UpdateScripts);
+        Step(FramePhase.Scripts, "Scripts", UpdateScripts, timesItself: true);
 
         // Whatever systems show on the screen is laid out first, so a click on it isn't taken for one in the world.
         Step(FramePhase.Simulate, "HUD", LayOutHuds);
@@ -306,7 +333,7 @@ public sealed partial class Game
         Step(FramePhase.Simulate, "Pickup Spin", RunPickupSpin);
 
         // Scripts push bodies just before they move.
-        Step(FramePhase.Physics, "Fixed Scripts", FixedUpdateScripts);
+        Step(FramePhase.Physics, "Fixed Scripts", FixedUpdateScripts, timesItself: true);
         Step(FramePhase.Physics, "Physics", StepPhysics);
         Step(FramePhase.Physics, "Carrying", CarryHeld, _drags);
 
@@ -329,7 +356,7 @@ public sealed partial class Game
 
         Step(FramePhase.Present, "Rooms", RunRooms);
         Step(FramePhase.Present, "Followers", RunFollowers);
-        Step(FramePhase.Present, "Late Scripts", LateUpdateScripts);
+        Step(FramePhase.Present, "Late Scripts", LateUpdateScripts, timesItself: true);
         Step(FramePhase.Present, "Screen Anchors", LayOutScreen);
         Step(FramePhase.Present, "Trails", RunTrails);
         Step(FramePhase.Present, "Lights", RunLights);
@@ -364,15 +391,15 @@ public sealed partial class Game
         BuildPhases();
     }
 
-    private void Step(FramePhase phase, string name, Action run, GameSystem? system = null) =>
-        _builtInSteps.Add(new FrameStep(phase, name, run, system));
+    private void Step(FramePhase phase, string name, Action run, GameSystem? system = null, bool timesItself = false) =>
+        _builtInSteps.Add(new FrameStep(phase, name, run, system) { TimesItself = timesItself });
 
     // Griff's steps, then each added system's Update, phase by phase.
     private void BuildPhases()
     {
         var added = AddedSystems.ToList();
         _phases = Phases.Select(phase => _builtInSteps.Where(s => s.Phase == phase)
-            .Concat(added.Where(s => s.Phase == phase).Select(s => new FrameStep(phase, s.Name, () => RunAdded(s), s)))
+            .Concat(added.Where(s => s.Phase == phase).Select(s => new FrameStep(phase, s.Name, () => RunAdded(s), s) { CostKind = FrameCostKind.System }))
             .ToArray()).ToArray();
         _frame = null;
     }
@@ -448,6 +475,12 @@ public sealed partial class Game
     // While a panel pauses the game, only the scripts on open panels run.
     private void UpdateScripts()
     {
+        if (Profiler is { } profiler)
+        {
+            RunScriptsTimed(profiler, _updating, BehaviorHooks.Update);
+            return;
+        }
+
         foreach (var behavior in _updating)
         {
             if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
@@ -461,6 +494,12 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0)
             return;
+        if (Profiler is { } profiler)
+        {
+            RunScriptsTimed(profiler, _fixedUpdating, BehaviorHooks.FixedUpdate);
+            return;
+        }
+
         foreach (var behavior in _fixedUpdating)
         {
             if (behavior.Entity?.Scene == Scene)
@@ -471,11 +510,53 @@ public sealed partial class Game
     // After everything has moved and the camera has followed, before what's pinned to the screen is put in place.
     private void LateUpdateScripts()
     {
+        if (Profiler is { } profiler)
+        {
+            RunScriptsTimed(profiler, _lateUpdating, BehaviorHooks.LateUpdate);
+            return;
+        }
+
         foreach (var behavior in _lateUpdating)
         {
             if (behavior.Entity?.Scene == Scene && (!PausedThisFrame || InOpenPanel(behavior.Entity)))
                 behavior.RunLateUpdate();
         }
+    }
+
+    // The scripts' `hook` as the loops above run it, timing each run of scripts of one kind (a scene's bunnies all at once)
+    // and the garbage they make, for a profiler: a script's own cost, whichever of its hooks it's spent in.
+    private void RunScriptsTimed(FrameProfiler profiler, Behavior[] scripts, BehaviorHooks hook)
+    {
+        Type? kind = null;
+        long started = 0, allocated = 0;
+        foreach (var behavior in scripts)
+        {
+            if (behavior.Entity?.Scene != Scene || (hook != BehaviorHooks.FixedUpdate && PausedThisFrame && !InOpenPanel(behavior.Entity)))
+                continue;
+            var type = behavior.GetType();
+            if (type != kind)
+            {
+                if (kind is not null)
+                    profiler.AddCost(kind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+                (kind, started, allocated) = (type, Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            }
+
+            switch (hook)
+            {
+                case BehaviorHooks.Update:
+                    behavior.RunUpdate();
+                    break;
+                case BehaviorHooks.FixedUpdate:
+                    behavior.RunFixedUpdate();
+                    break;
+                default:
+                    behavior.RunLateUpdate();
+                    break;
+            }
+        }
+
+        if (kind is not null)
+            profiler.AddCost(kind, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
     }
 
     private void LayOutHuds()

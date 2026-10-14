@@ -26,7 +26,8 @@
                 Padding="4,2"
                 BorderBrush="{DynamicResource Brush.Border.Subtle}"
                 BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal">
+            <!-- Wraps onto a second line when the panel is narrow -->
+            <WrapPanel Orientation="Horizontal">
                 <ToggleButton x:Name="RecordButton"
                               IsChecked="{Binding IsRecording, Mode=OneWay}"
                               Style="{StaticResource Style.ToggleButton.Toolbar}"
@@ -56,7 +57,13 @@
                 <TextBlock VerticalAlignment="Center" ToolTip="What drawing the frame takes, on average: handing it to the graphics card">
                     <Run Text="Draw" /><Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.DrawMs, StringFormat={} {0:0.00} ms, Mode=OneWay}" />
                 </TextBlock>
-            </StackPanel>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <TextBlock x:Name="Garbage" Margin="6,0,0,0" VerticalAlignment="Center"
+                           ToolTip="The garbage the game makes a frame, on average: memory it takes for a moment and lets go, which the garbage collector has to clear up, holding up a frame now and then. Then how many times the collector ran during the game's frames.">
+                    <Run Text="Garbage" /><Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.Garbage, StringFormat={} {0} a frame, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Summary.Collections, StringFormat={} · {0} collections, Mode=OneWay}" />
+                </TextBlock>
+            </WrapPanel>
         </Border>
 
         <!-- What the scene holds -->
@@ -94,6 +101,54 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Type.Name}" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Count, StringFormat={}{0:N0}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- What each script and step costs a frame -->
+        <Border DockPanel.Dock="Right"
+                Width="280"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="1,0,0,0">
+            <DockPanel x:Name="CostsPanel" Margin="8,6,8,4">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="52" />
+                        <ColumnDefinition Width="64" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Style.Text.Overline}" Text="COSTS A FRAME"
+                               ToolTip="What each kind of script, each of the game's steps, each system a script added, building and drawing the picture, and the editor's own work cost a frame on average over the graph's frames, the most first. Bars show each one's share of the frame's work." />
+                    <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource Style.Text.Overline}" Text="MS"
+                               ToolTip="The time it took a frame on average, in milliseconds" />
+                    <TextBlock Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource Style.Text.Overline}" Text="GARBAGE"
+                               ToolTip="The garbage it made a frame on average: memory it took for a moment and let go" />
+                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="CostList" ItemsSource="{Binding Costs}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="runtime:FrameCost">
+                                <Grid ToolTip="{Binding Label}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="52" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Its share of the frame's work -->
+                                    <Border Grid.ColumnSpan="3" Background="{DynamicResource Brush.Accent}" Opacity="0.22" RenderTransformOrigin="0,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform ScaleX="{Binding Share}" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <TextBlock Margin="2,0,0,0" TextTrimming="CharacterEllipsis">
+                                        <Run Text="{Binding Name, Mode=OneWay}" /><Run Foreground="{DynamicResource Brush.Text.Tertiary}" Text="{Binding Kind, StringFormat={}  {0}, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1" Style="{StaticResource Count}" Text="{Binding Ms, StringFormat={}{0:0.00}}" />
+                                    <TextBlock Grid.Column="2" Style="{StaticResource Count}" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Garbage}" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

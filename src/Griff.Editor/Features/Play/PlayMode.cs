@@ -483,11 +483,36 @@ public sealed class PlayMode : ObservableObject, IDisposable
     {
         if (_runtime is null || _runner is not { IsPaused: false } runner || runner.Game != sender || _timeline is not { } timeline)
             return;
-        timeline.Record(_runtime.Scene, runner.Game.Time.Total);
+        // The profiler shows what keeping rewind snapshots costs the game's frames, as the editor's own work.
+        if (runner.Game.Profiler is { } profiler)
+        {
+            var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
+            profiler.AddCost("Rewind", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+        }
+        else
+            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
         _position = timeline.Count - 1;
     }
 
+    // The profiler shows what the panels following the game cost its frames, as the editor's own work.
     private void OnTicked(object? sender, EventArgs e)
+    {
+        if (_runtime is null)
+            return;
+        if (_runner?.Game.Profiler is not { } profiler)
+        {
+            FollowGame();
+            return;
+        }
+
+        var (started, allocated) = (Stopwatch.GetTimestamp(), GC.GetAllocatedBytesForCurrentThread());
+        FollowGame();
+        profiler.AddCost("Editor Panels", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, GC.GetAllocatedBytesForCurrentThread() - allocated);
+    }
+
+    // The Inspector, the Hierarchy and the rewind bar keep up with the game.
+    private void FollowGame()
     {
         if (_runtime is null)
             return;

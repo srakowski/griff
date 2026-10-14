@@ -275,5 +275,10 @@ public sealed class FrameStep
 
     internal Action Run { get; }
 
+    // How a profiler counts it: as one of Griff's steps or a script's system; a step that runs scripts times each kind itself.
+    internal FrameCostKind CostKind { get; init; } = FrameCostKind.Step;
+
+    internal bool TimesItself { get; init; }
+
     public override string ToString() => $"{Phase}: {Name}";
 }

@@ -574,8 +574,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.CloseFloating(a);
                 break;
             case "expectprofiler":
-                // "expectprofiler: frames", "expectprofiler: recording = false" or "expectprofiler: entities = 2006": what the
-                // Profiler panel shows (it has recorded frames; it's recording or not; the entities it counted).
+                // "expectprofiler: frames", "expectprofiler: recording = false", "expectprofiler: entities = 2006" or
+                // "expectprofiler: cost = Bunny": what the Profiler panel shows (it has recorded frames; it's recording or not;
+                // the entities it counted; a cost for a kind of script or a step).
                 await ExpectProfiler(a);
                 break;
             case "expectlayout":
@@ -1552,7 +1553,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         return new Rect(scene.Left + (scene.Width - width) / 2, scene.Top + 30, width, scene.Height * 0.7);
     }
 
-    // "frames" (it has recorded some), "recording = true|false", or "entities = <n>" (as it last counted them).
+    // "frames" (it has recorded some), "recording = true|false", "entities = <n>" (as it last counted them), or "cost = <name>".
     private async Task ExpectProfiler(string text)
     {
         var profiler = DemoUi.Profiler;
@@ -1564,7 +1565,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 (() => profiler.IsRecording == recording, () => profiler.IsRecording ? "recording" : "not recording"),
             "entities" when int.TryParse(value, CultureInfo.InvariantCulture, out var entities) =>
                 (() => profiler.Counts.Entities == entities, () => $"{profiler.Counts.Entities} entities"),
-            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n>"),
+            "cost" when value.Length > 0 => (() => profiler.Costs.Any(c => c.Name == value),
+                () => $"costs for {string.Join(", ", profiler.Costs.Take(8).Select(c => c.Name))}"),
+            _ => throw new FormatException("expectprofiler: frames | recording = true|false | entities = <n> | cost = <script or step>"),
         };
         if (!await Until(holds, 5000))
             throw new InvalidOperationException($"Expected the Profiler to show {text}, but it shows {shows()}.");

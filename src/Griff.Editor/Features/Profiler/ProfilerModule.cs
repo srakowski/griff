@@ -21,8 +21,9 @@ public sealed class ProfilerModule : IEditorModule
 /// <summary>
 /// Shows the Profiler panel, which records how the game playing in the Game tab runs while it's on screen: a graph of the
 /// last ten seconds of frames (each split into the game's steps, building the picture and drawing it), the frame rate
-/// and its 1% low, and how many entities the scene holds and how many of each component the active ones have. Read
-/// what it shows with ui_inspect on ProfilerPanel (Summary, Counts).
+/// and its 1% low, the garbage a frame makes, what each kind of script and each step of the frame costs, and how many
+/// entities the scene holds and how many of each component the active ones have. Read what it shows with ui_inspect on
+/// ProfilerPanel (Summary, Costs, Counts).
 /// </summary>
 public sealed class ShowProfilerCommand(PanelLayout layout) : EditorCommand
 {

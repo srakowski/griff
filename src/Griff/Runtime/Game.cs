@@ -62,7 +62,9 @@ public sealed partial class Game : IGameContext
 
     /// <summary>
     /// Where the frames the game shows are timed, for a profiler (the editor's Profiler panel sets one while it's on
-    /// screen); null, as it starts, times nothing. The host that runs the game adds each frame it shows.
+    /// screen); null, as it starts, times nothing. The host that runs the game adds each frame it shows. While it's set,
+    /// each step the game takes also times each of its steps, each kind of script and each system a script added, with
+    /// the garbage each makes (see <see cref="FrameProfiler.Costs"/>).
     /// </summary>
     public FrameProfiler? Profiler { get; set; }
 

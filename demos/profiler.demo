@@ -1,5 +1,5 @@
 title: Profiler
-intro: See how a game runs while it plays: a graph of its frames, the frame rate, and what the scene holds.
+intro: See how a game runs while it plays: a graph of its frames, the frame rate, what each script and step costs, the garbage it makes, and what the scene holds.
 project: BunnyMark | Profiler
 
 chapter: Open the Profiler | Game > Profiler
@@ -15,6 +15,9 @@ expectprofiler: frames
 expectprofiler: entities = 5006
 explain: profiler:graph | Every frame | Each bar is one frame, the newest on the right. Orange is the game's steps, blue is building the picture, and green is drawing it. The grey above them is time to spare, up to the dashed line where a frame at sixty a second ends.
 explain: profiler:rate | The frame rate | Above it are the frame rate and its one percent low, the rate of the slowest frames, then the average and worst frame, and what each part takes.
+expectprofiler: cost = Bunny
+explain: profiler:garbage | Garbage | Then the garbage a frame makes: memory taken for a moment and let go, which the garbage collector has to clear up, holding up a frame now and then. A smooth game makes next to none.
+explain: profiler:costs | Costs a frame | Here is where the time goes. Every bunny's script together, Griff's own steps like physics and particles, building and drawing the picture, and the editor's own work, each with what it takes a frame and the garbage it makes, the most first.
 explain: profiler:counts | What the scene holds | Beside it, how many entities the scene holds, how many are active, and how many things were drawn in the last frame.
 explain: profiler:components | Components | Then how many of each component the active entities have, the most first.
 
@@ -28,4 +31,4 @@ click: profiler:clear
 expectprofiler: frames
 explain: profiler:graph | Afresh | Clear starts the graph again, and so does every Play.
 stop
-say: Agents can open the profiler, pause it, clear it and read its numbers too.
+say: Agents can open the profiler, pause it, clear it and read its numbers and costs too.

@@ -13,6 +13,7 @@ find out early what the browser needs; the export of whole games follows once sc
 on Windows.
 
 - [ ] Rasterize text without WPF.
+- [ ] Add a font picker in one go: every font property (Text, UI labels, buttons, dialogue, anything a component or script names a font with) gets a picker in the Inspector that previews each font in its own face and groups them as safe to ship (the built-in fonts, a small set of free fonts that ship with Griff for games (a pixel font, a clean sans, a serif, a mono, all SIL OFL or similar, unmodified and with their licenses), and font files in the project's Assets) and, set apart with a warning, fonts only installed on this PC (they aren't shipped, may be missing on players' machines and fall back to the built-in font on the web); picking a bundled free font copies it and its license into the project's Assets so the game ships it; and the exporter warns about any installed font a scene still names. Agents see the same choices through the MCP.
 - [ ] Put rendering behind a renderer interface, with OpenGL as its first implementation and WebGL for the browser.
 - [ ] Add a web export of whole games, with sound and saves, from the Build menu.
 

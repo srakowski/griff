@@ -26,3 +26,7 @@ Exported games' scripts are compiled optimized, like a Release build; the editor
 
 
 Building the editor also publishes the game players it exports games with (`dotnet build src/Griff.Editor/Griff.Editor.csproj`), and the tests are `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw. How the repository is laid out is in [Architecture](/docs/architecture/).
+
+## Releases
+
+A release is a version tag: `git tag v0.1.0` and `git push origin v0.1.0` (versions are `MAJOR.MINOR.PATCH`). The Release workflow (`.github/workflows/release.yml`) builds the editor in Release on Windows, runs both test projects, zips the editor with its game players, free fonts, LICENSE and `THIRD-PARTY-NOTICES.txt` as `Griff-0.1.0-win-x64.zip` (`tools\release.ps1 -Version 0.1.0` makes the same zip on your machine, in `artifacts\release`), and creates the GitHub Release with the commits since the previous tag as its notes (`tools\release-notes.ps1`). The [Releases](/releases/) page and the Download button follow the latest one by themselves. `site/README.md` has the maintainer's steps.

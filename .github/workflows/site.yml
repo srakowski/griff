@@ -1,5 +1,6 @@
 # Builds griff.games from site/ (Astro Starlight), checks it has no broken links, and deploys it to GitHub Pages on every
-# push to main. The repository's Pages source must be "GitHub Actions" (see site/README.md).
+# push to main, and after every release (the Release workflow starts it, so the Releases page lists the new one). The
+# repository's Pages source must be "GitHub Actions" (see site/README.md).
 name: Site
 
 on:
@@ -63,6 +64,9 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          # The Releases page reads the releases from GitHub when it is built; the token only lifts the API's rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
       - name: Check links

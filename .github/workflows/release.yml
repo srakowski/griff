@@ -1,0 +1,102 @@
+# Publishes an editor release when a version tag is pushed (git tag v0.1.0; git push origin v0.1.0): builds the editor in
+# Release, runs both test suites, zips the editor with its players, free fonts, LICENSE and third-party notices
+# (tools/release.ps1, which you can run yourself), and attaches the zip to a GitHub Release whose notes are the commits
+# since the previous tag (tools/release-notes.ps1). The site's Download button follows the latest release by itself.
+# See site/README.md, "Cutting a release".
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+# Building and testing only read the repository; the one job that publishes gets contents: write.
+permissions:
+  contents: read
+
+# A tag is released once; a second push of the same tag waits rather than racing it.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # All history and tags, so the notes can see the previous release.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # The runners have no GPU; Mesa's software OpenGL lets the player smoke test draw a frame.
+      - uses: ssciwr/setup-mesa-dist-win@v3
+        with:
+          deployment-choice: '1'
+
+      # The tag is vMAJOR.MINOR.PATCH, the version is the tag without its v.
+      - name: Build the release zip
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG.Substring(1)
+          ./tools/release.ps1 -Version $version
+
+      - name: Engine tests
+        run: dotnet test tests/Griff.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults
+
+      - name: Editor tests
+        if: ${{ !cancelled() }}
+        run: dotnet test tests/Griff.Editor.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults
+
+      - name: Write the release notes
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: ./tools/release-notes.ps1 -Tag $env:TAG -Out artifacts/release/release-notes.md
+
+      - name: Keep the test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
+
+      - name: Keep the zip and the notes for the release
+        uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/release-notes.md
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release and its zip
+      actions: write  # to start the Site workflow, which lists the new release
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: release
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" release/*.zip --verify-tag --title "Griff ${TAG#v}" --notes-file release/release-notes.md
+
+      # A release made with the workflow's own token starts no other workflow, so the site is started by hand.
+      - name: Rebuild the site, so the Releases page lists it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run site.yml --ref main

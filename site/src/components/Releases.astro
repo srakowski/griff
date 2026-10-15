@@ -1,0 +1,91 @@
+---
+// The Releases page's content: the newest release with its download, then the earlier ones, read from GitHub when the
+// site is built (src/data/releases.mjs). With no release yet (or none readable) it says so and points to the source and
+// to GitHub's releases page, which is where the Download button goes too.
+import { getReleases, repoUrl, latestUrl } from '../data/releases.mjs';
+
+const releases = await getReleases();
+const [latest, ...earlier] = releases;
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+---
+
+{
+	latest ? (
+		<>
+			<section class="release latest" aria-labelledby="latest">
+				<h2 id="latest">{latest.name}</h2>
+				<p class="meta">
+					The latest release{latest.prerelease && ', a pre-release'}, published {latest.date}.
+				</p>
+				<p class="downloads">
+					{latest.assets.map((asset) => (
+						<a class="sl-link-button primary" href={asset.url}>
+							Download {asset.name} ({megabytes(asset.size)})
+						</a>
+					))}
+				</p>
+				<p>
+					64-bit Windows, with the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>. Unzip it anywhere you can write to and run <code>Griff.Editor.exe</code>.
+				</p>
+				<div class="notes" set:html={latest.notes} />
+				<p>
+					<a href={latest.url}>This release on GitHub</a> · <a href={latestUrl}>Always the latest</a>
+				</p>
+			</section>
+
+			{earlier.length > 0 && <h2 id="earlier">Earlier releases</h2>}
+			{earlier.map((release) => (
+				<section class="release" aria-labelledby={`v${release.version}`}>
+					<h3 id={`v${release.version}`}>{release.name}</h3>
+					<p class="meta">
+						Published {release.date}{release.prerelease && ', a pre-release'}.{' '}
+						{release.assets.map((asset) => (
+							<a href={asset.url}>{asset.name}</a>
+						))}{' '}
+						· <a href={release.url}>Notes on GitHub</a>
+					</p>
+				</section>
+			))}
+		</>
+	) : (
+		<section class="release none" aria-labelledby="none">
+			<h2 id="none">No release yet</h2>
+			<p>
+				Griff's first release isn't out yet, or its list couldn't be read when this page was built. Releases appear here as soon as they are published, and <a href={latestUrl}>the latest one is always at GitHub</a>.
+			</p>
+			<p>
+				Until then you can build the editor from source in a minute: see <a href="/docs/getting-started/">Getting started</a>. The code is at <a href={repoUrl}>GitHub</a>.
+			</p>
+		</section>
+	)
+}
+
+<style>
+	.release {
+		margin-block: 1.5rem;
+	}
+	.latest {
+		padding: 1.25rem 1.5rem;
+		border: 1px solid var(--sl-color-hairline);
+		border-radius: 0.5rem;
+		background: var(--sl-color-bg-nav);
+	}
+	.latest :global(h2) {
+		margin-top: 0;
+	}
+	.meta {
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+	}
+	.downloads {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+	.notes {
+		margin-block: 1rem;
+	}
+	.notes :global(ul) {
+		padding-inline-start: 1.25rem;
+	}
+</style>

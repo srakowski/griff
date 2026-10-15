@@ -41,6 +41,7 @@ export default defineConfig({
 					items: [
 						{ label: 'What is Griff', slug: 'docs/what-is-griff' },
 						{ label: 'Getting started', slug: 'docs/getting-started' },
+						{ label: 'Releases', slug: 'releases' },
 					],
 				},
 				{

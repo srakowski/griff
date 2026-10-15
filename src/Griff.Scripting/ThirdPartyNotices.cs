@@ -51,6 +51,13 @@ public static class ThirdPartyNotices
             "(stb is offered under the MIT License or the Unlicense, as you prefer)", "StbImageSharp, StbTrueTypeSharp",
             name => name.Equals("StbImageSharp", StringComparison.OrdinalIgnoreCase) || name.Equals("StbTrueTypeSharp", StringComparison.OrdinalIgnoreCase),
             () => [Read("stb-LICENSE.txt")]),
+        // What the editor carries and a game doesn't (the release's notices; see tools/release-notices.cs).
+        new("AvalonEdit, by the SharpDevelop Team, under the MIT License", "ICSharpCode.AvalonEdit",
+            name => name.Equals("ICSharpCode.AvalonEdit", StringComparison.OrdinalIgnoreCase), () => [Read("AvalonEdit-LICENSE.txt")]),
+        new(".NET Community Toolkit, by the .NET Foundation and contributors, under the MIT License", "CommunityToolkit.Mvvm",
+            name => name.StartsWith("CommunityToolkit.", StringComparison.OrdinalIgnoreCase), () => [Read("CommunityToolkit-LICENSE.txt")]),
+        new("Humanizer, by the .NET Foundation and contributors, under the MIT License", "Humanizer",
+            name => name.Equals("Humanizer", StringComparison.OrdinalIgnoreCase), () => [Read("Humanizer-LICENSE.txt")]),
         .. BuiltInFonts.All.Select(font => new Component(font.About, "Griff.Fonts (the font is inside it)",
             name => name.Equals("Griff.Fonts", StringComparison.OrdinalIgnoreCase), () => [font.License])),
     ];
@@ -61,9 +68,10 @@ public static class ThirdPartyNotices
     /// <summary>
     /// The notices for <paramref name="files"/>: paths relative to the export (or inside a bundle), with '/' or '\'
     /// between folders. Griff's own and the game's need none, except copies of Griff's free fonts in the game's
-    /// <paramref name="assets"/> (its Assets folder, if given), which are listed with their licenses.
+    /// <paramref name="assets"/> (its Assets folder, if given), which are listed with their licenses. A different
+    /// <paramref name="introduction"/> (the editor release's) replaces the opening lines.
     /// </summary>
-    public static Notices For(IEnumerable<string> files, string? assets = null)
+    public static Notices For(IEnumerable<string> files, string? assets = null, string? introduction = null)
     {
         var used = new HashSet<Component>();
         var freeFonts = FreeFontsIn(assets);
@@ -82,8 +90,9 @@ public static class ThirdPartyNotices
         text.AppendLine("Third-party notices");
         text.AppendLine("===================");
         text.AppendLine();
-        text.AppendLine("This game was made with Griff. It carries software and fonts made by others, listed here with their");
-        text.AppendLine("licenses. What the game's maker made (its pictures, sounds, music, fonts and scripts) is theirs.");
+        text.AppendLine(introduction ?? "This game was made with Griff. It carries software and fonts made by others, listed here with their");
+        if (introduction is null)
+            text.AppendLine("licenses. What the game's maker made (its pictures, sounds, music, fonts and scripts) is theirs.");
         foreach (var component in Components.Where(used.Contains).Concat(freeFonts))
         {
             text.AppendLine();

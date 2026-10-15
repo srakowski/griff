@@ -7,7 +7,7 @@ Griff runs on 64-bit Windows.
 
 ## Get the editor
 
-Builds will be on the [releases page](https://github.com/srakowski/griff/releases). Until there's one there, build the editor from source: it takes the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and a minute.
+Download the latest zip from the [Releases](/releases/) page, unzip it anywhere you can write to and run `Griff.Editor.exe`. It needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). Or build the editor from source (before the first release, the only way): it takes the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and a minute.
 
 ```sh
 git clone https://github.com/srakowski/griff.git

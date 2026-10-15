@@ -8,6 +8,7 @@ astro.config.mjs        The site: title, header, sidebar, the theme's CSS and co
 src/content/docs/       The pages: index.mdx is the landing page, docs/ the guides (Markdown, one page a file),
                         reference/ the generated reference (git-ignored; see Reference below)
 src/components/         The header's logo and wordmark, the footer, the landing page's cards and screenshots
+src/data/releases.mjs   The releases, read from GitHub when the site is built, for the Releases page
 src/styles/griff.css    Griff's colours in light and dark, the wordmark's font, the landing page's layout
 src/assets/screens/     The screenshots (made by scripts/screenshots.mjs; see Screenshots below)
 public/                 Served as they are: the logo, the wordmark's font and its license, CNAME
@@ -134,3 +135,43 @@ are done, the Site workflow's deploy job fails (its build and link check still r
    certificate first, which can take up to 24 hours after the domain is set.
 9. Open https://griff.games and https://www.griff.games (which should land on the first), and try the search, the
    theme switch and the Download and GitHub buttons.
+
+## Cutting a release (maintainer)
+
+Releases are made by `.github/workflows/release.yml` when a version tag is pushed. Nothing is released from the
+repository's side: tagging and pushing is the maintainer's step.
+
+**Versions** are `MAJOR.MINOR.PATCH` and the tag is the version with a `v`: `v0.1.0`. Below 1.0 a new minor version
+(`v0.2.0`) is a release with new features, and may change how projects and scripts work; a patch (`v0.1.1`) only fixes.
+The first release is `v0.1.0`. The workflow ignores any other tag.
+
+1. **Check main is ready**: it is pushed, its CI run (Actions → CI) is green and its Site run deployed. The workflow runs
+   both test suites again and stops before releasing anything if one fails.
+2. **Tag and push** it:
+
+   ```sh
+   git switch main
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+3. **Watch** Actions → Release. It builds the editor in Release on Windows, runs the tests, zips the editor with its
+   game players, free fonts, LICENSE and `THIRD-PARTY-NOTICES.txt` as `Griff-0.1.0-win-x64.zip`, and creates the GitHub
+   Release with the commits since the previous tag as its notes. Then it starts the Site workflow, which lists the
+   release on https://griff.games/releases/. The Download button on the landing page goes to
+   `https://github.com/srakowski/griff/releases/latest`, so it follows the newest release by itself (and to the
+   releases page while there is none).
+4. **Look at it**: open the release on GitHub, edit its notes if you want to say more than the commit list does, and try the
+   zip (unzip, run `Griff.Editor.exe`).
+
+To redo a release that failed before it was created, delete the tag (`git push origin :refs/tags/v0.1.0`, then
+`git tag -d v0.1.0`) and tag again after fixing main; a created release has to be deleted on GitHub first.
+
+To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.1.0`
+makes the same zip in `artifacts\release\`, and `tools\release-notes.ps1 -Tag v0.1.0` writes the notes (it needs the tag).
+`tools/release-notices.cs` writes the notices from the files the editor folder holds and fails when a package has none
+on record: add its license to `src/Griff.Scripting/Notices/` and `ThirdPartyNotices`.
+
+The Releases page (`src/content/docs/releases.mdx`, `src/components/Releases.astro`) reads GitHub's list of releases when
+the site is built (`src/data/releases.mjs`), and says "No release yet" when there is none or GitHub can't be reached.
+`GRIFF_RELEASES_FILE=<json>` reads a saved copy of the API's answer instead, to see the page with releases offline.

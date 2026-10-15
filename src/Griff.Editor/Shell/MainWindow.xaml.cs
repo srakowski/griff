@@ -79,6 +79,13 @@ public partial class MainWindow : ChromeWindow
         panelHost.Attach(this, DockRoot, DocumentArea);
     }
 
+    /// <summary>Closes the window for a caller that has already asked about unsaved changes.</summary>
+    public void CloseConfirmed()
+    {
+        _closeConfirmed = true;
+        Close();
+    }
+
     protected override async void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);

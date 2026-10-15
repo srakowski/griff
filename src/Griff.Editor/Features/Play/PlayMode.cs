@@ -40,6 +40,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private Griff.Data.TableSet? _tables;
 
     /// <summary>How often the panels that show what the game changes (the Hierarchy, the Inspector) catch up while it plays.</summary>
+    /// <summary>
+    /// The most a step may spend copying the scene out so a script's exception can rewind to just before its step (see
+    /// <see cref="Timeline.RememberBudget"/>), for games played from now on. A quarter millisecond, which tests raise so a
+    /// slow machine doesn't decide whether a rewind is exact.
+    /// </summary>
+    public TimeSpan RememberBudget { get; set; } = Timeline.DefaultRememberBudget;
+
     public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(0.1);
 
     // Another player's game, in a window of its own, joined to the one in the Game tab.
@@ -233,7 +240,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         Surface.AssetRoot = project.AssetsPath;
         // A big scene is snapshotted less often: copying one out costs a step half a millisecond on average at most (a
         // Debug editor copies 20,000 BunnyMark bunnies out in under 3 ms, so ten times a second).
-        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5) };
+        _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5), RememberBudget = RememberBudget };
         _timeline.Record(copy, 0, force: true);
         _position = 0;
         _timeOffset = 0;

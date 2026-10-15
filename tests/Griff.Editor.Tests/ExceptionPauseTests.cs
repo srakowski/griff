@@ -111,6 +111,8 @@ public sealed class ExceptionPauseTests : IDisposable
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         var workspace = services.GetRequiredService<IWorkspace>();
+        // Copying the scene out is timed against a budget; a slow machine mustn't decide whether a rewind is exact.
+        services.GetRequiredService<PlayMode>().RememberBudget = TimeSpan.FromMinutes(1);
         Wait(workspace.CreateProjectAsync(_root, "Game"));
         var scripts = Path.Combine(workspace.Project!.AssetsPath, "Scripts");
         Directory.CreateDirectory(scripts);
@@ -265,6 +267,25 @@ public sealed class ExceptionPauseTests : IDisposable
         Assert.True(play.CanRewindBeforeException);
         play.Stop();
         Assert.False(play.CanRewindBeforeException);
+    });
+
+    [Fact]
+    public void Without_a_budget_for_remembering_the_rewind_goes_to_the_newest_snapshot_instead() => EditorHost.Run(CaptureLog, services =>
+    {
+        Open(services, "Thrower");
+        var debugger = services.GetRequiredService<Debugger>();
+        var play = services.GetRequiredService<PlayMode>();
+        play.RememberBudget = TimeSpan.Zero;
+
+        play.Play();
+        using (var stops = new AtEachStop(play, () => Assert.True(debugger.RewindBeforeException())))
+        {
+            for (var i = 0; i < 3; i++)
+                play.Step();
+            stops.Check();
+        }
+
+        Assert.False(play.ExceptionSnapshotExact);
     });
 
     [Fact]

@@ -129,6 +129,16 @@ public sealed class GlyphAtlasTests : IDisposable
     }
 
     [Fact]
+    public void ACharacterNoFontHas_DoesNotLeaveTheFallbackFontsLoaded()
+    {
+        InstalledFonts.Fallback('A');
+        var before = InstalledFonts.LoadedFaces;
+        Assert.Null(InstalledFonts.Fallback(0x10FFFD));
+        Assert.Null(InstalledFonts.Fallback(0x10FFFC));
+        Assert.Equal(before, InstalledFonts.LoadedFaces);
+    }
+
+    [Fact]
     public void FontFiles_InAssets_AreUsed_AndReadAgainWhenTheyChange()
     {
         var atlas = new GlyphAtlas(_assets);

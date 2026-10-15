@@ -13,7 +13,8 @@ namespace Griff.Editor.Features.Art;
 /// Adds one of the free fonts that ship with Griff for games to the project: Press Start 2P (pixel), Atkinson
 /// Hyperlegible Bold (a clean sans), Crimson Text SemiBold (a serif) or JetBrains Mono Bold (a mono), all under the SIL
 /// Open Font License. The font and its license are copied into Assets/Fonts, so the game ships them, and the selected
-/// entities' Text is set in it (one undo step). Pick the font by name, e.g. "Press Start 2P"; a Font then names it by its
+/// entities' Text is set in it (one undo step); for an agent, "entity" names which entity's Text to set (without it, the
+/// editor's selection is used, and none selected just adds the font). Pick the font by name, e.g. "Press Start 2P"; a Font then names it by its
 /// path ("Fonts/PressStart2P-Regular.ttf"). The Inspector's font picker does the same when one is picked there.
 /// </summary>
 public sealed class AddFreeFontCommand(IWorkspace workspace, ISelection selection, IDialogService dialogs, IStatusService status) : EditorCommand

@@ -127,6 +127,9 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Raised after scripts compile and are swapped in. Script components may have been replaced.</summary>
     event EventHandler<ReloadResult>? ScriptsReloaded;
 
+    /// <summary>Raised when the scene is to be brought to the front: by <see cref="ShowScene"/> (even when it's showing already, behind another tab) and when a project opens.</summary>
+    event EventHandler? SceneShown;
+
     /// <summary>Compiles the project's scripts now and swaps them into the open scenes if they build.</summary>
     ReloadResult? ReloadScripts();
 
@@ -203,6 +206,8 @@ public sealed class Workspace(
     public void AddLiveScenes(Func<IEnumerable<Scene>> scenes) => _liveScenes.Add(scenes);
 
     public event EventHandler<ReloadResult>? ScriptsReloaded;
+
+    public event EventHandler? SceneShown;
 
     public ReloadResult? ReloadScripts()
     {
@@ -311,8 +316,10 @@ public sealed class Workspace(
 
     public void ShowScene()
     {
-        if (!IsPlaying)
-            SetScene(_scene);
+        if (IsPlaying)
+            return;
+        SetScene(_scene);
+        SceneShown?.Invoke(this, EventArgs.Empty);
     }
 
     public void Show(SceneDocument document)
@@ -606,6 +613,7 @@ public sealed class Workspace(
             : project.FindScenes().FirstOrDefault();
 
         SetScene(scenePath is null ? await CreateSceneAsync(project) : await LoadSceneAsync(scenePath));
+        SceneShown?.Invoke(this, EventArgs.Empty);
         status.Show($"Opened {project.Name}");
         logger.LogInformation("Opened project {Name}", project.Name);
     }

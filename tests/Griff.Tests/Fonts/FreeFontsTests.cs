@@ -70,8 +70,10 @@ public sealed class FreeFontsTests : IDisposable
 
         // Someone's own file of that name is left alone.
         File.WriteAllText(Path.Combine(_assets, "Fonts", "CrimsonText-SemiBold.ttf"), "mine");
-        Assert.Throws<IOException>(() => FreeFonts.Serif.AddTo(_assets));
+        Assert.Equal("Fonts/CrimsonText-SemiBold-2.ttf", FreeFonts.Serif.AddTo(_assets));
+        Assert.Equal("Fonts/CrimsonText-SemiBold-2.ttf", FreeFonts.Serif.AddTo(_assets));
         Assert.Equal("mine", File.ReadAllText(Path.Combine(_assets, "Fonts", "CrimsonText-SemiBold.ttf")));
+        Assert.True(FreeFonts.Serif.IsCopy(Path.Combine(_assets, "Fonts", "CrimsonText-SemiBold-2.ttf")));
     }
 
     [Fact]

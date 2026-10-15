@@ -66,20 +66,30 @@ public sealed class FreeFont
     /// <summary>
     /// Copies the font and its license into <paramref name="assetRoot"/>'s <see cref="FreeFonts.AssetFolder"/> (unless
     /// they're there already) and returns the font's path in Assets, which a Text's Font is set to. A different file
-    /// already at that path is left alone and throws.
+    /// already at that path is left alone: the font goes beside it under a free name ("PressStart2P-Regular-2.ttf").
     /// </summary>
     public string AddTo(string assetRoot)
     {
         var folder = Directory.CreateDirectory(Path.Combine(assetRoot, FreeFonts.AssetFolder)).FullName;
-        var font = Path.Combine(folder, FileName);
-        if (!File.Exists(font))
-            File.Copy(FilePath, font);
-        else if (!IsCopy(font))
-            throw new IOException($"Assets already has a different {FreeFonts.AssetFolder}/{FileName}; rename or move it to add {Name}.");
+        var name = FileName;
+        for (var n = 2; ; n++)
+        {
+            var existing = Path.Combine(folder, name);
+            if (!File.Exists(existing))
+            {
+                File.Copy(FilePath, existing);
+                break;
+            }
+
+            if (IsCopy(existing))
+                break;
+            name = Path.GetFileNameWithoutExtension(FileName) + "-" + n + Path.GetExtension(FileName);
+        }
+
         var license = Path.Combine(folder, LicenseFile);
         if (!File.Exists(license))
             File.Copy(LicensePath, license);
-        return AssetPath;
+        return FreeFonts.AssetFolder + "/" + name;
     }
 
     /// <summary>True when <paramref name="file"/> is this font, byte for byte (an unchanged copy).</summary>

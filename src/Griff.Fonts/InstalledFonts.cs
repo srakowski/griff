@@ -18,6 +18,7 @@ public static class InstalledFonts
     private static readonly ConcurrentDictionary<string, FontFace?> s_faces = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Lazy<IReadOnlyList<string>> s_sorted = new(() => s_families.Value.Keys.Order(StringComparer.OrdinalIgnoreCase).ToList());
     private static readonly ConcurrentDictionary<int, FontFace?> s_fallbacks = new();
+    private static readonly ConcurrentDictionary<string, System.Collections.BitArray?> s_coverage = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Lazy<IReadOnlyList<string>> s_fallbackFamilies = new(FallbackOrder);
 
     /// <summary>The installed font families, by name, in order (read from the folders the first time it's asked).</summary>
@@ -31,14 +32,40 @@ public static class InstalledFonts
     /// </summary>
     public static FontFace? Fallback(int codepoint) => s_fallbacks.GetOrAdd(codepoint, c =>
     {
+        // Which characters a family has is indexed once (a bit each, 25 KB) with its face let go again; only a family that has
+        // the character is kept loaded, so a character nobody has doesn't leave every fallback font in memory (~100 MB).
         foreach (var family in s_fallbackFamilies.Value)
         {
-            if (Find(family) is { } face && face.GlyphOf(c) > 0)
+            if (Covers(family, c) && Find(family) is { } face)
                 return face;
         }
 
         return null;
     });
+
+    private const int IndexedCodepoints = 0x32400; // through the planes with assigned characters
+
+    private static bool Covers(string family, int codepoint)
+    {
+        var coverage = s_coverage.GetOrAdd(family.Trim(), name =>
+        {
+            if (s_faces.TryGetValue(name, out var kept) && kept is not null)
+                return Index(kept);
+            return Load(name) is { } face ? Index(face) : null;
+        });
+        return coverage is not null && codepoint >= 0 && codepoint < IndexedCodepoints && coverage[codepoint];
+    }
+
+    private static System.Collections.BitArray Index(FontFace face)
+    {
+        var bits = new System.Collections.BitArray(IndexedCodepoints);
+        for (var c = 0; c < IndexedCodepoints; c++)
+            bits[c] = face.GlyphOf(c) > 0;
+        return bits;
+    }
+
+    /// <summary>How many installed fonts are loaded and kept now (the ones asked for by name, and the fallbacks that drew a character).</summary>
+    public static int LoadedFaces => s_faces.Count(f => f.Value is not null);
 
     /// <summary>
     /// The installed fonts characters are looked for in, in order: Windows' fonts for the scripts and symbols the built-in
@@ -68,7 +95,9 @@ public static class InstalledFonts
     /// The installed family's face nearest semibold and upright (heavier wins a tie), or null if no family has that name.
     /// The folders are read the first time a name is asked for.
     /// </summary>
-    public static FontFace? Find(string family) => s_faces.GetOrAdd(family.Trim(), name =>
+    public static FontFace? Find(string family) => s_faces.GetOrAdd(family.Trim(), Load);
+
+    private static FontFace? Load(string name)
     {
         if (!s_families.Value.TryGetValue(name, out var candidates))
             return null;
@@ -85,7 +114,7 @@ public static class InstalledFonts
         }
 
         return null;
-    });
+    }
 
     private sealed record Candidate(string Path, int Weight, bool Italic);
 

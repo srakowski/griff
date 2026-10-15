@@ -150,7 +150,10 @@ public sealed class Timeline
     /// set): a scene that takes longer isn't remembered between snapshots, and <see cref="KeepRemembered"/> falls back to
     /// the newest snapshot.
     /// </summary>
-    public TimeSpan RememberBudget { get; init; } = TimeSpan.FromMilliseconds(0.25);
+    public TimeSpan RememberBudget { get; init; } = DefaultRememberBudget;
+
+    /// <summary>A quarter millisecond: the <see cref="RememberBudget"/> unless set.</summary>
+    public static readonly TimeSpan DefaultRememberBudget = TimeSpan.FromMilliseconds(0.25);
 
     /// <summary>
     /// Remembers the scene as it is between two steps (after a step that took no snapshot), so that if the next step goes

@@ -27,6 +27,12 @@ public sealed class PrefabTabs(IWorkspace workspace)
         _sceneTab = sceneTab;
         _sceneView = sceneView;
         ((INotifyCollectionChanged)workspace.Prefabs).CollectionChanged += OnPrefabsChanged;
+        workspace.SceneShown += (_, _) =>
+        {
+            Follow();
+            if (!workspace.IsPlaying && workspace.Scene is { IsPrefab: false })
+                tabs.SelectedItem = sceneTab;
+        };
         workspace.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(IWorkspace.Scene))

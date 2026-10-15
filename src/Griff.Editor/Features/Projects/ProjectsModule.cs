@@ -65,7 +65,7 @@ public sealed class OpenProjectCommand(IWorkspace workspace, IDialogService dial
 
 /// <summary>Closes the editor (asking to save unsaved changes first).</summary>
 [Destructive]
-public sealed class ExitCommand : EditorCommand
+public sealed class ExitCommand(IWorkspace workspace) : EditorCommand
 {
     public override string Id => "App.Exit";
     public override string Text => "E_xit";
@@ -75,10 +75,20 @@ public sealed class ExitCommand : EditorCommand
     public override string? GestureText => "Alt+F4";
     public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 9, Order: 0);
 
-    // Closing the window routes through MainWindow.OnClosing, which handles unsaved changes.
-    protected override Task ExecuteCoreAsync()
+    // The unsaved-changes questions are asked here, where the command can wait for the answer (and an agent can give it),
+    // then the window closes without asking again.
+    protected override async Task ExecuteCoreAsync()
     {
-        Application.Current.MainWindow?.Close();
-        return Task.CompletedTask;
+        if (await workspace.ConfirmCloseProjectAsync())
+            CloseWindow();
+    }
+
+    /// <summary>Closes the editor's window once the questions are answered.</summary>
+    private static void CloseWindow()
+    {
+        if (Application.Current?.MainWindow is Griff.Editor.Shell.MainWindow window)
+            window.CloseConfirmed();
+        else
+            Application.Current?.MainWindow?.Close();
     }
 }

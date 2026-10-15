@@ -2,7 +2,7 @@ title: Falling blocks
 intro: A board where pieces of four fall, slide, turn and lock, and full rows clear. No code.
 project: Empty | Block Drop
 
-chapter: A falling board | Entity > Create Falling Board
+chapter: A falling board | Entity > Genres > Falling Blocks > Falling Board
 select: Main Camera
 set: Camera.Size = 11
 deselect

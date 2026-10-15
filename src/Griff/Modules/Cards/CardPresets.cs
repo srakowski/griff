@@ -10,6 +10,7 @@ namespace Griff.Modules.Cards;
 /// and a discard pile on the right (which the deck shuffles back in when it runs out), so it plays straight away: drag a
 /// card onto the zone, or click the deck to draw. All in one undo step.
 /// </summary>
+[Category("Cards")]
 public sealed class DeckPreset : EntityPreset
 {
     public override string Id => "Entity.CreateDeck";
@@ -17,6 +18,8 @@ public sealed class DeckPreset : EntityPreset
     public override string Text => "Create Deck";
 
     public override int Order => 26;
+
+    public override string? Icon => "Copy";
 
     public override string EntityName(Scene scene) => CardNames.Free(scene, "Deck");
 
@@ -81,6 +84,7 @@ public sealed class DeckPreset : EntityPreset
 /// Creates a play zone: a place on the table, 9 by 2.8, that cards from any hand are played onto in a row by dragging
 /// them there. Set what it Accepts and its Limit to make rules of it.
 /// </summary>
+[Category("Cards")]
 public sealed class PlayZonePreset : EntityPreset
 {
     public override string Id => "Entity.CreatePlayZone";
@@ -88,6 +92,8 @@ public sealed class PlayZonePreset : EntityPreset
     public override string Text => "Create Play Zone";
 
     public override int Order => 27;
+
+    public override string? Icon => "Zone";
 
     public override string EntityName(Scene scene) => CardNames.Free(scene, "Play Zone");
 
@@ -107,6 +113,7 @@ public sealed class PlayZonePreset : EntityPreset
 /// Creates a card: inside the deck, hand or play zone picked (or one a card picked is in), otherwise on its own. Set its
 /// Title, Text, Value, Kind and Color in the Inspector.
 /// </summary>
+[Category("Cards")]
 public sealed class CardPreset : EntityPreset
 {
     public override string Id => "Entity.CreateCard";
@@ -114,6 +121,8 @@ public sealed class CardPreset : EntityPreset
     public override string Text => "Create Card";
 
     public override int Order => 28;
+
+    public override string? Icon => "Card";
 
     public override string EntityName(Scene scene) => CardNames.Free(scene, "Card");
 

@@ -59,7 +59,7 @@ set: BumpAttack.Layers = Player
 explain: component:BumpAttack | A monster's Bump Attack | The slime chases the player right into its cell, so with a Bump Attack on the Player layer, it hits the player too.
 deselect
 create: Turn Order
-explain: menu:Entity | Create Turn Order | And a turn order: everything moves when the player moves.
+explain: menu:Entity | Gameplay, Turn Order | And a turn order: everything moves when the player moves.
 
 chapter: Fight | Turn by turn
 play

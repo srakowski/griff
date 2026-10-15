@@ -59,11 +59,16 @@ const flat = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // ----- Checking a script against the generated reference -----
 
-// The editor's menus and their commands, from reference/commands.md: { entity: Set of flattened item names }.
+// The editor's menus and their commands, from reference/commands.md: { entity: Set of flattened item names }. What the
+// Entity menu makes is listed by its category ("Characters > Grid Enemy", "Genres > Match-3 > Match Board"), kept in
+// `made` by its own name too (gridenemy gives "Characters > Grid Enemy"), for `create:` lines.
+let menuIndex;
 function menus() {
+	if (menuIndex !== undefined) return menuIndex;
 	const commands = join(reference, 'commands.md');
-	if (!existsSync(commands)) return null;
+	if (!existsSync(commands)) return (menuIndex = null);
 	const found = new Map();
+	const made = new Map();
 	let menu = null;
 	for (const line of readFileSync(commands, 'utf8').split(/\r?\n/)) {
 		const heading = line.match(/^## (.+) menu$/);
@@ -72,10 +77,18 @@ function menus() {
 		if (menu && row && row[1] !== 'Command' && !row[1].startsWith('---')) {
 			if (!found.has(menu)) found.set(menu, new Set());
 			found.get(menu).add(flat(row[1]));
+			const path = split(row[1], '>');
+			if (menu === 'entity' && path.length > 1) made.set(flat(path[path.length - 1]), path.join(' > '));
 		}
 	}
-	return found;
+	found.made = made;
+	return (menuIndex = found);
 }
+
+// Where the Entity menu lists something it makes: "Characters > Grid Enemy" for "Grid Enemy" (or "Create Grid Enemy"),
+// "Genres > Match-3 > Match Board" for a module's.
+const madeName = (thing) => thing.replace(/^Create /, '');
+const madePath = (thing) => menus()?.made.get(flat(madeName(thing))) ?? madeName(thing);
 
 function component(name) {
 	const file = join(reference, 'components', `${flat(name)}.md`);
@@ -90,10 +103,12 @@ function lint(tutorial, lines) {
 	const menuHas = (menu, item) => index.get(flat(menu))?.has(flat(item)) ?? false;
 	for (const line of lines) {
 		if (line.command === 'menu') {
-			const [menu, item] = split(line.arg, '>');
-			if (!menuHas(menu, item ?? '')) complain(line, `no "${item}" in the ${menu} menu`);
+			// "Entity > Characters > Grid Enemy": the item in a submenu, as the reference lists it.
+			const [menu, ...path] = split(line.arg, '>');
+			const item = path.join(' > ');
+			if (!menuHas(menu, item)) complain(line, `no "${item}" in the ${menu} menu`);
 		} else if (line.command === 'create') {
-			if (!menuHas('Entity', line.arg.startsWith('Create ') ? line.arg : `Create ${line.arg}`)) complain(line, 'no such Entity > Create command');
+			if (!index.made.has(flat(madeName(line.arg)))) complain(line, 'nothing the Entity menu makes is called that');
 		} else if (line.command === 'add' || line.command === 'expectcomponents') {
 			const names = line.command === 'add' ? [line.arg] : split(line.arg.slice(line.arg.indexOf('=') + 1), ',');
 			for (const name of names) if (flat(name) !== 'transform' && !component(name)) complain(line, `no component called ${name}`);
@@ -126,7 +141,7 @@ function stepText(line) {
 		case 'menu':
 			return `Choose ${arrows(a)}.`;
 		case 'create':
-			return `Choose **Entity** → **Create ${escape(a.replace(/^Create /, ''))}**.`;
+			return `Choose ${arrows(`Entity > ${madePath(a)}`)}.`;
 		case 'select':
 			return `Select **${escape(a)}** in the Hierarchy.`;
 		case 'rename':

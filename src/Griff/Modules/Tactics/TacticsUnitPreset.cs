@@ -5,13 +5,15 @@ using Griff.Scenes;
 namespace Griff.Modules.Tactics;
 
 /// <summary>
-/// Creates a tactics unit: a box sprite in its side's color with a collider, a <see cref="Body"/> without gravity, a
+/// Creates a tactics unit that walks up to four cells a turn and hits whatever is next to it. It's a box sprite in its
+/// side's color with a collider, a <see cref="Body"/> without gravity, a
 /// <see cref="GridMovement"/>, a <see cref="Health"/> of 3, a <see cref="TacticsUnit"/> and a <see cref="TurnTaker"/> with
 /// one action, on whichever side has the fewest units so far, so creating a few makes two even teams facing each other.
 /// A scene with no turn order gets one (Blue, played by you, and Red, played by the computer; clear its Computer Sides for
 /// two people taking turns at one keyboard) with an End Turn button, and one with no <see cref="TacticsControls"/> gets
 /// those, to pick units with the mouse. All in one undo step.
 /// </summary>
+[Category("Tactics")]
 public sealed class TacticsUnitPreset : EntityPreset
 {
     // The colors of the first sides, in turn order; any further sides are gray.
@@ -26,6 +28,8 @@ public sealed class TacticsUnitPreset : EntityPreset
     public override string Text => "Create Tactics Unit";
 
     public override int Order => 16;
+
+    public override string? Icon => "Arrow";
 
     public override string EntityName(Scene scene) => $"{Side(scene).Name} Unit";
 

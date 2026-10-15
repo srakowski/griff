@@ -15,7 +15,8 @@ namespace Griff.Editor.Features.Agent;
 /// <summary>
 /// Every editor command as a tool: what's in the menus and on the toolbar, named by the command's id
 /// (<c>Entity.CreatePlatformerPlayer</c> is the tool <c>Entity_CreatePlatformerPlayer</c>) and described by its
-/// <c>///</c> summary and where it sits in the menus. A feature that adds a command to the editor has added a tool; nothing
+/// <c>///</c> summary and where it sits in the menus (for what makes things, its category there: Entity &gt; Characters &gt;
+/// Grid Enemy). A feature that adds a command to the editor has added a tool; nothing
 /// here changes. Questions the command asks are answered from "answers" (see <see cref="AgentDialogs"/>), and a command
 /// that opens a window returns while it's open, so the window can be worked through the ui_ tools.
 /// </summary>
@@ -60,7 +61,13 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         if (command.Placement is { } placement)
         {
             var menu = menus.FirstOrDefault(m => m.Id == placement.Menu)?.Text.Replace("_", "") ?? placement.Menu;
-            text.Append(CultureInfo.InvariantCulture, $" (Menu: {menu} > {command.DisplayText}");
+            // What makes things is in a submenu per category: "(Menu: Entity > Characters > Grid Enemy", or for a genre
+            // module's "(Menu: Entity > Genres > Match-3 > Match Board".
+            text.Append(" (Menu: ").Append(menu).Append(" > ");
+            if (command.Category is { } category)
+                text.Append(CommandCategories.MenuPath(category)).Append(" > ").Append(CommandCategories.ItemText(command).Replace("_", ""));
+            else
+                text.Append(command.DisplayText);
         }
         else
         {

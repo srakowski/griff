@@ -19,12 +19,12 @@ add: Health
 set: Health.Max = 50
 say: And a grid player in the bottom left corner, with plenty of health.
 
-chapter: A chaser | Entity, Create Grid Enemy
+chapter: A chaser | Entity, Characters, Grid Enemy
 deselect
 create: Grid Enemy
 set: Transform.Position.X = 10.5
 set: Transform.Position.Y = -1.5
-explain: menu:Entity | Entity, Create Grid Enemy | The Entity menu makes an enemy for grid games: Create Grid Enemy.
+explain: menu:Entity | Entity, Characters, Grid Enemy | The Entity menu makes an enemy for grid games: Grid Enemy, under Characters.
 explain: component:GridChase | Grid Chase | It steps with a Grid Movement, like the player, and a Grid Chase moves it after its target, the Player, tile by tile.
 explain: field:GridChase.Range | Range | It notices the player within this many units. Zero notices it anywhere, which suits this demo.
 set: GridChase.Range = 0

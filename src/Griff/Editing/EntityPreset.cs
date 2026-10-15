@@ -6,8 +6,11 @@ namespace Griff.Editing;
 /// Something the editor's Entity menu creates ready to use, e.g. Create Match Board: a module's (see
 /// <see cref="Runtime.GameModule"/>), kept with the rest of it. Presets are found rather than listed (see
 /// <see cref="All"/>), so adding one is adding a class. The editor makes each one a command, which agents get as a tool
-/// named by its <see cref="Id"/> and described by the preset's own /// summary. The new entity goes inside what's selected
-/// (or <see cref="InsideOf"/> it) and is selected, with its children and any changes to the scene in the same undo step.
+/// named by its <see cref="Id"/> and described by the preset's own /// summary, whose first sentence is also the one-line
+/// description the menu and the Add Entity palette show. A <see cref="CategoryAttribute"/> on the preset names the
+/// category it's listed under: its module's name, e.g. <c>[Category("Match-3")]</c>. The new entity goes inside what's
+/// selected (or <see cref="InsideOf"/> it) and is selected, with its children and any changes to the scene in the same
+/// undo step.
 /// </summary>
 public abstract class EntityPreset
 {
@@ -27,8 +30,11 @@ public abstract class EntityPreset
     /// <summary>What the menu says, e.g. "Create Match Board" ('_' marks the access key).</summary>
     public abstract string Text { get; }
 
-    /// <summary>Where it goes among the Entity menu's things to create: lower first.</summary>
+    /// <summary>Where it goes among the things to create in its category: lower first.</summary>
     public abstract int Order { get; }
+
+    /// <summary>The name of the editor's icon for it (one of its Icons, e.g. "Star"), or null for a plain one.</summary>
+    public virtual string? Icon => null;
 
     /// <summary>The new entity's name, given the scene it's made in.</summary>
     public abstract string EntityName(Scene scene);

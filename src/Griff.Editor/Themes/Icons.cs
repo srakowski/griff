@@ -70,6 +70,41 @@ public static class Icons
     public const string Chart = "";
     public const string Draw = "";
 
+    // Things to create (the Entity menu and the Add Entity palette); a module's preset names one (see Named)
+    public const string Box = "\uE739";
+    public const string Runner = "\uE726";
+    public const string Walker = "\uE805";
+    public const string Person = "\uE77B";
+    public const string Robot = "\uE99A";
+    public const string Bolt = "\uE945";
+    public const string Turns = "\uE895";
+    public const string Tiles = "\uE80A";
+    public const string Frame = "\uE9A6";
+    public const string Climb = "\uE8CB";
+    public const string Lever = "\uE707";
+    public const string Cube = "\uF158";
+    public const string Bounce = "\uE752";
+    public const string Tap = "\uE815";
+    public const string Checkbox = "\uE73A";
+    public const string Sliders = "\uE9E9";
+    public const string LeftRight = "\uE8AB";
+    public const string Battery = "\uE83F";
+    public const string Window = "\uE737";
+    public const string Speech = "\uE8BD";
+    public const string Speaker = "\uE7F5";
+    public const string Stopwatch = "\uE916";
+    public const string Lightbulb = "\uEA80";
+    public const string Confetti = "\uEC24";
+    public const string Cloud = "\uE753";
+    public const string Key = "\uE8D7";
+    public const string Blocks = "\uECA5";
+    public const string Star = "\uE735";
+    public const string Flag = "\uE7C1";
+    public const string Arrow = "\uE8F0";
+    public const string Card = "\uE8A1";
+    public const string Zone = "\uE8A9";
+    public const string Recent = "\uE823";
+
     // Tables
     public const string Cut = "\uE8C6";
     public const string Paste = "\uE77F";
@@ -97,6 +132,13 @@ public static class Icons
     public const string ChromeMaximize = "\uE922";
     public const string ChromeRestore = "\uE923";
     public const string ChromeClose = "\uE8BB";
+
+    /// <summary>
+    /// The glyph of the icon called <paramref name="name"/> (one of these constants, e.g. "Shuffle"), for things outside
+    /// the editor that name theirs (a module's presets and actions); null for none or an unknown name.
+    /// </summary>
+    public static string? Named(string? name) =>
+        name is null ? null : typeof(Icons).GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null) as string;
 
     /// <summary>Creates an icon element for use as menu, button or tab content.</summary>
     public static TextBlock Create(string glyph, double? size = null)

@@ -8,6 +8,7 @@ namespace Griff.Modules.Adventures;
 /// Creates a walk area: a floor 8 wide and 3 deep where a <see cref="Walker"/> walks, its corners dragged in the Scene view
 /// (and a corner added by dragging the plus on a side) to fit the room. Tick its Blocks for a hole in the floor.
 /// </summary>
+[Category("Adventures")]
 public sealed class WalkAreaPreset : EntityPreset
 {
     public override string Id => "Entity.CreateWalkArea";
@@ -15,6 +16,8 @@ public sealed class WalkAreaPreset : EntityPreset
     public override string Text => "Create Walk Area";
 
     public override int Order => 29;
+
+    public override string? Icon => "Zone";
 
     public override string EntityName(Scene scene) => "Walk Area";
 
@@ -30,6 +33,7 @@ public sealed class WalkAreaPreset : EntityPreset
 /// of it, with a line to say on looking at it. Drag its corners in the Scene view to fit what it is, and give it a line to
 /// say on using it, an action, a flag or a dialogue.
 /// </summary>
+[Category("Adventures")]
 public sealed class HotspotPreset : EntityPreset
 {
     public override string Id => "Entity.CreateHotspot";
@@ -37,6 +41,8 @@ public sealed class HotspotPreset : EntityPreset
     public override string Text => "Create Hotspot";
 
     public override int Order => 30;
+
+    public override string? Icon => "Tap";
 
     public override string EntityName(Scene scene) => "Hotspot";
 
@@ -52,6 +58,7 @@ public sealed class HotspotPreset : EntityPreset
 /// round what's in the way, and walks over to look at and use hotspots. A scene with no walk area gets one for it to walk
 /// on, all in one undo step.
 /// </summary>
+[Category("Adventures")]
 public sealed class WalkerPreset : EntityPreset
 {
     public override string Id => "Entity.CreateWalker";
@@ -59,6 +66,8 @@ public sealed class WalkerPreset : EntityPreset
     public override string Text => "Create Walker";
 
     public override int Order => 31;
+
+    public override string? Icon => "Walker";
 
     public override string EntityName(Scene scene) => "Player";
 

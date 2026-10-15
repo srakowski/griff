@@ -7,7 +7,7 @@ A point-and-click adventure in Griff is three components: a **Walk Area** drawn 
 
 ## Walk areas
 
-**Entity → Create Walk Area** makes a floor 8 wide and 3 deep. Its **Points** are its corners, "x y" pairs separated by semicolons round the entity: select it and the Scene view puts a knob on each corner and a plus halfway along each side, so you drag the corners to fit the floor painted in your background, drag a plus to add a corner, and double-click a knob to take one off (it keeps three). Hold Ctrl to snap to half units. Each change is one undo step, and clicking on the floor where nothing is drawn selects it. The Scene view draws walk areas in blue; the game doesn't, unless you tick **Shown** to see where walkers can go.
+**Entity → Genres → Adventures → Walk Area** makes a floor 8 wide and 3 deep. Its **Points** are its corners, "x y" pairs separated by semicolons round the entity: select it and the Scene view puts a knob on each corner and a plus halfway along each side, so you drag the corners to fit the floor painted in your background, drag a plus to add a corner, and double-click a knob to take one off (it keeps three). Hold Ctrl to snap to half units. Each change is one undo step, and clicking on the floor where nothing is drawn selects it. The Scene view draws walk areas in blue; the game doesn't, unless you tick **Shown** to see where walkers can go.
 
 Any shape with straight sides works: an L round a counter, a floor that narrows into a corridor. Several walk areas that overlap join up into one floor. Tick **Blocks** for a hole in the floor where nobody walks (a table, a pond, a well), drawn in red: walkers go round it. A hole can be part of something else: put a walk area that blocks inside a character standing in the way, and it moves with them.
 
@@ -15,7 +15,7 @@ Any shape with straight sides works: an L round a counter, a floor that narrows 
 
 ## The walker
 
-**Entity → Create Walker** makes the player: a figure with a **Walker**, standing on a walk area (a scene with none gets one with it). Click on the floor and it walks there along the shortest way, round the holes and the corners of the floor that jut in, going straight wherever it can; click off the floor and it walks as close as it can get. Its feet are the bottom middle of its sprite (or where it is, without one): it's the feet that walk on the floor, and the drawing that shrinks with depth.
+**Entity → Genres → Adventures → Walker** makes the player: a figure with a **Walker**, standing on a walk area (a scene with none gets one with it). Click on the floor and it walks there along the shortest way, round the holes and the corners of the floor that jut in, going straight wherever it can; click off the floor and it walks as close as it can get. Its feet are the bottom middle of its sprite (or where it is, without one): it's the feet that walk on the floor, and the drawing that shrinks with depth.
 
 It walks at its **Speed**, faces the way it goes (**Flip Sprite** turns its sprite left and right; art should face right) and plays its **Animation**'s **Walk** and **Idle** clips if it has them, and **WalkUp**, **WalkDown**, **IdleUp** and **IdleDown** going up or down the screen (**Run** clips if it has no Walk). It ignores gravity, so it works in a game that has some.
 
@@ -23,7 +23,7 @@ What it says (a hotspot's line, or its **Say** action) is drawn over its head in
 
 ## Hotspots
 
-**Entity → Create Hotspot** makes something to look at and use: an area the size of a door with a **Hotspot**. Its shape is its **Points**, dragged in the Scene view like a walk area's (drawn in yellow, with its name) for something painted into the background; with no points it's its collider, or else its sprite, so a key with a sprite needs nothing more. Hovering over it shows its **Name** by the pointer (its entity's name if that's empty) and changes the pointer to its **Cursor** (a hand to begin with; **Look** is the arrow with a question mark, **Cross** crosshairs, and **Hidden** none).
+**Entity → Genres → Adventures → Hotspot** makes something to look at and use: an area the size of a door with a **Hotspot**. Its shape is its **Points**, dragged in the Scene view like a walk area's (drawn in yellow, with its name) for something painted into the background; with no points it's its collider, or else its sprite, so a key with a sprite needs nothing more. Hovering over it shows its **Name** by the pointer (its entity's name if that's empty) and changes the pointer to its **Cursor** (a hand to begin with; **Look** is the arrow with a question mark, **Cross** crosshairs, and **Hidden** none).
 
 Clicking it sends the walker to stand at its **Stand At** (from the hotspot, in world units: `0, -1.5` is just in front of a door; the Scene view draws the spot), or as close as it can get, turns it to face the hotspot and then uses it; a right click looks at it instead. Untick **Walk There** for something seen from afar, like the moon, looked at from wherever the walker stands. Each verb, Look and Use, can do any of these with no code:
 

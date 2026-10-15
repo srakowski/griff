@@ -30,21 +30,18 @@ public sealed class ModulePresetEditorTests
         }
     });
 
-    // The Entity menu lists them where it did when they were the editor's own commands.
+    // Each is listed under its module's name, with the icon it names (see EntityMenuTests for the menu's layout).
     [Fact]
-    public void Presets_KeepTheirPlacesInTheEntityMenu() => EditorHost.Run(services =>
+    public void Presets_AreListedUnderTheirModule_WithTheirIcon() => EditorHost.Run(services =>
     {
-        var menu = services.GetRequiredService<CommandRegistry>().All
-            .Where(c => c.Placement is { Menu: Menus.Entity, Group: 0 })
-            .OrderBy(c => c.Placement!.Order)
-            .Select(c => c.Id)
-            .ToList();
-
-        Assert.Equal(menu.IndexOf("Entity.CreateTurnOrder") + 1, menu.IndexOf("Entity.CreateTacticsUnit"));
-        Assert.Equal(menu.IndexOf("Entity.CreateTacticsUnit") + 1, menu.IndexOf("Entity.CreateLadder"));
-        Assert.Equal(
-            ["Entity.CreateCrate", "Entity.CreateGoal", "Entity.CreateMatchBoard", "Entity.CreateFallingBoard", "Entity.CreateDungeon", "Entity.CreateLight"],
-            menu.Skip(menu.IndexOf("Entity.CreateCrate")).Take(6));
+        var commands = services.GetRequiredService<CommandRegistry>();
+        foreach (var preset in EntityPreset.All)
+        {
+            var command = commands.Get(preset.Id);
+            Assert.Equal(Griff.Runtime.GameModule.Of(preset.GetType())!.Name, command.Category);
+            Assert.NotNull(preset.Icon);
+            Assert.Equal(Griff.Editor.Themes.Icons.Named(preset.Icon), command.Icon);
+        }
     });
 
     [Fact]

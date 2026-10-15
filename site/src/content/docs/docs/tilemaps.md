@@ -5,7 +5,7 @@ description: "Painting tilemaps in the Scene view, tilesets, layers, autotiles a
 
 ## Painting tilemaps
 
-**Entity → Create Tilemap**, then set its **Image** to a tileset and its **Columns** and **Rows** to the tileset's layout. While a tilemap is selected, the Scene view paints:
+**Entity → Level → Tilemap**, then set its **Image** to a tileset and its **Columns** and **Rows** to the tileset's layout. While a tilemap is selected, the Scene view paints:
 - Pick a tool under the palette, or with a key: the **Brush** (B) paints the cells you drag over, the **Rectangle** (R) fills the box you drag out (shown as you drag; Esc lets go of it), and **Fill** (G) fills the area you click, like a paint bucket: the cell and every cell joined to it side by side holding the same tile, or all empty, within the map's grid. Hovering with Fill shows the area it would fill.
 - Hold Shift with any of them to erase instead. Each stroke, rectangle or fill is one undo step.
 - Pick a tile from the palette at the top left, with `[` and `]`, or Ctrl-click a painted tile. The mouse wheel scrolls a palette with more tiles than fit.

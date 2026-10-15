@@ -2,7 +2,7 @@ title: Card games
 intro: Decks, hands and play zones, with no code: shuffle and deal, draw, and play cards by dragging them onto the table, by the rules each place on it sets.
 project: Empty | Card Table
 
-chapter: A deck, a hand and a table | Entity > Create Deck
+chapter: A deck, a hand and a table | Entity > Genres > Cards > Deck
 create: Deck
 expectcount: Hand = 1
 expectcount: Play Zone = 1
@@ -10,7 +10,7 @@ expectcount: Discard Pile = 1
 explain: component:Deck | Deck | A deck is a pile of cards: the cards inside it, twenty here, Sun and Moon from one to ten. It's shuffled as the game starts, with the game's own random numbers.
 explain: field:Deck.Table | From a table | Or it makes its cards from a table of game data, a card for each row, with the row's title, text, value and color.
 select: Hand
-explain: component:Hand | Hand | Create Deck brought along a hand that draws five cards as the game starts and fans them out, a play zone to play them onto, and a discard pile.
+explain: component:Hand | Hand | The deck brought along a hand that draws five cards as the game starts and fans them out, a play zone to play them onto, and a discard pile.
 select: Play Zone
 set: PlayZone.Limit = 1
 explain: field:PlayZone.Accepts | Rules | A play zone has rules: the kinds of card it takes, which hands may play onto it, and a limit. This one holds one card.

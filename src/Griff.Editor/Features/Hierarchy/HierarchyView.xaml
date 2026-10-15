@@ -22,8 +22,9 @@
                 </Style>
             </DockPanel.Style>
 
-            <!-- Scene name + create button -->
-            <Border DockPanel.Dock="Top"
+            <!-- Scene name + Add Entity button -->
+            <Border x:Name="Header"
+                    DockPanel.Dock="Top"
                     Padding="10,2,4,2"
                     BorderBrush="{DynamicResource Brush.Border.Subtle}"
                     BorderThickness="0,0,0,1">
@@ -31,13 +32,133 @@
                     <Button x:Name="AddButton"
                             Click="OnAddClicked"
                             DockPanel.Dock="Right"
+                            PreviewMouseLeftButtonDown="OnAddPressed"
                             Style="{StaticResource Style.Button.Toolbar}"
-                            ToolTip="Create">
+                            ToolTip="Add Entity (Ctrl+Shift+A): type to find what to make, Enter makes it">
                         <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
                     </Button>
                     <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" Text="{Binding SceneName}" />
                 </DockPanel>
             </Border>
+
+            <!-- The Add Entity palette: type to filter, Up and Down to move, Enter (or a click) makes it -->
+            <Popup x:Name="AddPopup"
+                   AllowsTransparency="True"
+                   DockPanel.Dock="Top"
+                   IsOpen="{Binding IsAddOpen, Mode=TwoWay}"
+                   Opened="OnAddPopupOpened"
+                   Placement="Bottom"
+                   PlacementTarget="{Binding ElementName=Header}"
+                   PopupAnimation="None"
+                   StaysOpen="False"
+                   VerticalOffset="2">
+                <Border x:Name="AddPanel"
+                        Width="{Binding ActualWidth, ElementName=Header}"
+                        MinWidth="340"
+                        DataContext="{Binding Palette}"
+                        Style="{StaticResource Style.Border.Flyout}">
+                    <DockPanel>
+                        <Grid Margin="6,6,6,4" DockPanel.Dock="Top">
+                            <TextBox x:Name="AddSearch"
+                                     Padding="24,0,6,0"
+                                     PreviewKeyDown="OnAddSearchKeyDown"
+                                     Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="8,0,0,0"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       FontSize="{StaticResource IconSize.Small}"
+                                       Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                       IsHitTestVisible="False"
+                                       Style="{StaticResource Style.Icon}"
+                                       Text="{x:Static theme:Icons.Search}" />
+                            <TextBlock Margin="25,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                       IsHitTestVisible="False"
+                                       Text="Type to find something to add">
+                                <TextBlock.Visibility>
+                                    <Binding ElementName="AddSearch" Path="Text.IsEmpty">
+                                        <Binding.Converter>
+                                            <converters:BoolToVisibilityConverter />
+                                        </Binding.Converter>
+                                    </Binding>
+                                </TextBlock.Visibility>
+                            </TextBlock>
+                        </Grid>
+
+                        <!-- What Enter makes -->
+                        <TextBlock x:Name="AddPlan"
+                                   Margin="10,6,10,8"
+                                   DockPanel.Dock="Bottom"
+                                   Style="{StaticResource Style.Text.Caption}"
+                                   Text="{Binding PlanText}"
+                                   TextWrapping="Wrap" />
+
+                        <Grid>
+                            <ListBox x:Name="AddList"
+                                     MaxHeight="380"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Focusable="False"
+                                     ItemsSource="{Binding View}"
+                                     PreviewMouseLeftButtonUp="OnAddListClicked"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     SelectedItem="{Binding Selected}"
+                                     SelectionChanged="OnAddListSelectionChanged"
+                                     VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                                <ListBox.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Margin="8,8,8,2" Style="{StaticResource Style.Text.Overline}" Text="{Binding Name}" />
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ListBox.GroupStyle>
+                                <ListBox.ItemContainerStyle>
+                                    <Style BasedOn="{StaticResource {x:Type ListBoxItem}}" TargetType="ListBoxItem">
+                                        <Setter Property="Focusable" Value="False" />
+                                        <Setter Property="ToolTip" Value="{Binding Description}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanCreate}" Value="False">
+                                                <Setter Property="Opacity" Value="0.5" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="hierarchy:EntityPaletteItem">
+                                        <DockPanel Margin="2,2">
+                                            <TextBlock Width="18"
+                                                       Margin="2,1,8,0"
+                                                       VerticalAlignment="Top"
+                                                       DockPanel.Dock="Left"
+                                                       Style="{StaticResource Style.Icon}"
+                                                       Text="{Binding Icon}"
+                                                       TextAlignment="Center" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource Style.Text.Caption}" Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Margin="10,8"
+                                       Style="{StaticResource Style.Text.Caption}"
+                                       Text="Nothing to add matches">
+                                <TextBlock.Visibility>
+                                    <Binding Path="HasResults">
+                                        <Binding.Converter>
+                                            <converters:BoolToVisibilityConverter Invert="True" />
+                                        </Binding.Converter>
+                                    </Binding>
+                                </TextBlock.Visibility>
+                            </TextBlock>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </Popup>
 
             <!-- Filter: only entities whose names have what's typed, with what they're inside -->
             <controls:FilterBox x:Name="Filter"

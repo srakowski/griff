@@ -184,13 +184,23 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.Menu(top, item);
                 break;
             case "create":
-                await ui.Menu("Entity", a.StartsWith("Create ", StringComparison.OrdinalIgnoreCase) ? a : "Create " + a);
+                // "create: Grid Enemy" clicks Entity > Characters > Grid Enemy, wherever its category puts it.
+                await ui.Create(a);
+                break;
+            case "entitylist":
+                // Open the Add Entity palette with the Hierarchy's + button, nothing typed yet: "type: enemy" filters it,
+                // "key: Enter" makes what's picked.
+                await ui.OpenEntityList();
+                break;
+            case "hierarchymenu":
+                // "hierarchymenu: Characters > Grid Enemy": right-click empty space in the Hierarchy and pick from its menu.
+                await ui.HierarchyMenu(a);
                 break;
             case "key":
                 var (key, modifiers) = ParseKey(a);
-                // With the Add Component list open, keys go to its search box (Enter adds, Down moves); with New Project open,
-                // to that window.
-                if (!DemoUi.IsAddListOpen && DemoUi.NewProject is null)
+                // With the Add Component list or the Add Entity palette open, keys go to its search box (Enter adds, Down
+                // moves); with New Project open, to that window.
+                if (!DemoUi.IsAddListOpen && !DemoUi.IsEntityListOpen && DemoUi.NewProject is null)
                     await ui.FocusEditor();
                 await ui.Shortcut(key, modifiers);
                 break;
@@ -211,10 +221,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await ui.OpenAddList();
                 break;
             case "expectcomponents":
-                // "expectcomponents: Player = Transform, BoxCollider, Body, PlatformerMovement": exactly these, in order.
+                // "expectcomponents: Player = Transform, BoxCollider, Body, PlatformerMovement": exactly these, in order. Of
+                // two with that name (a new "Slime" beside the template's), the selected one.
                 var (componentsOf, componentsWant) = Split2(a, '=');
                 var want = componentsWant.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                string Has() => string.Join(", ", (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == componentsOf)?.Components ?? [])
+                string Has() => string.Join(", ", ((selection.Entities.FirstOrDefault(e => e.Name == componentsOf)
+                        ?? workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == componentsOf))?.Components ?? [])
                     .Select(c => c is Griff.Scenes.MissingComponent m ? m.TypeName : c.GetType().Name));
                 if (!await Until(() => Has() == string.Join(", ", want), 3000))
                     throw new InvalidOperationException($"Expected {componentsOf} to have {string.Join(", ", want)}, but it has {Has()}.");
@@ -1772,6 +1784,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "needadd" => (name.Split('.', 2) is [var needer, var needed] ? DemoUi.NeedButton(needer, needed) : DemoUi.NeedButton(name))
                 ?? throw new InvalidOperationException($"{name} isn't flagged as needing something in the Inspector."),
             "addlist" => DemoUi.AddListPart(name),
+            "entitylist" => DemoUi.EntityListPart(name),
             "label" when name.Split('.', 2) is [var component, var field] =>
                 DemoUi.FieldLabel(component, Label(field)) ?? throw new InvalidOperationException($"No field {name} in the Inspector."),
             "entity" => (FrameworkElement?)DemoUi.HierarchyItem(name) ?? throw new InvalidOperationException($"No {name} in the Hierarchy."),
@@ -1806,7 +1819,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

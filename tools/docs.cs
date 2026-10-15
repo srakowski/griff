@@ -258,7 +258,10 @@ static class Reference
             {
                 var summary = DocComments.Summary(command.DescribedBy).PlainText.Replace("\n\n", " ").Replace('\n', ' ');
                 var shortcut = command.GestureText is { Length: > 0 } g ? "`" + g + "`" : "";
-                page.AppendLine(CultureInfo.InvariantCulture, $"| {Cell(command.DisplayText)} | {shortcut} | `{command.Id}` | {Cell(summary)} |");
+                // What makes things is listed by its category, as the Entity menu's submenus have it: "Characters > Grid Enemy",
+                // "Genres > Match-3 > Match Board".
+                var name = command.Category is { } category ? $"{CommandCategories.MenuPath(category)} > {CommandCategories.ItemText(command).Replace("_", "")}" : command.DisplayText;
+                page.AppendLine(CultureInfo.InvariantCulture, $"| {Cell(name)} | {shortcut} | `{command.Id}` | {Cell(summary)} |");
             }
 
             page.AppendLine();
@@ -267,7 +270,9 @@ static class Reference
         foreach (var menu in menus)
         {
             Table(menu.Text.Replace("_", "") + " menu", commands.Where(c => c.Placement?.Menu == menu.Id)
-                .OrderBy(c => c.Placement!.Group).ThenBy(c => c.Placement!.Order).ThenBy(c => c.DisplayText, StringComparer.Ordinal));
+                .OrderBy(c => c.Placement!.Group)
+                .ThenBy(c => c.Category is { } category ? CommandCategories.Rank(category) : -1).ThenBy(c => c.Category, StringComparer.Ordinal)
+                .ThenBy(c => c.Placement!.Order).ThenBy(c => c.DisplayText, StringComparer.Ordinal));
         }
 
         var known = menus.Select(m => m.Id).ToHashSet();

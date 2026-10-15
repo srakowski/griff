@@ -2,10 +2,10 @@ title: Turn-based play
 intro: Sides that take turns, with no code, while the rest of the game runs in real time.
 project: Platformer | Taking Turns
 
-chapter: A turn order | Entity, Create Turn Order
+chapter: A turn order | Entity, Gameplay, Turn Order
 deselect
 create: Turn Order
-explain: menu:Entity | Entity, Create Turn Order | The Entity menu makes a game turn-based: Create Turn Order.
+explain: menu:Entity | Entity, Gameplay, Turn Order | The Entity menu makes a game turn-based: Turn Order, under Gameplay.
 explain: component:TurnOrder | Turn Order | It holds the turns. Its text in the corner says whose turn it is, and it comes with an End Turn button.
 explain: field:TurnOrder.Sides | Sides | The sides take turns in this order: the player, then the enemy. Two people at one keyboard could be blue and red.
 explain: field:TurnOrder.ComputerSides | Computer Sides | The computer plays the enemy, so its turn ends by itself, after its Computer Turn Time.

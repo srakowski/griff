@@ -2,9 +2,9 @@ title: Match-3 boards
 intro: Swap gems to line up three of a kind: they clear, the gems above fall into the gaps, new ones drop in, and whatever lands in a line clears too. No code.
 project: Empty | Gem Swap
 
-chapter: A board of gems | Entity, Create Match Board
+chapter: A board of gems | Entity, Genres, Match-3, Match Board
 create: Match Board
-explain: menu:Entity | Entity, Create Match Board | Create Match Board makes an eight by eight board, dealt already so you can see it.
+explain: menu:Entity | Entity, Genres, Match-3, Match Board | Match Board makes an eight by eight board, dealt already so you can see it.
 explain: component:Tilemap | The gems are tiles | The gems are the tiles of a tilemap, so a board is painted like any level. With no tileset each kind of gem is a square of its own color.
 explain: field:MatchBoard.Gems | Gems | These tile numbers are gems, six kinds. Any other tile on the board is a block the gems stop on.
 explain: field:MatchBoard.Deal | Deal and Seed | Each game deals a fresh board with nothing lined up and a move to make. A seed makes it the same board every time, which is handy for a puzzle, and for this demo.

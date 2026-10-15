@@ -10,7 +10,6 @@ namespace Griff.Editor.Features.Hierarchy;
 
 public partial class HierarchyView : UserControl
 {
-    private static readonly string[] CreateCommands = ["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"];
     private static readonly string[] EditCommands = ["Entity.Rename", "Entity.Duplicate", "Entity.Delete", "Entity.Lock", "Entity.Hide"];
     private static readonly string[] ClipboardCommands = ["Entity.Cut", "Entity.Copy", "Entity.Paste"];
     private static readonly string[] PrefabCommands = ["Entity.SaveAsPrefab", "Entity.UnlinkPrefab"];
@@ -19,36 +18,31 @@ public partial class HierarchyView : UserControl
     private Point _dragStart;
     private EntityNode? _dragCandidate;
     private (EntityNode Node, bool Control, bool Shift)? _pressed;
+    private bool _wasOpen;
 
     public HierarchyView(CommandRegistry commands)
     {
         InitializeComponent();
         _commands = commands;
-        Tree.ContextMenu = BuildMenu(CreateCommands, EditCommands, ClipboardCommands, PrefabCommands);
+        Tree.ContextMenu = BuildMenu(commands);
     }
 
     private HierarchyPanel Panel => (HierarchyPanel)DataContext;
 
-    private ContextMenu BuildMenu(params string[][] groups)
+    /// <summary>
+    /// The Hierarchy's right-click menu: Add Entity... and what the Entity menu makes, in the same submenus, then what's
+    /// done to the selection.
+    /// </summary>
+    public static ContextMenu BuildMenu(CommandRegistry commands)
     {
         var menu = new ContextMenu();
-        foreach (var group in groups)
+        menu.Items.Add(Shell.CommandMenuItems.Item(commands.Get("Entity.AddEntity")));
+        Shell.CommandMenuItems.AddCategories(menu.Items, commands.Categorized);
+        foreach (var group in new[] { EditCommands, ClipboardCommands, PrefabCommands })
         {
-            if (menu.Items.Count > 0)
-                menu.Items.Add(new Separator());
-
+            menu.Items.Add(new Separator());
             foreach (var id in group)
-            {
-                var command = _commands.Get(id);
-                menu.Items.Add(new MenuItem
-                {
-                    Header = command.Text,
-                    Command = command,
-                    InputGestureText = command.GestureText,
-                    Icon = command.Icon is { } icon ? Icons.Create(icon) : null,
-                    Tag = command,
-                });
-            }
+                menu.Items.Add(Shell.CommandMenuItems.Item(commands.Get(id)));
         }
 
         // On/off commands (Lock, Hide) show their tick as the menu opens.
@@ -60,12 +54,63 @@ public partial class HierarchyView : UserControl
         return menu;
     }
 
+    // ----- The Add Entity palette: its state (what's typed, what's picked) is the panel's Palette.
+
+    // A click on the button while the palette is open closes it (it shuts as the mouse goes down outside it), rather
+    // than opening it again.
+    private void OnAddPressed(object sender, MouseButtonEventArgs e) => _wasOpen = Panel.IsAddOpen;
+
     private void OnAddClicked(object sender, RoutedEventArgs e)
     {
-        var menu = BuildMenu(CreateCommands);
-        menu.PlacementTarget = AddButton;
-        menu.Placement = PlacementMode.Bottom;
-        menu.IsOpen = true;
+        if (!_wasOpen)
+            Panel.IsAddOpen = true;
+        _wasOpen = false;
+    }
+
+    private void OnAddPopupOpened(object? sender, EventArgs e)
+    {
+        AddSearch.Focus();
+        Keyboard.Focus(AddSearch);
+        if (Panel.Palette?.Selected is { } selected)
+            AddList.ScrollIntoView(selected);
+    }
+
+    // Typing filters; Up and Down move through the list, Enter makes the picked one and Escape closes it.
+    private void OnAddSearchKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Down or Key.Up or Key.PageDown or Key.PageUp:
+                Panel.Palette?.MoveSelection(e.Key switch { Key.Down => 1, Key.Up => -1, Key.PageDown => 8, _ => -8 });
+                break;
+            case Key.Enter:
+                Panel.AddPicked();
+                break;
+            case Key.Escape:
+                Panel.IsAddOpen = false;
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnAddListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AddList.SelectedItem is { } selected)
+            AddList.ScrollIntoView(selected);
+    }
+
+    // A click on a row makes it.
+    private void OnAddListClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && ItemsControl.ContainerFromElement(AddList, source) is ListBoxItem { DataContext: EntityPaletteItem item })
+        {
+            Panel.Palette!.Selected = item;
+            Panel.AddPicked();
+            e.Handled = true;
+        }
     }
 
     // ----- Selection -----

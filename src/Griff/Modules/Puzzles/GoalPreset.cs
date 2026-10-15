@@ -9,6 +9,7 @@ namespace Griff.Modules.Puzzles;
 /// "Solved", sent once every goal in the scene has a crate on it. The first goal in a scene also gets a
 /// <see cref="MoveHistory"/>, so the player can undo moves (Z) and restart (R).
 /// </summary>
+[Category("Puzzles")]
 public sealed class GoalPreset : EntityPreset
 {
     public override string Id => "Entity.CreateGoal";
@@ -16,6 +17,8 @@ public sealed class GoalPreset : EntityPreset
     public override string Text => "Create Goa_l";
 
     public override int Order => 19;
+
+    public override string? Icon => "Flag";
 
     public override string EntityName(Scene scene) => "Goal";
 

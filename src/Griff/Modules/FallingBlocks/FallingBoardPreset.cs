@@ -9,6 +9,7 @@ namespace Griff.Modules.FallingBlocks;
 /// centered on the scene's middle. Pieces fall into it as the game runs: slide them with left and right, turn them with
 /// up, drop them with Space, and fill rows to clear them.
 /// </summary>
+[Category("Falling Blocks")]
 public sealed class FallingBoardPreset : EntityPreset
 {
     public override string Id => "Entity.CreateFallingBoard";
@@ -16,6 +17,8 @@ public sealed class FallingBoardPreset : EntityPreset
     public override string Text => "Create Falling Board";
 
     public override int Order => 20;
+
+    public override string? Icon => "Blocks";
 
     public override string EntityName(Scene scene) => "Board";
 

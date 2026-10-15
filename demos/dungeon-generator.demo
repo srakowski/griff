@@ -2,7 +2,7 @@ title: Dungeons
 intro: Floors of rooms and corridors made from a seed, with the player, the stairs and the monsters put in place. No code.
 project: Empty | Deep Halls
 
-chapter: A dungeon | Entity > Create Dungeon
+chapter: A dungeon | Entity > Genres > Dungeons > Dungeon
 select: Main Camera
 set: Camera.Size = 17
 deselect

@@ -3,11 +3,13 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Entities;
 using Griff.Editor.Themes;
 using Griff.Scenes;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Hierarchy;
 
@@ -188,10 +190,15 @@ public sealed class HierarchyPanel : ToolPanel
     // What was open before a filter opened the rows its matches are in; put back when it's emptied.
     private HashSet<Guid>? _expandedBeforeFilter;
 
-    public HierarchyPanel(IWorkspace workspace, ISelection selection)
+    // The commands, looked up when the palette opens: commands that open panels are made before the panels are.
+    private readonly IServiceProvider _services;
+    private EntityPaletteViewModel? _palette;
+
+    public HierarchyPanel(IWorkspace workspace, ISelection selection, IServiceProvider services)
     {
         _workspace = workspace;
         _selection = selection;
+        _services = services;
         workspace.PropertyChanged += OnWorkspaceChanged;
         selection.PropertyChanged += (_, _) => SyncSelectionToTree();
         selection.RenameRequested += (_, _) => BeginRename();
@@ -204,6 +211,44 @@ public sealed class HierarchyPanel : ToolPanel
     public override PanelZone Zone => PanelZone.Left;
 
     public EntityNodes Roots { get; } = [];
+
+    /// <summary>
+    /// The Add Entity palette while it's open (null when it's shut): everything the Entity menu makes, by category, with
+    /// what was made lately at the top, filtered by what's typed in its Search, its Selected one's PlanText saying what it
+    /// makes. Open it with <see cref="IsAddOpen"/> (or Entity &gt; Add Entity...) and make the selected one with
+    /// <see cref="AddPicked"/>. Agents can call the Entity_Create tools directly.
+    /// </summary>
+    public EntityPaletteViewModel? Palette
+    {
+        get => _palette;
+        private set => SetProperty(ref _palette, value);
+    }
+
+    /// <summary>Whether the Add Entity palette is open. Opening it starts it afresh, with nothing typed.</summary>
+    public bool IsAddOpen
+    {
+        get => Palette is not null;
+        set
+        {
+            if (value == IsAddOpen)
+                return;
+            Palette = value && HasScene ? new EntityPaletteViewModel(_services.GetRequiredService<CommandRegistry>()) : null;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Makes the thing picked in the Add Entity palette (inside the selected entity, or at the top level) and closes the
+    /// palette; one that can't be made now (an attack with nothing selected) leaves it open.
+    /// </summary>
+    public void AddPicked()
+    {
+        if (Palette?.Selected is not { CanCreate: true } picked)
+            return;
+        IsAddOpen = false;
+        // Run as a menu item runs it, so what it throws is reported the same way.
+        ((System.Windows.Input.ICommand)picked.Command).Execute(null);
+    }
 
     public string? SceneName => _document?.Name;
 
@@ -440,6 +485,8 @@ public sealed class HierarchyPanel : ToolPanel
         Rebuild();
         OnPropertyChanged(nameof(SceneName));
         OnPropertyChanged(nameof(HasScene));
+        // What the palette would make goes in the scene it was opened on.
+        IsAddOpen = false;
     }
 
     private void OnDocumentChanged(object? sender, EditEventArgs e)

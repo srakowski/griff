@@ -29,10 +29,10 @@ set: Transform.Position.Y = -4.5
 set: GridChase.Range = 3
 say: Here's a small dungeon with a grid player, a slime that comes after the player from anywhere, and a bat that only notices it close up.
 
-chapter: Taking turns | Entity, Create Turn Order
+chapter: Taking turns | Entity, Gameplay, Turn Order
 deselect
 create: Turn Order
-explain: menu:Entity | Entity, Create Turn Order | Create Turn Order makes the game turn-based. In a scene with grid movers, it sets up a roguelike.
+explain: menu:Entity | Entity, Gameplay, Turn Order | Turn Order makes the game turn-based. In a scene with grid movers, it sets up a roguelike.
 explain: field:TurnOrder.Between | Between | Turns follow straight on, with no gap between them, and its text counts the turns.
 select: Player
 explain: component:TurnTaker | Turn Taker | Every grid mover got a Turn Taker. The player is on the Player side.

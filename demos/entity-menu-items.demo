@@ -1,0 +1,119 @@
+title: Everything on the Entity menu
+intro: Every thing the Entity menu makes, opened from its category, so none is out of reach however many there are.
+project: Empty | Every Item
+
+chapter: Basics | Entity > Basics
+say: Each category opens a short list, so even the last item of the last genre is a click away. Here's every one, made from the menu.
+deselect
+menu: Entity > Basics > Empty
+deselect
+menu: Entity > Basics > Sprite
+deselect
+menu: Entity > Basics > Text
+deselect
+menu: Entity > Basics > Camera
+
+chapter: Characters | Entity > Characters
+deselect
+menu: Entity > Characters > Platformer Player
+deselect
+menu: Entity > Characters > Top-down Player
+deselect
+menu: Entity > Characters > Grid Player
+deselect
+menu: Entity > Characters > Grid Enemy
+menu: Entity > Characters > Add Attack
+
+chapter: Gameplay | Entity > Gameplay
+deselect
+menu: Entity > Gameplay > Turn Order
+
+chapter: Level | Entity > Level
+deselect
+menu: Entity > Level > Tilemap
+deselect
+menu: Entity > Level > Room
+deselect
+menu: Entity > Level > Ladder
+deselect
+menu: Entity > Level > Switch
+
+chapter: Physics | Entity > Physics
+deselect
+menu: Entity > Physics > Crate
+deselect
+menu: Entity > Physics > Spring
+
+chapter: UI | Entity > UI
+deselect
+menu: Entity > UI > Button
+deselect
+menu: Entity > UI > Toggle
+deselect
+menu: Entity > UI > Slider
+deselect
+menu: Entity > UI > Choice
+deselect
+menu: Entity > UI > Bar
+deselect
+menu: Entity > UI > Panel
+
+chapter: Story | Entity > Story
+deselect
+menu: Entity > Story > Dialogue Box
+
+chapter: Audio | Entity > Audio
+deselect
+menu: Entity > Audio > Music
+deselect
+menu: Entity > Audio > Sound Source
+deselect
+menu: Entity > Audio > Sound Player
+deselect
+menu: Entity > Audio > Beat Clock
+
+chapter: Lights and Effects | Entity > Lights and Effects
+deselect
+menu: Entity > Lights and Effects > Light
+deselect
+menu: Entity > Lights and Effects > Particles
+deselect
+menu: Entity > Lights and Effects > Weather
+
+chapter: Adventures | Entity > Genres > Adventures
+deselect
+menu: Entity > Genres > Adventures > Walk Area
+deselect
+menu: Entity > Genres > Adventures > Hotspot
+deselect
+menu: Entity > Genres > Adventures > Walker
+
+chapter: Cards | Entity > Genres > Cards
+deselect
+menu: Entity > Genres > Cards > Deck
+deselect
+menu: Entity > Genres > Cards > Play Zone
+deselect
+menu: Entity > Genres > Cards > Card
+
+chapter: Dungeons | Entity > Genres > Dungeons
+deselect
+menu: Entity > Genres > Dungeons > Dungeon
+
+chapter: Falling Blocks | Entity > Genres > Falling Blocks
+deselect
+menu: Entity > Genres > Falling Blocks > Falling Board
+
+chapter: Match-3 | Entity > Genres > Match-3
+deselect
+menu: Entity > Genres > Match-3 > Match Board
+
+chapter: Puzzles | Entity > Genres > Puzzles
+deselect
+menu: Entity > Genres > Puzzles > Goal
+
+chapter: Tactics | Entity > Genres > Tactics
+deselect
+menu: Entity > Genres > Tactics > Tactics Unit
+
+say: That was every one, each made straight from its category.

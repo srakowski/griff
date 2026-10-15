@@ -28,6 +28,12 @@ public sealed class EditorSettings
     /// </summary>
     public List<string> CollapsedComponents { get; set; } = [];
 
+    /// <summary>
+    /// What was last made from the Entity menu, the Hierarchy's or the Add Entity palette (whose top lists them), by
+    /// command id ("Entity.CreateSprite"), most recent first.
+    /// </summary>
+    public List<string> RecentEntities { get; set; } = [];
+
     /// <summary>Colors last picked in color fields' pickers, as hex ("#FF004DFF"), most recent first.</summary>
     public List<string> RecentColors { get; set; } = [];
 

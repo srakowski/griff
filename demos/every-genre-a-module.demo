@@ -3,7 +3,7 @@ intro: Block worlds, contraptions, dungeons, first person and grid puzzles are n
 project: Empty | Module Garden
 
 chapter: Puzzles are a module | Goals and undo, from one folder
-say: Goals for crates and undo for grid puzzles used to be part of the game itself. Now they're the Puzzles module, with their own system, template and Entity menu item.
+say: Goals for crates and undo for grid puzzles used to be part of the game itself. Now they're the Puzzles module, with their own system, template and category in the Entity menu.
 create: Grid Player
 deselect
 create: Crate
@@ -11,7 +11,7 @@ set: Transform.Position = 1, 0, 0
 deselect
 create: Goal
 set: Transform.Position = 3, 0, 0
-explain: component:Goal | From the Puzzles module | Create Goal still makes a goal, and the first one in a scene a move history too. Both come from the Puzzles module now.
+explain: component:Goal | From the Puzzles module | Entity, Genres, Puzzles, Goal still makes a goal, and the first one in a scene a move history too. Both come from the Puzzles module now.
 explain: component:MoveHistory | Undo and restart | Grid movement doesn't know about undo any more. It tells the game's systems a step is about to be taken, and the puzzle system remembers where everything was.
 deselect
 create: Text
@@ -37,8 +37,8 @@ expectvalue: Crates.Text.Value = Crates: 0 / 1
 explain: game | One move taken back | Z puts the worker and the crate back where they were, and the count goes back with them.
 stop
 
-chapter: Dungeons are a module | Create Dungeon, and an action on the selection
-say: Dungeons moved the same way. Create Dungeon is the module's preset, and Generate Dungeon is a new kind of extension point: something a module does to the selected entity, which the editor makes into a menu command and a tool for agents.
+chapter: Dungeons are a module | Entity > Genres > Dungeons > Dungeon, and an action on the selection
+say: Dungeons moved the same way. Dungeon, in the Dungeons category of the Entity menu, is the module's preset, and Generate Dungeon is a new kind of extension point: something a module does to the selected entity, which the editor makes into a menu command and a tool for agents.
 deselect
 create: Dungeon
 look: 0, 0, 18

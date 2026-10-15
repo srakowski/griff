@@ -6,10 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Editor fixes
-
-- [ ] Lay out the Entity menu in one go: the long flat list of things to add becomes categories (Basics, Characters, Level, Physics, UI, Story, Audio, Lights and Effects, and one per genre module) found the way components are, by an attribute on each create command (no hand-kept list), each entry with an icon and a one-line description of what it makes; a searchable Add Entity palette (like Add Component) with recently used at the top; the Hierarchy's right-click menu uses the same categories; command ids stay the same so agents' tools don't change, and the demos and tour that open the menu are updated.
-
 ### Data and balance
 
 At the user's request (2026-10-14), before the Platforms block's Xbox exports (after Web): a game's items, spells,
@@ -133,6 +129,9 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Lay out the Entity menu in one go: the long flat list of things to add becomes categories (Basics, Characters, Level, Physics, UI, Story, Audio, Lights and Effects, and one per genre module) found the way components are, by an attribute on each create command (no hand-kept list), each entry with an icon and a one-line description of what it makes; a searchable Add Entity palette (like Add Component) with recently used at the top; the Hierarchy's right-click menu uses the same categories; command ids stay the same so agents' tools don't change, and the demos and tour that open the menu are updated. (2026-10-15)
+  - A create command's category is a `[Category("...")]` on the type that describes it (`EditorCommand.DescribedBy`, so a module's `EntityPreset` says its own: its module's name), read as `EditorCommand.Category`; `CommandCategories` orders them (Basics, Characters, Gameplay, Level, Physics, UI, Story, Audio, Lights and Effects, then the modules' alphabetically, together in a Genres submenu so a new module never makes the menu taller) and gives each item's text (its Text without "Create ") and one line (the first sentence of the `///` summary agents read). `CommandRegistry.Categorized` lists them; `CommandMenuItems` builds the submenus for the main menu (`MenuBuilder`) and the Hierarchy's right-click menu (`HierarchyView.BuildMenu`) alike, each item with its icon (new glyphs in `Icons`; presets name theirs, `EntityPreset.Icon`, resolved by `Icons.Named`) and its line as a tooltip.
+  - **Entity → Add Entity...** (`Entity.AddEntity`, Ctrl+Shift+A, and the Hierarchy's +) opens the Hierarchy panel's `Palette` (`EntityPaletteViewModel`): searchable by name, category and description, Recent first (`EditorSettings.RecentEntities`, recorded by `CommandRegistry` from each categorized command's new `Executed` event, however it ran), PlanText, items needing a selection faded. New Audio commands: Music, Sound Source, Sound Player, Beat Clock. Command ids unchanged; tool descriptions say "(Menu: Entity > Characters > Grid Enemy", the reference lists them by category, and `EntityMenuTests` fails for a create command without a category, icon or summary.
 - [x] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it. (2026-10-15)
   - `Griff.Modules.Adventures`: `WalkArea` (a polygon floor edited in the Scene view; Blocks for holes; Far/Near Scale for depth), `Walker` (shortest way over a visibility graph of the floor's inside corners and the holes' corners, Walk/Idle clips, speech over its head, verbs, Walk To/Stop/Say, state kept for rewinds), `Hotspot` (name and pointer on hover, Stand At, Look and Use each with a line, an action, a flag and a message, Use Talks, Needs Flag), and Entity menu presets.
   - Core: `IPointOutline` (the Scene view edits any outline's points), `IInput.Cursor` (desktop and browser pointers), and clicks or taps move dialogue on. `tools\web.ps1 -Check` plays an adventure in the browser.

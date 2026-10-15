@@ -378,7 +378,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     }
 
     /// <summary>
-    /// Opens a main-menu menu and clicks an item in it: Menu("Entity", "Create Tilemap"), or in a submenu of it, with
+    /// Opens a main-menu menu and clicks an item in it: Menu("Game", "Play"), or in a submenu of it, with
     /// "&gt;" between: Menu("View", "Layouts > Art").
     /// </summary>
     public async Task Menu(string top, string item, string? spotlight = null)
@@ -428,7 +428,12 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         // Last resort: run the item's command, or pick the choice in its submenu, as clicking it would.
         var first = header.Items.OfType<MenuItem>().First(m => HeaderText(m.Header) == steps[0]);
         var what = $"menu {top} > {string.Join(" > ", steps)}";
-        if (steps.Length > 1 && first.Tag is Core.Commands.EditorCommand chooser)
+        MenuItem? deepest = first;
+        foreach (var step in steps.Skip(1))
+            deepest = deepest?.Items.OfType<MenuItem>().FirstOrDefault(m => HeaderText(m.Header) == step);
+        if (steps.Length > 1 && deepest is { Command: Core.Commands.EditorCommand inner })
+            await RunFallback(inner.ExecuteAsync, what); // in submenus of commands, a category's
+        else if (steps.Length > 1 && first.Tag is Core.Commands.EditorCommand chooser)
             await RunFallback(() => chooser.ChooseAsync(item), what);
         else if (first.Command is Core.Commands.EditorCommand command)
             await RunFallback(command.ExecuteAsync, what);

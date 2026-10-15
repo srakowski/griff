@@ -15,14 +15,14 @@ deselect
 say: A tilemap is a grid of tiles, and each number in Tiles is one: 1 is a wall and a dot is empty floor. Typing the rows is the quickest way to lay out a small level. The camera is moved over the room.
 shot: room
 
-chapter: A worker | Create Grid Player
+chapter: A worker | Entity > Characters > Grid Player
 create: Grid Player
 set: Transform.Position.X = 1.5
 set: Transform.Position.Y = -1.5
 say: A grid player steps from cell to cell, one press for one step, and the tilemap's walls stop it.
 deselect
 
-chapter: Crates and goals | Create Crate, Create Goal
+chapter: Crates and goals | A crate and a goal
 create: Crate
 rename: Crate A
 set: Transform.Position.X = 3.5
@@ -33,7 +33,7 @@ rename: Crate B
 set: Transform.Position.X = 2.5
 set: Transform.Position.Y = -3.5
 deselect
-say: In a scene with a grid player, Create Crate makes a grid crate: a Pushable that slides one cell when the player steps into it, as long as the cell beyond is free.
+say: In a scene with a grid player, a crate (under Physics) is a grid crate: a Pushable that slides one cell when the player steps into it, as long as the cell beyond is free.
 deselect
 create: Goal
 rename: Goal A

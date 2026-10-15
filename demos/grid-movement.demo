@@ -22,7 +22,7 @@ deselect
 create: Grid Player
 set: Transform.Position.X = 1.4
 set: Transform.Position.Y = -1.6
-explain: menu:Entity | Entity, Create Grid Player | The Entity menu has a new player: Create Grid Player.
+explain: menu:Entity | Entity, Characters, Grid Player | The Entity menu has a new player under Characters: Grid Player.
 explain: component:GridMovement | Grid Movement | It's a box with a body and a collider, like the other players, and a Grid Movement instead of running and jumping.
 explain: field:GridMovement.StepTime | Step Time | Each press steps it one cell of the tilemap, gliding there in this many seconds.
 explain: field:GridMovement.RepeatDelay | Repeat and Repeat Delay | Holding a way keeps it walking, straight away or after a pause, which suits careful puzzle steps.

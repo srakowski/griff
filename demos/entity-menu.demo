@@ -1,0 +1,28 @@
+title: The Entity menu, laid out
+intro: What you can add is sorted into categories, each thing with an icon and a line saying what it makes, and Add Entity finds it as you type.
+project: Platformer | Entity Menu
+
+chapter: Categories | Entity > Characters > Grid Enemy
+say: The Entity menu used to be one long list. Now it's sorted into categories: basics, characters, gameplay, the level, physics, UI, story, audio, lights and effects, and genres, with one for each genre module, so the menu stays short however many there are.
+deselect
+menu: Entity > Characters > Grid Enemy
+expectselected: Enemy
+explain: component:GridChase | Grid Enemy | Every item has an icon, and hovering it says what it makes. This one is an enemy that chases the player tile by tile.
+
+chapter: Add Entity | Type to find it
+deselect
+entitylist
+explain: entitylist | Add Entity | The plus at the top of the Hierarchy, or Control Shift A, opens Add Entity: everything the menu makes, by category, each with a line saying what it is.
+explain: entitylist:recent:Grid Enemy | Recent | What you made lately is at the top, so the enemy from a moment ago is one key away. It's remembered between sessions.
+type: waterfall
+explain: entitylist:list | Found by what it does | Typing searches names, categories and what things do. A waterfall finds the sound source, a sound that loops where it's put.
+explain: entitylist:plan | What Enter makes | Underneath, it says what Enter will make.
+key: Enter
+expectselected: Sound Source
+explain: component:SoundSource | Sound Source | Audio is a category of its own now, with music, looping sounds, sounds that play on a message, and a beat clock.
+
+chapter: Right-click the Hierarchy | The same categories
+hierarchymenu: Lights and Effects > Light
+expectselected: Light
+explain: entity:Light | Same place, every time | Right-clicking the Hierarchy has the same categories, so things to add are where you expect them wherever you start.
+say: The menu items are the same commands as before, so agents' tools didn't change, and each one says its category to them too.

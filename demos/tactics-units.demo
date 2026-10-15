@@ -2,7 +2,7 @@ title: Tactics units
 intro: Pick a unit, see how far it can walk and hit, then send it in. Two sides take turns, with no code.
 project: Empty | Skirmish
 
-chapter: Four units on a field | Entity > Create Tactics Unit
+chapter: Four units on a field | Entity > Genres > Tactics > Tactics Unit
 create: Tilemap
 rename: Field
 set: Tilemap.Tiles = 1111111111\n1........1\n1...11...1\n1........1\n1........1\n1111111111
@@ -14,7 +14,7 @@ deselect
 create: Tactics Unit
 rename: Knight
 set: Transform.Position = 1.5, -2.5, 0
-explain: component:TacticsUnit | Tactics Unit | Create Tactics Unit makes a unit: it walks up to four cells a turn and hits whatever is next to it.
+explain: component:TacticsUnit | Tactics Unit | Tactics Unit, under Tactics, makes a unit: it walks up to four cells a turn and hits whatever is next to it.
 explain: panel:Hierarchy | Turns and controls | The first unit also brings a turn order, Blue then Red, with an End Turn button, and the tactics controls that let you pick units with the mouse.
 create: Tactics Unit
 rename: Orc

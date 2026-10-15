@@ -6,11 +6,12 @@ using Griff.Scenes.Serialization;
 namespace Griff.Modules.Dungeons;
 
 /// <summary>
-/// Creates a dungeon: a <see cref="Tilemap"/> with a <see cref="DungeonGenerator"/> 48 cells across and 32 down, centered
-/// on the scene's middle, showing a dungeon made from a new seed: rooms and corridors cut from solid wall (Fill Walls), so
-/// they show without a tileset. The game makes its own each time it starts (its Seed is 0); set a Seed to keep one, and
+/// Creates a dungeon of rooms and corridors cut from solid wall, made afresh each game. It's a <see cref="Tilemap"/> with a
+/// <see cref="DungeonGenerator"/> 48 cells across and 32 down, centered on the scene's middle, showing one made from a new
+/// seed (Fill Walls shows its walls without a tileset). The game makes its own each time it starts (its Seed is 0); set a Seed to keep one, and
 /// use Generate Dungeon to see it. It puts the entity called "Player" in the first room.
 /// </summary>
+[Category("Dungeons")]
 public sealed class DungeonPreset : EntityPreset
 {
     public override string Id => "Entity.CreateDungeon";
@@ -18,6 +19,8 @@ public sealed class DungeonPreset : EntityPreset
     public override string Text => "Create D_ungeon";
 
     public override int Order => 21;
+
+    public override string? Icon => "Key";
 
     public override string EntityName(Scene scene) => "Dungeon";
 

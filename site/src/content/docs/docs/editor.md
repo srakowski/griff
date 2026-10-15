@@ -13,6 +13,7 @@ Griff's editor is where a game is made and played at once. These are its parts a
 | Open project | Ctrl+O |
 | Save scene | Ctrl+S |
 | Undo / redo | Ctrl+Z / Ctrl+Y |
+| Add Entity (find something to make by typing) | Ctrl+Shift+A |
 | Create empty entity | Ctrl+Alt+N |
 | Rename, duplicate, delete | F2, Ctrl+D, Delete |
 | Play / pause / step / stop | F5 / F6 / F10 / Shift+F5 |
@@ -91,6 +92,14 @@ The **BunnyMark** template is a benchmark rather than a game: bunnies pour in fr
 ## Making sounds and music
 
 **Audio → New Sound** opens the Sound Maker. Pick a starting point (**Coin**, **Jump**, **Shoot**, **Explosion**, **Power Up**, **Hit**, **Blip** or **Random**) and it makes a fresh retro sound of that kind and plays it; click again for another. **Mutate** nudges every setting for "like that, but different", the **Wave** buttons change its tone, and the sliders shape it (its envelope, pitch slides, vibrato, a "ba-ding" change of pitch, repeats, a phaser and filters), playing it after every change. **Save** puts it in `Sounds/` as a WAV. **Audio → New Music** (or the **Music** button) writes a looping tune instead: pick a **Mood** (**Bright**, **Chill**, **Tense**, **Spooky** or **Heroic**: each has its own scale, chords, beat and accompaniment), then **New Tune** for another in the same mood, and set its **Tempo**, **Bars**, **Lead** sound and which **Parts** play (melody, bass, chords, drums). It's saved in `Music/`, and its end runs straight into its start, so it can play under a level forever. Sounds made here remember how they were made: double-click one in the Assets panel to play it, or right-click it and choose **Edit in Sound Maker** to tweak it and save over it (heard straight away, even in the running game). The Platformer, Top-down, Isometric, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3 and Falling Blocks templates come with their sounds and a theme tune made this way, already hooked up: jumps, coins, swings, hits, explosions, checkpoints, doors, switches, springs, menu buttons, orders, digging, building, crafting, the tools, crates sliding onto their marks, gems clearing, and blocks turning, locking and clearing.
+
+## Adding entities
+
+The **Entity** menu sorts what it makes into categories, a submenu each: **Basics** (an empty entity, a sprite, text, a camera), **Characters** (platformer, top-down and grid players, a grid enemy, an attack for the selected entity), **Gameplay** (a turn order), **Level** (a tilemap, a room, a ladder, a switch), **Physics** (a crate, a spring), **UI** (a button, toggle, slider, choice, bar and panel), **Story** (a dialogue box), **Audio** (music, a looping sound, a sound that plays on a message, a beat clock) and **Lights and Effects** (a light, particles, weather), then **Genres**, with one for each genre module that makes something (**Adventures**, **Cards**, **Dungeons**, **Falling Blocks**, **Match-3**, **Puzzles**, **Tactics**), so a new module never makes the menu taller. Each item has an icon, and hovering it says in a line what it makes. Right-clicking the Hierarchy has the same submenus. What's made goes inside the selected entity (on empty space in the Hierarchy, nothing is selected, so it goes at the top) and is selected.
+
+**Entity → Add Entity...** (Ctrl+Shift+A, or the + at the top of the Hierarchy) opens a searchable list of all of it: type a few letters and the best match is picked (`enemy` finds **Grid Enemy**), and words find things by their category or by what they do too (`audio` lists the sounds, `waterfall` finds a **Sound Source**). Up and Down move through it, Enter (or a click) makes the picked one, and the line under the list says what it is. What you made lately, from the menus or the list, is listed first under **Recent**, kept between sessions. Something that needs a selection (**Add Attack** gives the selected entity one) is faded until there is one.
+
+Where something is listed comes from the code: each command that makes something (and each module's `EntityPreset`) has a `[Category("...")]`, the way a component's does in the catalog, and its one line is the first sentence of its `///` summary, which is also what agents read about its tool. The commands keep their ids, so the tools are the same (`Entity_CreateGridEnemy`), and each tool's description says where it's listed ("Menu: Entity > Characters > Grid Enemy", "Menu: Entity > Genres > Match-3 > Match Board").
 
 ## Adding components
 

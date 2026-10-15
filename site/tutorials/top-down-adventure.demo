@@ -3,7 +3,7 @@ intro: A dark dungeon lit by your lantern, a key, a locked door and a treasure b
 summary: Build a small top-down dungeon from an empty project: a hero with a lantern, walls that cast shadows, a key and a locked door, a treasure and a bat.
 project: Empty | Dungeon
 
-chapter: A hero with a lantern | Create Top-down Player
+chapter: A hero with a lantern | Entity > Characters > Top-down Player
 say: A top-down game looks down on the world, so there is no gravity and the hero moves in eight directions. Start from the Empty template and make the hero.
 deselect
 create: Top-down Player

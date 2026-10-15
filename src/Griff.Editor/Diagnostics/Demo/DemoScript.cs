@@ -202,9 +202,9 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     {
         await Chapter(4, "Paint a level", "Tilemaps: walls and floors you paint right in the Scene view.");
 
-        await ui.Say("Levels in Griff are usually tilemaps. The Entity menu is where every kind of thing you can make lives. I'll create a tilemap.");
+        await ui.Say("Levels in Griff are usually tilemaps. The Entity menu is where every kind of thing you can make lives, sorted into categories. A tilemap is under Level.");
         await Deselect();
-        await ui.Menu("Entity", "Create Tilemap", "Entity → Create Tilemap");
+        await ui.Create("Tilemap", "Entity → Level → Tilemap");
         await Rename("Level");
         await ui.SetNumber("Transform", "Position", 7, "Y", "Top-left corner of the map");
 
@@ -260,9 +260,9 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private async Task AddPlayer()
     {
         await Chapter(5, "A hero who can run and jump", "A no-code platformer player, then make it look like ours.");
-        await ui.Say("Now for our hero. Entity, Create Platformer Player makes a player that runs, jumps, and even wall-jumps, with no code at all.");
+        await ui.Say("Now for our hero. Entity, Characters, Platformer Player makes a player that runs, jumps, and even wall-jumps, with no code at all.");
         await Deselect();
-        await ui.Menu("Entity", "Create Platformer Player", "Entity → Create Platformer Player");
+        await ui.Create("Platformer Player", "Entity → Characters → Platformer Player");
         await ui.SetVector("Transform", "Position", DemoLevel.PlayerStart.X, DemoLevel.PlayerStart.Y, "Start by the left wall");
 
         await ui.Say("It starts as an orange box. Let's give it the hero sprite sheet: eight frames in one row.");
@@ -366,7 +366,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await Chapter(8, "Coins and a score", "Pickups and counters work together with no code.");
         await Deselect();
         await ui.Say("Let's give the player something to collect. I'll make a sprite for the first coin.");
-        await ui.Menu("Entity", "Create Sprite");
+        await ui.Create("Sprite");
         await Rename("Coin");
         await ui.SetVector("Transform", "Position", DemoLevel.Coins[0].X, DemoLevel.Coins[0].Y);
         await ui.SetText("Sprite", "Image", "Sprites/coin.png");
@@ -395,7 +395,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         // A HUD counter.
         await Deselect();
         await ui.Say("A Counter adds up those Score messages by itself. I'll put one on a text in the top left corner of the screen.");
-        await ui.Menu("Entity", "Create Text");
+        await ui.Create("Text");
         await Rename("Score");
         await ui.SetText("Text", "Value", "Coins: 0");
         await ui.SetNumber("Text", "Size", 0.6);
@@ -417,7 +417,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await Chapter(9, "Slimes and a sword", "Enemies that patrol and hurt, health that respawns, and a way to fight back.");
         await Deselect();
         await ui.Say("A level needs some danger. Let's build a slime from parts.");
-        await ui.Menu("Entity", "Create Sprite");
+        await ui.Create("Sprite");
         await Rename("Slime");
         await ui.SetVector("Transform", "Position", DemoLevel.Slime1.X, DemoLevel.Slime1.Y);
         await ui.SetText("Sprite", "Image", "Sprites/slime.png");
@@ -461,8 +461,8 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.SetCheck("Health", "Respawn", true, "Back at the last checkpoint");
         await ui.SetNumber("Health", "Invincible Time", 1);
 
-        await ui.Say("To fight back, Entity, Add Attack gives the player a swing on the Attack key, which is X. It adds a hitbox that only exists while swinging. I'll give the hitbox a slash sprite so we can see it.");
-        await ui.Menu("Entity", "Add Attack", "Entity → Add Attack");
+        await ui.Say("To fight back, Entity, Characters, Add Attack gives the player a swing on the Attack key, which is X. It adds a hitbox that only exists while swinging. I'll give the hitbox a slash sprite so we can see it.");
+        await ui.Create("Add Attack", "Entity → Characters → Add Attack");
         await ui.AddComponent("Sprite");
         await ui.SetText("Sprite", "Image", "Sprites/slash.png");
         await ui.SetVector("Sprite", "Size", 1.4, 0.7);
@@ -471,7 +471,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.Say("Then a health bar. Create Bar, set it to track Player, and it follows the player's health on its own.");
         await FastForward(async () =>
         {
-            await ui.Menu("Entity", "Create Bar");
+            await ui.Create("Bar");
             await Rename("Hearts");
             await ui.SetText("Bar", "Track", "Player");
             await ui.SetVector("Bar", "Size", 2.4, 0.3);
@@ -488,7 +488,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
                 var (at, size) = DemoLevel.Ponds[i];
                 if (i == 0)
                 {
-                    await ui.Menu("Entity", "Create Empty");
+                    await ui.Create("Empty");
                     await Rename("Pond");
                     await ui.SetVector("Transform", "Position", at.X, at.Y);
                     await ui.AddComponent("BoxCollider");
@@ -508,7 +508,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
 
             // A checkpoint flag past the ledge.
             await Deselect();
-            await ui.Menu("Entity", "Create Sprite");
+            await ui.Create("Sprite");
             await Rename("Checkpoint");
             await ui.SetVector("Transform", "Position", DemoLevel.Checkpoint.X, DemoLevel.Checkpoint.Y);
             await ui.SetText("Sprite", "Image", "Sprites/flag.png");
@@ -553,7 +553,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await Chapter(10, "Your own code", "Scripts are C#. Save, and the running game picks them up.");
         await Deselect();
         await ui.Say("So far, no code at all. But sometimes you want something of your own. Let's put a key on the high ledge, and make it float with a script.");
-        await ui.Menu("Entity", "Create Sprite");
+        await ui.Create("Sprite");
         await Rename("Key");
         await ui.SetVector("Transform", "Position", DemoLevel.Key.X, DemoLevel.Key.Y);
         await ui.SetText("Sprite", "Image", "Sprites/key.png");
@@ -629,7 +629,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await Chapter(11, "A locked door", "Keys, locks and the way out, with no code.");
         await Deselect();
         await ui.Say("The key needs a door. A Door component goes somewhere when the player walks into it. Give it a Key, and it won't open until the player has one in their inventory.");
-        await ui.Menu("Entity", "Create Sprite");
+        await ui.Create("Sprite");
         await Rename("Door");
         await ui.SetVector("Transform", "Position", DemoLevel.Door.X, DemoLevel.Door.Y);
         await ui.SetText("Sprite", "Image", "Sprites/door.png");
@@ -672,7 +672,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
                 var at = DemoLevel.Torches[i];
                 if (i == 0)
                 {
-                    await ui.Menu("Entity", "Create Light");
+                    await ui.Create("Light");
                     await Rename("Torch");
                     await ui.SetVector("Transform", "Position", at.X, at.Y);
                     await ui.SetNumber("Light", "Radius", 6);
@@ -694,7 +694,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             }
 
             await Deselect();
-            await ui.Menu("Entity", "Create Sprite");
+            await ui.Create("Sprite");
             await Rename("Hills");
             await ui.SetVector("Transform", "Position", 32, -2);
             await ui.SetText("Sprite", "Image", "Sprites/hills.png");
@@ -729,7 +729,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await DemoUi.Settle(300);
 
         await ui.Say("A big title, and a Play button. A button's Action can load a scene, restart, quit or open a panel, all without a line of code.");
-        await ui.Menu("Entity", "Create Text");
+        await ui.Create("Text");
         await Rename("Title");
         await ui.SetText("Text", "Value", "EMBER HOLLOW");
         await ui.SetNumber("Text", "Size", 1.4);
@@ -737,7 +737,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await ui.SetNumber("Transform", "Position", 1.6, "Y");
 
         await Deselect();
-        await ui.Menu("Entity", "Create Button");
+        await ui.Create("Button");
         await Rename("Play");
         await ui.SetText("Text", "Value", "Play");
         await ui.SetNumber("Transform", "Position", -1, "Y");
@@ -750,7 +750,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         await FastForward(async () =>
         {
             await Deselect();
-            await ui.Menu("Entity", "Create Text");
+            await ui.Create("Text");
             await Rename("Hint");
             await ui.SetText("Text", "Value", "Find the key. Reach the door.");
             await ui.SetNumber("Text", "Size", 0.45);
@@ -770,14 +770,14 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             await TypeIntoPrompt("Win");
             await DemoUi.WaitFor(() => workspace.Scene?.Name == "Win" ? workspace.Scene : null, "the Win scene");
             await DemoUi.Settle(200);
-            await ui.Menu("Entity", "Create Text");
+            await ui.Create("Text");
             await Rename("Title");
             await ui.SetText("Text", "Value", "YOU ESCAPED!");
             await ui.SetNumber("Text", "Size", 1.2);
             await ui.SetText("Text", "Color", "#7BD35A");
             await ui.SetNumber("Transform", "Position", 1.8, "Y");
             await Deselect();
-            await ui.Menu("Entity", "Create Text");
+            await ui.Create("Text");
             await Rename("Best");
             await ui.SetText("Text", "Value", "Most coins: 0");
             await ui.SetNumber("Text", "Size", 0.55);
@@ -787,7 +787,7 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
             await ui.SetText("Counter", "Format", "Most coins: {1}");
             await ui.SetText("Counter", "Save Best As", "coins");
             await Deselect();
-            await ui.Menu("Entity", "Create Button");
+            await ui.Create("Button");
             await Rename("Again");
             await ui.SetText("Text", "Value", "Play again");
             await ui.SetNumber("Transform", "Position", -1.2, "Y");

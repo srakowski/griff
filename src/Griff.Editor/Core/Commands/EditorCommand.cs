@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Windows.Input;
 
 namespace Griff.Editor.Core.Commands;
@@ -10,6 +11,7 @@ namespace Griff.Editor.Core.Commands;
 public abstract class EditorCommand : ICommand
 {
     private bool _isExecuting;
+    private string? _category;
 
     /// <summary>Stable identifier, e.g. "File.Save". Used for lookup, keymaps and a future command palette.</summary>
     public abstract string Id { get; }
@@ -19,6 +21,16 @@ public abstract class EditorCommand : ICommand
     /// own, unless it stands for something else, as an Entity menu preset's command does for the preset.
     /// </summary>
     public virtual Type DescribedBy => GetType();
+
+    /// <summary>
+    /// The category it's listed under when it makes something (the Entity menu's submenus and the Add Entity palette, e.g.
+    /// "Characters", or a genre module's name), from a [Category] on its <see cref="DescribedBy"/> type, the way components
+    /// get theirs; null for an ordinary command.
+    /// </summary>
+    public string? Category => (_category ??= DescribedBy.GetCustomAttribute<Griff.Scenes.CategoryAttribute>(inherit: false)?.Name ?? "") is { Length: > 0 } name ? name : null;
+
+    /// <summary>Raised after it has run (from a menu, a palette, a key or an agent) without throwing.</summary>
+    public event EventHandler? Executed;
 
     /// <summary>Display text. Use '_' to mark the access key.</summary>
     public abstract string Text { get; }
@@ -86,16 +98,21 @@ public abstract class EditorCommand : ICommand
         // Disable the command while it runs so a slow save can't be triggered twice.
         _isExecuting = true;
         Outcome = null;
+        var ran = false;
         CommandManager.InvalidateRequerySuggested();
         try
         {
             await run();
+            ran = true;
         }
         finally
         {
             _isExecuting = false;
             CommandManager.InvalidateRequerySuggested();
         }
+
+        if (ran)
+            Executed?.Invoke(this, EventArgs.Empty);
     }
 
     bool ICommand.CanExecute(object? parameter) => CanExecute();

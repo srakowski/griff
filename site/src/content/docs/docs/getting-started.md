@@ -32,7 +32,7 @@ While playing, Griff keeps the last 20 seconds: pause and drag the **Rewind** ba
 ## Change it
 
 - Select an entity in the **Hierarchy** or the **Scene view**, and change its components in the **Inspector**. Every change is one undo step (Ctrl+Z, Ctrl+Y).
-- The **Entity** menu makes ready-made things (a platformer player, a camera, a button, a tilemap, a crate...), and **Entity → New Script** makes a C# script, attaches it to the selected entity and opens it. Save it, and the running game picks it up at once.
+- The **Entity** menu makes ready-made things, sorted into categories (a platformer player under **Characters**, a tilemap under **Level**, a button under **UI**...); **Entity → Add Entity...** (Ctrl+Shift+A) finds one as you type. **Entity → New Script** makes a C# script, attaches it to the selected entity and opens it. Save it, and the running game picks it up at once.
 - Select a tilemap to paint it in the Scene view: **B** brush, **R** rectangle, **G** fill, Shift to erase.
 
 | Action | Shortcut |
@@ -41,6 +41,7 @@ While playing, Griff keeps the last 20 seconds: pause and drag the **Rewind** ba
 | Open project | Ctrl+O |
 | Save scene | Ctrl+S |
 | Undo / redo | Ctrl+Z / Ctrl+Y |
+| Add Entity (find something to make by typing) | Ctrl+Shift+A |
 | Create empty entity | Ctrl+Alt+N |
 | Rename, duplicate, delete | F2, Ctrl+D, Delete |
 | Play / pause / step / stop | F5 / F6 / F10 / Shift+F5 |

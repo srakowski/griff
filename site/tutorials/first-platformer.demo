@@ -3,7 +3,7 @@ intro: A hero that runs and jumps, ground to stand on, a coin to grab and a slim
 summary: Build a small platformer from an empty project: a hero, a level, a coin that counts a score and a slime that hurts.
 project: Empty | My Platformer
 
-chapter: A hero | Entity > Create Platformer Player
+chapter: A hero | Entity > Characters > Platformer Player
 say: Start a new project from the Empty template (File, New Project). It opens on a scene with just a camera. The Entity menu makes ready-made things, and the first one a platformer needs is its hero.
 deselect
 create: Platformer Player

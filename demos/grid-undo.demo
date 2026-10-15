@@ -3,7 +3,7 @@ intro: Grid puzzles with no code: Z takes a move back, R starts the level over, 
 
 project: Empty | Crate Undo
 
-chapter: A puzzle to get wrong | Create Goal brings a Move History along
+chapter: A puzzle to get wrong | A goal brings a Move History along
 create: Tilemap
 rename: Level
 set: Tilemap.Tiles = 11111111\n1......1\n1......1\n1......1\n11111111

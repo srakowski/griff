@@ -19,7 +19,7 @@ create: Tactics Unit
 rename: Orc
 set: Transform.Position = 5.5, -1.5, 0
 select: Turns
-explain: field:TurnOrder.ComputerSides | Red is the computer's | Create Tactics Unit has the computer play Red.
+explain: field:TurnOrder.ComputerSides | Red is the computer's | The first tactics unit set the computer to play Red.
 select: Orc
 say: This orc charges: it comes after the nearest foe.
 explain: field:TacticsUnit.Stance | Stance | Its Stance says how the computer plays it: Charge comes at you, Guard waits until you come close, and Hold never moves.

@@ -23,9 +23,9 @@ say: Scripts see shadows too. Game dot Light At says how lit a spot is, so a ste
 wait: 1
 stop
 
-chapter: Weather | Entity, Create Weather
+chapter: Weather | Entity, Lights and Effects, Weather
 create: Weather
-explain: component:Weather | Weather | Create Weather makes rain, snow, falling leaves or rising embers that fill the view wherever the camera goes.
+explain: component:Weather | Weather | Weather, under Lights and Effects, makes rain, snow, falling leaves or rising embers that fill the view wherever the camera goes.
 set: Weather.Amount = 0.8
 set: Weather.Wind = -4
 explain: field:Weather.Wind | Wind | Amount says how heavy it is, and Wind slants the rain and drifts the snow.

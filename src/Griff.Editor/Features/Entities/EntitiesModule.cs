@@ -13,7 +13,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Entities;
 
-// Entity menu groups: 0 = create, 1 = edit selected.
+// Entity menu groups: 0 = create (Add Entity..., then a submenu per [Category] of the create commands and presets), 1 = edit
+// selected. Each create command's [Category] says where it's listed, as a component's does in the catalog.
 public sealed class EntitiesModule : IEditorModule
 {
     public void ConfigureServices(IServiceCollection services)
@@ -45,6 +46,10 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateLightCommand>()
             .AddCommand<CreateRoomCommand>()
             .AddCommand<CreateWeatherCommand>()
+            .AddCommand<CreateMusicCommand>()
+            .AddCommand<CreateSoundSourceCommand>()
+            .AddCommand<CreateSoundPlayerCommand>()
+            .AddCommand<CreateBeatClockCommand>()
             .AddCommand<CreateHitboxCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
@@ -81,8 +86,9 @@ public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISe
 
     public override string Text => preset.Text;
 
-    public override string? Icon => Icons.Add;
+    public override string? Icon => Icons.Named(preset.Icon) ?? Icons.Add;
 
+    // Its category (a [Category] naming its module) comes from the preset too, as its description does.
     public override Type DescribedBy => preset.GetType();
 
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: preset.Order);
@@ -114,7 +120,7 @@ public sealed class EntityActionCommand(EntityAction action, IWorkspace workspac
 
     public override string Text => action.Text;
 
-    public override string? Icon => action.Icon is { } name ? typeof(Icons).GetField(name)?.GetValue(null) as string : null;
+    public override string? Icon => Icons.Named(action.Icon);
 
     public override Type DescribedBy => action.GetType();
 
@@ -200,17 +206,19 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
 }
 
 /// <summary>Creates an empty entity (just a transform) inside the selected entity, or at the top level, and selects it.</summary>
+[Category("Basics")]
 public sealed class CreateEmptyCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateEmpty";
     public override string Text => "Create _Empty";
-    public override string? Icon => Icons.Add;
+    public override string? Icon => Icons.Box;
     public override KeyGesture? Gesture { get; } = new(Key.N, ModifierKeys.Control | ModifierKeys.Alt);
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Entity";
 }
 
 /// <summary>Creates an entity with a Sprite (a white box until it's given an Image) and selects it.</summary>
+[Category("Basics")]
 public sealed class CreateSpriteCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateSprite";
@@ -222,56 +230,61 @@ public sealed class CreateSpriteCommand(IWorkspace workspace, ISelection selecti
 }
 
 /// <summary>Creates a camera: what the game is seen through.</summary>
+[Category("Basics")]
 public sealed class CreateCameraCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateCamera";
     public override string Text => "Create _Camera";
     public override string? Icon => Icons.Camera;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Camera";
     protected override void Configure(Entity entity) => entity.AddComponent<Camera>();
 }
 
 /// <summary>Creates an entity with a Text: words in the world, or on the HUD with a ScreenAnchor.</summary>
+[Category("Basics")]
 public sealed class CreateTextCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateText";
     public override string Text => "Create _Text";
     public override string? Icon => Icons.Font;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Text";
     protected override void Configure(Entity entity) => entity.AddComponent<Griff.Scenes.Text>().Order = OrderAbove(0);
 }
 
 /// <summary>Creates an empty tilemap; selecting it puts the Scene view into tile painting.</summary>
+[Category("Level")]
 public sealed class CreateTilemapCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateTilemap";
     public override string Text => "Create Tile_map";
-    public override string? Icon => Icons.Palette;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
+    public override string? Icon => Icons.Tiles;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Tilemap";
     protected override void Configure(Entity entity) => entity.AddComponent<Tilemap>().Tint = Griff.Color.FromBytes(0x48, 0x4B, 0x55);
 }
 
 /// <summary>Creates a particle emitter: sparks, smoke, dust, magic.</summary>
+[Category("Lights and Effects")]
 public sealed class CreateParticlesCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateParticles";
     public override string Text => "Create Pa_rticles";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 5);
+    public override string? Icon => Icons.Confetti;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
     protected override string EntityName => "Particles";
     protected override void Configure(Entity entity) => entity.AddComponent<ParticleEmitter>();
 }
 
 /// <summary>Creates a clickable button: a background sprite, a label and a Button set to do nothing until configured.</summary>
+[Category("UI")]
 public sealed class CreateButtonCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateButton";
     public override string Text => "Create _Button";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 6);
+    public override string? Icon => Icons.Tap;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Button";
 
     protected override void Configure(Entity entity)
@@ -289,23 +302,25 @@ public sealed class CreateButtonCommand(IWorkspace workspace, ISelection selecti
 }
 
 /// <summary>Creates a slider for an options menu; set its Setting to a volume and it needs no code.</summary>
+[Category("UI")]
 public sealed class CreateSliderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateSlider";
     public override string Text => "Create Sl_ider";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 7);
+    public override string? Icon => Icons.Sliders;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Slider";
     protected override void Configure(Entity entity) => entity.AddComponent<Slider>().Order = OrderAbove(100);
 }
 
 /// <summary>Creates an on/off switch: a button whose label says which way it's set.</summary>
+[Category("UI")]
 public sealed class CreateToggleCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateToggle";
     public override string Text => "Create T_oggle";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 8);
+    public override string? Icon => Icons.Checkbox;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
     protected override string EntityName => "Toggle";
 
     protected override void Configure(Entity entity)
@@ -326,12 +341,13 @@ public sealed class CreateToggleCommand(IWorkspace workspace, ISelection selecti
 }
 
 /// <summary>Creates a bar for a HUD; set its Track to show an entity's health.</summary>
+[Category("UI")]
 public sealed class CreateBarCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateBar";
     public override string Text => "Create B_ar";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 9);
+    public override string? Icon => Icons.Battery;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
     protected override string EntityName => "Bar";
     protected override void Configure(Entity entity) => entity.AddComponent<Bar>();
 }
@@ -341,12 +357,13 @@ public sealed class CreateBarCommand(IWorkspace workspace, ISelection selection)
 /// out, with a name tag and a portrait above it for whoever is talking (see <see cref="Speaker"/>). It's hidden while the
 /// game runs until someone talks.
 /// </summary>
+[Category("Story")]
 public sealed class CreateDialogueBoxCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateDialogueBox";
     public override string Text => "Create _Dialogue Box";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 10);
+    public override string? Icon => Icons.Speech;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Dialogue Box";
 
     protected override void Configure(Entity entity)
@@ -389,12 +406,13 @@ public sealed class CreateDialogueBoxCommand(IWorkspace workspace, ISelection se
 /// Creates a lever: a small sprite with a trigger around it and a <see cref="Switch"/>. Name what it opens in its Targets
 /// (or Hides), or set its Mode to make it a pressure plate or a button.
 /// </summary>
+[Category("Level")]
 public sealed class CreateSwitchCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateSwitch";
     public override string Text => "Create S_witch";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 11);
+    public override string? Icon => Icons.Lever;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Switch";
 
     protected override void Configure(Entity entity)
@@ -413,12 +431,13 @@ public sealed class CreateSwitchCommand(IWorkspace workspace, ISelection selecti
 /// Creates a panel: a backdrop pinned to the middle of the screen with a <see cref="Panel"/>, hidden while the game runs
 /// until it's opened. Select it and create buttons to put them on it; set its Open On to "Pause" for a pause menu.
 /// </summary>
+[Category("UI")]
 public sealed class CreatePanelCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreatePanel";
     public override string Text => "Create Pa_nel";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 12);
+    public override string? Icon => Icons.Window;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 5);
     protected override string EntityName => "Panel";
 
     protected override void Configure(Entity entity)
@@ -434,12 +453,13 @@ public sealed class CreatePanelCommand(IWorkspace workspace, ISelection selectio
 }
 
 /// <summary>Creates a button that picks one of several options, changed with left and right: "Difficulty: Normal".</summary>
+[Category("UI")]
 public sealed class CreateChoiceCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateChoice";
     public override string Text => "Create C_hoice";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 13);
+    public override string? Icon => Icons.LeftRight;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Choice";
 
     protected override void Configure(Entity entity)
@@ -461,12 +481,13 @@ public sealed class CreateChoiceCommand(IWorkspace workspace, ISelection selecti
 /// Creates a platformer's player that runs and jumps with no code: a box sprite with a collider on the Player layer, a
 /// <see cref="Body"/> and a <see cref="PlatformerMovement"/>. Its Inspector tunes how it moves.
 /// </summary>
+[Category("Characters")]
 public sealed class CreatePlatformerPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreatePlatformerPlayer";
     public override string Text => "Create _Platformer Player";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 14);
+    public override string? Icon => Icons.Runner;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Player";
 
     protected override void Configure(Entity entity)
@@ -488,12 +509,13 @@ public sealed class CreatePlatformerPlayerCommand(IWorkspace workspace, ISelecti
 }
 
 /// <summary>Creates a top-down player that moves in eight directions with no code, ignoring gravity.</summary>
+[Category("Characters")]
 public sealed class CreateTopDownPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateTopDownPlayer";
     public override string Text => "Create Top-down Pla_yer";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 15);
+    public override string? Icon => Icons.Walker;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
     protected override string EntityName => "Player";
 
     protected override void Configure(Entity entity)
@@ -508,12 +530,13 @@ public sealed class CreateTopDownPlayerCommand(IWorkspace workspace, ISelection 
 /// Creates a player that steps tile by tile on the scene's tilemap with no code, blocked by its walls: a box sprite with
 /// a collider on the Player layer, a <see cref="Body"/> without gravity and a <see cref="GridMovement"/>.
 /// </summary>
+[Category("Characters")]
 public sealed class CreateGridPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateGridPlayer";
     public override string Text => "Create _Grid Player";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    public override string? Icon => Icons.Person;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Player";
 
     protected override void Configure(Entity entity)
@@ -531,12 +554,13 @@ public sealed class CreateGridPlayerCommand(IWorkspace workspace, ISelection sel
 /// a <see cref="GridChase"/>, and an <see cref="Attack"/> whose "Hitbox" child hurts the Player layer once it's next to
 /// the player. Add a <see cref="GridPatrol"/> to have it walk a route until it spots the player.
 /// </summary>
+[Category("Characters")]
 public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateGridEnemy";
     public override string Text => "Create Grid _Enemy";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    public override string? Icon => Icons.Robot;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Enemy";
 
     protected override void Configure(Entity entity)
@@ -576,12 +600,13 @@ public sealed class CreateGridEnemyCommand(IWorkspace workspace, ISelection sele
 /// gets a turn taker with one action (players on the Player side, chasers and patrols on the Enemy side), turns follow
 /// straight on, the text counts turns and the button waits a turn. Grid players and enemies created later join in.
 /// </summary>
+[Category("Gameplay")]
 public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateTurnOrder";
     public override string Text => "Create T_urn Order";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 16);
+    public override string? Icon => Icons.Turns;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Turns";
 
     private bool Grid => Scene is { } scene && GridMovers(scene).Any();
@@ -649,12 +674,13 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
 }
 
 /// <summary>Creates a ladder: a tall thin sprite behind things, with a trigger to climb. Stretch it with its Scale.</summary>
+[Category("Level")]
 public sealed class CreateLadderCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateLadder";
     public override string Text => "Create _Ladder";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 17);
+    public override string? Icon => Icons.Climb;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Ladder";
 
     protected override void Configure(Entity entity)
@@ -672,12 +698,13 @@ public sealed class CreateLadderCommand(IWorkspace workspace, ISelection selecti
 }
 
 /// <summary>Creates a spring: a low solid block with a <see cref="Bouncer"/> that sends whatever lands on it flying.</summary>
+[Category("Physics")]
 public sealed class CreateSpringCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateSpring";
     public override string Text => "Create Sprin_g";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 18);
+    public override string? Icon => Icons.Bounce;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
     protected override string EntityName => "Spring";
 
     protected override void Configure(Entity entity)
@@ -696,12 +723,13 @@ public sealed class CreateSpringCommand(IWorkspace workspace, ISelection selecti
 /// layer. In a scene with grid movers it's a grid crate, pushed a cell at a time: it gets a <see cref="GridMovement"/> and
 /// no gravity.
 /// </summary>
+[Category("Physics")]
 public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateCrate";
     public override string Text => "Create Cr_ate";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 19);
+    public override string? Icon => Icons.Cube;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Crate";
 
     protected override void Configure(Entity entity)
@@ -722,36 +750,99 @@ public sealed class CreateCrateCommand(IWorkspace workspace, ISelection selectio
 }
 
 /// <summary>Creates a light: an entity with a warm <see cref="Light"/>. It shows once the camera's Ambient is dark.</summary>
+[Category("Lights and Effects")]
 public sealed class CreateLightCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateLight";
     public override string Text => "Create Lig_ht";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 22);
+    public override string? Icon => Icons.Lightbulb;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
     protected override string EntityName => "Light";
     protected override void Configure(Entity entity) => entity.AddComponent<Light>();
 }
 
 /// <summary>Creates weather: an entity with a <see cref="Weather"/>, rain to start with, that fills the view while the game runs.</summary>
+[Category("Lights and Effects")]
 public sealed class CreateWeatherCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     public override string Id => "Entity.CreateWeather";
     public override string Text => "Create Weather";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 25);
+    public override string? Icon => Icons.Cloud;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
     protected override string EntityName => "Weather";
     protected override void Configure(Entity entity) => entity.AddComponent<Weather>();
 }
 
+/// <summary>
+/// Creates music for the scene: an entity with a <see cref="BackgroundMusic"/>, which plays its Music (make one with Audio &gt;
+/// New Music) when the scene starts, crossfading from whatever was playing.
+/// </summary>
+[Category("Audio")]
+public sealed class CreateMusicCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateMusic";
+    public override string Text => "Create _Music";
+    public override string? Icon => Icons.Music;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 0);
+    protected override string EntityName => "Music";
+    protected override void Configure(Entity entity) => entity.AddComponent<BackgroundMusic>();
+}
+
+/// <summary>
+/// Creates a sound that loops where it's put (a waterfall, a crackling fire): an entity with a <see cref="SoundSource"/>,
+/// louder the nearer it is to the middle of the screen. Pick its Sound in the Inspector.
+/// </summary>
+[Category("Audio")]
+public sealed class CreateSoundSourceCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateSoundSource";
+    public override string Text => "Create Sound _Source";
+    public override string? Icon => Icons.Speaker;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
+    protected override string EntityName => "Sound Source";
+    protected override void Configure(Entity entity) => entity.AddComponent<SoundSource>();
+}
+
+/// <summary>
+/// Creates a sound that plays when something happens, with no code: an entity with a <see cref="SoundPlayer"/>, which plays
+/// its Sound whenever its Message is sent (by a pickup, a switch or a script).
+/// </summary>
+[Category("Audio")]
+public sealed class CreateSoundPlayerCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateSoundPlayer";
+    public override string Text => "Create Sound _Player";
+    public override string? Icon => Icons.Volume;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 2);
+    protected override string EntityName => "Sound Player";
+    protected override void Configure(Entity entity) => entity.AddComponent<SoundPlayer>();
+}
+
+/// <summary>
+/// Creates a beat clock that keeps time with the music: an entity with a <see cref="BeatClock"/>, which sends "Beat" on
+/// every beat and "Bar" on every bar for sound players, spawners, movers and scripts to follow.
+/// </summary>
+[Category("Audio")]
+public sealed class CreateBeatClockCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateBeatClock";
+    public override string Text => "Create _Beat Clock";
+    public override string? Icon => Icons.Stopwatch;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
+    protected override string EntityName => "Beat Clock";
+    protected override void Configure(Entity entity) => entity.AddComponent<BeatClock>();
+}
+
 /// <summary>Creates a room one camera view big, for a camera with a Follow to keep to and slide between.</summary>
+[Category("Level")]
 public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
 {
     private readonly IWorkspace _workspace = workspace;
 
     public override string Id => "Entity.CreateRoom";
     public override string Text => "Create Roo_m";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 23);
+    public override string? Icon => Icons.Frame;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 1);
     protected override string EntityName => "Room";
 
     protected override void Configure(Entity entity)
@@ -767,12 +858,13 @@ public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection
 /// <see cref="DamageOnTouch"/> that hurts enemies) and an <see cref="Attack"/> that swings it out with the Attack action.
 /// One undo step.
 /// </summary>
+[Category("Characters")]
 public sealed class CreateHitboxCommand(IWorkspace workspace, ISelection selection) : EditorCommand
 {
     public override string Id => "Entity.CreateHitbox";
     public override string Text => "Add Atta_ck";
-    public override string? Icon => Icons.Add;
-    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 24);
+    public override string? Icon => Icons.Bolt;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
 
     protected override bool CanExecuteCore() => workspace.Scene is not null && selection.Entity is not null;
 

@@ -3,8 +3,8 @@ intro: Click somewhere and the player walks there, round whatever's in the way; 
 project: Empty | Adventure
 
 chapter: A floor to walk on | Walk areas and a walker
-# Built from Empty and Sprite (Create Walk Area, Create Hotspot and Create Walker make the same, but the Entity menu is
-# taller than a check's screen).
+# Built from Empty and Sprite, a component at a time (Entity > Genres > Adventures > Walk Area, Hotspot and Walker make the same in
+# one go).
 create: Empty
 rename: Floor
 set: Transform.Position = 0, -2, 0

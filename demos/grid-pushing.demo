@@ -2,7 +2,7 @@ title: Grid pushing
 intro: Sokoban crates with no code: a grid player pushes them a cell at a time, onto goals that count when they're covered.
 project: Empty | Crate Push
 
-chapter: A room with crates | Create Crate on a grid, and Create Goal
+chapter: A room with crates | A crate on a grid, and a goal
 create: Tilemap
 rename: Level
 set: Tilemap.Tiles = 11111111\n1......1\n1.11...1\n1......1\n11111111
@@ -20,7 +20,7 @@ create: Crate
 rename: Crate A
 set: Transform.Position.X = 3.5
 set: Transform.Position.Y = -1.5
-explain: component:GridMovement | A grid crate | Create Crate in a scene with a grid player makes a grid crate: a Pushable with a Grid Movement of its own, and no gravity.
+explain: component:GridMovement | A grid crate | A crate made in a scene with a grid player is a grid crate: a Pushable with a Grid Movement of its own, and no gravity.
 explain: group:Pushable.Grid | Pushes Row and Kind | Pushes Row lets it shove the crates behind it along too. Off, as in Sokoban, a crate behind it blocks the push. Kind is for goals that only take some crates.
 deselect
 create: Crate
@@ -32,7 +32,7 @@ create: Goal
 rename: Goal A
 set: Transform.Position.X = 5.5
 set: Transform.Position.Y = -1.5
-explain: menu:Entity | Entity, Create Goal | Create Goal makes a place to push a crate to: a flat square drawn under the crates.
+explain: menu:Entity | Entity, Genres, Puzzles, Goal | Goal, under Puzzles, makes a place to push a crate to: a flat square drawn under the crates.
 explain: component:Goal | Goal | It's covered while a crate rests in its cell. The crate turns its Covered Tint, and it can play a sound and send messages.
 explain: field:Goal.AllCoveredMessage | All Covered Message | Every goal with the same All Covered Message sends it once they're all covered: the level solved.
 deselect

@@ -39,6 +39,12 @@ Most engines make you stop the game to change it, lose your changes when play mo
 | Build game / small game | Ctrl+B / Ctrl+Shift+B |
 | Mute the editor (kept between sessions) | Ctrl+Shift+M |
 
+**New Project** takes a name, a folder and a template. Its template list scrolls (mouse wheel, or the arrow keys, Page
+Up/Down, Home and End once it has focus) and keeps the picked template in view, while the name, the folder and Create
+always show. The window can be resized, and like every editor window that opens centered (the Component Catalog,
+Controls, the Sprite Painter...), it opens no bigger than the work area of the screen it opens on, and wholly on it,
+whatever that screen's size and scaling.
+
 In the **Scene view**:
 - Scroll to zoom.
 - Middle-drag, right-drag or Alt-drag to pan.

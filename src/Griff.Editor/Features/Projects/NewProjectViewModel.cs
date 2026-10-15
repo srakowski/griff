@@ -31,11 +31,15 @@ public sealed class NewProjectViewModel : ObservableObject
 
         BrowseCommand = new RelayCommand(Browse);
         CreateCommand = new AsyncRelayCommand(CreateAsync, () => Error is null);
+        CancelCommand = new RelayCommand(() => Cancelled?.Invoke(this, EventArgs.Empty));
         Validate();
     }
 
     /// <summary>Raised after the project has been created; the view closes in response.</summary>
     public event EventHandler? Created;
+
+    /// <summary>Raised by Cancel; the view closes without making anything.</summary>
+    public event EventHandler? Cancelled;
 
     public static string DefaultLocation =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Griff Projects");
@@ -85,6 +89,9 @@ public sealed class NewProjectViewModel : ObservableObject
     public IRelayCommand BrowseCommand { get; }
 
     public IAsyncRelayCommand CreateCommand { get; }
+
+    /// <summary>Closes the window without making a project.</summary>
+    public IRelayCommand CancelCommand { get; }
 
     private void Browse()
     {

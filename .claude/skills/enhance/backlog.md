@@ -6,10 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Editor fixes
-
-- [ ] Fix the New Project window growing too tall with all the templates: cap its height to fit the screen (it opens at a sensible size, never taller than the screen's work area, and can be resized) and make the template list scroll, with the name, folder and Create button always in view; keyboard and mouse-wheel scrolling work, and the selected template scrolls into view.
-
 ### Web
 
 First, at the user's request (2026-10-14): a game playable in a browser comes before the rest. The proof goes first to
@@ -151,6 +147,8 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Fix the New Project window growing too tall with all the templates: cap its height to fit the screen (it opens at a sensible size, never taller than the screen's work area, and can be resized) and make the template list scroll, with the name, folder and Create button always in view; keyboard and mouse-wheel scrolling work, and the selected template scrolls into view. (2026-10-14)
+  - Every centered `ChromeWindow` opens within its screen's work area (`ChromeWindow.Fit`, in that screen's pixels); `editor_state` lists open windows with their sizes; New Project has a Cancel command; demo commands `newproject`, `wheel:`, `expectinview:`, `expecttemplate:`.
 - [x] Let anything trigger anything in one go: components name their actions (Switch On, Off and Toggle; Door Open and Lock; Spawner Spawn; Shooter Fire; Mover Step; Health Damage and Heal by an amount; TurnOrder End Turn; Panel Open and Close; a board's Pause, Restart and Shuffle; Dialogue Start; Sound Play; Set Flag), found by an attribute so a script component's methods count too; any entity gets Triggers in the Inspector ("when this message arrives, from anyone or a named entity, do this action on these entities"); wires fire an action on their rising edge as well as holding Power; messages go to everyone, a named entity or its children, so two boards can be told apart; and the Scene view draws a line from each trigger to what it drives. (2026-10-14)
   - Actions are found by [Action] on a component method (scripts too) and listed in component_describe; what a switch powers by [Powered] (no if-chain left in Game.Power); Trigger and Message Scope components; wires fire an action input on its rising edge; Game.Send(..., from), Game.SendTo and Game.Do; message routes relayed to clients by entity id.
 - [x] Set up griff.games in one go: an MIT `LICENSE` (Copyright (c) 2026 Shawn Rakowski) and a README license section; an Astro Starlight site in `site/` with a landing page (the Pixel Griffin logo and "griff" wordmark, what Griff is in a sentence, the features with real screenshots from the editor and templates, Download and GitHub buttons, links to the repo, issues, releases and the license), light and dark themes, search, and a docs section seeded from the README; a GitHub Action that builds the site and deploys it to GitHub Pages on every push to main, with a `CNAME` for griff.games; and the user's checklist (enable Pages from Actions, add GoDaddy's A records for GitHub Pages and a `www` CNAME, turn on HTTPS) with a check that the built site has no broken links. (2026-10-14)

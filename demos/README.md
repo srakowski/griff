@@ -128,6 +128,10 @@ build: standalone
 | `clipspeed: <fps>` | Type the picked clip's Speed into the Clip Editor (frames a second). Its looping is `click: clips:loop`. |
 | `expectart: <path> [\| <frames>]` | Fail unless the picture (relative to Assets) was saved by the Sprite Painter, with that many frames or tiles. |
 | `controls` | Wait for the Controls window to open (after `menu: Game > Controls...`). |
+| `newproject` | Wait for the New Project window to open (after `menu: File > New Project...` or `key: Ctrl+Shift+N`). While it's open, `key:` presses go to it. |
+| `expecttemplate: <template>` | Fail unless New Project has that template picked, by name or title as `project:` takes them, e.g. `expecttemplate: Empty`. |
+| `wheel: <target> = up\|down [<notches>]` | Rest the mouse on something and turn the wheel that many notches, e.g. `wheel: newproject:templates = down 5`. |
+| `expectinview: <target> [= true\|false]` | Fail unless the target is wholly in view: showing, inside any list or scrolling area it's in, inside its window, and its window wholly on its screen's work area (`= false`: unless it isn't), e.g. `expectinview: newproject:create`. |
 | `action: <name>` | Pick an action in the Controls window, e.g. `action: Jump`. |
 | `bind: <key>` | Click Press a Key and press it, e.g. `bind: W`, `bind: LeftShift`, `bind: Mouse Right`. |
 | `bindpad: <button>` | Add a gamepad button from Add Button's list, e.g. `bindpad: LB`, `bindpad: A`. |
@@ -174,6 +178,11 @@ In the Sprite Painter: `painter` (the window), `painter:tool:Fill`, `painter:col
 `painter:name`, `painter:palette`, `painter:swatches`, `painter:hex`, `painter:current`, `painter:fps`, `painter:tools`,
 `painter:ideas`, `painter:options`, `painter:layout` and `painter:size`. In the Clip Editor: `clips` (the window), `clips:clip:Run` (a clip in the list, or `clips:clip:(own frames)`), `clips:frame:2` (a frame in the strip, by its sheet frame), `clips:sheet:2` (a frame on the sheet), `clips:sheet` (the sheet), `clips:settings` (Speed and Loops), `clips:speed`, `clips:loop`, `clips:note` (where the speed and looping come from), `clips:list`, `clips:preview`, `clips:frames`, `clips:play`, `clips:back`, `clips:forward`, `clips:position` (which frame is showing), `clips:add`, `clips:rename`, `clips:remove`, `clips:start`, `clips:buttons`, `clips:notice`, `clips:addanimation` and `clips:entity`. An image field's buttons in the Inspector:
 `image:Sprite.Image:choose` and `image:Sprite.Image:paint`. Any field with a list (entities, prefabs, scenes, actions, layers, messages, images, sounds) has its list button, `pick:Switch.Targets`. A color field's swatch is `color:Sprite.Tint`, which opens its picker, whose parts are `color:picker` (all of it), `color:square`, `color:hue`, `color:alpha`, `color:hex`, `color:palette`, `color:swatches`, `color:recent` and `color:pick:#29ADFF` (a swatch in the palette or Recent). The Transform's 3D switch is `transform:3d` and the note naming what 2D hides `transform:hidden`; the filters are `filter:fields` (the Inspector's) and `filter:entities` (the Hierarchy's). The Profiler panel's parts are `profiler:graph`, `profiler:rate` (the frame rate over the graph), `profiler:garbage`, `profiler:costs` (what each script and step costs a frame), `profiler:counts`, `profiler:components`, `profiler:record` and `profiler:clear`. An asset's row in the Assets panel is `asset:Prefabs/Gem.prefab` (the folders it's in are opened).
+
+In New Project: `newproject` (the window), `newproject:name`, `newproject:location`, `newproject:browse`,
+`newproject:templates` (the list), `newproject:template:Empty` (a template's row, by name or title; scrolled to when it's
+far off, except by `expectinview`), `newproject:preview` (the folder it makes, or what's wrong), `newproject:cancel` and
+`newproject:create`.
 
 In the Controls window: `controls` (the window), `controls:actions` (the list), `controls:action:Jump` (a row),
 `controls:addaction`, `controls:move`, `controls:name`, `controls:builtin`, `controls:usedby`, `controls:keys`,

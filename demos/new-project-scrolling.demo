@@ -1,0 +1,37 @@
+title: New Project fits the screen
+intro: The templates scroll in their own list, and the name, the folder and Create always show.
+project: Platformer | Scroll Check
+
+chapter: A window that fits | File > New Project
+say: Griff has around twenty templates now, more than fit on a screen at once.
+menu: File > New Project...
+newproject
+expectinview: newproject
+expectinview: newproject:name
+expectinview: newproject:location
+expectinview: newproject:create
+explain: newproject | New Project | New Project opens at a size that fits the screen it opens on, whatever its size and scaling, and it can be resized. However many templates there are, it never grows past the screen.
+explain: newproject:templates | Templates | The templates scroll in a list of their own, taking whatever room the window has.
+explain: newproject:create | Always in view | And the name, the folder and Create stay where they are, in view, while the list scrolls.
+
+chapter: Scrolling the templates | The mouse wheel and the keys
+expectinview: newproject:template:Empty = false
+say: Empty is at the bottom of the list, out of sight. The mouse wheel scrolls down to it.
+wheel: newproject:templates = down 8
+expectinview: newproject:template:Empty
+click: newproject:template:Empty
+expecttemplate: Empty
+expectinview: newproject:create
+say: The keys work too. Home goes back to the top, picking the first template, and the list follows it.
+key: Home
+expecttemplate: Platformer
+expectinview: newproject:template:Platformer
+expectinview: newproject:template:Empty = false
+say: Page Down goes a list's height at a time, and End goes to the bottom. Whatever is picked stays in view.
+key: PageDown
+key: PageDown
+key: End
+expecttemplate: Empty
+expectinview: newproject:template:Empty
+explain: newproject:template:Empty | Picked, and in view | Empty is picked, and in view, ready to create.
+click: newproject:cancel

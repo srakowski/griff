@@ -10,35 +10,55 @@
                        d:DataContext="{d:DesignInstance Type=projects:NewProjectViewModel}"
                        Title="New Project"
                        Width="560"
-                       ResizeMode="NoResize"
+                       Height="680"
+                       MinWidth="440"
+                       MinHeight="480"
                        ShowInTaskbar="False"
-                       SizeToContent="Height"
                        WindowStartupLocation="CenterOwner">
 
-    <StackPanel Background="{DynamicResource Brush.Surface.Panel}">
-        <StackPanel Margin="24,20,24,0">
-            <TextBlock Style="{StaticResource Style.Text.Title}" Text="Create a new project" />
-            <TextBlock Margin="0,4,0,0"
-                       Style="{StaticResource Style.Text.Secondary}"
-                       Text="A project is a folder that holds your scenes, assets and settings."
-                       TextWrapping="Wrap" />
+    <!-- The template list takes whatever height is left and scrolls; everything else always shows. -->
+    <Grid Background="{DynamicResource Brush.Surface.Panel}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-            <TextBlock Margin="0,20,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Project name" />
-            <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+        <Grid Margin="24,20,24,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="72" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <TextBlock Margin="0,14,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Location" />
-            <DockPanel>
-                <Button Margin="8,0,0,0"
-                        Command="{Binding BrowseCommand}"
-                        Content="_Browse..."
-                        DockPanel.Dock="Right" />
-                <TextBox Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" />
-            </DockPanel>
+            <StackPanel>
+                <TextBlock Style="{StaticResource Style.Text.Title}" Text="Create a new project" />
+                <TextBlock Margin="0,4,0,0"
+                           Style="{StaticResource Style.Text.Secondary}"
+                           Text="A project is a folder that holds your scenes, assets and settings."
+                           TextWrapping="Wrap" />
 
-            <TextBlock Margin="0,14,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Template" />
-            <ListBox BorderBrush="{DynamicResource Brush.Border.Default}"
+                <TextBlock Margin="0,20,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Project name" />
+                <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Margin="0,14,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Location" />
+                <DockPanel>
+                    <Button x:Name="BrowseButton"
+                            Margin="8,0,0,0"
+                            Command="{Binding BrowseCommand}"
+                            Content="_Browse..."
+                            DockPanel.Dock="Right" />
+                    <TextBox x:Name="LocationBox" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+            </StackPanel>
+
+            <TextBlock Grid.Row="1" Margin="0,14,0,6" Style="{StaticResource Style.Text.Secondary}" Text="Template" />
+            <ListBox x:Name="TemplateList"
+                     Grid.Row="2"
+                     BorderBrush="{DynamicResource Brush.Border.Default}"
                      BorderThickness="1"
                      ItemsSource="{Binding Templates}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      SelectedItem="{Binding SelectedTemplate}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -54,7 +74,7 @@
             </ListBox>
 
             <!-- Preview of the folder that will be created, or why it can't be. -->
-            <Grid Margin="0,12,0,0" MinHeight="34">
+            <Grid x:Name="PreviewPanel" Grid.Row="3" Margin="0,12,0,0" MinHeight="34">
                 <StackPanel>
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
@@ -96,17 +116,23 @@
                                TextWrapping="Wrap" />
                 </DockPanel>
             </Grid>
-        </StackPanel>
+        </Grid>
 
         <!-- Footer -->
-        <Border Margin="0,20,0,0"
+        <Border Grid.Row="1"
+                Margin="0,20,0,0"
                 Padding="24,12"
                 Background="{DynamicResource Brush.Surface.PanelHeader}"
                 BorderBrush="{DynamicResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0">
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                <Button MinWidth="88" Content="Cancel" IsCancel="True" />
-                <Button MinWidth="88"
+                <Button x:Name="CancelButton"
+                        MinWidth="88"
+                        Command="{Binding CancelCommand}"
+                        Content="Cancel"
+                        IsCancel="True" />
+                <Button x:Name="CreateButton"
+                        MinWidth="88"
                         Margin="8,0,0,0"
                         Command="{Binding CreateCommand}"
                         Content="Create"
@@ -114,5 +140,5 @@
                         Style="{StaticResource Style.Button.Primary}" />
             </StackPanel>
         </Border>
-    </StackPanel>
+    </Grid>
 </controls:ChromeWindow>

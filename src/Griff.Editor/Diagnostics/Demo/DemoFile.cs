@@ -141,8 +141,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 break;
             case "key":
                 var (key, modifiers) = ParseKey(a);
-                // With the Add Component list open, keys go to its search box (Enter adds, Down moves).
-                if (!DemoUi.IsAddListOpen)
+                // With the Add Component list open, keys go to its search box (Enter adds, Down moves); with New Project open,
+                // to that window.
+                if (!DemoUi.IsAddListOpen && DemoUi.NewProject is null)
                     await ui.FocusEditor();
                 await ui.Shortcut(key, modifiers);
                 break;
@@ -872,6 +873,37 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "controls":
                 await DemoUi.WaitForControls();
                 break;
+            case "newproject":
+                await DemoUi.WaitForNewProject();
+                break;
+            case "expecttemplate":
+                // "expecttemplate: Empty": New Project has that template picked (by name or title).
+                var wantTemplate = Griff.Projects.ProjectTemplates.Get(a).Title;
+                if (!await Until(() => DemoUi.NewProjectSelected == wantTemplate, 3000))
+                    throw new InvalidOperationException($"Expected New Project to have {wantTemplate} picked, but it has {DemoUi.NewProjectSelected}.");
+                break;
+            case "wheel":
+                // "wheel: newproject:templates = down 4": rest the mouse on it and turn the wheel four notches.
+                var (wheelTarget, wheelHow) = Split2(a, '=');
+                var wheelWords = wheelHow.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (wheelWords.Length is not (1 or 2) || wheelWords[0].ToLowerInvariant() is not ("up" or "down"))
+                    throw new FormatException("wheel: <target> = up|down [<notches>]");
+                var notches = wheelWords.Length == 2 ? int.Parse(wheelWords[1], CultureInfo.InvariantCulture) : 1;
+                var wheelRect = TargetRect(wheelTarget);
+                await Input.MoveTo(new Point(wheelRect.X + wheelRect.Width / 2, wheelRect.Y + wheelRect.Height / 2));
+                await Input.Scroll(wheelWords[0].Equals("up", StringComparison.OrdinalIgnoreCase) ? notches : -notches);
+                await DemoUi.Settle(150);
+                break;
+            case "expectinview":
+                // "expectinview: newproject:create" (or "= false"): wholly in view, in its list, its window and on its screen.
+                var (inViewTarget, inViewWant) = Split2(a, '=');
+                var wantInView = inViewWant.Length == 0 || bool.Parse(inViewWant);
+                bool InView() => (inViewTarget.StartsWith("newproject:", StringComparison.OrdinalIgnoreCase)
+                    ? DemoUi.NewProjectPart(inViewTarget["newproject:".Length..], scroll: false)
+                    : Target(inViewTarget)) is { } inViewElement && DemoUi.InView(inViewElement);
+                if (!await Until(() => InView() == wantInView, 3000))
+                    throw new InvalidOperationException($"Expected {inViewTarget} {(wantInView ? "to be wholly in view" : "not to be in view")}, but it {(wantInView ? "isn't" : "is")}.");
+                break;
             case "action":
                 await ui.PickAction(a);
                 break;
@@ -1516,6 +1548,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "catalog" => DemoUi.CatalogPart(name),
             "maker" => DemoUi.MakerPart(name),
             "controls" => DemoUi.ControlsPart(name),
+            "newproject" => DemoUi.NewProjectPart(name),
             "painter" => DemoUi.PainterPart(name),
             "clips" => DemoUi.ClipsPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
@@ -1532,7 +1565,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

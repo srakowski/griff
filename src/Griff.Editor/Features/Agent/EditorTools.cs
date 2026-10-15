@@ -14,6 +14,7 @@ using Griff.Editor.Features.Output;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.SceneView;
 using Griff.Editor.Shell;
+using Griff.Editor.Themes.Controls;
 using Griff.Input;
 using Griff.Rendering;
 using Griff.Runtime;
@@ -37,7 +38,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             ReadOnly = true,
             Description = "Where the editor is at: the open project and scene, unsaved changes, whether the game is playing (and the " +
                 "dialogue flags set and the systems scripts have added while it is, or the breakpoint it's stopped at with the values in scope), " +
-                "the breakpoints set, the selection, what undo and redo would do, open windows and recent problems from the Output panel.",
+                "the breakpoints set, the selection, what undo and redo would do, open windows (with their sizes, and any that runs off its screen) and recent problems from the Output panel.",
             Invoke = _ => Task.FromResult(State()),
         };
 
@@ -109,6 +110,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             text.AppendLine("No project is open. Project_New makes one (from a template); Project_Open opens one.");
             if (workspace.RecentProjects.Count > 0)
                 text.AppendLine("Recent projects: " + string.Join("; ", workspace.RecentProjects.Take(5)));
+            OpenWindows(text);
             return ToolResult.Ok(text.ToString());
         }
 
@@ -153,9 +155,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         if (play.Game is { } running && Playtesting.AddedSystems(running) is { } systems)
             text.AppendLine(systems);
         text.AppendLine(CultureInfo.InvariantCulture, $"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
-        var windows = Application.Current is { } app ? app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow).Select(w => w.Title).ToList() : [];
-        if (windows.Count > 0)
-            text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
+        OpenWindows(text);
         var problems = log.Entries.Where(entry => entry.Level >= LogLevel.Warning).TakeLast(10).ToList();
         if (problems.Count > 0)
         {
@@ -222,6 +222,18 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     }
 
     // Shows a document tab long enough to draw it, then puts back the one that was showing.
+    // The windows open over the editor (New Project with no project open too).
+    private static void OpenWindows(StringBuilder text)
+    {
+        var windows = Application.Current is { } app ? app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow).Select(DescribeWindow).ToList() : [];
+        if (windows.Count > 0)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
+    }
+
+    // "New Project (560 x 680)": its title and size, and whether it runs off its screen.
+    private static string DescribeWindow(Window window) =>
+        string.Create(CultureInfo.InvariantCulture, $"{window.Title} ({window.ActualWidth:0} x {window.ActualHeight:0}{(ChromeWindow.IsOnItsScreen(window) == false ? ", off its screen" : "")})");
+
     private static async Task<BitmapSource> WithTabAsync(MainWindow main, System.Windows.Controls.TabItem tab, Func<BitmapSource> capture)
     {
         var previous = main.DocumentTabs.SelectedItem;

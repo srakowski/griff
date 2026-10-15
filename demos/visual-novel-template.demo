@@ -1,0 +1,120 @@
+title: The Visual Novel template
+intro: Starfall Café: a whole short visual novel with no code. A title screen, a story on a stage, two choices, three endings, and save slots, a log, skip and auto.
+project: VisualNovel | Starfall Cafe
+
+chapter: A story on a stage | The Story scene
+scene: Story
+select: Stage
+explain: component:Stage | The stage | The café, its roof under the stars and the dawn are the stage's backgrounds. June, who runs the café, Felix, who watches the stars, and Comet, the star that fell in, are on it.
+explain: field:Dialogue.Lines | The whole story | The whole story is the stage's dialogue: stage directions in brackets, who says each line and how they look, two choices, and the parts they lead to.
+select: Comet
+explain: field:Character.Expressions | Faces that twinkle | June and Felix have a picture for each face. Comet's faces are clips of one sprite sheet, so it twinkles as it talks.
+say: For this demo the lines show at once instead of typing out, so each press reads on one line.
+select: Line
+set: Typewriter.Speed = 0
+key: Ctrl+S
+
+chapter: Reading it | New Game, a choice and an ending
+scene: Main
+play
+wait: 1
+expectvalue: Continue.Button.IsUsable = false
+say: The title screen. Continue is faded until there's a game saved.
+gameclick: New Game
+wait: 2
+expectvalue: Stage.Dialogue.Line = 1
+gameclick: 0, 1.5
+wait: 0.8
+gameclick: 0, 1.5
+wait: 0.8
+gameclick: 0, 1.5
+wait: 0.8
+gameclick: 0, 1.5
+wait: 1
+expectvalue: Stage.Dialogue.Line = 5
+say: A click or a tap reads on, and so do Space and a gamepad's A.
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1
+expectvalue: Stage.Dialogue.Line = 12
+explain: game | The first choice | How June warms Comet up sets a flag, and the flag decides one of the endings.
+tap: D1
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1.5
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1
+expectvalue: Stage.Dialogue.Line = 28
+expectvalue: Stage.Stage.Background = Roof
+say: Up on the roof. Before choosing, save the game in a slot.
+gameclick: Save
+wait: 1
+gameclick: -5.2, 1.5
+wait: 1
+expectvalue: Slot 1.SaveSlot.HasSave = true
+tap: Escape
+wait: 0.5
+tap: Enter
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1.2
+tap: Space
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+waitfor: Ending Title | 10
+expectvalue: Home Ending.Panel.Open = true
+explain: game | An ending | Comet goes home, full of cocoa. There are three endings, each a panel the story's last line opens.
+
+chapter: Saves, skip and the other endings | Continue, then Ctrl
+gameclick: Title
+wait: 1.5
+expectvalue: Continue.Button.IsUsable = true
+gameclick: Continue
+wait: 2
+expectvalue: Stage.Dialogue.Line = 28
+say: Continue loads the game saved last, on the roof, with the cocoa flag as it was. This time, ask Comet to stay.
+tap: Down
+tap: Enter
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 0.8
+tap: Space
+wait: 1
+tap: Space
+wait: 0.8
+tap: Space
+waitfor: Ending Title | 10
+expectvalue: Stay Ending.Panel.Open = true
+gameclick: Play Again
+wait: 2
+say: Playing again, hold Control: the lines read before go by in a moment, and it stops at the first choice.
+hold: LeftControl 2
+wait: 0.5
+expectvalue: Stage.Dialogue.Line = 12
+stop
+say: That's the Visual Novel template: a whole story with no code, ready to rewrite with your own characters, pictures and lines.

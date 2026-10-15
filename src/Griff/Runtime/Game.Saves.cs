@@ -113,6 +113,32 @@ public sealed partial class Game
         return _slots.TryGetValue(slot.Trim(), out var saved) ? saved.Game : null;
     }
 
+    /// <summary>
+    /// The game saved most recently, in any slot (quick saves too), or null when none is: what a title screen's Continue
+    /// loads (see <see cref="ContinueGame"/>).
+    /// </summary>
+    public SavedGame? LatestSave
+    {
+        get
+        {
+            RefreshSlots();
+            SavedGame? latest = null;
+            foreach (var (game, _) in _slots.Values)
+            {
+                if (latest is null || game.Saved > latest.Saved)
+                    latest = game;
+            }
+
+            return latest;
+        }
+    }
+
+    /// <summary>
+    /// Loads the game saved most recently (<see cref="LatestSave"/>), as <see cref="LoadGame"/> does: a title screen's
+    /// Continue. True if there was one, and it's on its way.
+    /// </summary>
+    public bool ContinueGame(float fade = 0) => LatestSave is { } latest && LoadGame(latest.Slot, fade);
+
     /// <summary>True if a game is saved in <paramref name="slot"/>.</summary>
     public bool HasSave(string slot) => !string.IsNullOrWhiteSpace(slot) && SaveData.Has(SavedGameKey + slot.Trim());
 

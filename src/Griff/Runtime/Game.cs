@@ -829,11 +829,14 @@ public sealed partial class Game : IGameContext
             spawner.Advance(Time.Delta, this);
     }
 
-    // Typewriters run on real time, so dialogue still types out while the game is paused.
+    // Typewriters run on real time, so dialogue still types out while a talk holds the game still; a pause menu holds them
+    // still too, all but those on an open panel.
     private void RunTypewriters()
     {
         foreach (var typewriter in Scene.Running<Typewriter>())
         {
+            if (Time.IsPaused && !InOpenPanel(typewriter.Entity!))
+                continue;
             if (typewriter.Advance(Time.UnscaledDelta))
                 Audio.Play(typewriter.Sound!);
         }

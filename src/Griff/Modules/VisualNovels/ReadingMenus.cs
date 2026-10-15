@@ -72,6 +72,18 @@ public static class ReadingMenus
         return parts;
     }
 
+    /// <summary>
+    /// The screens a title screen opens, as <see cref="Parts"/> gives them: the load screen and the settings (no quick menu,
+    /// save screen or log, with no game going on yet).
+    /// </summary>
+    public static IReadOnlyList<(Entity Entity, Entity? Parent)> TitleParts()
+    {
+        var parts = new List<(Entity, Entity?)>();
+        SlotScreen(parts, LoadScreen, "Load", ButtonAction.LoadGame);
+        SettingsScreen(parts);
+        return parts;
+    }
+
     /// <summary>Adds the menus to <paramref name="scene"/>, inside a new entity called <see cref="Name"/>, and returns it.</summary>
     public static Entity AddTo(Scene scene)
     {

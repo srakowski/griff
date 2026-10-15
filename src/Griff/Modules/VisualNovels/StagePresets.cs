@@ -65,6 +65,8 @@ public sealed class StagePreset : EntityPreset
 
         var dialogue = entity.AddComponent<Dialogue>();
         dialogue.Start = DialogueStart.SceneStart;
+        // It starts with the scene, so no layer starts it.
+        dialogue.Layers = null;
         dialogue.PauseGame = false;
         dialogue.Box = StageNames.Box(scene) ?? "Dialogue Box";
         dialogue.Lines = Script;

@@ -125,6 +125,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
+    [InlineData("VisualNovel")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -142,9 +143,12 @@ public sealed class ProjectTemplateTests : IDisposable
             .ToList();
 
         Assert.Contains(sounds, s => s.Component == nameof(BackgroundMusic) && s.Path == "Music/theme.wav");
-        // Something gets hurt in all but the adventure, whose items, uses and combinations make sounds instead.
+        // Something gets hurt in all but the adventure, whose items, uses and combinations make sounds instead, and the visual
+        // novel, whose lines tick as they type out.
         if (template == "Adventure")
             Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.Adventures.InventoryBar) && s.Path is not null);
+        else if (template == "VisualNovel")
+            Assert.Contains(sounds, s => s.Component == nameof(Typewriter) && s.Path is not null);
         else
             Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
         Assert.All(sounds.Where(s => s.Path is not null), s =>
@@ -818,6 +822,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
+    [InlineData("VisualNovel")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -835,6 +840,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Duel");
         if (template == "Adventure")
             scene = GameLoader.LoadScene(project, registry, "Garden");
+        if (template == "VisualNovel")
+            scene = GameLoader.LoadScene(project, registry, "Story");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -855,6 +862,7 @@ public sealed class ProjectTemplateTests : IDisposable
             : game.Find("Hero")?.GetComponent<Griff.Modules.Battles.Battler>() is { } hero ? $"{hero.Said} {hero.Mana} {hero.Items}"
             : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
             : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"
+            : game.Find("Stage")?.GetComponent<Dialogue>() is { } story ? $"{story.Line} {story.Picked} {game.Find("Line")!.GetComponent<Typewriter>()!.Shown}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();

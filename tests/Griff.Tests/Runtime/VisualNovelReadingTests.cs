@@ -287,6 +287,101 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.Equal("Empty", slot.GetComponent<SaveSlot>()!.Description);
     }
 
+    [Fact]
+    public void A_continue_button_loads_the_game_saved_last_in_any_slot_and_is_faded_while_there_is_none()
+    {
+        _game.ViewAspect = 16 / 9f;
+        Build(0, "Ava: One.", "Ava: Two.", "Ava: Three.");
+        var resume = new Entity("Continue");
+        resume.Transform.Position = new Vector3(5, -3, 0);
+        var button = resume.AddComponent<Button>();
+        (button.Action, button.Size) = (ButtonAction.Continue, new Vector2(2, 2));
+        _scene.Add(resume);
+        var now = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+        _game.Clock = () => now;
+
+        Start();
+        Assert.Null(_game.LatestSave);
+        Assert.False(button.IsUsable);
+        Assert.False(_game.ContinueGame());
+
+        // Saved in slot 2 on line Two, then quick saved later on line Three: Continue loads the quick save.
+        _game.AdvanceDialogue(_game.Talking!);
+        Run(Frame);
+        _game.SaveGame("2");
+        now = now.AddMinutes(5);
+        _game.AdvanceDialogue(_game.Talking!);
+        Run(Frame);
+        _game.QuickSave();
+        Run(Frame);
+        Assert.Equal((Game.QuickSlot, "Ava: Three.", "Ava: Two."), (_game.LatestSave?.Slot, _game.LatestSave?.Line, _game.SavedGameIn("2")?.Line));
+        Assert.True(button.IsUsable);
+
+        _game.EndDialogue(finished: false);
+        _game.StartDialogue(The<Dialogue>(_scene));
+        Run(Frame);
+        Assert.Equal("One.", _game.Talking?.Said);
+        ClickAt(new Vector2(5, -3));
+        Run(2 * Frame);
+        Assert.Equal("Three.", _game.Talking?.Said);
+
+        // Slot 2 saved again, later still: now it's the one.
+        now = now.AddMinutes(5);
+        _game.SaveGame("2");
+        Assert.Equal("2", _game.LatestSave?.Slot);
+        _game.DeleteSave("2");
+        _game.DeleteSave(Game.QuickSlot);
+        Run(Frame);
+        Assert.Null(_game.LatestSave);
+        Assert.False(_game.Scene.Entities.Single(e => e.Name == "Continue").GetComponent<Button>()!.IsUsable);
+        Assert.Empty(_warnings);
+    }
+
+    [Fact]
+    public void A_pause_menu_over_choices_takes_the_arrow_keys_and_the_line_stops_typing_under_it()
+    {
+        _game.ViewAspect = 16 / 9f;
+        var (_, dialogue, text) = Build(0, "Which?", "> A", "> B", "> C", "A much longer line, typing out slowly.");
+        var pause = new Entity("Paused");
+        pause.AddComponent<Panel>().OpenOn = "Pause";
+        _scene.Add(pause);
+        foreach (var (name, y) in new[] { ("Resume", 1f), ("Quit", -1f) })
+        {
+            var entity = new Entity(name);
+            entity.Transform.Position = new Vector3(0, y, 0);
+            entity.AddComponent<Button>().Action = name == "Resume" ? ButtonAction.ClosePanel : ButtonAction.None;
+            _scene.Add(entity, pause);
+        }
+
+        Start();
+        Assert.Equal(3, dialogue.Choices.Count);
+        Press(Key.Escape);
+        Assert.Equal("Paused", _game.TopPanel?.Entity!.Name);
+        Assert.Equal("Resume", _game.Focused?.Entity!.Name);
+        Press(Key.Down);
+        Assert.Equal("Quit", _game.Focused?.Entity!.Name);
+        Assert.Equal(0, dialogue.Picked);
+
+        // Closed again, the arrows pick the choices.
+        _game.ClosePanel(_game.TopPanel);
+        Run(Frame);
+        Press(Key.Down);
+        Assert.Equal(1, dialogue.Picked);
+
+        // A line typing out holds still under the menu.
+        var typing = text.Entity!.GetComponent<Typewriter>()!;
+        typing.Speed = 10;
+        Press(Key.D1);
+        Assert.Equal("A much longer line, typing out slowly.", dialogue.Said);
+        Press(Key.Escape);
+        var shown = typing.Shown;
+        Run(1);
+        Assert.Equal(shown, typing.Shown);
+        _game.ClosePanel(_game.TopPanel);
+        Run(1);
+        Assert.True(typing.Shown > shown);
+    }
+
     private void ClickAt(Vector2 at)
     {
         _input.MouseWorld = at;

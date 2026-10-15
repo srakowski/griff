@@ -54,7 +54,7 @@ The **Contraption** template is a room to build machines in, Garry's Mod and Wir
 
 ## Visual novels
 
-Visual novels have a page of their own: a **Stage** with backgrounds and the characters on it, at named positions and with expressions, directed by the lines of a dialogue (`[show Ava left happy]`, `[background Park fade]`, `Ava (sad): Oh.`), the Dialogue Editor that picks each line's speaker, expression and directions from lists with a preview of the stage, and save slots with screenshots, a log of the lines said, Skip and Auto, are in [Visual novels](/docs/visual-novels/). A stage's Advance, Skip and Auto actions (Space, Ctrl, A) work only while it has focus, and it names its actions (**Background**, **Show**, **Hide**, **Direct**) and outputs (**Background**, **Speaking**), so a visual novel scene can sit inside any other game.
+Visual novels have a page of their own: a **Stage** with backgrounds and the characters on it, at named positions and with expressions, directed by the lines of a dialogue (`[show Ava left happy]`, `[background Park fade]`, `Ava (sad): Oh.`), the Dialogue Editor that picks each line's speaker, expression and directions from lists with a preview of the stage, and save slots with screenshots, a log of the lines said, Skip and Auto, are in [Visual novels](/docs/visual-novels/). A stage's Advance, Skip and Auto actions (Space, Ctrl, A) work only while it has focus, and it names its actions (**Background**, **Show**, **Hide**, **Direct**) and outputs (**Background**, **Speaking**), so a visual novel scene can sit inside any other game. The **Visual Novel** template is a whole short story, Starfall Café, with a title screen, two choices and three endings.
 
 ## Rhythm games
 

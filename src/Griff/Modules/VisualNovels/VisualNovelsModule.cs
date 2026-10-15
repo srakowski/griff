@@ -5,7 +5,8 @@ namespace Griff.Modules.VisualNovels;
 /// <summary>
 /// Visual novels: a <see cref="Stage"/> with backgrounds and the characters on it (<see cref="Character"/>), at named
 /// positions and with expressions, directed by the lines of a dialogue ("[show Ava left happy]", "[background Park
-/// fade]"); and Create Stage and Create Character in the Entity menu.
+/// fade]"); the Visual Novel template, a short story with three endings; and Create Stage, Create Character and Create
+/// Reading Menus in the Entity menu.
 /// </summary>
 public sealed class VisualNovelsModule : GameModule
 {

@@ -192,6 +192,7 @@ public sealed partial class Game
         {
             ButtonAction.LoadGame or ButtonAction.DeleteSave => SlotOf(button) is { } slot && HasSave(slot) && (button.Action == ButtonAction.DeleteSave || !Net.IsOnline),
             ButtonAction.QuickLoad => HasSave(QuickSlot) && !Net.IsOnline,
+            ButtonAction.Continue => !Net.IsOnline && LatestSave is not null,
             ButtonAction.SaveGame or ButtonAction.QuickSave => !Net.IsOnline,
             _ => true,
         };

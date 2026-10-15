@@ -134,6 +134,12 @@ public enum ButtonAction
     /// menu's "New Game".
     /// </summary>
     NewGame,
+
+    /// <summary>
+    /// Loads the game saved most recently, in any slot (quick saves too): a title screen's Continue. It's faded while
+    /// there's none.
+    /// </summary>
+    Continue,
 }
 
 /// <summary>
@@ -174,7 +180,7 @@ public sealed class Button : Component, IDrawEffect
     public string? SavedScene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
-    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.NewGame, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame, ButtonAction.LoadGame, ButtonAction.QuickLoad])]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.NewGame, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame, ButtonAction.LoadGame, ButtonAction.QuickLoad, ButtonAction.Continue])]
     public float Fade { get; set; }
 
     /// <summary>For <see cref="ButtonAction.OpenPanel"/>: the name of the panel's entity, e.g. "Options".</summary>

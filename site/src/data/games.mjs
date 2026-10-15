@@ -207,4 +207,17 @@ export const games = {
 			['E', 'your items'],
 		],
 	},
+	VisualNovel: {
+		tagline: 'Starfall Café: a short visual novel about a star that fell into the flour.',
+		about:
+			'At closing time a little star falls into the café, and June and Felix have until sunrise to get it home. Pick how to warm it up and whether to let it go: three endings, with save and load slots, a log, skip and auto, all with no code.',
+		controls: [
+			['Click, tap or Space', 'read on'],
+			['Arrows and Enter', 'pick a choice (or click it)'],
+			['Ctrl', 'skip lines read before'],
+			['A', 'Auto: read on by itself'],
+			['H or the mouse wheel', 'the log of lines read'],
+			['Esc', 'pause, save, load and settings'],
+		],
+	},
 };

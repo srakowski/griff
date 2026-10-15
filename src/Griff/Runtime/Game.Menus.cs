@@ -94,8 +94,9 @@ public sealed partial class Game
                 controls.Add(slider);
         }
 
-        // The arrows pick a dialogue's choices while it offers them, not the buttons behind it.
-        var direction = ReadDirection(controls.Count > 0 && _levels.Talking is not { Choices.Count: > 0 });
+        // The arrows pick a dialogue's choices while it offers them, not the buttons behind it; but a menu that stops the game
+        // (a pause menu over the choices) takes them, the talk being held still under it.
+        var direction = ReadDirection(controls.Count > 0 && (top is { PauseGame: true } || _levels.Talking is not { Choices.Count: > 0 }));
         var mouseMoved = MouseMovedOverView();
         foreach (var button in allButtons)
         {
@@ -303,6 +304,9 @@ public sealed partial class Game
                 break;
             case ButtonAction.QuickLoad:
                 QuickLoad(button.Fade);
+                break;
+            case ButtonAction.Continue:
+                ContinueGame(button.Fade);
                 break;
         }
 

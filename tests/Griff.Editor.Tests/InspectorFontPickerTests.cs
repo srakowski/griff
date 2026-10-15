@@ -27,10 +27,7 @@ public sealed class InspectorFontPickerTests : IDisposable
 
     private static void Wait(Task task)
     {
-        var frame = new DispatcherFrame();
-        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
-        Dispatcher.PushFrame(frame);
-        task.GetAwaiter().GetResult();
+        EditorHost.Pump(task);
     }
 
     // A project with a font file of its own, and in its scene a label.

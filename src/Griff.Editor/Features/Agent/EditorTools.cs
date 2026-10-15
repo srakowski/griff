@@ -180,6 +180,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var view = (args.OptionalString("view") ?? "game").Trim();
         var maxWidth = Math.Clamp(args.Int("max_width", 1280), 64, 4096);
         var main = (MainWindow)Application.Current.MainWindow;
+        var timer = System.Diagnostics.Stopwatch.StartNew();
 
         BitmapSource bitmap;
         string caption;
@@ -218,8 +219,15 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
         if (bitmap.PixelWidth > maxWidth)
             bitmap = new TransformedBitmap(bitmap, new ScaleTransform((double)maxWidth / bitmap.PixelWidth, (double)maxWidth / bitmap.PixelWidth));
-        return ToolResult.Image(Png(bitmap), $"{caption} {bitmap.PixelWidth}x{bitmap.PixelHeight}.");
+        var drawn = timer.Elapsed;
+        var png = Png(bitmap);
+        if (timer.Elapsed > SlowPicture)
+            log.Add(new LogEntry(DateTime.Now, LogLevel.Warning, "Agent", $"A {view} screenshot took {timer.Elapsed.TotalSeconds:0.0} s: {drawn.TotalSeconds:0.0} s to draw it (showing its tab, drawing the frame, reading the pixels back), {(timer.Elapsed - drawn).TotalSeconds:0.0} s to make the PNG."));
+        return ToolResult.Image(png, $"{caption} {bitmap.PixelWidth}x{bitmap.PixelHeight}.");
     }
+
+    // A picture that takes longer than this says where the time went in the Output panel.
+    private static readonly TimeSpan SlowPicture = TimeSpan.FromSeconds(2);
 
     // Shows a document tab long enough to draw it, then puts back the one that was showing.
     // The windows open over the editor (New Project with no project open too).

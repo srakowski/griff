@@ -31,10 +31,7 @@ public sealed class TablesPanelTests : IDisposable
 
     private static void Wait(Task task)
     {
-        var frame = new DispatcherFrame();
-        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
-        Dispatcher.PushFrame(frame);
-        task.GetAwaiter().GetResult();
+        EditorHost.Pump(task);
     }
 
     private static T Wait<T>(Task<T> task)

@@ -10,9 +10,9 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -28,15 +28,15 @@ jobs:
       # Each test's result goes to the log as it finishes, and to a .trx file kept with the run when one fails, so a
       # failure can be read without signing in to see the log. The editor's tests run even when the engine's fail.
       - name: Engine tests
-        run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults
+        run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Editor tests
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults
+        run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Keep the test results
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: TestResults

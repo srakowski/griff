@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
+using System.Windows.Threading;
 using Griff.Editor.Core.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -8,11 +10,52 @@ namespace Griff.Editor.Tests;
 /// <summary>The editor's real services, built from every module, for a test to run against on a WPF thread.</summary>
 internal static class EditorHost
 {
+    /// <summary>
+    /// How long a test may run on its WPF thread (and, as <see cref="WaitTimeout"/>, a task it waits for). Longer, and the test fails
+    /// saying where it was, instead of leaving the run hanging (a test host that never finishes) behind a dialog nobody
+    /// can answer or a task that never completes.
+    /// </summary>
+    public static readonly TimeSpan TestTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long a task a test waits for (see <see cref="Pump{T}"/>) may take.</summary>
+    public static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// Runs <paramref name="task"/> to the end on the test's WPF thread, pumping its dispatcher as the editor's would, and
+    /// returns what it gave. Fails with a message naming the test (and its line) if the task takes longer than
+    /// <see cref="TestTimeout"/>.
+    /// </summary>
+    public static T Pump<T>(Task<T> task, TimeSpan? timeout = null)
+    {
+        PumpUntilDone(task, timeout ?? WaitTimeout);
+        return task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>As <see cref="Pump{T}"/>, for a task that gives nothing.</summary>
+    public static void Pump(Task task, TimeSpan? timeout = null)
+    {
+        PumpUntilDone(task, timeout ?? WaitTimeout);
+        task.GetAwaiter().GetResult();
+    }
+
+    private static void PumpUntilDone(Task task, TimeSpan timeout)
+    {
+        var caller = new StackTrace(2, fNeedFileInfo: true);
+        var frame = new DispatcherFrame();
+        var timedOut = false;
+        var timer = new DispatcherTimer(timeout, DispatcherPriority.Normal, (_, _) => (timedOut, frame.Continue) = (true, false), Dispatcher.CurrentDispatcher);
+        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+        timer.Stop();
+        if (timedOut && !task.IsCompleted)
+            throw new TimeoutException($"A task the test waits for didn't finish in {timeout.TotalSeconds:0} seconds. It is probably waiting for an answer to a dialog nobody can give, or for something that never happens. The test was at:\n{caller}");
+    }
+
     // WPF objects (the scene view, the game surface, the clipboard) need a single-threaded apartment.
     public static void Run(Action<IServiceProvider> test) => Run(_ => { }, test);
 
     /// <summary>As <see cref="Run(Action{IServiceProvider})"/>, with services swapped first (a fake for one that reaches outside the editor).</summary>
-    public static void Run(Action<IServiceCollection> configure, Action<IServiceProvider> test)
+    public static void Run(Action<IServiceCollection> configure, Action<IServiceProvider> test, TimeSpan? timeout = null)
     {
         Exception? failure = null;
         var thread = new Thread(() =>
@@ -38,8 +81,12 @@ internal static class EditorHost
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        // A thread stuck for good mustn't keep the test host from ending once the test has failed.
+        thread.IsBackground = true;
+        var caller = new StackTrace(1, fNeedFileInfo: true);
         thread.Start();
-        thread.Join();
+        if (!thread.Join(timeout ?? TestTimeout))
+            throw new TimeoutException($"The test didn't finish in {(timeout ?? TestTimeout).TotalSeconds:0} seconds on its WPF thread. It is probably blocked on a dialog that opened a window nobody can close, or on a task or lock that never completes. It was started from:\n{caller}");
         if (failure is not null)
             ExceptionDispatchInfo.Throw(failure);
     }

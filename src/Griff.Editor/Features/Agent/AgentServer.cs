@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Windows;
@@ -123,15 +124,22 @@ public sealed partial class AgentServer : ObservableObject, IHostedService
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 
+    // A call that waited this long for the UI thread was held up by something else the editor was doing.
+    private static readonly TimeSpan SlowQueue = TimeSpan.FromSeconds(2);
+
     // Every call runs on the UI thread, where the editor lives, with its questions answered by the call's "answers".
-    private static Task<ToolResult> Dispatch(AgentTool tool, ToolArgs args, Func<Task<ToolResult>> call)
+    private Task<ToolResult> Dispatch(AgentTool tool, ToolArgs args, Func<Task<ToolResult>> call)
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.HasShutdownStarted)
             return Task.FromResult(ToolResult.Error("The editor is closing."));
 
+        var queued = Stopwatch.StartNew();
         return dispatcher.InvokeAsync(async () =>
         {
+            // Said in the Output panel, so a call that takes long can be told apart: waiting behind the editor's own work, or its own.
+            if (queued.Elapsed > SlowQueue)
+                _logger.LogWarning("{Tool} waited {Seconds:0.0} s for the editor to be free before it could start.", tool.Name, queued.Elapsed.TotalSeconds);
             using (AgentDialogs.Answering(args.TryGet("answers", out var answers) ? answers : null))
                 return await call();
         }).Task.Unwrap();

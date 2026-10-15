@@ -46,11 +46,11 @@ jobs:
           ./tools/release.ps1 -Version $version
 
       - name: Engine tests
-        run: dotnet test tests/Griff.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults
+        run: dotnet test tests/Griff.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Editor tests
         if: ${{ !cancelled() }}
-        run: dotnet test tests/Griff.Editor.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults
+        run: dotnet test tests/Griff.Editor.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Write the release notes
         shell: pwsh

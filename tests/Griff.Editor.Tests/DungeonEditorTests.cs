@@ -24,10 +24,7 @@ public sealed class DungeonEditorTests : IDisposable
     // Runs a task to the end on the test's WPF thread, as the editor's dispatcher would.
     private static void Wait(Task task)
     {
-        var frame = new DispatcherFrame();
-        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
-        Dispatcher.PushFrame(frame);
-        task.GetAwaiter().GetResult();
+        EditorHost.Pump(task);
     }
 
     [Fact]

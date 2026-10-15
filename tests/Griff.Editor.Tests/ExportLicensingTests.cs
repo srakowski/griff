@@ -149,7 +149,11 @@ public sealed class ExportLicensingTests : IDisposable
         })!;
         var log = process.StandardOutput.ReadToEndAsync();
         var errors = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
+        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail("Publishing the web player didn't finish in 10 minutes.");
+        }
         Assert.True(process.ExitCode == 0, $"Publishing the web player failed:\n{log.Result}\n{errors.Result}");
         return Path.Combine(output, "wwwroot");
     }

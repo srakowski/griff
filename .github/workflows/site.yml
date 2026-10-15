@@ -27,14 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Write the reference
         run: dotnet run -p:SkipPlayers=true tools/docs.cs -- --out site/src/content/docs/reference
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: reference
           path: site/src/content/docs/reference
@@ -55,7 +55,7 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: reference
           path: site/src/content/docs/reference

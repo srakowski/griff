@@ -27,10 +27,7 @@ public sealed class PrefabMoveTests : IDisposable
     // Runs a task to the end on the test's WPF thread, as the editor's dispatcher would.
     private static T Wait<T>(Task<T> task)
     {
-        var frame = new DispatcherFrame();
-        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
-        Dispatcher.PushFrame(frame);
-        return task.GetAwaiter().GetResult();
+        return EditorHost.Pump(task);
     }
 
     private static void Wait(Task task) => Wait(task.ContinueWith(t => { t.GetAwaiter().GetResult(); return true; }, TaskScheduler.Default));

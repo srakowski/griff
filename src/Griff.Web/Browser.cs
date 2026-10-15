@@ -66,9 +66,9 @@ internal static partial class Browser
     [JSImport("storeSave", "griff")]
     public static partial void StoreSave(string key, string json);
 
-    /// <summary>Shakes the controller this hard (0 stops it), where the browser can.</summary>
+    /// <summary>Shakes controller <paramref name="index"/> this hard (0 stops it), where the browser can.</summary>
     [JSImport("rumble", "griff")]
-    public static partial void Rumble(double strength);
+    public static partial void Rumble(int index, double strength);
 
     /// <summary>Fills the screen with the game, or stops; the browser allows it only after a click or key press, so it may wait for one.</summary>
     [JSImport("fullscreen", "griff")]

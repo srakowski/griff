@@ -297,7 +297,11 @@ public sealed partial class Game
         Step(FramePhase.Begin, "Panels", SyncPanels, _panels);
         Step(FramePhase.Begin, "Pauses", SyncPauses);
         Step(FramePhase.Begin, "Time", AdvanceTime);
-        Step(FramePhase.Begin, "Input", () => (Input as InputState)?.BeginFrame(Time.UnscaledDelta));
+        Step(FramePhase.Begin, "Input", () =>
+        {
+            (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
+            LocalPlayers.Update(Scene);
+        });
         Step(FramePhase.Begin, "Debug Drawing", Debug.BeginFrame);
         Step(FramePhase.Begin, "Network", () => Net.BeginFrame(Time.UnscaledDelta));
         Step(FramePhase.Begin, "Tables", ApplyTables);

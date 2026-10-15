@@ -10,7 +10,8 @@ public sealed partial class Game
     /// Gives <paramref name="entity"/> the player's input, as its Focus action does: everything on it and inside it that
     /// takes input (see <see cref="FocusAttribute"/>) takes it, and everything else the same player plays stops, so a
     /// match-3 board and a platformer's player in one scene don't both move on the arrow keys. In a network game, a player's
-    /// own character only gives up focus to what that player (or everyone) plays. Done where the game is run, the host.
+    /// own character only gives up focus to what that player (or everyone) plays, and so does one a <see cref="PlayedBy"/> gives
+    /// to a player at this machine. Done where the game is run, the host.
     /// </summary>
     /// <example><code>Game.Focus(Find("Arcade Board")!);  // later: Game.Focus(player);</code></example>
     public void Focus(Entity entity)
@@ -19,12 +20,13 @@ public sealed partial class Game
         if (entity.Scene != Scene)
             throw new InvalidOperationException("Only an entity in the running scene can be given focus.");
         var player = NetSession.OwnerIdOf(entity);
+        var local = PlayedBy.Of(entity);
         var entities = Scene.Entities;
         for (var i = 0; i < entities.Count; i++)
         {
             var other = entities[i];
             var inside = other.IsSelfOrDescendantOf(entity);
-            if (!inside && !SamePlayer(player, NetSession.OwnerIdOf(other)))
+            if (!inside && (!SamePlayer(player, NetSession.OwnerIdOf(other)) || !SamePlayer(local, PlayedBy.Of(other))))
                 continue;
             var components = other.ComponentList;
             for (var c = 0; c < components.Count; c++)
@@ -62,6 +64,7 @@ public sealed partial class Game
         return true;
     }
 
-    // Played by the same player: either belongs to nobody in particular (shared, or offline), or both to the same one.
+    // Played by the same player: either belongs to nobody in particular (shared, or offline), or both to the same one (a
+    // network player's id, or a player at this machine's number).
     private static bool SamePlayer(int a, int b) => a == 0 || b == 0 || a == b;
 }

@@ -5,7 +5,7 @@ using Griff.Input;
 
 namespace Griff.Runtime;
 
-/// <summary>Buttons of an Xbox-style controller (the first one connected).</summary>
+/// <summary>Buttons of an Xbox-style controller.</summary>
 public enum GamepadButton
 {
     A, B, X, Y,
@@ -392,16 +392,36 @@ public sealed class InputState : IInput
 
     public MouseCursor Cursor { get; set; }
 
+    /// <summary>The left stick of any controller (the first held off its middle), each axis -1..1. Up is positive.</summary>
     public Vector2 LeftStick { get; private set; }
 
+    /// <summary>The right stick of any controller (the first held off its middle), each axis -1..1. Up is positive.</summary>
     public Vector2 RightStick { get; private set; }
 
+    /// <summary>How far any controller's left trigger is pulled (the furthest), 0..1.</summary>
     public float LeftTrigger { get; private set; }
 
+    /// <summary>How far any controller's right trigger is pulled (the furthest), 0..1.</summary>
     public float RightTrigger { get; private set; }
 
-    /// <summary>Set by the platform as controllers come and go.</summary>
-    public bool IsGamepadConnected { get; set; }
+    /// <summary>
+    /// True while any controller is plugged in. Setting it says whether the first is (a platform with one controller);
+    /// <see cref="SetGamepadConnected"/> says so of each.
+    /// </summary>
+    public bool IsGamepadConnected
+    {
+        get
+        {
+            foreach (var pad in _pads)
+            {
+                if (pad.Connected)
+                    return true;
+            }
+
+            return false;
+        }
+        set => SetGamepadConnected(0, value);
+    }
 
     public bool UsingGamepad { get; private set; }
 
@@ -620,7 +640,7 @@ public sealed class InputState : IInput
             _saveData.Set(BindingsSaveKey, JsonSerializer.Serialize(_rebound.ToDictionary(p => p.Key, p => p.Value.Select(b => b.ToString()).ToArray())));
     }
 
-    private InputBinding[] Bindings(string action) =>
+    internal InputBinding[] Bindings(string action) =>
         _rebound.TryGetValue(action.Trim(), out var rebound) ? rebound
         : _actions.TryGetValue(action.Trim(), out var bindings) ? bindings
         : throw new ArgumentException(
@@ -636,36 +656,245 @@ public sealed class InputState : IInput
     private bool WasReleased(InputBinding binding) =>
         binding.Key is { } key ? WasReleased(key) : binding.Mouse is { } mouse ? WasReleased(mouse) : binding.Gamepad is { } pad && WasReleased(pad);
 
-    /// <summary>Sets the controller state for this frame (called by the platform each tick).</summary>
+    /// <summary>Sets the first controller's state for this frame (called by the platform each tick).</summary>
     public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick) =>
-        SetGamepad(down, leftStick, Vector2.Zero);
+        SetGamepad(0, down, leftStick, Vector2.Zero);
 
-    /// <summary>Sets the controller state for this frame (called by the platform each tick). Triggers are 0..1.</summary>
-    public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick, Vector2 rightStick, float leftTrigger = 0, float rightTrigger = 0)
+    /// <summary>Sets the first controller's state for this frame (called by the platform each tick). Triggers are 0..1.</summary>
+    public void SetGamepad(IEnumerable<GamepadButton> down, Vector2 leftStick, Vector2 rightStick, float leftTrigger = 0, float rightTrigger = 0) =>
+        SetGamepad(0, down, leftStick, rightStick, leftTrigger, rightTrigger);
+
+    /// <summary>How many controllers it keeps apart: up to four, as XInput and most browsers give.</summary>
+    public const int MaxGamepads = 4;
+
+    /// <summary>
+    /// Sets controller <paramref name="index"/>'s state for this frame (0 to <see cref="MaxGamepads"/> - 1, the platform's own
+    /// numbering; called by it each tick). Triggers are 0..1. What the game reads by itself (<see cref="IsDown(GamepadButton)"/>,
+    /// the sticks, the actions) is every controller at once; a player at this machine reads their own (see
+    /// <see cref="LocalPlayers"/>).
+    /// </summary>
+    public void SetGamepad(int index, IEnumerable<GamepadButton> down, Vector2 leftStick, Vector2 rightStick, float leftTrigger = 0, float rightTrigger = 0)
     {
-        LeftTrigger = ApplyDeadZone(Math.Clamp(leftTrigger, 0, 1), TriggerDeadZone);
-        RightTrigger = ApplyDeadZone(Math.Clamp(rightTrigger, 0, 1), TriggerDeadZone);
-        var now = down.ToHashSet();
-        if (LeftTrigger > 0.5f)
+        if (index is < 0 or >= MaxGamepads)
+            return;
+        var pad = _pads[index];
+        pad.Raw.Clear();
+        pad.Raw.UnionWith(down);
+        (pad.RawLeftStick, pad.RawRightStick, pad.RawLeftTrigger, pad.RawRightTrigger) = (leftStick, rightStick, leftTrigger, rightTrigger);
+        Apply(pad);
+    }
+
+    /// <summary>
+    /// Says whether controller <paramref name="index"/> is plugged in (called by the platform as controllers come and go).
+    /// Unplugged, it stops counting as plugged in even if <see cref="HoldGamepadButton"/> pretended it was.
+    /// </summary>
+    public void SetGamepadConnected(int index, bool connected)
+    {
+        if (index is < 0 or >= MaxGamepads)
+            return;
+        _pads[index].PlatformConnected = connected;
+        if (!connected)
+            _pads[index].Pretend = false;
+    }
+
+    /// <summary>
+    /// Holds (or lets go of) <paramref name="button"/> on controller <paramref name="index"/> as if pressed on it, over what the
+    /// controller itself says: for tests, agents and demos playing as a second player's controller. A controller with a button
+    /// held this way counts as plugged in from then on.
+    /// </summary>
+    public void HoldGamepadButton(int index, GamepadButton button, bool down)
+    {
+        if (index is < 0 or >= MaxGamepads)
+            return;
+        var pad = _pads[index];
+        if (down)
+            pad.Pretend = true;
+        if (down ? !pad.Held.Add(button) : !pad.Held.Remove(button))
+            return;
+        Apply(pad);
+    }
+
+    /// <summary>How many controllers are plugged in.</summary>
+    public int GamepadCount
+    {
+        get
+        {
+            var count = 0;
+            foreach (var pad in _pads)
+            {
+                if (pad.Connected)
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// The platform's number for the <paramref name="nth"/> controller plugged in (from 0: the first plugged in is 0, whatever
+    /// slot it's in), or -1 if there aren't that many.
+    /// </summary>
+    public int ConnectedGamepad(int nth)
+    {
+        for (var i = 0; i < MaxGamepads; i++)
+        {
+            if (!_pads[i].Connected)
+                continue;
+            if (nth == 0)
+                return i;
+            nth--;
+        }
+
+        return -1;
+    }
+
+    /// <summary>True while controller <paramref name="index"/> is plugged in (or has had a button held by <see cref="HoldGamepadButton"/>).</summary>
+    public bool IsGamepadConnectedAt(int index) => index is >= 0 and < MaxGamepads && _pads[index].Connected;
+
+    /// <summary>True while <paramref name="button"/> is held on controller <paramref name="index"/>.</summary>
+    public bool IsDown(int index, GamepadButton button) => index is >= 0 and < MaxGamepads && _pads[index].Down.Contains(button);
+
+    /// <summary>True on the frame <paramref name="button"/> goes down on controller <paramref name="index"/>.</summary>
+    public bool WasPressed(int index, GamepadButton button) => index is >= 0 and < MaxGamepads && _pads[index].Pressed.Contains(button);
+
+    /// <summary>True on the frame <paramref name="button"/> is let go on controller <paramref name="index"/>.</summary>
+    public bool WasReleased(int index, GamepadButton button) => index is >= 0 and < MaxGamepads && _pads[index].Released.Contains(button);
+
+    /// <summary>Controller <paramref name="index"/>'s left stick, with the dead zone applied.</summary>
+    public Vector2 LeftStickOf(int index) => index is >= 0 and < MaxGamepads ? _pads[index].LeftStick : Vector2.Zero;
+
+    /// <summary>Controller <paramref name="index"/>'s right stick, with the dead zone applied.</summary>
+    public Vector2 RightStickOf(int index) => index is >= 0 and < MaxGamepads ? _pads[index].RightStick : Vector2.Zero;
+
+    /// <summary>How far controller <paramref name="index"/>'s left trigger is pulled, 0..1.</summary>
+    public float LeftTriggerOf(int index) => index is >= 0 and < MaxGamepads ? _pads[index].LeftTrigger : 0;
+
+    /// <summary>How far controller <paramref name="index"/>'s right trigger is pulled, 0..1.</summary>
+    public float RightTriggerOf(int index) => index is >= 0 and < MaxGamepads ? _pads[index].RightTrigger : 0;
+
+    /// <summary>The first button pressed on controller <paramref name="index"/> this frame, if any.</summary>
+    public GamepadButton? PressedOn(int index)
+    {
+        if (index is < 0 or >= MaxGamepads)
+            return null;
+        foreach (var button in _pads[index].Pressed)
+            return button;
+        return null;
+    }
+
+    /// <summary>
+    /// Shakes controller <paramref name="index"/> alone (a player's own), as <see cref="Rumble(float, float)"/> shakes every
+    /// controller.
+    /// </summary>
+    public void Rumble(int index, float strength, float seconds)
+    {
+        if (index is < 0 or >= MaxGamepads || !float.IsFinite(strength) || !float.IsFinite(seconds) || seconds <= 0 || strength <= 0)
+            return;
+        var pad = _pads[index];
+        pad.RumbleStrength = Math.Max(pad.RumbleSeconds > 0 ? pad.RumbleStrength : 0, Math.Min(strength, 1));
+        pad.RumbleSeconds = Math.Max(pad.RumbleSeconds, seconds);
+    }
+
+    /// <summary>
+    /// How hard controller <paramref name="index"/> should be shaking now, 0..1: its own rumble or every controller's. The
+    /// platform reads it each frame.
+    /// </summary>
+    public float RumbleStrengthOf(int index) =>
+        index is >= 0 and < MaxGamepads ? Math.Max(RumbleStrength, _pads[index].RumbleStrength) : RumbleStrength;
+
+    // When a controller's button (or one held for it) went down last, on the game's clock, for buffered presses.
+    internal double? PressedAt(int index, GamepadButton button) =>
+        index is >= 0 and < MaxGamepads && _pads[index].PressedAt.TryGetValue(button, out var at) ? at : null;
+
+    // When a key or mouse button went down last, on the game's clock.
+    internal double? PressedAt(InputBinding binding) => _pressedAt.TryGetValue(binding, out var at) ? at : null;
+
+    // The game's clock, in seconds, that presses are dated by.
+    internal double Clock => _clock;
+
+    // One controller: what the platform says it has held (and its sticks and triggers), what's held for it by
+    // HoldGamepadButton, and what that comes to this frame.
+    private sealed class Pad
+    {
+        public readonly HashSet<GamepadButton> Raw = [];
+        public readonly HashSet<GamepadButton> Held = [];
+        public readonly HashSet<GamepadButton> Down = [];
+        public readonly HashSet<GamepadButton> Pressed = [];
+        public readonly HashSet<GamepadButton> Released = [];
+        public readonly HashSet<GamepadButton> Now = [];
+        public readonly Dictionary<GamepadButton, double> PressedAt = [];
+        public Vector2 RawLeftStick, RawRightStick, LeftStick, RightStick;
+        public float RawLeftTrigger, RawRightTrigger, LeftTrigger, RightTrigger;
+        public bool PlatformConnected, Pretend;
+        public float RumbleStrength, RumbleSeconds;
+
+        public bool Connected => PlatformConnected || Pretend;
+    }
+
+    private readonly Pad[] _pads = [new(), new(), new(), new()];
+
+    // A controller's state worked out from what it says and what's held for it; then what the game reads of every one.
+    private void Apply(Pad pad)
+    {
+        pad.LeftTrigger = ApplyDeadZone(Math.Clamp(pad.RawLeftTrigger, 0, 1), TriggerDeadZone);
+        pad.RightTrigger = ApplyDeadZone(Math.Clamp(pad.RawRightTrigger, 0, 1), TriggerDeadZone);
+        var now = pad.Now;
+        now.Clear();
+        now.UnionWith(pad.Raw);
+        now.UnionWith(pad.Held);
+        if (pad.LeftTrigger > 0.5f)
             now.Add(GamepadButton.LeftTrigger);
-        if (RightTrigger > 0.5f)
+        if (pad.RightTrigger > 0.5f)
             now.Add(GamepadButton.RightTrigger);
 
-        foreach (var button in now.Where(b => !_padDown.Contains(b)))
+        foreach (var button in now)
         {
-            _padPressed.Add(button);
-            _pressedAt[button] = _clock;
+            if (pad.Down.Contains(button))
+                continue;
+            pad.Pressed.Add(button);
+            pad.PressedAt[button] = _clock;
             UsingGamepad = true;
         }
-        foreach (var button in _padDown.Where(b => !now.Contains(b)))
-            _padReleased.Add(button);
-        _padDown.Clear();
-        _padDown.UnionWith(now);
 
-        LeftStick = ApplyDeadZone(leftStick);
-        RightStick = ApplyDeadZone(rightStick);
-        if (LeftStick != Vector2.Zero || RightStick != Vector2.Zero)
+        foreach (var button in pad.Down)
+        {
+            if (!now.Contains(button))
+                pad.Released.Add(button);
+        }
+
+        pad.Down.Clear();
+        pad.Down.UnionWith(now);
+        pad.LeftStick = ApplyDeadZone(pad.RawLeftStick);
+        pad.RightStick = ApplyDeadZone(pad.RawRightStick);
+        if (pad.LeftStick != Vector2.Zero || pad.RightStick != Vector2.Zero)
             UsingGamepad = true;
+        CombinePads();
+    }
+
+    // Every controller together, as the game reads them by itself: a button is held while it is on any, the sticks are the
+    // first held off their middle, the triggers the furthest pulled.
+    private void CombinePads()
+    {
+        _padDown.Clear();
+        _padPressed.Clear();
+        _padReleased.Clear();
+        (LeftStick, RightStick, LeftTrigger, RightTrigger) = (Vector2.Zero, Vector2.Zero, 0, 0);
+        foreach (var pad in _pads)
+        {
+            _padDown.UnionWith(pad.Down);
+            _padPressed.UnionWith(pad.Pressed);
+            _padReleased.UnionWith(pad.Released);
+            if (LeftStick == Vector2.Zero)
+                LeftStick = pad.LeftStick;
+            if (RightStick == Vector2.Zero)
+                RightStick = pad.RightStick;
+            LeftTrigger = Math.Max(LeftTrigger, pad.LeftTrigger);
+            RightTrigger = Math.Max(RightTrigger, pad.RightTrigger);
+        }
+
+        _padReleased.ExceptWith(_padDown);
+        foreach (var button in _padPressed)
+            _pressedAt[button] = _clock;
     }
 
     public bool IsDown(Key key) => _down.Contains(key);
@@ -779,6 +1008,8 @@ public sealed class InputState : IInput
     {
         RumbleStrength = 0;
         _rumbleSeconds = 0;
+        foreach (var pad in _pads)
+            (pad.RumbleStrength, pad.RumbleSeconds) = (0, 0);
     }
 
     /// <summary>Releases everything, e.g. when the game window loses focus.</summary>
@@ -806,6 +1037,17 @@ public sealed class InputState : IInput
             _pressedAt[button] = _clock;
         foreach (var button in _padPressed)
             _pressedAt[button] = _clock;
+        foreach (var pad in _pads)
+        {
+            foreach (var button in pad.Pressed)
+                pad.PressedAt[button] = _clock;
+            if (pad.RumbleSeconds > 0)
+            {
+                pad.RumbleSeconds -= seconds;
+                if (pad.RumbleSeconds <= 0)
+                    (pad.RumbleStrength, pad.RumbleSeconds) = (0, 0);
+            }
+        }
 
         if (_rumbleSeconds > 0)
         {
@@ -832,6 +1074,12 @@ public sealed class InputState : IInput
                 _touches[i] = _touches[i] with { Touch = _touches[i].Touch with { Pressed = false } };
                 _touchesChanged = true;
             }
+        }
+
+        foreach (var pad in _pads)
+        {
+            pad.Pressed.Clear();
+            pad.Released.Clear();
         }
 
         _typed.Clear();

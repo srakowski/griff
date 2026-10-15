@@ -232,4 +232,18 @@ export const games = {
 			['Esc', 'pause, save, load and settings'],
 		],
 	},
+	Fighter: {
+		tagline: 'Dojo Clash: a one-on-one fighting game for two at one keyboard or against the computer.',
+		about:
+			'Pick Kenta or Mira and fight best of three rounds against the clock on a dojo yard at dusk: quarter circles, a dragon punch, charges and an overhead, blocking high and low, and combos. Two can share the keyboard or play on two controllers; training has a dummy that stands, crouches, jumps or fights back.',
+		controls: [
+			['WASD, F and G', 'the left player: move, punch, kick'],
+			['Arrows, K and L', 'the right player: move, punch, kick'],
+			['A controller', 'a player of its own: X punch, A kick'],
+			['Hold back', 'block (down-back to block low)'],
+			['Tab', 'swap who has the keyboard and the controller'],
+			['Esc', 'pause'],
+		],
+		tips: ['Against the computer, the keyboard is yours: the arrows or WASD to move, J to punch and K to kick.'],
+	},
 };

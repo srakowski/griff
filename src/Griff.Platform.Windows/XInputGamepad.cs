@@ -4,7 +4,7 @@ using Griff.Runtime;
 
 namespace Griff.Platform.Windows;
 
-/// <summary>Reads (and rumbles) the first connected Xbox-style controller through XInput (built into Windows).</summary>
+/// <summary>Reads (and rumbles) the Xbox-style controllers plugged in, up to four, through XInput (built into Windows).</summary>
 public static class XInputGamepad
 {
     private static readonly (ushort Mask, GamepadButton Button)[] Buttons =
@@ -19,12 +19,13 @@ public static class XInputGamepad
     ];
 
     private static bool _unavailable;
-    private static uint? _rumbling;
-    private static ushort _lastRumble;
+    private static readonly ushort?[] Rumbling = new ushort?[4];
+    private static readonly bool[] Seen = new bool[4];
+    private static readonly List<GamepadButton> Down = new(16);
 
     /// <summary>
-    /// Copies the controller state into <paramref name="input"/> and shakes the controller as hard as it asks
-    /// (<see cref="InputState.RumbleStrength"/>). No controller means nothing pressed.
+    /// Copies each controller's state into <paramref name="input"/> (up to four, each its own, for players at one machine)
+    /// and shakes each as hard as it asks (<see cref="InputState.RumbleStrengthOf"/>). No controller means nothing pressed.
     /// </summary>
     public static void Poll(InputState input)
     {
@@ -35,23 +36,37 @@ public static class XInputGamepad
         {
             for (uint index = 0; index < 4; index++)
             {
+                var slot = (int)index;
                 if (XInputGetState(index, out var state) != 0)
+                {
+                    // Unplugged (a controller an agent or a demo only pretends is plugged in is left alone).
+                    if (Seen[slot])
+                    {
+                        input.SetGamepadConnected(slot, false);
+                        input.SetGamepad(slot, [], Vector2.Zero, Vector2.Zero);
+                        (Seen[slot], Rumbling[slot]) = (false, null);
+                    }
+
                     continue;
+                }
+
+                Seen[slot] = true;
 
                 var pad = state.Gamepad;
-                var down = Buttons.Where(b => (pad.Buttons & b.Mask) != 0).Select(b => b.Button);
-                input.IsGamepadConnected = true;
-                input.SetGamepad(down,
+                Down.Clear();
+                foreach (var (mask, button) in Buttons)
+                {
+                    if ((pad.Buttons & mask) != 0)
+                        Down.Add(button);
+                }
+
+                input.SetGamepadConnected(slot, true);
+                input.SetGamepad(slot, Down,
                     new Vector2(Axis(pad.LeftThumbX), Axis(pad.LeftThumbY)),
                     new Vector2(Axis(pad.RightThumbX), Axis(pad.RightThumbY)),
                     pad.LeftTrigger / 255f, pad.RightTrigger / 255f);
-                SetRumble(index, input.RumbleStrength);
-                return;
+                SetRumble(index, input.RumbleStrengthOf(slot));
             }
-
-            input.IsGamepadConnected = false;
-            input.SetGamepad([], Vector2.Zero);
-            _rumbling = null;
         }
         catch (DllNotFoundException)
         {
@@ -59,14 +74,18 @@ public static class XInputGamepad
         }
     }
 
-    /// <summary>Stops the controller shaking, e.g. when the game pauses or stops.</summary>
+    /// <summary>Stops every controller shaking, e.g. when the game pauses or stops.</summary>
     public static void StopRumble()
     {
-        if (_unavailable || _rumbling is not { } index)
+        if (_unavailable)
             return;
         try
         {
-            SetRumble(index, 0);
+            for (uint index = 0; index < 4; index++)
+            {
+                if (Rumbling[index] is not null)
+                    SetRumble(index, 0);
+            }
         }
         catch (DllNotFoundException)
         {
@@ -74,19 +93,16 @@ public static class XInputGamepad
         }
     }
 
-    // Only talk to the controller when the strength changes (or it's a different controller).
+    // Only talk to a controller when its strength changes.
     private static void SetRumble(uint index, float strength)
     {
         var speed = (ushort)(Math.Clamp(strength, 0, 1) * ushort.MaxValue);
-        if (_rumbling == index && _lastRumble == speed)
+        if (Rumbling[index] == speed)
             return;
         // Both motors: the heavy low rumble and the light buzz together feel like one shake.
         var vibration = new Vibration { LeftMotorSpeed = speed, RightMotorSpeed = speed };
         if (XInputSetState(index, ref vibration) == 0)
-        {
-            _rumbling = index;
-            _lastRumble = speed;
-        }
+            Rumbling[index] = speed;
     }
 
     // -32768..32767 to -1..1.

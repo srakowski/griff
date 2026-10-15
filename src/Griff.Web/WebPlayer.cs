@@ -37,7 +37,7 @@ public static partial class WebPlayer
     private static double s_lastTime = -1;
     private static Vector2 s_pointer;
     private static bool s_faulted, s_quit, s_soundWaiting, s_noticed, s_syncingFullscreen;
-    private static float s_rumble;
+    private static readonly float[] s_rumble = new float[InputState.MaxGamepads];
     private static MouseCursor s_cursor;
     private static string? s_netStatus;
     private static int? s_still;
@@ -250,10 +250,10 @@ public static partial class WebPlayer
     [JSExport]
     public static void Blur() => s_input.ReleaseAll();
 
-    /// <summary>The first controller this frame (see <see cref="WebGamepad.Apply"/>), or none.</summary>
+    /// <summary>Controller <paramref name="index"/> this frame (see <see cref="WebGamepad.Apply(InputState, int, bool, int, double, double, double, double, double, double)"/>), or none.</summary>
     [JSExport]
-    public static void Gamepad(bool connected, int pressed, double leftX, double leftY, double rightX, double rightY, double leftTrigger, double rightTrigger) =>
-        WebGamepad.Apply(s_input, connected, pressed, leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);
+    public static void Gamepad(int index, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY, double leftTrigger, double rightTrigger) =>
+        WebGamepad.Apply(s_input, index, connected, pressed, leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);
 
     /// <summary>True when a click should take the mouse (a first-person game wants it) rather than reach the game.</summary>
     [JSExport]
@@ -421,8 +421,12 @@ public static partial class WebPlayer
     // joining can't happen here.
     private static void AfterFrame(Game game)
     {
-        if (s_input.RumbleStrength != s_rumble)
-            Browser.Rumble(s_rumble = s_input.RumbleStrength);
+        for (var pad = 0; pad < s_rumble.Length; pad++)
+        {
+            var strength = s_input.RumbleStrengthOf(pad);
+            if (strength != s_rumble[pad])
+                Browser.Rumble(pad, s_rumble[pad] = strength);
+        }
         if (s_input.IsMouseLocked && !s_input.WantsMouseLock)
             Browser.ReleaseMouse();
         if (s_input.Cursor != s_cursor)
@@ -461,7 +465,8 @@ public static partial class WebPlayer
     {
         game.Stop();
         s_input.StopRumble();
-        Browser.Rumble(0);
+        for (var pad = 0; pad < s_rumble.Length; pad++)
+            Browser.Rumble(pad, s_rumble[pad] = 0);
         Browser.ReleaseMouse();
         Browser.SoundWaiting(false);
         Browser.Ended($"Thanks for playing {game.Title}.\nReload the page to play again.");

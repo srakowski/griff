@@ -24,26 +24,35 @@ public sealed partial class Game
 
     /// <summary>
     /// The controls of whoever plays <paramref name="entity"/>: in a network game, the player it belongs to (their keys
-    /// arrive from their machine); otherwise, or for something nobody owns, this machine's <see cref="Input"/>. Griff's
+    /// arrive from their machine); for something a <see cref="PlayedBy"/> gives to one of the players at this machine, their
+    /// keys or controller (see <see cref="LocalPlayers"/>); otherwise this machine's <see cref="Input"/>. Griff's
     /// components use it, so each player's character answers to its own player; scripts get it as <c>Input</c>.
     /// </summary>
     public IInput InputOf(Entity? entity)
     {
         // A turn taker waiting for its turn hears nothing.
-        return Waiting(entity) ? _noInput ??= new NoInput(Input) : ControlsOf(entity);
+        return Waiting(entity) ? NoControls : ControlsOf(entity);
     }
+
+    /// <summary>The people playing at this machine, each with their own keys or controller (see <see cref="Runtime.LocalPlayers"/>).</summary>
+    public LocalPlayers LocalPlayers => _localPlayers ??= new LocalPlayers(this);
+
+    private LocalPlayers? _localPlayers;
+
+    // Nothing held, nothing pressed.
+    internal IInput NoControls => _noInput ??= new NoInput(Input);
 
     // The controls of whoever plays an entity, whether or not it's its turn.
     private IInput ControlsOf(Entity? entity)
     {
-        if (!Net.IsOnline || entity is null)
+        if (entity is null)
             return Input;
-        var owner = NetSession.OwnerIdOf(entity);
+        var owner = Net.IsOnline ? NetSession.OwnerIdOf(entity) : 0;
         if (owner == 0)
-            return Input;
+            return LocalPlayers.Playing > 1 && PlayedBy.Of(entity) is var player && player > 0 ? LocalPlayers.Input(player) : Input;
         if (Net.LocalPlayer is { } me && me.Id == owner)
-            return LocalInputBlocked ? _noInput ??= new NoInput(Input) : Input;
-        return Net.PlayerById(owner)?.Input is { } remote ? remote : _noInput ??= new NoInput(Input);
+            return LocalInputBlocked ? NoControls : Input;
+        return Net.PlayerById(owner)?.Input is { } remote ? remote : NoControls;
     }
 
     private NoInput? _noInput;

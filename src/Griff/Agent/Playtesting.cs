@@ -23,6 +23,35 @@ public static class Playtesting
     }
 
     /// <summary>
+    /// A controller's button an agent names, as a second player's controller is played: "Gamepad A" (the first controller),
+    /// "Gamepad2 X", "Pad2 Start"; Left, Right, Up and Down are its D-pad. The controller as the platform numbers it (from 0)
+    /// and the button, or null if it isn't one.
+    /// </summary>
+    public static (int Pad, GamepadButton Button)? PadButtonNamed(string name)
+    {
+        var words = name.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length != 2)
+            return null;
+        var device = words[0].ToLowerInvariant();
+        var prefix = device.StartsWith("gamepad", StringComparison.Ordinal) ? "gamepad" : device.StartsWith("pad", StringComparison.Ordinal) ? "pad" : null;
+        if (prefix is null)
+            return null;
+        var number = device[prefix.Length..];
+        var pad = number.Length == 0 ? 0 : int.TryParse(number, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n is >= 1 and <= InputState.MaxGamepads ? n - 1 : -1;
+        if (pad < 0)
+            return null;
+        var button = words[1].ToLowerInvariant() switch
+        {
+            "left" => GamepadButton.DPadLeft,
+            "right" => GamepadButton.DPadRight,
+            "up" => GamepadButton.DPadUp,
+            "down" => GamepadButton.DPadDown,
+            _ => Enum.TryParse<GamepadButton>(words[1], ignoreCase: true, out var b) && !char.IsAsciiDigit(words[1][0]) ? b : (GamepadButton?)null,
+        };
+        return button is { } found ? (pad, found) : null;
+    }
+
+    /// <summary>
     /// The point in the world an agent names for the mouse: <c>[x, y]</c> in world units, an entity's name for its middle
     /// (its collider's, if it has one), or the label of a button a system shows on the screen (an inventory bar's item, a
     /// hotbar's slot: see <see cref="Game.HudButtons"/>) for its middle, after its kind (<c>"Item: Key"</c>) when an

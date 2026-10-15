@@ -41,7 +41,7 @@ public enum MovePhase
 /// </summary>
 /// <remarks>
 /// It plays its <see cref="Animation"/>'s Idle, Walk (or Run), WalkBack, Crouch, Jump, Block, CrouchBlock and Hurt clips
-/// when it has them. Everything is counted in steps (frames, at 60 a second) and kept with the scene, so the same input
+/// when it has them, and KO (or Hurt) once its <see cref="Health"/> runs out, doing nothing more. Everything is counted in steps (frames, at 60 a second) and kept with the scene, so the same input
 /// does the same thing every time, and a rewind carries on mid-motion and mid-move. It reads the controls of whoever plays
 /// it; in a network game the host runs it, as it lands every hit.
 /// </remarks>
@@ -140,6 +140,11 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// <summary>Blocks by itself: never, everything standing, everything crouching, or always (for a training dummy).</summary>
     public AutoBlock AutoBlock { get; set; }
 
+    /// <summary>Its <see cref="AutoBlock"/> in words, for a training menu's label: "Never", "Standing", "Crouching" or "Always".</summary>
+    [DoNotSerialize]
+    [Output("Auto Block")]
+    public string AutoBlockName => AutoBlock.ToString();
+
     /// <summary>How much of a blocked hit's damage it still takes (chip damage), 0 to 1. A move's own chip says otherwise.</summary>
     public float ChipDamage { get; set; } = 0.1f;
 
@@ -199,6 +204,13 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// <summary>True while it's crouching. Set by the game.</summary>
     [Output]
     public bool Crouching { get; set; }
+
+    /// <summary>
+    /// True while something holds it still and deaf to its controls (a versus match before a round's "Fight!" and after its
+    /// K.O.): it stands, falls and recovers, but walks, jumps, blocks by hand and starts no moves. Set by the game.
+    /// </summary>
+    [Output]
+    public bool Held { get; set; }
 
     /// <summary>True while it's blocking: holding back on the ground and free, or in blockstun. Set by the game.</summary>
     [Output]
@@ -306,6 +318,23 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// <summary>Ends its combo count (the HUD's "hits" goes back to 0).</summary>
     [Action]
     public void ResetCombo() => (Combo, ComboDamage, ComboOn) = (0, 0, null);
+
+    /// <summary>Changes its <see cref="AutoBlock"/> to the next: Never, Standing, Crouching, Always, and round again (a training dummy's guard).</summary>
+    [Action]
+    public void NextAutoBlock() => AutoBlock = AutoBlock == AutoBlock.Always ? AutoBlock.Never : AutoBlock + 1;
+
+    /// <summary>
+    /// Puts it back as a round starts: no move, blockstun, combo or presses waiting, and free (its hitstun is its
+    /// <see cref="Hitboxes"/>'). Its health and place are the match's to set.
+    /// </summary>
+    internal void ResetForRound()
+    {
+        (Move, Current, MoveFrame, Connected, Phase, Requested) = (null, null, 0, false, MovePhase.None, null);
+        (Blockstun, Blocking, JustBlocked, Crouching) = (0, false, false, false);
+        (Combo, ComboDamage, ComboOn) = (0, 0, null);
+        Input.Clear();
+        _historyWritten = -1;
+    }
 
     // ----- For the game -----
 

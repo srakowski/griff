@@ -1,0 +1,46 @@
+title: The Fighter template
+intro: Dojo Clash, a one-on-one fighting game with no code: two players at one keyboard or on controllers, or one against the computer, best of three rounds against the clock, and training.
+project: Fighter | Dojo
+
+chapter: Pick your fighters | Select
+expectcount: Versus = 1
+expectcount: Training = 1
+say: The title has Versus for two players, Vs Computer, and Training, with Kenta and Mira squaring up either side.
+scene: Select
+expectcount: Kenta = 1
+expectcount: Mira = 1
+select: Select
+explain: component:CharacterSelect | Character Select | A character select gives each player at the computer a cursor of their own. Its cards are its children, one for each fighter's prefab.
+explain: field:CharacterSelect.Players | Two players | Two pick here. With one, and the computer ticked, the computer takes the fighter after yours.
+deselect
+play
+wait: 0.5
+expectvalue: Select.CharacterSelect.FirstControls = Left keys (WASD)
+expectvalue: Select.CharacterSelect.SecondControls = Right keys (arrows)
+explain: game | One keyboard, two players | With no controller plugged in, the first player has the left keys, W A S D with F and G, and the second the arrows with K and L.
+agent: game_input {"steps": [{"tap": ["F"]}, {"wait": 0.3}, {"tap": ["K"]}, {"wait": 2.6}], "watch": ["Player 1", "Player 2"]}
+expectvalue: Match.VersusMatch.FirstName = Kenta
+expectvalue: Match.VersusMatch.SecondName = Mira
+
+chapter: Fight | Best of three, against the clock
+explain: game | Round one | Each round starts with both back in their places at full health, held still until Fight. The clock runs down from sixty.
+agent: game_input {"steps": [{"hold": ["D"], "seconds": 1.3}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"hold": ["D"], "tap": ["F"], "seconds": 0.25}, {"wait": 0.3}], "watch": ["Player 1", "Player 2", "Match"]}
+expectvalue: Match.VersusMatch.FirstWins = 1
+explain: game | K.O. | Mira's health ran out: a K.O., and the round is Kenta's. Time up, the one with more health left would have won it.
+wait: 4.5
+explain: game | A controller joins | A controller plugged in takes the second player, and the first has the whole keyboard. Each fighter reads its own player's controls alone.
+agent: game_input {"steps": [{"hold": ["Gamepad Left"], "seconds": 1.4}, {"tap": ["Gamepad X"]}, {"wait": 0.4}, {"tap": ["Gamepad X"]}, {"wait": 0.6}], "watch": ["Player 1", "Player 2"]}
+expectvalue: Player 2.Transform.Position.X = -1 ~ 2
+stop
+
+chapter: Against the computer | Training too
+scene: Solo
+play
+wait: 0.5
+agent: game_input {"steps": [{"tap": ["J"]}, {"wait": 2.2}], "watch": ["Player 2"]}
+expectvalue: Player 2.ComputerFighter.Behavior = Fight
+explain: game | The computer | Against the computer, a Computer Fighter plays the second fighter: it closes in, attacks with the fighter's own moves, guards as you attack and follows a hit with a special.
+wait: 5
+explain: game | Training | Training puts you against a dummy instead, that stands, crouches, jumps or fights back, with its guard, the hitboxes and a reset on the number keys.
+stop
+say: That's the Fighter template: a character select for players at one computer, rounds against the clock, a computer to fight, and training, all with no code.

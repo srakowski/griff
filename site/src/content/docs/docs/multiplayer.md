@@ -5,6 +5,8 @@ description: "Hosting and joining games over the network, what is sent, and what
 
 ## Multiplayer
 
+Players at one computer (two at a keyboard, on controllers) don't need a network: see [Several players at one machine](/docs/players/#several-players-at-one-machine).
+
 Network play is for games built for Windows: a browser can't make the connections it needs, so a game built for the web says network play isn't there and plays alone (see [In a browser](/docs/exporting/#in-a-browser)).
 
 Any scene becomes a network game with a **Multiplayer** component, and the **Multiplayer** template is one to start from: a menu to type your name and a host's address into, and an arena for up to eight players with slimes, hearts, crates to hide behind and a scoreboard. One machine hosts and runs the game; everyone else's shows the host's world, sends the host their keys, and moves their own character itself, so it never waits on the connection. Cameras, the HUD, menus and music stay on each machine and follow that player's own character, and so do each player's settings, their audio and visual offsets among them (see [Rhythm games](/docs/rhythm/#network-games-and-replays)). The pieces:

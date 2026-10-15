@@ -127,6 +127,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Cards")]
     [InlineData("Adventure")]
     [InlineData("VisualNovel")]
+    [InlineData("Fighter")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -825,6 +826,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Cards")]
     [InlineData("Adventure")]
     [InlineData("VisualNovel")]
+    [InlineData("Fighter")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -844,6 +846,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Garden");
         if (template == "VisualNovel")
             scene = GameLoader.LoadScene(project, registry, "Story");
+        if (template == "Fighter")
+            scene = GameLoader.LoadScene(project, registry, "Stage");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -861,6 +865,7 @@ public sealed class ProjectTemplateTests : IDisposable
         // Nothing moves while it's up, however hard the player pushes: not the player, nor a board's piece or cursor, nor
         // the tactics cursor.
         string Moving() => game.Find("Player") is { } player ? player.Transform.Position.ToString()
+            : game.Find("Match")?.GetComponent<Griff.Modules.Fighting.VersusMatch>() is { } match ? $"{game.Find("Player 1")!.Transform.Position} {match.Timer} {match.Clock}"
             : game.Find("Hero")?.GetComponent<Griff.Modules.Battles.Battler>() is { } hero ? $"{hero.Said} {hero.Mana} {hero.Items}"
             : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
             : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"

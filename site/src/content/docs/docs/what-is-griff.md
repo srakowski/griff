@@ -22,7 +22,7 @@ Most engines make you stop the game to change it, lose your changes when play mo
 
 ## Templates
 
-Every template is playable (and audible) from the first second: Platformer, Top-down, Isometric, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3, Falling Blocks, Roguelike, Tactics, RPG Stats, Cards, Adventure, Visual Novel and Physics, and a BunnyMark benchmark.
+Every template is playable (and audible) from the first second: Platformer, Top-down, Isometric, Arcade, Strategy, Shooter, Sandbox, Contraption, Multiplayer, Puzzle, Match-3, Falling Blocks, Roguelike, Tactics, RPG Stats, Cards, Adventure, Visual Novel, Physics and Fighter, and a BunnyMark benchmark.
 
 ## Where to go next
 

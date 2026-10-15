@@ -567,6 +567,91 @@ public sealed class FighterTests
     }
 
     [Fact]
+    public void A_training_dummy_the_computer_plays_stands_crouches_or_jumps_and_ignores_the_keys()
+    {
+        var cpu = _dummy.AddComponent<ComputerFighter>();
+        cpu.Behavior = ComputerBehavior.Crouch;
+        var x = _dummy.Transform.Position.X;
+        Play("5*10");
+        Assert.True(FighterOf(_dummy).Crouching);
+
+        cpu.NextBehavior();
+        Assert.Equal("Jump", cpu.BehaviorName);
+        Play("5*10");
+        Assert.False(_dummy.GetComponent<Body>()!.IsGrounded);
+
+        cpu.NextBehavior();
+        cpu.NextBehavior();
+        Assert.Equal(ComputerBehavior.Stand, cpu.Behavior);
+        Play("5*120");
+        FighterOf(_dummy).Controllable = true;
+        Play("4*30");
+        Assert.Equal(x, _dummy.Transform.Position.X, 2);
+        Assert.False(FighterOf(_dummy).Crouching);
+    }
+
+    [Fact]
+    public void A_computer_fighter_closes_in_attacks_guards_and_follows_up_the_same_every_time()
+    {
+        static (string Trace, int Moves, int Blocks, float Hurt) Fight()
+        {
+            var scene = Training(out var fighter, out var dummy);
+            var keys = new InputState();
+            var game = new Game(scene, keys);
+            var cpu = dummy.AddComponent<ComputerFighter>();
+            (cpu.Difficulty, cpu.Seed) = (ComputerDifficulty.Hard, 12345);
+            dummy.GetComponent<Health>()!.Respawn = false;
+            var (moves, blocks) = (0, 0);
+            FighterOf(dummy).MoveStarted += _ => moves++;
+            FighterOf(dummy).Blocked += _ => blocks++;
+            // The player stands its ground, jabbing now and then.
+            var steps = new List<string>();
+            for (var i = 0; i < 40; i++)
+                steps.AddRange(["5P", "5*24"]);
+            Play(game, keys, [.. steps]);
+            return (Snapshot(scene), moves, blocks, 30 - HealthOf(fighter));
+        }
+
+        var first = Fight();
+        Assert.True(first.Moves >= 4, $"{first.Moves} moves");
+        Assert.True(first.Blocks >= 1, "It never blocked.");
+        Assert.True(first.Hurt > 0, "It never hit.");
+        Assert.Equal(first, Fight());
+    }
+
+    [Fact]
+    public void A_computer_fighter_uses_only_the_moves_it_is_given()
+    {
+        var cpu = _dummy.AddComponent<ComputerFighter>();
+        (cpu.UseMoves, cpu.Difficulty) = ("Low Kick, Palm", ComputerDifficulty.Hard);
+        var moves = new HashSet<string>();
+        FighterOf(_dummy).MoveStarted += m => moves.Add(m.Name);
+        Play("5*900");
+        Assert.NotEmpty(moves);
+        Assert.Subset(new HashSet<string> { "Low Kick", "Palm" }, moves);
+    }
+
+    [Fact]
+    public void A_fighter_knocked_out_lies_down_and_a_held_one_reads_no_keys()
+    {
+        _fighter.GetComponent<Health>()!.DestroyOnDeath = false;
+        _fighter.GetComponent<Health>()!.Kill();
+        Play("6P", "5*10");
+        Assert.Equal("Hurt", _fighter.GetComponent<Animation>()!.Clip);
+        Assert.Null(FighterOf(_fighter).Move);
+        Assert.Equal(-1.2f, _fighter.Transform.Position.X, 1);
+
+        _fighter.GetComponent<Health>()!.Current = 30;
+        FighterOf(_fighter).Held = true;
+        Play("6P", "6*20");
+        Assert.Null(FighterOf(_fighter).Move);
+        Assert.Equal(-1.2f, _fighter.Transform.Position.X, 1);
+        FighterOf(_fighter).Held = false;
+        Play("6*20");
+        Assert.True(_fighter.Transform.Position.X > -1.0f);
+    }
+
+    [Fact]
     public void Fighting_makes_no_garbage_while_fighters_walk_crouch_and_do_moves()
     {
         Play("5*30");
@@ -588,5 +673,54 @@ public sealed class FighterTests
 
         var perStep = Allocations.PerCall(Bout, 5);
         Assert.True(perStep == 0, $"A bout of steps allocated {perStep:N0} bytes.");
+    }
+
+    [Fact]
+    public void Two_players_at_one_keyboard_fight_each_on_their_side_with_no_garbage()
+    {
+        _fighter.AddComponent<PlayedBy>().Player = 1;
+        _dummy.AddComponent<PlayedBy>().Player = 2;
+        FighterOf(_dummy).Controllable = true;
+        Step(2);
+
+        // The left player's F is its punch; the right player's K is the dummy's.
+        string? first = null, second = null;
+        FighterOf(_fighter).MoveStarted += m => first ??= m.Name;
+        FighterOf(_dummy).MoveStarted += m => second ??= m.Name;
+        _keys.SetKey(Key.F, true);
+        Step();
+        _keys.SetKey(Key.F, false);
+        Step(30);
+        _keys.SetKey(Key.K, true);
+        Step();
+        _keys.SetKey(Key.K, false);
+        Step(30);
+        Assert.Equal(("Jab", "Jab"), (first, second));
+
+        void Bout()
+        {
+            for (var i = 0; i < 40; i++)
+            {
+                _keys.SetKey(Key.D, i < 20);
+                _keys.SetKey(Key.Left, i >= 20);
+                _keys.SetKey(Key.F, i == 5);
+                _keys.SetKey(Key.L, i == 25);
+                _game.Tick(Frame);
+                _keys.EndFrame();
+            }
+        }
+
+        var perStep = Allocations.PerCall(Bout, 5);
+        Assert.True(perStep == 0, $"A bout allocated {perStep:N0} bytes.");
+    }
+
+    [Fact]
+    public void A_computer_fighter_makes_no_garbage()
+    {
+        var cpu = _dummy.AddComponent<ComputerFighter>();
+        (cpu.Difficulty, cpu.UseMoves) = (ComputerDifficulty.Hard, "Jab, Kick, Low Kick, Palm");
+        Play("5*60");
+        var perStep = Allocations.PerCall(() => Step(30), 5);
+        Assert.True(perStep == 0, $"The computer's steps allocated {perStep:N0} bytes.");
     }
 }

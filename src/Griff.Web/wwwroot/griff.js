@@ -55,10 +55,12 @@ let quadBytes = new Uint8Array(QUAD_BYTES * 1024);
 let capturing = null;
 
 let audio = null;
-let pad = null;
-let hadPad = false;
-let rumbleStrength = 0;
-let rumbledAt = 0;
+// The controllers plugged in, up to four, in the order the browser lists them (each a player's own), and how hard each is
+// asked to shake.
+let pads = [null, null, null, null];
+const hadPads = [false, false, false, false];
+const rumbleStrengths = [0, 0, 0, 0];
+const rumbledAts = [0, 0, 0, 0];
 let wantFullscreen = false;
 let touchLeft = false;
 let noticeTimer = 0;
@@ -170,12 +172,12 @@ export function storeSave(key, json) {
   }
 }
 
-/** Shakes the first controller this hard, 0 to 1 (0 stops it), where the browser lets a page. */
-export function rumble(strength) {
-  rumbleStrength = strength;
-  rumbledAt = 0;
+/** Shakes controller `index` this hard, 0 to 1 (0 stops it), where the browser lets a page. */
+export function rumble(index, strength) {
+  rumbleStrengths[index] = strength;
+  rumbledAts[index] = 0;
   if (strength <= 0)
-    pad?.vibrationActuator?.reset?.()?.catch?.(() => {});
+    pads[index]?.vibrationActuator?.reset?.()?.catch?.(() => {});
 }
 
 /** Fills the screen with the page, or stops; the browser allows it only after a click or a key, so it may wait for one. */
@@ -501,7 +503,7 @@ function frame(now) {
   const height = Math.max(1, Math.round(canvas.clientHeight * scale));
   if (canvas.width !== width || canvas.height !== height)
     [canvas.width, canvas.height] = [width, height];
-  readGamepad(now);
+  readGamepads(now);
   player.Frame(now, width, height);
   // A finger lifted counts as the mouse leaving only once the game has seen the tap.
   if (touchLeft) {
@@ -513,38 +515,41 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// The first controller plugged in, in the browser's standard layout (the Xbox one's), handed to the game each frame; its
-// rumble kept going while the game asks for one.
-function readGamepad(now) {
-  pad = null;
+// The controllers plugged in (up to four, each a player's own), in the browser's standard layout (the Xbox one's), handed to
+// the game each frame; each one's rumble kept going while the game asks for one.
+function readGamepads(now) {
+  const found = [null, null, null, null];
+  let next = 0;
   for (const candidate of navigator.getGamepads?.() ?? []) {
-    if (candidate?.connected) {
-      pad = candidate;
-      break;
+    if (candidate?.connected && next < found.length)
+      found[next++] = candidate;
+  }
+
+  pads = found;
+  found.forEach((pad, index) => {
+    if (!pad) {
+      if (hadPads[index])
+        player.Gamepad(index, false, 0, 0, 0, 0, 0, 0, 0);
+      hadPads[index] = false;
+      return;
     }
-  }
 
-  if (!pad) {
-    if (hadPad)
-      player.Gamepad(false, 0, 0, 0, 0, 0, 0, 0);
-    hadPad = false;
-    return;
-  }
-
-  hadPad = true;
-  let pressed = 0;
-  pad.buttons.forEach((button, i) => {
-    if (i < 31 && button.pressed)
-      pressed |= 1 << i;
+    hadPads[index] = true;
+    let pressed = 0;
+    pad.buttons.forEach((button, i) => {
+      if (i < 31 && button.pressed)
+        pressed |= 1 << i;
+    });
+    const axis = i => pad.axes[i] ?? 0;
+    const value = i => pad.buttons[i]?.value ?? 0;
+    player.Gamepad(index, true, pressed, axis(0), axis(1), axis(2), axis(3), value(6), value(7));
+    const strength = rumbleStrengths[index];
+    if (strength > 0 && now - rumbledAts[index] > 100 && pad.vibrationActuator?.playEffect) {
+      rumbledAts[index] = now;
+      pad.vibrationActuator.playEffect('dual-rumble', { duration: 200, strongMagnitude: strength, weakMagnitude: strength })
+        .catch(() => {});
+    }
   });
-  const axis = i => pad.axes[i] ?? 0;
-  const value = i => pad.buttons[i]?.value ?? 0;
-  player.Gamepad(true, pressed, axis(0), axis(1), axis(2), axis(3), value(6), value(7));
-  if (rumbleStrength > 0 && now - rumbledAt > 100 && pad.vibrationActuator?.playEffect) {
-    rumbledAt = now;
-    pad.vibrationActuator.playEffect('dual-rumble', { duration: 200, strongMagnitude: rumbleStrength, weakMagnitude: rumbleStrength })
-      .catch(() => {});
-  }
 }
 
 // Web Audio, made as the page opens: the browser holds it until the player clicks or presses a key (its autoplay rule),

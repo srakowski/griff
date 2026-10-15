@@ -63,7 +63,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             Title = "Game Input",
             Description = "Plays the running game (start it with Game_Play): presses keys and uses the mouse as a player would, in steps. If a breakpoint stops the game, it stops there and says where, with the values in scope. Each step can " +
                 "\"hold\" keys for \"seconds\", \"tap\" keys (pressed for one frame) or just \"wait\" seconds. Keys are names like Right, " +
-                "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact. " +
+                "Left, Up, Down, Space, Z, X, E, LeftShift, Enter, Escape, or an input action like Jump, Attack, Dash or Interact; a controller's buttons are " +
+                "\"Gamepad A\" (the first controller), \"Gamepad2 X\" or \"Gamepad2 Left\" (its D-pad), for a second player at one machine. " +
                 "The mouse: \"point\" moves it to a point, \"click\" clicks there (\"button\": \"Right\" for the right button), and \"drag\" presses " +
                 "at \"from\", moves to \"to\" over \"seconds\" (default 0.5) and lets go, e.g. {\"drag\": {\"from\": \"Card\", \"to\": \"Slot\"}} " +
                 "(with \"release\": false in it, it keeps holding, to see what's held over what, until a {\"release\": true} step lets go). " +
@@ -366,18 +367,18 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             }
 
             foreach (var key in hold.Concat(tap))
-                input.SetKey(key, true);
+                key.Set(input, true);
             if (tap.Count > 0)
             {
                 await FramesAsync(2);
                 foreach (var key in tap.Except(hold))
-                    input.SetKey(key, false);
+                    key.Set(input, false);
             }
 
             if (seconds > 0)
                 await UntilBreakpointAsync(Task.Delay(TimeSpan.FromSeconds(Math.Min(seconds, 60))));
             foreach (var key in hold)
-                input.SetKey(key, false);
+                key.Set(input, false);
             if (play.Game != game)
             {
                 log.AppendLine("The game stopped.");
@@ -543,23 +544,37 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     // The ids of an agent's fingers on the touch screen, well clear of a real one's.
     private const int AgentFingers = 1 << 20;
 
-    private static List<Key> Keys(JsonElement step, string name, InputState input)
+    private static List<Press> Keys(JsonElement step, string name, InputState input)
     {
         if (step.ValueKind != JsonValueKind.Object || !step.TryGetProperty(name, out var value))
             return [];
         var names = value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().Select(e => e.GetString() ?? "").ToList() : [value.GetString() ?? ""];
-        var keys = new List<Key>();
+        var keys = new List<Press>();
         foreach (var keyName in names)
         {
             if (Playtesting.KeyNamed(keyName) is { } key)
-                keys.Add(key);
+                keys.Add(new Press(key, -1, default));
+            else if (Playtesting.PadButtonNamed(keyName) is var (pad, button))
+                keys.Add(new Press(null, pad, button));
             else if (input.BindingsOf(keyName).FirstOrDefault(b => b.Key is not null).Key is { } bound)
-                keys.Add(bound);
+                keys.Add(new Press(bound, -1, default));
             else
-                throw new AgentException($"\"{keyName}\" isn't a key or an input action with a key. Keys: {string.Join(", ", Enum.GetNames<Key>())}.");
+                throw new AgentException($"\"{keyName}\" isn't a key, a controller's button (\"Gamepad2 A\") or an input action with a key. Keys: {string.Join(", ", Enum.GetNames<Key>())}.");
         }
 
         return keys;
+    }
+
+    // A key, or a button on one of the controllers, held or let go.
+    private readonly record struct Press(Key? Key, int Pad, GamepadButton Button)
+    {
+        public void Set(InputState input, bool down)
+        {
+            if (Key is { } key)
+                input.SetKey(key, down);
+            else
+                input.HoldGamepadButton(Pad, Button, down);
+        }
     }
 
     // A breakpoint stopped the game: the steps stop there, and say where it is and what's in scope.

@@ -55,13 +55,15 @@ internal sealed class FightersSystem : GameSystem
         }
     }
 
-    // This step's input, as it faces, into its history: the direction held and the buttons pressed. Returns the direction.
+    // This step's input, as it faces, into its history: the direction held and the buttons pressed (the computer's, for
+    // one it plays; nothing while it's held). Returns the direction.
     private int Read(FightingCharacter f)
     {
         var entity = f.Entity!;
         var facing = HitboxesSystem.FacingOf(entity);
-        var input = f.Controllable ? Game.InputOf(entity) : null;
-        var (x, y) = input is null ? (0, 0) : Stick(input);
+        var computer = entity.GetComponent<ComputerFighter>();
+        var input = f.Controllable && !f.Held && computer is null ? Game.InputOf(entity) : null;
+        var (x, y) = computer is not null && !f.Held ? (Math.Sign(computer.HoldX), Math.Sign(computer.HoldY)) : input is null ? (0, 0) : Stick(input);
         var direction = 5 + x * (int)facing + 3 * y;
         var presses = 0;
         if (input is not null)
@@ -121,11 +123,26 @@ internal sealed class FightersSystem : GameSystem
         var stunned = boxes is { Hitstun: > 0 };
         var opponent = OpponentOf(f, fighters);
         var free = !stunned && !blocking && f.Current is null;
-        if (free && grounded && f.FaceOpponent && opponent is not null)
+        var knockedOut = entity.GetComponent<Health>() is { IsDead: true };
+        if (free && grounded && f.FaceOpponent && opponent is not null && !knockedOut)
             Face(entity, opponent);
 
+        if (entity.GetComponent<ComputerFighter>() is { } computer)
+            Think(f, computer, opponent, moves, grounded, free && !knockedOut);
+        if (f.Held)
+            f.Requested = null;
         var direction = Read(f);
         var facing = HitboxesSystem.FacingOf(entity);
+
+        if (knockedOut)
+        {
+            // Knocked out: down, and nothing more.
+            EndMove(f, animation);
+            (f.Blocking, f.Crouching) = (false, false);
+            PlayFirst(animation, "KO", "Hurt", "Idle");
+            Slow(f, body, grounded);
+            return;
+        }
 
         if (stunned)
         {
@@ -167,7 +184,7 @@ internal sealed class FightersSystem : GameSystem
 
         // Free: a move if one is pressed (or was, a few steps ago, or asked for), or else walking, jumping and crouching.
         f.Blocking = false;
-        if (TryStart(f, moves, grounded, animation, boxes, body, cancelFrom: null))
+        if (!f.Held && TryStart(f, moves, grounded, animation, boxes, body, cancelFrom: null))
             return;
         Move(f, direction, body, animation, grounded, facing);
     }
@@ -454,6 +471,182 @@ internal sealed class FightersSystem : GameSystem
         return (h > StickThreshold ? 1 : h < -StickThreshold ? -1 : 0, v > StickThreshold ? 1 : v < -StickThreshold ? -1 : 0);
     }
 
+    // ----- The computer -----
+
+    // What a fighter the computer plays holds and does this step: as a dummy, stands, crouches or jumps; fighting, guards
+    // the attack coming (chosen once a move), follows a hit with a special it cancels into, closes in, attacks with a move
+    // in range, backs off or waits, choosing again every so often by its seed.
+    private static void Think(FightingCharacter f, ComputerFighter cpu, Entity? opponent, IReadOnlyList<FighterMove> moves, bool grounded, bool free)
+    {
+        if (f.Held)
+        {
+            (cpu.HoldX, cpu.HoldY, cpu.Guarding) = (0, 0, false);
+            return;
+        }
+
+        switch (cpu.Behavior)
+        {
+            case ComputerBehavior.Stand:
+                (cpu.HoldX, cpu.HoldY) = (0, 0);
+                return;
+            case ComputerBehavior.Crouch:
+                (cpu.HoldX, cpu.HoldY) = (0, -1);
+                return;
+            case ComputerBehavior.Jump:
+                (cpu.HoldX, cpu.HoldY) = (0, grounded && free ? 1 : 0);
+                return;
+        }
+
+        if (opponent is null || opponent.GetComponent<Health>() is { IsDead: true })
+        {
+            (cpu.HoldX, cpu.HoldY, cpu.Guarding) = (0, 0, false);
+            return;
+        }
+
+        var dx = opponent.Transform.WorldPosition.X - f.Entity!.Transform.WorldPosition.X;
+        var toward = dx >= 0 ? 1 : -1;
+        var distance = MathF.Abs(dx);
+        var (reaction, guard, attack) = cpu.Difficulty switch
+        {
+            ComputerDifficulty.Easy => (28, 0.25f, 0.4f),
+            ComputerDifficulty.Hard => (8, 0.85f, 0.75f),
+            _ => (16, 0.55f, 0.55f),
+        };
+
+        // Their attack coming: guard it or not, chosen once for each move of theirs.
+        var foe = opponent.GetComponent<FightingCharacter>();
+        if (foe is { Current: { } theirs } && foe.Phase is MovePhase.Startup or MovePhase.Active && distance < cpu.Range + 2.5f)
+        {
+            if (!string.Equals(cpu.SawMove, theirs.Name, StringComparison.Ordinal))
+            {
+                cpu.SawMove = theirs.Name;
+                cpu.Guarding = free && grounded && cpu.Next() < guard;
+            }
+
+            if (cpu.Guarding)
+            {
+                (cpu.HoldX, cpu.HoldY) = (-toward, theirs.Hits == MoveHeight.Low ? -1 : 0);
+                return;
+            }
+        }
+        else if (cpu.SawMove is not null || cpu.Guarding)
+        {
+            (cpu.SawMove, cpu.Guarding) = (null, false);
+        }
+
+        // Its own move has hit: perhaps a special it cancels into, once.
+        if (f.Current is { } mine)
+        {
+            (cpu.HoldX, cpu.HoldY) = (0, 0);
+            if (f.Connected && f.Requested is null && cpu.Wait >= 0 && mine.CancelList.Count > 0)
+            {
+                cpu.Wait = -1;
+                if (cpu.Next() < attack && Pick(moves, cpu, air: false, cancelFrom: mine) is { } follow)
+                    f.Perform(follow.Name);
+            }
+
+            return;
+        }
+
+        if (!free)
+        {
+            (cpu.HoldX, cpu.HoldY) = (0, 0);
+            return;
+        }
+
+        // In the air: an air move once it's near.
+        if (!grounded)
+        {
+            cpu.HoldY = 0;
+            if (cpu.Wait >= 0 && distance < cpu.Range + 0.8f)
+            {
+                cpu.Wait = -1;
+                if (Pick(moves, cpu, air: true, cancelFrom: null) is { } air)
+                    f.Perform(air.Name);
+            }
+
+            return;
+        }
+
+        if (cpu.Wait < 0)
+            cpu.Wait = 0;
+        if (cpu.Wait > 0)
+        {
+            cpu.Wait--;
+            // A jump is a single press of up.
+            if (cpu.HoldY > 0)
+                cpu.HoldY = 0;
+            return;
+        }
+
+        var roll = cpu.Next();
+        if (distance > cpu.Range)
+        {
+            // Out of reach: walk in, now and then jumping in.
+            if (roll < attack * 0.15f)
+                (cpu.HoldX, cpu.HoldY, cpu.Wait) = (toward, 1, 4);
+            else
+                (cpu.HoldX, cpu.HoldY, cpu.Wait) = (toward, 0, reaction / 2);
+        }
+        else if (roll < attack && Pick(moves, cpu, air: false, cancelFrom: null) is { } move)
+        {
+            f.Perform(move.Name);
+            (cpu.HoldX, cpu.HoldY, cpu.Wait) = (0, 0, reaction);
+        }
+        else if (roll < attack + 0.2f)
+        {
+            (cpu.HoldX, cpu.HoldY, cpu.Wait) = (-toward, 0, reaction / 2);
+        }
+        else
+        {
+            (cpu.HoldX, cpu.HoldY, cpu.Wait) = (0, 0, reaction / 2);
+        }
+
+        cpu.Wait += (int)(cpu.Next() * (reaction / 2 + 1));
+    }
+
+    // One of its moves in the air or on the ground (and one the move it's doing cancels into, if any) that it uses, picked
+    // by its seed; null if none.
+    private static FighterMove? Pick(IReadOnlyList<FighterMove> moves, ComputerFighter cpu, bool air, FighterMove? cancelFrom)
+    {
+        bool Fits(FighterMove move) => move.Input.Air == air && (cancelFrom is null || cancelFrom.CancelsInto(move)) && Uses(cpu, move);
+
+        var count = 0;
+        for (var i = 0; i < moves.Count; i++)
+        {
+            if (Fits(moves[i]))
+                count++;
+        }
+
+        if (count == 0)
+            return null;
+        var pick = Math.Min(count - 1, (int)(cpu.Next() * count));
+        for (var i = 0; i < moves.Count; i++)
+        {
+            if (!Fits(moves[i]))
+                continue;
+            if (pick-- == 0)
+                return moves[i];
+        }
+
+        return null;
+    }
+
+    // Whether the computer uses a move: every one, or those its Use Moves names.
+    private static bool Uses(ComputerFighter cpu, FighterMove move)
+    {
+        var names = cpu.UseMoves;
+        if (string.IsNullOrWhiteSpace(names))
+            return true;
+        foreach (var range in names.AsSpan().Split(','))
+        {
+            if (names.AsSpan(range).Trim().Equals(move.Name, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     // ----- Facing and opponents -----
 
     private static void Face(Entity entity, Entity opponent)
@@ -521,7 +714,8 @@ internal sealed class FightersSystem : GameSystem
         bool crouching;
         if (defender.Blockstun > 0)
             crouching = defender.Crouching;
-        else if (defender.HoldBackToBlock && defender.Controllable && HoldsAway(defender, attacker))
+        else if (defender.HoldBackToBlock && !defender.Held && (defender.Controllable || entity.GetComponent<ComputerFighter>() is not null) &&
+                 HoldsAway(defender, attacker))
             crouching = defender.HeldDown;
         else if (defender.AutoBlock != AutoBlock.Never)
             crouching = defender.AutoBlock switch

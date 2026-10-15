@@ -7,7 +7,7 @@ A jam themed "combine two genres" wants a match-3 board inside a platformer, a s
 
 ## Who has the input
 
-Everything that reads the player's keys, mouse or gamepad has a **Controllable** tick and a **Focus** action (see [Who has the player's input](/docs/players/#who-has-the-players-input)): the movements, match-3 and falling-block boards, the strategy **Commander**, the **Tactics Controls**, a card game's **Hand**, the **Sandbox Tools**, a **Block Builder** and an RPG **Battler**. Focus gives the input to one entity (and what's inside it) and takes it from everything else the same player plays, so a board and a platformer's player don't both move on the arrow keys. A trigger hands it over: on an arcade cabinet, "when `Play` arrives, Focus the Board", and on the board, "when `Won` arrives, Focus the Player". Scripts call `Game.Focus(entity)` and ask `Game.HasFocus(entity)`.
+Everything that reads the player's keys, mouse or gamepad has a **Controllable** tick and a **Focus** action (see [Who has the player's input](/docs/players/#who-has-the-players-input)): the movements, match-3 and falling-block boards, the strategy **Commander**, the **Tactics Controls**, a card game's **Hand**, a visual novel's **Stage**, the **Sandbox Tools**, a **Block Builder** and an RPG **Battler**. Focus gives the input to one entity (and what's inside it) and takes it from everything else the same player plays, so a board and a platformer's player don't both move on the arrow keys. A trigger hands it over: on an arcade cabinet, "when `Play` arrives, Focus the Board", and on the board, "when `Won` arrives, Focus the Player". Scripts call `Game.Focus(entity)` and ask `Game.HasFocus(entity)`.
 
 ## Working on part of the scene
 

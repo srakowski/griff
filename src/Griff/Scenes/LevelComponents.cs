@@ -672,6 +672,12 @@ public enum DialogueStart
 
     /// <summary>As soon as the player touches it: a sign that reads itself, a cutscene trigger.</summary>
     Touch,
+
+    /// <summary>
+    /// As soon as the scene starts, with no collider needed: an intro, a visual novel's script. Once said it isn't said
+    /// again until the scene is loaded again.
+    /// </summary>
+    SceneStart,
 }
 
 /// <summary>
@@ -682,10 +688,11 @@ public enum DialogueStart
 /// (see <see cref="Lines"/>). A line starting with a <see cref="Speaker"/>'s name ("Guide: Hello!") is said by them, and
 /// the rest by the Speaker on this entity, if it has one: a <see cref="DialogueBox"/> shows their name and portrait.
 /// The <see cref="Box"/> is shown while talking and hidden otherwise; put a <see cref="Typewriter"/> next to its text to
-/// type the lines out. Needs a collider, usually a trigger.
+/// type the lines out. Needs a collider, usually a trigger, unless it starts as the scene starts. Where it's got to is
+/// saved with the scene, so a rewind goes back into the middle of a talk.
 /// </summary>
 [Category("Story")]
-[Requires(typeof(Collider), Note = "usually a trigger")]
+[Requires(typeof(Collider), Note = "usually a trigger; none when it starts with the scene", Unless = nameof(StartsWithScene))]
 [WorksWith(typeof(Speaker), Note = "for a name and portrait over its lines")]
 [ComponentName("Griff.Dialogue")]
 public sealed class Dialogue : Component
@@ -698,8 +705,10 @@ public sealed class Dialogue : Component
     /// brackets: "[if Flag]" or "[if not Flag]" says it (offers the choice, follows the go-to) only when the flag is set
     /// or isn't; "[set Flag]" and "[clear Flag]" set and clear one, and "[send Message]" sends a message, when the line
     /// is said or the choice picked. A row of tags alone just does them. Flags are kept in the game's save data, so
-    /// they're still set next time. "Name: ..." is said by the <see cref="Speaker"/> called Name. Start a row with "\"
-    /// to say it as it is, "&gt;", "#", "[" and all.
+    /// they're still set next time. "Name: ..." is said by the <see cref="Speaker"/> called Name, and "Name (happy): ..."
+    /// with that expression (see <see cref="Expression"/>). Modules add tags of their own: a visual novel stage's
+    /// "[show Ava left happy]", "[hide Ava]", "[move Ava right]" and "[background Park fade]". Start a row with "\" to say
+    /// it as it is, "&gt;", "#", "[" and all.
     /// </summary>
     public IReadOnlyList<string> Lines { get; set; } = ["Hello!"];
 
@@ -742,14 +751,6 @@ public sealed class Dialogue : Component
     [EntityName]
     public string? Prompt { get; set; }
 
-    /// <summary>True while it's being said.</summary>
-    [DoNotSerialize]
-    public bool IsTalking { get; internal set; }
-
-    /// <summary>The line showing, from 0, while talking.</summary>
-    [DoNotSerialize]
-    public int Line { get; internal set; }
-
     /// <summary>The line showing as it's said, without the speaker's name it starts with; null while only choices show.</summary>
     [DoNotSerialize]
     public string? Said { get; internal set; }
@@ -758,9 +759,12 @@ public sealed class Dialogue : Component
     [DoNotSerialize]
     public Speaker? Speaker { get; internal set; }
 
-    /// <summary>True once it has been said all the way through.</summary>
+    /// <summary>
+    /// The expression the line showing is said with, from its speaker's name ("Ava (happy): ..." says it happy), or null:
+    /// a visual novel's stage shows the character that way.
+    /// </summary>
     [DoNotSerialize]
-    public bool IsDone { get; internal set; }
+    public string? Expression { get; internal set; }
 
     /// <summary>The choices offered under the line showing, empty when there are none.</summary>
     [DoNotSerialize]
@@ -769,6 +773,25 @@ public sealed class Dialogue : Component
     /// <summary>The choice the arrow keys or mouse are on, from 0, while there are <see cref="Choices"/>; Interact picks it.</summary>
     [DoNotSerialize]
     public int Picked { get; internal set; }
+
+    /// <summary>
+    /// True while it's being said. Saved with the scene (with <see cref="Line"/>), so a rewind or a saved game goes back
+    /// into the talk; set it in the Inspector to start the game partway through one.
+    /// </summary>
+    [Group("State")]
+    [NotSent]
+    public bool IsTalking { get; set; }
+
+    /// <summary>The row showing, from 0, while talking.</summary>
+    [NotSent]
+    public int Line { get; set; }
+
+    /// <summary>True once it has been said all the way through.</summary>
+    [NotSent]
+    public bool IsDone { get; set; }
+
+    /// <summary>True for one that starts by itself as the scene starts, which needs no collider.</summary>
+    public bool StartsWithScene => Start == DialogueStart.SceneStart;
 
     /// <summary>Raised as each line is shown, with its number.</summary>
     public event Action<int>? LineShown;
@@ -816,10 +839,16 @@ public sealed class Dialogue : Component
         Set,
         Clear,
         Send,
+
+        /// <summary>One of a module's own (see <see cref="DialogueTagsAttribute"/>): "[show Ava left]".</summary>
+        Direction,
     }
 
-    /// <summary>A tag at the start of a row, like "[set MetKing]".</summary>
-    internal readonly record struct Tag(TagKind Kind, string Name);
+    /// <summary>
+    /// A tag at the start of a row, like "[set MetKing]": for a module's own, <see cref="Word"/> is the word it starts with
+    /// ("show") and <see cref="Name"/> the rest ("Ava left happy").
+    /// </summary>
+    internal readonly record struct Tag(TagKind Kind, string Name, string? Word = null);
 
     /// <summary>
     /// A row of <see cref="Lines"/>: what it is, the text to show (a line's or a choice's), where it goes (a choice's or a
@@ -888,28 +917,49 @@ public sealed class Dialogue : Component
                 "set" => TagKind.Set,
                 "clear" => TagKind.Clear,
                 "send" => TagKind.Send,
+                _ when IsTagWord(word) => TagKind.Direction,
                 _ => null,
             };
             if (kind is null || name.Length == 0)
                 break;
-            tags.Add(new Tag(kind.Value, name));
+            tags.Add(new Tag(kind.Value, name, kind == TagKind.Direction ? word : null));
             text = text[(end + 1)..].TrimStart();
         }
 
         return text;
     }
 
+    private static readonly Lazy<HashSet<string>> TagWords = new(() => new HashSet<string>(
+        typeof(Dialogue).Assembly.GetTypes().SelectMany(t => t.GetCustomAttributes(typeof(DialogueTagsAttribute), false))
+            .SelectMany(a => ((DialogueTagsAttribute)a).Words), StringComparer.OrdinalIgnoreCase));
+
     /// <summary>
-    /// Splits "Name: what they say" into the name and what's said, when the line starts that way. The name is only a
-    /// speaker's if a <see cref="Griff.Scenes.Speaker"/> is called it (the game checks); otherwise it's all said.
+    /// True if <paramref name="word"/> starts one of a module's own dialogue tags (see <see cref="DialogueTagsAttribute"/>),
+    /// e.g. "show" for a visual novel's "[show Ava left]".
     /// </summary>
-    internal static (string? Who, string Said) SplitSpeaker(string text)
+    public static bool IsTagWord(string word) => TagWords.Value.Contains(word);
+
+    /// <summary>
+    /// Splits "Name: what they say" into the name and what's said, when the line starts that way, and "Name (happy): ..."
+    /// into the name, the expression and what's said. The name is only a speaker's if a <see cref="Griff.Scenes.Speaker"/>
+    /// is called it (the game checks); otherwise it's all said.
+    /// </summary>
+    public static (string? Who, string? Expression, string Said) SplitSpeaker(string text)
     {
         var colon = text.IndexOf(':');
-        if (colon <= 0 || colon > 40 || (colon + 1 < text.Length && !char.IsWhiteSpace(text[colon + 1])))
-            return (null, text);
+        if (colon <= 0 || colon > 60 || (colon + 1 < text.Length && !char.IsWhiteSpace(text[colon + 1])))
+            return (null, null, text);
         var who = text[..colon].Trim();
-        return who.Length == 0 ? (null, text) : (who, text[(colon + 1)..].TrimStart());
+        string? expression = null;
+        if (who.EndsWith(')') && who.LastIndexOf('(') is var open and > 0)
+        {
+            expression = who[(open + 1)..^1].Trim();
+            who = who[..open].Trim();
+            if (expression.Length == 0)
+                expression = null;
+        }
+
+        return who.Length == 0 || who.Length > 40 ? (null, null, text) : (who, expression, text[(colon + 1)..].TrimStart());
     }
 
     /// <summary>
@@ -949,6 +999,19 @@ public sealed class Dialogue : Component
 }
 
 /// <summary>
+/// Marks a component that dialogue lines direct with tags of its own, starting with these words, e.g. a visual novel
+/// stage's "[show Ava left happy]": a row of a <see cref="Dialogue"/>'s lines starting with one in square brackets is a
+/// tag rather than said, done as the line is said by what the component's module registers for it (GameSetup's
+/// OnDialogueTag). Found by this attribute, the way components are.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class DialogueTagsAttribute(params string[] words) : Attribute
+{
+    /// <summary>The words, e.g. "show" and "hide".</summary>
+    public IReadOnlyList<string> Words { get; } = words;
+}
+
+/// <summary>
 /// Someone who talks in dialogue: the name shown over what they say and their portrait, in a <see cref="DialogueBox"/>.
 /// A <see cref="Dialogue"/> on the same entity is said by them, and so is a line anywhere that starts with their name
 /// ("Guide: Over here!"), so the player can answer back. Put one on an empty entity for someone who isn't in the level
@@ -984,4 +1047,10 @@ public sealed class DialogueBox : Component
     /// <summary>The entity inside the box whose <see cref="Sprite"/> shows the speaker's portrait.</summary>
     [EntityName(Inside = true)]
     public string? Portrait { get; set; } = "Portrait";
+
+    /// <summary>
+    /// How wide a line can be, in world units, before it carries on onto the next: 0 never wraps it. Words are kept whole,
+    /// and the width is reckoned from the text's size, so it's about that wide whatever the font.
+    /// </summary>
+    public float WrapWidth { get; set; }
 }

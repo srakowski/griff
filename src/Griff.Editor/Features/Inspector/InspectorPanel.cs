@@ -796,7 +796,7 @@ public sealed class ComponentSection : ObservableObject
         SetupNote = component.SetupNote();
         IsAddedToCopy = components.Any(owner.IsAddedToCopy);
         Needs = descriptor.Requires
-            .Select(r => (Link: r, Lacking: components.Count(c => c.Entity is { } e && !r.IsMetBy(e))))
+            .Select(r => (Link: r, Lacking: components.Count(c => c.Entity is { } e && !r.IsMetBy(e, c))))
             .Where(r => r.Lacking > 0)
             .Select(r => new NeedRow(r.Link, r.Lacking, components, owner, registry))
             .ToList();

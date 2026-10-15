@@ -145,6 +145,12 @@ public sealed class RequiresAttribute(Type type) : Attribute
 
     /// <summary>A few words on how it's used, shown with the requirement, e.g. "usually a trigger".</summary>
     public string? Note { get; init; }
+
+    /// <summary>
+    /// The name of a true-or-false property of the component that, while true, means it doesn't need it after all: a
+    /// dialogue that starts by itself as the scene starts needs no collider to be touched.
+    /// </summary>
+    public string? Unless { get; init; }
 }
 
 /// <summary>

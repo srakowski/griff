@@ -116,4 +116,10 @@ chapter: Tactics | Entity > Genres > Tactics
 deselect
 menu: Entity > Genres > Tactics > Tactics Unit
 
+chapter: Visual Novels | Entity > Genres > Visual Novels
+deselect
+menu: Entity > Genres > Visual Novels > Stage
+deselect
+menu: Entity > Genres > Visual Novels > Character
+
 say: That was every one, each made straight from its category.

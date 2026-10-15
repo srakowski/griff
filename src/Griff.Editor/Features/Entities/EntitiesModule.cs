@@ -106,6 +106,21 @@ public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISe
     protected override IEnumerable<IEdit> EditScene(Scene scene) => preset.EditScene(scene);
 
     protected override Entity? InsideOf(Entity? selected) => preset.InsideOf(selected);
+
+    // The pictures it uses go into Assets first, where they aren't already.
+    protected override void BeforeCreate()
+    {
+        if (Project?.AssetsPath is not { } assets)
+            return;
+        foreach (var (path, bytes) in preset.Files())
+        {
+            var file = Path.Combine(assets, path.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(file))
+                continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, bytes);
+        }
+    }
 }
 
 /// <summary>
@@ -165,6 +180,14 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     /// <summary>The scene it's created in.</summary>
     protected Scene? Scene => workspace.Scene?.Scene;
 
+    /// <summary>The open project.</summary>
+    protected Griff.Projects.Project? Project => workspace.Project;
+
+    /// <summary>Done before the entity is made, e.g. to put the pictures it uses into Assets.</summary>
+    protected virtual void BeforeCreate()
+    {
+    }
+
     /// <summary>
     /// A draw order for a menu control: at least <paramref name="order"/>, and above anything drawn by the entity it's
     /// created inside (a button made on a panel draws over the panel's backdrop).
@@ -187,6 +210,7 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
         if (workspace.Scene is not { } document)
             return Task.CompletedTask;
 
+        BeforeCreate();
         var entity = new Entity(EntityName);
         Configure(entity);
         var children = CreateChildren().ToList();

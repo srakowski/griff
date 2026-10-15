@@ -1,3 +1,5 @@
+using Griff.Scenes;
+
 namespace Griff.Runtime;
 
 /// <summary>
@@ -104,6 +106,13 @@ public sealed class GameSetup
     /// step <paramref name="before"/> and after the steps added before it there, in that step's phase.
     /// </summary>
     public void StepBefore(string before, string name, GameSystem system, Action run) => AddStep(before, before: true, name, system, run);
+
+    /// <summary>
+    /// Does one of the module's dialogue tags (see <see cref="DialogueTagsAttribute"/>) as the line it's on is said:
+    /// <paramref name="run"/> is called with the dialogue and what follows the word in the brackets ("Ava left happy" for
+    /// "[show Ava left happy]"). A dialogue is said on the machine of the player reading it.
+    /// </summary>
+    public void OnDialogueTag(string word, Action<Dialogue, string> run) => Game.OnDialogueTag(word, run);
 
     /// <summary>
     /// Something players' machines in a network game can ask the host to do, by a name unique to the module (e.g.

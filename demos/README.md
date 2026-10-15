@@ -150,6 +150,10 @@ build: standalone
 | `clips` | Wait for the Clip Editor to open (after `menu: Art > Animation Clips...`). |
 | `clipframes: <first> > <last>` | Drag across the Clip Editor's sheet with the real mouse, from one frame to another (by sheet frame), making them the picked clip's frames: `clipframes: 2 > 5`. One frame clicks it (`clipframes: 3`); `clipframes: Shift+6` Shift-clicks, stretching the clip to reach it. |
 | `clipspeed: <fps>` | Type the picked clip's Speed into the Clip Editor (frames a second). Its looping is `click: clips:loop`. |
+| `dialogue` | Wait for the Dialogue Editor to open (after `menu: Entity > Edit Dialogue...`). |
+| `dialogueline: <n>` | Click the Dialogue Editor's line numbered `<n>` (from 1), picking it to edit and preview. |
+| `dialogueset: <field> = <value>` | Set one of the Dialogue Editor's fields with the real mouse and keyboard: picked from its list (`speaker`, `expression`, and for a new direction `kind`, `who`, `position`, `face`, `background`, `transition`), or typed into its box with Enter (`said`, `row`). `click: dialogue:adddirection` adds the direction. Parts for `click:`, `spot:` and `explain:` are `dialogue:line:3`, `list`, `directions`, `preview`, `previewtext`, `problems`, `add`, `remove`, `up`, `down`, `close` and the fields above. |
+| `expectpreview: <text>` | Fail unless the Dialogue Editor's preview of the stage, in words, has that in it, e.g. `expectpreview: Ben at Center, Happy, speaking`. |
 | `expectart: <path> [\| <frames>]` | Fail unless the picture (relative to Assets) was saved by the Sprite Painter, with that many frames or tiles. |
 | `controls` | Wait for the Controls window to open (after `menu: Game > Controls...`). |
 | `newproject` | Wait for the New Project window to open (after `menu: File > New Project...` or `key: Ctrl+Shift+N`). While it's open, `key:` presses go to it. |

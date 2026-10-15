@@ -51,5 +51,12 @@ public abstract class EntityPreset
     /// <summary>What the new entity goes inside, given what's selected: the selection itself, unless overridden.</summary>
     public virtual Entity? InsideOf(Entity? selected) => selected;
 
+    /// <summary>
+    /// Pictures (or other files) it puts in the project for what it makes to use, by their path in Assets
+    /// ("Stage/park.png"). Each is written only when the project has nothing at that path yet, so one repainted since is
+    /// kept; files aren't taken back by undo.
+    /// </summary>
+    public virtual IReadOnlyDictionary<string, byte[]> Files() => new Dictionary<string, byte[]>();
+
     public override string ToString() => Id;
 }

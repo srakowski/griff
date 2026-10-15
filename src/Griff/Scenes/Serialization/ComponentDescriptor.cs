@@ -16,7 +16,7 @@ public sealed class ComponentDescriptor
         DisplayName = type.Name;
         Properties = DiscoverProperties(type);
         Category = type.GetCustomAttribute<CategoryAttribute>()?.Name;
-        Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
+        Requires = type.GetCustomAttributes<RequiresAttribute>().Select(a => new ComponentLink(a.Type, a.Note) { Unless = a.Unless }).ToList();
         _worksWith = type.GetCustomAttributes<WorksWithAttribute>().Select(a => new ComponentLink(a.Type, a.Note)).ToList();
         FormerNames = type.GetCustomAttributes<FormerNameAttribute>(inherit: false)
             .SelectMany(a => a.Name.Contains('.') || type.Namespace is null ? [a.Name] : new[] { a.Name, $"{type.Namespace}.{a.Name}" })
@@ -182,8 +182,19 @@ public sealed record ComponentLink(Type Type, string? Note)
     // Put on the list by the other component (see WorksWithAttribute.Back).
     internal bool Back { get; init; }
 
-    /// <summary>True if <paramref name="entity"/> has a component of this type (or a subtype).</summary>
-    public bool IsMetBy(Entity entity) => entity.Components.Any(c => Type.IsInstanceOfType(c));
+    /// <summary>
+    /// For a requirement, the true-or-false property of the component that waives it while true (see
+    /// <see cref="RequiresAttribute.Unless"/>); null when it always holds.
+    /// </summary>
+    public string? Unless { get; init; }
+
+    /// <summary>
+    /// True if <paramref name="entity"/> has a component of this type (or a subtype), or <paramref name="of"/> (the
+    /// component that needs it) doesn't need it as it's set up now (see <see cref="Unless"/>).
+    /// </summary>
+    public bool IsMetBy(Entity entity, Component? of = null) =>
+        (of is not null && Unless is { } unless && of.GetType().GetProperty(unless)?.GetValue(of) is true) ||
+        entity.Components.Any(c => Type.IsInstanceOfType(c));
 }
 
 public sealed class PropertyDescriptor

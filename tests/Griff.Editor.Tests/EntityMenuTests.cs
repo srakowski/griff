@@ -70,7 +70,7 @@ public sealed class EntityMenuTests
 
         Assert.Equal(["Basics", "Characters", "Gameplay", "Level", "Physics", "UI", "Story", "Audio", "Lights and Effects"], names.Take(9));
         // Then one per genre module that makes something, alphabetically.
-        Assert.Equal(["Adventures", "Cards", "Dungeons", "Falling Blocks", "Match-3", "Puzzles", "Tactics"], names.Skip(9));
+        Assert.Equal(["Adventures", "Cards", "Dungeons", "Falling Blocks", "Match-3", "Puzzles", "Tactics", "Visual Novels"], names.Skip(9));
         string[] Ids(string category) => categories.Single(g => g.Key == category).Select(c => c.Id).ToArray();
         Assert.Equal(["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"], Ids("Basics"));
         Assert.Equal(["Entity.CreatePlatformerPlayer", "Entity.CreateTopDownPlayer", "Entity.CreateGridPlayer", "Entity.CreateGridEnemy", "Entity.CreateHitbox"], Ids("Characters"));

@@ -10,7 +10,8 @@ src/
                            (UDP with reliable and unreliable messages, and multiplayer on top),
                            projects and templates, tables of game data (Data). No UI dependencies.
     Modules/               The genres, each in a folder of its own: Adventures, Battles, BlockWorlds, Cards, Contraptions,
-                           Dungeons, FallingBlocks, FirstPerson, Match3, Puzzles, Strategy, Tactics
+                           Dungeons, FallingBlocks, FirstPerson, Match3, Puzzles, Strategy, Tactics,
+                           VisualNovels
   Griff.Scripting          Roslyn script compiler, hot reload, game exporter
   Griff.Graphics           How a frame is drawn, apart from any graphics API: IRenderer, the DrawList every renderer
                            draws (quads in clip space and the passes that draw them) and the shaders

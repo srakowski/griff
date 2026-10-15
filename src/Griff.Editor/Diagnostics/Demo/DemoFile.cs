@@ -1064,6 +1064,24 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "clips":
                 await DemoUi.WaitForClipEditor();
                 break;
+            case "dialogue":
+                await DemoUi.WaitForDialogueEditor();
+                break;
+            case "dialogueline":
+                // "dialogueline: 3" clicks the Dialogue Editor's third line.
+                await ui.DialogueLine(int.Parse(a, CultureInfo.InvariantCulture));
+                break;
+            case "dialogueset":
+                // "dialogueset: speaker = Ben" picks from a list; "dialogueset: said = Hello" types into a box.
+                var (dialogueField, dialogueValue) = Split2(a, '=');
+                await ui.DialogueSet(dialogueField, dialogueValue);
+                break;
+            case "expectpreview":
+                // The Dialogue Editor's preview of the stage, in words, has this in it.
+                await DemoUi.WaitForDialogueEditor();
+                if (!await Until(() => DemoUi.DialogueEditor?.Model.PreviewText.Contains(a, StringComparison.OrdinalIgnoreCase) == true, 3000))
+                    throw new InvalidOperationException($"The Dialogue Editor's preview says \"{DemoUi.DialogueEditor?.Model.PreviewText}\", not \"{a}\".");
+                break;
             case "clipframes":
                 // "clipframes: 2 > 5" drags across the Clip Editor's sheet; "clipframes: 3" clicks one; "Shift+6" stretches to it.
                 var (clipFramesText, clipFramesModifiers) = ParseModifiedName(a);
@@ -1802,6 +1820,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "newproject" => DemoUi.NewProjectPart(name),
             "painter" => DemoUi.PainterPart(name),
             "clips" => DemoUi.ClipsPart(name),
+            "dialogue" => DemoUi.DialoguePart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 DemoUi.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "color" => ui.ColorPart(name),

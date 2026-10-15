@@ -166,7 +166,7 @@ public static class ComponentCatalog
     /// </summary>
     public static IReadOnlyList<ComponentLink> Unmet(ComponentRegistry registry, Component component) =>
         component.Entity is { } entity && registry.TryGet(component.GetType()) is { } descriptor
-            ? descriptor.Requires.Where(r => !r.IsMetBy(entity)).ToList()
+            ? descriptor.Requires.Where(r => !r.IsMetBy(entity, component)).ToList()
             : [];
 
     /// <summary>

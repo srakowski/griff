@@ -1,0 +1,63 @@
+title: Visual novels
+intro: A stage with backgrounds and characters, directed by the lines of a dialogue: who's on, where they stand, how they look, and who's speaking.
+project: Empty | Park Story
+
+chapter: A stage | Entity > Genres > Visual Novels > Stage
+create: Stage
+expectcount: Ava = 1
+expectcount: Ben = 1
+expectcount: Dialogue Box = 1
+explain: component:Stage | Stage | A stage shows a background and the characters inside it, standing at named positions: left, center and right, or your own.
+explain: field:Stage.Backgrounds | Backgrounds | Its backgrounds are pictures, here a park and a room, or plain colors.
+select: Ava
+explain: component:Character | Character | Ava is a character with three expressions, each a picture. An expression can be an animation clip as well.
+select: Stage
+explain: field:Dialogue.Lines | Directed by its lines | The stage's dialogue directs it. Tags on a line show, hide and move characters and change the background, and a line can say how its speaker looks as they say it.
+
+chapter: Editing lines | Entity > Edit Dialogue
+menu: Entity > Edit Dialogue...
+dialogue
+dialogueline: 2
+explain: dialogue:preview | The stage at a line | The Dialogue Editor lists the lines and shows the stage as the line picked leaves it. Nobody's on stage yet for the narrator's first line.
+dialogueset: kind = Show
+dialogueset: who = Ava
+dialogueset: position = Left
+dialogueset: face = Neutral
+dialogueset: transition = fade
+click: dialogue:adddirection
+expectpreview: Park. Ava at Left, Neutral
+explain: dialogue:directions | Picked from lists | Directions are picked from what the stage has: its characters, positions, expressions and backgrounds. Now Ava fades in as the narrator speaks.
+dialogueline: 5
+dialogueset: expression = Sad
+expectpreview: Ava at Left, Sad, speaking; Ben at Right, Surprised, dimmed
+explain: dialogue:preview | Who's speaking | Ava says this line looking sad. Whoever speaks is lit, and the others on stage are dimmed.
+click: dialogue:close
+
+chapter: Reading it | Click, tap, or press Space
+play
+wait: 2
+expectvalue: Ava.Character.Expression = Neutral
+explain: game | Read on | The script starts by itself. A click or a tap anywhere, Space, Enter or a gamepad button reads on, finishing the line being typed first.
+gameclick: 0, 3
+wait: 2
+expectvalue: Ava.Character.Expression = Happy
+gameclick: 0, 3
+wait: 2
+expectvalue: Stage.Dialogue.Line = 3
+say: Ben slides in from the right.
+gameclick: 0, 3
+wait: 2
+expectvalue: Ava.Character.Expression = Sad
+gameclick: 0, 3
+wait: 2
+gameclick: 0, 3
+wait: 2
+expectvalue: Stage.Dialogue.Line = 6
+say: A choice. Two goes home for tea.
+wait: 2
+tap: D2
+wait: 2
+expectvalue: Stage.Stage.Background = Room
+explain: game | A new scene | The background fades to the room, Ben leaves and Ava walks to the middle.
+stop
+say: That's visual novel scenes: backgrounds and characters with positions and expressions, all directed from the lines of a dialogue, and saved with the scene, so rewinding goes back into the middle of a talk.

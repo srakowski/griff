@@ -512,9 +512,23 @@ public sealed partial class Game
         var touched = new HashSet<Dialogue>();
         foreach (var dialogue in dialogues)
         {
-            // Boxes are hidden until there's something to say.
-            if (_levels.DialoguesSeen.Add(dialogue) && BoxOf(dialogue) is { } box)
-                box.IsEnabled = false;
+            // Boxes are hidden until there's something to say. One saved partway through a talk (a rewind, a saved game)
+            // goes back into it; one that starts with the scene starts.
+            if (_levels.DialoguesSeen.Add(dialogue))
+            {
+                if (BoxOf(dialogue) is { } box && (_levels.Talking is not { } saying || BoxOf(saying) != box))
+                    box.IsEnabled = false;
+                if (_levels.Talking is null && !dialogue.Entity!.IsPaused && dialogue.Lines.Count > 0)
+                {
+                    if (dialogue.IsTalking)
+                        ResumeDialogue(dialogue);
+                    else if (dialogue is { StartsWithScene: true, IsDone: false })
+                        StartDialogue(dialogue);
+                }
+            }
+
+            if (dialogue.StartsWithScene)
+                continue;
 
             var available = !(dialogue.Once && dialogue.IsDone) && dialogue.Lines.Count > 0;
             // In a network game each player reads for themselves, on their own machine.
@@ -552,13 +566,21 @@ public sealed partial class Game
     /// cutscene, a boss appearing. Does nothing while another dialogue is being said, or if it has no lines; one whose
     /// flags let none of its lines be said ends straight away.
     /// </summary>
-    public void StartDialogue(Dialogue dialogue)
+    public void StartDialogue(Dialogue dialogue) => BeginTalk(dialogue, resume: false);
+
+    // Goes back into a talk saved partway through, at the row it was on, without doing that row's tags again: they were
+    // done when it was first said, and what they did (flags, a stage) is saved too.
+    private void ResumeDialogue(Dialogue dialogue) => BeginTalk(dialogue, resume: true);
+
+    private void BeginTalk(Dialogue dialogue, bool resume)
     {
         if (_levels.Talking is not null || dialogue.Lines.Count == 0 || dialogue.Entity?.Scene != Scene)
             return;
         dialogue.CheckParts();
+        _levels.DialoguesSeen.Add(dialogue);
         _levels.Talking = dialogue;
         _levels.TalkJustStarted = true;
+        var at = dialogue.Line;
         dialogue.IsTalking = true;
         dialogue.Line = 0;
         ShowPrompt(dialogue.Entity!, dialogue.Prompt, false);
@@ -573,6 +595,12 @@ public sealed partial class Game
         {
             // Only a group stands still, from now.
             SyncPauses();
+        }
+
+        if (resume && at >= 0 && at < dialogue.Lines.Count && dialogue.Row(at).Kind is Dialogue.RowKind.Said or Dialogue.RowKind.Choice)
+        {
+            ShowLine(dialogue, at, resume: true);
+            return;
         }
 
         // "# Name" on the first row just names the start.
@@ -718,9 +746,17 @@ public sealed partial class Game
                 case Dialogue.TagKind.Send:
                     Send(tag.Name, dialogue.Entity, from: dialogue.Entity);
                     break;
+                case Dialogue.TagKind.Direction when _dialogueTags.TryGetValue(tag.Word!, out var run):
+                    run(dialogue, tag.Name);
+                    break;
             }
         }
     }
+
+    // What the modules' own dialogue tags do, by the word they start with.
+    private readonly Dictionary<string, Action<Dialogue, string>> _dialogueTags = new(StringComparer.OrdinalIgnoreCase);
+
+    internal void OnDialogueTag(string word, Action<Dialogue, string> run) => _dialogueTags[word] = run;
 
     // Shows the first line from row on whose flags let it be said, going where go-tos say and doing rows of tags on the
     // way; the end of the lines or the start of another part ends it.
@@ -815,14 +851,15 @@ public sealed partial class Game
 
     // A line, with the choices under it that can be picked; choices with no line before them are shown on their own.
     // Its tags are done first, so a flag it sets can offer a choice under it.
-    private void ShowLine(Dialogue dialogue, int row)
+    private void ShowLine(Dialogue dialogue, int row, bool resume = false)
     {
         var line = dialogue.Row(row);
         dialogue.Line = row;
         var choices = row;
         if (line.Kind == Dialogue.RowKind.Said)
         {
-            DoTags(dialogue, line.Tags);
+            if (!resume)
+                DoTags(dialogue, line.Tags);
             if (_levels.Talking != dialogue)
                 return;
             choices = ChoicesUnder(dialogue, row);
@@ -832,10 +869,11 @@ public sealed partial class Game
         _levels.AfterChoices = hasChoices ? AfterChoices(dialogue, choices) : row + 1;
 
         // Said by the speaker it starts with ("Guide: ..."), or else the one on the dialogue's own entity.
-        var (who, said) = line.Kind == Dialogue.RowKind.Said && !line.AsIs ? Dialogue.SplitSpeaker(line.Text) : (null, line.Text);
+        var (who, expression, said) = line.Kind == Dialogue.RowKind.Said && !line.AsIs ? Dialogue.SplitSpeaker(line.Text) : (null, null, line.Text);
         var named = who is null ? null : SpeakerNamed(who);
         dialogue.Speaker = line.Kind == Dialogue.RowKind.Choice ? null : named ?? dialogue.Entity!.GetComponent<Speaker>();
         dialogue.Said = line.Kind == Dialogue.RowKind.Choice ? null : named is null ? line.Text : said;
+        dialogue.Expression = named is null || line.Kind == Dialogue.RowKind.Choice ? null : expression;
         ShowSpeaker(dialogue);
 
         _levels.ChoiceRows.Clear();
@@ -849,7 +887,7 @@ public sealed partial class Game
         if (LineText(dialogue) is { } text)
         {
             _levels.LastMouseOnChoices = MouseOn(text);
-            text.Value = LineWithChoices(dialogue, text.Align);
+            text.Value = LineWithChoices(dialogue, text);
             text.Entity!.GetComponent<Typewriter>()?.Restart();
         }
 
@@ -888,8 +926,9 @@ public sealed partial class Game
         string.IsNullOrWhiteSpace(name) ? null : box.SelfAndDescendants().FirstOrDefault(e => e.Name == name.Trim());
 
     // The line showing and its choices under it, the one picked with arrows by it that keep the rows lined up.
-    private static string LineWithChoices(Dialogue dialogue, TextAlign align)
+    private string LineWithChoices(Dialogue dialogue, Text text)
     {
+        var align = text.Align;
         var rows = dialogue.Choices.Select((choice, i) => (i == dialogue.Picked, align) switch
         {
             (true, TextAlign.Left) => "> " + choice,
@@ -899,7 +938,40 @@ public sealed partial class Game
             (false, TextAlign.Right) => choice + "   ",
             _ => choice,
         });
-        return string.Join("\n", dialogue.Said is { } said ? rows.Prepend(said) : rows);
+        var wrap = BoxOf(dialogue)?.GetComponent<DialogueBox>()?.WrapWidth ?? 0;
+        return string.Join("\n", dialogue.Said is { } said ? rows.Prepend(Wrap(said, wrap, text.Size)) : rows);
+    }
+
+    // An average letter of a font is about this much of its height across.
+    private const float LetterWidth = 0.5f;
+
+    // Breaks text onto more lines between words, so no line is much wider than width (0 or less doesn't).
+    internal static string Wrap(string text, float width, float size)
+    {
+        var letters = size > 0 && width > 0 ? (int)(width / (size * LetterWidth)) : 0;
+        if (letters < 4 || text.Length <= letters)
+            return text;
+        var lines = new List<string>();
+        foreach (var paragraph in text.Split('\n'))
+        {
+            var line = "";
+            foreach (var word in paragraph.Split(' '))
+            {
+                if (line.Length > 0 && line.Length + 1 + word.Length > letters)
+                {
+                    lines.Add(line);
+                    line = word;
+                }
+                else
+                {
+                    line = line.Length == 0 ? word : line + " " + word;
+                }
+            }
+
+            lines.Add(line);
+        }
+
+        return string.Join("\n", lines);
     }
 
     // Choosing with the arrow keys, D-pad or stick, the number keys and the mouse, once the line has typed out. Interact
@@ -935,7 +1007,7 @@ public sealed partial class Game
         {
             dialogue.Picked = picked;
             text.Entity.GetComponent<Typewriter>()?.ShowNextAtOnce();
-            text.Value = LineWithChoices(dialogue, text.Align);
+            text.Value = LineWithChoices(dialogue, text);
         }
 
         for (var i = 0; i < Math.Min(count, 9); i++)
@@ -994,7 +1066,7 @@ public sealed partial class Game
         _levels.Talking = null;
         dialogue.IsTalking = false;
         dialogue.Choices = [];
-        (dialogue.Speaker, dialogue.Said) = (null, null);
+        (dialogue.Speaker, dialogue.Said, dialogue.Expression) = (null, null, null);
         _levels.ChoiceRows.Clear();
         if (dialogue.Entity?.Scene == Scene && BoxOf(dialogue) is { } box)
             box.IsEnabled = false;

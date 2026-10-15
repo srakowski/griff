@@ -45,11 +45,7 @@ public static class GameExporter
         var staging = Path.Combine(Path.GetTempPath(), "griff-export-" + Guid.NewGuid().ToString("N")[..8]);
         try
         {
-            File.Copy(project.ManifestPath, Path.Combine(Directory.CreateDirectory(staging).FullName, Project.ManifestFileName));
-            CopyFolder(project.AssetsPath, Path.Combine(staging, Project.AssetsFolderName),
-                path => !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
-            if (compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
-                File.WriteAllBytes(Path.Combine(staging, ExportLayout.ScriptsAssembly), assembly);
+            WriteGame(project, compiled, staging);
 
             // Written next to the target and moved into place, so a failed export leaves the last good one alone.
             var partial = executable + ".partial";
@@ -71,7 +67,21 @@ public static class GameExporter
         return new ExportResult { Success = true, Diagnostics = compiled.Diagnostics, OutputFolder = outputFolder, Executable = executable };
     }
 
-    private static void CopyFolder(string source, string destination, Func<string, bool> include)
+    /// <summary>
+    /// Writes the game folder every export carries into <paramref name="folder"/>: the project's manifest, its Assets
+    /// without the script sources, and the scripts <paramref name="compiled"/> (if it has any) as
+    /// <see cref="ExportLayout.ScriptsAssembly"/>.
+    /// </summary>
+    internal static void WriteGame(Project project, CompileResult compiled, string folder)
+    {
+        File.Copy(project.ManifestPath, Path.Combine(Directory.CreateDirectory(folder).FullName, Project.ManifestFileName));
+        CopyFolder(project.AssetsPath, Path.Combine(folder, Project.AssetsFolderName),
+            path => !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
+        if (compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
+            File.WriteAllBytes(Path.Combine(folder, ExportLayout.ScriptsAssembly), assembly);
+    }
+
+    internal static void CopyFolder(string source, string destination, Func<string, bool> include)
     {
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).Where(include))
@@ -82,6 +92,6 @@ public static class GameExporter
         }
     }
 
-    private static string SafeFileName(string name) =>
+    internal static string SafeFileName(string name) =>
         string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
 }

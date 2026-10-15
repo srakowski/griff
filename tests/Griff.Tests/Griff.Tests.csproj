@@ -16,6 +16,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- The web player's own logic, its keys and frames: Griff.Web targets the browser, so a test can't reference it. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Griff.Web\WebKeys.cs" Link="Web\WebKeys.cs" />
+    <Compile Include="..\..\src\Griff.Web\WebFrame.cs" Link="Web\WebFrame.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Griff\Griff.csproj" />
     <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />

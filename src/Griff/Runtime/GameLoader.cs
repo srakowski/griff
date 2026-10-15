@@ -16,6 +16,12 @@ public static class ExportLayout
 
     /// <summary>Marks a folder as created by export, so re-exporting may safely replace it.</summary>
     public const string Marker = ".griff-build";
+
+    /// <summary>
+    /// For a game exported for the web: the list of the game folder's files (paths relative to it, '/' between folders,
+    /// one a line), inside it. A browser can't list a folder, so the web player fetches what this names.
+    /// </summary>
+    public const string WebFileList = "files.txt";
 }
 
 /// <summary>Everything needed to start a game: project, component types and the start scene.</summary>

@@ -5,6 +5,7 @@
     <Project Path="src/Griff.Platform.Windows/Griff.Platform.Windows.csproj" />
     <Project Path="src/Griff.Player/Griff.Player.csproj" />
     <Project Path="src/Griff.Scripting/Griff.Scripting.csproj" />
+    <Project Path="src/Griff.Web/Griff.Web.csproj" />
     <Project Path="src/Griff/Griff.csproj" />
   </Folder>
   <Folder Name="/tests/">

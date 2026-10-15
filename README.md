@@ -708,6 +708,7 @@ src/
                            text rasterizing
   Griff.Editor             WPF editor: modules, commands, panels, design system (Themes/)
   Griff.Player             Runs exported games
+  Griff.Web                Runs games in a browser: .NET for WebAssembly, drawn with WebGL 2 (a proof so far)
 tests/
   Griff.Tests              Unit and integration tests, including playing every template
   Griff.Editor.Tests       The editor's real services, the agent surface, and exported games run for real
@@ -749,13 +750,65 @@ Every project shares `Directory.Build.props` (nullable on, warnings are errors, 
 
 Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, with a breakpoint probe on each line (see The script editor), which makes saving a script take a little longer there (about 50 ms for the Arcade template's five scripts, against 15). Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
+## Web
+
+Games are on their way to the browser, so a jam game can be played from its page. So far it's a proof: the web player
+(`src/Griff.Web`) runs a game's start scene and draws its sprites in Edge or Chrome, taking the keyboard and mouse, and
+the Build menu doesn't offer it yet. To try it, `powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1`
+publishes the web player, exports the proof game (the griffin, which the arrow keys or WASD move with a script) and
+serves it at `http://127.0.0.1:8091/` until Ctrl+C; `-Project <folder>` serves a project of yours instead, `-Port`
+another port, and `-Out <folder>` keeps the exported site. `-Check` plays it in a headless Edge or Chrome (no window, and
+software WebGL, so it needs no GPU), takes a screenshot, holds the right arrow, takes another, and passes if the griffin
+is drawn and has moved right.
+
+How it works:
+- **Griff runs on .NET for WebAssembly unchanged.** `Griff.Web` is a `Microsoft.NET.Sdk.WebAssembly` project that
+  references `src/Griff` as it is: all of it compiles for `browser-wasm`, and no workload is needed (no `wasm-tools`),
+  since the runtime is the Mono interpreter that ships in the SDK's runtime pack. Native AOT for the browser, which would
+  need the workload, isn't used.
+- **A game is exported for the web** by `WebExporter` (`Griff.Scripting`, beside the desktop `GameExporter`): the
+  published player (`index.html`, `main.js`, `griff.js` and .NET in `_framework`), and in `game/` the same game folder
+  the desktop player carries (the manifest, Assets without the script sources, and the scripts compiled as `Scripts.dll`),
+  with a `files.txt` listing it. A browser can't list a folder, so the player fetches what `files.txt` names into its
+  in-memory file system and loads the game from there with `GameLoader`, as the desktop player does.
+- **Scripts compiled at export load in the browser.** The interpreter loads `Scripts.dll` with `Assembly.Load` like the
+  desktop does: the proof game's mover is a script, and the Arcade template (five scripts, three scenes) and the
+  Platformer load and play. Roslyn doesn't run in the browser; compiling at export means it needn't.
+- **The main loop is the browser's.** `griff.js` calls `WebPlayer.Frame` (a `[JSExport]`) on each
+  `requestAnimationFrame`, which takes the game's fixed steps that frame's time holds (`Game.Advance`, as on the desktop),
+  builds its `RenderFrame`, and hands it back. The browser build is single-threaded, so the player sets `Workers.Count`
+  to 1 and a big scene's work is done on the page's thread.
+- **Drawing is WebGL 2.** `WebFrame` lays a frame out as the desktop renderer's instanced quads (corners in clip space,
+  the part of the image, tint and flash) with batches split by image, one `[JSImport]` call a frame passes them (as
+  bytes: a memory view can only be of bytes, ints or doubles), and `griff.js` draws them with the desktop shaders in
+  GLSL ES 3.00. Images are read from the game's files by .NET and decoded by the browser (`createImageBitmap`); a missing
+  one draws as the magenta checker.
+- **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
+  page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl
+  shortcuts), typed text, and the mouse over the canvas (its position in the world through the last frame's camera, its
+  buttons and wheel).
+
+What it found for the rest of the web export:
+- **Size:** .NET and Griff are 27 MB untrimmed (7.9 MB compressed with Brotli, which the publish writes beside each
+  file for a server to send); the proof game is 7 KB. Trimming is off, since scenes load by reflection and scripts are compiled against
+  all of .NET after the player is published. The largest pieces are CoreLib (4.9 MB), System.Private.Xml (3.1 MB, pulled
+  in though games don't use XML), the runtime (3.0 MB), Griff (2.1 MB) and the ICU culture data (2 MB, which invariant
+  globalization would drop). The proof game ran 2 to 4 seconds after the page opened, served locally.
+- **Text** is skipped: Griff draws it with WPF's rasterizer, which the browser hasn't got (a menu's buttons show with no
+  labels). **Lights, shadows and screen effects** aren't drawn yet (a dark scene shows lit), nor are **sound** (Windows'
+  NAudio; the browser has Web Audio), **saves** (they'd go to the in-memory file system and be lost with the page: they
+  need the browser's storage), **controllers** (the Gamepad API) and **fullscreen**. Multiplayer can't use UDP in a
+  browser; it would need WebSockets or WebRTC.
+- File-based C# apps (`dotnet run tool.cs`) default to Native AOT, which turns off the reflection Griff's JSON uses;
+  `tools\web.cs` turns it off as `toolsunnymark.cs` does. Native AOT exports will meet the same wall.
+
 ## Status
 
 Griff is young. Known gaps:
 - CI runs on Windows only, and Griff.Graphics and Griff.Platform.Windows have no tests of their own: the player smoke test covers them end to end. The layer test checks Griff.Scenes; Runtime still reaches into Rendering.
 - Modules are found only in Griff itself: a project can't add one. Templates several modules share pictures from (the crate, the crypt's hero and walls) keep those in the core's `TemplateArt`.
 - The Scene view draws sprites, tilemaps, text and particles itself and every other drawable from its quads, but not a board that draws its tilemap in the game (there you paint the tiles).
-- No web export yet.
+- Games play in a browser only as a proof, from `tools\web.ps1` rather than the Build menu, and there they draw sprites and take the keyboard and mouse but have no text, lights, screen effects, sound, saves, controllers or multiplayer (see Web).
 - Templates are found only in Griff itself: a project can't add one of its own to New Project. A component saved by a newer version of it keeps the values it doesn't know, but is written back at this version.
 - Big scenes: an exported game holds about 128,000 BunnyMark bunnies at 60 fps (127,932 to 144,686 over 3 runs on an RTX 3060 Ti PC with an i7-12700, October 2026, each held with a 1% low of 60 fps; 76,283 to 78,666 on the same PC before the frame was built and the bunnies' scripts run across the cores, about 69,000 with a frame built in two passes over the entities, 28,200 before that), and 100,000 at 60 fps with 1% lows at 60 fps and no garbage collections in ten seconds, the aim set for it, in 3 runs out of 3 (before: 30 fps, a 1% low of 30, in 3 out of 3). A frame of 100,000 takes 7.4 ms of the CPU (`tools/bunnybench.cs`): 1.6 ms of steps, 2.9 to build and 2.8 to draw with OpenGL, which is done on the game's thread, as are what a frame's chunks leave it (scripts' drawables, what's inside other entities) and copying every draw to its place once (about 0.6 ms at 100,000). On a computer with fewer cores the count is lower: with everything on one thread (`--workers 1`), 100,000 take 15 ms (4.6 ms of steps, 7.5 to build, 2.7 to draw; 18 ms before). Text whose words change (a score, the frame rate) is drawn again with WPF, which makes garbage: the odd collection in a long run. Playing in the editor keeps up with them now (see Rewind in big scenes): a Debug editor holds 5,000 bunnies at 60 fps with a 1% low of 60 and 1 garbage collection in ten seconds (before: 39 to 45 fps, a 1% low of 7, 69 to 81 collections), and 20,000 at 60 fps with a 1% low of 60 (before: 59 fps, a 1% low of 30), snapshotting them ten times a second (before, every two seconds), and with the frame built and the bunnies' scripts run across the cores, 50,000 at 55 fps with a 1% low of 30 (before: 19.6 fps and a 1% low of 12; a rewind snapshot of 50,000, copied out on the game's thread, still takes 6.6 ms there); a Release editor holds 20,000 at 60 fps with a 1% low of 60, and 50,000 at 59 fps with a 1% low of 60 (before: 58 fps, a 1% low of 30). Copying a snapshot out still happens on one step (it has to, to be one moment), so the biggest scenes are snapshotted less often to keep their frames on time: 50,000 bunnies about seven times a second in a Release editor and four in a Debug one, and just after rewinding a big scene, whose entities are all fresh, a little less often for a while.
 - Mouse look turns once a step, and the screen shows the game up to a step behind, so it trails the mouse by a step or two; so does what follows the mouse (a strategy game's drag box and placing ghost, the contraptions tools' line, something being dragged), which is drawn where the mouse was at the last step. A drop of rain wrapping round the view is drawn where it lands a step early (out of view).

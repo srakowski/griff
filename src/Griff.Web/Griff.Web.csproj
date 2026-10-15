@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <!--
+    The web player: Griff's runtime on .NET for WebAssembly (browser-wasm), drawn with WebGL 2 by wwwroot/griff.js. It
+    builds with the plain SDK, no workload: the runtime is the Mono interpreter, which also runs the scripts a game
+    exports as Scripts.dll. `dotnet publish -c Release` writes the site to bin/Release/net10.0/publish/wwwroot, which
+    WebExporter (Griff.Scripting) copies a game beside. See the README's Web section.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Griff\Griff.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!--
+      Not trimmed: scenes are loaded by reflection, and a game's scripts are compiled later, against the whole of .NET and
+      Griff, so nothing can be known to be unused when the player is published.
+    -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+</Project>

@@ -103,8 +103,8 @@ internal sealed class OutputReader
     private static Entity? Named(Scene scene, ReadOnlySpan<char> name)
     {
         Entity? first = null;
-        var entities = scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             var entity = entities[i];
             if (!name.SequenceEqual(entity.Name))

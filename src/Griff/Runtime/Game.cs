@@ -380,7 +380,7 @@ public sealed partial class Game : IGameContext
 
             // So do sound players.
             picked.Clear();
-            foreach (var player in Scene.Active<SoundPlayer>())
+            foreach (var player in Scene.ActiveNow<SoundPlayer>())
             {
                 if (Named(player.Message, message) && route.Reaches(player.Entity))
                     picked.Add(player);
@@ -393,7 +393,7 @@ public sealed partial class Game : IGameContext
             // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
             var done = 0;
             picked.Clear();
-            foreach (var hearer in Scene.Active<IHearsMessages>())
+            foreach (var hearer in Scene.ActiveNow<IHearsMessages>())
             {
                 if (hearer is Component component)
                     picked.Add(component);
@@ -411,7 +411,7 @@ public sealed partial class Game : IGameContext
             // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that
             // isn't set: after the triggers, so one that sets the flag on this message lets it open.
             picked.Clear();
-            foreach (var panel in Scene.All<Panel>())
+            foreach (var panel in Scene.AllNow<Panel>())
             {
                 if (Named(panel.OpenMessage, message) && !panel.Entity!.IsEnabled && (panel.Entity.Parent is null || panel.Entity.Parent.IsActive) &&
                     route.Reaches(panel.Entity) && FlagHolds(panel.NeedsFlag))
@@ -522,7 +522,7 @@ public sealed partial class Game : IGameContext
     public IReadOnlyList<Entity> FindAll(string name) => Scene.Entities.Where(e => e.Name == name).ToList();
 
     /// <summary>The first component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.Find&lt;ScoreCounter&gt;()</c>.</summary>
-    public T? Find<T>() where T : Component => Scene.All<T>().FirstOrDefault();
+    public T? Find<T>() where T : Component => Scene.AllNow<T>().FirstOrDefault();
 
     /// <summary>Every component of type <typeparamref name="T"/> in the scene, e.g. <c>Game.FindAll&lt;Enemy&gt;()</c>.</summary>
     public IReadOnlyList<T> FindAll<T>() where T : Component => Scene.All<T>();
@@ -605,7 +605,7 @@ public sealed partial class Game : IGameContext
             return;
         _stopped = true;
 
-        foreach (var behavior in Scene.All<Behavior>())
+        foreach (var behavior in Scene.AllNow<Behavior>())
             behavior.RunDestroy();
         Net.Leave("The game closed.");
         SaveSettings();
@@ -825,7 +825,7 @@ public sealed partial class Game : IGameContext
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.
     private void LayOutScreen()
     {
-        var anchors = Scene.Active<ScreenAnchor>();
+        var anchors = Scene.ActiveNow<ScreenAnchor>();
         if (anchors.Count == 0)
             return;
 
@@ -913,7 +913,7 @@ public sealed partial class Game : IGameContext
     // still too, all but those on an open panel.
     private void RunTypewriters()
     {
-        foreach (var typewriter in Scene.Running<Typewriter>())
+        foreach (var typewriter in Scene.RunningNow<Typewriter>())
         {
             if (Time.IsPaused && !InOpenPanel(typewriter.Entity!))
                 continue;
@@ -1086,7 +1086,7 @@ public sealed partial class Game : IGameContext
     // what the counter asks for.
     private void CountFromSource(Counter counter)
     {
-        foreach (var source in Scene.Active<ICounterSource>())
+        foreach (var source in Scene.ActiveNow<ICounterSource>())
         {
             if (source.CountFor(counter) is not { } count)
                 continue;
@@ -1240,16 +1240,37 @@ public sealed partial class Game : IGameContext
     {
         while (_pendingDestroy.Count > 0)
         {
-            var batch = _pendingDestroy.ToList();
+            var batch = _destroying;
+            batch.AddRange(_pendingDestroy);
             _pendingDestroy.Clear();
-
-            foreach (var entity in batch.Where(e => e.Scene == Scene && Runs(e)))
+            foreach (var entity in batch)
             {
-                foreach (var behavior in entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Behavior>()))
-                    behavior.RunDestroy();
+                if (entity.Scene != Scene || !Runs(entity))
+                    continue;
+                RunDestroys(entity);
                 if (entity.Scene == Scene)
                     Scene.Remove(entity);
             }
+
+            batch.Clear();
         }
+    }
+
+    // The batch of destroys being done (those asked for meanwhile wait for the next).
+    private readonly List<Entity> _destroying = [];
+
+    // Each script's OnDestroy on `entity` and inside it, depth first.
+    private static void RunDestroys(Entity entity)
+    {
+        var components = entity.ComponentList;
+        for (var i = 0; i < components.Count; i++)
+        {
+            if (components[i] is Behavior behavior)
+                behavior.RunDestroy();
+        }
+
+        var children = entity.ChildList;
+        for (var i = 0; i < children.Count; i++)
+            RunDestroys(children[i]);
     }
 }

@@ -7,7 +7,7 @@ public sealed partial class Game
 {
     private TableSet _tables = new();
     private int _tablesSeen = -1;
-    private TableValues[]? _tableValuesSeen;
+    private long _tableValuesSeen = -1;
 
     // The Table Values that have set their values since the tables last changed: one new to the game sets its own, and a
     // block broken away (its Table Values gone) sets nobody's again.
@@ -57,11 +57,12 @@ public sealed partial class Game
                 Warn(problem);
         }
 
-        var all = Scene.All<TableValues>().Items;
-        if (!changed && all == _tableValuesSeen)
+        var list = Scene.AllNow<TableValues>();
+        var (all, serial) = (list.Items, list.Serial);
+        if (!changed && serial == _tableValuesSeen)
             return;
         _tablesSeen = _tables.Version;
-        _tableValuesSeen = all;
+        _tableValuesSeen = serial;
         if (changed || _tableValuesApplied.Count > all.Length * 2 + 16)
             _tableValuesApplied.Clear();
         foreach (var values in all)
@@ -95,7 +96,7 @@ public sealed partial class Game
     // A spawned entity's Table Values set their values straight away, so it plays its first step with them.
     private void ApplyTables(Entity entity)
     {
-        if (Scene.All<TableValues>().Count == 0)
+        if (Scene.AllNow<TableValues>().Count == 0)
             return;
         foreach (var e in entity.SelfAndDescendants())
         {

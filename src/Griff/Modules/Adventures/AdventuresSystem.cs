@@ -439,7 +439,7 @@ internal sealed partial class AdventuresSystem : GameSystem
         if (Game.Find(place) is not { } target)
             return;
         var at = target.GetComponent<Hotspot>()?.StandPoint ?? Game.CenterOf(target);
-        foreach (var walker in Game.Scene.Active<Walker>())
+        foreach (var walker in Game.Scene.ActiveNow<Walker>())
         {
             if (!walker.Controllable)
                 continue;

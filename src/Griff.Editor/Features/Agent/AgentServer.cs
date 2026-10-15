@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Agent;
+using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
 using Microsoft.Extensions.Hosting;
@@ -33,13 +35,15 @@ public sealed partial class AgentServer : ObservableObject, IHostedService
 
     private readonly McpServer _server;
     private readonly ISettingsStore _settings;
+    private readonly AgentDialogs? _dialogs;
     private readonly IStatusService _status;
     private readonly ILogger<AgentServer> _logger;
     private McpHttpTransport? _transport;
 
-    public AgentServer(IEnumerable<IAgentToolSource> sources, ISettingsStore settings, IStatusService status, ILogger<AgentServer> logger)
+    public AgentServer(IEnumerable<IAgentToolSource> sources, ISettingsStore settings, IStatusService status, IDialogService dialogs, ILogger<AgentServer> logger)
     {
         _settings = settings;
+        _dialogs = dialogs as AgentDialogs;
         _status = status;
         _logger = logger;
         var version = typeof(AgentServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0";
@@ -165,7 +169,13 @@ public sealed partial class AgentServer : ObservableObject, IHostedService
             // Said in the Output panel, so a call that takes long can be told apart: waiting behind the editor's own work, or its own.
             if (queued.Elapsed > SlowQueue)
                 _logger.LogWarning("{Tool} waited {Seconds:0.0} s for the editor to be free before it could start.", tool.Name, queued.Elapsed.TotalSeconds);
-            using (AgentDialogs.Answering(args.TryGet("answers", out var answers) ? answers : null))
+            JsonElement? answers = args.TryGet("answers", out var given) ? given : null;
+            // A question the editor is showing the user (one it asked outside any call, as a project reopened when it started)
+            // waits in a loop of its own, in which this call came in: it's answered from the call, or the call is told of it,
+            // rather than run with the editor half way through what asked.
+            if (_dialogs?.AnswerShowing(answers) is { } showing)
+                return showing;
+            using (AgentDialogs.Answering(answers))
                 return await call();
         }).Task.Unwrap();
     }

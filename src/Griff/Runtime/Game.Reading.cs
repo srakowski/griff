@@ -139,7 +139,7 @@ public sealed partial class Game
     // Every log in the scene, open or not, gets the line.
     private void AddToLogs(string line)
     {
-        foreach (var log in Scene.All<Backlog>())
+        foreach (var log in Scene.AllNow<Backlog>())
             log.Add(line);
     }
 
@@ -214,7 +214,7 @@ public sealed partial class Game
     // With the menus: a log's panel opens when the wheel turns up over the game, and a log showing scrolls.
     private void RunBacklogs()
     {
-        var logs = Scene.Active<Backlog>();
+        var logs = Scene.ActiveNow<Backlog>();
         if (logs.Count == 0 && _logsShown.Count == 0 && Input.Scroll <= 0)
             return;
         var top = TopPanel;
@@ -239,7 +239,7 @@ public sealed partial class Game
 
     private bool OpenLogOnWheel()
     {
-        foreach (var log in Scene.All<Backlog>())
+        foreach (var log in Scene.AllNow<Backlog>())
         {
             if (!log.OpenOnWheel || log.Entity!.IsActive || PanelOf(log.Entity) is not { } panel || !FlagHolds(panel.NeedsFlag))
                 continue;
@@ -333,7 +333,7 @@ public sealed partial class Game
     // With the menus: each slot showing has the game saved in it.
     private void ShowSaveSlots()
     {
-        var slots = Scene.Active<SaveSlot>();
+        var slots = Scene.ActiveNow<SaveSlot>();
         if (slots.Count == 0)
             return;
         foreach (var slot in slots)

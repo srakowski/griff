@@ -363,7 +363,7 @@ internal sealed partial class AdventuresSystem
     // Hotspots that Hide When Gone are shown while their Needs Flag holds, and hidden while it doesn't.
     private void ShowOrHide()
     {
-        foreach (var hotspot in Game.Scene.All<Hotspot>())
+        foreach (var hotspot in Game.Scene.AllNow<Hotspot>())
         {
             if (!hotspot.HideWhenGone || hotspot.Entity is not { } entity || !Game.Runs(entity))
                 continue;
@@ -737,7 +737,7 @@ internal sealed partial class AdventuresSystem
     // The sprite of a hotspot that gives the item when it's used (the key it was), if there is one.
     private Sprite? GiverSprite(string item)
     {
-        foreach (var hotspot in Game.Scene.All<Hotspot>())
+        foreach (var hotspot in Game.Scene.AllNow<Hotspot>())
         {
             if (Gives(hotspot.Gives, item) && hotspot.Entity!.GetComponent<Sprite>() is { } sprite)
                 return sprite;

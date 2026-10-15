@@ -46,7 +46,7 @@ public sealed partial class Physics
     // The solid hex maps of a scene. With layers, only maps on those layers.
     private static void CollectHex(Scene scene, string? layers, List<HexWalls> into)
     {
-        var tilemaps = scene.Active<Tilemap>();
+        var tilemaps = scene.ActiveNow<Tilemap>();
         if (tilemaps.Count == 0)
             return;
         var only = layers is null ? null : CollisionLayers.Parse(layers);

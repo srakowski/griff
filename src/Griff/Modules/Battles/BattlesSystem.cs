@@ -101,7 +101,7 @@ internal sealed class BattlesSystem : GameSystem
             return null;
         foreach (var part in battler.Foe.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            foreach (var entity in Game.Scene.Entities)
+            foreach (var entity in Game.Scene.EntitiesNow)
             {
                 if (entity.Name == part && entity.IsActive && entity != battler.Entity && Health.Of(entity) is not { IsDead: true })
                     return entity;

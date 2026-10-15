@@ -134,7 +134,7 @@ public sealed class TurnOrder : Component
         var count = 0;
         var running = ScopedFrame >= 0;
         var scope = running ? default : Covering();
-        foreach (var taker in scene.Active<TurnTaker>())
+        foreach (var taker in scene.ActiveNow<TurnTaker>())
         {
             // While the game runs, the turn takers taking turns in it; otherwise those it covers.
             if ((running ? taker.OrderNow == this : scope.Covers(taker.Entity)) &&

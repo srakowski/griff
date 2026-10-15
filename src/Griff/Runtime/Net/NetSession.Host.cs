@@ -384,7 +384,7 @@ public sealed partial class NetSession
 
     private void Place(Entity avatar, NetPlayer player)
     {
-        var spawns = _game.Scene.Active<PlayerSpawn>()
+        var spawns = _game.Scene.ActiveNow<PlayerSpawn>()
             .Where(s => string.IsNullOrWhiteSpace(s.Team) || s.Team.Trim().Equals(player.Team, StringComparison.OrdinalIgnoreCase))
             .ToList();
         var others = _players.Where(p => p != player && p.Avatar?.Scene == _game.Scene).Select(p => Flat(p.Avatar!.Transform.WorldPosition)).ToList();
@@ -566,7 +566,7 @@ public sealed partial class NetSession
         _syncTick++;
         var scene = _game.Scene;
         var order = new List<NetObject>(_objects.Count);
-        foreach (var entity in scene.Entities)
+        foreach (var entity in scene.EntitiesNow)
         {
             if (!_known.TryGetValue(entity, out var obj))
             {

@@ -73,7 +73,7 @@ public sealed class Faction : Component
             return 0;
         var team = Team.AsSpan().Trim();
         var count = 0;
-        foreach (var member in scene.Active<T>())
+        foreach (var member in scene.ActiveNow<T>())
         {
             if (teamOf(member).AsSpan().Trim().Equals(team, StringComparison.OrdinalIgnoreCase))
                 count++;

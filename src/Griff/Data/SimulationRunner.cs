@@ -411,7 +411,7 @@ public static class SimulationRunner
         if (string.IsNullOrWhiteSpace(name))
             return fighters;
         var wanted = name.Trim();
-        foreach (var entity in scene.Entities)
+        foreach (var entity in scene.EntitiesNow)
         {
             if (string.Equals(entity.Name, wanted, StringComparison.OrdinalIgnoreCase))
                 fighters.Add(entity);
@@ -602,7 +602,7 @@ public static class SimulationRunner
                 run.Track(reward, run.Earned(reward));
         }
 
-        var order = scene.All<TurnOrder>().Items.FirstOrDefault();
+        var order = scene.AllNow<TurnOrder>().Items.FirstOrDefault();
         if (order is not null)
             order.TurnStarted += _ => Sample();
 

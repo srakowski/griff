@@ -93,7 +93,7 @@ public sealed partial class Game
             return inside;
         if (owner.Scene is not { } scene)
             return null;
-        foreach (var entity in scene.Entities)
+        foreach (var entity in scene.EntitiesNow)
         {
             if (name.SequenceEqual(entity.Name))
                 return entity;
@@ -118,7 +118,7 @@ public sealed partial class Game
     // The triggers waiting for this message go off; each returns whether one did.
     private int FireTriggers(string message, object? data, in MessageRoute route)
     {
-        var triggers = Scene.Active<Trigger>();
+        var triggers = Scene.ActiveNow<Trigger>();
         if (triggers.Count == 0 || _triggerDepth >= MaxTriggerDepth)
             return 0;
 
@@ -199,7 +199,7 @@ public sealed partial class Game
             AddInside(owner, name, into);
             if (into.Count > before || owner.Scene is not { } scene)
                 continue;
-            foreach (var entity in scene.Entities)
+            foreach (var entity in scene.EntitiesNow)
             {
                 if (name.SequenceEqual(entity.Name) && !into.Contains(entity))
                     into.Add(entity);

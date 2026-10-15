@@ -41,7 +41,7 @@ public sealed partial class Physics
     // The solid isometric maps of a scene, each with its grid's place in the world. With layers, only maps on those layers.
     private static void CollectIsometric(Scene scene, string? layers, List<IsometricWalls> into)
     {
-        var tilemaps = scene.Active<Tilemap>();
+        var tilemaps = scene.ActiveNow<Tilemap>();
         if (tilemaps.Count == 0)
             return;
         var only = layers is null ? null : CollisionLayers.Parse(layers);

@@ -156,7 +156,7 @@ internal sealed class HitboxesSystem : GameSystem
         var layers = CollisionLayers.Parse(attacker.Layers);
         var hits = attacker.Now();
         var own = Health.Of(entity);
-        foreach (var health in Game.Scene.Running<Health>())
+        foreach (var health in Game.Scene.RunningNow<Health>())
         {
             var target = health.Entity!;
             if (health == own || target.IsPaused || target.GetComponent<Hitboxes>() is not null || target.IsSelfOrDescendantOf(entity) ||
@@ -326,7 +326,7 @@ internal sealed class HitboxesSystem : GameSystem
             return;
         _draws.Clear();
         var thick = frame.LineWidth * 1.5f;
-        foreach (var boxes in frame.Scene.Running<Hitboxes>())
+        foreach (var boxes in frame.Scene.RunningNow<Hitboxes>())
         {
             var entity = boxes.Entity!;
             if (!frame.ShowsInWorld(entity))

@@ -146,7 +146,7 @@ public static partial class SceneRenderer
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse.Sprites ?? [];
         // With viewports (in a running game), each view draws what's its own.
-        var showsViews = game is not null && viewport is null && scene.Active<Viewport>().Count > 0;
+        var showsViews = game is not null && viewport is null && scene.ActiveNow<Viewport>().Count > 0;
         var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null));
         // A picture of the game (for a saved game) leaves out the panels open over it: the save screen itself.
         Func<Entity, bool>? leaveOut = null;
@@ -239,7 +239,7 @@ public static partial class SceneRenderer
         var scratch = t_scratch ??= new Scratch();
         var order = scratch.Viewports;
         order.Clear();
-        foreach (var viewport in scene.Active<Viewport>())
+        foreach (var viewport in scene.ActiveNow<Viewport>())
         {
             if (!viewport.IsShowing)
                 continue;
@@ -442,7 +442,7 @@ public static partial class SceneRenderer
     {
         var camera = filter.Camera ?? FindCamera(scene);
         var sortByY = camera?.GetComponent<Camera>()?.SortByY == true;
-        if (include is null && scene.Entities.Count >= ChunkedFrom)
+        if (include is null && scene.EntitiesNow.Length >= ChunkedFrom)
         {
             DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY, filter);
         }
@@ -477,11 +477,11 @@ public static partial class SceneRenderer
         var drawables = scratch.Drawables;
         var entries = scratch.Entries;
         var first = sprites.Count;
-        sprites.EnsureCapacity(first + scene.Entities.Count + 16);
+        sprites.EnsureCapacity(first + scene.EntitiesNow.Length + 16);
         var drawing = DrawingFor(ref scratch.Drawing, sprites, view, cameraSize, playing);
         // By index: going through a list of them as such would make garbage.
-        var entities = scene.Entities;
-        for (var e = 0; e < entities.Count; e++)
+        var entities = scene.EntitiesNow;
+        for (var e = 0; e < entities.Length; e++)
         {
             var entity = entities[e];
             if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)) || !filter.Shows(entity))
@@ -1052,7 +1052,7 @@ public static partial class SceneRenderer
     private static void AddLights(Scene scene, Box? view, List<LightDraw> lights, Scratch? scratch)
     {
         List<ShadowEdge>? edges = null;
-        foreach (var light in scene.Active<Light>())
+        foreach (var light in scene.ActiveNow<Light>())
         {
             // A light that grows, dims or flickers does it between steps too.
             var (center, radius, color, intensity, softness) = light.Drawn(StepBlend.For(scene, light.Entity));
@@ -1081,7 +1081,7 @@ public static partial class SceneRenderer
             edges.Clear();
 
         var spots = scratch?.Spots ?? [];
-        foreach (var source in scene.Active<ILightSource>())
+        foreach (var source in scene.ActiveNow<ILightSource>())
         {
             spots.Clear();
             source.AddLights(spots);
@@ -1165,8 +1165,8 @@ public static partial class SceneRenderer
     // What an iris closes in on: the entity called Player, or else the first a player moves (see PlayerMovementAttribute).
     private static Vector2? IrisCenter(Scene scene)
     {
-        var player = scene.Entities.FirstOrDefault(e => e.Name == "Player" && e.IsActive)
-                     ?? scene.Entities.FirstOrDefault(e => e.IsActive && PlayerMovementAttribute.IsOn(e));
+        var player = scene.EntitiesNow.FirstOrDefault(e => e.Name == "Player" && e.IsActive)
+                     ?? scene.EntitiesNow.FirstOrDefault(e => e.IsActive && PlayerMovementAttribute.IsOn(e));
         if (player is null)
             return null;
         var position = player.Transform.WorldPosition;
@@ -1215,7 +1215,7 @@ public static partial class SceneRenderer
     /// </summary>
     public static Entity? FindCamera(Scene scene)
     {
-        var cameras = scene.Active<Camera>();
+        var cameras = scene.ActiveNow<Camera>();
         foreach (var camera in cameras)
         {
             if ((camera.Entity!.Roles & ComponentRoles.Viewport) == 0)

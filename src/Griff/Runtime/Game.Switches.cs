@@ -207,7 +207,7 @@ public sealed partial class Game
     // this machine's player's own.
     private int ItemCount(string item)
     {
-        var inventories = Scene.All<Inventory>();
+        var inventories = Scene.AllNow<Inventory>();
         var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
         return inventory?.Count(item.Trim()) ?? 0;
     }

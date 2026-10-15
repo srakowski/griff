@@ -135,7 +135,7 @@ public sealed class HingeJoint : Component
         var here = Flat(from.Transform.WorldPosition);
         Entity? best = null;
         var bestDistance = float.PositiveInfinity;
-        foreach (var entity in scene.Entities)
+        foreach (var entity in scene.EntitiesNow)
         {
             if (entity == from || entity.Name != name)
                 continue;

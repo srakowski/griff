@@ -27,7 +27,7 @@ public sealed partial class Game
             return;
 
         // Ropes laid out (or brought back from a rewind) before anyone grabs one.
-        if (Scene.Active<Rope>().Count > 0)
+        if (Scene.ActiveNow<Rope>().Count > 0)
             Physics.ReadyRopes(Scene);
         foreach (var movement in Moving<PlatformerMovement>())
             RunPlatformer(movement);

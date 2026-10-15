@@ -896,6 +896,84 @@ public sealed class PinballTests
     }
 
     [Fact]
+    public void Losing_serving_and_multiball_make_no_garbage()
+    {
+        // On the Pinball Table: the ball lost into the drain, held, and served onto the plunger; and two extra balls of a
+        // multiball falling in and going, the one on the plunger still in play. Once the table has settled not a step of it
+        // allocates (the extra balls are new each time, so the steps spawning them aren't counted). Steps are counted on this
+        // thread (and the workers' for it), and only those no garbage collection ran during: another thread's (other tests
+        // running alongside) can add to this thread's count what it never allocated.
+        var table = Table(_scene);
+        var ball = Named(_scene, "Ball");
+        var drain = Named(_scene, "Drain").GetComponent<Drain>()!;
+        (drain.Balls, drain.BallSave) = (100_000, 0);
+        // The HUD's "Ball 2 of 3" says something new each time a ball is lost, a new string, and pops (a tween): it's turned
+        // off, so what's counted is the table's own work.
+        Named(_scene, "Balls").IsEnabled = false;
+        Run(0.5f);
+        var mouth = At(drain.Entity!) - At(table);
+        var (bytes, counted) = (0L, 0);
+
+        void Measure(int steps)
+        {
+            for (var i = 0; i < steps; i++)
+            {
+                var (before, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
+                Step();
+                var allocated = Workers.AllocatedBytes() - before;
+                if (GC.CollectionCount(0) == collections)
+                    (bytes, counted) = (bytes + allocated, counted + 1);
+            }
+        }
+
+        void Round()
+        {
+            var lost = drain.Ball;
+            ball.Transform.Teleport(mouth + new Vector2(0, 0.3f));
+            ball.GetComponent<Body>()!.Velocity = new Vector2(0, -5);
+            Measure(30);
+            Assert.False(ball.IsEnabled);
+            Assert.Equal(lost + 1, drain.Ball);
+            Measure(90);
+            Assert.True(ball.IsEnabled);
+
+            var extras = new List<Entity>();
+            for (var i = 0; i < 2; i++)
+            {
+                var extra = PinballParts.Ball(mouth + new Vector2(i - 0.5f, 0.3f));
+                extra.GetComponent<Body>()!.Velocity = new Vector2(0, -5);
+                _game.Spawn(extra, table);
+                extras.Add(extra);
+                Step();
+                Measure(3 + i * 20);
+            }
+
+            Assert.All(extras, extra => Assert.Null(extra.Scene));
+            Assert.Equal(lost + 1, drain.Ball);
+            Assert.True(ball.IsEnabled);
+        }
+
+        for (var i = 0; i < 3; i++)
+            Round();
+
+        // The runtime compiles what's run often again, better, as the game goes, which can take a while with other tests
+        // keeping the machine busy: until then the quickly compiled code can allocate what the better doesn't.
+        var least = (Bytes: long.MaxValue, Counted: 0);
+        for (var attempt = 0; attempt < 20 && least.Bytes > 0; attempt++)
+        {
+            Thread.Sleep(attempt > 0 ? 50 : 0);
+            (bytes, counted) = (0, 0);
+            Round();
+            Round();
+            if (counted > 0 && bytes < least.Bytes)
+                least = (bytes, counted);
+        }
+
+        Assert.True(least.Counted > 100, $"Only {least.Counted} steps were counted (garbage collections ran in the rest).");
+        Assert.True(least.Bytes == 0, $"Losing, serving and multiball allocated {least.Bytes:N0} bytes in {least.Counted} steps.");
+    }
+
+    [Fact]
     public void Playing_makes_no_garbage()
     {
         Table(_scene);

@@ -45,7 +45,7 @@ internal sealed class FirstPersonSystem : GameSystem
         {
             if (MainFirstPersonView is { } main)
                 return main;
-            foreach (var viewport in Scene.Active<Viewport>())
+            foreach (var viewport in Scene.ActiveNow<Viewport>())
             {
                 if (viewport.IsShowing && viewport.Entity!.GetComponent<FirstPersonView>() is { } view)
                     return view;

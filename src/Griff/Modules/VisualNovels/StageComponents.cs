@@ -129,8 +129,8 @@ public sealed class Stage : Component, IDrawable
         {
             if (Entity?.Scene is not { } scene)
                 return Entity is null ? [] : [.. Entity.SelfAndDescendants().Select(e => e.GetComponent<Character>()).OfType<Character>()];
-            var first = scene.All<Stage>().FirstOrDefault() == this;
-            return [.. scene.All<Character>().Where(c => c.Entity is { } e && (StageOf(e) == this || (first && StageOf(e) is null)))];
+            var first = scene.AllNow<Stage>().FirstOrDefault() == this;
+            return [.. scene.AllNow<Character>().Where(c => c.Entity is { } e && (StageOf(e) == this || (first && StageOf(e) is null)))];
         }
     }
 
@@ -234,7 +234,7 @@ public sealed class Character : Component, IDrawEffect
             if (string.Equals(_position, value, StringComparison.Ordinal))
                 return;
             _position = value;
-            if (MoveLeft <= 0 && Entity is { } entity && (Stage.StageOf(entity) ?? entity.Scene?.All<Stage>().FirstOrDefault()) is { } stage &&
+            if (MoveLeft <= 0 && Entity is { } entity && (Stage.StageOf(entity) ?? entity.Scene?.AllNow<Stage>().FirstOrDefault()) is { } stage &&
                 stage.PositionOf(value) is { } spot)
                 StageDirector.Place(this, stage, spot);
         }

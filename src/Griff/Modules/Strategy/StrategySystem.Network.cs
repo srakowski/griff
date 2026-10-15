@@ -118,7 +118,7 @@ internal sealed partial class StrategySystem
             return;
         if (Game.Net.LocalPlayer is { Team.Length: > 0 } me)
         {
-            foreach (var commander in Scene.All<Commander>())
+            foreach (var commander in Scene.AllNow<Commander>())
             {
                 if (SameTeam(commander.Team, me.Team))
                     continue;

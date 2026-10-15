@@ -237,7 +237,7 @@ public sealed class LocalPlayers
     internal void Update(Scene scene)
     {
         var most = 1;
-        var played = scene.Running<PlayedBy>();
+        var played = scene.RunningNow<PlayedBy>();
         for (var i = 0; i < played.Count; i++)
             most = Math.Max(most, Math.Clamp(played[i].Player, 1, Max));
         Playing = most;

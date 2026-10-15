@@ -47,7 +47,7 @@ public sealed partial class Physics
         _jointed.Clear();
         _unbumped.Clear();
         _motorized.Clear();
-        var hinges = scene.Active<HingeJoint>();
+        var hinges = scene.ActiveNow<HingeJoint>();
         if (hinges.Count == 0)
             return;
 

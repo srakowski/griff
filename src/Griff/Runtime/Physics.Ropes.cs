@@ -63,7 +63,7 @@ public sealed partial class Physics
     /// </summary>
     internal void ReadyRopes(Scene scene)
     {
-        var ropes = scene.Active<Rope>();
+        var ropes = scene.ActiveNow<Rope>();
         for (var i = 0; i < ropes.Count; i++)
         {
             if (ropes[i].Points is null)
@@ -109,7 +109,7 @@ public sealed partial class Physics
             (rope.BrokenAt, rope.StillFor) = ((int)header.Y, header.Z);
             rope.Asleep = rope.StillFor >= SleepAfter;
             rope.Climbers.Clear();
-            foreach (var body in scene.Active<Body>())
+            foreach (var body in scene.ActiveNow<Body>())
             {
                 if (memory.TryGet(new ContactKey(id, body.Entity!.Id, RopePart, RopeHolds), out var hold))
                     Hold(rope, body, hold.X);
@@ -135,7 +135,7 @@ public sealed partial class Physics
     {
         (Rope Rope, float At, Vector2 Point)? best = null;
         var bestDistance = reach * reach;
-        foreach (var rope in scene.Active<Rope>())
+        foreach (var rope in scene.ActiveNow<Rope>())
         {
             if (!rope.Climbable || rope.Points is not { } points || rope.Entity == except.Entity || rope.OtherEntity == except.Entity)
                 continue;
@@ -206,7 +206,7 @@ public sealed partial class Physics
         _climbing.Clear();
         Snapped.Clear();
         _ropeScene = scene;
-        var ropes = scene.Active<Rope>();
+        var ropes = scene.ActiveNow<Rope>();
         if (ropes.Count == 0)
             return;
 

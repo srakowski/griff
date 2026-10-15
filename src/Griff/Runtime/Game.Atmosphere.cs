@@ -39,8 +39,8 @@ public sealed partial class Game
     // Before followers move: a follower's target that has crossed into another room takes the camera over to it.
     private void RunRooms()
     {
-        var rooms = Scene.Active<Room>();
-        foreach (var follow in Scene.Active<Follow>())
+        var rooms = Scene.ActiveNow<Room>();
+        foreach (var follow in Scene.ActiveNow<Follow>())
         {
             var camera = follow.Entity!.GetComponent<Camera>();
             if (camera is null)
@@ -117,7 +117,7 @@ public sealed partial class Game
     // Sound players that have just appeared play their sound if they're set to; scenes' music starts.
     private void RunSoundPlayers()
     {
-        foreach (var player in Scene.Active<SoundPlayer>())
+        foreach (var player in Scene.ActiveNow<SoundPlayer>())
         {
             if (player.Started)
                 continue;
@@ -126,7 +126,7 @@ public sealed partial class Game
                 Play(player);
         }
 
-        foreach (var music in Scene.Active<BackgroundMusic>())
+        foreach (var music in Scene.ActiveNow<BackgroundMusic>())
         {
             if (_startedMusic.Contains(music) || string.IsNullOrWhiteSpace(music.Music))
                 continue;
@@ -215,7 +215,7 @@ public sealed partial class Game
     {
         var live = _liveSources;
         live.Clear();
-        foreach (var source in Scene.Active<SoundSource>())
+        foreach (var source in Scene.ActiveNow<SoundSource>())
         {
             if (!source.Playing || string.IsNullOrWhiteSpace(source.Sound))
                 continue;
@@ -259,7 +259,7 @@ public sealed partial class Game
 
     private void RunLights()
     {
-        foreach (var light in Scene.Running<Light>())
+        foreach (var light in Scene.RunningNow<Light>())
             light.AdvanceFlicker(Time.Delta);
     }
 }

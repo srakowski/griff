@@ -25,7 +25,7 @@ public sealed class Goal : Component, ICounterSource
     {
         if (!counter.CountGoals || Entity?.Scene is not { } scene)
             return null;
-        var goals = scene.Active<Goal>();
+        var goals = scene.ActiveNow<Goal>();
         return (goals.Count(g => g.IsCovered), goals.Count);
     }
 
@@ -78,7 +78,7 @@ public sealed class Goal : Component, ICounterSource
         if (Entity?.Scene is not { } scene)
             return 0;
         var count = 0;
-        foreach (var goal in scene.Active<Goal>())
+        foreach (var goal in scene.ActiveNow<Goal>())
         {
             if (!coveredOnly || goal.IsCovered)
                 count++;

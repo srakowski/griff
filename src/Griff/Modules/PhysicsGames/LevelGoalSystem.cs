@@ -106,8 +106,8 @@ internal sealed class LevelGoalSystem : GameSystem
             return 0;
         name = name.Trim();
         var left = 0;
-        var entities = Game.Scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = Game.Scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             var entity = entities[i];
             if (entity.Name == name && entity.IsActive && entity.GetComponent<Breakable>() is not { Broken: true })
@@ -150,8 +150,8 @@ internal sealed class LevelGoalSystem : GameSystem
     // The first entity called `name`, looked for without making garbage.
     private Entity? Named(string name)
     {
-        var entities = Game.Scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = Game.Scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             if (entities[i].Name == name)
                 return entities[i];

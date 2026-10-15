@@ -129,7 +129,7 @@ internal static class FirstPersonDrawing
         var depths = new float[columns];
         var maxDepth = fp.Fog.A >= 1 && fp.FogDistance > 0 ? fp.FogDistance * 1.05f : 96;
         // Walls fading or flashing do it between steps, like the sprites standing among them.
-        var tilemaps = scene.Active<Tilemap>().Where(t => t.Solid && t.TileSize > 0).Select(t => (Map: t, Tint: t.TintDrawn(blendOf(t.Entity!)))).ToList();
+        var tilemaps = scene.ActiveNow<Tilemap>().Where(t => t.Solid && t.TileSize > 0).Select(t => (Map: t, Tint: t.TintDrawn(blendOf(t.Entity!)))).ToList();
         var blocks = scene.Entities.Where(e => e.IsActive)
             .Select(e => (Block: e.GetComponent<Block>(), Collider: e.GetComponent<BoxCollider>()))
             .Where(b => b.Block is not null && b.Collider is not null)
@@ -332,7 +332,7 @@ internal static class FirstPersonDrawing
     {
         var standees = new List<Standee>();
         var time = game.Time.Total;
-        foreach (var entity in game.Scene.Entities)
+        foreach (var entity in game.Scene.EntitiesNow)
         {
             if (!entity.IsActive || entity.IsSelfOrDescendantOf(viewer) || !inWorld(entity) || entity.GetComponent<Block>() is not null)
                 continue;
@@ -549,7 +549,7 @@ internal static class FirstPersonDrawing
                 return Daylight;
             // Without shadows: walls stand up out of the map, so its shadows wouldn't fall where they look right. The
             // ambient light fading and the lights flickering are drawn between steps, as in the flat view.
-            var lights = scene.Active<Light>()
+            var lights = scene.ActiveNow<Light>()
                 .Select(l => l.Drawn(blendOf(l.Entity!)))
                 .Where(l => l.Radius > 0 && l.Intensity > 0)
                 .Select(l => new LightDraw(l.Center, l.Radius, new Color(l.Color.R * l.Intensity, l.Color.G * l.Intensity, l.Color.B * l.Intensity), l.Softness))

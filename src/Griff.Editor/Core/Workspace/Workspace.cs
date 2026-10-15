@@ -603,6 +603,15 @@ public sealed class Workspace(
 
     private async Task OpenAsync(Project project)
     {
+        var scenePath = project.StartScenePath is { } start && File.Exists(start)
+            ? start
+            : project.FindScenes().FirstOrDefault();
+
+        // Asked before anything changes, so a question an agent's call didn't answer goes back to it with the editor as it
+        // was (and while the user's question is up, the editor isn't half way into the project): never with the project
+        // open and no scene.
+        var recovery = scenePath is null ? null : AskRecovery(project, scenePath);
+
         SetScene(null);
         _prefabs.Clear();
         Project = project;
@@ -613,46 +622,98 @@ public sealed class Workspace(
         WatchScripts(project);
         StartRecoveryTimer();
 
-        var scenePath = project.StartScenePath is { } start && File.Exists(start)
-            ? start
-            : project.FindScenes().FirstOrDefault();
-
-        SetScene(scenePath is null ? await CreateSceneAsync(project) : await LoadSceneAsync(scenePath));
+        var (scene, problem) = await OpenFirstSceneAsync(project, scenePath, recovery);
+        SetScene(scene);
         SceneShown?.Invoke(this, EventArgs.Empty);
         status.Show($"Opened {project.Name}");
         logger.LogInformation("Opened project {Name}", project.Name);
+        if (problem is not null)
+            dialogs.ShowError("Couldn't open the start scene", problem);
     }
 
-    private async Task<SceneDocument> LoadSceneAsync(string path)
+    // The scene a project opens on: its start scene (or first); if that can't be read, the first other that can; if none
+    // can, a new one. A project is never open without a scene. With what went wrong, said once the scene is open.
+    private async Task<(SceneDocument Scene, string? Problem)> OpenFirstSceneAsync(Project project, string? path, string? recovery)
     {
-        // A recovery copy newer than the scene means the editor closed without saving.
-        var source = path;
-        var recovered = false;
-        if (Project is { } project && RecoveryFiles.FindNewer(project, path) is { } recovery)
+        if (path is null)
+            return (await CreateSceneAsync(project), null);
+        string problem;
+        try
         {
-            var when = File.GetLastWriteTime(recovery);
-            if (dialogs.Confirm("Recover unsaved changes?",
-                    $"{Path.GetFileNameWithoutExtension(path)} has unsaved changes from {when:g} that weren't saved before Griff closed.\n\nRecover them?"))
+            return (await LoadSceneAsync(path, recovery), null);
+        }
+        catch (Exception ex) when (Unreadable(ex))
+        {
+            logger.LogError("Couldn't open {Scene}: {Message}", project.GetRelativePath(path), ex.Message);
+            problem = $"{Path.GetFileNameWithoutExtension(path)} couldn't be read ({ex.Message}), so ";
+        }
+
+        foreach (var other in project.FindScenes())
+        {
+            if (string.Equals(Path.GetFullPath(other), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+                continue;
+            try
             {
-                source = recovery;
-                recovered = true;
+                // Without asking about its recovery copy (that's kept for when it's opened itself).
+                var document = await LoadSceneAsync(other, null);
+                return (document, problem + $"{document.Name} is open instead.");
             }
-            else
+            catch (Exception ex) when (Unreadable(ex))
             {
-                TryRecovery(() => RecoveryFiles.Delete(project, path));
+                logger.LogError("Couldn't open {Scene}: {Message}", project.GetRelativePath(other), ex.Message);
             }
         }
 
+        var created = await CreateSceneAsync(project);
+        return (created, problem + $"a new scene, {created.Name}, is open instead.");
+    }
+
+    private static bool Unreadable(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or FormatException or NotSupportedException;
+
+    private async Task<SceneDocument> LoadSceneAsync(string path) =>
+        await LoadSceneAsync(path, Project is { } project ? AskRecovery(project, path) : null);
+
+    // A recovery copy newer than the scene means the editor closed without saving: whether to open the scene from it, asked
+    // through the dialogs (so an agent answers it with "answers"). The copy to open from, or null.
+    private string? AskRecovery(Project project, string path)
+    {
+        if (RecoveryFiles.FindNewer(project, path) is not { } recovery)
+            return null;
+        var when = File.GetLastWriteTime(recovery);
+        if (dialogs.Confirm(RecoverTitle,
+                $"{Path.GetFileNameWithoutExtension(path)} has unsaved changes from {when:g} that weren't saved before Griff closed.\n\nRecover them?"))
+            return recovery;
+        TryRecovery(() => RecoveryFiles.Delete(project, path));
+        return null;
+    }
+
+    /// <summary>The question asked when a scene has unsaved changes kept from when the editor closed without saving.</summary>
+    public const string RecoverTitle = "Recover unsaved changes?";
+
+    // The scene at `path`, from its recovery copy if one was chosen (or the scene itself, if the copy can't be read).
+    private async Task<SceneDocument> LoadSceneAsync(string path, string? recovery)
+    {
         var warnings = new List<string>();
         Scene scene;
-        await using (var stream = File.OpenRead(source))
+        try
+        {
+            await using var stream = File.OpenRead(recovery ?? path);
             scene = Serializer.Load(stream, warnings);
+        }
+        catch (Exception ex) when (recovery is not null && Unreadable(ex))
+        {
+            logger.LogWarning("The unsaved changes to {Scene} couldn't be read ({Message}); opened it as it was saved.", Path.GetFileName(path), ex.Message);
+            (recovery, warnings) = (null, []);
+            await using var stream = File.OpenRead(path);
+            scene = Serializer.Load(stream, warnings);
+        }
 
         foreach (var warning in warnings)
             logger.LogWarning("{Scene}: {Warning}", Path.GetFileName(path), warning);
 
         var document = new SceneDocument(scene, path);
-        if (recovered)
+        if (recovery is not null)
         {
             document.MarkRecovered();
             logger.LogInformation("Recovered unsaved changes to {Scene}", document.Name);
@@ -690,15 +751,19 @@ public sealed class Workspace(
         }
     }
 
-    // A project with no scenes gets an empty one so there's always something to edit.
+    // A project with no scenes (or none that can be read) gets an empty one so there's always something to edit, beside any
+    // that's there rather than over it.
     private async Task<SceneDocument> CreateSceneAsync(Project project)
     {
-        var path = Path.Combine(project.AssetsPath, Griff.Projects.Project.DefaultSceneName + Griff.Projects.Project.SceneExtension);
+        var name = Griff.Projects.Project.DefaultSceneName;
+        var path = Path.Combine(project.AssetsPath, name + Griff.Projects.Project.SceneExtension);
+        for (var n = 2; File.Exists(path); n++)
+            path = Path.Combine(project.AssetsPath, $"{name} {n}{Griff.Projects.Project.SceneExtension}");
         Directory.CreateDirectory(project.AssetsPath);
         var document = new SceneDocument(new Scene(), path);
         await using (var stream = File.Create(path))
             Serializer.Save(document.Scene, stream);
-        logger.LogWarning("{Project} had no scenes; created {Scene}", project.Name, document.Name);
+        logger.LogWarning("{Project} had no scene to open; created {Scene}", project.Name, document.Name);
         return document;
     }
 

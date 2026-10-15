@@ -142,8 +142,8 @@ public readonly struct Scope
             return inside;
         if (owner.Scene is not { } scene)
             return null;
-        var entities = scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             if (name.SequenceEqual(entities[i].Name))
                 return entities[i];

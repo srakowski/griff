@@ -40,19 +40,19 @@ public sealed partial class Game
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
     // Not what's paused (see Entity.IsPaused): it's held still.
-    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Running<T>() : Where(Scene.Running<T>(), Runs);
+    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Runs);
 
     // What this machine runs, paused or not: for what reads or shows how things are rather than moving them on.
-    internal ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Runs);
+    internal ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.ActiveNow<T>() : Where(Scene.ActiveNow<T>(), Runs);
 
     // What this machine moves: what it runs, less other players' own characters, plus this player's own; not what's paused.
-    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Running<T>() : Where(Scene.Running<T>(), Moves);
+    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Moves);
 
     // Everything showing, wherever it's run: for what only changes how things look.
-    internal ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
+    internal ComponentList<T> Showing<T>() where T : Component => Scene.ActiveNow<T>();
 
     // Everything this machine runs, active or not.
-    internal ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.All<T>() : Where(Scene.All<T>(), Runs);
+    internal ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.AllNow<T>() : Where(Scene.AllNow<T>(), Runs);
 
     // Those whose entity passes: the same list when they all do (always, offline), so a frame allocates nothing.
     private static ComponentList<T> Where<T>(ComponentList<T> components, Func<Entity, bool> test) where T : Component
@@ -400,7 +400,7 @@ public sealed partial class Game
             if (health.RespawnLeft > 0)
                 continue;
 
-            var checkpoint = Scene.Active<Checkpoint>().FirstOrDefault(c => c.Active);
+            var checkpoint = Scene.ActiveNow<Checkpoint>().FirstOrDefault(c => c.Active);
             var position = checkpoint is not null ? Flat(checkpoint.Entity!.Transform.WorldPosition) : health.Home ?? Flat(entity.Transform.WorldPosition);
             entity.IsEnabled = true;
             PlaceAt(entity, position);
@@ -417,7 +417,7 @@ public sealed partial class Game
         entity.Transform.Teleport(new Vector3(target.X, target.Y, entity.Transform.Position.Z));
         if (entity.GetComponent<Body>() is { } body)
             (body.Velocity, body.Spin) = (Vector2.Zero, 0);
-        foreach (var follow in Scene.All<Follow>().Where(f => f.TargetEntity == entity))
+        foreach (var follow in Scene.AllNow<Follow>().Where(f => f.TargetEntity == entity))
             follow.Snap();
     }
 
@@ -918,7 +918,7 @@ public sealed partial class Game
 
     // The speaker called name (or whose entity is, when it has no name of its own), anywhere in the scene, shown or not.
     private Speaker? SpeakerNamed(string name) =>
-        Scene.All<Speaker>()
+        Scene.AllNow<Speaker>()
             .FirstOrDefault(s => string.Equals(s.ShownName, name, StringComparison.OrdinalIgnoreCase));
 
     // The box's name tag and portrait show who's talking, and hide when nobody is (or they have no portrait).

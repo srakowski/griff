@@ -352,7 +352,7 @@ internal sealed partial class CardsSystem : GameSystem
     private void Restart(Deck deck, List<Deck> decks, List<Hand> hands)
     {
         var name = deck.Entity!.Name;
-        foreach (var card in Scene.All<Card>())
+        foreach (var card in Scene.AllNow<Card>())
         {
             if (card.Entity!.Scene == Scene && string.Equals(card.Home?.Trim(), name, StringComparison.Ordinal) && card.Zone != deck)
                 MoveTo(card, deck);

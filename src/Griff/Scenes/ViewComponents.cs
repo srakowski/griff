@@ -190,8 +190,8 @@ public sealed class Follow : Component
             return null;
 
         // Looked for without making garbage, every step.
-        var entities = scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             if (entities[i].Name == StayInside)
                 return AreaOf(entities[i]);

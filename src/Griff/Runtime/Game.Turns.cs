@@ -33,7 +33,7 @@ public sealed partial class Game
         }
 
         // Each turn taker to the order that covers it.
-        foreach (var taker in Scene.Active<TurnTaker>())
+        foreach (var taker in Scene.ActiveNow<TurnTaker>())
             OrderOf(taker, fresh: true)?.Takers.Add(taker);
 
         foreach (var order in orders)
@@ -356,8 +356,8 @@ public sealed partial class Game
     {
         if (player is null)
             return;
-        var entities = Scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = Scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             var e = entities[i];
             if (e.IsActive && e.GetComponent<GridMovement>() is not null && NetSession.OwnerIdOf(e) == player.Id && TurnTaker.Of(e) is { } taker &&
@@ -470,7 +470,7 @@ public sealed partial class Game
             return;
         }
 
-        foreach (var order in Scene.Active<TurnOrder>())
+        foreach (var order in Scene.ActiveNow<TurnOrder>())
         {
             if (Runs(order.Entity!) && MayEndTurn(order, player))
                 order.EndTurn();

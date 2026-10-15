@@ -74,7 +74,7 @@ public sealed partial class Game
 
     private bool AnyButtonHovered()
     {
-        foreach (var button in Scene.Active<Button>())
+        foreach (var button in Scene.ActiveNow<Button>())
         {
             if (button.IsHovered)
                 return true;
@@ -110,7 +110,7 @@ public sealed partial class Game
     internal void NetEnded()
     {
         Scene.PreferNamed = null;
-        foreach (var entity in Scene.Entities)
+        foreach (var entity in Scene.EntitiesNow)
             entity.NetFlags = NetFlags.None;
     }
 
@@ -235,7 +235,7 @@ public sealed partial class Game
     private ComponentList<T> MineOnline<T>(bool evenPaused) where T : Component
     {
         var id = (_acting ?? Net.LocalPlayer)?.Id ?? 0;
-        return Where(evenPaused ? Scene.Active<T>() : Scene.Running<T>(), entity =>
+        return Where(evenPaused ? Scene.ActiveNow<T>() : Scene.RunningNow<T>(), entity =>
         {
             var owner = NetSession.OwnerIdOf(entity);
             return (owner != 0 && owner == id) || (owner == 0 && _acting is null && Runs(entity));
@@ -283,7 +283,7 @@ public sealed partial class Game
             return Find(name);
         Entity? best = null;
         var bestDistance = float.PositiveInfinity;
-        foreach (var entity in Scene.Entities)
+        foreach (var entity in Scene.EntitiesNow)
         {
             if (entity.Name != name || !entity.IsActive || Health.Of(entity) is { IsDead: true })
                 continue;

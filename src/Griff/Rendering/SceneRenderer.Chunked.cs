@@ -258,8 +258,8 @@ public static partial class SceneRenderer
         var chunked = scratch.Chunked ??= new ChunkedScratch();
         chunked.Holding = true;
         var job = chunked.Job;
-        var entities = scene.Entities;
-        var count = (entities.Count + ChunkSize - 1) / ChunkSize;
+        var entities = scene.EntitiesNow;
+        var count = (entities.Length + ChunkSize - 1) / ChunkSize;
         while (job.Runs.Count < count)
         {
             var run = new Run();
@@ -319,7 +319,7 @@ public static partial class SceneRenderer
     private static readonly Entity[] s_noEntities = [];
 
     // Draws the entities the chunks left, in hierarchy order, into the game thread's run, and puts it back to front.
-    private static void DrawLeft(ChunkedScratch chunked, IReadOnlyList<Entity> entities, int count, Box view, float cameraSize, bool playing,
+    private static void DrawLeft(ChunkedScratch chunked, Entity[] entities, int count, Box view, float cameraSize, bool playing,
         List<IDrawable>? overs, List<IDrawable> drawables, BuildTimer? timer, bool sortByY, in ViewFilter filter)
     {
         var job = chunked.Job;

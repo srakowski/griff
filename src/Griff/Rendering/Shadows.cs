@@ -67,7 +67,7 @@ public static class Shadows
     /// </summary>
     public static void AddEdges(Scene scene, List<ShadowEdge> edges)
     {
-        foreach (var tilemap in scene.Active<Tilemap>())
+        foreach (var tilemap in scene.ActiveNow<Tilemap>())
         {
             // Isometric maps don't block light yet.
             if (!tilemap.Solid)
@@ -78,7 +78,7 @@ public static class Shadows
                 AddHexTiles(edges, tilemap);
         }
 
-        foreach (var collider in scene.Active<Collider>())
+        foreach (var collider in scene.ActiveNow<Collider>())
         {
             if (collider.IsTrigger || collider is BoxCollider { OneWay: true })
                 continue;

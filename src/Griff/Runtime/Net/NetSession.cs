@@ -106,7 +106,7 @@ public sealed partial class NetSession : IDisposable
     public static bool IsUsedIn(Scene scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
-        foreach (var entity in scene.Entities)
+        foreach (var entity in scene.EntitiesNow)
         {
             foreach (var component in entity.Components)
             {
@@ -199,7 +199,7 @@ public sealed partial class NetSession : IDisposable
             {
                 _settingsScene = scene;
                 _settingsVersion = scene.Version;
-                _settings = scene.All<Multiplayer>().FirstOrDefault();
+                _settings = scene.AllNow<Multiplayer>().FirstOrDefault();
             }
 
             return _settings;

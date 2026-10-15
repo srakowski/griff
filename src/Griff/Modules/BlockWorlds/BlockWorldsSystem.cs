@@ -210,7 +210,7 @@ internal sealed class BlockWorldsSystem : GameSystem
 
     protected override void SceneEnding()
     {
-        foreach (var blocks in Scene.All<Blocks>())
+        foreach (var blocks in Scene.AllNow<Blocks>())
         {
             if (Changed(blocks))
                 SaveWorld(blocks);

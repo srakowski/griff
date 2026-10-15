@@ -20,7 +20,7 @@ internal static class BlockWorldsDrawing
     {
         var game = frame.Game;
         var state = system.Local;
-        if (state.Hud is null && game.Scene.Active<BlockBuilder>().Count == 0)
+        if (state.Hud is null && game.Scene.ActiveNow<BlockBuilder>().Count == 0)
             return;
         var thickness = frame.LineWidth;
         var firstPerson = frame.SeenThrough is not null;
@@ -45,7 +45,7 @@ internal static class BlockWorldsDrawing
     // The block a builder points at, cracking as it's dug, or the outline of where a block would go.
     private static IEnumerable<SpriteDraw> BuilderDraws(Game game, float thickness, Func<Entity, StepBlend> blendOf)
     {
-        foreach (var builder in game.Scene.Active<BlockBuilder>())
+        foreach (var builder in game.Scene.ActiveNow<BlockBuilder>())
         {
             if (builder.Map is not { Entity: not null } map || builder.Highlight.A <= 0)
                 continue;
@@ -114,8 +114,8 @@ internal static class BlockWorldsDrawing
         var u = hud.Unit;
         var mouse = game.Input.MouseWorld;
         var buttons = state.Buttons;
-        var hotbar = game.Scene.Active<Hotbar>().FirstOrDefault();
-        var crafting = game.Scene.Active<Crafting>().FirstOrDefault();
+        var hotbar = game.Scene.ActiveNow<Hotbar>().FirstOrDefault();
+        var crafting = game.Scene.ActiveNow<Crafting>().FirstOrDefault();
         var world = WorldOf(game);
 
         // The hotbar: each slot's block (or a swatch), how many, and the picked one's name over it.

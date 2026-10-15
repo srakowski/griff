@@ -46,7 +46,7 @@ internal static class ContraptionsDrawing
     private static IEnumerable<SpriteDraw> ToolDraws(Game game, float thickness)
     {
         var mouse = game.Input.MouseWorld;
-        foreach (var hinge in game.Scene.Active<HingeJoint>())
+        foreach (var hinge in game.Scene.ActiveNow<HingeJoint>())
         {
             var at = hinge.WorldAnchor;
             yield return Quad(at, new Vector2(thickness * 6), Neutral);

@@ -21,8 +21,8 @@ public sealed partial class Game
             throw new InvalidOperationException("Only an entity in the running scene can be given focus.");
         var player = NetSession.OwnerIdOf(entity);
         var local = PlayedBy.Of(entity);
-        var entities = Scene.Entities;
-        for (var i = 0; i < entities.Count; i++)
+        var entities = Scene.EntitiesNow;
+        for (var i = 0; i < entities.Length; i++)
         {
             var other = entities[i];
             var inside = other.IsSelfOrDescendantOf(entity);

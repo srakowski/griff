@@ -61,7 +61,7 @@ public sealed partial class Game
             return;
 
         var top = TopPanel;
-        var allButtons = OnTop(_menus.AllButtons, Scene.Active<Button>(), top);
+        var allButtons = OnTop(_menus.AllButtons, Scene.ActiveNow<Button>(), top);
         foreach (var button in allButtons)
         {
             button.IsMissingSave = !HasWhatItNeeds(button);
@@ -77,9 +77,9 @@ public sealed partial class Game
                 buttons.Add(button);
         }
 
-        var sliders = OnTop(_menus.Sliders, Scene.Active<Slider>(), top);
-        var toggles = OnTop(_menus.Toggles, Scene.Active<Toggle>(), top);
-        var choices = OnTop(_menus.Choices, Scene.Active<Choice>(), top);
+        var sliders = OnTop(_menus.Sliders, Scene.ActiveNow<Slider>(), top);
+        var toggles = OnTop(_menus.Toggles, Scene.ActiveNow<Toggle>(), top);
+        var choices = OnTop(_menus.Choices, Scene.ActiveNow<Choice>(), top);
         var controls = _menus.Controls;
         controls.Clear();
         foreach (var button in buttons)

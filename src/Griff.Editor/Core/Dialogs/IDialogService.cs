@@ -30,3 +30,16 @@ public interface IDialogService
 
     void ShowError(string title, string message);
 }
+
+/// <summary>
+/// Dialogs that can be answered while they're showing, by what runs meanwhile: a dialog waits for the user in a loop of its
+/// own, in which an agent's call still comes in, and can answer it (see <c>AgentDialogs.AnswerShowing</c>).
+/// </summary>
+public interface IAnswerableDialogs
+{
+    /// <summary>
+    /// Closes the yes/no (or yes/no/cancel) question showing as if the user had picked <paramref name="answer"/>. False
+    /// if no such question is showing.
+    /// </summary>
+    bool AnswerShowing(System.Windows.MessageBoxResult answer);
+}

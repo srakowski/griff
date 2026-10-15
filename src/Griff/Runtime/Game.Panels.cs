@@ -100,7 +100,7 @@ public sealed partial class Game
     // so a hidden panel's scripts don't start until it opens.
     private void SyncPanels()
     {
-        var panels = Scene.All<Panel>();
+        var panels = Scene.AllNow<Panel>();
         foreach (var panel in panels)
         {
             if (_panels.Seen.Add(panel) && !panel.Open)
@@ -218,7 +218,7 @@ public sealed partial class Game
         // Back cancels what a system has under way (a building being placed) before it opens a pause menu.
         if (clicked.Count > 0 || TopPanel is not null || SystemClaimsBack())
             return;
-        foreach (var panel in Scene.All<Panel>())
+        foreach (var panel in Scene.AllNow<Panel>())
         {
             if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled)
                 continue;
@@ -270,7 +270,7 @@ public sealed partial class Game
     private void FillPrompts()
     {
         var state = Input as InputState;
-        foreach (var text in Scene.Active<Text>())
+        foreach (var text in Scene.ActiveNow<Text>())
         {
             if (text.Said is not { } value || !value.Contains('{'))
                 continue;

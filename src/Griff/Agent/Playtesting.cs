@@ -123,7 +123,7 @@ public static class Playtesting
     public static string Mouse(Game game)
     {
         var at = game.Input.MouseWorld;
-        var reports = string.Concat(game.Scene.All<IPlaytestReport>().Select(r => r.MouseReport()));
+        var reports = string.Concat(game.Scene.AllNow<IPlaytestReport>().Select(r => r.MouseReport()));
         return $"Mouse: at ({at.X:0.##}, {at.Y:0.##}){(game.Held is { } held ? $", holding {held.Name}" : "")}{reports}.";
     }
 

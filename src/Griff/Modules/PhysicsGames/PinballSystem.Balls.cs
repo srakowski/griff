@@ -285,7 +285,9 @@ internal sealed partial class PinballSystem
         if (ball.GetComponent<Body>() is { } body)
             (body.Velocity, body.Spin) = (Vector2.Zero, 0);
         ball.IsEnabled = false;
-        (drain.Serving, drain.ServeIn, drain.Saved) = (ball.Id.ToString(), Math.Max(0, drain.ServeDelay), false);
+        // The same ball served again keeps the text of its id it had (no new string each time).
+        var id = drain.ServingEntity == ball && drain.ServingKey is { } key ? key : ball.Id.ToString();
+        (drain.Serving, drain.ServeIn, drain.Saved) = (id, Math.Max(0, drain.ServeDelay), false);
         (drain.ServingKey, drain.ServingEntity) = (drain.Serving, ball);
     }
 

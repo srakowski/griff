@@ -247,7 +247,7 @@ public sealed partial class Physics
         _slopes.Clear();
         _isometric.Clear();
         _hex.Clear();
-        if (scene.Active<Tilemap>().Count > 0)
+        if (scene.ActiveNow<Tilemap>().Count > 0)
         {
             CollectSlopes(scene, _slopes);
             CollectIsometric(scene, null, _isometric);
@@ -274,7 +274,7 @@ public sealed partial class Physics
         _movedGroups.Clear();
         _turning.Clear();
         _turningGroups.Clear();
-        foreach (var body in scene.Active<Body>())
+        foreach (var body in scene.ActiveNow<Body>())
         {
             // An entity's first body is the one that moves it.
             if (body.Entity!.GetComponent<Body>() != body)
@@ -410,13 +410,13 @@ public sealed partial class Physics
         scene.VacatedEverywhere = false;
 
         _grounds.Clear();
-        foreach (var body in scene.All<Body>())
+        foreach (var body in scene.AllNow<Body>())
         {
             if (body.Ground is not null && body.Entity!.GetComponent<Body>() == body)
                 _grounds[body] = (body.Ground, PositionOf(body.Ground));
         }
 
-        UpdateTriggers(scene.Active<Collider>(), onTrigger);
+        UpdateTriggers(scene.ActiveNow<Collider>(), onTrigger);
     }
 
     // Whatever a body moved by someone else is touching (or all but touching), as if it had bumped into it.
@@ -817,7 +817,7 @@ public sealed partial class Physics
     // A step's slopes, into a list without enumerators: those of every solid square map.
     private static void CollectSlopes(Scene scene, List<Slope> into)
     {
-        foreach (var tilemap in scene.Active<Tilemap>())
+        foreach (var tilemap in scene.ActiveNow<Tilemap>())
         {
             if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
                 continue;
@@ -833,7 +833,7 @@ public sealed partial class Physics
     private static IEnumerable<Slope> Slopes(Scene scene, string? layers = null)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        foreach (var tilemap in scene.Active<Tilemap>())
+        foreach (var tilemap in scene.ActiveNow<Tilemap>())
         {
             if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
@@ -1028,8 +1028,8 @@ public sealed partial class Physics
     private static void CollectShapes(Scene scene, bool includeTriggers, string? layers, List<Shape> into)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
-        var colliders = scene.Active<Collider>();
-        var tilemaps = scene.Active<Tilemap>();
+        var colliders = scene.ActiveNow<Collider>();
+        var tilemaps = scene.ActiveNow<Tilemap>();
         if (tilemaps.Count > 0)
             scene.Order();
 

@@ -17,19 +17,26 @@ public sealed partial class Game
     private readonly CrowdJob _crowdJob = new();
 
     // `scripts` in runs: each crowd of scripts of one crowd type next to each other, and what's between them.
-    private static ScriptRun[] RunsOf(Behavior[] scripts)
+    private ScriptRun[] RunsOf(Behavior[] scripts)
     {
-        var runs = new List<ScriptRun>();
-        var from = 0;
+        var count = 0;
+        for (var i = 1; i <= scripts.Length; i++)
+        {
+            if (i == scripts.Length || !SameRun(scripts[i - 1], scripts[i]))
+                count++;
+        }
+
+        var runs = _runLists.Rent(count, _steps);
+        var (from, run) = (0, 0);
         for (var i = 1; i <= scripts.Length; i++)
         {
             if (i < scripts.Length && SameRun(scripts[i - 1], scripts[i]))
                 continue;
-            runs.Add(new ScriptRun(from, i - from, (scripts[from].Hooks & BehaviorHooks.Crowd) != 0));
+            runs[run++] = new ScriptRun(from, i - from, (scripts[from].Hooks & BehaviorHooks.Crowd) != 0);
             from = i;
         }
 
-        return [.. runs];
+        return runs;
 
         static bool SameRun(Behavior a, Behavior b)
         {

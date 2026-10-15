@@ -374,7 +374,7 @@ internal static class StrategyDrawing
         }
 
         var team = rts.Commander?.Team;
-        foreach (var resource in strategy.Scene.Active<Resource>())
+        foreach (var resource in strategy.Scene.ActiveNow<Resource>())
         {
             var entity = resource.Entity!;
             if (StrategySystem.Footprint(entity) is not { } box || !(rts.Fog?.IsExplored(box.Center) ?? true) ||

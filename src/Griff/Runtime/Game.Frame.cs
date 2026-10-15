@@ -21,13 +21,18 @@ public sealed partial class Game
 
     // The scripts running this frame, taken as it starts: spawned scripts wait for the next one. Then those of them with
     // an Update, a FixedUpdate and a LateUpdate, kept with the snapshot they were taken from (unchanged while nothing is
-    // added, removed, enabled or disabled), and the last snapshot every script of had started.
+    // added, removed, enabled or disabled), and the last snapshot every script of had started (by their serials: see
+    // ComponentList.Serial). Lists replaced are filled again two steps later (see SnapshotPool), counted by _steps.
     private ComponentList<Behavior> _running;
-    private Behavior[]? _hooksFor;
+    private long _hooksFor = -1;
+    private Behavior[] _hooksFrom = [];
     private Behavior[] _updating = [];
     private Behavior[] _fixedUpdating = [];
     private Behavior[] _lateUpdating = [];
-    private Behavior[]? _startedFor;
+    private long _startedFor = -1;
+    private readonly SnapshotPool<Behavior> _scriptLists = new();
+    private readonly SnapshotPool<ScriptRun> _runLists = new();
+    private long _steps;
     private double _tickSeconds;
 
     // What physics calls back, made once rather than every frame.
@@ -252,6 +257,8 @@ public sealed partial class Game
         _tickSeconds = seconds;
         // What moves in it remembers where it was as it began, to be drawn between the two.
         Scene.Step = Time.Frame + 1;
+        Scene.Steps++;
+        _steps++;
         if (Profiler is { } profiler)
         {
             StepTimed(profiler);
@@ -442,29 +449,42 @@ public sealed partial class Game
     {
         _running = Active<Behavior>();
         var running = _running.Items;
-        if (running != _hooksFor)
+        var serial = _running.Serial;
+        if (serial == 0 || serial != _hooksFor)
         {
+            var (updating, fixedUpdating, lateUpdating) = (_updating, _fixedUpdating, _lateUpdating);
+            var (updatingRuns, fixedUpdatingRuns, lateUpdatingRuns) = (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns);
             (_updating, _fixedUpdating, _lateUpdating) = (With(running, BehaviorHooks.Update), With(running, BehaviorHooks.FixedUpdate),
                 With(running, BehaviorHooks.LateUpdate));
             (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns) = (RunsOf(_updating), RunsOf(_fixedUpdating), RunsOf(_lateUpdating));
-            _hooksFor = running;
+            // The lists of their own that were replaced (not the snapshot itself, when every script had the step).
+            foreach (var old in (ReadOnlySpan<Behavior[]>)[updating, fixedUpdating, lateUpdating])
+            {
+                if (old != _hooksFrom && old != _updating && old != _fixedUpdating && old != _lateUpdating)
+                    _scriptLists.Retire(old, _steps);
+            }
+
+            _runLists.Retire(updatingRuns, _steps);
+            _runLists.Retire(fixedUpdatingRuns, _steps);
+            _runLists.Retire(lateUpdatingRuns, _steps);
+            (_hooksFor, _hooksFrom) = (serial, running);
         }
 
         // A big scene's scripts started long ago: unless it's changed, there's nothing to look for.
-        if (running == _startedFor)
+        if (serial != 0 && serial == _startedFor)
             return;
-        _startedFor = null;
+        _startedFor = -1;
         foreach (var behavior in running)
         {
             if (!behavior.IsStarted)
                 behavior.RunStart(this);
         }
 
-        _startedFor = running;
+        _startedFor = serial;
     }
 
     // Those of `running` whose type has `hook`, in the same order.
-    private static Behavior[] With(Behavior[] running, BehaviorHooks hook)
+    private Behavior[] With(Behavior[] running, BehaviorHooks hook)
     {
         var count = 0;
         foreach (var behavior in running)
@@ -475,7 +495,7 @@ public sealed partial class Game
 
         if (count == running.Length)
             return running;
-        var with = new Behavior[count];
+        var with = _scriptLists.Rent(count, _steps);
         count = 0;
         foreach (var behavior in running)
         {
@@ -524,13 +544,13 @@ public sealed partial class Game
     // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
     private void RunTrails()
     {
-        foreach (var trail in Scene.Running<Trail>())
+        foreach (var trail in Scene.RunningNow<Trail>())
             trail.Advance(Time.Delta);
     }
 
     private void RunAnimatedTiles()
     {
-        foreach (var tilemap in Scene.Running<Tilemap>())
+        foreach (var tilemap in Scene.RunningNow<Tilemap>())
         {
             if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
                 tilemap.AnimationTime += Time.Delta;
@@ -539,13 +559,13 @@ public sealed partial class Game
 
     private void RunAnimations()
     {
-        foreach (var animation in Scene.Running<Animation>())
+        foreach (var animation in Scene.RunningNow<Animation>())
             animation.Advance(Time.Delta);
     }
 
     private void RunParticles()
     {
-        foreach (var emitter in Scene.Running<ParticleEmitter>())
+        foreach (var emitter in Scene.RunningNow<ParticleEmitter>())
         {
             emitter.Advance(Time.Delta, Physics.Gravity);
             if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
@@ -555,7 +575,7 @@ public sealed partial class Game
 
     private void RunCameraShake()
     {
-        foreach (var camera in Scene.Active<Camera>())
+        foreach (var camera in Scene.ActiveNow<Camera>())
         {
             camera.AdvanceShake(Time.UnscaledDelta);
             camera.AdvanceAmbient(Time.UnscaledDelta);

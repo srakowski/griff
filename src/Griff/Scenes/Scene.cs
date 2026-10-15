@@ -86,22 +86,44 @@ public sealed class Scene
 
     public IReadOnlyList<Entity> Roots => _roots;
 
-    /// <summary>Every entity in the scene, depth first, as it is now: adding or removing entities while going through it is safe.</summary>
+    /// <summary>
+    /// Every entity in the scene, depth first, as it is now: adding or removing entities while going through it is safe, and
+    /// it doesn't change, however long it's kept.
+    /// </summary>
     public IReadOnlyList<Entity> Entities
+    {
+        get
+        {
+            var entities = EntitiesNow;
+            _entitiesKept = true;
+            return entities;
+        }
+    }
+
+    // The same, for the engine to go through in the step it asked in (see SnapshotPool): it's filled again once it has been
+    // replaced, unless it was also handed out to be kept.
+    internal Entity[] EntitiesNow
     {
         get
         {
             if (_entities is not null)
                 return _entities;
-            var entities = new Entity[_byId.Count];
+            var entities = _entityArrays.Rent(_byId.Count, Steps);
             var count = 0;
             foreach (var root in _roots)
                 Collect(root, entities, ref count);
             _ordered = true;
             _nextOrder = count;
+            _entitiesKept = false;
             return _entities = entities;
         }
     }
+
+    private readonly SnapshotPool<Entity> _entityArrays = new();
+    private bool _entitiesKept;
+
+    // How many steps the game has taken on this scene: arrays replaced two steps ago can be filled again (see SnapshotPool).
+    internal long Steps;
 
     // Depth first, numbering them as it goes.
     private static void Collect(Entity entity, Entity[] into, ref int count)
@@ -129,7 +151,7 @@ public sealed class Scene
     public Entity? FindNamed(string name, bool activeOnly = false)
     {
         Entity? first = null;
-        foreach (var entity in Entities)
+        foreach (var entity in EntitiesNow)
         {
             if (entity.Name != name || (activeOnly && !entity.IsActive))
                 continue;
@@ -147,19 +169,28 @@ public sealed class Scene
     /// <summary>
     /// Every component of type <typeparamref name="T"/> in the scene, in hierarchy order. A base type or interface finds
     /// every kind of it (<c>All&lt;Collider&gt;()</c> finds box and circle colliders). Kept as the scene changes, so asking
-    /// every frame is cheap; see <see cref="ComponentList{T}"/>.
+    /// every frame is cheap; see <see cref="ComponentList{T}"/>. It doesn't change, however long it's kept.
     /// </summary>
-    public ComponentList<T> All<T>() where T : class => new(IndexOf<T>().All());
+    public ComponentList<T> All<T>() where T : class => IndexOf<T>().All(keep: true);
 
     /// <summary>Like <see cref="All{T}"/>, only those on active entities (see <see cref="Entity.IsActive"/>): what the game runs and draws.</summary>
-    public ComponentList<T> Active<T>() where T : class => new(IndexOf<T>().Active(ActiveVersion));
+    public ComponentList<T> Active<T>() where T : class => IndexOf<T>().Active(ActiveVersion, keep: true);
 
     /// <summary>
     /// Like <see cref="Active{T}"/>, less those on paused entities (see <see cref="Entity.IsPaused"/>): what the game moves on
     /// each step. The same list as Active while nothing is paused.
     /// </summary>
     public ComponentList<T> Running<T>() where T : class =>
-        _paused.Count == 0 ? Active<T>() : new(IndexOf<T>().Running(ActiveVersion, PauseVersion));
+        _paused.Count == 0 ? Active<T>() : IndexOf<T>().Running(ActiveVersion, PauseVersion, keep: true);
+
+    // The same lists for the engine, which goes through them in the step it asked in and doesn't keep them: once replaced,
+    // they're filled again two steps later (see SnapshotPool), so enabling, disabling and destroying make no garbage.
+    internal ComponentList<T> AllNow<T>() where T : class => IndexOf<T>().All(keep: false);
+
+    internal ComponentList<T> ActiveNow<T>() where T : class => IndexOf<T>().Active(ActiveVersion, keep: false);
+
+    internal ComponentList<T> RunningNow<T>() where T : class =>
+        _paused.Count == 0 ? ActiveNow<T>() : IndexOf<T>().Running(ActiveVersion, PauseVersion, keep: false);
 
     // The entities held still with everything inside them (see Entity.IsPaused), and a number that changes whenever they do.
     private readonly List<Entity> _paused = [];
@@ -210,7 +241,7 @@ public sealed class Scene
     {
         if (!_indexes.TryGetValue(typeof(T), out var index))
         {
-            index = new ComponentIndex<T>();
+            index = new ComponentIndex<T>(this);
             _indexes.Add(typeof(T), index);
             // The component types it lists learn of it; the rest are as they were (worked out afresh, a scene's first
             // step, asking for a hundred kinds, spent most of its time and garbage here).
@@ -234,7 +265,7 @@ public sealed class Scene
     internal void Order()
     {
         if (!_ordered)
-            _ = Entities;
+            _ = EntitiesNow;
     }
 
     private void BringIndexesUpToDate()
@@ -253,13 +284,13 @@ public sealed class Scene
             }
             else if (index.Stale)
             {
-                index.Compact(this);
+                index.Compact();
             }
         }
 
         if (dirty is null)
             return;
-        foreach (var entity in Entities)
+        foreach (var entity in EntitiesNow)
         {
             foreach (var component in entity.ComponentList)
             {
@@ -311,7 +342,7 @@ public sealed class Scene
         foreach (var index in _indexes.Values)
         {
             if (index.Stale && !index.Dirty)
-                index.Compact(this);
+                index.Compact();
         }
     }
 
@@ -331,13 +362,7 @@ public sealed class Scene
         if (entity.Parent is not null)
             throw new InvalidOperationException($"\"{entity.Name}\" still has a parent.");
         EnsureInScene(parent);
-
-        foreach (var e in entity.SelfAndDescendants())
-        {
-            if (_byId.ContainsKey(e.Id))
-                throw new InvalidOperationException($"An entity with id {e.Id} is already in the scene.");
-        }
-
+        ThrowIfIdTaken(entity);
         ComponentJoining();
 
         // Added at the very end of the hierarchy (as spawning does), it goes on the end of each list; anywhere else, the
@@ -345,38 +370,51 @@ public sealed class Scene
         var atEnd = parent is null && (index is null || index >= _roots.Count);
         _ordered &= atEnd;
         Insert(entity, parent, index);
-        foreach (var e in entity.SelfAndDescendants())
+        Joined(entity, atEnd);
+        Changed();
+    }
+
+    private void ThrowIfIdTaken(Entity entity)
+    {
+        if (_byId.ContainsKey(entity.Id))
+            throw new InvalidOperationException($"An entity with id {entity.Id} is already in the scene.");
+        foreach (var child in entity.ChildList)
+            ThrowIfIdTaken(child);
+    }
+
+    // `entity` and what's inside it, depth first, have joined the scene.
+    private void Joined(Entity entity, bool atEnd)
+    {
+        entity.Scene = this;
+        entity.ForgetActive();
+        if (entity.NetFlags != NetFlags.None)
+            NetFlagged++;
+        // Something new is drawn where it starts out, not glided there from wherever it was made.
+        entity.Transform.Jumped();
+        _byId.Add(entity.Id, entity);
+        if (_ordered)
+            entity.Order = _nextOrder++;
+        foreach (var component in entity.ComponentList)
         {
-            e.Scene = this;
-            e.ForgetActive();
-            if (e.NetFlags != NetFlags.None)
-                NetFlagged++;
-            // Something new is drawn where it starts out, not glided there from wherever it was made.
-            e.Transform.Jumped();
-            _byId.Add(e.Id, e);
-            if (_ordered)
-                e.Order = _nextOrder++;
-            foreach (var component in e.ComponentList)
+            // A sprite flashed before it was added flashes here.
+            (component as Sprite)?.ListEffects();
+            foreach (var list in IndexesFor(component))
             {
-                // A sprite flashed before it was added flashes here.
-                (component as Sprite)?.ListEffects();
-                foreach (var list in IndexesFor(component))
+                if (atEnd && !list.Dirty)
                 {
-                    if (atEnd && !list.Dirty)
-                    {
-                        list.Items.Add(component);
-                        list.Changed();
-                    }
-                    else
-                    {
-                        list.Dirty = true;
-                        _indexesChanged = true;
-                    }
+                    list.Items.Add(component);
+                    list.Changed();
+                }
+                else
+                {
+                    list.Dirty = true;
+                    _indexesChanged = true;
                 }
             }
         }
 
-        Changed();
+        foreach (var child in entity.ChildList)
+            Joined(child, atEnd);
     }
 
     /// <summary>Removes <paramref name="entity"/> and its descendants. They keep their own hierarchy.</summary>
@@ -386,17 +424,21 @@ public sealed class Scene
         EnsureInScene(entity);
         Vacate(entity);
         Detach(entity);
-        foreach (var e in entity.SelfAndDescendants())
-        {
-            e.Scene = null;
-            if (e.NetFlags != NetFlags.None)
-                NetFlagged--;
-            _byId.Remove(e.Id);
-            foreach (var component in e.ComponentList)
-                ComponentLeft(component);
-        }
-
+        Left(entity);
         Changed();
+    }
+
+    // `entity` and what's inside it have left the scene.
+    private void Left(Entity entity)
+    {
+        entity.Scene = null;
+        if (entity.NetFlags != NetFlags.None)
+            NetFlagged--;
+        _byId.Remove(entity.Id);
+        foreach (var component in entity.ComponentList)
+            ComponentLeft(component);
+        foreach (var child in entity.ChildList)
+            Left(child);
     }
 
     /// <summary>Moves <paramref name="entity"/> under a new parent (or to the root) at <paramref name="index"/>.</summary>
@@ -410,20 +452,25 @@ public sealed class Scene
 
         Detach(entity);
         Insert(entity, newParent, index);
-        foreach (var e in entity.SelfAndDescendants())
-        {
-            // Its position now means somewhere else (it's from the new parent): drawn where it is, not glided.
-            e.Transform.Jumped();
-            foreach (var component in e.ComponentList)
-                ComponentMoved(component);
-        }
-
+        Moved(entity);
         _ordered = false;
         Changed();
     }
 
+    private void Moved(Entity entity)
+    {
+        // Its position now means somewhere else (it's from the new parent): drawn where it is, not glided.
+        entity.Transform.Jumped();
+        foreach (var component in entity.ComponentList)
+            ComponentMoved(component);
+        foreach (var child in entity.ChildList)
+            Moved(child);
+    }
+
     private void Changed()
     {
+        if (!_entitiesKept)
+            _entityArrays.Retire(_entities, Steps);
         _entities = null;
         Version++;
         ActiveVersion++;

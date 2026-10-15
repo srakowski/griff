@@ -114,7 +114,7 @@ public sealed class WalkArea : Component, IPointOutline, IDrawable
     public static float ScaleIn(Scene scene, Vector2 point)
     {
         WalkArea? first = null;
-        foreach (var area in scene.Active<WalkArea>())
+        foreach (var area in scene.ActiveNow<WalkArea>())
         {
             if (!area.ScalesDepth)
                 continue;

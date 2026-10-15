@@ -36,7 +36,7 @@ public sealed partial class Game
     {
         var groups = _pausing;
         groups.Clear();
-        foreach (var group in Scene.Active<PauseGroup>())
+        foreach (var group in Scene.ActiveNow<PauseGroup>())
         {
             var paused = group.Paused;
             if (paused)

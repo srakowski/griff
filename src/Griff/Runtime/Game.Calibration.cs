@@ -53,7 +53,7 @@ public sealed partial class Game
         }
 
         // Every one, shown or not, says the offset in use, so a button opening one can show it.
-        foreach (var calibration in Scene.All<Calibration>())
+        foreach (var calibration in Scene.AllNow<Calibration>())
             calibration.Current = calibration.Measures == CalibrationKind.Visual ? VisualOffset : AudioOffset;
     }
 
@@ -179,7 +179,7 @@ public sealed partial class Game
             Audio.StopMusic();
             if (resume && calibration.Resume is { } music)
             {
-                var playing = Scene.Active<BackgroundMusic>().FirstOrDefault(m => string.Equals(m.Music?.Trim(), music.Trim(), StringComparison.OrdinalIgnoreCase));
+                var playing = Scene.ActiveNow<BackgroundMusic>().FirstOrDefault(m => string.Equals(m.Music?.Trim(), music.Trim(), StringComparison.OrdinalIgnoreCase));
                 Audio.PlayMusic(music, playing is null ? 0.6f : Math.Clamp(playing.Volume, 0, 1), playing?.Loop ?? true);
             }
         }

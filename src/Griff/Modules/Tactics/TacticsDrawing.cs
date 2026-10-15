@@ -18,7 +18,7 @@ internal static class TacticsDrawing
             return;
         if (view.Controls is not { } controls)
             return;
-        var units = game.Scene.Active<TacticsUnit>();
+        var units = game.Scene.ActiveNow<TacticsUnit>();
         if (units.Count > 0)
             Draw(view, frame, controls, units);
     }

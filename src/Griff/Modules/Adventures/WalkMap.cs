@@ -29,7 +29,7 @@ internal sealed class WalkMap
     public static WalkMap Of(Scene scene)
     {
         var map = new WalkMap();
-        foreach (var area in scene.Active<WalkArea>())
+        foreach (var area in scene.ActiveNow<WalkArea>())
         {
             if (area.GivenPoints.Count < 3)
                 continue;

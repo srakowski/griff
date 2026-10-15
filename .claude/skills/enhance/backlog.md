@@ -24,6 +24,18 @@ on Windows.
 - [ ] Add hinge joints, and let welded contraptions turn.
 - [ ] Make ropes swing and sag.
 
+### Data and balance
+
+At the user's request (2026-10-14), before the Platforms block's Xbox exports (after Web): a game's items, spells,
+enemies, races, classes, loot and level curves live in tables edited like a spreadsheet, and their balance is tested
+by simulating thousands of plays, not by guessing. Tables are game data like components: found and edited by agents
+through the scene and asset tools, read by scripts, and usable by no-code components.
+
+- [ ] Add data tables in one go: a Table asset (named rows, typed columns: number, whole number, text, yes/no, a choice from a list, dice like "2d6+3", a sprite, sound or prefab, and a row of another table), edited in a spreadsheet-like panel (sort, filter, fill down, add and reorder rows and columns, undo, and copy and paste with Excel and Google Sheets), saved as a readable text file and imported or exported as CSV; scripts read rows typed by name (`Tables.Get("Spells", "Fireball")["Damage"]`, or a class whose properties are the columns), components can take their values from a row (an enemy's Health and Damage from the Enemies table), and a change made while playing applies at once.
+- [ ] Add formulas and curves to tables in one go: a column can be a formula of the row's other columns and of other tables (`=Base * 1.15 ^ (Level - 1)`, a sum or lookup), a level-progression table can be generated from a curve (linear, power, exponential, an S-curve or points drawn by hand) for XP to the next level, stats and prices, and the panel charts any column over the rows or over the levels, with dice columns showing their average, range and spread.
+- [ ] Add balance simulations in one go: run a matchup thousands of times headless and seeded, with no code for the common cases (each row of one table against each row of another: a hero of each class at each level against each enemy, using the game's own damage, health and dice) or a script for the rest; the results are a table and charts (win rate, turns or seconds to win, damage dealt, gold and XP over a run), a matrix of every pair coloured by how one-sided it is, and a sweep that changes a column by steps and shows what it does, so outliers and dead levels stand out; agents run them and read the results through the MCP.
+- [ ] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level.
+
 ### Platforms
 
 - [ ] Make the game player open and draw in its own window without WPF.

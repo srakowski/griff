@@ -1,0 +1,57 @@
+title: Chart recording
+intro: Chart a song by tapping along to it, then tidy the notes on a timeline: snapped to the beat, your audio offset allowed for, every take one undo step.
+project: Empty | Chart Recording
+
+create: Note Lanes
+
+chapter: The Chart panel | Entity > Edit Chart
+say: Note Lanes play a chart, a table of notes. The Chart panel draws it on a timeline, over the song.
+menu: Entity > Edit Chart > Groove
+wait: 1
+expectnotes: Groove in Normal: 58 notes
+explain: chart:timeline | The timeline | A row for each lane, in its color, the bars across the top, and the song's shape behind the notes. The other difficulties show faintly behind.
+explain: chart:timing | The lanes' timing | The tempo and the first beat come from the lanes' own beat clock, so what you chart is exactly what they'll judge.
+
+chapter: Record a take | Record, tap along, stop
+chartset: difficulty = Hard
+chartset: snap = 1/16
+chartset: mode = Replace
+explain: chart:mode | Overdub or replace | A take can go over the notes that are there, or in place of them.
+explain: chart:offset | Your offset | Taps count on the beat you heard. If your headphones are late, the offset from calibrating allows for it.
+chartset: playhead = 8
+say: Put the playhead at bar three and press Record. The song starts a bar early, so you're in time when it gets there. Then tap D, F, J and K along to it.
+click: chart:record
+notetap: 1 @ 8
+notetap: 2 @ 8.5
+notetap: 3 @ 9
+notetap: 4 @ 9.5 - 11
+notetap: 2 @ 11.5
+chartwait: 12.25
+click: chart:record
+expectnotes: Take 1: 5 notes in Hard
+expectnote: 8.5, 2, hold 0
+expectnote: 9.5, 4, hold 1.5
+say: Each tap landed on the sixteenth it was nearest, and the key held down became a hold. The whole take is one step of undo.
+
+chapter: Tidy it by hand | Click, drag, right-click
+noteclick: 10, 1
+expectnote: 10, 1
+notedrag: 10, 1 > 10.5, 2
+expectnote: 10.5, 2
+expectnote: none at 10, 1
+say: Click a lane to add a note on the grid, and drag one to move it.
+notedrag: 11, 4 > 12, 4
+expectnote: 9.5, 4, hold 2.5
+say: Drag a hold's end to stretch it.
+noteremove: 11.5, 2
+expectnote: none at 11.5, 2
+click: chart:undo
+expectnote: 11.5, 2
+say: Right-click takes a note out, and undo puts it back.
+
+chapter: Play it back | Play from here
+chartset: playhead = 8
+click: chart:play
+chartwait: 12
+click: chart:play
+say: Play goes from the playhead with a tick on every note, to hear how the chart sits on the music. The notes are rows of the Groove table, saved as you go, and in the running game at once.

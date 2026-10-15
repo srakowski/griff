@@ -1098,6 +1098,63 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => MoveSays().Contains(a, StringComparison.OrdinalIgnoreCase), 3000))
                     throw new InvalidOperationException($"The Move List says \"{MoveSays()}\", not \"{a}\".");
                 break;
+            case "chartset":
+                // "chartset: snap = 1/16", "chartset: metronome = true", "chartset: playhead = 8": set one of the Chart panel's
+                // settings with the real mouse and keyboard (the playhead by clicking the ruler).
+                var (chartSetting, chartValue) = Split2(a, '=');
+                await ui.ChartSet(chartSetting, chartValue);
+                break;
+            case "noteclick":
+                // "noteclick: 4.5, 3": click the Chart panel's timeline at beat 4.5 in lane 3 (adding a note, or picking it).
+                var noteClickAt = NoteAt(a);
+                await ui.NoteClick(noteClickAt.Beat, noteClickAt.Lane);
+                break;
+            case "noteremove":
+                // "noteremove: 4.5, 3": right-click the note there, taking it out.
+                var noteRemoveAt = NoteAt(a);
+                await ui.NoteClick(noteRemoveAt.Beat, noteRemoveAt.Lane, right: true);
+                break;
+            case "notedrag":
+                // "notedrag: 4.5, 3 > 5, 2": drag on the timeline: a note moved, a hold's end dragged, or a new hold drawn.
+                var (noteDragFrom, noteDragTo) = Split2(a, '>');
+                await ui.NoteDrag(NoteAt(noteDragFrom), NoteAt(noteDragTo));
+                break;
+            case "notetap":
+                // "notetap: 2 @ 9", "notetap: 1 @ 10 - 11.5": while a take records, press lane 2's key as beat 9 is heard
+                // (and hold it to 11.5).
+                var (tapLane, tapWhen) = Split2(a, '@');
+                var tapBeats = tapWhen.Split(" - ", 2, StringSplitOptions.TrimEntries);
+                await ui.NoteTap(int.Parse(tapLane, CultureInfo.InvariantCulture), double.Parse(tapBeats[0], CultureInfo.InvariantCulture),
+                    tapBeats.Length > 1 ? double.Parse(tapBeats[1], CultureInfo.InvariantCulture) : double.NaN);
+                break;
+            case "chartwait":
+                // "chartwait: 12": wait until the Chart panel's song has been heard to beat 12 (or stops).
+                await DemoUi.WaitForBeat(double.Parse(a, CultureInfo.InvariantCulture));
+                break;
+            case "expectnotes":
+                // What the Chart panel says (its summary of the difficulty, and what the last thing done said) has this in it.
+                string ChartSays() => $"{DemoUi.Chart.Summary} | {DemoUi.Chart.Message}";
+                if (!await Until(() => ChartSays().Contains(a, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"The Chart panel says \"{ChartSays()}\", not \"{a}\".");
+                break;
+            case "expectnote":
+                // "expectnote: 9, 4, hold 1.5": the difficulty has a note at beat 9 in lane 4, held 1.5 beats ("hold 0" for a
+                // tap; leave it out for either); "expectnote: none at 4.5, 3": it has none there.
+                var noneThere = a.StartsWith("none at ", StringComparison.OrdinalIgnoreCase);
+                var noteParts = (noneThere ? a[8..] : a).Split(',', StringSplitOptions.TrimEntries);
+                var noteAt = NoteAt($"{noteParts[0]}, {noteParts[1]}");
+                double? wantHold = noteParts.Length > 2 ? double.Parse(noteParts[2].Replace("hold", "").Trim(), CultureInfo.InvariantCulture) : null;
+                bool NoteIsThere()
+                {
+                    var row = DemoUi.Chart.NoteAt(noteAt.Beat, noteAt.Lane);
+                    if (noneThere)
+                        return row is null;
+                    return row is not null && (wantHold is not { } hold || DemoUi.Chart.Rows.Any(r => r.Row == row && Math.Abs(r.Note.Hold - hold) < 1e-3));
+                }
+
+                if (!await Until(NoteIsThere, 3000))
+                    throw new InvalidOperationException($"Expected {(noneThere ? "no note" : "a note")} at {a}, but the chart has: {string.Join("; ", DemoUi.Chart.NoteLines.Take(40))}");
+                break;
             case "expectpreview":
                 // The Dialogue Editor's preview of the stage, in words, has this in it.
                 await DemoUi.WaitForDialogueEditor();
@@ -1863,6 +1920,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "clips" => DemoUi.ClipsPart(name),
             "dialogue" => DemoUi.DialoguePart(name),
             "moves" => DemoUi.MovesPart(name),
+            "chart" => DemoUi.ChartPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 DemoUi.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "color" => ui.ColorPart(name),
@@ -1880,7 +1938,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 
@@ -2005,6 +2063,17 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     private static string ClipText(string text) => text.Replace("\\t", "\t", StringComparison.Ordinal).Replace("\\n", "\r\n", StringComparison.Ordinal);
 
     // "15, 30000" as a level and a value on the Tables panel's chart.
+    // "4.5, 3": a beat and a lane (from 1) on the Chart panel's timeline.
+    private static (double Beat, int Lane) NoteAt(string text)
+    {
+        var parts = text.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 2
+            && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var beat)
+            && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var lane)
+            ? (beat, lane)
+            : throw new FormatException($"Write a note on the timeline as <beat>, <lane>, not \"{text}\".");
+    }
+
     private static (double Level, double Value) ChartAt(string text)
     {
         var parts = text.Split(',', StringSplitOptions.TrimEntries);

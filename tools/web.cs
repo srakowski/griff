@@ -344,7 +344,15 @@ async Task RhythmInput(GameCheck game)
         .OrderBy(n => n.Beat).ThenBy(n => n.Lane).ToList();
     async Task<double> Heard() => double.Parse((await game.Probe("music")).Split('|')[1], CultureInfo.InvariantCulture);
     async Task<int> Output(string name) => int.Parse(await game.Probe($"output:{Lanes}.{name}"), CultureInfo.InvariantCulture);
-    async Task<int> Hits() => await Output("Perfects") + await Output("Greats") + await Output("Goods");
+
+    // How each note went, two marks a note in the chart's order (the press, then a hold's end): . not yet, P G O hits, M a
+    // miss. Each note tried is judged by its own marks rather than by the score's counts going up since it was tried: a page
+    // held still a moment (a busy machine) can judge the note tried before it late, inside the next one's count.
+    async Task<string> Played() => await game.Probe($"played:{Lanes}");
+    static bool IsHit(char mark) => mark is 'P' or 'G' or 'O';
+    string Marks(string played, int note) => note * 2 + 1 < played.Length ? played.Substring(note * 2, 2) : "??";
+    async Task<bool> Hit(int note, bool end = false) => (await Played()) is var played && note * 2 + 1 < played.Length &&
+        IsHit(played[note * 2]) && (!end || IsHit(played[note * 2 + 1]));
 
     // Waits until the music heard reaches `beat` (two a second), then does `press`. It asks the page what's been heard as it
     // goes, so a page that stalls a moment (a busy machine) is waited for, and counts the last few hundredths itself.
@@ -405,6 +413,7 @@ async Task RhythmInput(GameCheck game)
     // isn't a hit is said and the next one like it tried, until the song runs out.
     var keyHits = new List<string>();
     string? chordHit = null, holdHit = null;
+    var tried = new HashSet<int>();
     var free = await Heard() * 2 + 1.5;
     foreach (var beat in notes.Select(n => n.Beat).Distinct().Order().ToList())
     {
@@ -413,49 +422,65 @@ async Task RhythmInput(GameCheck game)
         var here = notes.Where(n => n.Beat == beat).ToList();
         if (beat < free || beat * 0.5 - await Heard() < 0.35)
             continue;
-        var hits = await Hits();
         if (holdHit is null && here is [{ Hold: > 0 } hold])
         {
+            var index = notes.IndexOf(hold);
+            tried.Add(index);
             free = beat + hold.Hold + 1;
             await Before(beat);
             await Fingers([hold.Lane], down: true, beat);
             var holding = Stopwatch.StartNew();
-            while (await Hits() < hits + 2 && holding.Elapsed < TimeSpan.FromSeconds(hold.Hold * 0.5 + 3))
+            while (!await Hit(index, end: true) && holding.Elapsed < TimeSpan.FromSeconds(hold.Hold * 0.5 + 3))
                 await Task.Delay(50);
             await Fingers([hold.Lane], down: false);
             await Task.Delay(150);
-            if (await Hits() == hits + 2)
+            if (await Hit(index, end: true))
                 holdHit = $"a finger held on lane {hold.Lane + 1} from beat {beat} for {hold.Hold} beats hit its start and its end (pressed {double.Parse(await game.Probe($"output:{Lanes}.Timing"), CultureInfo.InvariantCulture).ToString("+0;-0;0", CultureInfo.InvariantCulture)} ms from its beat)";
             else
-                Console.WriteLine($"  touch: the hold on beat {beat} was {await Hits() - hits} hits ({await LastJudged()}); trying the next");
+                Console.WriteLine($"  touch: the hold on beat {beat} went {Marks(await Played(), index)} ({await LastJudged()}); trying the next");
         }
         else if (chordHit is null && here is [{ Hold: 0 } first, { Hold: 0 } second])
         {
+            var (firstNote, secondNote) = (notes.IndexOf(first), notes.IndexOf(second));
+            tried.UnionWith([firstNote, secondNote]);
             free = beat + 1;
             await Before(beat);
             await Fingers([first.Lane, second.Lane], down: true, beat);
             await Task.Delay(60);
             await Fingers([first.Lane, second.Lane], down: false);
             await Task.Delay(150);
-            if (await Hits() == hits + 2)
+            if (await Hit(firstNote) && await Hit(secondNote))
                 chordHit = $"two fingers at once on lanes {first.Lane + 1} and {second.Lane + 1} hit the chord on beat {beat}: {await LastJudged()}";
             else
-                Console.WriteLine($"  touch: the chord on beat {beat} was {await Hits() - hits} hits ({await LastJudged()}); trying the next");
+                Console.WriteLine($"  touch: the chord on beat {beat} went {Marks(await Played(), firstNote)} and {Marks(await Played(), secondNote)} ({await LastJudged()}); trying the next");
         }
         else if (keyHits.Count < 3 && here is [{ Hold: 0 } note])
         {
+            var index = notes.IndexOf(note);
+            tried.Add(index);
             free = beat + 1.5;
             await At(beat, () => game.Press(keys[note.Lane]));
             await Task.Delay(150);
-            if (await Hits() == hits + 1)
+            if (await Hit(index))
                 keyHits.Add(await LastJudged());
             else
-                Console.WriteLine($"  keys: {keys[note.Lane]} on beat {beat} wasn't a hit ({await LastJudged()}); trying the next");
+                Console.WriteLine($"  keys: {keys[note.Lane]} on beat {beat} went {Marks(await Played(), index)} ({await LastJudged()}); trying the next");
         }
     }
 
     if (keyHits.Count < 3 || chordHit is null || holdHit is null)
         throw new CheckFailed($"the song ran out with {keyHits.Count} of 3 notes hit with the keys, {(chordHit is null ? "no" : "a")} chord and {(holdHit is null ? "no" : "a")} hold");
+
+    // Each press counted once: the score's counts are as many as the notes marked hit (none counted twice).
+    await Task.Delay(300);
+    var marked = await Played();
+    var hitNotes = Enumerable.Range(0, marked.Length / 2).Where(i => IsHit(marked[i * 2])).ToList();
+    var hitMarks = marked.Count(IsHit);
+    var counted = await Output("Perfects") + await Output("Greats") + await Output("Goods");
+    if (counted != hitMarks)
+        throw new CheckFailed($"{counted} hits were counted for {hitMarks} notes marked hit: a press counted twice ({marked})");
+    if (hitNotes.Except(tried).ToList() is { Count: > 0 } untried)
+        Console.WriteLine($"  note: notes {string.Join(", ", untried)} were hit without being tried (a press held up by the page taken by the next note in its lane)");
     Console.WriteLine($"  keys: notes pressed on the beat as Web Audio plays it were {string.Join(", ", keyHits)}");
     Console.WriteLine($"  touch: {chordHit}");
     Console.WriteLine($"  touch: {holdHit}");

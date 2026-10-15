@@ -110,7 +110,8 @@ public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISe
 
     protected override Entity? InsideOf(Entity? selected) => preset.InsideOf(selected);
 
-    // The pictures it uses go into Assets first, where they aren't already.
+    // The pictures, sounds and tables it uses go into Assets first, where they aren't already, and what keeps them loaded
+    // (the tables) takes them in at once.
     protected override void BeforeCreate()
     {
         if (Project?.AssetsPath is not { } assets)
@@ -122,6 +123,7 @@ public sealed class PresetCommand(EntityPreset preset, IWorkspace workspace, ISe
                 continue;
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.WriteAllBytes(file, bytes);
+            AssetWritten(path);
         }
     }
 }
@@ -185,6 +187,9 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
 
     /// <summary>The open project.</summary>
     protected Griff.Projects.Project? Project => workspace.Project;
+
+    /// <summary>Says a file in Assets (its path there) was written, to what keeps it loaded (the tables).</summary>
+    protected void AssetWritten(string assetPath) => workspace.AssetChanged(assetPath);
 
     /// <summary>Done before the entity is made, e.g. to put the pictures it uses into Assets.</summary>
     protected virtual void BeforeCreate()

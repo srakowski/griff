@@ -104,7 +104,7 @@ internal static partial class SnapshotRunner
         await Task.Delay(600);
         checks.Add($"door opens: {(!game.Find("Gate Wall")!.IsEnabled ? "ok" : "FAILED")}");
         game.Find("Player")!.Transform.Position = new Vector3(12, -6.6f, 0);
-        game.Tools!.Selected = 4;
+        game.Tools!.Selected = 5;
         await Task.Delay(1500);
         Capture("contraption-machine.png");
 

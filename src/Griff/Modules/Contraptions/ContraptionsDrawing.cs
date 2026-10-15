@@ -41,10 +41,18 @@ internal static class ContraptionsDrawing
 
     // ----- In the world -----
 
-    // The thing being carried, and a line from a first click to the mouse while a weld, rope or wire waits for its other end.
+    // The thing being carried, a line from a first click to the mouse while a weld, hinge, rope or wire waits for its other
+    // end, and a bolt on each hinge, so what's hinged where shows while building.
     private static IEnumerable<SpriteDraw> ToolDraws(Game game, float thickness)
     {
         var mouse = game.Input.MouseWorld;
+        foreach (var hinge in game.Scene.Active<HingeJoint>())
+        {
+            var at = hinge.WorldAnchor;
+            yield return Quad(at, new Vector2(thickness * 6), Neutral);
+            yield return Quad(at, new Vector2(thickness * 3), HudBack);
+        }
+
         if (game.Grabbed is { } held)
         {
             var center = Game.CenterOf(held);
@@ -135,6 +143,8 @@ internal static class ContraptionsDrawing
         SandboxTool.Spawn => $"Click to put down a {tools.CurrentProp}. Z undoes.",
         SandboxTool.Weld when game.ToolFirst is { } first => $"Click what to weld {first.Name} to. Right-click to cancel.",
         SandboxTool.Weld => "Click something, then what to weld it to.",
+        SandboxTool.Hinge when game.ToolFirst is { } first => $"Click what to hinge {first.Name} to, or somewhere empty to pin it there. Right-click to cancel.",
+        SandboxTool.Hinge => "Click something where it should turn, then what to hinge it to.",
         SandboxTool.Rope when game.ToolFirst is { } first => $"Click what to tie {first.Name} to. Right-click to cancel.",
         SandboxTool.Rope => "Click something, then what to tie it to.",
         SandboxTool.Wire when game.ToolFirst is { } first => $"Click what {first.Name} should drive. Right-click to cancel.",

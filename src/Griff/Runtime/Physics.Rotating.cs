@@ -13,7 +13,9 @@ namespace Griff.Runtime;
 // kicked. Bodies that have all stayed still together for a moment fall asleep and aren't worked out until something
 // disturbs them. Whatever else moves meets them as the turned boxes they are. A circle is a ball: it rolls, held back from
 // rolling at each point it touches by its rolling resistance (and, top-down, by the ground under the view), grips as hard
-// as it hits so its spin goes into its bounces, and passes over the joins between things laid end to end.
+// as it hits so its spin goes into its bounces, and passes over the joins between things laid end to end. A welded group
+// is one of them too, made of its members' shapes, turning round where its weight balances (when they all rotate); and
+// bodies on hinges are worked out with them (Physics.Joints.cs), even ones that don't turn.
 public sealed partial class Physics
 {
     // Shapes this close are touching: what a body rests on, is grounded on and reports bumping into.
@@ -44,6 +46,9 @@ public sealed partial class Physics
     // Moving slower than this (world units a second, the far end of it when it turns) counts as still.
     private const float SleepSpeed = 0.05f;
 
+    // Moving faster than this (world units a second, the far end of it when it turns), something wakes a sleeper it touches.
+    private const float WakeSpeed = 0.15f;
+
     // Seconds a body and everything turning that it touches stay still before they fall asleep.
     private const float SleepAfter = 0.5f;
 
@@ -55,6 +60,7 @@ public sealed partial class Physics
 
     // Walking into a turned box's slant no steeper than this (rise over run) walks up it.
     private const float TurnedStepSlope = 1.2f;
+
 
     // What one gathering of contacts found.
     private readonly List<Contact> _contacts = [];
@@ -69,6 +75,14 @@ public sealed partial class Physics
     private readonly List<Contact> _solving = [];
     private readonly List<float> _islandStill = [];
 
+    // What a sleeping welded group touches, all its members together; and while gathering one's contacts, the group, whose
+    // members don't meet each other.
+    private readonly List<Contact> _groupContacts = [];
+    private BodyGroup? _excluding;
+
+    // The scene's memory of its contacts, for the step.
+    private ContactMemory _memory = new();
+
     private float _widestMargin;
 
     // The step of every body that turns, together: asleep ones stay so unless disturbed; the rest (and the sleepers they
@@ -78,6 +92,7 @@ public sealed partial class Physics
         var movers = _movers;
         movers.Clear();
         _moverOf.Clear();
+        _memory = scene.Contacts;
         _sleepers.Clear();
         _solving.Clear();
         _widestMargin = 0;
@@ -92,37 +107,105 @@ public sealed partial class Physics
                 AddTurning(body, solids, dt, reported: false);
         }
 
-        // What each touches, or could reach this step; each pair once. A sleeper it touches wakes and joins in.
-        for (var i = 0; i < movers.Count; i++)
+        foreach (var group in _turningGroups)
         {
-            if (movers[i].Turns)
-                GatherFor(i, solids);
+            if (Asleep(group) && (scene.Vacated.Count > 0 || scene.VacatedEverywhere) && NearVacated(scene, group))
+                Wake(group);
+            if (Asleep(group) && KeepsSleeping(group, solids, onCollision))
+            {
+                foreach (var member in group.Bodies)
+                {
+                    if (member.Entity is { IsActive: true })
+                        _sleepers.Add(member);
+                }
+            }
+            else
+                AddGroup(group, solids, dt, reported: false);
         }
+
+        // What each touches, or could reach this step; each pair once. A sleeper it touches, or is hinged to, wakes and
+        // joins in.
+        WakeJoined(solids);
+        var gathered = 0;
+        do
+        {
+            for (; gathered < movers.Count; gathered++)
+            {
+                if (movers[gathered].Turns)
+                    GatherFor(gathered, solids);
+            }
+        }
+        while (WakeJoined(solids));
 
         Solve(scene.Contacts, dt);
         Remember(scene.Contacts);
 
-        for (var i = 0; i < movers.Count; i++)
+        // A body inside another that turns goes its own way in the world: it's moved after what it's in, from where it was.
+        var deepest = 0;
+        foreach (ref var mover in CollectionsMarshal.AsSpan(movers))
         {
-            if (movers[i].Turns)
+            if (!mover.Turns || mover.Group is not null)
+                continue;
+            mover.Depth = DepthOf(mover.Body);
+            if (mover.Depth == 0)
+                continue;
+            deepest = Math.Max(deepest, mover.Depth);
+            var entity = mover.Body.Entity!;
+            (mover.StartPosition, mover.StartTurn) = (PositionOf(entity), HingeJoint.TurnOf(entity));
+        }
+
+        for (var depth = 0; depth <= deepest; depth++)
+        {
+            for (var i = 0; i < movers.Count; i++)
+            {
+                var mover = movers[i];
+                if (!mover.Turns || mover.Depth != depth)
+                    continue;
+                if (mover.Group is not null)
+                {
+                    MoveGroup(i, solids);
+                    continue;
+                }
+
+                if (depth > 0)
+                {
+                    var entity = mover.Body.Entity!;
+                    Turn(solids, entity, null, HingeJoint.Wrap(mover.StartTurn - HingeJoint.TurnOf(entity)) * MathF.PI / 180);
+                    Translate(solids, entity, mover.StartPosition - PositionOf(entity));
+                }
+
                 Move(i, solids);
+            }
         }
 
         foreach (ref var mover in CollectionsMarshal.AsSpan(movers))
         {
             var body = mover.Body;
+            (mover.GroundUp, mover.Touched, mover.Ground) = (0.5f, null, null);
+            if (mover.Group is { } group)
+            {
+                foreach (var member in group.Bodies)
+                    (member.Ground, member.WallSide) = (null, 0);
+                continue;
+            }
+
             body.Velocity = mover.Velocity;
             if (!mover.Turns)
                 continue;
             body.Spin = mover.Spin * 180 / MathF.PI;
-            (body.Ground, body.WallSide, mover.GroundUp, mover.Touched) = (null, 0, 0.5f, null);
+            (body.Ground, body.WallSide) = (null, 0);
         }
 
         Touches(onCollision);
         foreach (ref var mover in CollectionsMarshal.AsSpan(movers))
         {
-            if (mover.Turns)
-                Settle(ref mover, dt);
+            if (!mover.Turns)
+                continue;
+            var motorized = _motorized.Count > 0 && _motorized.Contains(mover.Body);
+            if (mover.Group is null)
+                Settle(ref mover, dt, motorized);
+            else
+                SettleGroup(ref mover, dt, motorized);
         }
 
         FallAsleep();
@@ -144,6 +227,53 @@ public sealed partial class Physics
         return false;
     }
 
+    private static bool NearVacated(Scene scene, BodyGroup group)
+    {
+        foreach (var member in group.Bodies)
+        {
+            if (member.Entity is { IsActive: true } && member.Entity.GetComponent<Collider>() is not null && NearVacated(scene, member))
+                return true;
+        }
+
+        return false;
+    }
+
+    // Whether every member of a welded group is asleep.
+    private static bool Asleep(BodyGroup group)
+    {
+        var any = false;
+        foreach (var member in group.Bodies)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            if (!member.Asleep)
+                return false;
+            any = true;
+        }
+
+        return any;
+    }
+
+    private static void Wake(BodyGroup group)
+    {
+        foreach (var member in group.Bodies)
+            member.Asleep = false;
+    }
+
+    // A sleeper woken by what touches it, or is hinged to it, with everything welded to it: its place in the step's bodies.
+    private int Wake(Body body, Solids solids)
+    {
+        if (_groupOf.Count > 0 && _groupOf.TryGetValue(body, out var group) && !group.Still)
+        {
+            foreach (var member in group.Bodies)
+                _sleepers.Remove(member);
+            return AddGroup(group, solids, 0, reported: true);
+        }
+
+        _sleepers.Remove(body);
+        return AddTurning(body, solids, 0, reported: true);
+    }
+
     // A sleeping body stays asleep while nothing has moved it, pushed into it or taken away what's under it (anything else
     // that held it, taken out or turned off, has woken it already); it still rests on what it rests on and says what it
     // touches. False (and nothing done) if it should wake.
@@ -152,7 +282,7 @@ public sealed partial class Physics
         var entity = body.Entity!;
         if (body.Velocity != Vector2.Zero || body.Spin != 0)
             return false;
-        if (CarryOf(body) != Vector2.Zero)
+        if (CarryOf(body) != Vector2.Zero || _motorized.Count > 0 && _motorized.Contains(body))
             return false;
 
         var collider = entity.GetComponent<Collider>()!;
@@ -163,12 +293,26 @@ public sealed partial class Physics
         // knocks it, which wakes it.) What's under it may be one thing below it, or things either side of it it's wedged
         // between: a ball in a heap against a wall rests on a ball down to one side and the wall.
         var pull = body.FloatThisStep ? Vector2.Zero : Gravity * body.GravityScale;
+        if (!Held(_contacts, pull, Hinged(body), TurnsHere(body) ? body.Grip : 0, body))
+            return false;
+
+        Touching(body, onCollision, report: true);
+        return true;
+    }
+
+    // Whether what's been gathered (_contacts, or a group's) still holds a sleeper up against `pull`: nothing pushed into
+    // it, and something under it (or hanging it), or things either side of it it's wedged between, or bracing it up.
+    private bool Held(List<Contact> contacts, Vector2 pull, bool hung, float grip, Body? own)
+    {
         var up = pull == Vector2.Zero ? Vector2.Zero : -Vector2.Normalize(pull);
-        var held = up == Vector2.Zero;
+        var held = up == Vector2.Zero || hung;
         var (left, right) = (false, false);
-        foreach (var contact in _contacts)
+        foreach (var contact in contacts)
         {
-            if (contact.Gap < -WakeDepth)
+            // Something that holds still pushed into it: something new, not what it fell asleep wedged against (which it
+            // remembers). (A body moving into it wakes it as it touches it.)
+            if (contact.Gap < -WakeDepth && contact.Other is null &&
+                !_memory.TryGet(new ContactKey((own ?? contact.Own).Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), out _))
                 return false;
             var lifts = Vector2.Dot(contact.Normal, up);
             held |= lifts > 0.5f;
@@ -179,10 +323,65 @@ public sealed partial class Physics
             }
         }
 
-        if (!held && !(left && right) && !Braced(body, up))
+        return held || left && right || Braced(contacts, up, grip);
+    }
+
+    // A sleeping welded group stays asleep as one body does: nothing has moved any of it, pushed into it or taken away what's
+    // under it, all its members' contacts together.
+    private bool KeepsSleeping(BodyGroup group, Solids solids, Action<Entity, Entity> onCollision)
+    {
+        var members = group.Bodies;
+        var (mass, pull, hung, grip) = (0f, Vector2.Zero, false, 0f);
+        foreach (var member in members)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            if (member.Velocity != Vector2.Zero || member.Spin != 0 || CarryOf(member) != Vector2.Zero ||
+                _motorized.Count > 0 && _motorized.Contains(member))
+                return false;
+            var weight = Math.Max(0.01f, member.Mass);
+            mass += weight;
+            if (!member.FloatThisStep)
+                pull += Gravity * member.GravityScale * weight;
+            hung |= Hinged(member);
+            grip = MathF.Max(grip, group.Turns ? member.Grip : 0);
+        }
+
+        var contacts = _groupContacts;
+        contacts.Clear();
+        _excluding = group;
+        foreach (var member in members)
+        {
+            if (member.Entity is not { IsActive: true } entity || entity.GetComponent<Collider>() is not { IsTrigger: false } collider)
+                continue;
+            var shape = ShapeOf(member, collider);
+            Gather(member, collider, solids, solids.FilterOf(collider), shape.Footprint, TouchSkin, shape.Bottom, turning: false);
+            foreach (var contact in _contacts)
+                contacts.Add(contact with { Own = member });
+        }
+
+        _excluding = null;
+        if (mass <= 0 || !Held(contacts, pull / mass, hung, grip, null))
             return false;
 
-        Touching(body, onCollision, report: true);
+        // What it stands on, beside and touches, every member standing where any does.
+        var (up, report) = (0.5f, 0);
+        Entity? ground = null;
+        foreach (var member in members)
+            (member.Ground, member.WallSide) = (null, 0);
+        foreach (var contact in contacts)
+        {
+            if (contact.Normal.Y > up)
+                (up, ground) = (contact.Normal.Y, contact.Solid);
+            if (MathF.Abs(contact.Normal.X) > 0.9f)
+                contact.Own.WallSide = -MathF.Sign(contact.Normal.X);
+            if (report == 0 || contacts[report - 1].Solid != contact.Solid || contacts[report - 1].Own != contact.Own)
+                onCollision(contact.Own.Entity!, contact.Solid);
+            report++;
+        }
+
+        foreach (var member in members)
+            (member.Ground, member.IsGrounded) = (ground, ground is not null);
         return true;
     }
 
@@ -191,11 +390,11 @@ public sealed partial class Physics
     // wedged between a slant below it and a side slightly above its middle, as in a jumbled heap, is held). Only the way
     // up counts, not whether they're just so to keep it from turning: it fell asleep still, and this only asks whether
     // what held it is still there.
-    private bool Braced(Body body, Vector2 up)
+    private static bool Braced(List<Contact> contacts, Vector2 up, float grip)
     {
-        var lean = MathF.Atan(Math.Clamp(body.Grip, 0, 1));
+        var lean = MathF.Atan(Math.Clamp(grip, 0, 1));
         var (left, right) = (float.PositiveInfinity, float.NegativeInfinity);
-        foreach (var contact in _contacts)
+        foreach (var contact in contacts)
         {
             // How far round from straight up it pushes: positive to the left.
             var angle = MathF.Atan2(Cross(up, contact.Normal), Vector2.Dot(up, contact.Normal));
@@ -234,7 +433,7 @@ public sealed partial class Physics
     private Vector2 CarryOf(Body body)
     {
         if (!_grounds.TryGetValue(body, out var ground) || ground.Ground.Scene != body.Entity!.Scene || !ground.Ground.IsActive ||
-            ground.Ground.GetComponent<Body>() is { Rotates: true, HeldStill: false } under && !_groupOf.ContainsKey(under) && ground.Ground.MovesHere)
+            ground.Ground.GetComponent<Body>() is { HeldStill: false } under && Solves(under) && ground.Ground.MovesHere)
             return Vector2.Zero;
         return PositionOf(ground.Ground) - ground.Position;
     }
@@ -264,13 +463,16 @@ public sealed partial class Physics
         var reach = shape.Reach;
         var pull = body.FloatThisStep ? Vector2.Zero : Gravity * body.GravityScale;
         var velocity = body.Velocity;
-        var spin = Math.Clamp(body.Spin * MathF.PI / 180, -MaxSpin, MaxSpin);
+        // One hung on a hinge that doesn't rotate hangs upright.
+        var turns = body.Rotates;
+        var round = shape.Round && turns;
+        var spin = turns ? Math.Clamp(body.Spin * MathF.PI / 180, -MaxSpin, MaxSpin) : 0;
         // How far it could go this step (a ball turning doesn't bring its edge any nearer anything).
-        var margin = ((velocity + pull * dt).Length() + (shape.Round ? 0 : MathF.Abs(spin) * reach)) * dt + TouchSkin;
+        var margin = ((velocity + pull * dt).Length() + (round ? 0 : MathF.Abs(spin) * reach)) * dt + TouchSkin;
         _widestMargin = MathF.Max(_widestMargin, margin);
 
         // A ball with nothing pulling it (top-down) rolls on the ground under the view, slowed as on level ground.
-        var floor = shape.Round && pull == Vector2.Zero
+        var floor = round && pull == Vector2.Zero
             ? Math.Max(0, body.RollingResistance) * (Gravity != Vector2.Zero ? Gravity.Length() : DefaultGravity.Length())
             : 0;
 
@@ -280,12 +482,12 @@ public sealed partial class Physics
             Body = body,
             Collider = collider,
             Turns = true,
-            Round = shape.Round,
+            Round = round,
             Pull = pull,
             Floor = floor,
             Center = shape.Center,
             InverseMass = 1 / Math.Max(0.01f, body.Mass),
-            InverseInertia = 1 / shape.Inertia,
+            InverseInertia = turns ? 1 / shape.Inertia : 0,
             Velocity = velocity,
             Spin = spin,
             TurnCos = 1,
@@ -298,9 +500,169 @@ public sealed partial class Physics
             Island = index,
             Rode = rode,
             Reported = reported,
+            Moving = Moving(velocity, spin, reach),
         });
         _moverOf[body] = index;
         return index;
+    }
+
+    // Wakes a welded group (if asleep) and adds it to the step's as one body: its members' weights and shapes together, round
+    // where its weight balances, going and turning as their own speeds and spins add up to.
+    private int AddGroup(BodyGroup group, Solids solids, float dt, bool reported)
+    {
+        var members = group.Bodies;
+        var carry = Vector2.Zero;
+        Body? first = null;
+        foreach (var member in members)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            first ??= member;
+            if (member.Asleep)
+                (member.Asleep, member.StillFor) = (false, 0);
+            if (!reported)
+                (member.IsGrounded, member.Ground, member.WallSide) = (false, null, 0);
+            if (carry == Vector2.Zero)
+                carry = CarryOf(member);
+        }
+
+        // Ride along with whatever it stood on, if that has moved since.
+        var rode = carry != Vector2.Zero;
+        if (rode)
+        {
+            foreach (var member in members)
+            {
+                if (member.Entity is { IsActive: true } entity && IsTop(member, group))
+                    Translate(solids, entity, carry);
+            }
+        }
+
+        var (mass, weighted, momentum, pull) = (0f, Vector2.Zero, Vector2.Zero, Vector2.Zero);
+        foreach (var member in members)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            var weight = Math.Max(0.01f, member.Mass);
+            mass += weight;
+            weighted += member.CenterOfMass * weight;
+            momentum += member.Velocity * weight;
+            if (!member.FloatThisStep)
+                pull += Gravity * member.GravityScale * weight;
+        }
+
+        var center = weighted / mass;
+        var velocity = momentum / mass;
+        pull /= mass;
+
+        // How hard it is to turn round its middle, and how it's turning (from how its members go round it and spin).
+        var (inertia, turning, reach, thickness) = (0f, 0f, 0f, float.PositiveInfinity);
+        foreach (var member in members)
+        {
+            if (member.Entity is not { IsActive: true } entity)
+                continue;
+            var weight = Math.Max(0.01f, member.Mass);
+            var arm = member.CenterOfMass - center;
+            var own = Math.Max(1e-4f, weight / 6);
+            if (entity.GetComponent<Collider>() is { IsTrigger: false } collider)
+            {
+                var shape = ShapeOf(member, collider);
+                (own, reach, thickness) = (shape.Inertia, MathF.Max(reach, arm.Length() + shape.Reach), MathF.Min(thickness, shape.Thickness));
+            }
+            else
+                reach = MathF.Max(reach, arm.Length());
+
+            inertia += own + weight * arm.LengthSquared();
+            turning += own * member.Spin * MathF.PI / 180 + weight * Cross(arm, member.Velocity);
+        }
+
+        var spin = group.Turns ? Math.Clamp(turning / inertia, -MaxSpin, MaxSpin) : 0;
+        thickness = float.IsFinite(thickness) ? thickness : MathF.Max(1e-3f, reach);
+        var margin = ((velocity + pull * dt).Length() + MathF.Abs(spin) * reach) * dt + TouchSkin;
+        _widestMargin = MathF.Max(_widestMargin, margin);
+
+        var index = _movers.Count;
+        _movers.Add(new Mover
+        {
+            Body = first!,
+            Group = group,
+            Turns = true,
+            Pull = pull,
+            Center = center,
+            InverseMass = 1 / mass,
+            InverseInertia = group.Turns ? 1 / inertia : 0,
+            Velocity = velocity,
+            Spin = spin,
+            TurnCos = 1,
+            Reach = reach,
+            Thickness = thickness,
+            Margin = margin,
+            Island = index,
+            Rode = rode,
+            Reported = reported,
+            Moving = Moving(velocity, spin, reach),
+        });
+        foreach (var member in members)
+        {
+            if (member.Entity is { IsActive: true })
+                _moverOf[member] = index;
+        }
+
+        return index;
+    }
+
+    // Whether something going at `velocity` and turning at `spin` (radians a second) with its far end `reach` out is moving
+    // rather than as good as still.
+    private static bool Moving(Vector2 velocity, float spin, float reach) =>
+        velocity.LengthSquared() > WakeSpeed * WakeSpeed || MathF.Abs(spin) * reach > WakeSpeed;
+
+    // Whether a member of a group isn't inside another of its members: it's moved itself (the others move with what
+    // they're in).
+    private bool IsTop(Body member, BodyGroup group)
+    {
+        for (var parent = member.Entity!.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent.GetComponent<Body>() is { } body && _groupOf.TryGetValue(body, out var other) && other == group)
+                return false;
+        }
+
+        return true;
+    }
+
+    // Whether a shape inside a body's entity is part of it, rather than of a body of its own inside it.
+    private static bool PartOf(Entity shape, Body body)
+    {
+        for (var at = shape; at is not null; at = at.Parent)
+        {
+            if (at.GetComponent<Body>() is { } owner)
+                return owner == body;
+        }
+
+        return false;
+    }
+
+    // How many bodies worked out with those that turn a body is inside.
+    private int DepthOf(Body body)
+    {
+        var depth = 0;
+        for (var parent = body.Entity!.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent.GetComponent<Body>() is { } outer && _moverOf.TryGetValue(outer, out var index) && _movers[index].Turns)
+                depth++;
+        }
+
+        return depth;
+    }
+
+    // Whether an entity is (or is inside) a member of a group.
+    private bool InGroup(Entity entity, BodyGroup group)
+    {
+        for (var at = entity; at is not null; at = at.Parent)
+        {
+            if (at.GetComponent<Body>() is { } body && _groupOf.TryGetValue(body, out var other) && other == group)
+                return true;
+        }
+
+        return false;
     }
 
     // A body moved the old way that a turning one touches: it takes its share of the pushes, but doesn't turn or move here.
@@ -355,11 +717,34 @@ public sealed partial class Physics
     // The contacts of turning body i, into the step's: each pair of turning bodies once, and a sleeper it touches woken.
     private void GatherFor(int i, Solids solids)
     {
-        var movers = _movers;
-        var mover = movers[i];
-        Gather(mover.Body, mover.Collider!, solids, mover.Filter, mover.Footprint, mover.Margin, mover.BottomBefore, turning: true);
-        CollectionsMarshal.AsSpan(movers)[i].Gathered = true;
+        var mover = _movers[i];
+        if (mover.Group is not { } group)
+        {
+            Gather(mover.Body, mover.Collider!, solids, mover.Filter, mover.Footprint, mover.Margin, mover.BottomBefore, turning: true);
+            CollectionsMarshal.AsSpan(_movers)[i].Gathered = true;
+            AddGathered(i, mover.Body, solids);
+            return;
+        }
 
+        // A welded group meets things with each of its members' shapes, never each other.
+        CollectionsMarshal.AsSpan(_movers)[i].Gathered = true;
+        foreach (var member in group.Bodies)
+        {
+            if (member.Entity is not { IsActive: true } entity || entity.GetComponent<Collider>() is not { IsTrigger: false } collider)
+                continue;
+            var shape = ShapeOf(member, collider);
+            _excluding = group;
+            Gather(member, collider, solids, solids.FilterOf(collider), shape.Footprint, mover.Margin, shape.Bottom, turning: true);
+            _excluding = null;
+            AddGathered(i, member, solids);
+        }
+    }
+
+    // The contacts just gathered for turning body i (`own` is the body, or the member of its group, making them), into the
+    // step's: each pair of turning bodies once, and a sleeper touched woken.
+    private void AddGathered(int i, Body own, Solids solids)
+    {
+        var movers = _movers;
         for (var c = 0; c < _contacts.Count; c++)
         {
             var contact = _contacts[c];
@@ -368,17 +753,29 @@ public sealed partial class Physics
             {
                 if (_moverOf.TryGetValue(body, out other))
                 {
-                    if (movers[other].Gathered)
+                    if (movers[other].Gathered && other != i)
+                        continue;
+                    if (other == i)
                         continue;
                 }
+                else if (_sleepers.Contains(body))
+                {
+                    // Something moving into a sleeper wakes it; something all but still rests on it (or leans on it, or is
+                    // eased out of it) as on something that holds still.
+                    other = movers[i].Moving ? Wake(body, solids) : -1;
+                }
                 else
-                    other = _sleepers.Remove(body) ? AddTurning(body, solids, 0, reported: true) : AddPushed(body);
+                    other = AddPushed(body);
             }
 
+            contact.Own = own;
             contact.A = i;
             contact.B = other;
             _solving.Add(contact);
-            if (other >= 0 && movers[other].Turns)
+
+            // Touching bodies fall asleep together while either is moving; once all are as good as still, each falls asleep
+            // by itself, so a deep heap sleeps a part at a time rather than waiting for all of it to be still at once.
+            if (other >= 0 && movers[other].Turns && (movers[i].Moving || movers[other].Moving))
                 Join(i, other);
         }
     }
@@ -420,6 +817,11 @@ public sealed partial class Physics
         var a2 = part * omega * a1;
         var a3 = 1 / (1 + a2);
         var softness = new Softness(omega / a1, a2 * a3, a3);
+        omega = 2 * MathF.PI * JointHertz;
+        a1 = 2 * JointDamping + part * omega;
+        a2 = part * omega * a1;
+        a3 = 1 / (1 + a2);
+        var jointSoftness = new Softness(omega / a1, a2 * a3, a3);
 
         foreach (ref var contact in contacts)
         {
@@ -428,8 +830,10 @@ public sealed partial class Physics
             var tangent = new Vector2(-normal.Y, normal.X);
             // A ball touches where its edge meets the normal, however far off the point found is yet.
             contact.ArmA = contact.Underfoot ? Vector2.Zero : a.Round ? -normal * a.Reach : contact.Point - a.Center;
-            var (bounce, grip) = (a.Body.Bounciness, Math.Clamp(a.Body.Grip, 0, 1));
-            var rolling = a.Round && !contact.Underfoot ? Math.Max(0, a.Body.RollingResistance) * a.Reach : 0;
+            // Grip is a turning body's: one that doesn't turn slides by its friction instead.
+            var own = contact.Own;
+            var (bounce, grip) = (own.Bounciness, TurnsHere(own) ? Math.Clamp(own.Grip, 0, 1) : -1);
+            var rolling = a.Round && !contact.Underfoot ? Math.Max(0, own.RollingResistance) * a.Reach : 0;
             var (otherMass, otherInertia) = (0f, 0f);
             if (contact.B >= 0)
             {
@@ -437,14 +841,18 @@ public sealed partial class Physics
                 otherMass = b.InverseMass;
                 if (b.Turns)
                 {
+                    var other = contact.Other!;
                     contact.ArmB = b.Round ? normal * b.Reach : contact.Point - b.Center;
                     otherInertia = b.InverseInertia;
-                    grip = MathF.Sqrt(grip * Math.Clamp(b.Body.Grip, 0, 1));
-                    bounce = MathF.Max(bounce, b.Body.Bounciness);
+                    if (TurnsHere(other))
+                        grip = grip < 0 ? Math.Clamp(other.Grip, 0, 1) : MathF.Sqrt(grip * Math.Clamp(other.Grip, 0, 1));
+                    bounce = MathF.Max(bounce, other.Bounciness);
                     if (b.Round)
-                        rolling = MathF.Max(rolling, Math.Max(0, b.Body.RollingResistance) * b.Reach);
+                        rolling = MathF.Max(rolling, Math.Max(0, other.RollingResistance) * b.Reach);
                 }
             }
+
+            grip = MathF.Max(0, grip);
 
             // How hard it is to change how fast the two go apart (and slide) at the point, from their weights and how far
             // from their middles it is.
@@ -458,9 +866,13 @@ public sealed partial class Physics
             contact.Rolling = rolling;
             contact.RollMass = rolling > 0 ? 1 / (a.InverseInertia + otherInertia) : 0;
             contact.Approach = Vector2.Dot(Relative(movers, ref contact), normal);
-            if (memory.TryGet(new ContactKey(a.Body.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), out var pushed))
+            if (memory.TryGet(new ContactKey(own.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), out var pushed) ||
+                Remembered(memory, ref contact, out pushed))
                 (contact.Pushed, contact.Rubbed, contact.Rolled) = (pushed.X, pushed.Y, rolling > 0 ? pushed.Z : 0);
         }
+
+        SetUpJoints(memory, movers, dt);
+        var joints = _rows.Count > 0;
 
         for (var step = 0; step < SolveParts; step++)
         {
@@ -481,8 +893,15 @@ public sealed partial class Physics
                     Twist(movers, ref contact, contact.Rolled);
             }
 
+            if (joints)
+                WarmJoints(movers);
+
             for (var pass = 0; pass < PushPasses; pass++)
+            {
+                if (joints)
+                    SolveJoints(movers, jointSoftness, inversePart, ease: true, dt, step * part);
                 PushAll(movers, contacts, softness, inversePart, ease: true);
+            }
 
             foreach (ref var mover in movers)
             {
@@ -494,6 +913,8 @@ public sealed partial class Physics
                 (mover.TurnSin, mover.TurnCos) = MathF.SinCos(mover.Turned);
             }
 
+            if (joints)
+                SolveJoints(movers, jointSoftness, inversePart, ease: false, dt, (step + 1) * part);
             PushAll(movers, contacts, softness, inversePart, ease: false);
         }
 
@@ -525,6 +946,25 @@ public sealed partial class Physics
         }
     }
 
+    // A point between two bodies remembered from the other's side (it worked the pair out last, or this one was asleep and
+    // it leaned on it), as this side sees it: the same push, the grip and hold against rolling the other way. Only for two
+    // shapes of one piece each, each its entity's first, whose points are known the same from either side.
+    private static bool Remembered(ContactMemory memory, ref Contact contact, out Vector3 pushed)
+    {
+        pushed = default;
+        if (contact.Other is null || !Simple(contact) || !memory.TryGet(new ContactKey(contact.Solid.Id, contact.Own.Entity!.Id, 0, Reversed(contact.Feature)), out var theirs))
+            return false;
+        pushed = new Vector3(theirs.X, -theirs.Y, -theirs.Z);
+        return true;
+    }
+
+    // Whether a point is between two shapes of one piece each, each its entity's first.
+    private static bool Simple(in Contact contact) => contact.Part == 0 && (contact.Feature & ~((1 << PieceShift) - 1)) == 0;
+
+    // Which corners and sides make a point, seen from the other shape: two polygons' points say which of them the side
+    // they're on is (the rest is the same either way); a circle's are the same either way.
+    private static int Reversed(int feature) => (feature & (FaceFeature | CornerFeature | RoundFeature)) != 0 ? feature : feature ^ 1;
+
     // How much of what holds a ball back from rolling slows how fast it goes: its turning takes the rest.
     private const float RollingShare = 2 / 3f;
 
@@ -550,7 +990,16 @@ public sealed partial class Physics
             _sleeping.Add(body.Entity!.Id);
         memory.KeepOnly(_sleeping);
         foreach (var contact in _solving)
-            memory.Set(new ContactKey(_movers[contact.A].Body.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), new Vector3(contact.Pushed, contact.Rubbed, contact.Rolled));
+        {
+            memory.Set(new ContactKey(contact.Own.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), new Vector3(contact.Pushed, contact.Rubbed, contact.Rolled));
+
+            // Leaning on a sleeper: it remembers the point too, as it sees it, so woken it carries on from how hard it's
+            // leaned on now.
+            if (contact.B < 0 && contact.Other is { } sleeper && _sleepers.Contains(sleeper) && Simple(contact))
+                memory.Set(new ContactKey(contact.Solid.Id, contact.Own.Entity!.Id, 0, Reversed(contact.Feature)), new Vector3(contact.Pushed, -contact.Rubbed, -contact.Rolled));
+        }
+
+        RememberJoints(memory);
     }
 
     private readonly record struct Softness(float BiasRate, float MassScale, float ImpulseScale);
@@ -759,6 +1208,72 @@ public sealed partial class Physics
         }
     }
 
+    // Moves and turns a welded group as the step worked out, round where its weight balances: each member (those inside
+    // another carried along by it); a fast one in parts, pushed out of whatever it went into after each.
+    private void MoveGroup(int i, Solids solids)
+    {
+        var mover = _movers[i];
+        var group = mover.Group!;
+        var travel = mover.Moved.Length() + MathF.Abs(mover.Turned) * mover.Reach;
+        var parts = Math.Clamp((int)MathF.Ceiling(travel / (TurnPartShare * mover.Thickness)), 1, MaxTurnParts);
+        var (step, turn) = (mover.Moved / parts, mover.Turned / parts);
+        var (sin, cos) = MathF.SinCos(turn);
+        var center = mover.Center;
+        for (var part = 0; part < parts; part++)
+        {
+            foreach (var member in group.Bodies)
+            {
+                if (member.Entity is not { IsActive: true } entity || !IsTop(member, group))
+                    continue;
+                var collider = entity.GetComponent<Collider>();
+                var pivot = collider is null ? PositionOf(entity) : PivotOf(collider);
+                Turn(solids, entity, collider, turn);
+                Translate(solids, entity, center + step + Rotate(pivot - center, cos, sin) - pivot);
+            }
+
+            center += step;
+            if (parts > 1)
+                center += PushOut(group, solids, center - mover.Center);
+        }
+    }
+
+    // Pushes a welded group out of the deepest thing any of it is in, again and again while it's in something; how far.
+    private Vector2 PushOut(BodyGroup group, Solids solids, Vector2 moved)
+    {
+        var total = Vector2.Zero;
+        for (var pass = 0; pass < TurnPushPasses; pass++)
+        {
+            var (found, deepest) = (false, default(Contact));
+            _excluding = group;
+            foreach (var member in group.Bodies)
+            {
+                if (member.Entity is not { IsActive: true } entity || entity.GetComponent<Collider>() is not { IsTrigger: false } collider)
+                    continue;
+                var shape = ShapeOf(member, collider);
+                Gather(member, collider, solids, solids.FilterOf(collider), shape.Footprint, -PushSlop, shape.Bottom - moved.Y - total.Y, turning: false);
+                foreach (var contact in _contacts)
+                {
+                    if (!found || contact.Gap < deepest.Gap)
+                        (found, deepest) = (true, contact);
+                }
+            }
+
+            _excluding = null;
+            if (!found)
+                break;
+            var push = deepest.Normal * -deepest.Gap;
+            foreach (var member in group.Bodies)
+            {
+                if (member.Entity is { IsActive: true } entity && IsTop(member, group))
+                    Translate(solids, entity, push);
+            }
+
+            total += push;
+        }
+
+        return total;
+    }
+
     // What each turning body touches after its move, from the step's contacts: what it stands on, a wall beside it, and what
     // it bumped into.
     private void Touches(Action<Entity, Entity> onCollision)
@@ -769,20 +1284,19 @@ public sealed partial class Physics
             if (GapNow(movers, ref contact) > TouchSkin)
                 continue;
             ref var a = ref movers[contact.A];
-            Touch(ref a, contact.Normal, contact.Solid, onCollision);
+            Touch(ref a, contact.Own, contact.Normal, contact.Solid, onCollision);
             if (contact.B < 0)
                 continue;
             ref var b = ref movers[contact.B];
             if (b.Turns)
-                Touch(ref b, -contact.Normal, a.Body.Entity!, onCollision);
+                Touch(ref b, contact.Other!, -contact.Normal, contact.Own.Entity!, onCollision);
         }
     }
 
-    private static void Touch(ref Mover mover, Vector2 normal, Entity solid, Action<Entity, Entity> onCollision)
+    private static void Touch(ref Mover mover, Body body, Vector2 normal, Entity solid, Action<Entity, Entity> onCollision)
     {
-        var body = mover.Body;
         if (normal.Y > mover.GroundUp)
-            (mover.GroundUp, mover.GroundNormal, body.Ground) = (normal.Y, normal, solid);
+            (mover.GroundUp, mover.GroundNormal, mover.Ground, body.Ground) = (normal.Y, normal, solid, solid);
         if (MathF.Abs(normal.X) > 0.9f)
             body.WallSide = -MathF.Sign(normal.X);
         if (!mover.Reported && solid != mover.Touched)
@@ -791,7 +1305,8 @@ public sealed partial class Physics
 
     // After its move: its sliding along the ground slowed, and how long it has been still (hardly moving, and not carried
     // along).
-    private static void Settle(ref Mover mover, float dt)
+    // `motorized`: a motor turns it, so it doesn't fall asleep.
+    private static void Settle(ref Mover mover, float dt, bool motorized)
     {
         var body = mover.Body;
         body.IsGrounded = body.Ground is not null;
@@ -799,9 +1314,44 @@ public sealed partial class Physics
             RubRolling(ref mover, body.Friction, dt);
         else if (body.IsGrounded)
             Rub(body, body.Friction, dt);
-        var still = !mover.Rode && body.Velocity.LengthSquared() < SleepSpeed * SleepSpeed &&
+        var still = !mover.Rode && !motorized && body.Velocity.LengthSquared() < SleepSpeed * SleepSpeed &&
                     MathF.Abs(mover.Spin) * mover.Reach < SleepSpeed;
         body.StillFor = still ? body.StillFor + dt : 0;
+    }
+
+    // A welded group after its move: every member stands where any does, its sliding along the ground is slowed by the most
+    // friction any member has, and each member goes as its part of the group does (faster the further out it is, as it
+    // turns) and spins with it.
+    private static void SettleGroup(ref Mover mover, float dt, bool motorized)
+    {
+        var group = mover.Group!;
+        var ground = mover.Ground;
+        var (friction, mass, weighted) = (0f, 0f, Vector2.Zero);
+        foreach (var member in group.Bodies)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            (member.Ground, member.IsGrounded) = (ground, ground is not null);
+            friction = MathF.Max(friction, member.Friction);
+            var weight = Math.Max(0.01f, member.Mass);
+            (mass, weighted) = (mass + weight, weighted + member.CenterOfMass * weight);
+        }
+
+        var velocity = mover.Velocity;
+        if (ground is not null && friction > 0)
+            velocity.X = MathF.Sign(velocity.X) * Math.Max(0, MathF.Abs(velocity.X) - friction * dt);
+        var spin = mover.Spin;
+        var still = !mover.Rode && !motorized && velocity.LengthSquared() < SleepSpeed * SleepSpeed && MathF.Abs(spin) * mover.Reach < SleepSpeed;
+        var center = weighted / mass;
+        foreach (var member in group.Bodies)
+        {
+            if (member.Entity is not { IsActive: true })
+                continue;
+            var arm = member.CenterOfMass - center;
+            member.Velocity = velocity + new Vector2(-spin * arm.Y, spin * arm.X);
+            member.Spin = spin * 180 / MathF.PI;
+            member.StillFor = still ? member.StillFor + dt : 0;
+        }
     }
 
     // A ball's friction slows only its sliding: where it touches the ground, how fast that goes along it, by `friction` units
@@ -842,6 +1392,17 @@ public sealed partial class Physics
         {
             if (!_movers[i].Turns || still[IslandOf(i)] < SleepAfter)
                 continue;
+            if (_movers[i].Group is { } group)
+            {
+                foreach (var member in group.Bodies)
+                {
+                    if (member.Entity is { IsActive: true })
+                        (member.Velocity, member.Spin, member.Asleep) = (Vector2.Zero, 0, true);
+                }
+
+                continue;
+            }
+
             var body = _movers[i].Body;
             (body.Velocity, body.Spin, body.Asleep) = (Vector2.Zero, 0, true);
         }
@@ -865,7 +1426,7 @@ public sealed partial class Physics
             }
 
             var depth = -deepest.Gap;
-            if (deepest.Other is { Rotates: true, HeldStill: false } other && !_groupOf.ContainsKey(other))
+            if (deepest.Other is { HeldStill: false } other && Solves(other) && !_groupOf.ContainsKey(other))
             {
                 var otherInverse = 1 / Math.Max(0.01f, other.Mass);
                 var share = inverseMass / (inverseMass + otherInverse);
@@ -919,7 +1480,8 @@ public sealed partial class Physics
             foreach (var index in near)
             {
                 var solid = solids.All[index];
-                if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || filter.IgnoresEachOther(solid.Filter))
+                if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) && PartOf(solid.Entity, body) || filter.IgnoresEachOther(solid.Filter) ||
+                    Unbumped(entity, solid.Entity) || _excluding is not null && InGroup(solid.Entity, _excluding))
                     continue;
                 var area = solids.AreaOf(index);
                 var solidBounds = area.Bounds;
@@ -1052,6 +1614,9 @@ public sealed partial class Physics
         hull.Inner = polygon.InnerSides(piece);
     }
 
+    // A ball meeting a side, in a contact's Feature.
+    private const int FaceFeature = 1 << 4;
+
     // A ball meeting a corner (rather than a side), in a contact's Feature.
     private const int CornerFeature = 1 << 10;
 
@@ -1106,9 +1671,9 @@ public sealed partial class Physics
     }
 
     // The body that moves a solid, when it moves under its own steam here and so shares a turning body's pushes.
-    private static Body? MovingBody(in Shape solid)
+    private Body? MovingBody(in Shape solid)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { HeldStill: false } body || !solid.Entity.MovesHere)
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { HeldStill: false } body || !solid.Entity.MovesHere || HeldInGroup(body))
             return null;
         return body;
     }
@@ -1117,9 +1682,9 @@ public sealed partial class Physics
     // A body moved the old way (one that doesn't turn) ran into one that turns: it stops as it would at a wall, and the one
     // it ran into takes the knock where they touch, shared by their weights, so walking into a crate pushes it along, running
     // into a plank's end tips it, and standing on one end of a seesaw lowers it.
-    private static void Knock(Body mover, Area moving, in Shape solid, int axis, float sign)
+    private void Knock(Body mover, Area moving, in Shape solid, int axis, float sign)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, HeldStill: false } struck ||
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { HeldStill: false } struck || !Solves(struck) ||
             struck == mover || !solid.Entity.MovesHere)
             return;
         var into = axis == 0 ? new Vector2(sign, 0) : new Vector2(0, sign);
@@ -1137,7 +1702,7 @@ public sealed partial class Physics
         var closing = Vector2.Dot(mover.Velocity - struck.Velocity - new Vector2(-spin * arm.Y, spin * arm.X), into);
         if (closing <= 0)
             return;
-        var turn = Cross(arm, into);
+        var turn = TurnsHere(struck) ? Cross(arm, into) : 0;
         var inertia = struck.Inertia;
         var struckMass = Math.Max(0.01f, struck.Mass);
         var impulse = closing / (1 / Math.Max(0.01f, mover.Mass) + 1 / struckMass + turn * turn / inertia);
@@ -1185,6 +1750,9 @@ public sealed partial class Physics
         // What it touches, when that's a body that moves and so takes its share of the pushes.
         public Body? Other;
 
+        // The body making the point: the turning one, or the member of its welded group.
+        public Body Own;
+
         // Which of the solid's shapes (a tile run, a cell) and which corners and sides make the point: the same point next step.
         public int Part;
         public int Feature;
@@ -1227,9 +1795,19 @@ public sealed partial class Physics
     // the pushes, but doesn't turn or move here).
     private struct Mover
     {
+        // The body (a welded group's first member, for a group).
         public Body Body;
         public Collider? Collider;
         public bool Turns;
+
+        // A welded group worked out as one body, round where its weight balances.
+        public BodyGroup? Group;
+
+        // How many bodies that turn it's inside, and (inside one) where it was in the world and which way it faced as it
+        // began to move.
+        public int Depth;
+        public Vector2 StartPosition;
+        public float StartTurn;
 
         // A circle: turning it doesn't move where it touches anything.
         public bool Round;
@@ -1272,9 +1850,13 @@ public sealed partial class Physics
         public bool Rode;
         public bool Reported;
 
+        // It was moving as the step began, rather than as good as still.
+        public bool Moving;
+
         // After its move: how much what it stands on faces up (and which way), and the last thing it said it touched.
         public float GroundUp;
         public Vector2 GroundNormal;
+        public Entity? Ground;
         public Entity? Touched;
     }
 
@@ -1447,7 +2029,7 @@ public sealed partial class Physics
             if (!corner && (polygon.Inner >> face & 1) != 0)
                 return false;
             manifold.Normal = a.IsCircle ? normal : -normal;
-            manifold.Add(point, gap, corner ? CornerFeature : 0);
+            manifold.Add(point, gap, corner ? CornerFeature : FaceFeature);
             return true;
         }
 

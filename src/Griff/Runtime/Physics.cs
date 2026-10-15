@@ -219,9 +219,10 @@ public sealed partial class Physics
     }
 
     /// <summary>
-    /// Bodies welded together (a contraption's Welds), set by the game before each step: each group moves as one, with
-    /// one velocity shared by weight, and its members don't collide with each other. An anchored group (welded to
-    /// something without a body, or with a frozen member) holds still.
+    /// Bodies welded together (a contraption's Welds), set by the game before each step: each group is one rigid body, worked
+    /// out with the bodies that turn (it turns as one when all its members rotate, round where its weight balances), and its
+    /// members don't collide with each other. An anchored group (welded to something without a body, or with a frozen
+    /// member) holds still.
     /// </summary>
     internal IReadOnlyList<BodyGroup> Groups { get; set; } = [];
 
@@ -239,14 +240,25 @@ public sealed partial class Physics
             CollectHex(scene, null, _hex);
         }
         _groupOf.Clear();
-        foreach (var group in Groups)
+        var groups = Groups;
+        for (var g = 0; g < groups.Count; g++)
         {
+            var group = groups[g];
+            var (still, turns) = (group.Anchored, true);
             foreach (var member in group.Bodies)
+            {
                 _groupOf[member] = group;
+                if (member.Entity is { IsActive: true })
+                    (still, turns) = (still || member.Frozen, turns && member.Rotates);
+            }
+
+            (group.Still, group.Turns) = (still, turns);
         }
 
+        CollectJoints(scene);
         _movedGroups.Clear();
         _turning.Clear();
+        _turningGroups.Clear();
         foreach (var body in scene.Active<Body>())
         {
             // An entity's first body is the one that moves it.
@@ -266,10 +278,17 @@ public sealed partial class Physics
                 continue;
             }
 
+            // A welded group is one body: held still with what holds it, or worked out with the bodies that turn.
             if (_groupOf.TryGetValue(body, out var group))
             {
                 if (_movedGroups.Add(group) && !AnyPaused(group))
-                    StepGroup(group, solids, dt, onCollision);
+                {
+                    if (group.Still)
+                        HoldStill(group, dt);
+                    else
+                        _turningGroups.Add(group);
+                }
+
                 continue;
             }
 
@@ -284,9 +303,9 @@ public sealed partial class Physics
                 continue;
             }
 
-            // Bodies that turn are worked out together, once the rest have moved.
+            // Bodies that turn (or hang on a hinge) are worked out together, once the rest have moved.
             var collider = body.Entity!.GetComponent<Collider>();
-            if (body.Rotates && collider is { IsTrigger: false })
+            if ((body.Rotates || _jointed.Count > 0 && _jointed.Contains(body)) && collider is { IsTrigger: false })
             {
                 _turning.Add(body);
                 continue;
@@ -349,12 +368,23 @@ public sealed partial class Physics
             EndStep(body, dt);
         }
 
-        if (_turning.Count > 0)
+        if (_turning.Count > 0 || _turningGroups.Count > 0)
         {
             StepTurning(scene, solids, dt, onCollision);
             foreach (var body in _turning)
                 EndStep(body, dt);
+            foreach (var group in _turningGroups)
+            {
+                var members = group.Bodies;
+                for (var i = 0; i < members.Count; i++)
+                {
+                    if (members[i].Entity is { IsActive: true })
+                        EndStep(members[i], dt);
+                }
+            }
+
             _turning.Clear();
+            _turningGroups.Clear();
         }
 
         scene.Vacated.Clear();
@@ -389,55 +419,19 @@ public sealed partial class Physics
         solids.Return(near);
     }
 
-    // A welded group: gravity on each member, then one velocity for all (shared by weight, so a balloon lifts what it's
-    // welded to), moved together one axis at a time.
-    private void StepGroup(BodyGroup group, Solids solids, float dt, Action<Entity, Entity> onCollision)
+    // A welded group held still (welded to something that doesn't move, or with a member frozen): it stays where it is.
+    private static void HoldStill(BodyGroup group, float dt)
     {
-        var members = group.Bodies.Where(b => b.Entity is not null && b.Entity.IsActive).ToList();
-        foreach (var body in members)
+        var members = group.Bodies;
+        for (var i = 0; i < members.Count; i++)
         {
-            body.IsGrounded = false;
-            body.Ground = null;
-            body.WallSide = 0;
-        }
-
-        if (group.Anchored || members.Any(b => b.Frozen))
-        {
-            foreach (var body in members)
-            {
-                body.Velocity = Vector2.Zero;
-                EndStep(body, dt);
-            }
-
-            return;
-        }
-
-        var momentum = Vector2.Zero;
-        var mass = 0f;
-        foreach (var body in members)
-        {
-            if (!body.FloatThisStep)
-                body.Velocity += Gravity * body.GravityScale * dt;
-            var weight = Math.Max(0.01f, body.Mass);
-            momentum += body.Velocity * weight;
-            mass += weight;
-        }
-
-        var velocity = mass > 0 ? momentum / mass : Vector2.Zero;
-        foreach (var body in members)
-            body.Velocity = velocity;
-
-        MoveGroupAxis(members, solids, new Vector2(velocity.X * dt, 0), onCollision, nudge: false);
-        MoveGroupAxis(members, solids, new Vector2(0, velocity.Y * dt), onCollision, nudge: false);
-        if (members.Any(b => b.IsGrounded))
-        {
-            var friction = members.Max(b => b.Friction);
-            foreach (var body in members)
-                Rub(body, friction, dt);
-        }
-
-        foreach (var body in members)
+            var body = members[i];
+            if (body.Entity is not { IsActive: true })
+                continue;
+            (body.IsGrounded, body.Ground, body.WallSide) = (false, null, 0);
+            (body.Velocity, body.Spin) = (Vector2.Zero, 0);
             EndStep(body, dt);
+        }
     }
 
     // Sliding along the ground slows by `friction` units per second, every second, down to a stop.
@@ -459,12 +453,13 @@ public sealed partial class Physics
             return;
         var solids = new Solids();
         solids.Fill(scene);
-        MoveGroupAxis(bodies, solids, new Vector2(delta.X, 0), (_, _) => { }, nudge: true);
-        MoveGroupAxis(bodies, solids, new Vector2(0, delta.Y), (_, _) => { }, nudge: true);
+        NudgeAxis(bodies, solids, new Vector2(delta.X, 0));
+        NudgeAxis(bodies, solids, new Vector2(0, delta.Y));
     }
 
-    // Like MoveAxis for a group: everyone moves, then everyone is pushed back by the deepest overlap any of them made.
-    private static void MoveGroupAxis(IReadOnlyList<Body> members, Solids solids, Vector2 delta, Action<Entity, Entity> onCollision, bool nudge)
+    // Like MoveAxis for a group, without bumping into anything: everyone moves, then everyone is pushed back by the deepest
+    // overlap any of them made.
+    private static void NudgeAxis(IReadOnlyList<Body> members, Solids solids, Vector2 delta)
     {
         if (delta == Vector2.Zero)
             return;
@@ -474,8 +469,6 @@ public sealed partial class Physics
             Translate(solids, body.Entity!, delta);
 
         var push = 0f;
-        var touched = new List<(Entity Member, Entity Solid)>();
-        Entity? ground = null;
         foreach (var body in members)
         {
             if (body.Entity!.GetComponent<Collider>() is not { IsTrigger: false } collider)
@@ -500,11 +493,6 @@ public sealed partial class Physics
                     continue; // Already overlapping from the far side: not something this move ran into.
                 if (MathF.Abs(back) > MathF.Abs(push))
                     push = back;
-                touched.Add((body.Entity, solid.Entity));
-                if (!nudge)
-                    Knock(body, area, solid, axis, sign);
-                if (axis == 1 && sign < 0)
-                    ground = solid.Entity;
             }
 
             solids.Return(near);
@@ -515,25 +503,6 @@ public sealed partial class Physics
             foreach (var body in members)
                 Translate(solids, body.Entity!, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
         }
-
-        if (nudge || touched.Count == 0)
-            return;
-        var bounciness = members.Min(b => Math.Clamp(b.Bounciness, 0, 1));
-        foreach (var body in members)
-        {
-            var velocity = body.Velocity;
-            var speed = (axis == 0 ? velocity.X : velocity.Y) * -bounciness;
-            if (MathF.Abs(speed) < SettleSpeed)
-                speed = 0;
-            body.Velocity = axis == 0 ? velocity with { X = speed } : velocity with { Y = speed };
-            if (axis == 1 && sign < 0)
-                (body.IsGrounded, body.Ground) = (true, ground);
-            else if (axis == 0)
-                body.WallSide = sign;
-        }
-
-        foreach (var (member, solid) in touched)
-            onCollision(member, solid);
     }
 
     // Movement's requests last one step; dropping through platforms lasts its time.
@@ -618,7 +587,7 @@ public sealed partial class Physics
             var index = near[n];
             var solid = solids.All[index];
             if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || solid.Entity == carrier ||
-                solid.Entity == pusher || filter.IgnoresEachOther(solid.Filter))
+                solid.Entity == pusher || filter.IgnoresEachOther(solid.Filter) || Unbumped(entity, solid.Entity))
                 continue;
 
             var other = solid.Area;
@@ -876,9 +845,9 @@ public sealed partial class Physics
 
     // Whether a solid is a body that turns (and moves) which this move can't have taken it into: getting out of it along the
     // move takes further than the move went.
-    private static bool MovedIntoBy(in Shape solid, Area area, Area other, int axis, float sign, Vector2 delta)
+    private bool MovedIntoBy(in Shape solid, Area area, Area other, int axis, float sign, Vector2 delta)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, HeldStill: false })
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { HeldStill: false } body || !Solves(body))
             return false;
         var push = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign) - Component(area.Center, axis);
         return MathF.Abs(push) > MathF.Abs(Component(delta, axis)) + 0.05f;
@@ -890,7 +859,7 @@ public sealed partial class Physics
     private (Body Body, Collider Collider, Pushable Pushable)? CanPush(Shape solid, int axis, string? layer)
     {
         if (solid.Collider is not { } collider || solid.Entity.GetComponent<Pushable>() is not { } pushable ||
-            solid.Entity.GetComponent<Body>() is not { Rotates: false } body || !pushable.AcceptsLayer(layer) ||
+            solid.Entity.GetComponent<Body>() is not { } body || Solves(body) || !pushable.AcceptsLayer(layer) ||
             solid.Entity.GetComponent<GridMovement>() is not null)
             return null;
         if (axis == 1 && body.GravityScale != 0 && Gravity != Vector2.Zero)
@@ -1487,10 +1456,16 @@ public sealed partial class Physics
 }
 
 /// <summary>Bodies welded into one; see <see cref="Physics.Groups"/>.</summary>
-internal sealed class BodyGroup(IReadOnlyList<Body> bodies, bool anchored)
+internal sealed class BodyGroup(List<Body> bodies, bool anchored)
 {
-    public IReadOnlyList<Body> Bodies { get; } = bodies;
+    public List<Body> Bodies { get; } = bodies;
 
     /// <summary>Welded to something without a body (a wall, the ground): the whole group holds still.</summary>
     public bool Anchored { get; } = anchored;
+
+    /// <summary>For this step: it holds still (anchored, or a member is frozen).</summary>
+    internal bool Still { get; set; }
+
+    /// <summary>For this step: it turns as one, every member being a body that rotates.</summary>
+    internal bool Turns { get; set; }
 }

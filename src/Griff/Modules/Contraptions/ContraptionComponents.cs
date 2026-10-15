@@ -17,20 +17,26 @@ public enum SandboxTool
     /// <summary>Click one thing, then another, to stick them together.</summary>
     Weld,
 
+    /// <summary>
+    /// Click a thing where it should turn, then what to hinge it to (or somewhere empty, to pin it there): a wheel on a cart,
+    /// a door, a seesaw.
+    /// </summary>
+    Hinge,
+
     /// <summary>Click one thing, then another, to tie them together with a rope.</summary>
     Rope,
 
     /// <summary>Click something with an output (a button, a gate), then something with an input (a lamp, a thruster).</summary>
     Wire,
 
-    /// <summary>Click a thing to get rid of it, with its wires, welds and ropes.</summary>
+    /// <summary>Click a thing to get rid of it, with its wires, welds, hinges and ropes.</summary>
     Remove,
 }
 
 /// <summary>
 /// Garry's Mod style tools for building contraptions while the game runs: grab and throw things, freeze them in place,
-/// spawn props, weld and rope them together, wire buttons to lamps and thrusters, and remove them. Pick a tool along the
-/// top of the screen (or with the number keys and mouse wheel); Z undoes the last thing made.
+/// spawn props, weld, hinge and rope them together, wire buttons to lamps, thrusters and wheels' motors, and remove them.
+/// Pick a tool along the top of the screen (or with the number keys and mouse wheel); Z undoes the last thing made.
 /// </summary>
 /// <remarks>
 /// Props are prefabs: give them a <see cref="Body"/> and a collider to grab and weld them, and wiring parts
@@ -39,13 +45,14 @@ public enum SandboxTool
 /// </remarks>
 [Category("Contraptions")]
 [WorksWith(typeof(Weld), Note = "what the Weld tool makes")]
+[WorksWith(typeof(HingeJoint), Note = "what the Hinge tool makes")]
 [WorksWith(typeof(Rope), Note = "what the Rope tool makes")]
 [WorksWith(typeof(Wire), Note = "what the Wire tool makes")]
 [ComponentName("Griff.SandboxTools")]
 public sealed class SandboxTools : Component
 {
-    /// <summary>The tools it has, in order, separated by commas: Grab, Spawn, Weld, Rope, Wire and Remove.</summary>
-    public string? Tools { get; set; } = "Grab, Spawn, Weld, Rope, Wire, Remove";
+    /// <summary>The tools it has, in order, separated by commas: Grab, Spawn, Weld, Hinge, Rope, Wire and Remove.</summary>
+    public string? Tools { get; set; } = "Grab, Spawn, Weld, Hinge, Rope, Wire, Remove";
 
     /// <summary>The props the Spawn tool can put down, by prefab name, separated by commas, e.g. "Crate, Ball, Lamp".</summary>
     [Names(NameKind.Prefab, Many = true)]
@@ -79,7 +86,7 @@ public sealed class SandboxTools : Component
     [Focus]
     public bool Controllable { get; set; } = true;
 
-    /// <summary>The key that undoes the last prop, weld, rope or wire made.</summary>
+    /// <summary>The key that undoes the last prop, weld, hinge, rope or wire made.</summary>
     public Key UndoKey { get; set; } = Key.Z;
 
     /// <summary>A sound played when a tool does something (spawns, welds, wires).</summary>
@@ -106,9 +113,11 @@ public sealed class SandboxTools : Component
 }
 
 /// <summary>
-/// Sticks its entity to another, so the two move as one: a plank with wheels, a box with a thruster. Both need a
+/// Sticks its entity to another, so the two move as one: a plank with a cab, a box with a thruster. Both need a
 /// <see cref="Body"/> to move; welded to something without one (a wall, the ground), it holds still. Welded things don't
-/// bump into each other.
+/// bump into each other. Everything welded together is one body, as heavy as all of it, that turns round where its weight
+/// balances when all of its bodies rotate (a thruster off its middle spins it, it tips over edges and lands on its side),
+/// and stays upright when any of them doesn't.
 /// </summary>
 [Category("Contraptions")]
 [Requires(typeof(Body), Note = "what's welded")]

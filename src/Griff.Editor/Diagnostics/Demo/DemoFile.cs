@@ -835,10 +835,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // patrol's turn to that far out on its side (0 clears it). "path: GridPatrol.1 = 3, -2" drags a grid patrol's
                 // point to the middle of the cell that many cells from where it was placed. "path: PolygonCollider.2 = 1, 0.5"
                 // (or "PolygonCollider.+3" for the plus on the side after point 2) drags a polygon's point to there in its own units.
+                // "path: HingeJoint.Anchor = -2, 0" drags a hinge's knob to there in its entity's own units; "path:
+                // HingeJoint.Lower = -45" (or Upper) drags the end of its arc round to that many degrees.
                 var (pathText, pathModifiers) = ParseModifiedName(a);
                 var (pathName, pathValue) = Split2(pathText, '=');
                 var (pathHandle, pathFrom) = ui.PathKnob(pathName)
-                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol, a Patrol or a Polygon Collider.");
+                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol, a Patrol, a Polygon Collider or a Hinge Joint.");
                 var pathComponent = (pathHandle.Point?.Component ?? pathHandle.Path)!;
                 var pathEntity = pathComponent.Entity!;
                 var pathParent = pathEntity.Parent?.Transform.WorldMatrix ?? System.Numerics.Matrix4x4.Identity;
@@ -853,6 +855,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 else if (pathComponent is Griff.Scenes.PolygonCollider pathPolygon)
                 {
                     pathTo = pathPolygon.ToWorld(Vector(pathValue));
+                }
+                else if (pathComponent is Griff.Scenes.HingeJoint pathHinge)
+                {
+                    pathTo = pathHandle.Index == 0
+                        ? System.Numerics.Vector2.Transform(Vector(pathValue), pathEntity.Transform.WorldMatrix)
+                        : SceneViewModel.ArcOf(pathHinge).At(float.Parse(pathValue, CultureInfo.InvariantCulture));
                 }
                 else if (pathComponent is Griff.Scenes.Patrol pathPatrol)
                 {

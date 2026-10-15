@@ -5,13 +5,17 @@
 // StackBench: what bodies that rotate cost a physics step when they're stacked up, measured in Release with nothing on the
 // screen. Builds a pyramid of crates that rotate (and, with --tower, a tower of ten beside it; with --balls 60, that many
 // balls heaped in a bin instead; with --shapes 60, that many polygons, triangles, pentagons, hexagons and concave Ls, heaped
-// in a bin) on a floor, lets them settle, then times steps of the pile awake (woken before each step,
+// in a bin; with --hinges 60, that many planks hinged into chains of five hanging from the ceiling, let go from the side so
+// they swing; with --welded 60, that many crates welded in pairs into Ls, heaped in a bin) on a floor, lets them settle,
+// then times steps of the pile awake (woken before each step,
 // so every body and contact is worked out, as while a pile settles or is knocked about) and asleep, printing the median,
 // mean and worst step and the bytes allocated meanwhile. The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60]
+//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60] [--hinges 60]
+//     [--welded 60]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
+using Griff.Modules.Contraptions;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -28,10 +32,29 @@ scene.Add(floor);
 var bodies = new List<Body>();
 var balls = Arg("--balls", 0);
 var shapes = Arg("--shapes", 0);
-if (balls > 0 || shapes > 0)
+var hinges = Arg("--hinges", 0);
+var welded = Arg("--welded", 0);
+if (hinges > 0)
+{
+    // Chains of five planks, each hinged by its left end to the right end of the one before, the first to the ceiling; laid
+    // out level, so they swing down.
+    for (var chain = 0; chain < hinges / 5; chain++)
+    {
+        for (var link = 0; link < 5; link++)
+        {
+            var body = Crate(new Vector2(chain * 7 - hinges / 5 * 3.5f + link + 0.5f, 12), new Vector2(1, 0.2f));
+            var entity = body.Entity!;
+            entity.Name = $"Link {chain} {link}";
+            var hinge = entity.AddComponent<HingeJoint>();
+            (hinge.Anchor, hinge.To, hinge.Friction) = (new Vector2(-0.5f, 0), link == 0 ? null : $"Link {chain} {link - 1}", 0.5f);
+            bodies.Add(body);
+        }
+    }
+}
+else if (balls > 0 || shapes > 0 || welded > 0)
 {
     // A bin ten balls (or shapes) wide, filled a row of ten (a little off true, so they tumble) at a time.
-    var count = Math.Max(balls, shapes);
+    var count = Math.Max(Math.Max(balls, shapes), welded);
     foreach (var x in new[] { -5.5f, 5.5f })
     {
         var side = new Entity("Side");
@@ -43,7 +66,7 @@ if (balls > 0 || shapes > 0)
     for (var i = 0; i < count; i++)
     {
         var at = new Vector2(-4.5f + i % 10 + (i / 10 % 2) * 0.3f, 0.5f + i / 10 * 1.1f);
-        bodies.Add(balls > 0 ? Ball(at) : Shape(at, i));
+        bodies.Add(balls > 0 ? Ball(at) : shapes > 0 ? Shape(at, i) : Welded(at, i));
     }
 }
 else
@@ -75,7 +98,11 @@ for (var i = 0; i < 120; i++)
     game.Tick(Frame);
 var asleep = Time(() => game.Tick(Frame));
 
-Console.WriteLine(shapes > 0
+Console.WriteLine(hinges > 0
+    ? $"{hinges} planks that rotate hinged in chains of five; {settled} asleep after 3 s"
+    : welded > 0
+    ? $"{welded} crates that rotate welded in pairs in a bin; {settled} asleep after 3 s"
+    : shapes > 0
     ? $"{shapes} polygons that rotate in a bin{(args.Contains("--tower") ? " and a tower of ten crates" : "")}; {settled} asleep after 3 s"
     : balls > 0
     ? $"{balls} balls that rotate in a bin{(args.Contains("--tower") ? " and a tower of ten crates" : "")}; {settled} asleep after 3 s"
@@ -84,11 +111,11 @@ Console.WriteLine($"awake:  {awake}");
 Console.WriteLine($"asleep: {asleep}");
 return;
 
-Body Crate(Vector2 at)
+Body Crate(Vector2 at, Vector2? size = null)
 {
     var entity = new Entity("Crate");
     entity.Transform.Position = new Vector3(at, 0);
-    entity.AddComponent<BoxCollider>();
+    entity.AddComponent<BoxCollider>().Size = size ?? Vector2.One;
     var body = entity.AddComponent<Body>();
     body.Rotates = true;
     scene.Add(entity);
@@ -103,6 +130,20 @@ Body Ball(Vector2 at)
     var body = entity.AddComponent<Body>();
     body.Rotates = true;
     scene.Add(entity);
+    return body;
+}
+
+// A crate 0.9 wide, every other one welded to the one before as the foot of an L (a little smaller, beside its bottom).
+Body Welded(Vector2 at, int i)
+{
+    var body = Crate(at, i % 2 == 0 ? new Vector2(0.9f, 0.9f) : new Vector2(0.45f, 0.45f));
+    body.Entity!.Name = $"Crate {i}";
+    if (i % 2 == 1)
+    {
+        body.Entity.Transform.Position = new Vector3(at - new Vector2(1 - 0.675f, 0.225f), 0);
+        body.Entity.AddComponent<Weld>().To = $"Crate {i - 1}";
+    }
+
     return body;
 }
 

@@ -11,7 +11,7 @@ namespace Griff.Modules.Contraptions;
 // no-code components.
 internal sealed class ContraptionTemplate : ProjectTemplate
 {
-    public override string Description => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, balloons, thrusters, lamps, buttons and logic gates, weld and rope them together, and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-6 for tools, E to press buttons, Z to undo.";
+    public override string Description => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, wheels, balloons, thrusters, lamps, buttons and logic gates, weld, hinge and rope them together (a cart on wheels, a windmill), and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-7 for tools, E to press buttons, Z to undo.";
 
     public override int Order => 70;
 
@@ -76,7 +76,7 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         player.AddComponent<Body>();
         player.AddComponent<PlatformerMovement>();
         var tools = player.AddComponent<SandboxTools>();
-        tools.Props = "Crate, Ball, Plank, Balloon, Thruster, Button, Lamp, Toggle, And Gate, Not Gate, Clock, Display, Sensor";
+        tools.Props = "Crate, Ball, Wheel, Plank, Balloon, Thruster, Button, Lamp, Toggle, And Gate, Not Gate, Clock, Display, Sensor";
         scene.Add(player);
 
         // A lamp hanging from the ceiling on a rope, and a button on the floor wired to it.
@@ -155,7 +155,14 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         balloon.AddComponent<Rope>().To = "Heavy Crate";
         scene.Add(balloon, machine);
 
-        scene.Add(Help("1-6 or the wheel: pick a tool.   Drag things to carry them.   E presses buttons.   Z undoes.", Anchor.BottomLeft));
+        // A windmill: a plank pinned to the wall at its middle, turned by its hinge's motor.
+        var windmill = Placed(PlankProp(), new Vector2(13.5f, 4.5f));
+        windmill.Name = "Windmill";
+        var hinge = windmill.AddComponent<HingeJoint>();
+        (hinge.Motor, hinge.MotorSpeed, hinge.MotorStrength) = (true, 60, 400);
+        scene.Add(windmill, machine);
+
+        scene.Add(Help("1-7 or the wheel: pick a tool.   Drag things to carry them.   E presses buttons.   Z undoes.", Anchor.BottomLeft));
         AddPauseMenu(scene, menuScene: null);
         return scene;
     }
@@ -164,6 +171,7 @@ internal sealed class ContraptionTemplate : ProjectTemplate
     {
         ["Prefabs/Crate.prefab"] = CrateProp(),
         ["Prefabs/Ball.prefab"] = BallProp(),
+        ["Prefabs/Wheel.prefab"] = WheelProp(),
         ["Prefabs/Plank.prefab"] = PlankProp(),
         ["Prefabs/Balloon.prefab"] = BalloonProp(),
         ["Prefabs/Thruster.prefab"] = ThrusterProp(),
@@ -189,7 +197,8 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         (wire.Input, wire.From, wire.Output) = (input, from, output);
     }
 
-    // A prop: a picture (or a colored box), a collider that fits it, and a body.
+    // A prop: a picture (or a colored box), a collider that fits it, and a body that turns, so what's built with them tips,
+    // tumbles and swings.
     private static Entity Prop(string name, string? image, Vector2 size, Color tint, float mass, bool round = false)
     {
         var entity = new Entity(name);
@@ -200,7 +209,7 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         else
             entity.AddComponent<BoxCollider>().Size = size;
         var body = entity.AddComponent<Body>();
-        (body.Mass, body.Friction) = (mass, 12);
+        (body.Mass, body.Friction, body.Rotates) = (mass, 12, true);
         return entity;
     }
 
@@ -210,9 +219,17 @@ internal sealed class ContraptionTemplate : ProjectTemplate
     private static Entity BallProp()
     {
         var ball = Prop("Ball", ContraptionsArt.BallArt, new Vector2(0.8f), Color.White, 0.6f, round: true);
-        var body = ball.GetComponent<Body>()!;
-        (body.Bounciness, body.Rotates) = (0.7f, true);
+        ball.GetComponent<Body>()!.Bounciness = 0.7f;
         return ball;
+    }
+
+    // A wheel to hinge to a plank or a crate (the Hinge tool): a cart. Wire a button to its Power to run its motor.
+    private static Entity WheelProp()
+    {
+        var wheel = Prop("Wheel", ContraptionsArt.WheelArt, new Vector2(0.9f), Color.White, 0.5f, round: true);
+        var body = wheel.GetComponent<Body>()!;
+        (body.Grip, body.RollingResistance) = (1, 0.02f);
+        return wheel;
     }
 
     private static Entity PlankProp() => Prop("Plank", null, new Vector2(4, 0.4f), Color.FromBytes(0xB0, 0x7F, 0x4A), 1.5f);

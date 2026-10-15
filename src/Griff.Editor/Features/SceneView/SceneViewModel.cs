@@ -45,9 +45,10 @@ public sealed record SceneDistance(Component Component, PropertyDescriptor Prope
 /// <summary>
 /// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
 /// selected together, resizing the primary selection's sprite and colliders, dragging its distances, the points of its
-/// path (a mover's or grid patrol's points, a patrol's turns) and its polygon collider's points, painting the selected
-/// tilemap (cell by cell, a rectangle at a time or a paint-bucket fill), and the links it draws to and from the entities
-/// the selection's fields name. The view's drags call these, and agents can too (positions are world units, Y up).
+/// path (a mover's or grid patrol's points, a patrol's turns), its polygon collider's points and its hinge's anchor and
+/// limits, painting the selected tilemap (cell by cell, a rectangle at a time or a paint-bucket fill), and the links it
+/// draws to and from the entities the selection's fields name. The view's drags call these, and agents can too
+/// (positions are world units, Y up).
 /// </summary>
 public sealed partial class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {

@@ -372,12 +372,14 @@ public class RollingTests
         Assert.All(heap, b => Assert.True(b.Asleep, $"{b.Entity!.Name} is still awake, moving at {b.Velocity} and turning at {b.Spin}."));
         var rested = heap.Select(At).ToList();
 
-        // Woken, each ball starts from how hard it pushed as it fell asleep, so the heap holds up as it was.
+        // Woken, each ball starts from how hard it pushed as it fell asleep (or was leaned on since), so the heap holds up
+        // as it was, give or take a few thousandths (parts of it fell asleep while the rest settled against them; without
+        // remembering, balls sag nearly three hundredths).
         foreach (var ball in heap)
             ball.Asleep = false;
         Run(0.25f);
 
-        Assert.All(heap.Zip(rested), pair => Assert.True(Vector2.Distance(At(pair.First), pair.Second) < 0.0005f,
+        Assert.All(heap.Zip(rested), pair => Assert.True(Vector2.Distance(At(pair.First), pair.Second) < 0.01f,
             $"{pair.First.Entity!.Name} moved from {pair.Second} to {At(pair.First)}."));
         Run(1);
         Assert.All(heap, b => Assert.True(b.Asleep));

@@ -52,6 +52,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
         _local = new ContraptionsState();
         _players.Clear();
         _sent.Clear();
+        _welded.Clear();
     }
 
     protected override void Draw(FrameDrawing frame) => ContraptionsDrawing.Draw(this, frame);
@@ -244,6 +245,12 @@ internal sealed partial class ContraptionsSystem : GameSystem
                 else if (click && ThingAt(mouse, user, scope) is { } thing)
                     Join(tools, thing, mouse);
                 break;
+            case SandboxTool.Hinge:
+                if (rightClick)
+                    CancelTool();
+                else if (click)
+                    HingeClick(tools, ThingAt(mouse, user, scope), mouse);
+                break;
             case SandboxTool.Wire:
                 if (rightClick)
                     CancelTool();
@@ -387,6 +394,34 @@ internal sealed partial class ContraptionsSystem : GameSystem
         ToolSound(tools);
     }
 
+    // The first click picks what turns and where (it needs a body), the second what it's hinged to: anything, or nothing
+    // there to pin it to the world. What turns is made to rotate.
+    private void HingeClick(SandboxTools tools, Entity? thing, Vector2 mouse)
+    {
+        if (Sandbox.First is not { } first)
+        {
+            if (thing?.GetComponent<Body>() is null)
+            {
+                SandboxNote(thing is null ? "Click something that moves, where it should turn" : $"{thing.Name} doesn't move");
+                return;
+            }
+
+            (Sandbox.First, Sandbox.FirstAt) = (thing, mouse);
+            return;
+        }
+
+        if (thing == first)
+            return;
+        var hinge = first.AddComponent<HingeJoint>();
+        hinge.Anchor = Matrix4x4.Invert(first.Transform.WorldMatrix, out var toOwn) ? Vector2.Transform(Sandbox.FirstAt, toOwn) : Vector2.Zero;
+        hinge.HingeTo(thing);
+        first.GetComponent<Body>()!.Rotates = true;
+        Sandbox.Made.Add(hinge);
+        SandboxNote(thing is null ? $"Pinned {first.Name}" : $"Hinged {first.Name} to {thing.Name}");
+        Sandbox.First = null;
+        ToolSound(tools);
+    }
+
     // The first click picks an output, the second an input; a list pops up when there's more than one to choose from.
     private void WireClick(Entity part)
     {
@@ -441,7 +476,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
                     return true;
                 case Component component when component.Entity is { } owner && owner.Scene == Scene:
                     owner.RemoveComponent(component);
-                    SandboxNote($"Undid the {component.GetType().Name.ToLowerInvariant()}");
+                    SandboxNote($"Undid the {(component is HingeJoint ? "hinge" : component.GetType().Name.ToLowerInvariant())}");
                     return true;
             }
         }
@@ -460,6 +495,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
                 {
                     Weld weld => (weld.Other?.Scene == Scene ? weld.Other : WirePorts.Find(weld.Entity!, weld.To)) == entity,
                     Rope rope => (rope.Other?.Scene == Scene ? rope.Other : WirePorts.Find(rope.Entity!, rope.To)) == entity,
+                    HingeJoint hinge => hinge.OtherEntity == entity,
                     Wire wire => (wire.Source ?? WirePorts.Find(wire.Entity!, wire.From)) == entity,
                     _ => false,
                 };
@@ -497,21 +533,54 @@ internal sealed partial class ContraptionsSystem : GameSystem
 
     // ----- Welds and ropes -----
 
-    // Who's welded to whom, worked out each frame before physics: each group moves as one.
+    // Who's welded to whom, worked out each frame before physics: each group moves as one. Worked out again only when a
+    // weld, what it's welded to, or whether that moves, has changed since the last frame (so a frame makes no garbage).
     internal void GroupWelds()
     {
-        Sandbox.Groups.Clear();
         var welds = Game.Active<Weld>();
         if (welds.Count == 0)
         {
+            Sandbox.Groups.Clear();
+            _welded.Clear();
             Physics.Groups = [];
             return;
         }
 
-        Physics.Groups = GroupWelds(welds);
+        var links = _links;
+        links.Clear();
+        foreach (var weld in welds)
+        {
+            var host = weld.Entity!;
+            var other = weld.Other = weld.Other?.Scene == Scene ? weld.Other : WirePorts.Find(host, weld.To);
+            links.Add(new WeldLink(host, other, host.GetComponent<Body>(), other?.GetComponent<Body>(), other?.IsActive ?? false));
+        }
+
+        if (links.Count == _welded.Count && SameLinks(links, _welded) && ReferenceEquals(Physics.Groups, _groups))
+            return;
+        _welded.Clear();
+        _welded.AddRange(links);
+        Sandbox.Groups.Clear();
+        Physics.Groups = _groups = GroupWelds(links);
     }
 
-    private List<BodyGroup> GroupWelds(ComponentList<Weld> welds)
+    private static bool SameLinks(List<WeldLink> a, List<WeldLink> b)
+    {
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (a[i] != b[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    // Each weld as of this frame and the last time the groups were worked out: its entity, what it's welded to, their bodies,
+    // and whether that's there.
+    private readonly List<WeldLink> _links = [];
+    private readonly List<WeldLink> _welded = [];
+    private List<BodyGroup> _groups = [];
+
+    private List<BodyGroup> GroupWelds(List<WeldLink> links)
     {
         var parent = new Dictionary<Entity, Entity>();
         Entity Root(Entity e)
@@ -522,14 +591,12 @@ internal sealed partial class ContraptionsSystem : GameSystem
         }
 
         var anchored = new HashSet<Entity>();
-        foreach (var weld in welds)
+        foreach (var (host, other, hostBody, otherBody, otherActive) in links)
         {
-            var host = weld.Entity!;
-            var other = weld.Other = weld.Other?.Scene == Scene ? weld.Other : WirePorts.Find(host, weld.To);
-            if (other is null || other == host || host.GetComponent<Body>() is null)
+            if (other is null || other == host || hostBody is null)
                 continue;
             parent.TryAdd(host, host);
-            if (other.GetComponent<Body>() is null || !other.IsActive)
+            if (otherBody is null || !otherActive)
             {
                 anchored.Add(host);
                 continue;
@@ -555,7 +622,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
     }
 
     // A body and everything welded to it.
-    private IReadOnlyList<Body> GroupOf(Body body) => Sandbox.Groups.TryGetValue(body, out var group) ? group.Bodies : [body];
+    private List<Body> GroupOf(Body body) => Sandbox.Groups.TryGetValue(body, out var group) ? group.Bodies : [body];
 
     // After physics: ropes pull their ends back within reach, sharing the pull by weight, and stop them pulling apart.
     internal void RunRopes()
@@ -606,7 +673,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
     }
 
     // The bodies that move when a rope pulls on an entity: its weld group, or none if it's fixed in place.
-    private IReadOnlyList<Body> Movable(Entity entity)
+    private List<Body> Movable(Entity entity)
     {
         if (entity.GetComponent<Body>() is not { } body)
             return [];
@@ -617,7 +684,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
     }
 
     // How much of a pull each end takes: the lighter end moves more, and a fixed end not at all.
-    private static (float Host, float Other) Shares(IReadOnlyList<Body> host, IReadOnlyList<Body> other)
+    private static (float Host, float Other) Shares(List<Body> host, List<Body> other)
     {
         var hostInverse = host.Count > 0 ? 1 / Math.Max(0.01f, host.Sum(b => b.Mass)) : 0;
         var otherInverse = other.Count > 0 ? 1 / Math.Max(0.01f, other.Sum(b => b.Mass)) : 0;
@@ -625,6 +692,9 @@ internal sealed partial class ContraptionsSystem : GameSystem
         return total <= 0 ? (0, 0) : (hostInverse / total, otherInverse / total);
     }
 }
+
+/// <summary>A weld as grouping sees it: its entity, what it's welded to, their bodies, and whether that's there.</summary>
+internal readonly record struct WeldLink(Entity Host, Entity? Other, Body? HostBody, Body? OtherBody, bool OtherActive);
 
 /// <summary>What contraptions keep track of while a scene runs: welds and wiring, and one player's tools and HUD.</summary>
 internal sealed class ContraptionsState

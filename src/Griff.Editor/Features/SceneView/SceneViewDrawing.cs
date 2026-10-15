@@ -485,6 +485,14 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     DrawOutline(collider.GivenPoints.Select(collider.ToWorld).ToArray(), brokenGiven);
             }
 
+            // A hinge: a pin where it is.
+            foreach (var hinge in entity.GetComponents<HingeJoint>())
+            {
+                var pin = viewport.ToScreen(hinge.WorldAnchor);
+                dc.DrawEllipse(null, solid, pin, 5, 5);
+                dc.DrawEllipse(solid.Brush, null, pin, 1.5, 1.5);
+            }
+
             // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons.
             foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric))
             {
@@ -641,6 +649,33 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         foreach (var bouncer in selected.GetComponents<Bouncer>())
             DrawArc(dc, here, bouncer.Way * bouncer.Strength, -Griff.Runtime.Physics.DefaultGravity.Y, 1, 0);
+
+        // How far a hinge with limits swings: a wedge round its anchor from its lower limit to its upper, and a line the
+        // way it points now.
+        foreach (var hinge in selected.GetComponents<HingeJoint>())
+        {
+            var arc = SceneViewModel.ArcOf(hinge);
+            var center = viewport.ToScreen(arc.Anchor);
+            dc.DrawLine(dashed, center, viewport.ToScreen(arc.At(hinge.Angle)));
+            if (!hinge.Limit)
+                continue;
+            var (lower, upper) = (Math.Clamp(hinge.LowerAngle, -180, 180), Math.Clamp(hinge.UpperAngle, -180, 180));
+            if (lower > upper)
+                (lower, upper) = (upper, lower);
+            var wedge = new StreamGeometry();
+            using (var context = wedge.Open())
+            {
+                context.BeginFigure(center, true, true);
+                context.LineTo(viewport.ToScreen(arc.At(lower)), true, false);
+                var steps = Math.Max(2, (int)MathF.Ceiling((upper - lower) / 5));
+                for (var i = 1; i <= steps; i++)
+                    context.LineTo(viewport.ToScreen(arc.At(lower + (upper - lower) * i / steps)), true, false);
+            }
+
+            var fill = guide.Clone();
+            fill.Opacity = 0.15;
+            dc.DrawGeometry(fill, new Pen(guide, 1.5), wedge);
+        }
     }
 
     // The selection's links (see SceneViewModel.Links): a dashed arrow from each field's entity to the one it names,
@@ -928,6 +963,16 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 text = point.Open
                     ? dragging ? $"{side}: on to a wall" : hovered ? $"{side}: on to a wall or an edge  ·  drag to set" : side
                     : dragging ? $"{side} {Number(value)}" : hovered ? $"{side} {Number(value)}  ·  double-click to clear" : side;
+            }
+            else if (point.Component is HingeJoint hinge)
+            {
+                if (point.Index == 0)
+                    text = dragging ? $"Hinge  ·  {Number(hinge.Anchor.X)}, {Number(hinge.Anchor.Y)}" : hovered ? "Hinge  ·  drag to move" : "Hinge";
+                else
+                {
+                    var (side, value) = point.Index < 0 ? ("Lower", hinge.LowerAngle) : ("Upper", hinge.UpperAngle);
+                    text = dragging ? $"{side} {Number(value)}°" : hovered ? $"{side} {Number(value)}°  ·  double-click to clear limits" : side;
+                }
             }
             else
             {

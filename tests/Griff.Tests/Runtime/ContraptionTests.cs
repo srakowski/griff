@@ -506,6 +506,37 @@ public sealed class ContraptionTests
     }
 
     [Fact]
+    public void TheHingeTool_HingesAThingWhereItWasClicked_ToAnotherOrToTheWorld_AndUndoTakesItAway()
+    {
+        var scene = new Scene();
+        var plank = Crate(scene, "Plank", new Vector2(0, 3), gravity: 0);
+        plank.GetComponent<BoxCollider>()!.Size = new Vector2(4, 0.4f);
+        var wheel = Crate(scene, "Wheel", new Vector2(6, 3), gravity: 0);
+        var (game, input, _, _) = Sandbox(scene);
+
+        // Pinned to the world by its left end.
+        Pick(game, input, ToolHud.Tool, "Hinge");
+        Click(game, input, new Vector2(-1.5f, 3));
+        Assert.Equal(plank, game.ToolFirst);
+        Click(game, input, new Vector2(-1.5f, 8));
+        var hinge = Assert.Single(plank.GetComponents<HingeJoint>());
+        Assert.Null(hinge.To);
+        Assert.Equal(new Vector2(-1.5f, 0), hinge.Anchor, new Vector2Comparer(0.01f));
+        Assert.True(plank.GetComponent<Body>()!.Rotates);
+
+        // The wheel hinged to the plank at its middle.
+        Click(game, input, At(wheel));
+        Click(game, input, At(plank));
+        var axle = Assert.Single(wheel.GetComponents<HingeJoint>());
+        Assert.Equal("Plank", axle.To);
+
+        Assert.True(game.Undo());
+        Assert.Empty(wheel.GetComponents<HingeJoint>());
+        Assert.True(game.Undo());
+        Assert.Empty(plank.GetComponents<HingeJoint>());
+    }
+
+    [Fact]
     public void TheWireTool_AsksWhichInput_WhenThereAreSeveral_AndUndoTakesTheWireAway()
     {
         var scene = new Scene();

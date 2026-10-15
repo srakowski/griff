@@ -1,0 +1,112 @@
+title: Hinges and turning contraptions
+intro: Hinge joints pin a body to the world or to another body at a point, with limits on how far it swings and a motor to turn it; and welded contraptions turn as one body.
+project: Contraption | Hinges
+
+# A new scene in the Contraption project (which has a wheel picture, Textures/wheel.png), its camera moved out to see it
+# all: a floor 40 wide whose top is at y = -2.5.
+menu: File > New Scene...
+prompt: Hinges
+select: Main Camera
+set: Transform.Position = 0, 1, 0
+set: Camera.Size = 7
+deselect
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 40, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 40, 1
+deselect
+
+chapter: A door | Its hinge and limits dragged in the Scene view
+create: Sprite
+rename: Door
+set: Transform.Position = 4, 2, 0
+set: Sprite.Size = 3, 0.3
+set: Sprite.Tint = #B07F4A
+add: BoxCollider
+set: BoxCollider.Size = 3, 0.3
+menu: Entity > Add Hinge
+expectcomponents: Door = Transform, Sprite, BoxCollider, Body, HingeJoint
+expectvalue: Door.Body.Rotates = true
+say: Add Hinge pins the selection at its middle so it turns there, and makes its body rotate.
+explain: handle:HingeJoint.Anchor | The hinge | Drag its knob to move it: here, to the door's left end.
+path: HingeJoint.Anchor = -1.5, 0
+expectvalue: Door.HingeJoint.Anchor.X = -1.5 ~ 0.01
+set: HingeJoint.Limit = true
+explain: handle:HingeJoint.Lower | Its limits | With Limit ticked, the wedge shows how far it swings: drag either end to set that limit.
+path: HingeJoint.Lower = -60
+expectvalue: Door.HingeJoint.LowerAngle = -60 ~ 1
+path: HingeJoint.Upper = 20
+expectvalue: Door.HingeJoint.UpperAngle = 20 ~ 1
+deselect
+
+chapter: A cart | Wheels hinged to it, turned by motors
+create: Sprite
+rename: Cart
+set: Transform.Position = -6, -1.6, 0
+set: Sprite.Size = 3, 0.4
+set: Sprite.Tint = #B07F4A
+add: BoxCollider
+set: BoxCollider.Size = 3, 0.4
+add: Body
+set: Body.Rotates = true
+deselect
+create: Sprite
+rename: Back Wheel
+set: Transform.Position = -7, -2.05, 0
+pickimage: Sprite.Image = Textures/wheel.png
+set: Sprite.Size = 0.9, 0.9
+add: CircleCollider
+set: CircleCollider.Radius = 0.45
+select: Cart
+select: Ctrl+Back Wheel
+menu: Entity > Add Hinge
+expectvalue: Back Wheel.HingeJoint.To = Cart
+say: With two picked, the last is hinged to the first: this wheel turns on the cart, and the two don't bump into each other.
+select: Ctrl+Cart
+set: HingeJoint.Motor = true
+set: HingeJoint.MotorSpeed = -360
+explain: component:HingeJoint | A motor | Its motor turns it at its speed, as hard as its strength lets it. A wire into its Power switches it on and off.
+menu: Entity > Duplicate
+rename: Front Wheel
+set: Transform.Position = -5, -2.05, 0
+deselect
+
+chapter: Turning as one | A welded contraption tips over
+create: Sprite
+rename: Post
+set: Transform.Position = -1, -1.5, 0
+set: Sprite.Size = 0.4, 2
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 0.4, 2
+deselect
+create: Crate
+rename: Box
+set: Transform.Position = -0.2, 0.3, 0
+set: Body.Rotates = true
+deselect
+create: Sprite
+rename: Beam
+set: Transform.Position = -0.2, -0.35, 0
+set: Sprite.Size = 2.4, 0.3
+set: Sprite.Tint = #8C93A0
+add: BoxCollider
+set: BoxCollider.Size = 2.4, 0.3
+add: Body
+set: Body.Rotates = true
+add: Weld
+set: Weld.To = Box
+say: Welded together, a beam and a box are one body now, which turns round where its weight balances: just off this post.
+deselect
+
+play
+wait: 4
+expectvalue: Door.Body.Asleep = true
+explain: entity:Door | Swung down | The door swung down on its hinge as far as its lower limit, and fell asleep there.
+explain: entity:Cart | Driving | The wheels' motors drive the cart along.
+expectvalue: Beam.Body.Asleep = true
+explain: entity:Beam | Tipped over | The welded beam and box tipped off the post together and lie on the floor as one.
+stop

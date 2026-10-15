@@ -1284,7 +1284,7 @@ public sealed class ProjectTemplateTests : IDisposable
         var game = NewGame(project, scene, input, registry);
         var props = scene.Entities.Select(e => e.GetComponent<SandboxTools>()).OfType<SandboxTools>().Single().PropList;
 
-        Assert.Equal(13, props.Count);
+        Assert.Equal(14, props.Count);
         Assert.All(props, p => Assert.Equal(p, game.PrefabLoader!(p).Name));
     }
 

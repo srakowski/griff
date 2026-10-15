@@ -606,7 +606,8 @@ public sealed class Body : Component
     /// <summary>
     /// Lets it turn: hit or pushed off its middle it spins (see <see cref="Spin"/>), it tips over edges and falls flat, and
     /// its box or polygon collider turns with the entity, so others meet it turned. Off (the default), it stays upright whatever hits
-    /// it, as players and enemies should, and so does its box. Welded to others, it moves with them without turning.
+    /// it, as players and enemies should, and so does its box. Welded to others, they turn as one if they all rotate; hung on
+    /// a <see cref="HingeJoint"/> without it, it hangs upright.
     /// </summary>
     public bool Rotates { get; set; }
 

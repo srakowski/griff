@@ -3,11 +3,12 @@ using static Griff.Projects.TemplateArt;
 
 namespace Griff.Modules.Contraptions;
 
-// The Contraption template's props, 32 pixels: a crate (shared with other templates), a ball, a balloon, a thruster, a
-// button, a lamp's bulb and a logic chip.
+// The Contraption template's props, 32 pixels: a crate (shared with other templates), a ball, a wheel, a balloon, a
+// thruster, a button, a lamp's bulb and a logic chip.
 internal static class ContraptionsArt
 {
     public const string BallArt = "Textures/ball.png";
+    public const string WheelArt = "Textures/wheel.png";
     public const string BalloonArt = "Textures/balloon.png";
     public const string ThrusterArt = "Textures/thruster.png";
     public const string ButtonArt = "Textures/button.png";
@@ -18,6 +19,7 @@ internal static class ContraptionsArt
     {
         [CrateArt] = Crate().Png(),
         [BallArt] = Ball().Png(),
+        [WheelArt] = WheelPicture().Png(),
         [BalloonArt] = Balloon().Png(),
         [ThrusterArt] = ThrusterPicture().Png(),
         [ButtonArt] = ButtonPicture().Png(),
@@ -44,6 +46,20 @@ internal static class ContraptionsArt
             }
         }
 
+        return c;
+    }
+
+    // A tyre round a grey rim with four spokes and a gold hub, so it's plain to see turning.
+    private static Canvas WheelPicture()
+    {
+        var c = new Canvas(32, 32, 47);
+        var rim = Rgb(0x9A, 0x9F, 0xAA);
+        c.Ellipse(15, 15, 15, 15, Rgb(0x2B, 0x2E, 0x35));
+        c.Ellipse(15, 15, 10, 10, rim);
+        c.Ellipse(15, 15, 8, 8, Rgb(0x4A, 0x4F, 0x5A));
+        c.Rect(14, 7, 3, 17, rim);
+        c.Rect(7, 14, 17, 3, rim);
+        c.Ellipse(15, 15, 3, 3, Rgb(0xE3, 0xB3, 0x41));
         return c;
     }
 

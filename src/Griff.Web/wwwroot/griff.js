@@ -8,7 +8,8 @@ const status = document.getElementById('status');
 // A quad's floats and bytes (its corners in clip space, the part of the image, tint and flash: four floats each).
 const QUAD_FLOATS = 20;
 const QUAD_BYTES = QUAD_FLOATS * 4;
-// The image id of a batch of holes (a scene change's iris), drawn with the shape shader; 0 is no image (white).
+// The image id of a batch of holes (a scene change's iris), drawn with the shape shader; 0 is no image (white), and
+// -2, -3... are the glyph atlas's pages (see glyphs).
 const HOLE = -1;
 
 // The quads and holes are drawn as the desktop renderer draws them (Griff.Graphics' SpriteRenderer), in GLSL ES.
@@ -119,6 +120,30 @@ export function loadImage(id, file) {
   createImageBitmap(new Blob([bytes]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
     .then(image => upload(texture, image))
     .catch(() => upload(texture, new Uint8Array([255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255]), 2, 2));
+}
+
+/**
+ * Copies `rows` rows from `top` of a glyph atlas page (RGBA, `size` pixels wide) to its texture under `id`, making it
+ * `size` pixels square the first time. Text is smoothed, as on the desktop.
+ */
+export function glyphs(id, size, top, rows, rgba) {
+  let texture = textures.get(id);
+  if (!texture) {
+    texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    textures.set(id, texture);
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, top, size, rows, gl.RGBA, gl.UNSIGNED_BYTE, rgba.slice());
 }
 
 /** Draws a frame: the quads (as bytes), the batches (image id, quad count) and the background color. */

@@ -8,6 +8,7 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\Griff\Griff.csproj" />
+    <ProjectReference Include="..\Griff.Fonts\Griff.Fonts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

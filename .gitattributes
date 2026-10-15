@@ -51,6 +51,8 @@
 *.tif      binary
 *.tiff     binary
 *.ico      binary
+*.ttf      binary
+*.otf      binary
 # SVG treated as text by default.
 *.svg      text
 # If you want to treat it as binary,

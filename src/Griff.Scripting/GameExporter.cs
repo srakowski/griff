@@ -15,11 +15,15 @@ public sealed class ExportResult
     public string? Executable { get; init; }
 
     public string? Error { get; init; }
+
+    /// <summary>What the game maker should know about the export, which didn't stop it (e.g. fonts the browser hasn't got).</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 /// <summary>
 /// Builds a standalone game as one executable: a copy of the player with the project's content (minus script
-/// sources) and the compiled scripts zipped onto its end (see <see cref="GamePackage"/>). The file can be shared as-is.
+/// sources) and the compiled scripts zipped onto its end (see <see cref="GamePackage"/>). The file can be shared as-is: it
+/// carries its <see cref="ThirdPartyNotices"/> inside, which are also written beside it.
 /// </summary>
 public static class GameExporter
 {
@@ -46,12 +50,15 @@ public static class GameExporter
         try
         {
             WriteGame(project, compiled, staging);
+            var notices = ThirdPartyNotices.For(ThirdPartyNotices.FilesIn(playerExecutable));
+            File.WriteAllText(Path.Combine(staging, ThirdPartyNotices.FileName), notices.Text);
 
             // Written next to the target and moved into place, so a failed export leaves the last good one alone.
             var partial = executable + ".partial";
             File.Copy(playerExecutable, partial, overwrite: true);
             GamePackage.Append(partial, staging);
             File.Move(partial, executable, overwrite: true);
+            File.WriteAllText(Path.Combine(outputFolder, ThirdPartyNotices.FileName), notices.Text);
         }
         finally
         {

@@ -187,9 +187,10 @@ public sealed class Text : Component, IDrawable
     public int Order { get; set; }
 
     /// <summary>
-    /// A font file relative to Assets (e.g. "Fonts/pixel.ttf"), or the name of an installed font such as "Consolas".
-    /// Empty uses the built-in font. Prefer font files: they ship with the game, and installed fonts may be missing
-    /// on players' PCs.
+    /// A font file relative to Assets (.ttf, .otf or .ttc, e.g. "Fonts/pixel.ttf"), or the name of an installed font such
+    /// as "Consolas". Empty uses the built-in font (Selawik Semibold). Prefer font files: they ship with the game, while
+    /// an installed font is never copied into it, so it may be missing on players' PCs and is never there in a browser
+    /// (the built-in font draws instead, and the web export warns of it).
     /// </summary>
     public string? Font { get; set; }
 

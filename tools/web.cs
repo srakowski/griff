@@ -5,9 +5,10 @@
 
 // Griff in a browser: exports a game for the web (WebExporter, with the web player Griff.Web publishes) and serves it on
 // http://127.0.0.1:<port>/, this computer only. With no project it's the proof game: the griffin, a sprite, which the
-// arrow keys or WASD move (a script reads the input). With --check it plays it in a headless Edge (or Chrome) through the
-// DevTools protocol, so no window opens: it waits for the game to run, takes a screenshot, holds the right arrow, takes
-// another, and checks the griffin is drawn and moved right, then exits 0 (or 1, saying why). Otherwise it serves until
+// arrow keys or WASD move (a script reads the input), under a label. With --check it plays it in a headless Edge (or
+// Chrome) through the DevTools protocol, so no window opens: it waits for the game to run, takes a screenshot, holds the
+// right arrow, takes another, and checks the label's text is drawn as wide as Griff lays it out, and the griffin is drawn
+// and moved right, then exits 0 (or 1, saying why). Otherwise it serves until
 // Ctrl+C, for a person to open the address. Run through tools\web.ps1, which publishes the web player first.
 //   dotnet run -c Release tools/web.cs -- [--check] [--project <folder>] [--port <port>] [--out <folder>]
 using System.Diagnostics;
@@ -16,6 +17,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Griff.Fonts;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -24,6 +26,11 @@ using Griff.Scripting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using StbImageSharp;
+
+// The proof game's label: what it says, how high a line is and where it is (world units; the view is 10 high).
+const string LabelText = "Griff on the Web ♥";
+const float LabelSize = 0.8f;
+const float LabelY = 3.8f;
 
 var check = args.Contains("--check");
 var port = int.TryParse(Arg("--port"), CultureInfo.InvariantCulture, out var p) ? p : 8091;
@@ -45,6 +52,8 @@ try
     var export = WebExporter.Export(project, player, site);
     if (!export.Success)
         return Fail($"The export failed: {export.Error}\n{string.Join("\n", export.Diagnostics.Select(d => d.ToString()))}");
+    foreach (var warning in export.Warnings)
+        Console.WriteLine("Warning: " + warning);
     Report(site);
 
     await using var server = await Serve(site, port);
@@ -72,9 +81,9 @@ finally
     }
 }
 
-// The proof game: an empty project with the griffin (Griff's logo) in the middle of the screen and a script that moves
-// it with the Move action (the arrow keys, WASD or a stick), so drawing a sprite, a script compiled at export and input
-// all have to work in the browser.
+// The proof game: an empty project with the griffin (Griff's logo) in the middle of the screen, a script that moves
+// it with the Move action (the arrow keys, WASD or a stick) and a label over it, so drawing a sprite and text, a script
+// compiled at export and input all have to work in the browser.
 async Task<Project> ProofGame(string folder)
 {
     var project = await Project.CreateAsync(folder, "Griff on the Web", ProjectTemplates.Empty);
@@ -102,6 +111,11 @@ async Task<Project> ProofGame(string folder)
     using (var data = JsonDocument.Parse("""{ "type": "Mover" }"""))
         griffin.AddComponent(new MissingComponent("Mover", data.RootElement));
     scene.Add(griffin);
+    var label = new Entity("Label");
+    label.Transform.Position = new System.Numerics.Vector3(0, LabelY, 0);
+    var text = label.AddComponent<Text>();
+    (text.Value, text.Size, text.Color) = (LabelText, LabelSize, new Griff.Color(1f, 0.83f, 0.3f));
+    scene.Add(label);
     await using (var write = File.Create(scenePath))
         serializer.Save(scene, write);
     return project;
@@ -188,6 +202,12 @@ async Task<int> Check(string url, string profile, string shots)
         if (await Evaluate(cdp, "document.getElementById('status').checkVisibility()") != "false")
             return Fail("The page still shows its status over the game.");
         var before = await Screenshot(cdp, Path.Combine(shots, "before.png"));
+        if (Label(before) is not { } label)
+            return Fail($"The label's text isn't drawn (see {Path.Combine(shots, "before.png")}).\n{string.Join("\n", log)}");
+        var expected = LabelWidth(before.Height);
+        Console.WriteLine($"The label is drawn: {label.Pixels} pixels in {label.Runs} runs across, {label.Width} pixels wide (laid out at {expected:0}).");
+        if (label.Runs < 10 || Math.Abs(label.Width - expected) > expected * 0.06)
+            return Fail($"The label's text isn't drawn as Griff lays it out (see {Path.Combine(shots, "before.png")}).");
         if (Griffin(before) is not { } first)
             return Fail($"Nothing but the background is drawn (see {Path.Combine(shots, "before.png")}).\n{string.Join("\n", log)}");
         Console.WriteLine($"The griffin is drawn: {first.Pixels} pixels, around ({first.X:0}, {first.Y:0}) of {before.Width}x{before.Height}.");
@@ -206,7 +226,7 @@ async Task<int> Check(string url, string profile, string shots)
 
         if (moved.X - first.X < 50 || Math.Abs(moved.Y - first.Y) > 4)
             return Fail("The right arrow didn't move the griffin right.");
-        Console.WriteLine("Web proof: OK. A sprite draws and input moves it in the browser.");
+        Console.WriteLine("Web proof: OK. Text and a sprite draw, and input moves the sprite, in the browser.");
         return 0;
     }
     finally
@@ -241,12 +261,13 @@ static async Task<ImageResult> Screenshot(DevTools cdp, string path)
     return ImageResult.FromMemory(png, ColorComponents.RedGreenBlueAlpha);
 }
 
-// Where the griffin is: the middle of the pixels that aren't the empty scene's background (the camera's, #1E222B).
+// Where the griffin is: the middle of the pixels that aren't the empty scene's background (the camera's, #1E222B), below
+// the label.
 static (double X, double Y, int Pixels)? Griffin(ImageResult image)
 {
     double x = 0, y = 0;
     var count = 0;
-    for (var row = 0; row < image.Height; row++)
+    for (var row = image.Height / 4; row < image.Height; row++)
     {
         for (var column = 0; column < image.Width; column++)
         {
@@ -259,6 +280,46 @@ static (double X, double Y, int Pixels)? Griffin(ImageResult image)
     }
 
     return count < 500 ? null : (x / count, y / count, count);
+}
+
+// The label's text in the top quarter of the screen: how many pixels it has, how many runs of columns with some of it
+// (the letters, more or less) and how wide it is.
+static (int Pixels, int Runs, int Width)? Label(ImageResult image)
+{
+    var (pixels, runs, left, right) = (0, 0, int.MaxValue, -1);
+    var inRun = false;
+    for (var column = 0; column < image.Width; column++)
+    {
+        var any = false;
+        for (var row = 0; row < image.Height / 4; row++)
+        {
+            var i = (row * image.Width + column) * 4;
+            if (Math.Abs(image.Data[i] - 0x1E) + Math.Abs(image.Data[i + 1] - 0x22) + Math.Abs(image.Data[i + 2] - 0x2B) <= 60)
+                continue;
+            (pixels, any) = (pixels + 1, true);
+        }
+
+        if (any)
+            (left, right) = (Math.Min(left, column), column);
+        if (any && !inRun)
+            runs++;
+        inRun = any;
+    }
+
+    return pixels < 300 ? null : (pixels, runs, right - left + 1);
+}
+
+// How wide Griff lays the label out, in screen pixels: its glyphs' extent in lines, a line being LabelSize world units
+// and the view 10 units high (the camera's size, 5, is half of it).
+static double LabelWidth(int screenHeight)
+{
+    var quads = new GlyphAtlas(null).Lay(LabelText, null, TextAlign.Center);
+    var (min, max) = (float.MaxValue, float.MinValue);
+    foreach (var quad in quads)
+        (min, max) = (Math.Min(min, quad.Left), Math.Max(max, quad.Right));
+    // Each quad has a pixel of nothing round its glyph at 64 pixels a line.
+    var inset = 2f / TextRaster.LinePixels;
+    return (max - min - inset) * LabelSize * screenHeight / 10.0;
 }
 
 static string? Browser()

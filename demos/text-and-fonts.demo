@@ -1,0 +1,32 @@
+title: Text without WPF
+intro: Griff draws game text itself now, the same in the editor, an exported game and a browser.
+project: Arcade | Glyphs
+
+chapter: The same text everywhere | Fonts read and drawn in plain .NET
+say: Every label in this menu, the title, the best score and the buttons, is drawn by Griff itself now, not by Windows.
+explain: scene | Scene view | Griff reads the font and rasterizes its letters in plain dot net, so the browser can draw them too.
+say: The built-in font is Selawik Semibold, Microsoft's open font with Segoe UI's measurements, so text sits where it always did.
+play
+wait: 1.5
+explain: game | Game | The game draws each letter as its own little quad, from a page of letters drawn once.
+stop
+
+chapter: Symbols and fonts | What a font hasn't got comes from the fallback
+select: Best
+set: Text.Value = Lives ♥♥♥ → Ωmega
+expectvalue: Best.Text.Value = Lives ♥♥♥ → Ωmega
+explain: scene | Scene view | Hearts, arrows, Greek and Cyrillic come from a part of DejaVu Sans when the font has none.
+set: Text.Font = Consolas
+expectvalue: Best.Text.Font = Consolas
+explain: field:Text.Font | Font | An installed font still works on your own computer, but it's never copied into a game. In a browser it falls back to the built-in font, and the web export warns of it.
+set: Text.Font =
+say: A font file in Assets ships with the game and works everywhere, so it's the one to choose.
+
+chapter: Scores that change | No garbage
+say: Text whose words change every frame, a score or a timer, now makes no garbage: its letters are already on the page.
+play
+wait: 1
+tap: Enter
+wait: 2.5
+stop
+say: And every exported game, desktop or web, carries a third party notices file with the licenses of the fonts and libraries inside it.

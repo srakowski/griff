@@ -222,10 +222,10 @@ public sealed class SpriteRenderer : IDisposable
     private uint _sceneTexture;
     private (int Width, int Height) _sceneSize;
 
-    public SpriteRenderer(GL gl, string assetRoot, TextRasterizer? textRasterizer = null)
+    public SpriteRenderer(GL gl, string assetRoot)
     {
         _gl = gl;
-        _textures = new TextureCache(gl, assetRoot, textRasterizer);
+        _textures = new TextureCache(gl, assetRoot);
         _program = CreateProgram(FragmentShader);
         _gl.Uniform1(_gl.GetUniformLocation(_program, "uTexture"), 0);
         _shapeProgram = CreateProgram(ShapeFragmentShader);
@@ -349,16 +349,8 @@ public sealed class SpriteRenderer : IDisposable
         Texture texture;
         if (sprite.Text is { } text)
         {
-            if (_textures.GetText(text, sprite.Font, sprite.Align) is not { } textTexture)
-                return;
-            texture = textTexture;
-
-            // The draw is one line high; stretch to the rasterized block's line count and aspect,
-            // then slide it so its left or right edge is at the origin for aligned text.
-            var lines = text.AsSpan().Count('\n') + 1;
-            var width = (float)texture.Width / texture.Height * lines;
-            var shift = sprite.Align switch { TextAlign.Left => width / 2, TextAlign.Right => -width / 2, _ => 0f };
-            world = Matrix4x4.CreateScale(width, lines, 1) * Matrix4x4.CreateTranslation(shift, 0, 0) * world;
+            AddText(sprite, text, world * viewProjection);
+            return;
         }
         else if (_lastTexture is not null && string.Equals(sprite.Image, _lastImage, StringComparison.Ordinal))
         {
@@ -376,6 +368,30 @@ public sealed class SpriteRenderer : IDisposable
             Flush();
         _batchTexture = texture;
         WriteQuad(world * viewProjection, sprite.Source, sprite.Tint, sprite.Flash);
+    }
+
+    // Text as a quad a glyph, each from its atlas page (the draw is one line high, so the glyphs' places, in lines, are in
+    // the draw's own space).
+    private void AddText(in SpriteDraw sprite, string text, in Matrix4x4 toClip)
+    {
+        var glyphs = _textures.Glyphs.Lay(text, sprite.Font, sprite.Align);
+        var tint = new Vector4(sprite.Tint.R, sprite.Tint.G, sprite.Tint.B, sprite.Tint.A);
+        var flash = new Vector4(sprite.Flash.R, sprite.Flash.G, sprite.Flash.B, sprite.Flash.A);
+        foreach (ref readonly var glyph in glyphs)
+        {
+            var texture = _textures.GlyphPage(glyph.Page);
+            if (_batchTexture is not null && texture != _batchTexture)
+                Flush();
+            if (_quadCount == MaxQuads)
+                Flush();
+            _batchTexture = texture;
+            ref var quad = ref _quads[_quadCount++];
+            quad.Corners01 = Pair(ToClip(glyph.Left, glyph.Top, toClip), ToClip(glyph.Right, glyph.Top, toClip));
+            quad.Corners23 = Pair(ToClip(glyph.Right, glyph.Bottom, toClip), ToClip(glyph.Left, glyph.Bottom, toClip));
+            quad.Source = glyph.Source;
+            quad.Tint = tint;
+            quad.Flash = flash;
+        }
     }
 
     // One quad into the batch: the unit quad's corners (-0.5..0.5) taken to clip space, the part of the image (row 0 is

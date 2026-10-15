@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
+using Griff.Fonts;
 using Griff.Input;
 using Griff.Rendering;
 using Griff.Runtime;
@@ -19,7 +20,8 @@ public static partial class WebPlayer
 
     private static readonly InputState s_input = new() { IsMouseInView = false };
     private static readonly Dictionary<string, int> s_images = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly WebFrame s_frame = new(ImageId);
+    private static WebFrame s_frame = new(ImageId);
+    private static byte[] s_glyphRows = [];
     private static LoadedGame? s_loaded;
     private static Game? s_game;
     private static RenderFrame? s_last;
@@ -53,6 +55,7 @@ public static partial class WebPlayer
     public static void Run(LoadedGame loaded)
     {
         s_loaded = loaded;
+        s_frame = new WebFrame(ImageId, loaded.Project.AssetsPath);
         // The browser build has one thread (the page's): a big scene's work is done on it rather than shared out.
         Workers.Count = 1;
         s_game = new Game(loaded.Scene, s_input)
@@ -96,6 +99,7 @@ public static partial class WebPlayer
         }
 
         s_frame.Build(s_last);
+        SendGlyphs();
         var background = s_frame.Background;
         Browser.Draw(MemoryMarshal.AsBytes(s_frame.Quads), s_frame.Batches, background.R, background.G, background.B);
     }
@@ -167,6 +171,23 @@ public static partial class WebPlayer
         {
             var world = Vector4.Transform(new Vector4(s_pointer, 0, 1), inverse);
             s_input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
+        }
+    }
+
+    // The rows of the glyph pages that glyphs were drawn into since the last frame, for the page to copy to its textures
+    // before drawing the frame.
+    private static void SendGlyphs()
+    {
+        var pages = s_frame.Glyphs.Pages;
+        for (var i = 0; i < pages.Count; i++)
+        {
+            if (!pages[i].TakeChanges(out var top, out var rows))
+                continue;
+            var length = rows * GlyphPage.Size * 4;
+            if (s_glyphRows.Length < length)
+                s_glyphRows = new byte[GlyphPage.Size * GlyphPage.Size * 4];
+            pages[i].CopyRgba(top, rows, s_glyphRows);
+            Browser.Glyphs(WebFrame.GlyphPageId(i), GlyphPage.Size, top, rows, s_glyphRows.AsSpan(0, length));
         }
     }
 

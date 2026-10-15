@@ -1,8 +1,9 @@
 <#
   Griff in a browser: publishes the web player (src\Griff.Web, .NET for WebAssembly), exports a game for the web with it
   and serves it at http://127.0.0.1:8091/ (this computer only) until Ctrl+C. With no -Project it's the proof game: the
-  griffin, which the arrow keys or WASD move. -Check plays it in a headless Edge (or Chrome) instead, with no window:
-  it checks the griffin is drawn and that holding the right arrow moves it, saves the two screenshots and exits 0 if so.
+  griffin, which the arrow keys or WASD move, under a label. -Check plays it in a headless Edge (or Chrome) instead, with
+  no window: it checks the label's text and the griffin are drawn and that holding the right arrow moves the griffin,
+  saves the two screenshots and exits 0 if so.
     powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1 [-Check] [-Project <folder>] [-Port 8091] [-Out <folder>] [-NoBuild]
 #>
 param(

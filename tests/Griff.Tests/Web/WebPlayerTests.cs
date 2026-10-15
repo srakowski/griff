@@ -105,7 +105,7 @@ public sealed class WebPlayerTests
     }
 
     [Fact]
-    public void Frame_DrawsHolesWithTheShape_AndSkipsTextForNow()
+    public void Frame_DrawsHolesWithTheShape_AndTextAsAQuadAGlyphFromTheAtlas()
     {
         var entity = new Entity();
         var web = new WebFrame(_ => 1);
@@ -116,15 +116,45 @@ public sealed class WebPlayerTests
             Sprites =
             [
                 new SpriteDraw(Matrix4x4.Identity, null, Color.Black, entity) { HoleRadius = 0.4f },
-                new SpriteDraw(Matrix4x4.Identity, null, Color.White, entity, Text: "Score: 3"),
+                new SpriteDraw(Matrix4x4.Identity, null, new Color(1, 0, 0), entity, Text: "Score: 3"),
                 new SpriteDraw(Matrix4x4.Identity, "a.png", Color.White, entity),
             ],
         });
 
-        Assert.Equal([WebFrame.HoleShape, 1, 1, 1], web.Batches.ToArray());
-        Assert.Equal(1, web.Skipped);
+        // Seven glyphs with something to draw (the space has none), all on the atlas's first page.
+        Assert.Equal([WebFrame.HoleShape, 1, WebFrame.GlyphPageId(0), 7, 1, 1], web.Batches.ToArray());
         // A hole's radius goes where the shader reads it: the flash's first channel.
         Assert.Equal(0.4f, web.Quads[16]);
+        // A glyph's quad is tinted with the text's color, and shows its part of the page.
+        var glyph = web.Quads.Slice(WebFrame.FloatsPerQuad, WebFrame.FloatsPerQuad).ToArray();
+        Assert.Equal([1f, 0, 0, 1], glyph[12..16]);
+        Assert.InRange(glyph[10], 0.001f, 0.1f);
+        Assert.True(web.Glyphs.Pages[0].HasChanges);
+    }
+
+    [Fact]
+    public void Frame_OfTextThatChanges_MakesNoGarbage()
+    {
+        var entity = new Entity();
+        var web = new WebFrame(_ => 1);
+        var scores = Enumerable.Range(0, 100).Select(i => $"Score: {i}").ToArray();
+        var sprites = new List<SpriteDraw> { new(Matrix4x4.Identity, null, Color.White, entity, Text: "Lives ♥♥♥") { Align = TextAlign.Left } };
+        var frame = new RenderFrame { ViewProjection = Matrix4x4.Identity, Sprites = sprites };
+        sprites.Add(default);
+        foreach (var score in scores)
+        {
+            sprites[1] = new SpriteDraw(Matrix4x4.Identity, null, Color.White, entity, Text: score);
+            web.Build(frame);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        foreach (var score in scores)
+        {
+            sprites[1] = new SpriteDraw(Matrix4x4.Identity, null, Color.White, entity, Text: score);
+            web.Build(frame);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
     [Fact]

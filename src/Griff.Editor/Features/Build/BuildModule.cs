@@ -85,6 +85,9 @@ public abstract class BuildCommandBase(
                 logger.LogWarning("{Diagnostic}", diagnostic.ToString());
         }
 
+        foreach (var warning in result.Warnings)
+            logger.LogWarning("{Warning}", warning);
+
         if (!result.Success)
         {
             logger.LogError("Build failed: {Error}", result.Error);

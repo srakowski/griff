@@ -39,7 +39,7 @@ public sealed class GameExporterTests : IDisposable
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(Path.Combine(_output, "Space Hop.exe"), result.Executable);
-        Assert.Equal(["Space Hop.exe"], Directory.GetFileSystemEntries(_output).Select(Path.GetFileName));
+        Assert.Equal(["Space Hop.exe", ThirdPartyNotices.FileName], Directory.GetFileSystemEntries(_output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         Assert.StartsWith("player exe", File.ReadAllText(result.Executable!));
         Assert.True(GamePackage.IsPackaged(result.Executable!));
 
@@ -49,6 +49,8 @@ public sealed class GameExporterTests : IDisposable
         Assert.True(File.Exists(Path.Combine(game, "Assets", "hero.png")));
         Assert.False(File.Exists(Path.Combine(game, "Assets", "Scripts", "Jumper.cs")));
         Assert.True(File.Exists(Path.Combine(game, ExportLayout.ScriptsAssembly)));
+        // The notices go inside the game too, so the .exe shared on its own still carries them.
+        Assert.Equal(File.ReadAllText(Path.Combine(_output, ThirdPartyNotices.FileName)), File.ReadAllText(Path.Combine(game, ThirdPartyNotices.FileName)));
     }
 
     [Fact]

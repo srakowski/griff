@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
+using Griff.Fonts;
 using Griff.Rendering;
 using Griff.Scenes;
 using Point = System.Windows.Point;
@@ -25,6 +26,9 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
     private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
+    private readonly Dictionary<(string Text, string? Font, TextAlign Align), (BitmapSource Image, Rect Rect)?> _textImages = [];
+    private GlyphAtlas? _glyphs;
+    private string? _glyphsRoot;
     private SceneDocument? _document;
 
     // The area a fill would cover, for the map's tiles and the cell it was worked out for.
@@ -37,6 +41,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         _images.Clear();
         _tileImages.Clear();
         _tintedImages.Clear();
+        _textImages.Clear();
     }
 
     /// <summary>Draws the open tab's scene (or just the background, with none open).</summary>
@@ -256,18 +261,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(draw.World)));
             if (draw.Text is { Length: > 0 } text)
             {
-                var formatted = Griff.Platform.Windows.WpfText.Format(text,
-                    Griff.Platform.Windows.WpfText.TypefaceFor(draw.Font, workspace.Project?.AssetsPath), draw.Align,
-                    new SolidColorBrush(System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte)),
-                    style.PixelsPerDip);
-                var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace) + 8;
-                formatted.MaxTextWidth = width;
-                var left = draw.Align switch { TextAlign.Left => 0, TextAlign.Right => -width, _ => -width / 2 };
-                var lines = text.Split('\n').Length;
-                var scale = 1 / Griff.Platform.Windows.WpfText.LineHeight;
-                dc.PushTransform(new MatrixTransform(new Matrix(scale, 0, 0, -scale, 0, 0)));
-                dc.DrawText(formatted, new Point(left, -Griff.Platform.Windows.WpfText.LineHeight * lines / 2));
-                dc.Pop();
+                DrawTextImage(dc, text, draw.Font, draw.Align, draw.Tint);
             }
             else if (LoadImage(draw.Image) is { } loaded)
             {
@@ -317,26 +311,60 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         }
     }
 
-    // Same font and line height as the game's text rasterizer, scaled to the text's world size.
+    // As the game draws it: the text's glyphs, from the same fonts and laid out the same way, scaled to its world size.
     private void DrawText(DrawingContext dc, Entity entity, Text text)
     {
-        var lines = text.Value!.Split('\n').Length;
-        var formatted = Griff.Platform.Windows.WpfText.Format(text.Value,
-            Griff.Platform.Windows.WpfText.TypefaceFor(text.Font, workspace.Project?.AssetsPath), text.Align,
-            new SolidColorBrush(System.Windows.Media.Color.FromArgb(text.Color.AByte, text.Color.RByte, text.Color.GByte, text.Color.BByte)),
-            style.PixelsPerDip);
-
-        // Same block width as the rasterized texture, placed like the game places it for the alignment.
-        var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace) + 8;
-        formatted.MaxTextWidth = width;
-        var left = text.Align switch { TextAlign.Left => 0, TextAlign.Right => -width, _ => -width / 2 };
-
-        var blockHeight = Griff.Platform.Windows.WpfText.LineHeight * lines;
-        var scale = text.Size / Griff.Platform.Windows.WpfText.LineHeight;
-        var matrix = new Matrix(scale, 0, 0, -scale, 0, 0) * viewport.ScreenMatrix(entity.Transform.WorldMatrix);
-        dc.PushTransform(new MatrixTransform(matrix));
-        dc.DrawText(formatted, new Point(left, -blockHeight / 2));
+        var world = Matrix4x4.CreateScale(text.Size, text.Size, 1) * entity.Transform.WorldMatrix;
+        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(world)));
+        DrawTextImage(dc, text.Value!, string.IsNullOrWhiteSpace(text.Font) ? null : text.Font, text.Align, text.Color);
         dc.Pop();
+    }
+
+    // Text one line high at the origin, tinted, from an image of its glyphs as the game lays them out (see GlyphAtlas).
+    private void DrawTextImage(DrawingContext dc, string text, string? font, TextAlign align, Griff.Color tint)
+    {
+        if (TextImage(text, font, align) is not var (image, rect))
+            return;
+
+        // Images are stored top-down; flip Y back since world space is Y-up.
+        dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 0));
+        dc.PushOpacity(tint.A);
+        dc.DrawImage(Tinted(image, tint), rect);
+        dc.Pop();
+        dc.Pop();
+    }
+
+    // The image of some text's glyphs and where it goes (in lines, Y down as images are), made once and kept; null for
+    // text with nothing to draw.
+    private (BitmapSource Image, Rect Rect)? TextImage(string text, string? font, TextAlign align)
+    {
+        var root = workspace.Project?.AssetsPath;
+        if (_glyphs is null || _glyphsRoot != root)
+        {
+            (_glyphs, _glyphsRoot) = (new GlyphAtlas(root), root);
+            _textImages.Clear();
+        }
+
+        if (_glyphs.RefreshChanged())
+            _textImages.Clear();
+        var key = (text, font, align);
+        if (_textImages.TryGetValue(key, out var cached))
+            return cached;
+        if (_textImages.Count >= 256)
+            _textImages.Clear();
+
+        var (rgba, width, height, topLeft) = _glyphs.Rasterize(text, font, align);
+        _glyphs.EndFrame();
+        (BitmapSource, Rect)? made = null;
+        if (width > 0 && height > 0)
+        {
+            var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, rgba, width * 4);
+            image.Freeze();
+            made = (image, new Rect(topLeft.X, -topLeft.Y, (double)width / TextRaster.LinePixels, (double)height / TextRaster.LinePixels));
+        }
+
+        _textImages[key] = made;
+        return made;
     }
 
     private void DrawCameraFrame(DrawingContext dc, Entity entity, Camera camera, bool selected)

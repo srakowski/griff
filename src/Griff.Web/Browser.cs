@@ -25,6 +25,13 @@ internal static partial class Browser
     public static partial void LoadImage(int id, [JSMarshalAs<JSType.MemoryView>] Span<byte> file);
 
     /// <summary>
+    /// Copies rows of a glyph atlas page (straight-alpha RGBA, <paramref name="size"/> pixels wide) to its texture, made
+    /// <paramref name="size"/> pixels square the first time, under the image <paramref name="id"/>.
+    /// </summary>
+    [JSImport("glyphs", "griff")]
+    public static partial void Glyphs(int id, int size, int top, int rows, [JSMarshalAs<JSType.MemoryView>] Span<byte> rgba);
+
+    /// <summary>
     /// Draws a frame (see <see cref="WebFrame"/>) over the background color. The quads' floats go as their bytes: a
     /// memory view can only be of bytes, ints or doubles.
     /// </summary>

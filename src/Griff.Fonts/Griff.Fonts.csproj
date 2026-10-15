@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Game text without the operating system's: fonts read and glyphs rasterized in plain .NET (StbTrueTypeSharp, a port
+    of stb_truetype, in the public domain), packed into atlas pages and laid out as one quad a glyph. It runs wherever
+    Griff does, the browser included, so text draws the same on the desktop and on the web.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Griff\Griff.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StbTrueTypeSharp" />
+  </ItemGroup>
+
+  <!--
+    The built-in font and the one it falls back to, carried inside the assembly with their licenses (the SIL Open Font
+    License 1.1, and Bitstream Vera's with DejaVu's changes in the public domain), so they go wherever it goes.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Fonts\*.ttf;Fonts\*.txt" LogicalName="Griff.Fonts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

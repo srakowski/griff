@@ -311,6 +311,8 @@ Tilemaps now only draw the tiles in view, so worlds can be big.
 
 **Spawners and lifetimes.** A **Spawner** spawns its **Prefab** every **Interval** seconds where it stands, after a **Delay**, within a **Radius**, up to **Count** in all and **Max Alive** at once; with **Beats** set, it spawns on the music's beat instead (see Keeping the beat). A **Lifetime** destroys its entity after **Seconds**, fading it out over the last **Fade Out** seconds: bullets, effects, score popups.
 
+**Text and fonts.** A **Text** draws its **Value** (several lines are fine) at its entity, **Size** world units a line, in its **Color**, lined up by its **Align** (centered on the entity, starting at it or ending at it). Its **Font** is a font file in Assets (`.ttf`, `.otf` or `.ttc`, such as `Fonts/pixel.ttf`), which ships with the game and is read again when the file changes, or an installed font's name (`Consolas`), or empty for the built-in font, Selawik Semibold (Microsoft's open-source stand-in for Segoe UI, which Griff's text used before, with the same metrics). Griff reads fonts and rasterizes their glyphs itself, in plain .NET (`Griff.Fonts`, with StbTrueTypeSharp), so text draws the same in the editor, an exported game and a browser: each glyph is rasterized once, at 64 pixels a line, onto an atlas page, and text is drawn as one smoothed quad a glyph, so a score or a timer that changes every frame makes no garbage. A character the font hasn't got comes from the built-in font, then from a part of DejaVu Sans Bold (arrows, shapes, symbols such as ♥, Greek and Cyrillic); one none has (Chinese, Japanese, emoji) draws as the font's missing-glyph box, so for those choose a font file that has them. An installed font is drawn from the player's own computer and never copied into a game: on a computer without it, and always in a browser, the built-in font draws instead (the web export warns of each), so prefer font files.
+
 **Typewriter text.** Add a **Typewriter** next to a **Text** and the text types itself out, **Speed** letters a second, pausing briefly at punctuation, with an optional blip **Sound**. Whenever a script changes the text, the new line types out from the start. It runs on real time, so it works in a paused game.
 
 **Prefabs.** Select an entity and choose **Entity → Save as Prefab** to save it (with its children) to `Assets/Prefabs`. Drag a prefab into the Scene view to place it, or spawn it from a script. Save as Prefab works while playing too, to keep a live entity you've tweaked.
@@ -367,7 +369,7 @@ Scripts are plain C# classes in your project's `Assets` folder. **Entity → New
 
 **The script editor.** Scripts open in Griff's own code editor, as tabs next to Scene and Game: from New Script, by double-clicking a `.cs` file in Assets, with the code button on a script component's header in the Inspector (**Edit Script**), or by double-clicking a script error in Output. It's C# with the compiler behind it, so it knows Griff's whole API and your other scripts, unsaved changes included:
 
-- Colors by meaning: properties, methods, types, parameters and fields each have their own color. Code is set in JetBrains Mono, which ships with Griff (SIL Open Font License; see `Themes/Fonts`).
+- Colors by meaning: properties, methods, types, parameters and fields each have their own color. Code is set in JetBrains Mono, which ships with Griff (SIL Open Font License; see `Themes/Fonts` and Licenses).
 - Completion as you type, with each item's signature and documentation; signature help inside calls (Up and Down pick an overload); hover anything for its documentation, or for the compiler's message.
 - Errors and warnings as you type: underlined where they are, counted in the header (click for the list), and in red in the line numbers.
 - **Ctrl+S** saves, compiles and swaps the change into the scene, and into the game if it's playing. Playing saves open scripts first.
@@ -659,7 +661,7 @@ What a behavior can use:
 - **Game:** `Spawn` (an entity, or a prefab by name), `Destroy`, `Find` and `FindAll` (by name, or `Find<T>()` and `FindAll<T>()` by component type; `Game.Scene.Active<T>()` gives just those on enabled entities, and asking every frame costs next to nothing, since the scene keeps its components by type), `LoadScene` and `ReloadScene` (optionally with a `fade:` in seconds and a `color:`; fades use real time, so they work from a paused menu, and `IsChangingScene` is true until the switch), `KeepBetweenScenes` (carry an entity into the next scenes, still running; returning to its original scene doesn't duplicate it), `Quit`, `ShakeCamera`, `HitStop` (freeze game time for a moment of real time; `Time.IsFrozen` is true meanwhile), `SlowMotion` (game time at a fraction of normal speed for a moment of real time, easing back; on top of `Time.Scale`, and `Time.SlowMotionScale` says how much), `Flash` (an entity's sprites and its children's), `FlashScreen` (the whole view, fading out on real time), `Fullscreen` (remembered, like the volumes), `Focus` and `Focused` (the button or slider picked for the keyboard and gamepad), `OpenPanel`, `ClosePanel`, `TopPanel`, `OpenPanels` and `IsPaused` (see Pause menus and panels), `ListenForBinding` and `Rebinding` (see Controls screens), `FadeThrough` (fade out, call something while the screen is covered, fade back in), `LightAt` (how lit a place or an entity is, 0 to 1), `PlaySoundAt` (a sound from somewhere on or off screen), `StartDialogue`, `AdvanceDialogue`, `ChooseDialogue` (pick one of its choices) and `Talking` (the dialogue being said), `HasFlag`, `SetFlag` and `FlagChanged` (see Dialogue flags), `SaveData` (`GetInt`, `GetFloat`, `GetBool`, `GetString`, `Set`, `Delete`, `Clear`) and `Physics` (`Raycast`, `OverlapPoint`, `OverlapBox`, `OverlapCircle`; each takes `layers:` to only find colliders on those layers).
 
 Built-in components:
-- `Transform`, `Camera` (with `Shake`), `Sprite` (single images or sprite sheets, optionally nine-sliced with **Slice**) and `Text` (with `Align` and a `Font`: a `.ttf`/`.otf` file in Assets, which ships with the game, or an installed font's name);
+- `Transform`, `Camera` (with `Shake`), `Sprite` (single images or sprite sheets, optionally nine-sliced with **Slice**) and `Text` (with `Align` and a `Font`: a `.ttf`/`.otf` file in Assets, which ships with the game, or an installed font's name; see Text and fonts);
 - `Animation`, which plays a range of sprite-sheet frames, or named **Clips** (`Idle 0-3, Run 4-9 @12, Die 11-15 once`: a name, frames, and optionally a speed and `once`) switched with `Play("Run")`, which carries on if that clip is already playing. Its **Clip** picks the one the game starts with. `ClipSettings("Run")` gives the frames, speed and looping a clip plays with, `Animation.FrameAt(time, count, fps, loop)` which of its frames shows at a time, and `Animation.FormatClips` writes clips back as text;
 - `Tilemap`, a painted grid of tiles from one or more tilesets, square, isometric or hex (`Shape`, `TileHeight`, `SortByY`, `Neighbors(x, y)`; see Isometric maps and Hex maps above) (`GetTile` and `SetTile` from scripts, `Tilesets()` and `TilesetOf(tile)` to see which picture a tile is cut from, `FillRect(fromX, fromY, toX, toY, tile)` for a box and `FloodFill(x, y, tile)` for an area, like the Scene view's tools; -1 clears; `Layers()` lists the map's layers, `LayerOf` the map a layer belongs to and `BaseMap` the one whose tilesets it uses), with background and one-way tiles. `FindPath(from, to)` finds the shortest way between two world positions around its solid tiles (background and one-way tiles can be walked through), as waypoints at the corners, moving diagonally but never cutting a wall's corner (pass `diagonal: false` for four directions);
 - `ParticleEmitter`, for continuous effects or one-shot bursts (`Burst`; `BurstOnStart` with `DestroyWhenFinished` makes a self-cleaning effect prefab);
@@ -705,8 +707,10 @@ src/
                            FallingBlocks, FirstPerson, Match3, Puzzles, Strategy, Tactics
   Griff.Scripting          Roslyn script compiler, hot reload, game exporter
   Griff.Graphics           OpenGL 3.3 sprite and text renderer
-  Griff.Platform.Windows   WGL context, WPF game surface, frame pacing, input, sound output and decoding,
-                           text rasterizing
+  Griff.Fonts              Fonts read and glyphs rasterized in plain .NET (StbTrueTypeSharp), packed into atlas
+                           pages and laid out as a quad a glyph; a font name resolved in one place (FontCatalog:
+                           BuiltInFonts with their licenses, a project's font files, installed fonts)
+  Griff.Platform.Windows   WGL context, WPF game surface, frame pacing, input, sound output and decoding
   Griff.Editor             WPF editor: modules, commands, panels, design system (Themes/)
   Griff.Player             Runs exported games
   Griff.Web                Runs games in a browser: .NET for WebAssembly, drawn with WebGL 2 (a proof so far)
@@ -754,13 +758,13 @@ Exported games' scripts are compiled optimized, like a Release build; the editor
 ## Web
 
 Games are on their way to the browser, so a jam game can be played from its page. So far it's a proof: the web player
-(`src/Griff.Web`) runs a game's start scene and draws its sprites in Edge or Chrome, taking the keyboard and mouse, and
+(`src/Griff.Web`) runs a game's start scene and draws its sprites and text in Edge or Chrome, taking the keyboard and mouse, and
 the Build menu doesn't offer it yet. To try it, `powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1`
-publishes the web player, exports the proof game (the griffin, which the arrow keys or WASD move with a script) and
+publishes the web player, exports the proof game (the griffin, which the arrow keys or WASD move with a script, under a label) and
 serves it at `http://127.0.0.1:8091/` until Ctrl+C; `-Project <folder>` serves a project of yours instead, `-Port`
 another port, and `-Out <folder>` keeps the exported site. `-Check` plays it in a headless Edge or Chrome (no window, and
-software WebGL, so it needs no GPU), takes a screenshot, holds the right arrow, takes another, and passes if the griffin
-is drawn and has moved right.
+software WebGL, so it needs no GPU), takes a screenshot, holds the right arrow, takes another, and passes if the label's text
+is drawn as wide as Griff lays it out and the griffin is drawn and has moved right.
 
 How it works:
 - **Griff runs on .NET for WebAssembly unchanged.** `Griff.Web` is a `Microsoft.NET.Sdk.WebAssembly` project that
@@ -784,6 +788,11 @@ How it works:
   bytes: a memory view can only be of bytes, ints or doubles), and `griff.js` draws them with the desktop shaders in
   GLSL ES 3.00. Images are read from the game's files by .NET and decoded by the browser (`createImageBitmap`); a missing
   one draws as the magenta checker.
+- **Text draws as on the desktop**, from the same glyph atlas (`Griff.Fonts`, which runs in the browser as it is): a quad
+  a glyph, with the rows of an atlas page that glyphs were added to that frame copied to its texture before drawing.
+  Font files in the game's Assets work; an installed font can't (the browser has only the game's files), so its text
+  draws in the built-in font and the export warns of it. `-Check` also checks the proof game's label ("Griff on the Web
+  ♥") is drawn, as wide in the browser as Griff lays it out.
 - **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
   page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl
   shortcuts), typed text, and the mouse over the canvas (its position in the world through the last frame's camera, its
@@ -795,13 +804,32 @@ What it found for the rest of the web export:
   all of .NET after the player is published. The largest pieces are CoreLib (4.9 MB), System.Private.Xml (3.1 MB, pulled
   in though games don't use XML), the runtime (3.0 MB), Griff (2.1 MB) and the ICU culture data (2 MB, which invariant
   globalization would drop). The proof game ran 2 to 4 seconds after the page opened, served locally.
-- **Text** is skipped: Griff draws it with WPF's rasterizer, which the browser hasn't got (a menu's buttons show with no
-  labels). **Lights, shadows and screen effects** aren't drawn yet (a dark scene shows lit), nor are **sound** (Windows'
+- **Lights, shadows and screen effects** aren't drawn yet (a dark scene shows lit), nor are **sound** (Windows'
   NAudio; the browser has Web Audio), **saves** (they'd go to the in-memory file system and be lost with the page: they
   need the browser's storage), **controllers** (the Gamepad API) and **fullscreen**. Multiplayer can't use UDP in a
   browser; it would need WebSockets or WebRTC.
 - File-based C# apps (`dotnet run tool.cs`) default to Native AOT, which turns off the reflection Griff's JSON uses;
   `tools\web.cs` turns it off as `toolsunnymark.cs` does. Native AOT exports will meet the same wall.
+
+## Licenses
+
+Every game Griff exports, for the desktop or the web, carries software and fonts made by others: .NET (MIT), and in the
+player NAudio (MIT), NVorbis (MIT), Silk.NET (MIT), StbImageSharp and StbTrueTypeSharp (public domain; stb is MIT or the
+Unlicense), and the built-in fonts inside `Griff.Fonts`. Each export writes `THIRD-PARTY-NOTICES.txt` with their
+licenses' texts (beside the game's `.exe` and inside it, or at the top of the web export), worked out from the files the
+player actually carries (`ThirdPartyNotices`, which reads a single-file player's bundle), and the export tests fail if
+it carries an assembly or font with no notice.
+- **Built-in fonts** may only be ones whose licenses let them be shipped and embedded in games, and ship with their
+  license texts. Selawik Semibold is Microsoft's file as released (1.01), unchanged: the SIL Open Font License 1.1
+  reserves the name Selawik, so it's never cut down or altered. DejaVu Sans Bold 2.37 is cut down to the characters the
+  built-in font lacks with fontTools (`src/Griff.Fonts/Fonts`) and renamed "DejaVu Sans Griff Subset" in its name table,
+  as Bitstream Vera's license asks of a changed font (no "Bitstream" or "Vera" in its names, and no "Arev" or "Tavmjong
+  Bah" for Arev's glyphs), keeping its copyright notices. JetBrains Mono, the script editor's font (SIL Open Font License;
+  see `Themes/Fonts`), is the editor's own and never goes into a game.
+- **Installed fonts** (Segoe UI, Consolas, Arial...) are licensed to the computer they're on: Griff draws them there at
+  run time and never copies, bakes or embeds one into an export. In a browser their text draws in the built-in font, and
+  the web export warns of it rather than failing.
+- **A game maker's own Assets** (pictures, sounds, music, fonts, scripts) are theirs to license; Griff just ships them.
 
 ## Status
 
@@ -809,9 +837,9 @@ Griff is young. Known gaps:
 - CI runs on Windows only, and Griff.Graphics and Griff.Platform.Windows have no tests of their own: the player smoke test covers them end to end. The layer test checks Griff.Scenes; Runtime still reaches into Rendering.
 - Modules are found only in Griff itself: a project can't add one. Templates several modules share pictures from (the crate, the crypt's hero and walls) keep those in the core's `TemplateArt`.
 - The Scene view draws sprites, tilemaps, text and particles itself and every other drawable from its quads, but not a board that draws its tilemap in the game (there you paint the tiles).
-- Games play in a browser only as a proof, from `tools\web.ps1` rather than the Build menu, and there they draw sprites and take the keyboard and mouse but have no text, lights, screen effects, sound, saves, controllers or multiplayer (see Web).
+- Games play in a browser only as a proof, from `tools\web.ps1` rather than the Build menu, and there they draw sprites and text and take the keyboard and mouse but have no lights, screen effects, sound, saves, controllers or multiplayer (see Web).
 - Templates are found only in Griff itself: a project can't add one of its own to New Project. A component saved by a newer version of it keeps the values it doesn't know, but is written back at this version.
-- Big scenes: an exported game holds about 128,000 BunnyMark bunnies at 60 fps (127,932 to 144,686 over 3 runs on an RTX 3060 Ti PC with an i7-12700, October 2026, each held with a 1% low of 60 fps; 76,283 to 78,666 on the same PC before the frame was built and the bunnies' scripts run across the cores, about 69,000 with a frame built in two passes over the entities, 28,200 before that), and 100,000 at 60 fps with 1% lows at 60 fps and no garbage collections in ten seconds, the aim set for it, in 3 runs out of 3 (before: 30 fps, a 1% low of 30, in 3 out of 3). A frame of 100,000 takes 7.4 ms of the CPU (`tools/bunnybench.cs`): 1.6 ms of steps, 2.9 to build and 2.8 to draw with OpenGL, which is done on the game's thread, as are what a frame's chunks leave it (scripts' drawables, what's inside other entities) and copying every draw to its place once (about 0.6 ms at 100,000). On a computer with fewer cores the count is lower: with everything on one thread (`--workers 1`), 100,000 take 15 ms (4.6 ms of steps, 7.5 to build, 2.7 to draw; 18 ms before). Text whose words change (a score, the frame rate) is drawn again with WPF, which makes garbage: the odd collection in a long run. Playing in the editor keeps up with them now (see Rewind in big scenes): a Debug editor holds 5,000 bunnies at 60 fps with a 1% low of 60 and 1 garbage collection in ten seconds (before: 39 to 45 fps, a 1% low of 7, 69 to 81 collections), and 20,000 at 60 fps with a 1% low of 60 (before: 59 fps, a 1% low of 30), snapshotting them ten times a second (before, every two seconds), and with the frame built and the bunnies' scripts run across the cores, 50,000 at 55 fps with a 1% low of 30 (before: 19.6 fps and a 1% low of 12; a rewind snapshot of 50,000, copied out on the game's thread, still takes 6.6 ms there); a Release editor holds 20,000 at 60 fps with a 1% low of 60, and 50,000 at 59 fps with a 1% low of 60 (before: 58 fps, a 1% low of 30). Copying a snapshot out still happens on one step (it has to, to be one moment), so the biggest scenes are snapshotted less often to keep their frames on time: 50,000 bunnies about seven times a second in a Release editor and four in a Debug one, and just after rewinding a big scene, whose entities are all fresh, a little less often for a while.
+- Big scenes: an exported game holds about 128,000 BunnyMark bunnies at 60 fps (127,932 to 144,686 over 3 runs on an RTX 3060 Ti PC with an i7-12700, October 2026, each held with a 1% low of 60 fps; 76,283 to 78,666 on the same PC before the frame was built and the bunnies' scripts run across the cores, about 69,000 with a frame built in two passes over the entities, 28,200 before that), and 100,000 at 60 fps with 1% lows at 60 fps and no garbage collections in ten seconds, the aim set for it, in 3 runs out of 3 (before: 30 fps, a 1% low of 30, in 3 out of 3). A frame of 100,000 takes 7.4 ms of the CPU (`tools/bunnybench.cs`): 1.6 ms of steps, 2.9 to build and 2.8 to draw with OpenGL, which is done on the game's thread, as are what a frame's chunks leave it (scripts' drawables, what's inside other entities) and copying every draw to its place once (about 0.6 ms at 100,000). On a computer with fewer cores the count is lower: with everything on one thread (`--workers 1`), 100,000 take 15 ms (4.6 ms of steps, 7.5 to build, 2.7 to draw; 18 ms before). Text whose words change (a score, the frame rate) makes no garbage: it's laid out from glyphs already on an atlas page (before, it was drawn again with WPF, which made the odd collection in a long run). Playing in the editor keeps up with them now (see Rewind in big scenes): a Debug editor holds 5,000 bunnies at 60 fps with a 1% low of 60 and 1 garbage collection in ten seconds (before: 39 to 45 fps, a 1% low of 7, 69 to 81 collections), and 20,000 at 60 fps with a 1% low of 60 (before: 59 fps, a 1% low of 30), snapshotting them ten times a second (before, every two seconds), and with the frame built and the bunnies' scripts run across the cores, 50,000 at 55 fps with a 1% low of 30 (before: 19.6 fps and a 1% low of 12; a rewind snapshot of 50,000, copied out on the game's thread, still takes 6.6 ms there); a Release editor holds 20,000 at 60 fps with a 1% low of 60, and 50,000 at 59 fps with a 1% low of 60 (before: 58 fps, a 1% low of 30). Copying a snapshot out still happens on one step (it has to, to be one moment), so the biggest scenes are snapshotted less often to keep their frames on time: 50,000 bunnies about seven times a second in a Release editor and four in a Debug one, and just after rewinding a big scene, whose entities are all fresh, a little less often for a while.
 - Mouse look turns once a step, and the screen shows the game up to a step behind, so it trails the mouse by a step or two; so does what follows the mouse (a strategy game's drag box and placing ghost, the contraptions tools' line, something being dragged), which is drawn where the mouse was at the last step. A drop of rain wrapping round the view is drawn where it lands a step early (out of view).
 - Physics shapes are boxes and circles (no polygons yet), and boxes stay upright unless their body **Rotates**. Slopes are tilemap tiles at 45 degrees only, and circle bodies that don't rotate slide rather than roll. Bodies that rotate are worked out one at a time, so two stacked creep slowly sideways and three or more lean over and topple; there are no hinges or other joints.
 - Shadows are hard-edged, and come from colliders and tiles rather than sprites' shapes.

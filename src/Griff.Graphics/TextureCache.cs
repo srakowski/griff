@@ -1,14 +1,8 @@
-using Griff.Scenes;
+using Griff.Fonts;
 using Silk.NET.OpenGL;
 using StbImageSharp;
 
 namespace Griff.Graphics;
-
-/// <summary>
-/// Renders a string to straight-alpha RGBA pixels (white glyphs; the sprite tint colors them), in a font (see
-/// <see cref="Text.Font"/>; null for the built-in one), lining up several lines by <paramref name="align"/>.
-/// </summary>
-public delegate (byte[] Rgba, int Width, int Height) TextRasterizer(string text, string? font, TextAlign align);
 
 public sealed class Texture(uint handle, int width, int height)
 {
@@ -21,7 +15,8 @@ public sealed class Texture(uint handle, int width, int height)
 
 /// <summary>
 /// Loads images from the project's Assets folder on first use and reloads them when the file changes,
-/// so editing a sprite in a paint program updates the running game. Missing images draw as a magenta checker.
+/// so editing a sprite in a paint program updates the running game. Missing images draw as a magenta checker. Text's
+/// glyphs are drawn from a texture of each of the <see cref="Glyphs"/> atlas's pages, kept up to date as glyphs are added.
 /// </summary>
 internal sealed class TextureCache : IDisposable
 {
@@ -31,18 +26,18 @@ internal sealed class TextureCache : IDisposable
     private readonly string _assetRoot;
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _paths = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string Text, string? Font, TextAlign Align), (Texture Texture, long LastUsed)> _text = [];
-    private readonly TextRasterizer? _rasterizer;
-    private long _frame;
+    private readonly List<string> _changed = [];
+    private readonly List<Texture> _glyphPages = [];
+    private byte[] _glyphRows = [];
     private readonly Texture _white;
     private readonly Texture _missing;
     private DateTime _lastRefresh = DateTime.UtcNow;
 
-    public TextureCache(GL gl, string assetRoot, TextRasterizer? rasterizer)
+    public TextureCache(GL gl, string assetRoot)
     {
         _gl = gl;
         _assetRoot = assetRoot;
-        _rasterizer = rasterizer;
+        Glyphs = new GlyphAtlas(assetRoot);
         _white = Upload([255, 255, 255, 255], 1, 1);
         _missing = Upload(Checker(), 2, 2);
     }
@@ -65,54 +60,57 @@ internal sealed class TextureCache : IDisposable
         return entry.Texture ?? _missing;
     }
 
-    /// <summary>A texture of <paramref name="text"/>, or null if no rasterizer is available.</summary>
-    public Texture? GetText(string text, string? font, TextAlign align)
-    {
-        if (_rasterizer is null)
-            return null;
-
-        var key = (text, font, align);
-        if (!_text.TryGetValue(key, out var entry))
-        {
-            var (rgba, width, height) = _rasterizer(text, font, align);
-            entry = (Upload(rgba, width, height, smooth: true), _frame);
-        }
-
-        _text[key] = entry with { LastUsed = _frame };
-        return entry.Texture;
-    }
+    /// <summary>The glyphs text is drawn with, from font files in the Assets folder, installed fonts or the built-in one.</summary>
+    public GlyphAtlas Glyphs { get; }
 
     /// <summary>
-    /// Called once per frame. Frees text textures unused for a few seconds, so text that changes every
-    /// frame (scores, timers) doesn't pile up.
+    /// The texture of the atlas's page <paramref name="index"/>, with the glyphs added to the page since it was last asked
+    /// for copied to it.
     /// </summary>
-    public void EndFrame()
+    public Texture GlyphPage(int index)
     {
-        _frame++;
-        if (_frame % 60 != 0)
-            return;
-
-        foreach (var (key, entry) in _text.Where(t => _frame - t.Value.LastUsed > 120).ToList())
+        var page = Glyphs.Pages[index];
+        while (_glyphPages.Count <= index)
+            _glyphPages.Add(Upload(null, Fonts.GlyphPage.Size, Fonts.GlyphPage.Size, smooth: true));
+        var texture = _glyphPages[index];
+        if (page.TakeChanges(out var top, out var rows))
         {
-            _gl.DeleteTexture(entry.Texture.Handle);
-            _text.Remove(key);
+            if (_glyphRows.Length < rows * Fonts.GlyphPage.Size * 4)
+                _glyphRows = new byte[Fonts.GlyphPage.Size * Fonts.GlyphPage.Size * 4];
+            page.CopyRgba(top, rows, _glyphRows);
+            _gl.BindTexture(TextureTarget.Texture2D, texture.Handle);
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            _gl.TexSubImage2D<byte>(TextureTarget.Texture2D, 0, 0, top, Fonts.GlyphPage.Size, (uint)rows, PixelFormat.Rgba, PixelType.UnsignedByte,
+                _glyphRows.AsSpan(0, rows * Fonts.GlyphPage.Size * 4));
         }
+
+        return texture;
     }
+
+    /// <summary>Called once per frame, after drawing it.</summary>
+    public void EndFrame() => Glyphs.EndFrame();
 
     /// <summary>Reloads images whose files changed. Checks at most once a second.</summary>
     public void RefreshChanged()
     {
+        Glyphs.RefreshChanged();
         var now = DateTime.UtcNow;
         if (now - _lastRefresh < RefreshInterval)
             return;
         _lastRefresh = now;
 
-        foreach (var (path, entry) in _entries.ToList())
+        // Into a list kept for it, so a check that finds nothing changed makes no garbage.
+        _changed.Clear();
+        foreach (var (path, entry) in _entries)
         {
-            if (Stamp(path) == entry.Stamp)
-                continue;
-            if (entry.Texture is not null)
-                _gl.DeleteTexture(entry.Texture.Handle);
+            if (Stamp(path) != entry.Stamp)
+                _changed.Add(path);
+        }
+
+        foreach (var path in _changed)
+        {
+            if (_entries[path].Texture is { } texture)
+                _gl.DeleteTexture(texture.Handle);
             _entries[path] = Load(path);
         }
     }
@@ -121,8 +119,8 @@ internal sealed class TextureCache : IDisposable
     {
         foreach (var entry in _entries.Values.Where(e => e.Texture is not null))
             _gl.DeleteTexture(entry.Texture!.Handle);
-        foreach (var entry in _text.Values)
-            _gl.DeleteTexture(entry.Texture.Handle);
+        foreach (var page in _glyphPages)
+            _gl.DeleteTexture(page.Handle);
         _gl.DeleteTexture(_white.Handle);
         _gl.DeleteTexture(_missing.Handle);
     }
@@ -146,13 +144,16 @@ internal sealed class TextureCache : IDisposable
         }
     }
 
-    // Pixel art is the common jam style, so images sample with nearest-neighbour filtering; text is smoothed.
-    private Texture Upload(byte[] rgba, int width, int height, bool smooth = false)
+    // Pixel art is the common jam style, so images sample with nearest-neighbour filtering; text's glyphs are smoothed.
+    private unsafe Texture Upload(byte[]? rgba, int width, int height, bool smooth = false)
     {
         var handle = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2D, handle);
         _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-        _gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, rgba);
+        if (rgba is null)
+            _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        else
+            _gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, rgba);
         var filter = smooth ? (int)TextureMinFilter.Linear : (int)TextureMinFilter.Nearest;
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, filter);
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, filter);

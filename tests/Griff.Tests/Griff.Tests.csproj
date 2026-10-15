@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Griff\Griff.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Fonts\Griff.Fonts.csproj" />
     <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />
   </ItemGroup>
 

@@ -23,13 +23,14 @@ public class FrameTests
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
-            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Falling Boards", "Simulate: Strategy",
+            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Slingshots", "Simulate: Falling Boards",
+            "Simulate: Strategy",
             "Simulate: Attacks", "Simulate: Idle Grid Movers", "Simulate: Timers", "Simulate: Coroutines",
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
             "Simulate: Sprite Effects", "Simulate: Prompts", "Simulate: Typewriters", "Simulate: Pickup Spin",
             "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
-            "Physics: Carrying",
+            "Physics: Breakables", "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Stage Input", "Resolve: Dialogues", "Resolve: Stages", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Touch Damage",
             "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Counters", "Resolve: Text Outputs", "Resolve: Fade",
@@ -58,10 +59,12 @@ public class FrameTests
         var game = CreateGame();
 
         // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks,
-        // First Person, Match-3, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
+        // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
         Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "First Person",
-            "Match Boards", "Puzzles", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
+            "Match Boards", "Slingshots", "Breakables", "Puzzles", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
+        Assert.Equal("Slingshots", game.Frame.Single(s => s.Name == "Slingshots").System?.Name);
+        Assert.Equal("Breakables", game.Frame.Single(s => s.Name == "Breakables").System?.Name);
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
         Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
         Assert.Equal("Cards", game.Frame.Single(s => s.Name == "Cards").System?.Name);
@@ -143,7 +146,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(17, game.Systems.Count);
+        Assert.Equal(19, game.Systems.Count);
     }
 
     [Fact]

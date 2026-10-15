@@ -1,0 +1,57 @@
+title: Slingshots and breakable blocks
+intro: A slingshot to pull back and let go, and towers of wood, glass and stone that crack and break on hard knocks, with no code.
+project: Empty | Knock It Down
+
+chapter: A slingshot and a tower | Entity > Genres > Physics Games
+create: Slingshot
+expectcount: Shot = 3
+expectcount: Ground = 1
+expectvalue: Main Camera.Follow.Target = Slingshot
+explain: component:Slingshot | Slingshot | A slingshot, with three shots waiting behind it: the bodies inside it, launched in turn. Then it can make copies of a prefab, as many as its Shots says.
+explain: field:Slingshot.Power | Power | Pull it all the way back and the shot leaves this fast; less, the less it's pulled.
+explain: field:Slingshot.CameraFollows | The camera | The camera follows each shot as it flies, and comes back for the next.
+deselect
+create: Tower
+expectcount: Plank = 1
+expectcount: Target = 1
+expectcount: Score = 1
+say: The tower is two storeys of wood, a pane of glass and a stone slab, with a green target inside, all asleep until something hits them, and a score along the top.
+select: Plank
+explain: component:Breakable | Breakable | Each piece is breakable. A hit is as hard as the push it takes to stop it: mass times speed. Hits softer than Min Hit do nothing; harder ones add up, cracking it, and at its Strength it breaks.
+explain: field:Breakable.Split | Pieces | It splits into pieces that tumble away and fade, with a puff of dust, its sound, and its Break Message carrying its points to the score.
+deselect
+create: Sprite
+rename: Crate
+set: Transform.Position = 3, 0.5, 0
+set: Sprite.Tint = #B07F4A
+menu: Entity > Add Breakable
+expectcomponents: Crate = Transform, Sprite, BoxCollider, Body, Breakable
+expectvalue: Crate.Body.Rotates = true
+say: Add Breakable makes anything break on hard knocks: it gets a body that rotates, and a collider the size of its sprite.
+set: Breakable.Strength = 4
+deselect
+
+chapter: Knock it down | Pull the pouch back and let go
+play
+wait: 1
+expectvalue: Slingshot.Slingshot.Loaded = true
+expectvalue: Slingshot.Slingshot.ShotsLeft = 3
+gamedrag: Slingshot + 0, 1.6 > Slingshot + -1.8, 0.7
+wait: 0.2
+expectvalue: Slingshot.Slingshot.Loaded = false
+expectvalue: Slingshot.Slingshot.ShotsLeft = 2
+explain: game | Away it goes | Pulled back and let go, the shot flies off the other way, as fast as it was pulled, and the camera goes with it.
+wait: 3
+expectvalue: Score.Counter.Value = 10000 ~ 9999
+say: Whatever it hits hard enough cracks and breaks into pieces, and what falls can break the next thing down.
+wait: 6
+expectvalue: Slingshot.Slingshot.Loaded = true
+say: Once the shot has come to rest the next is loaded, and the camera comes back.
+hold: Left+Down 0.6
+explain: game | With the keys | With the keys or a gamepad the arrows pull the pouch about, and a dotted line shows where the shot will go. Space lets go.
+tap: Space
+wait: 0.2
+expectvalue: Slingshot.Slingshot.ShotsLeft = 1
+wait: 3
+stop
+say: That's a slingshot and breakable blocks, with no code. Materials come from a table, targets are breakable things or things with health, a counter keeps the score, and it all replays to the bit in a rewind and plays in a network game.

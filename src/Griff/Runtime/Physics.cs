@@ -230,6 +230,7 @@ public sealed partial class Physics
     {
         var solids = _solids;
         solids.Fill(scene);
+        _impacts.Clear();
         _slopes.Clear();
         _isometric.Clear();
         _hex.Clear();
@@ -587,6 +588,7 @@ public sealed partial class Physics
         // Only the solids near where it went, in the order they'd be met going through them all.
         var region = Grow(Union(boundsBefore, area.Bounds), Margin);
         var near = solids.Near(region);
+        Entity? struck = null;
         for (var n = 0; n < near.Count; n++)
         {
             var index = near[n];
@@ -663,6 +665,8 @@ public sealed partial class Physics
             }
 
             hit |= !gaveWay && !climbed;
+            if (!gaveWay && !climbed)
+                struck = solid.Entity;
             if (carrier is not null)
                 continue;
             if ((axis == 1 && sign < 0) || climbed)
@@ -684,6 +688,8 @@ public sealed partial class Physics
         if (hit && carrier is null)
         {
             var velocity = body.Velocity;
+            if (struck is not null && pusher is null)
+                NoteImpact(body, collider, struck, axis, axis == 0 ? velocity.X : velocity.Y);
             var speed = (axis == 0 ? velocity.X : velocity.Y) * -Math.Clamp(body.Bounciness, 0, 1);
             if (MathF.Abs(speed) < SettleSpeed)
                 speed = 0;
@@ -989,7 +995,8 @@ public sealed partial class Physics
             if (t == tilemaps.Count || (c < colliders.Count && Before(colliders[c], tilemaps[t])))
             {
                 var collider = colliders[c++];
-                if ((includeTriggers || !collider.IsTrigger) && (only is null || CollisionLayers.Contains(only, collider.Layer)))
+                if ((includeTriggers || !collider.IsTrigger) && (only is null || CollisionLayers.Contains(only, collider.Layer)) &&
+                    collider.HeldOutIn != scene.Step)
                     into.Add(new Shape(collider.Entity!, collider, default, false, LayerFilter.Of(collider)));
                 continue;
             }

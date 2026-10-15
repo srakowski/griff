@@ -57,6 +57,10 @@ public abstract class Collider : Component
     /// <summary>True if <paramref name="point"/> (in the world) is inside the shape, turned if it <see cref="Turns"/>.</summary>
     public abstract bool Contains(Vector2 point);
 
+    // The step it's held out of the world for (a slingshot's shot waiting its turn or in the pouch): that step, nothing bumps
+    // into it and it bumps into nothing. Set again each step it's held.
+    internal long HeldOutIn = -1;
+
     // Whether a world matrix turns things (so a shape that Turns needs turning).
     private protected static bool IsTurning(in Matrix4x4 world) => world.M12 != 0 || world.M21 != 0;
 }

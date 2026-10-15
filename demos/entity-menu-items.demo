@@ -108,6 +108,12 @@ chapter: Match-3 | Entity > Genres > Match-3
 deselect
 menu: Entity > Genres > Match-3 > Match Board
 
+chapter: Physics Games | Entity > Genres > Physics Games
+deselect
+menu: Entity > Genres > Physics Games > Slingshot
+deselect
+menu: Entity > Genres > Physics Games > Tower
+
 chapter: Puzzles | Entity > Genres > Puzzles
 deselect
 menu: Entity > Genres > Puzzles > Goal

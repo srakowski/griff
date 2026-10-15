@@ -84,6 +84,7 @@ export default defineConfig({
 						{ label: 'Puzzles and boards', slug: 'docs/puzzles' },
 						{ label: 'Roguelikes, turns and tactics', slug: 'docs/turns' },
 						{ label: 'Card games', slug: 'docs/cards' },
+						{ label: 'Physics games', slug: 'docs/physics-games' },
 						{ label: 'Dialogue, switches and items', slug: 'docs/story' },
 						{ label: 'Point-and-click adventures', slug: 'docs/adventures' },
 						{ label: 'Visual novels', slug: 'docs/visual-novels' },

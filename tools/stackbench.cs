@@ -9,14 +9,18 @@
 // they swing; with --welded 60, that many crates welded in pairs into Ls, heaped in a bin) on a floor, lets them settle,
 // then times steps of the pile awake (woken before each step, so every body and contact is worked out, as while a pile
 // settles or is knocked about) and asleep. With --ropes 40, that many ropes 3 long instead, swinging down from hooks over
-// pegs, every other one with a crate on its end, timed as they swing from the start and again ten seconds on. It prints the median,
-// mean and worst step and the bytes allocated meanwhile. The numbers are this computer's: compare runs on the same one.
+// pegs, every other one with a crate on its end, timed as they swing from the start and again ten seconds on. With
+// --breakable 150, that many Breakable posts and planks stacked into towers five storeys high, asleep, and a heavy ball
+// thrown through them, timed step by step as they crack, break into pieces and collapse (once untimed first, so nothing is
+// compiled while it's timed). It prints the median, mean and worst step and the bytes allocated meanwhile. The numbers are
+// this computer's: compare runs on the same one.
 //   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60] [--hinges 60]
-//     [--welded 60] [--ropes 40]
+//     [--welded 60] [--ropes 40] [--breakable 150]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
 using Griff.Modules.Contraptions;
+using Griff.Modules.PhysicsGames;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -71,6 +75,75 @@ if (ropes > 0)
     Console.WriteLine($"{ropes} ropes 3 long ({ropes / 2 + ropes % 2} with a crate on the end) swinging over pegs");
     Console.WriteLine($"swinging: {swinging}");
     Console.WriteLine($"later:    {hanging}");
+    return;
+}
+
+var breakable = Arg("--breakable", 0);
+if (breakable > 0)
+{
+    // Towers of posts and planks (three a storey, five storeys a tower) side by side, asleep, and a heavy ball thrown low
+    // through them all: what a big collapse costs, from the first knock to the pieces settling.
+    (Scene Scene, Game Game, List<Breakable> Pieces) Towers()
+    {
+        var towers = new Scene();
+        var floor = new Entity("Floor");
+        floor.Transform.Position = new Vector3(0, -0.5f, 0);
+        floor.AddComponent<BoxCollider>().Size = new Vector2(400, 1);
+        towers.Add(floor);
+        var pieces = new List<Breakable>();
+        for (var i = 0; i < breakable; i++)
+        {
+            var (tower, storey, part) = (i / 15, i / 3 % 5, i % 3);
+            var (x, y) = (tower * 4f, storey * 2.35f);
+            var (at, size) = part switch
+            {
+                0 => (new Vector2(x - 1.1f, y + 1), new Vector2(0.35f, 2)),
+                1 => (new Vector2(x + 1.1f, y + 1), new Vector2(0.35f, 2)),
+                _ => (new Vector2(x, y + 2.175f), new Vector2(3, 0.35f)),
+            };
+            var entity = new Entity(part == 2 ? "Plank" : "Post");
+            entity.Transform.Position = new Vector3(at, 0);
+            entity.AddComponent<Sprite>().Size = size;
+            entity.AddComponent<BoxCollider>().Size = size;
+            var body = entity.AddComponent<Body>();
+            (body.Rotates, body.Asleep, body.Mass) = (true, true, size.X * size.Y);
+            var piece = entity.AddComponent<Breakable>();
+            (piece.Strength, piece.MinHit) = (6, 1.5f);
+            towers.Add(entity);
+            pieces.Add(piece);
+        }
+
+        var ball = new Entity("Ball");
+        ball.Transform.Position = new Vector3(-6, 3, 0);
+        ball.AddComponent<CircleCollider>().Radius = 0.6f;
+        var thrown = ball.AddComponent<Body>();
+        (thrown.Rotates, thrown.Mass, thrown.Velocity) = (true, 40, new Vector2(30, 2));
+        towers.Add(ball);
+        return (towers, new Game(towers, new InputState()), pieces);
+    }
+
+    var (_, warm, _) = Towers();
+    for (var i = 0; i < steps; i++)
+        warm.Tick(Frame);
+
+    var (timed, collapsing, all) = Towers();
+    var times = new double[steps];
+    var before = GC.GetAllocatedBytesForCurrentThread();
+    var most = 0;
+    for (var i = 0; i < steps; i++)
+    {
+        var start = Stopwatch.GetTimestamp();
+        collapsing.Tick(Frame);
+        times[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        most = Math.Max(most, timed.All<Body>().Count);
+    }
+
+    var allocated = (GC.GetAllocatedBytesForCurrentThread() - before) / steps;
+    Array.Sort(times);
+    Console.WriteLine($"{breakable} breakable posts and planks in towers of five storeys, a heavy ball thrown through them: " +
+        $"{all.Count(b => b.Broken)} broke, {all.Count(b => !b.Broken && b.Damage > 0)} cracked, up to {most} bodies at once");
+    Console.WriteLine($"collapse: median {times[steps / 2]:0.000} ms, mean {times.Average():0.000} ms, worst {times[^1]:0.000} ms a step, " +
+        $"{allocated} bytes a step (the pieces things break into)");
     return;
 }
 

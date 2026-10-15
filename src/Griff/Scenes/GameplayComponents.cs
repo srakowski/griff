@@ -608,8 +608,9 @@ public sealed class Lifetime : Component
     /// <summary>Seconds at the end of its life spent fading out (see <c>FadeTo</c>). 0 just disappears.</summary>
     public float FadeOut { get; set; }
 
-    /// <summary>Seconds it has been alive.</summary>
-    [DoNotSerialize]
+    /// <summary>Seconds it has been alive: kept with the scene, so a rewind goes on from where it was.</summary>
+    [Group("State")]
+    [NotSent]
     public float Age { get; set; }
 
     internal bool IsFading { get; set; }

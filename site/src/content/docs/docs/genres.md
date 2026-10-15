@@ -63,3 +63,7 @@ Card games have pages of their own: decks, hands and play zones, drawing, shuffl
 ## Point-and-click adventures
 
 Walk areas drawn round a room's floor (with holes for the furniture, and depth so the player shrinks into the distance), a walker that goes where the player clicks or taps along the shortest way round, and hotspots that show their name under the pointer and answer a look or a use with a line, an action, a flag or a conversation, with an inventory bar of items to pick up, use on things and put together, all with no code and with the mouse, touch, keys or a controller: see [Point-and-click adventures](/docs/adventures/).
+
+## Physics games
+
+Physics puzzlers have a page of their own: a slingshot to pull back and let go (with the mouse, a finger, the keys or a gamepad), shots that fly where its dotted line says with the camera following them, and blocks of wood, glass and stone that crack and break into pieces on hard knocks, are in [Physics games](/docs/physics-games/). They're built to mix with the rest: a **Slingshot** takes the player's input only while it has focus (and on its side's turn), and names its actions (**Load**, **Launch**) for triggers and wires and its outputs (**Shots Left**, **Out Of Shots**) for counters, bars and texts; a **Breakable** has **Break**, **Damage** and **Repair**, and the outputs **Damage** and **Broken**.

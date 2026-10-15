@@ -54,7 +54,17 @@ public sealed partial class Game
             if (follow.FindTarget() is not { } target)
                 continue;
             var position = new Vector2(target.Transform.WorldPosition.X, target.Transform.WorldPosition.Y);
-            var room = rooms.FirstOrDefault(r => r.Area.Contains(position));
+            // A loop rather than a query that keeps `position`, which would cost the camera a little garbage every step.
+            Room? room = null;
+            foreach (var r in rooms)
+            {
+                if (r.Area.Contains(position))
+                {
+                    room = r;
+                    break;
+                }
+            }
+
             if (room is null || room == follow.CurrentRoom)
                 continue;
 

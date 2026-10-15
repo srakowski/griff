@@ -138,6 +138,7 @@ public sealed partial class Physics
         while (WakeTied(solids));
 
         Solve(scene.Contacts, solids, dt);
+        NoteImpacts();
         Remember(scene.Contacts);
 
         // A body inside another that turns goes its own way in the world: it's moved after what it's in, from where it was.

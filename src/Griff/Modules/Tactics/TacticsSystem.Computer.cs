@@ -16,14 +16,24 @@ internal sealed partial class TacticsSystem
     // Where the game is run, after scripts' orders: the next computer unit's go, once the last one's walk or swing is over.
     private void RunTacticsComputer(IReadOnlyList<TacticsUnit> units, TacticsControls? controls)
     {
-        if (Game.TurnOrderNow is not { Round: > 0, IsBetweenTurns: false } order || order.Entity?.Scene != Scene || !Game.Runs(order.Entity) ||
-            !order.IsComputer(order.Current))
+        // The computer's units in each turn order on its turn, one go at a time.
+        List<TacticsUnit>? mine = null;
+        foreach (var order in Game.TurnOrdersNow)
+        {
+            if (order is not { Round: > 0, IsBetweenTurns: false } || order.Entity?.Scene != Scene || !Game.Runs(order.Entity) || !order.IsComputer(order.Current))
+                continue;
+            mine = units.Where(u => Game.Runs(u.Entity!) && TurnTaker.Of(u.Entity!) is { } taker && Game.TurnOrderOf(u.Entity) == order &&
+                                    TurnOrder.SameSide(Game.SideOf(taker), order.Current)).ToList();
+            if (mine.Count > 0)
+                break;
+        }
+
+        if (mine is not { Count: > 0 })
         {
             _tacticsNext = null;
             return;
         }
 
-        var mine = units.Where(u => Game.Runs(u.Entity!) && TurnTaker.Of(u.Entity!) is { } taker && TurnOrder.SameSide(Game.SideOf(taker), order.Current)).ToList();
         if (mine.Any(u => u.IsWalking))
             return;
         if (_tacticsNext?.GetComponent<TacticsUnit>() is not { CanAct: true } next || _tacticsNext.Scene != Scene)

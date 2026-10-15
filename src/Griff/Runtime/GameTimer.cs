@@ -31,6 +31,9 @@ public sealed class GameTimer
 
     public void Cancel() => IsActive = false;
 
+    // Puts it off by `seconds`, while its owner is paused.
+    internal void Hold(double seconds) => Due += seconds;
+
     /// <summary>Fires every due occurrence up to <paramref name="now"/>.</summary>
     internal void Run(double now, Scene scene)
     {

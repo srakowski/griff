@@ -28,7 +28,8 @@ internal sealed class FallingBlocksSystem : GameSystem
     {
         foreach (var board in Game.Showing<FallingBoard>())
         {
-            if (board.Entity!.GetComponent<Tilemap>() is not { } map || !Game.Runs(board.Entity))
+            // Held still with a group it's in (see Entity.IsPaused).
+            if (board.Entity!.GetComponent<Tilemap>() is not { } map || !Game.Runs(board.Entity) || board.Entity.IsPaused)
                 continue;
             RunFalling(board, map);
         }
@@ -310,7 +311,8 @@ internal sealed class FallingBlocksSystem : GameSystem
     // anyone holds down. Nobody's keys reach it while a panel is open.
     private bool ReadFallingKeys(FallingBoard board)
     {
-        if (Game.PausedThisFrame || Game.Net.IsClient)
+        // Without focus it ignores everyone's keys (another part of the scene has them).
+        if (Game.PausedThisFrame || Game.Net.IsClient || !board.Controllable)
             return false;
         var soft = false;
         if (Game.TopPanel is null)

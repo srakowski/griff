@@ -17,7 +17,7 @@ public static class ContraptionsGame
         /// <summary>What the Weld, Rope or Wire tool's first click picked, waiting for the second.</summary>
         public Entity? ToolFirst => Of(game).ToolFirst;
 
-        /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene.</summary>
+        /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene with focus.</summary>
         public SandboxTools? Tools => Of(game).Tools;
 
         /// <summary>Undoes the last prop, weld, rope or wire the tools made; returns whether there was one.</summary>

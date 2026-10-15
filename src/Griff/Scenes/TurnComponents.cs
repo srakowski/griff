@@ -12,8 +12,11 @@ namespace Griff.Scenes;
 /// <see cref="Between"/> to 0: each step is a turn, and an enemy with nowhere to go passes.
 /// </summary>
 /// <remarks>
-/// One per scene (the first is used). In a network game the host runs it, and with <see cref="Multiplayer.Teams"/> each
-/// player's character is on its player's team: "Blue, Red" sides for "Blue, Red" teams.
+/// It covers the whole scene, or with <see cref="Within"/> only part of it: a turn-based arena in a real-time game, or two
+/// boards each taking their own turns. A turn taker takes turns in the turn order whose Within covers it (inside that
+/// entity, or standing in its area), else in one over the whole scene; one covered by none acts freely. In a network game
+/// the host runs it, and with <see cref="Multiplayer.Teams"/> each player's character is on its player's team: "Blue, Red"
+/// sides for "Blue, Red" teams.
 /// </remarks>
 [Category("Gameplay")]
 [WorksWith(typeof(TurnTaker), Note = "on whatever takes turns")]
@@ -72,6 +75,15 @@ public sealed class TurnOrder : Component
     public string? Sound { get; set; }
 
     /// <summary>
+    /// The part of the scene it runs the turns of, by an entity's name: the turn takers inside that entity or standing in
+    /// its area (a Room's, a tilemap's, a collider's), e.g. "Arena". Something that walks in joins the turns, and walks out
+    /// of them as it leaves. Empty covers the whole scene (but what another turn order's Within covers).
+    /// </summary>
+    [Group("Turns")]
+    [EntityName]
+    public string? Within { get; set; }
+
+    /// <summary>
     /// A message sent once a side that had turn takers has none left (beaten: its units all destroyed), with the side's
     /// name as its data. {0} in it is the side's name: "{0}Defeated" sends "RedDefeated", for a Victory panel to open on.
     /// </summary>
@@ -98,7 +110,10 @@ public sealed class TurnOrder : Component
     public float StartsIn { get; set; }
 
     /// <summary>The sides in order, from <see cref="Sides"/>.</summary>
-    public IReadOnlyList<string> SideList => Split(Sides);
+    public IReadOnlyList<string> SideList => Parsed(Sides, ref _sidesFrom, ref _sides);
+
+    /// <summary>The part of the scene it covers (see <see cref="Within"/>).</summary>
+    public Scope Covering() => Scope.Of(Entity, Within);
 
     /// <summary>True between turns, while nobody acts.</summary>
     public bool IsBetweenTurns => StartsIn > 0;
@@ -117,9 +132,13 @@ public sealed class TurnOrder : Component
             return 0;
         var wanted = side.AsSpan().Trim();
         var count = 0;
+        var running = ScopedFrame >= 0;
+        var scope = running ? default : Covering();
         foreach (var taker in scene.Active<TurnTaker>())
         {
-            if (taker.Side.AsSpan().Trim().Equals(wanted, StringComparison.OrdinalIgnoreCase))
+            // While the game runs, the turn takers taking turns in it; otherwise those it covers.
+            if ((running ? taker.OrderNow == this : scope.Covers(taker.Entity)) &&
+                taker.Side.AsSpan().Trim().Equals(wanted, StringComparison.OrdinalIgnoreCase))
                 count++;
         }
 
@@ -127,7 +146,17 @@ public sealed class TurnOrder : Component
     }
 
     /// <summary>True if the computer plays <paramref name="side"/> (see <see cref="ComputerSides"/>).</summary>
-    public bool IsComputer(string? side) => Split(ComputerSides).Any(s => SameSide(s, side));
+    public bool IsComputer(string? side)
+    {
+        var computers = Parsed(ComputerSides, ref _computersFrom, ref _computers);
+        for (var i = 0; i < computers.Length; i++)
+        {
+            if (SameSide(computers[i], side))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Ends the current turn at the start of the next frame, whoever's it is (a script's own End Turn, or a computer side
@@ -150,8 +179,31 @@ public sealed class TurnOrder : Component
 
     internal void RaiseTurnEnded(string side) => TurnEnded?.Invoke(side);
 
-    private static string[] Split(string? names) =>
-        (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    // Names separated by commas, split again only when the text changes.
+    private static string[] Parsed(string? names, ref string? from, ref string[] parsed)
+    {
+        if (ReferenceEquals(names, from))
+            return parsed;
+        (from, parsed) = (names, (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return parsed;
+    }
+
+    private string? _sidesFrom;
+    private string[] _sides = [];
+    private string? _computersFrom;
+    private string[] _computers = [];
+
+    // Where it was as the turns were last taken (the frame -1 before), and the turn takers taking turns in it then.
+    internal Scope ScopeNow { get; set; }
+
+    internal long ScopedFrame { get; set; } = -1;
+
+    internal List<TurnTaker> Takers { get; } = [];
+
+    // What its text last said, and what it said it for, so it's made again only when that changes.
+    internal string? Label { get; set; }
+
+    internal (string? Format, string? Current, int Round, int Seconds) LabelFor { get; set; }
 
     // Asked to end the turn (a script, or someone's End Turn); the side the game last started a turn for, so a script
     // setting Current is noticed. Not saved: a rewound game takes up the turn it finds.
@@ -164,7 +216,7 @@ public sealed class TurnOrder : Component
 }
 
 /// <summary>
-/// Takes turns in the scene's <see cref="TurnOrder"/>: it acts only on its <see cref="Side"/>'s turn. Off its turn the
+/// Takes turns in the <see cref="TurnOrder"/> that covers it: it acts only on its <see cref="Side"/>'s turn. Off its turn the
 /// player's controls don't reach it (nor scripts on it reading input) and its Patrol, Chase, Grid Chase, Grid Patrol,
 /// Attack and Shooter hold still; it still falls, gets pushed and gets hurt. Give it <see cref="Actions"/> to limit what
 /// it does in a turn: each attack swing, each shot and each step of its Grid Movement uses one, and once every turn taker
@@ -172,7 +224,7 @@ public sealed class TurnOrder : Component
 /// steps once an action and passes when it has nowhere to go or nothing to swing at, and a Grid Patrol waits whole turns.
 /// </summary>
 [Category("Gameplay")]
-[WorksWith(typeof(TurnOrder), Note = "the turns it takes, one per scene")]
+[WorksWith(typeof(TurnOrder), Note = "the turns it takes: the one that covers it")]
 [ComponentName("Griff.TurnTaker")]
 public sealed class TurnTaker : Component
 {
@@ -234,6 +286,13 @@ public sealed class TurnTaker : Component
     internal void RaiseTurnStarted() => TurnStarted?.Invoke(this);
 
     internal void RaiseTurnEnded() => TurnEnded?.Invoke(this);
+
+    // The turn order it takes turns in, as found on a frame of a scene (see Game's turns).
+    internal TurnOrder? OrderNow { get; set; }
+
+    internal long OrderFrame { get; set; } = -1;
+
+    internal Scene? OrderScene { get; set; }
 }
 
 /// <summary>

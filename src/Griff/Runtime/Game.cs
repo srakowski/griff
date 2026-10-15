@@ -362,14 +362,6 @@ public sealed partial class Game : IGameContext
         foreach (var player in players)
             Play(player);
 
-        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that isn't set.
-        var panels = Scene.All<Panel>()
-            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive) &&
-                        route.Reaches(p.Entity) && FlagHolds(p.NeedsFlag))
-            .ToList();
-        foreach (var panel in panels)
-            OpenPanel(panel);
-
         // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
         var done = 0;
         var hearers = Scene.Active<IHearsMessages>();
@@ -384,6 +376,15 @@ public sealed partial class Game : IGameContext
 
         // And triggers do what they do.
         done += FireTriggers(message, data, route);
+
+        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that
+        // isn't set: after the triggers, so one that sets the flag on this message lets it open.
+        var panels = Scene.All<Panel>()
+            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive) &&
+                        route.Reaches(p.Entity) && FlagHolds(p.NeedsFlag))
+            .ToList();
+        foreach (var panel in panels)
+            OpenPanel(panel);
         return heard + counters.Count + players.Count + panels.Count + done;
     }
 
@@ -578,7 +579,13 @@ public sealed partial class Game : IGameContext
         if (_coroutines.Count == 0)
             return;
         foreach (var coroutine in _coroutines.ToList())
-            coroutine.Run(this);
+        {
+            // One whose entity (or script) is paused waits, its waits put off as long (see Entity.IsPaused).
+            if (coroutine.IsPaused)
+                coroutine.Hold(Time.Delta);
+            else
+                coroutine.Run(this);
+        }
         _coroutines.RemoveAll(c => !c.IsRunning);
     }
 
@@ -609,7 +616,13 @@ public sealed partial class Game : IGameContext
         if (_tweens.Count == 0)
             return;
         foreach (var tween in _tweens.ToList())
-            tween.Run(Time.Total, Scene);
+        {
+            // One on a paused entity holds where it is, finishing as much later (see Entity.IsPaused).
+            if (tween.Owner is { IsPaused: true })
+                tween.Hold(Time.Delta);
+            else
+                tween.Run(Time.Total, Scene);
+        }
         _tweens.RemoveAll(t => !t.IsActive);
     }
 
@@ -619,7 +632,13 @@ public sealed partial class Game : IGameContext
         if (_timers.Count == 0)
             return;
         foreach (var timer in _timers.ToList())
-            timer.Run(Time.Total, Scene);
+        {
+            // One whose entity is paused goes off as much later (see Entity.IsPaused).
+            if (timer.Owner is { IsPaused: true })
+                timer.Hold(Time.Delta);
+            else
+                timer.Run(Time.Total, Scene);
+        }
 
         foreach (var timer in _timers.Where(t => t.Owner is not null && t.Owner.Scene != Scene))
             timer.Cancel();
@@ -721,8 +740,9 @@ public sealed partial class Game : IGameContext
     // Followers move after physics (so they see where things ended up) and before screen anchors (which pin to the camera).
     private void RunFollowers()
     {
+        // A viewport's camera keeps its own view (its part of the screen's shape) inside what it stays in.
         foreach (var follow in Moving<Follow>())
-            follow.Advance(Time.Delta, ViewAspect, Time.UnscaledDelta);
+            follow.Advance(Time.Delta, AspectOf(follow.Entity!), Time.UnscaledDelta);
     }
 
     // Pins ScreenAnchor entities to their point on the camera's view, parents before children.
@@ -809,7 +829,7 @@ public sealed partial class Game : IGameContext
     // Typewriters run on real time, so dialogue still types out while the game is paused.
     private void RunTypewriters()
     {
-        foreach (var typewriter in Scene.Active<Typewriter>())
+        foreach (var typewriter in Scene.Running<Typewriter>())
         {
             if (typewriter.Advance(Time.UnscaledDelta))
                 Audio.Play(typewriter.Sound!);
@@ -832,7 +852,9 @@ public sealed partial class Game : IGameContext
             return;
         foreach (var (source, target) in _touches.ToList())
         {
-            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<Pickup>() is not { IsCollected: false } pickup)
+            // Nothing paused picks up or is picked up (see Entity.IsPaused).
+            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<Pickup>() is not { IsCollected: false } pickup ||
+                source.IsPaused || target.IsPaused)
                 continue;
             if (BodyOwner(target) is not { } collector || !pickup.AcceptsLayer(LayerOf(target)) || source.IsSelfOrDescendantOf(collector))
                 continue;
@@ -885,9 +907,10 @@ public sealed partial class Game : IGameContext
         return null;
     }
 
+    // Bars and texts show how things are, so they go on showing it while they're paused.
     private void RunBars()
     {
-        foreach (var bar in Active<Bar>())
+        foreach (var bar in Present<Bar>())
             bar.Advance(Time.Delta, Scene);
     }
 
@@ -960,7 +983,7 @@ public sealed partial class Game : IGameContext
     // Texts showing an output fill it into what they say, made again only when it (or what it's out of) changes.
     private void ShowOutputs()
     {
-        foreach (var text in Active<Text>())
+        foreach (var text in Present<Text>())
         {
             if (string.IsNullOrWhiteSpace(text.Output))
             {
@@ -1014,7 +1037,9 @@ public sealed partial class Game : IGameContext
     {
         foreach (var (source, target) in _touches)
         {
-            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<DamageOnTouch>() is not { } touch)
+            // Nothing paused hurts or is hurt by a touch (see Entity.IsPaused).
+            if (source.Scene != Scene || target.Scene != Scene || !Runs(source) || source.GetComponent<DamageOnTouch>() is not { } touch ||
+                source.IsPaused || target.IsPaused)
                 continue;
             if (touch.DestroyOnWall && IsWall(target) && !(Health.Of(target) is { } struck && struck != Health.Of(source) && touch.Hurts(LayerOf(target))))
             {

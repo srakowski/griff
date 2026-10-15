@@ -105,6 +105,26 @@ public sealed class WebPlayerTests
     }
 
     [Fact]
+    public void Frame_PutsEachViewportsQuadsBetweenItsMarkers_WhereTheFrameSays()
+    {
+        var entity = new Entity();
+        SpriteDraw Draw(string image) => new(Matrix4x4.Identity, image, Color.White, entity);
+        var ids = new Dictionary<string, int> { ["world.png"] = 1, ["hud.png"] = 2, ["map.png"] = 3 };
+        var web = new WebFrame(image => ids[image]);
+        var frame = new RenderFrame { ViewProjection = Matrix4x4.Identity, Sprites = [Draw("world.png"), Draw("hud.png")], ViewsAt = 1 };
+        var view = frame.AddView();
+        view.Frame = new RenderFrame { Background = new Color(0.5f, 0.25f, 0), ViewProjection = Matrix4x4.CreateScale(0.25f), Sprites = [Draw("map.png")] };
+        (view.Left, view.Top, view.Width, view.Height) = (0.7f, 0.05f, 0.25f, 0.3f);
+
+        web.Build(frame);
+
+        Assert.Equal([1, 1, WebFrame.ViewStart, 0, 3, 1, WebFrame.ViewEnd, 0, 2, 1], web.Batches.ToArray());
+        Assert.Equal(new double[] { 0.7f, 0.05f, 0.25f, 0.3f, 0.5f, 0.25f, 0 }, web.Views.ToArray());
+        // The view's quad through its own projection: a quarter the size.
+        Assert.Equal(0.125f, web.Quads[WebFrame.FloatsPerQuad + 2], 5);
+    }
+
+    [Fact]
     public void Frame_DrawsHolesWithTheShape_AndTextAsAQuadAGlyphFromTheAtlas()
     {
         var entity = new Entity();

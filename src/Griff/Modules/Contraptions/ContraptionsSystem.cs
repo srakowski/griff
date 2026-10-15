@@ -96,8 +96,20 @@ internal sealed partial class ContraptionsSystem : GameSystem
     /// <summary>What the Weld, Rope or Wire tool's first click picked, waiting for the second.</summary>
     public Entity? ToolFirst => Sandbox.First;
 
-    /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene.</summary>
-    public SandboxTools? Tools => Game.Mine<SandboxTools>().FirstOrDefault();
+    /// <summary>The <see cref="SandboxTools"/> in use: the first in the scene with focus (see <see cref="SandboxTools.Controllable"/>).</summary>
+    public SandboxTools? Tools
+    {
+        get
+        {
+            foreach (var tools in Game.Mine<SandboxTools>(evenPaused: true))
+            {
+                if (tools.Controllable)
+                    return tools;
+            }
+
+            return null;
+        }
+    }
 
     // The tools along the top, the spawn list and the ports to pick, for this frame's view; a click on one of their
     // buttons.
@@ -184,7 +196,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
             Sandbox.Held = null;
         if (Sandbox.First is { } first && first.Scene != Scene)
             CancelTool();
-        if (tools is null || Time.Delta <= 0 || Game.PausedThisFrame || Game.PanelOpenHere || Net.IsClient)
+        if (tools is null || Time.Delta <= 0 || Game.PausedThisFrame || Game.PanelOpenHere || Net.IsClient || tools.Entity!.IsPaused)
         {
             if (tools is null)
                 CancelTool();
@@ -195,6 +207,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
         var list = tools.ToolList;
         if (list.Count == 0)
             return;
+        var scope = tools.Covering();
 
         // Number keys and the wheel pick tools, unless they're the hotbar's.
         if (!user.Components.Any(c => c is IClaimsNumberKeys))
@@ -223,21 +236,21 @@ internal sealed partial class ContraptionsSystem : GameSystem
                 RunGrab(tools, click, rightClick);
                 break;
             case SandboxTool.Spawn when click && tools.CurrentProp is { } prop && Game.PrefabLoader is not null:
-                SpawnProp(tools, prop, mouse);
+                SpawnProp(tools, prop, mouse, scope);
                 break;
             case SandboxTool.Weld or SandboxTool.Rope:
                 if (rightClick)
                     CancelTool();
-                else if (click && ThingAt(mouse, user) is { } thing)
+                else if (click && ThingAt(mouse, user, scope) is { } thing)
                     Join(tools, thing, mouse);
                 break;
             case SandboxTool.Wire:
                 if (rightClick)
                     CancelTool();
-                else if (click && ThingAt(mouse, user) is { } part)
+                else if (click && ThingAt(mouse, user, scope) is { } part)
                     WireClick(part);
                 break;
-            case SandboxTool.Remove when click && ThingAt(mouse, user) is { } doomed && Removable(doomed):
+            case SandboxTool.Remove when click && ThingAt(mouse, user, scope) is { } doomed && Removable(doomed):
                 RemoveThing(doomed);
                 SandboxNote($"Removed {doomed.Name}");
                 ToolSound(tools);
@@ -274,7 +287,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
             return;
         }
 
-        if ((click || rightClick) && ThingAt(mouse, tools.Entity!)?.GetComponent<Body>() is { } grabbed)
+        if ((click || rightClick) && ThingAt(mouse, tools.Entity!, tools.Covering())?.GetComponent<Body>() is { } grabbed)
         {
             foreach (var body in GroupOf(grabbed))
                 body.Frozen = false;
@@ -289,8 +302,15 @@ internal sealed partial class ContraptionsSystem : GameSystem
         }
     }
 
-    private void SpawnProp(SandboxTools tools, string prop, Vector2 at)
+    private void SpawnProp(SandboxTools tools, string prop, Vector2 at, Scope scope)
     {
+        // Within an area, only there; within a group that has none, into it.
+        if (scope.Area is not null && !scope.Covers(at))
+        {
+            SandboxNote("Can't put that there");
+            return;
+        }
+
         Entity entity;
         try
         {
@@ -302,10 +322,14 @@ internal sealed partial class ContraptionsSystem : GameSystem
             return;
         }
 
-        entity.Transform.Position = new Vector3(at, entity.Transform.Position.Z);
+        var into = scope.Area is null ? scope.Root : null;
+        var place = new Vector3(at, entity.Transform.Position.Z);
+        if (into is not null && Matrix4x4.Invert(into.Transform.WorldMatrix, out var toLocal))
+            place = Vector3.Transform(place, toLocal) with { Z = entity.Transform.Position.Z };
+        entity.Transform.Position = place;
         entity.Name = UniqueName(entity.Name);
         Game.Claim(entity, tools.Entity!);
-        Game.Spawn(entity);
+        Game.Spawn(entity, into);
         Sandbox.Made.Add(entity);
         ToolSound(tools);
     }
@@ -457,9 +481,9 @@ internal sealed partial class ContraptionsSystem : GameSystem
         entity.GetComponent<WireLamp>() is not null || entity.GetComponent<WireDisplay>() is not null || entity.GetComponent<WireSensor>() is not null;
 
     // What's under a point: something with a body first, then any other collider, then a solid tile. Never the tool user.
-    private Entity? ThingAt(Vector2 point, Entity user)
+    private Entity? ThingAt(Vector2 point, Entity user, Scope scope)
     {
-        var found = Physics.OverlapPoint(Scene, point).Where(e => !e.IsSelfOrDescendantOf(user)).ToList();
+        var found = Physics.OverlapPoint(Scene, point).Where(e => !e.IsSelfOrDescendantOf(user) && scope.Covers(e)).ToList();
         return found.FirstOrDefault(e => e.GetComponent<Body>() is not null)
                ?? found.FirstOrDefault(e => e.GetComponent<Collider>() is not null)
                ?? found.FirstOrDefault();

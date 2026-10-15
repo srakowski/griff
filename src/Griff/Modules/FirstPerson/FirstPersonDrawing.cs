@@ -14,12 +14,13 @@ internal static class FirstPersonDrawing
 {
     /// <summary>
     /// Draws the world through the first-person viewer's eyes in place of the top-down view, lit by itself, with what's
-    /// pinned to the screen over it; the camera's view (unturned and unshaken) only places the HUD.
+    /// pinned to the screen over it, for a view whose camera has a <see cref="FirstPersonView"/>: the main view, or a
+    /// viewport's (a first-person window in a 2D game). The camera's view (unturned and unshaken) only places the HUD.
     /// </summary>
     public static void Draw(FrameDrawing frame)
     {
         var game = frame.Game;
-        if (game.FirstPersonView is not { } fp || FirstPersonGame.Of(game).ViewerOf(fp) is not { } viewer)
+        if (frame.Camera?.GetComponent<FirstPersonView>() is not { } fp || !frame.Camera.IsActive || FirstPersonGame.Of(game).ViewerOf(fp) is not { } viewer)
             return;
         var camera = frame.Camera;
         var (size, aspect) = (frame.CameraSize, frame.Aspect);
@@ -27,10 +28,11 @@ internal static class FirstPersonDrawing
         frame.View = new Box(center, frame.View.HalfSize);
         frame.ViewProjection = Matrix4x4.CreateTranslation(-center.X, -center.Y, 0) * Matrix4x4.CreateOrthographic(size * 2 * aspect, size * 2, -1000f, 1000f);
         // The view looks up and down, bobs and shows particles and fades between steps, as everything else does.
-        var sprites = FirstPersonDraws(game, fp, viewer, camera, frame.View, aspect, frame.BlendOf);
+        var sprites = FirstPersonDraws(game, fp, viewer, camera, frame.View, aspect, frame.BlendOf, frame.ShowsInWorld);
         sprites.AddRange(frame.DrawEntities(frame.IsOnScreen));
         frame.Sprites = sprites;
         frame.Lit = false;
+        frame.SeenThrough = viewer;
     }
 
     // How dark walls facing north and south are next to those facing east and west.
@@ -59,7 +61,8 @@ internal static class FirstPersonDrawing
     /// The first-person view through <paramref name="viewer"/>'s eyes, as quads over <paramref name="view"/> (the camera's
     /// view of the world, unrotated), back to front.
     /// </summary>
-    private static List<SpriteDraw> FirstPersonDraws(Game game, FirstPersonView fp, Entity viewer, Entity? camera, Box view, float aspect, Func<Entity, StepBlend> blendOf)
+    private static List<SpriteDraw> FirstPersonDraws(Game game, FirstPersonView fp, Entity viewer, Entity? camera, Box view, float aspect, Func<Entity, StepBlend> blendOf,
+        Func<Entity, bool> inWorld)
     {
         var scene = game.Scene;
         var draws = new List<SpriteDraw>();
@@ -168,7 +171,7 @@ internal static class FirstPersonDrawing
         }
 
         // Things in the world, furthest first, each strip hidden where a wall is nearer.
-        var standees = Standees(game, fp, viewer, camera, eye, dir, right, focal, vertical, horizon + 0, eyeHeight, lighting, FogOf, blendOf);
+        var standees = Standees(game, fp, viewer, eye, dir, right, focal, vertical, horizon + 0, eyeHeight, lighting, FogOf, blendOf, inWorld);
         foreach (var standee in standees.OrderByDescending(s => s.Depth))
         {
             var first = Math.Max(0, (int)MathF.Floor((standee.Left + 1) / strip));
@@ -323,14 +326,15 @@ internal static class FirstPersonDrawing
 
     // ----- Things standing in the world -----
 
-    private static List<Standee> Standees(Game game, FirstPersonView fp, Entity viewer, Entity? camera, Vector2 eye, Vector2 dir, Vector2 right,
-        float focal, float vertical, float horizon, float eyeHeight, Lighting lighting, Func<float, float> fogOf, Func<Entity, StepBlend> blendOf)
+    private static List<Standee> Standees(Game game, FirstPersonView fp, Entity viewer, Vector2 eye, Vector2 dir, Vector2 right,
+        float focal, float vertical, float horizon, float eyeHeight, Lighting lighting, Func<float, float> fogOf, Func<Entity, StepBlend> blendOf,
+        Func<Entity, bool> inWorld)
     {
         var standees = new List<Standee>();
         var time = game.Time.Total;
         foreach (var entity in game.Scene.Entities)
         {
-            if (!entity.IsActive || entity.IsSelfOrDescendantOf(viewer) || SceneRenderer.IsOnScreen(entity, camera) || entity.GetComponent<Block>() is not null)
+            if (!entity.IsActive || entity.IsSelfOrDescendantOf(viewer) || !inWorld(entity) || entity.GetComponent<Block>() is not null)
                 continue;
             var billboard = entity.GetComponent<Billboard>();
             var scale = billboard?.Scale ?? 1;

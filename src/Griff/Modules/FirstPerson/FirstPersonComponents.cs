@@ -106,8 +106,12 @@ public sealed class FirstPersonMovement : Component
     /// <summary>Let the mouse (and the right stick) look up and down a little, as well as turn.</summary>
     public bool LookUpDown { get; set; } = true;
 
-    /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input.</summary>
+    /// <summary>
+    /// Untick it (from a script, in a cutscene) to ignore the player's input. Its Focus action ticks it and unticks it on
+    /// everything else the player plays (a board, another character), and back.
+    /// </summary>
     [Group("Control")]
+    [Focus]
     public bool Controllable { get; set; } = true;
 
     /// <summary>A footstep sound, played every <see cref="StepLength"/> units walked.</summary>

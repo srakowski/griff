@@ -78,6 +78,14 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// <summary>True while it stands still: nothing moves, falls or clears, and it takes no swaps. Its Pause and Resume actions set it.</summary>
     public bool Paused { get; set; }
 
+    /// <summary>
+    /// Untick it to have the board ignore the mouse, keys and gamepad while it plays on: another part of the scene has the
+    /// player's input (a platformer around an arcade cabinet). Its Focus action ticks it and unticks it on everything else
+    /// the player plays, and the player's own Focus gives the input back.
+    /// </summary>
+    [Focus]
+    public bool Controllable { get; set; } = true;
+
     /// <summary>How many swaps have been made (not counting those that slid back). Saved with the scene, so a rewind takes them back.</summary>
     [Output(OutOf = nameof(Moves))]
     public int Swaps { get; set; }

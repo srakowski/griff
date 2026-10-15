@@ -1,0 +1,47 @@
+title: Genres sharing a scene
+intro: A match-3 board inside a platformer. Each piece takes the player's input only while it has focus, a viewport shows two places at once, and part of the game can pause while the rest runs on.
+project: Platformer | Mashup
+
+chapter: A board in the level | Focus hands over the input
+select: Checkpoint
+set: Checkpoint.Message = Reached
+say: The checkpoint flag sends Reached when the player gets to it.
+create: Match Board
+set: Transform.Position.X = 6
+set: Transform.Position.Y = 14
+explain: field:MatchBoard.Controllable | Controllable | Everything that reads the keys or the mouse has a Controllable tick: the movements, boards, the strategy commander, the tactics controls and the sandbox tools. Unticked, it ignores the player and plays on.
+add: Trigger
+pick: Trigger.Message = Reached
+pick: Trigger.Do = Focus
+expectvalue: Board.Trigger.Do = Focus
+explain: field:Trigger.Do | Do | Focus gives this board the input, and takes it from everything else the player plays, so the board and the player don't both move on the arrow keys.
+
+chapter: Two places at once | A camera with a Viewport
+create: Camera
+rename: Minimap
+set: Transform.Position.X = 10
+set: Transform.Position.Y = 10
+set: Camera.Size = 5
+add: Viewport
+expectvalue: Minimap.Viewport.Width = 0.25
+explain: field:Viewport.Left | Where on the screen | A camera with a viewport draws into part of the screen: a minimap in a corner, each player's half of a split screen, or a first person window in a 2D game. This one watches the board.
+
+chapter: Playing it | Reach the flag
+play
+hold: Right 1.4
+expectvalue: Player.PlatformerMovement.Controllable = false
+expectvalue: Board.MatchBoard.Controllable = true
+hold: Left 0.6
+explain: game | The board has the input | Reaching the flag focused the board: now the arrows move its cursor, there in the corner, and the player stands still. A message from the board could hand the input back the same way.
+stop
+
+chapter: Pausing part of the game | A Pause Group
+select: Level
+add: Pause Group
+set: PauseGroup.Paused = true
+explain: field:PauseGroup.Paused | Paused | A pause group holds everything inside it still, the lift and the crumbling ledges here, while the rest of the game runs on. Triggers, switches and panels can pause and resume it.
+play
+wait: 1
+expectat: Lift = -13, -3.75
+say: The lift waits, and the player runs and jumps as ever. Groups, areas and a turn order's or move history's Within let each genre work on its own part of the scene.
+stop

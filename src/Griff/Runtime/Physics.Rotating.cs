@@ -213,7 +213,7 @@ public sealed partial class Physics
     private Vector2 CarryOf(Body body)
     {
         if (!_grounds.TryGetValue(body, out var ground) || ground.Ground.Scene != body.Entity!.Scene || !ground.Ground.IsActive ||
-            ground.Ground.GetComponent<Body>() is { Rotates: true, Frozen: false } under && !_groupOf.ContainsKey(under) && ground.Ground.MovesHere)
+            ground.Ground.GetComponent<Body>() is { Rotates: true, HeldStill: false } under && !_groupOf.ContainsKey(under) && ground.Ground.MovesHere)
             return Vector2.Zero;
         return PositionOf(ground.Ground) - ground.Position;
     }
@@ -833,7 +833,7 @@ public sealed partial class Physics
             }
 
             var depth = -deepest.Gap;
-            if (deepest.Other is { Rotates: true } other && !_groupOf.ContainsKey(other))
+            if (deepest.Other is { Rotates: true, HeldStill: false } other && !_groupOf.ContainsKey(other))
             {
                 var otherInverse = 1 / Math.Max(0.01f, other.Mass);
                 var share = inverseMass / (inverseMass + otherInverse);
@@ -1006,7 +1006,7 @@ public sealed partial class Physics
     // The body that moves a solid, when it moves under its own steam here and so shares a turning body's pushes.
     private static Body? MovingBody(in Shape solid)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Frozen: false } body || !solid.Entity.MovesHere)
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { HeldStill: false } body || !solid.Entity.MovesHere)
             return null;
         return body;
     }
@@ -1017,7 +1017,7 @@ public sealed partial class Physics
     // into a plank's end tips it, and standing on one end of a seesaw lowers it.
     private static void Knock(Body mover, Area moving, in Shape solid, int axis, float sign)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, Frozen: false } struck ||
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, HeldStill: false } struck ||
             struck == mover || !solid.Entity.MovesHere)
             return;
         var into = axis == 0 ? new Vector2(sign, 0) : new Vector2(0, sign);

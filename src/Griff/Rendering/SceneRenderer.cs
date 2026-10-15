@@ -107,16 +107,20 @@ public static partial class SceneRenderer
         return true;
     }
 
-    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer)
+    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer, Viewport? viewport = null)
     {
-        var camera = FindCamera(scene);
+        var main = FindCamera(scene);
+        var camera = viewport?.Entity ?? main;
         var component = camera?.GetComponent<Camera>();
         // A zoom and a fade of the background are drawn between steps, like the camera's moves.
         var drawn = component?.Drawn(StepBlend.For(scene, camera));
         var size = drawn?.Size ?? DefaultCameraSize;
         var view = new Box(ViewCenter(camera), new Vector2(size * aspect, size));
         var sprites = reuse.Sprites ?? [];
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer, reuse: true);
+        // With viewports (in a running game), each view draws what's its own.
+        var showsViews = game is not null && viewport is null && scene.Active<Viewport>().Count > 0;
+        var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null));
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer, reuse: true, filter);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
@@ -124,9 +128,9 @@ public static partial class SceneRenderer
         var frame = (t_scratch ??= new Scratch()).Frame;
         t_scratch.Frame = null;
         if (frame is null)
-            frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
+            frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter);
         else
-            frame.Reset(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount);
+            frame.Reset(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter);
         if (game is not null)
             DrawSystems(game, frame, timer);
 
@@ -134,18 +138,23 @@ public static partial class SceneRenderer
 
         sprites = frame.Sprites;
         view = frame.View;
-        var viewProjection = frame.ViewProjection;
+        // A viewport's view goes onto its part of the screen.
+        var viewProjection = viewport is null ? frame.ViewProjection : frame.ViewProjection * viewport.ToScreen();
 
         // What the game draws over the screen (its fades and flashes, and debug shapes) changes once a step too, so it's
         // drawn between the steps as well.
         var blend = frame.Blend;
 
-        // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched.
+        // In the dark, the world is drawn first and darkened; what's pinned to the screen goes over it untouched. Viewports
+        // go between the two as well.
         var ambient = component?.AmbientDrawn(blend) ?? Color.White;
         var dark = component?.IsDark == true && frame.Lit;
         var litCount = sprites.Count;
+        var worldCount = sprites.Count;
+        if (dark || showsViews)
+            worldCount = PutScreenLast(sprites, camera, t_scratch ??= new Scratch(), filter);
         if (dark)
-            litCount = PutScreenLast(sprites, camera, t_scratch ??= new Scratch());
+            litCount = worldCount;
 
         // The last frame's lights are replaced, their shadows' lists kept for this frame's.
         var lights = reuse.Lights;
@@ -155,7 +164,7 @@ public static partial class SceneRenderer
             AddLights(scene, view, lights ??= [], t_scratch ??= new Scratch());
         timer?.Mark(ScreenPart);
 
-        if (game is not null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
+        if (game is not null && viewport is null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
         {
             // Quads over the whole view: twice the unit quad in clip space, taken back into the world.
             var whole = Matrix4x4.CreateScale(2, 2, 1) * clipToWorld;
@@ -165,7 +174,7 @@ public static partial class SceneRenderer
                 sprites.Add(transition);
         }
 
-        if (game is { Debug.HasShapes: true })
+        if (viewport is null && game is { Debug.HasShapes: true })
             sprites.AddRange(DebugDraws(game.Debug.ShapesAt(blend), size));
 
         frame.Release();
@@ -178,10 +187,73 @@ public static partial class SceneRenderer
         built.Ambient = dark ? ambient : Color.White;
         built.Lights = lights ?? [];
         built.LitCount = dark ? litCount : sprites.Count;
-        var effects = camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown : null;
+        var effects = viewport is null && camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown : null;
         built.Effects = effects;
         built.Look = effects?.Drawn(StepBlend.For(scene, camera)) ?? default;
+        built.ViewsAt = worldCount;
+        built.ClearViews();
+        if (showsViews)
+            BuildViews(scene, aspect, game!, timer, built, sprites, worldCount);
         return built;
+    }
+
+    // Each viewport showing, lowest Order first, built as a frame of its own (the one it had last time, filled again), and a
+    // border round each drawn over them all, under what's pinned to the screen.
+    private static void BuildViews(Scene scene, float aspect, Runtime.Game game, BuildTimer? timer, RenderFrame built, List<SpriteDraw> sprites,
+        int worldCount)
+    {
+        var scratch = t_scratch ??= new Scratch();
+        var order = scratch.Viewports;
+        order.Clear();
+        foreach (var viewport in scene.Active<Viewport>())
+        {
+            if (!viewport.IsShowing)
+                continue;
+            var at = order.Count;
+            while (at > 0 && order[at - 1].Order > viewport.Order)
+                at--;
+            order.Insert(at, viewport);
+        }
+
+        try
+        {
+            if (order.Count == 0)
+                return;
+            Matrix4x4.Invert(built.ViewProjection, out var clipToWorld);
+            var borderAt = worldCount;
+            foreach (var viewport in order)
+            {
+                var view = built.AddView();
+                view.Viewport = viewport;
+                view.Frame = BuildNow(scene, viewport.AspectOn(aspect), game, new Recycled(view.Frame), timer, viewport);
+                (view.Left, view.Top, view.Width, view.Height) = viewport.Area;
+                view.Border = viewport.Border;
+                if (viewport.Border.A > 0)
+                    borderAt = AddBorder(sprites, borderAt, view, aspect, clipToWorld);
+            }
+        }
+        finally
+        {
+            order.Clear();
+        }
+    }
+
+    // A frame round a view, about two pixels thick on a 720-pixel-high screen, just outside it: four quads in clip space,
+    // taken back into the world, put in at `at`. Returns where the next go.
+    private static int AddBorder(List<SpriteDraw> sprites, int at, RenderView view, float aspect, Matrix4x4 clipToWorld)
+    {
+        var thickY = 1 / 180f;
+        var thickX = thickY / (aspect > 0 ? aspect : 1);
+        var (left, right) = (view.Left * 2 - 1, (view.Left + view.Width) * 2 - 1);
+        var (top, bottom) = (1 - view.Top * 2, 1 - (view.Top + view.Height) * 2);
+        sprites.Insert(at++, Edge((left + right) / 2, top + thickY / 2, right - left + 2 * thickX, thickY));
+        sprites.Insert(at++, Edge((left + right) / 2, bottom - thickY / 2, right - left + 2 * thickX, thickY));
+        sprites.Insert(at++, Edge(left - thickX / 2, (top + bottom) / 2, thickX, top - bottom));
+        sprites.Insert(at++, Edge(right + thickX / 2, (top + bottom) / 2, thickX, top - bottom));
+        return at;
+
+        SpriteDraw Edge(float x, float y, float width, float height) =>
+            new(Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(x, y, 0) * clipToWorld, null, view.Border, ScreenEntity);
     }
 
     // The game's systems draw, in the order they were added: those that see the world their own way (first person) first,
@@ -215,13 +287,13 @@ public static partial class SceneRenderer
 
     // Moves the draws pinned to the screen after the others, each keeping their order, in place (by way of the scratch's
     // spare, so a big dark scene's frame makes no garbage). Returns how many draws aren't pinned.
-    private static int PutScreenLast(List<SpriteDraw> sprites, Entity? camera, Scratch scratch)
+    private static int PutScreenLast(List<SpriteDraw> sprites, Entity? camera, Scratch scratch, in ViewFilter filter = default)
     {
         var drawn = CollectionsMarshal.AsSpan(sprites);
         var (world, screen) = (0, 0);
         foreach (ref readonly var draw in drawn)
         {
-            if (IsOnScreen(draw.Entity, camera))
+            if (filter.IsOnScreen(draw.Entity, camera))
                 screen++;
         }
 
@@ -233,7 +305,7 @@ public static partial class SceneRenderer
         screen = 0;
         for (var i = 0; i < drawn.Length; i++)
         {
-            if (IsOnScreen(drawn[i].Entity, camera))
+            if (filter.IsOnScreen(drawn[i].Entity, camera))
                 spare[screen++] = drawn[i];
             else
                 drawn[world++] = drawn[i];
@@ -259,13 +331,13 @@ public static partial class SceneRenderer
     /// <paramref name="sprites"/> holds last frame's draws, to be replaced; otherwise the draws are added after what it holds.
     /// </summary>
     internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld,
-        BuildTimer? timer = null, bool reuse = false)
+        BuildTimer? timer = null, bool reuse = false, ViewFilter filter = default)
     {
         var scratch = t_scratch ?? new Scratch();
         t_scratch = null;
         try
         {
-            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse);
+            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse, filter);
         }
         finally
         {
@@ -304,6 +376,9 @@ public static partial class SceneRenderer
 
         public FrameDrawing? Frame { get; set; }
 
+        // The viewports of the frame being built, in the order they're drawn.
+        public List<Viewport> Viewports { get; } = [];
+
         // What the entities draw with, one at a time, and what goes over the world (ropes, wires) with.
         public Drawing? Drawing;
 
@@ -329,12 +404,13 @@ public static partial class SceneRenderer
     // With a timer (a profiler's), each entity's own work counts to the kind of thing it draws first, and each drawable's
     // drawing to its own kind.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse, in ViewFilter filter)
     {
-        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
+        var camera = filter.Camera ?? FindCamera(scene);
+        var sortByY = camera?.GetComponent<Camera>()?.SortByY == true;
         if (include is null && scene.Entities.Count >= ChunkedFrom)
         {
-            DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY);
+            DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY, filter);
         }
         else
         {
@@ -345,10 +421,10 @@ public static partial class SceneRenderer
                 sprites.Clear();
             }
 
-            DrawEach(scene, view, cameraSize, playing, sprites, include, overs, scratch, timer, sortByY);
+            DrawEach(scene, view, cameraSize, playing, sprites, include, overs, scratch, timer, sortByY, filter);
         }
 
-        return overs is { Count: > 0 } ? DrawOverWorld(scene, view, cameraSize, playing, sprites, overs, scratch, timer) : -1;
+        return overs is { Count: > 0 } ? DrawOverWorld(view, cameraSize, playing, sprites, overs, scratch, timer, camera, filter) : -1;
     }
 
     // A drawing that adds to `draws`: the one kept in `kept`, set up afresh, or a new one kept there. Released once done with.
@@ -362,7 +438,7 @@ public static partial class SceneRenderer
 
     // The scene's entities one by one, on this thread.
     private static void DrawEach(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool sortByY)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool sortByY, in ViewFilter filter)
     {
         var drawables = scratch.Drawables;
         var entries = scratch.Entries;
@@ -374,7 +450,7 @@ public static partial class SceneRenderer
         for (var e = 0; e < entities.Count; e++)
         {
             var entity = entities[e];
-            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)))
+            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || (include is not null && !include(entity)) || !filter.Shows(entity))
                 continue;
             timer?.Mark(LeadOf(entity));
             if (!Describe(entity, sortByY, drawables, overs, out var entry))
@@ -403,8 +479,8 @@ public static partial class SceneRenderer
 
     // What goes over the world (ropes, wires), after it and under what's pinned to the screen. Returns how many draws at
     // the end are pinned to the screen when it had to split them for that, or -1.
-    private static int DrawOverWorld(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, List<IDrawable> overs,
-        Scratch scratch, BuildTimer? timer)
+    private static int DrawOverWorld(Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, List<IDrawable> overs,
+        Scratch scratch, BuildTimer? timer, Entity? camera, in ViewFilter filter)
     {
         // Over the world: lower steps first, in hierarchy order within a step (the order they're listed in).
         for (var i = 1; i < overs.Count; i++)
@@ -430,7 +506,7 @@ public static partial class SceneRenderer
             if (over.Count == 0)
                 return -1;
             var count = sprites.Count;
-            var world = PutScreenLast(sprites, FindCamera(scene), scratch);
+            var world = PutScreenLast(sprites, camera, scratch, filter);
             sprites.InsertRange(world, over);
             return count - world;
         }
@@ -1099,7 +1175,21 @@ public static partial class SceneRenderer
     }
 
     /// <summary>The first enabled entity with a Camera, in hierarchy order.</summary>
-    public static Entity? FindCamera(Scene scene) => scene.Active<Camera>().FirstOrDefault()?.Entity;
+    /// <summary>
+    /// The scene's main camera, which fills the screen: the first active camera without a <see cref="Viewport"/> (a
+    /// viewport's camera draws into its own part of the screen), or with every camera in one, the first.
+    /// </summary>
+    public static Entity? FindCamera(Scene scene)
+    {
+        var cameras = scene.Active<Camera>();
+        foreach (var camera in cameras)
+        {
+            if ((camera.Entity!.Roles & ComponentRoles.Viewport) == 0)
+                return camera.Entity;
+        }
+
+        return cameras.FirstOrDefault()?.Entity;
+    }
 
     /// <summary>
     /// Orthographic projection of the camera's view. <paramref name="size"/> is half the visible height;

@@ -1,0 +1,61 @@
+using Griff.Scenes;
+
+namespace Griff.Rendering;
+
+/// <summary>
+/// What one view of a running game draws, in a scene with viewports (see <see cref="Viewport"/>): what rides inside another
+/// view's camera is that view's own HUD, and a viewport's view leaves out the main view's HUD (anything with a
+/// <see cref="ScreenAnchor"/>, or inside the main camera). Without viewports (the default) every view draws everything, and
+/// what's pinned to the screen is what <see cref="SceneRenderer.IsOnScreen"/> says.
+/// </summary>
+internal readonly struct ViewFilter(Entity? camera, Entity? main, Viewport? viewport, bool split)
+{
+    /// <summary>The camera the view is drawn from; null when it isn't known (the scene's main camera then).</summary>
+    public Entity? Camera => camera;
+
+    /// <summary>The viewport the view is drawn for, or null for the main view.</summary>
+    public Viewport? Viewport => viewport;
+
+    /// <summary>True if the view draws <paramref name="entity"/> at all.</summary>
+    public bool Shows(Entity entity)
+    {
+        if (!split)
+            return true;
+        var isViewport = viewport is not null;
+        for (var e = entity; e is not null; e = e.Parent)
+        {
+            if (e != entity)
+            {
+                if (e == camera)
+                    return true;
+                if ((e.Roles & ComponentRoles.Viewport) != 0 || (isViewport && e == main))
+                    return false;
+            }
+
+            if (isViewport && (e.Roles & ComponentRoles.ScreenAnchor) != 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// True if <paramref name="entity"/>'s draws are pinned to the view's screen rather than in its world: inside its
+    /// camera, or in the main view, anything with a <see cref="ScreenAnchor"/> too. <paramref name="fallback"/> is the
+    /// camera to go by when the filter has none.
+    /// </summary>
+    public bool IsOnScreen(Entity entity, Entity? fallback)
+    {
+        if (viewport is null)
+            return SceneRenderer.IsOnScreen(entity, camera ?? fallback);
+        if (entity == SceneRenderer.ScreenEntity)
+            return true;
+        for (var e = entity.Parent; e is not null; e = e.Parent)
+        {
+            if (e == camera)
+                return true;
+        }
+
+        return false;
+    }
+}

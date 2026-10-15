@@ -42,7 +42,8 @@ public abstract class Component
                 (this is IDrawEffect ? ComponentRoles.DrawEffect : 0) |
                 (this is Sprite ? ComponentRoles.Sprite : 0) |
                 (this is Parallax ? ComponentRoles.Parallax : 0) |
-                (this is ScreenAnchor ? ComponentRoles.ScreenAnchor : 0);
+                (this is ScreenAnchor ? ComponentRoles.ScreenAnchor : 0) |
+                (this is Viewport ? ComponentRoles.Viewport : 0);
 }
 
 /// <summary>What a component is, for code that asks of every entity every frame (see <see cref="Component.Roles"/>, <see cref="Entity.Roles"/>).</summary>
@@ -65,6 +66,9 @@ internal enum ComponentRoles : byte
 
     /// <summary>A <see cref="Scenes.ScreenAnchor"/>.</summary>
     ScreenAnchor = 16,
+
+    /// <summary>A <see cref="Scenes.Viewport"/>: its camera draws into part of the screen.</summary>
+    Viewport = 32,
 }
 
 /// <summary>Excludes a public read/write property from scene files and the inspector.</summary>

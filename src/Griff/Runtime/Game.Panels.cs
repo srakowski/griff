@@ -16,7 +16,10 @@ public sealed partial class Game
     /// <summary>Every open panel, the one underneath the rest first.</summary>
     public IReadOnlyList<Panel> OpenPanels => _panels.Open.Select(p => p.Panel).ToList();
 
-    /// <summary>True while an open panel pauses the game (see <see cref="Panel.PauseGame"/> and <see cref="Time.IsPaused"/>).</summary>
+    /// <summary>
+    /// True while an open panel pauses the whole game (see <see cref="Panel.PauseGame"/> and <see cref="Time.IsPaused"/>).
+    /// One that pauses only a group (<see cref="Panel.Pauses"/>) leaves it false: see <see cref="Entity.IsPaused"/>.
+    /// </summary>
     public bool IsPaused => Time.IsPaused;
 
     /// <summary>The input action waiting for the player to press its new key or button, if any (see <see cref="ListenForBinding"/>).</summary>
@@ -129,6 +132,8 @@ public sealed partial class Game
             panel.IsTop = panel == TopPanel;
         // A network game is shared, so it can't stop for one player's menu (their keys just don't reach it meanwhile).
         Time.IsPaused = !Net.IsOnline && AnyPanelPauses();
+        // One that pauses only a group stops it at once, as one that pauses the whole game does.
+        SyncPauses();
     }
 
     private bool IsOpen(Panel panel)
@@ -146,7 +151,7 @@ public sealed partial class Game
     {
         foreach (var (open, _) in _panels.Open)
         {
-            if (open.PauseGame)
+            if (PausesAll(open.PauseGame, open.Pauses))
                 return true;
         }
 

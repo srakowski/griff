@@ -32,13 +32,14 @@ internal static partial class Browser
     public static partial void Glyphs(int id, int size, int top, int rows, [JSMarshalAs<JSType.MemoryView>] Span<byte> rgba);
 
     /// <summary>
-    /// Draws a frame (see <see cref="WebFrame"/>) over the background color. The quads' floats go as their bytes: a
-    /// memory view can only be of bytes, ints or doubles.
+    /// Draws a frame (see <see cref="WebFrame"/>) over the background color, with its viewports. The quads' floats go as
+    /// their bytes: a memory view can only be of bytes, ints or doubles.
     /// </summary>
     [JSImport("draw", "griff")]
     public static partial void Draw(
         [JSMarshalAs<JSType.MemoryView>] Span<byte> quads,
         [JSMarshalAs<JSType.MemoryView>] Span<int> batches,
+        [JSMarshalAs<JSType.MemoryView>] Span<double> views,
         double red,
         double green,
         double blue);

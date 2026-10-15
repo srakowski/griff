@@ -23,13 +23,14 @@ internal static class BlockWorldsDrawing
         if (state.Hud is null && game.Scene.Active<BlockBuilder>().Count == 0)
             return;
         var thickness = frame.LineWidth;
-        var firstPerson = game.Eyes is not null;
+        var firstPerson = frame.SeenThrough is not null;
         var overlays = new List<SpriteDraw>();
         if (!firstPerson)
             overlays.AddRange(BuilderDraws(game, thickness, frame.BlendOf));
 
-        var hud = state.Hud is { } layout ? HudDraws(game, state, layout, thickness).ToList() : [];
-        if (state.Hud is { } laidOut)
+        // The hotbar and crafting list are the whole screen's, in the main view.
+        var hud = state.Hud is { } layout && frame.Viewport is null ? HudDraws(game, state, layout, thickness).ToList() : [];
+        if (state.Hud is { } laidOut && hud.Count > 0)
             frame.PinToView(hud, laidOut.View.Center, laidOut.View.Height / 2);
         if (firstPerson)
             hud.InsertRange(0, FirstPersonDigDraws(game, frame.View, frame.BlendOf));

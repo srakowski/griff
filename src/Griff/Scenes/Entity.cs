@@ -63,7 +63,33 @@ public sealed class Entity
     private long _activeFor = -1;
 
     // Joining a scene: what IsActive kept was for another one.
-    internal void ForgetActive() => _activeFor = -1;
+    internal void ForgetActive() => (_activeFor, _pausedFor) = (-1, (-1, -1));
+
+    /// <summary>
+    /// True while the game holds this entity still: it, or something it's inside, is a paused group (a
+    /// <see cref="PauseGroup"/> that's <see cref="PauseGroup.Paused"/>, or what an open panel or a dialogue being said
+    /// pauses). Nothing in a paused group moves, animates, runs its scripts or takes input, but it's still drawn and still
+    /// solid to what's outside, and the rest of the game runs on.
+    /// </summary>
+    public bool IsPaused
+    {
+        get
+        {
+            if (Scene is not { } scene || scene.PausedGroups.Count == 0)
+                return false;
+            // Kept until something is paused, resumed, enabled, disabled or moved.
+            var key = (scene.ActiveVersion, scene.PauseVersion);
+            if (_pausedFor != key)
+                (_isPaused, _pausedFor) = (PausedIn == scene || (Parent?.IsPaused ?? false), key);
+            return _isPaused;
+        }
+    }
+
+    private bool _isPaused;
+    private (long Active, long Pause) _pausedFor = (-1, -1);
+
+    // The scene whose paused group this entity is the top of, if it is one (see Scene.SetPaused).
+    internal Scene? PausedIn { get; set; }
 
     /// <summary>Its place in the scene's hierarchy, depth first, once the scene has numbered it (see <see cref="Scene.Order"/>).</summary>
     internal int Order { get; set; }

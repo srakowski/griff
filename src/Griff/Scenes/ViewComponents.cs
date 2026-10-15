@@ -268,3 +268,79 @@ public sealed class Parallax : Component
     /// <summary>How far the layer is shifted when seen from a camera at <paramref name="camera"/>.</summary>
     public Vector2 OffsetFor(Vector2 camera) => camera * (Vector2.One - Factor);
 }
+
+/// <summary>
+/// Draws the camera on its entity into part of the screen, over the main camera's view: a minimap in a corner, one
+/// player's half of a split screen, a first-person window (a camera with a First Person View) inside a 2D game. The part
+/// is given as fractions of the screen from its top left, so it keeps its place at any window size; the camera's own
+/// <see cref="Camera.Size"/> is half the view's height, its width following the part's shape. Whatever rides inside this
+/// camera (its children) is this view's own HUD, drawn in it and not in the main view; the main view's HUD (anything
+/// with a <see cref="ScreenAnchor"/>, or inside the main camera) stays on top of every view, with menus and fades.
+/// </summary>
+/// <remarks>
+/// The main view is the first camera without a viewport; with none, the first camera fills the screen and its viewport
+/// draws over it too. A viewport is drawing only: it changes nothing in the game, so rewinds and network games are as
+/// ever. Scripts can ask where the mouse is in a view with <c>Game.MouseIn</c>.
+/// </remarks>
+[Category("Rendering")]
+[Requires(typeof(Camera))]
+[WorksWith(typeof(Follow), Note = "to follow a player in their half of the screen")]
+[ComponentName("Viewport")]
+[NetLocal]
+public sealed class Viewport : Component
+{
+    /// <summary>Where the view's left edge is, as a fraction of the screen's width from its left (0 to 1).</summary>
+    public float Left { get; set; } = 0.72f;
+
+    /// <summary>Where the view's top edge is, as a fraction of the screen's height from its top (0 to 1).</summary>
+    public float Top { get; set; } = 0.04f;
+
+    /// <summary>How wide the view is, as a fraction of the screen's width: 0.5 for half of a split screen.</summary>
+    public float Width { get; set; } = 0.25f;
+
+    /// <summary>How tall the view is, as a fraction of the screen's height.</summary>
+    public float Height { get; set; } = 0.25f;
+
+    /// <summary>Which views go over which where they overlap: higher is drawn later, on top.</summary>
+    public int Order { get; set; }
+
+    /// <summary>A frame drawn round the view; transparent for none.</summary>
+    public Color Border { get; set; } = Color.FromBytes(0xF4, 0xF4, 0xF4, 0xC0);
+
+    /// <summary>Shows the view; untick it (or switch it off) to hide it, e.g. a map shown while a key is held. Its camera never becomes the main one.</summary>
+    [Powered]
+    public bool Shown { get; set; } = true;
+
+    // The part of the screen it covers, clamped to the screen: left, top, width and height as fractions of it.
+    internal (float Left, float Top, float Width, float Height) Area
+    {
+        get
+        {
+            var left = Math.Clamp(Finite(Left), 0, 1);
+            var top = Math.Clamp(Finite(Top), 0, 1);
+            return (left, top, Math.Clamp(Finite(Width), 0, 1 - left), Math.Clamp(Finite(Height), 0, 1 - top));
+        }
+    }
+
+    /// <summary>True if it shows anything: <see cref="Shown"/>, and some of the screen to show it in.</summary>
+    public bool IsShowing => Shown && Area is { Width: > 0, Height: > 0 };
+
+    /// <summary>The view's width over its height on a screen <paramref name="screenAspect"/> wide (its width over its height).</summary>
+    public float AspectOn(float screenAspect)
+    {
+        var (_, _, width, height) = Area;
+        return height > 0 && screenAspect > 0 ? width * screenAspect / height : screenAspect;
+    }
+
+    /// <summary>
+    /// Takes the view's clip space (-1..1 across it) to the whole screen's, onto the part it covers: what a renderer puts
+    /// after the view's camera projection.
+    /// </summary>
+    public Matrix4x4 ToScreen()
+    {
+        var (left, top, width, height) = Area;
+        return Matrix4x4.CreateScale(width, height, 1) * Matrix4x4.CreateTranslation(2 * left + width - 1, 1 - 2 * top - height, 0);
+    }
+
+    private static float Finite(float value) => float.IsFinite(value) ? value : 0;
+}

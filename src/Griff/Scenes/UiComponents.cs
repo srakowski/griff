@@ -575,6 +575,15 @@ public sealed class Panel : Component
     public bool PauseGame { get; set; } = true;
 
     /// <summary>
+    /// What it stops while it's open: empty stops the whole game; an entity's name (one inside this panel first) stops only
+    /// it and everything inside it, as a <see cref="PauseGroup"/> does, while the rest of the game runs on behind the panel:
+    /// the minigame a pause menu is for, the world behind a shop while the music and the HUD go on.
+    /// </summary>
+    [EntityName]
+    [ShownWhen(nameof(PauseGame))]
+    public string? Pauses { get; set; }
+
+    /// <summary>
     /// An input action that opens it when no other panel is open, and closes it again: "Pause" for a pause menu (Esc, P
     /// or Start), or one of your own, like "Map". Empty opens it only from a button or a script.
     /// </summary>

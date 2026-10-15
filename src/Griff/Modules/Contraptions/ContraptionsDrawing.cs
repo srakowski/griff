@@ -24,10 +24,11 @@ internal static class ContraptionsDrawing
             return;
         var thickness = frame.LineWidth;
         var overlays = new List<SpriteDraw>();
-        if (game.Eyes is null)
+        if (frame.SeenThrough is null)
             overlays.AddRange(ToolDraws(game, thickness));
 
-        if (state.Hud is { } layout && system.Tools is { } tools)
+        // The tool bar goes in the main view, not in every viewport.
+        if (state.Hud is { } layout && system.Tools is { } tools && frame.Viewport is null)
         {
             var start = overlays.Count;
             overlays.AddRange(HudDraws(game, state, layout, tools, thickness));

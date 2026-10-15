@@ -35,7 +35,8 @@ public sealed partial class Game
 
             // A frame that skips several beats (a stall) gives just the last, though anything stepping on one of them steps.
             var beat = (long)Math.Floor(beats);
-            if (beat < 0 || beat < (long)Math.Floor(before) + 1 || PausedThisFrame)
+            // A paused clock (see Entity.IsPaused) keeps up with the music but lands no beats meanwhile.
+            if (beat < 0 || beat < (long)Math.Floor(before) + 1 || PausedThisFrame || clock.Entity!.IsPaused)
                 continue;
             (clock.LandedFrom, clock.LandedTo) = (Math.Max(0, (long)Math.Floor(before) + 1), beat);
             clock.RaiseBeat((int)beat);

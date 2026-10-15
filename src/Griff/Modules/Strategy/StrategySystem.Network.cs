@@ -55,8 +55,21 @@ internal sealed partial class StrategySystem
         if (fixedArgs < 0 || args.Length < 1 + fixedArgs)
             return;
 
-        var commander = new Commander { Team = team };
         var selected = args.Skip(1 + fixedArgs).OfType<Entity>().Where(e => IsAlive(e) && SameTeam(TeamOf(e), team)).ToList();
+
+        // In the game what they ordered is in (or whose commander is on their team, or the first).
+        var game = selected.Select(OwnerOf).FirstOrDefault(g => g is not null) ?? _games.FirstOrDefault(g => SameTeam(g.Commander?.Team, team)) ?? Rts;
+        if (game != Rts)
+        {
+            With(game, () =>
+            {
+                RunStrategyOrder(player, data);
+                return 0;
+            });
+            return;
+        }
+
+        var commander = new Commander { Team = team, MapCenter = Rts.Commander?.MapCenter ?? default, MapSize = Rts.Commander?.MapSize ?? new Vector2(48, 32) };
         var saved = (Selected: Rts.Selected.ToList(), Rts.Targeting, Rts.Placing, Rts.PlaceAt, Rts.PlaceOk);
         Rts.Selected.Clear();
         Rts.Selected.AddRange(selected);

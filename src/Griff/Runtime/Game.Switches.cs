@@ -27,7 +27,8 @@ public sealed partial class Game
         foreach (var @switch in all)
             @switch.Shown ??= @switch.IsOn;
 
-        foreach (var @switch in all.Where(s => s.Entity!.IsActive))
+        // A paused switch (see Entity.IsPaused) can't be worked, and its time on stands still; it still holds what it's switched.
+        foreach (var @switch in all.Where(s => s.Entity!.IsActive && !s.Entity.IsPaused))
         {
             var users = TouchersOf(@switch.Entity!).Where(t => @switch.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
 
@@ -39,7 +40,7 @@ public sealed partial class Game
                     ShowPrompt(@switch.Entity!, @switch.Prompt, works && users.Count > 0 && _levels.Talking is null);
 
                     // Not with the press that just started a conversation beside it.
-                    if (works && users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
+                    if (works && users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => !u.IsPaused && InputOf(u).WasPressed("Interact")))
                     {
                         if (@switch.IsOn)
                             @switch.IsOn = false;

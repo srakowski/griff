@@ -293,6 +293,7 @@ public sealed partial class Game
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
         Step(FramePhase.Begin, "Panels", SyncPanels, _panels);
+        Step(FramePhase.Begin, "Pauses", SyncPauses);
         Step(FramePhase.Begin, "Time", AdvanceTime);
         Step(FramePhase.Begin, "Input", () => (Input as InputState)?.BeginFrame(Time.UnscaledDelta));
         Step(FramePhase.Begin, "Debug Drawing", Debug.BeginFrame);
@@ -515,13 +516,13 @@ public sealed partial class Game
     // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
     private void RunTrails()
     {
-        foreach (var trail in Scene.Active<Trail>())
+        foreach (var trail in Scene.Running<Trail>())
             trail.Advance(Time.Delta);
     }
 
     private void RunAnimatedTiles()
     {
-        foreach (var tilemap in Scene.Active<Tilemap>())
+        foreach (var tilemap in Scene.Running<Tilemap>())
         {
             if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
                 tilemap.AnimationTime += Time.Delta;
@@ -530,13 +531,13 @@ public sealed partial class Game
 
     private void RunAnimations()
     {
-        foreach (var animation in Scene.Active<Animation>())
+        foreach (var animation in Scene.Running<Animation>())
             animation.Advance(Time.Delta);
     }
 
     private void RunParticles()
     {
-        foreach (var emitter in Scene.Active<ParticleEmitter>())
+        foreach (var emitter in Scene.Running<ParticleEmitter>())
         {
             emitter.Advance(Time.Delta, Physics.Gravity);
             if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
@@ -563,7 +564,7 @@ public sealed partial class Game
             var sprite = sprites[i];
             if (sprite.Entity is { } entity && entity.Scene == Scene)
             {
-                if (!entity.IsActive)
+                if (!entity.IsActive || entity.IsPaused)
                     continue;
                 sprite.AdvanceEffects(Time.Delta);
                 if (sprite.HasEffects)

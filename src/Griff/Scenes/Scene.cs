@@ -150,6 +150,58 @@ public sealed class Scene
     /// <summary>Like <see cref="All{T}"/>, only those on active entities (see <see cref="Entity.IsActive"/>): what the game runs and draws.</summary>
     public ComponentList<T> Active<T>() where T : class => new(IndexOf<T>().Active(ActiveVersion));
 
+    /// <summary>
+    /// Like <see cref="Active{T}"/>, less those on paused entities (see <see cref="Entity.IsPaused"/>): what the game moves on
+    /// each step. The same list as Active while nothing is paused.
+    /// </summary>
+    public ComponentList<T> Running<T>() where T : class =>
+        _paused.Count == 0 ? Active<T>() : new(IndexOf<T>().Running(ActiveVersion, PauseVersion));
+
+    // The entities held still with everything inside them (see Entity.IsPaused), and a number that changes whenever they do.
+    private readonly List<Entity> _paused = [];
+
+    /// <summary>The entities the game holds still with everything inside them, while it runs (see <see cref="Entity.IsPaused"/>).</summary>
+    public IReadOnlyList<Entity> PausedGroups => _paused;
+
+    internal long PauseVersion { get; private set; }
+
+    /// <summary>
+    /// Makes <paramref name="groups"/> the paused groups in place of the last ones (see <see cref="Entity.IsPaused"/>).
+    /// Returns whether that changed anything.
+    /// </summary>
+    internal bool SetPaused(List<Entity> groups)
+    {
+        if (groups.Count == _paused.Count)
+        {
+            var same = true;
+            foreach (var group in groups)
+            {
+                if (group.PausedIn != this)
+                {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same)
+                return false;
+        }
+
+        foreach (var old in _paused)
+            old.PausedIn = null;
+        _paused.Clear();
+        foreach (var group in groups)
+        {
+            if (group.Scene != this || group.PausedIn == this)
+                continue;
+            group.PausedIn = this;
+            _paused.Add(group);
+        }
+
+        PauseVersion++;
+        return true;
+    }
+
     private ComponentIndex<T> IndexOf<T>() where T : class
     {
         if (!_indexes.TryGetValue(typeof(T), out var index))

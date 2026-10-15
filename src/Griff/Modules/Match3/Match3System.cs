@@ -26,7 +26,8 @@ internal sealed class Match3System : GameSystem
             if (board.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
             board.LocalPlayer = Game.Net.LocalPlayer?.Id ?? 0;
-            if (board.Paused)
+            // Paused itself, or with a group it's in (see Entity.IsPaused).
+            if (board.Paused || board.Entity.IsPaused)
                 continue;
             AdvanceGems(board);
             if (Game.Runs(board.Entity))
@@ -336,6 +337,14 @@ internal sealed class Match3System : GameSystem
     // player's. While the board moves, gems can still be picked up and the cursor moved, but swaps wait.
     private void ReadHands(MatchBoard board, Tilemap map, bool swaps)
     {
+        // Without focus it ignores everyone's input (another part of the scene has it), and puts down what was picked up.
+        if (!board.Controllable)
+        {
+            foreach (var hand in board.Hands.Values)
+                (hand.Picked, hand.Pressed, hand.Cursor) = (null, null, null);
+            return;
+        }
+
         if (Game.PausedThisFrame || Game.Net.IsClient)
             return;
         if (Game.TopPanel is null)

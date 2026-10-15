@@ -257,7 +257,7 @@ public sealed partial class Game
                     LoadScene(button.Scene.Trim(), button.Fade);
                 break;
             case ButtonAction.EndTurn:
-                Net.SendCommand(EndTurnCommand, null);
+                Net.SendCommand(EndTurnCommand, OrderForButton(button)?.Entity);
                 break;
         }
 

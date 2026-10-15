@@ -407,6 +407,9 @@ public sealed partial class Game
     {
         foreach (var bouncer in Showing<Bouncer>())
         {
+            // A paused bouncer launches nothing, and nothing paused is launched (see Entity.IsPaused).
+            if (bouncer.Entity!.IsPaused)
+                continue;
             foreach (var key in bouncer.Recent.Keys.ToList())
             {
                 bouncer.Recent[key] += Time.Delta;
@@ -420,7 +423,7 @@ public sealed partial class Game
             var box = collider is null ? new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero) : Physics.BoundsOf(collider);
             foreach (var (by, layer) in TouchersOf(entity).ToList())
             {
-                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by) || !Moves(by))
+                if (!bouncer.AcceptsLayer(layer) || by.GetComponent<Body>() is not { } body || bouncer.Recent.ContainsKey(by) || !Moves(by) || by.IsPaused)
                     continue;
                 if (!OnLaunchingSide(by, box, way, collider is { IsTrigger: false }))
                     continue;
@@ -465,6 +468,8 @@ public sealed partial class Game
         foreach (var crumble in RunHere<Crumble>())
         {
             var entity = crumble.Entity!;
+            if (entity.IsPaused)
+                continue;
             if (crumble.Crumbled)
             {
                 crumble.ShakeOffset = Vector2.Zero;

@@ -39,10 +39,14 @@ public sealed partial class Game
     }
 
     // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Runs);
+    // Not what's paused (see Entity.IsPaused): it's held still.
+    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Running<T>() : Where(Scene.Running<T>(), Runs);
 
-    // What this machine moves: what it runs, less other players' own characters, plus this player's own.
-    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Moves);
+    // What this machine runs, paused or not: for what reads or shows how things are rather than moving them on.
+    internal ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Active<T>() : Where(Scene.Active<T>(), Runs);
+
+    // What this machine moves: what it runs, less other players' own characters, plus this player's own; not what's paused.
+    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.Running<T>() : Where(Scene.Running<T>(), Moves);
 
     // Everything showing, wherever it's run: for what only changes how things look.
     internal ComponentList<T> Showing<T>() where T : Component => Scene.Active<T>();
@@ -347,7 +351,7 @@ public sealed partial class Game
         var all = RunHere<Checkpoint>();
         foreach (var checkpoint in all)
         {
-            if (!checkpoint.Entity!.IsActive || checkpoint.Active)
+            if (!checkpoint.Entity!.IsActive || checkpoint.Active || checkpoint.Entity.IsPaused)
                 continue;
             var (by, _) = TouchersOf(checkpoint.Entity!).FirstOrDefault(t => checkpoint.AcceptsLayer(t.Layer));
             if (by is null)
@@ -381,7 +385,7 @@ public sealed partial class Game
     {
         foreach (var health in RunHere<Health>())
         {
-            if (!health.Respawn || !health.IsDead)
+            if (!health.Respawn || !health.IsDead || health.Entity!.IsPaused)
                 continue;
             var entity = health.Entity!;
             if (float.IsNaN(health.RespawnLeft))
@@ -431,7 +435,8 @@ public sealed partial class Game
         var touchingAnyDoor = new HashSet<Entity>();
         foreach (var door in doors)
         {
-            var users = TouchersOf(door.Entity!).Where(t => door.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
+            // Nothing paused goes through it (see Entity.IsPaused).
+            var users = TouchersOf(door.Entity!).Where(t => door.AcceptsLayer(t.Layer) && !t.By.IsPaused).Select(t => t.By).ToList();
             touchingAnyDoor.UnionWith(users);
             var ready = door.Locked || !FlagHolds(door.NeedsFlag) ? [] : users.Where(u => !_levels.ArrivedByDoor.Contains(u) && CanUnlock(door, u)).ToList();
             ShowPrompt(door.Entity!, door.Prompt, ready.Count > 0);
@@ -513,7 +518,8 @@ public sealed partial class Game
 
             var available = !(dialogue.Once && dialogue.IsDone) && dialogue.Lines.Count > 0;
             // In a network game each player reads for themselves, on their own machine.
-            var touching = available && TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Net.IsMine(t.By));
+            var touching = available && !dialogue.Entity!.IsPaused &&
+                           TouchersOf(dialogue.Entity!).Any(t => dialogue.AcceptsLayer(t.Layer) && Net.IsMine(t.By) && !t.By.IsPaused);
             if (touching)
                 touched.Add(dialogue);
             ShowPrompt(dialogue.Entity!, dialogue.Prompt, touching && dialogue.Start == DialogueStart.Interact);
@@ -552,10 +558,15 @@ public sealed partial class Game
         ShowPrompt(dialogue.Entity!, dialogue.Prompt, false);
         if (BoxOf(dialogue) is { } box)
             box.IsEnabled = true;
-        if (dialogue.PauseGame)
+        if (PausesAll(dialogue.PauseGame, dialogue.Pauses))
         {
             _levels.ScaleBeforeTalk = Time.Scale;
             Time.Scale = 0;
+        }
+        else
+        {
+            // Only a group stands still, from now.
+            SyncPauses();
         }
 
         // "# Name" on the first row just names the start.
@@ -984,6 +995,7 @@ public sealed partial class Game
         if (_levels.ScaleBeforeTalk is { } scale)
             Time.Scale = scale;
         _levels.ScaleBeforeTalk = null;
+        SyncPauses();
 
         if (!finished)
             return;

@@ -61,7 +61,7 @@ public sealed partial class Game
 
         // A player waiting while the computer takes its turn still hears its keys, so a step pressed then is taken as the
         // turn comes back.
-        var controls = waits && byTurns && ComputersTurn() ? ControlsOf(entity) : InputOf(entity);
+        var controls = waits && byTurns && ComputersTurn(entity) ? ControlsOf(entity) : InputOf(entity);
         var way = m.Controllable && !driven ? GridWay(m, controls.Move, grid) : (X: 0, Y: 0);
         var pressed = way != (0, 0) && way != m.Held;
         m.HeldFor = way == m.Held ? m.HeldFor + Time.Delta : 0;

@@ -11,7 +11,9 @@ namespace Griff.Web;
 /// renderer's instances are (Griff.Graphics' SpriteRenderer): its corners in clip space (top left, top right, bottom
 /// right, bottom left), the part of the image on it (u, v, width, height), its tint and its flash. A batch is two ints:
 /// the image's id (see <see cref="WhiteImage"/>, <see cref="HoleShape"/> and <see cref="GlyphPageId"/>) and how many
-/// quads it draws.
+/// quads it draws. A viewport's quads (see <see cref="RenderFrame.Views"/>) come between a <see cref="ViewStart"/> batch,
+/// whose count is the view's number in <see cref="Views"/>, and a <see cref="ViewEnd"/> batch: the page clips drawing to
+/// the view's part of the screen and clears it to its background between the two.
 /// </summary>
 /// <remarks>
 /// Sprites (with their part of the image, tint and flash), text (a quad a glyph, from the <see cref="Glyphs"/> atlas's
@@ -29,7 +31,17 @@ public sealed class WebFrame
     /// <summary>The image id of a batch of holes, drawn with the shape shader rather than an image.</summary>
     public const int HoleShape = -1;
 
+    /// <summary>The image id of a batch that starts a viewport: its count is the view's number, and it draws no quads.</summary>
+    public const int ViewStart = -1_000_000;
+
+    /// <summary>The image id of a batch that ends a viewport, drawing no quads.</summary>
+    public const int ViewEnd = -1_000_001;
+
+    /// <summary>The numbers for each view in <see cref="Views"/>.</summary>
+    public const int NumbersPerView = 7;
+
     private readonly Func<string, int> _imageId;
+    private double[] _views = new double[NumbersPerView * 4];
     private float[] _quads = new float[FloatsPerQuad * 1024];
     private int[] _batches = new int[2 * 64];
 
@@ -53,23 +65,39 @@ public sealed class WebFrame
     /// <summary>The batches of the last frame built: an image id and a quad count each.</summary>
     public Span<int> Batches => _batches.AsSpan(0, BatchCount * 2);
 
+    /// <summary>
+    /// The viewports of the last frame built, <see cref="NumbersPerView"/> numbers each: the part of the screen it covers
+    /// (left, top, width and height as fractions of the screen from its top left) and its background's red, green and blue.
+    /// </summary>
+    public Span<double> Views => _views.AsSpan(0, ViewCount * NumbersPerView);
+
+    public int ViewCount { get; private set; }
+
     public int QuadCount { get; private set; }
 
     public int BatchCount { get; private set; }
 
     public Color Background { get; private set; }
 
-    /// <summary>Lays out <paramref name="frame"/>'s quads and batches, replacing the last frame's.</summary>
+    /// <summary>Lays out <paramref name="frame"/>'s quads, batches and views, replacing the last frame's.</summary>
     public void Build(RenderFrame frame)
     {
         Glyphs.EndFrame();
         Glyphs.RefreshChanged();
-        QuadCount = BatchCount = 0;
+        QuadCount = BatchCount = ViewCount = 0;
         Background = frame.Background;
+        WriteFrame(frame);
+    }
+
+    // A frame's quads, with its views' where they go.
+    private void WriteFrame(RenderFrame frame)
+    {
         var viewProjection = frame.ViewProjection;
         var sprites = frame.Sprites;
         for (var i = 0; i < sprites.Count; i++)
         {
+            if (i == frame.ViewsAt)
+                WriteViews(frame);
             var sprite = sprites[i];
             if (sprite.HoleRadius > 0)
             {
@@ -86,6 +114,38 @@ public sealed class WebFrame
             var image = string.IsNullOrWhiteSpace(sprite.Image) ? WhiteImage : _imageId(sprite.Image);
             Write(image, sprite.World * viewProjection, sprite.Source, sprite.Tint, sprite.Flash);
         }
+
+        if (frame.ViewsAt >= sprites.Count)
+            WriteViews(frame);
+    }
+
+    // Each view between its markers, its part of the screen and background noted.
+    private void WriteViews(RenderFrame frame)
+    {
+        var views = frame.Views;
+        for (var v = 0; v < views.Count; v++)
+        {
+            var view = views[v];
+            if ((ViewCount + 1) * NumbersPerView > _views.Length)
+                Array.Resize(ref _views, _views.Length * 2);
+            var numbers = _views.AsSpan(ViewCount * NumbersPerView, NumbersPerView);
+            var background = view.Frame.Background;
+            (numbers[0], numbers[1], numbers[2], numbers[3]) = (view.Left, view.Top, view.Width, view.Height);
+            (numbers[4], numbers[5], numbers[6]) = (background.R, background.G, background.B);
+            Marker(ViewStart, ViewCount++);
+            WriteFrame(view.Frame);
+            Marker(ViewEnd, 0);
+        }
+    }
+
+    // A batch that draws nothing, for the page to act on.
+    private void Marker(int kind, int count)
+    {
+        if (BatchCount * 2 == _batches.Length)
+            Array.Resize(ref _batches, _batches.Length * 2);
+        _batches[BatchCount * 2] = kind;
+        _batches[BatchCount * 2 + 1] = count;
+        BatchCount++;
     }
 
     // Text as a quad a glyph, each from its atlas page (the draw is one line high, so the glyphs' places, in lines, are in

@@ -15,7 +15,7 @@ public class FrameTests
     {
         string[] expected =
         [
-            "Begin: Panels", "Begin: Time", "Begin: Input", "Begin: Debug Drawing", "Begin: Network", "Begin: Tables",
+            "Begin: Panels", "Begin: Pauses", "Begin: Time", "Begin: Input", "Begin: Debug Drawing", "Begin: Network", "Begin: Tables",
             "Begin: Dungeons",
             "Begin: Script Start",
             "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Tactics",

@@ -35,8 +35,28 @@ internal sealed class FirstPersonSystem : GameSystem
         FirstPersonView is { } view && (ViewerOf(view) == entity ||
                                         (Game.Net.IsOnline && entity.GetComponent<FirstPersonMovement>() is not null && view.Viewer?.Trim() == entity.Name));
 
-    /// <summary>The camera's <see cref="FirstPersonView"/>, if the game is played in first person.</summary>
-    public FirstPersonView? FirstPersonView =>
+    /// <summary>
+    /// The camera's <see cref="FirstPersonView"/>, if the game is played in first person: the main camera's, or else that of
+    /// a camera showing in a <see cref="Viewport"/> (a first-person window in a 2D game).
+    /// </summary>
+    public FirstPersonView? FirstPersonView
+    {
+        get
+        {
+            if (MainFirstPersonView is { } main)
+                return main;
+            foreach (var viewport in Scene.Active<Viewport>())
+            {
+                if (viewport.IsShowing && viewport.Entity!.GetComponent<FirstPersonView>() is { } view)
+                    return view;
+            }
+
+            return null;
+        }
+    }
+
+    // The main camera's first-person view: the game is seen through it on the whole screen, and takes the mouse.
+    private FirstPersonView? MainFirstPersonView =>
         SceneRenderer.FindCamera(Scene)?.GetComponent<FirstPersonView>() is { } view && view.Entity!.IsActive ? view : null;
 
     /// <summary>The entity a <see cref="FirstPersonView"/> looks through (the player), if there is one.</summary>
@@ -74,7 +94,8 @@ internal sealed class FirstPersonSystem : GameSystem
     {
         var view = FirstPersonView;
         var movements = Game.Moving<FirstPersonMovement>();
-        Game.Input.WantsMouseLock = view is not null && !Game.PausedThisFrame && Game.TopPanel is null &&
+        // Only a first-person view on the whole screen holds the mouse: a window in a 2D game leaves it to the rest.
+        Game.Input.WantsMouseLock = view is not null && view == MainFirstPersonView && !Game.PausedThisFrame && Game.TopPanel is null &&
                                     movements.Any(m => m.MouseLook && m.Controllable && Game.InputOf(m.Entity) == Game.Input);
         if (Time.Delta <= 0 || Game.PausedThisFrame)
             return;

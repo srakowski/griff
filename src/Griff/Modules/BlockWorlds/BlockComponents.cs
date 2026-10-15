@@ -348,6 +348,14 @@ public sealed class BlockBuilder : Component
     /// <summary>Whether it can put blocks down.</summary>
     public bool CanBuild { get; set; } = true;
 
+    /// <summary>
+    /// Untick it to have it ignore the mouse (no digging or building, and its hotbar and crafting ignore their keys):
+    /// another part of the scene has the player's input. Its Focus action ticks it and unticks it on everything else the
+    /// player plays, and another's Focus takes it back.
+    /// </summary>
+    [Focus]
+    public bool Controllable { get; set; } = true;
+
     /// <summary>The item it puts down. The <see cref="Hotbar"/> sets it to whatever's picked there.</summary>
     public string? Item { get; set; } = "Dirt";
 

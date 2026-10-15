@@ -25,23 +25,61 @@ internal sealed partial class StrategySystem : GameSystem
 
     public override string Name => "Strategy";
 
-    public StrategyState State { get; private set; } = new();
+    private readonly List<StrategyState> _games = [];
+    private StrategyState _state = new();
+    private List<Unit> _allUnits = [];
+    private List<Building> _allBuildings = [];
 
-    internal StrategyState Rts => State;
+    /// <summary>
+    /// The strategy game in hand: while the system runs or draws, the one it's on; otherwise the one the player plays (its
+    /// commander has focus).
+    /// </summary>
+    public StrategyState State => _state;
+
+    internal StrategyState Rts => _state;
 
     internal Scene Scene => Game.Scene;
 
     internal IInput Input => Game.Input;
 
-    protected override void SceneChanged() => State = new StrategyState();
+    protected override void SceneChanged()
+    {
+        _games.Clear();
+        _state = new StrategyState();
+        (_allUnits, _allBuildings) = ([], []);
+    }
 
     protected override void Draw(FrameDrawing frame) => StrategyDrawing.Draw(this, frame);
 
-    // The mouse on the HUD isn't on the world.
-    protected override bool MouseOnHud => Rts.Hud?.Covers(Game.Input.MouseWorld) ?? false;
+    // The mouse on a HUD isn't on the world.
+    protected override bool MouseOnHud
+    {
+        get
+        {
+            foreach (var game in _games)
+            {
+                if (game.Hud is { } hud && game.MouseInView && hud.Covers(game.Mouse))
+                    return true;
+            }
+
+            return false;
+        }
+    }
 
     // Esc cancels placing a building or picking a target before it opens a pause menu.
-    protected override bool ClaimsBack => Rts.Placing is not null || Rts.Targeting is not null;
+    protected override bool ClaimsBack
+    {
+        get
+        {
+            foreach (var game in _games)
+            {
+                if (game.Placing is not null || game.Targeting is not null)
+                    return true;
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>What the player has selected in a strategy game (see <see cref="Commander"/>), first picked first.</summary>
     public IReadOnlyList<Entity> Selected => Rts.Selected;
@@ -54,17 +92,18 @@ internal sealed partial class StrategySystem : GameSystem
 
     /// <summary>The <see cref="Faction"/> for a team, e.g. "Player", if there is one.</summary>
     public Faction? FactionOf(string? team) =>
-        string.IsNullOrWhiteSpace(team) ? null : Game.Active<Faction>().FirstOrDefault(f => SameTeam(f.Team, team));
+        string.IsNullOrWhiteSpace(team) ? null : Game.Present<Faction>().FirstOrDefault(f => SameTeam(f.Team, team));
 
     /// <summary>The supply a team's units take up, counting those being trained.</summary>
     public int SupplyUsed(string team) =>
-        Game.Active<Unit>().Where(u => SameTeam(u.Team, team) && IsAlive(u.Entity!)).Sum(u => u.Supply) +
-        Game.Active<Producer>().Where(p => SameTeam(TeamOf(p.Entity!), team)).SelectMany(p => p.QueueList).Sum(n => PrefabInfo(n)?.GetComponent<Unit>()?.Supply ?? 0);
+        Game.Present<Unit>().Where(u => SameTeam(u.Team, team) && IsAlive(u.Entity!) && OnMap(u.Entity!)).Sum(u => u.Supply) +
+        Game.Present<Producer>().Where(p => SameTeam(TeamOf(p.Entity!), team) && OnMap(p.Entity!)).SelectMany(p => p.QueueList)
+            .Sum(n => PrefabInfo(n)?.GetComponent<Unit>()?.Supply ?? 0);
 
     /// <summary>The supply a team's finished buildings provide, up to its <see cref="Faction.SupplyLimit"/>.</summary>
     public int SupplyProvided(string team)
     {
-        var provided = Game.Active<Building>().Where(b => SameTeam(b.Team, team) && b.IsBuilt).Sum(b => b.Supply);
+        var provided = Game.Present<Building>().Where(b => SameTeam(b.Team, team) && b.IsBuilt && OnMap(b.Entity!)).Sum(b => b.Supply);
         return FactionOf(team) is { } faction ? Math.Min(provided, faction.SupplyLimit) : provided;
     }
 
@@ -116,6 +155,15 @@ internal sealed partial class StrategySystem : GameSystem
     /// </summary>
     public Entity? PlaceBuilding(Worker worker, string building, Vector2 center, out string? why)
     {
+        // In the game whose map the worker is on.
+        if (OwnerOf(worker.Entity!) is { } game && game != Rts)
+        {
+            string? whyNot = null;
+            var there = With(game, () => PlaceBuilding(worker, building, center, out whyNot));
+            why = whyNot;
+            return there;
+        }
+
         why = null;
         var info = PrefabInfo(building)?.GetComponent<Building>();
         if (info is null || !worker.Options().Contains(building, StringComparer.OrdinalIgnoreCase))
@@ -164,15 +212,15 @@ internal sealed partial class StrategySystem : GameSystem
             return false;
 
         // Nor on top of an enemy.
-        return !Game.Active<Unit>().Any(u => !SameTeam(u.Team, team) && box.Overlaps(Game.Flat(u.Entity!.Transform.WorldPosition), u.Radius));
+        return !Game.Present<Unit>().Any(u => !SameTeam(u.Team, team) && box.Overlaps(Game.Flat(u.Entity!.Transform.WorldPosition), u.Radius));
     }
+
+    // On the map of the game in hand (the game without a commander has everything on its map).
+    private bool OnMap(Entity entity) => Rts.Commander is not { } commander || commander.MapArea.Contains(Game.Flat(entity.Transform.WorldPosition));
 
     /// <summary>True if the player's team can see <paramref name="point"/> through the fog of war (always, with no fog).</summary>
     public bool IsVisible(Vector2 point) => Rts.Fog?.IsVisible(point) ?? true;
 
-    // Before physics, after scripts: a script's orders take effect this frame.
-    // In a network game the host runs the units; a player's machine runs its own commander (selecting, the camera, the
-    // fog), seeing the host's units, and sends its orders to the host.
     // Those still standing; with none at all, last frame's list if that was empty too, so a game without any allocates nothing.
     private List<T> Alive<T>(ComponentList<T> all, List<T> last) where T : Component
     {
@@ -181,15 +229,47 @@ internal sealed partial class StrategySystem : GameSystem
         return all.Where(c => IsAlive(c.Entity!)).ToList();
     }
 
+    // Before physics, after scripts: a script's orders take effect this frame. Each commander plays a strategy game on its
+    // own map (several can share one: each player their own selection, fog and HUD); with no commander, one game takes in
+    // every unit. In a network game the host runs the units; a player's machine runs its own commander (selecting, the
+    // camera, the fog), seeing the host's units, and sends its orders to the host.
     internal void Run()
     {
-        var commander = Game.Active<Commander>().FirstOrDefault();
-        var units = Alive(Game.Showing<Unit>(), Rts.Units);
-        var buildings = Alive(Game.Showing<Building>(), Rts.Buildings);
-        (Rts.Commander, Rts.Units, Rts.Buildings) = (commander, units, buildings);
+        _allUnits = Alive(Game.Showing<Unit>(), _allUnits);
+        _allBuildings = Alive(Game.Showing<Building>(), _allBuildings);
+        SyncGames(Game.Present<Commander>());
+        ShareOut(_allUnits, _allBuildings);
+
+        var simulates = Time.Delta > 0 && !Game.PausedThisFrame && !Game.Net.IsClient;
+        if (simulates)
+        {
+            foreach (var fighter in Game.Active<Fighter>())
+                fighter.CooldownLeft = Math.Max(0, fighter.CooldownLeft - Time.Delta);
+        }
+
+        try
+        {
+            foreach (var game in _games)
+            {
+                _state = game;
+                RunGame(simulates);
+            }
+        }
+        finally
+        {
+            _state = Primary();
+        }
+
+        if (Time.Delta > 0 && !Game.PausedThisFrame)
+            CheckDefeats();
+    }
+
+    // One strategy game's frame: its commander's controls, its units, buildings and shots, its fog.
+    private void RunGame(bool simulates)
+    {
         if (!Rts.IsActive)
             return;
-
+        var commander = Rts.Commander;
         Rts.Clock += Time.UnscaledDelta;
         Rts.Selected.RemoveAll(e => e.Scene != Scene || !e.IsActive || !IsAlive(e));
         SyncSelectionFlags();
@@ -198,25 +278,38 @@ internal sealed partial class StrategySystem : GameSystem
         if (commander is not null)
             RunCommander(commander);
 
-        if (Time.Delta > 0 && !Game.PausedThisFrame && !Game.Net.IsClient)
+        if (simulates)
         {
             var dt = Time.Delta;
-            foreach (var opponent in Game.Active<Opponent>().Where(o => !PlayedByPerson(o)))
-                RunOpponent(opponent, dt);
+            foreach (var opponent in Game.Active<Opponent>())
+            {
+                if (!PlayedByPerson(opponent) && HomeOf(opponent) == Rts)
+                    RunOpponent(opponent, dt);
+            }
+
             foreach (var producer in Game.Active<Producer>())
-                RunProducer(producer, dt);
-            foreach (var fighter in Game.Active<Fighter>())
-                fighter.CooldownLeft = Math.Max(0, fighter.CooldownLeft - dt);
-            foreach (var unit in units)
-                RunUnit(unit, dt);
-            SpreadUnits(units);
-            foreach (var building in buildings)
-                RunTower(building);
+            {
+                if (OwnerOf(producer.Entity!) == Rts)
+                    RunProducer(producer, dt);
+            }
+
+            // What a paused group holds (see PauseGroup) stands still.
+            var mine = Owned(Rts.Units);
+            foreach (var unit in mine)
+            {
+                if (!unit.Entity!.IsPaused)
+                    RunUnit(unit, dt);
+            }
+
+            SpreadUnits(mine);
+            foreach (var building in Rts.Buildings)
+            {
+                if (building.InGame == Rts && !building.Entity!.IsPaused)
+                    RunTower(building);
+            }
+
             RunShots(dt);
         }
-
-        if (Time.Delta > 0 && !Game.PausedThisFrame)
-            CheckDefeats();
 
         UpdateFog(commander);
         // Each marker remembers how old it was as the step began, and the notice how long it had left, to be drawn between steps.
@@ -226,6 +319,162 @@ internal sealed partial class StrategySystem : GameSystem
         Rts.Markers.RemoveAll(m => m.Age >= StrategyState.MarkerSeconds);
         Rts.NoticeLeft = Math.Max(0, Rts.NoticeLeft - Time.UnscaledDelta);
         Rts.NoticeShown.Set(Scene, Rts.NoticeLeft);
+    }
+
+    // A game for each commander, in the scene's order, each keeping its own selection, fog and HUD from frame to frame; one
+    // with no commander when there are none.
+    private void SyncGames(ComponentList<Commander> commanders)
+    {
+        if (commanders.Count == 0)
+        {
+            if (_games.Count != 1 || _games[0].Commander is not null)
+            {
+                _games.Clear();
+                _games.Add(_state.Commander is null ? _state : new StrategyState());
+            }
+
+            return;
+        }
+
+        var same = _games.Count == commanders.Count;
+        for (var i = 0; same && i < commanders.Count; i++)
+            same = _games[i].Commander == commanders[i];
+        if (same)
+            return;
+        var kept = _games.Count > 0 ? _games.ToList() : [_state];
+        _games.Clear();
+        foreach (var commander in commanders)
+        {
+            // What a game did before its commander was found (a script's selection on the first frame) stays with the first.
+            var game = kept.FirstOrDefault(g => g.Commander == commander) ??
+                       (_games.Count == 0 ? kept.FirstOrDefault(g => g.Commander is null) : null) ??
+                       new StrategyState();
+            kept.Remove(game);
+            game.Commander = commander;
+            _games.Add(game);
+        }
+    }
+
+    // Each game takes in the units and buildings on its map; each is run by the first game whose map it's on (the one game
+    // without a commander takes in all of them). What's on no commander's map is no strategy game's.
+    private void ShareOut(List<Unit> units, List<Building> buildings)
+    {
+        foreach (var unit in units)
+            unit.InGame = OwnerOf(unit.Entity!);
+        foreach (var building in buildings)
+            building.InGame = OwnerOf(building.Entity!);
+        foreach (var game in _games)
+        {
+            if (game.Commander is null)
+            {
+                (game.Units, game.Buildings) = (units, buildings);
+                continue;
+            }
+
+            var area = game.Commander.MapArea;
+            game.Units = Within(units, game.Units, area);
+            game.Buildings = Within(buildings, game.Buildings, area);
+        }
+    }
+
+    // Those of `all` on the map: `all` itself when that's every one, and last frame's list when it was empty and still is.
+    private static List<T> Within<T>(List<T> all, List<T> last, Box area) where T : Component
+    {
+        var count = 0;
+        foreach (var item in all)
+        {
+            if (area.Contains(Game.Flat(item.Entity!.Transform.WorldPosition)))
+                count++;
+        }
+
+        if (count == all.Count)
+            return all;
+        if (count == 0)
+            return last.Count == 0 && last != all ? last : [];
+        var within = new List<T>(count);
+        foreach (var item in all)
+        {
+            if (area.Contains(Game.Flat(item.Entity!.Transform.WorldPosition)))
+                within.Add(item);
+        }
+
+        return within;
+    }
+
+    // The game that runs what's at an entity: the first whose map it's on (the game without a commander runs everything).
+    internal StrategyState? OwnerOf(Entity entity)
+    {
+        var at = Game.Flat(entity.Transform.WorldPosition);
+        foreach (var game in _games)
+        {
+            if (game.Commander is null || game.Commander.MapArea.Contains(at))
+                return game;
+        }
+
+        return null;
+    }
+
+    // The units of this game that it runs (those another game's map came first for are run there).
+    private List<Unit> Owned(List<Unit> units)
+    {
+        var count = 0;
+        foreach (var unit in units)
+        {
+            if (unit.InGame == Rts)
+                count++;
+        }
+
+        return count == units.Count ? units : units.Where(u => u.InGame == Rts).ToList();
+    }
+
+    // The game a computer player plays in: the first with a building of its team (or, with none, a unit).
+    private StrategyState? HomeOf(Opponent opponent)
+    {
+        var team = opponent.Entity?.GetComponent<Faction>()?.Team;
+        foreach (var game in _games)
+        {
+            if (game.Buildings.Any(b => SameTeam(b.Team, team)))
+                return game;
+        }
+
+        foreach (var game in _games)
+        {
+            if (game.Units.Any(u => SameTeam(u.Team, team)))
+                return game;
+        }
+
+        return null;
+    }
+
+    // The game the player is playing, for scripts and what isn't any one game's: the first whose commander has focus, else
+    // the first.
+    private StrategyState Primary()
+    {
+        foreach (var game in _games)
+        {
+            if (game.Commander is { Controllable: true })
+                return game;
+        }
+
+        return _games.Count > 0 ? _games[0] : _state;
+    }
+
+    /// <summary>The strategy games being played: one for each commander, in the scene's order (or one with none).</summary>
+    internal IReadOnlyList<StrategyState> Games => _games;
+
+    /// <summary>Runs <paramref name="body"/> with <paramref name="game"/> as the game in hand, then puts back the one that was.</summary>
+    internal T With<T>(StrategyState game, Func<T> body)
+    {
+        var was = _state;
+        _state = game;
+        try
+        {
+            return body();
+        }
+        finally
+        {
+            _state = was;
+        }
     }
 
     // ----- Teams -----
@@ -548,7 +797,7 @@ internal sealed partial class StrategySystem : GameSystem
                 moved = nav.NearestOpen(aAt) ?? moved;
             else if (nav.IsBlocked(moved))
                 moved = aAt;
-            if (moved != aAt)
+            if (moved != aAt && !a.Entity!.IsPaused)
                 Place(a.Entity, moved);
         }
 
@@ -765,6 +1014,9 @@ internal sealed partial class StrategySystem : GameSystem
                 continue;
             }
 
+            if (shot.Entity.IsPaused)
+                continue;
+
             var alive = IsAlive(shot.Target);
             if (alive)
                 shot.LastSeen = Game.Flat(shot.Target.Transform.WorldPosition);
@@ -792,7 +1044,7 @@ internal sealed partial class StrategySystem : GameSystem
 
     private Resource? NearestResource(Vector2 from, string? kind, float within = float.PositiveInfinity) =>
         Game.Active<Resource>()
-            .Where(r => IsAlive(r.Entity!) && r.Amount > 0 && (kind is null || string.Equals(r.Kind?.Trim(), kind.Trim(), StringComparison.OrdinalIgnoreCase)))
+            .Where(r => IsAlive(r.Entity!) && r.Amount > 0 && OnMap(r.Entity!) && (kind is null || string.Equals(r.Kind?.Trim(), kind.Trim(), StringComparison.OrdinalIgnoreCase)))
             .Select(r => (Resource: r, Distance: EdgeDistance(from, r.Entity!)))
             .Where(r => r.Distance <= within)
             .OrderBy(r => r.Distance)
@@ -1017,17 +1269,20 @@ internal sealed partial class StrategySystem : GameSystem
 
     // ----- Winning and losing -----
 
+    // A faction with no building left anywhere is beaten; then each game whose commander's side has won or lost ends.
     private void CheckDefeats()
     {
-        Rts.DefeatCheckLeft -= Time.Delta;
-        if (Rts.DefeatCheckLeft > 0)
+        _defeatCheckLeft -= Time.Delta;
+        if (_defeatCheckLeft > 0)
             return;
-        Rts.DefeatCheckLeft = 0.5f;
+        _defeatCheckLeft = 0.5f;
+        if (!_games.Any(g => g.IsActive))
+            return;
 
         var factions = Game.Showing<Faction>();
         foreach (var faction in factions.Where(f => !f.IsDefeated && Game.Runs(f.Entity!)))
         {
-            if (Rts.Buildings.Any(b => SameTeam(b.Team, faction.Team) && IsAlive(b.Entity!)))
+            if (_allBuildings.Any(b => SameTeam(b.Team, faction.Team) && IsAlive(b.Entity!)))
                 continue;
             faction.IsDefeated = true;
             faction.RaiseDefeated();
@@ -1035,6 +1290,25 @@ internal sealed partial class StrategySystem : GameSystem
                 Game.Send(faction.DefeatMessage.Trim(), faction.Team, from: faction.Entity);
         }
 
+        var was = _state;
+        try
+        {
+            foreach (var game in _games)
+            {
+                _state = game;
+                EndIfDecided(factions);
+            }
+        }
+        finally
+        {
+            _state = was;
+        }
+    }
+
+    private float _defeatCheckLeft;
+
+    private void EndIfDecided(ComponentList<Faction> factions)
+    {
         if (Rts.Ended || Rts.Commander is not { } commander || factions.Count < 2)
             return;
         var mine = factions.FirstOrDefault(f => SameTeam(f.Team, commander.Team));
@@ -1085,7 +1359,7 @@ internal sealed partial class StrategySystem : GameSystem
     /// <summary>True if the player's fog of war hides <paramref name="entity"/> (an enemy unit somewhere they can't see).</summary>
     internal bool IsHidden(Entity entity)
     {
-        if (Rts.Fog is not { } fog || Rts.Commander is not { } commander)
+        if (Rts.Fog is not { } fog || Rts.Commander is not { } commander || !commander.MapArea.Contains(Game.Flat(entity.Transform.WorldPosition)))
             return false;
         if (entity.GetComponent<Unit>() is { } unit)
             return !SameTeam(unit.Team, commander.Team) && !fog.IsVisible(Game.Flat(entity.Transform.WorldPosition));
@@ -1167,7 +1441,13 @@ internal sealed class StrategyState
 
     public double LastGroupTime { get; set; } = double.NegativeInfinity;
 
-    public float DefeatCheckLeft { get; set; }
+    // The mouse as this game's commander sees it: whether it's over its camera's part of the screen, and the world point
+    // under it; and that view's width over its height. Worked out as the commander's controls run.
+    public bool MouseInView { get; set; }
+
+    public Vector2 Mouse { get; set; }
+
+    public float ViewAspect { get; set; } = 1;
 
     public bool Ended { get; set; }
 

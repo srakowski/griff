@@ -113,11 +113,12 @@ public sealed class Goal : Component, ICounterSource
 /// The <see cref="UndoAction"/> (Z, U or the gamepad's left shoulder) puts everything back where it was before the last
 /// move, and the <see cref="RestartAction"/> (R or the left trigger) back where the level started, which Undo takes back
 /// too. One in the scene is enough: put it on the player or on the level. A <see cref="Counter"/> with Count Moves shows
-/// how many moves have been taken.
+/// how many moves have been taken. With <see cref="Within"/>, it covers only part of the scene (a puzzle room in a bigger
+/// game): only steps there count, and only what's there goes back; give each puzzle its own.
 /// </summary>
 /// <remarks>
-/// It puts back every grid mover: players, crates, and chasers and patrols (where they were on their routes), each facing
-/// the way it did. Things collected or destroyed since stay gone, and the rest (counters, switches, inventories, whose turn
+/// It puts back every grid mover it covers: players, crates, and chasers and patrols (where they were on their routes),
+/// each facing the way it did. Things collected or destroyed since stay gone, and the rest (counters, switches, inventories, whose turn
 /// it is) stays as it is; tick <see cref="RestartReloads"/> for a restart that starts the whole scene over. In a network
 /// game there's no undo, and a restart starts the scene over for everyone.
 /// </remarks>
@@ -152,6 +153,14 @@ public sealed class MoveHistory : Component, ICounterSource
 
     /// <summary>The most moves it remembers, dropping the oldest. 0 remembers them all.</summary>
     public int Limit { get; set; }
+
+    /// <summary>
+    /// The part of the scene it covers, by an entity's name: the grid movers inside that entity or standing in its area (a
+    /// Room's, a tilemap's, a collider's), e.g. "Puzzle Room". Only their steps are moves, only they go back, and Undo and
+    /// Restart work while a grid player with the input stands there. Empty covers the whole scene.
+    /// </summary>
+    [EntityName]
+    public string? Within { get; set; }
 
     /// <summary>A sound played as a move is taken back, e.g. "Sounds/undo.wav".</summary>
     [Group("Sound and Messages")]
@@ -200,12 +209,15 @@ public sealed class MoveHistory : Component, ICounterSource
         if (Entity?.Scene is not { } scene)
             return;
         Begin(scene);
-        Remember(MoveSnapshot.Take(scene, Moves));
+        Remember(MoveSnapshot.Take(scene, Moves, Covering()));
         Moves++;
     }
 
+    /// <summary>The part of the scene it covers (see <see cref="Within"/>).</summary>
+    public Scope Covering() => Scope.Of(Entity, Within);
+
     // Where the level started, taken on its first frame (or the first after a rewind).
-    internal void Begin(Scene scene) => Start ??= MoveSnapshot.Take(scene, 0);
+    internal void Begin(Scene scene) => Start ??= MoveSnapshot.Take(scene, 0, Covering());
 
     internal void Remember(MoveSnapshot snapshot)
     {
@@ -233,7 +245,7 @@ public sealed class MoveHistory : Component, ICounterSource
     internal void RaiseRestarted() => Restarted?.Invoke(this);
 }
 
-/// <summary>Where every grid mover in a scene was at one moment, for a <see cref="MoveHistory"/> to put them back.</summary>
+/// <summary>Where every grid mover in a scene (or part of it) was at one moment, for a <see cref="MoveHistory"/> to put them back.</summary>
 internal sealed class MoveSnapshot
 {
     private readonly List<Mover> _movers = [];
@@ -247,12 +259,12 @@ internal sealed class MoveSnapshot
 
     private sealed record PatrolState(int Leg, Vector2 Away, float WaitLeft, (int X, int Y)? LastCell);
 
-    public static MoveSnapshot Take(Scene scene, int moves)
+    public static MoveSnapshot Take(Scene scene, int moves, Scope scope)
     {
         var snapshot = new MoveSnapshot(moves);
         foreach (var entity in scene.Entities.Where(e => e.IsActive))
         {
-            if (entity.GetComponent<GridMovement>() is not { } m)
+            if (entity.GetComponent<GridMovement>() is not { } m || !scope.Covers(entity))
                 continue;
             // A mover partway through a step is in the cell it's heading into.
             var cell = m.Started ? m.Cell : m.CellAt(new Vector2(entity.Transform.WorldPosition.X, entity.Transform.WorldPosition.Y));

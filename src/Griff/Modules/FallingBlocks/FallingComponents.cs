@@ -93,8 +93,16 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     [Output]
     public bool GameOver { get; set; }
 
-    /// <summary>The input action that turns the piece clockwise, as up does: "Fire" is J, the gamepad's X or the right shoulder. Empty only uses up.</summary>
+    /// <summary>
+    /// Untick it to have the board ignore the keys and gamepad while its piece falls on: another part of the scene has the
+    /// player's input. Its Focus action ticks it and unticks it on everything else the player plays, and the player's own
+    /// Focus gives the input back.
+    /// </summary>
     [Group("Controls")]
+    [Focus]
+    public bool Controllable { get; set; } = true;
+
+    /// <summary>The input action that turns the piece clockwise, as up does: "Fire" is J, the gamepad's X or the right shoulder. Empty only uses up.</summary>
     [Names(NameKind.Action)]
     public string? RotateAction { get; set; } = "Fire";
 

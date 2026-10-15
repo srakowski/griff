@@ -125,7 +125,9 @@ internal static class NetSchema
                 var info = property.Info;
                 if ((state?.Skipped.Contains(property.Name) ?? false) || info.IsDefined(typeof(NotSentAttribute), true))
                     continue;
-                var owned = ownerMoved && (movement || info.GetCustomAttribute<SentAttribute>(true) is { ByMover: true });
+                // Who has the player's input (see FocusAttribute) is the host's to say, even on a player's own character.
+                var owned = ownerMoved && (movement || info.GetCustomAttribute<SentAttribute>(true) is { ByMover: true }) &&
+                            !info.IsDefined(typeof(FocusAttribute), true);
                 slots.Add(new NetSlot(SlotKind.Property, component, info, property.Type, owned));
             }
 

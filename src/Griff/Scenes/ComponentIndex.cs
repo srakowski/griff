@@ -72,11 +72,14 @@ internal sealed class ComponentIndex<T>() : ComponentIndex(typeof(T)) where T : 
     private T[]? _all;
     private T[]? _active;
     private long _activeFor;
+    private T[]? _running;
+    private (long Active, long Pause) _runningFor;
 
     public override void Changed()
     {
         _all = null;
         _active = null;
+        _running = null;
     }
 
     public T[] All()
@@ -117,5 +120,37 @@ internal sealed class ComponentIndex<T>() : ComponentIndex(typeof(T)) where T : 
 
         _activeFor = activeVersion;
         return _active;
+    }
+
+    // Those on active entities that aren't paused (see Entity.IsPaused), as of the scene's activeVersion and pauseVersion.
+    public T[] Running(long activeVersion, long pauseVersion)
+    {
+        if (_running is not null && _runningFor == (activeVersion, pauseVersion))
+            return _running;
+        var active = Active(activeVersion);
+        var count = 0;
+        foreach (var item in active)
+        {
+            if (!((Component)(object)item).Entity!.IsPaused)
+                count++;
+        }
+
+        if (count == active.Length)
+        {
+            _running = active;
+        }
+        else
+        {
+            _running = new T[count];
+            count = 0;
+            foreach (var item in active)
+            {
+                if (!((Component)(object)item).Entity!.IsPaused)
+                    _running[count++] = item;
+            }
+        }
+
+        _runningFor = (activeVersion, pauseVersion);
+        return _running;
     }
 }

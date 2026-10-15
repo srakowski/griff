@@ -27,23 +27,38 @@ internal sealed partial class StrategySystem
         var size = camera?.Size ?? SceneRenderer.DefaultCameraSize;
         var (mapCenter, mapSize) = Map();
         var center = Game.Flat(cameraEntity.Transform.WorldPosition);
-        var half = new Vector2(size * (Game.ViewAspect > 0 ? Game.ViewAspect : 1), size);
+        SeeMouse(commander);
+        var half = new Vector2(size * Rts.ViewAspect, size);
         Rts.Hud = commander.Hud ? new StrategyHud(center, half, mapCenter, mapSize) : null;
         Rts.Card = BuildCard(commander);
         if (Rts.Placing is { } aiming)
             AimPlacement(commander, aiming);
 
-        if (!Game.PausedThisFrame && !Rts.Ended)
+        // Without focus the controls ignore the mouse and keys (another part of the scene has them).
+        var takesInput = !Game.PausedThisFrame && commander.Controllable && !cameraEntity.IsPaused;
+        if (takesInput && !Rts.Ended)
             HandleCommands(commander);
         else
             (Rts.DragFrom, Rts.DraggingMinimap) = (null, false);
 
-        if (!Game.PausedThisFrame)
+        if (takesInput)
             MoveCamera(commander, cameraEntity, camera);
 
         if (Rts.Placing is { } placing)
             AimPlacement(commander, placing);
     }
+
+    // Where the mouse is for this commander: over its camera's part of the screen, and the world point under it.
+    private void SeeMouse(Commander commander)
+    {
+        var camera = commander.Entity!;
+        Rts.MouseInView = Game.MouseIn(camera, out var world);
+        Rts.Mouse = world;
+        Rts.ViewAspect = ViewAspectOf(commander);
+    }
+
+    // The width over the height of the commander's camera's view: the screen's, or its viewport's.
+    private float ViewAspectOf(Commander commander) => Game.AspectOf(commander.Entity!) is > 0 and var aspect ? aspect : 1;
 
     // ----- Selecting -----
 
@@ -148,8 +163,8 @@ internal sealed partial class StrategySystem
     private void HandleCommands(Commander commander)
     {
         var hud = Rts.Hud;
-        var mouse = Input.MouseWorld;
-        var inView = Input.IsMouseInView;
+        var mouse = Rts.Mouse;
+        var inView = Rts.MouseInView;
         var onHud = hud is not null && inView && hud.Covers(mouse);
         var shift = Input.IsDown(Key.LeftShift) || Input.IsDown(Key.RightShift);
         var ctrl = Input.IsDown(Key.LeftControl) || Input.IsDown(Key.RightControl);
@@ -517,7 +532,7 @@ internal sealed partial class StrategySystem
         // Edges on the grid, so buildings line up.
         var nav = Nav();
         var size = Vector2.Abs(info.Size);
-        var mouse = Input.MouseWorld;
+        var mouse = Rts.Mouse;
         var corner = mouse - size / 2 - nav.Min;
         corner = new Vector2(MathF.Round(corner.X / nav.CellSize), MathF.Round(corner.Y / nav.CellSize)) * nav.CellSize;
         Rts.PlaceAt = nav.Min + corner + size / 2;
@@ -586,9 +601,9 @@ internal sealed partial class StrategySystem
         if (Input.IsDown(Key.Up)) pan.Y += 1;
         if (Input.IsDown(Key.Down)) pan.Y -= 1;
 
-        if (commander.EdgeScroll && Input.IsMouseInView && Rts.Hud is { } hud && Rts.DragFrom is null && !Rts.DraggingMinimap)
+        if (commander.EdgeScroll && Rts.MouseInView && Rts.Hud is { } hud && Rts.DragFrom is null && !Rts.DraggingMinimap)
         {
-            var mouse = Input.MouseWorld;
+            var mouse = Rts.Mouse;
             var edge = hud.View.Height * 0.015f;
             if (mouse.X <= hud.View.X + edge) pan.X -= 1;
             if (mouse.X >= hud.View.Right - edge) pan.X += 1;
@@ -600,7 +615,7 @@ internal sealed partial class StrategySystem
         if (pan != Vector2.Zero)
             position += Vector2.Normalize(pan) * commander.ScrollSpeed * dt * (size / 8);
 
-        if (camera is not null && Input.Scroll != 0 && Input.IsMouseInView && !(Rts.Hud?.Covers(Input.MouseWorld) ?? false))
+        if (camera is not null && Input.Scroll != 0 && Rts.MouseInView && !(Rts.Hud?.Covers(Rts.Mouse) ?? false))
             camera.Size = size = Math.Clamp(size - Input.Scroll * 0.8f, Math.Min(commander.MinZoom, commander.MaxZoom), Math.Max(commander.MinZoom, commander.MaxZoom));
 
         position = ClampCamera(commander, position, size);
@@ -611,8 +626,21 @@ internal sealed partial class StrategySystem
     /// <summary>Points the player's camera at <paramref name="point"/>, as far as the map allows.</summary>
     public void LookAt(Vector2 point)
     {
-        if ((Rts.Commander ?? Game.Active<Commander>().FirstOrDefault()) is { } commander)
+        if ((Rts.Commander ?? FirstCommander()) is { } commander)
             CenterCamera(commander, point);
+    }
+
+    // Before the game has run, the commander it will run with: the first with focus, else the first.
+    private Commander? FirstCommander()
+    {
+        var commanders = Game.Present<Commander>();
+        foreach (var commander in commanders)
+        {
+            if (commander.Controllable)
+                return commander;
+        }
+
+        return commanders.FirstOrDefault();
     }
 
     private void CenterCamera(Commander commander, Vector2 point)
@@ -626,7 +654,7 @@ internal sealed partial class StrategySystem
     private Vector2 ClampCamera(Commander commander, Vector2 position, float size)
     {
         var (center, mapSize) = Map();
-        var half = new Vector2(size * (Game.ViewAspect > 0 ? Game.ViewAspect : 1), size);
+        var half = new Vector2(size * ViewAspectOf(commander), size);
         var min = center - mapSize / 2;
         var max = center + mapSize / 2;
         var below = commander.Hud ? size * 2 * 0.22f : 0;

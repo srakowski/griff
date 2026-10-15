@@ -32,7 +32,10 @@ public sealed class Tween
     /// <summary>False once the tween has finished or was cancelled.</summary>
     public bool IsActive { get; private set; } = true;
 
-    internal double Start { get; }
+    internal double Start { get; private set; }
+
+    // Puts it off by `seconds`, while its owner is paused: it picks up where it was.
+    internal void Hold(double seconds) => Start += seconds;
 
     // Tweens with the same key replace each other, so a new MoveTo takes over from an unfinished one.
     internal object? Key { get; }

@@ -87,8 +87,9 @@ internal sealed class BlockWorldsSystem : GameSystem
     protected override void LayOutHud()
     {
         Sandbox.Buttons.Clear();
-        var hotbar = Game.Mine<Hotbar>().FirstOrDefault();
-        var crafting = Game.Mine<Crafting>().FirstOrDefault();
+        // Shown even while the player is paused (see Entity.IsPaused); its buttons do nothing meanwhile.
+        var hotbar = Game.Mine<Hotbar>(evenPaused: true).FirstOrDefault();
+        var crafting = Game.Mine<Crafting>(evenPaused: true).FirstOrDefault();
         if (hotbar is null && crafting is null)
         {
             Sandbox.Hud = null;
@@ -133,7 +134,8 @@ internal sealed class BlockWorldsSystem : GameSystem
         var mouse = Input.MouseWorld;
         Sandbox.MouseOnHud = Input.IsMouseInView && (areas.Any(a => a.Contains(mouse)) || Sandbox.Buttons.Any(b => b.Rect.Contains(mouse)));
         // On a player's machine the host does what the button does.
-        if (!Game.PanelOpenHere && !Game.PausedThisFrame && !Game.Net.IsClient && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud)
+        if (!Game.PanelOpenHere && !Game.PausedThisFrame && !Game.Net.IsClient && Input.WasPressed(MouseButton.Left) && Sandbox.MouseOnHud &&
+            !(hotbar ?? (Component?)crafting)!.Entity!.IsPaused)
             Sandbox.Buttons.FirstOrDefault(b => b.Rect.Contains(mouse))?.Press();
     }
 
@@ -141,10 +143,11 @@ internal sealed class BlockWorldsSystem : GameSystem
     private const float FallStep = 0.06f;
     private const float SaveEvery = 2f;
 
-    // Worlds are made before anything moves, so the player is stood on the new ground in the first frame.
+    // Worlds are made before anything moves, so the player is stood on the new ground in the first frame: paused ones too
+    // (see Entity.IsPaused), so they're there to be seen.
     internal void StartWorlds()
     {
-        foreach (var generator in Game.Active<WorldGenerator>())
+        foreach (var generator in Game.Present<WorldGenerator>())
         {
             if (!Sandbox.Started.Add(generator) || generator.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
@@ -164,7 +167,7 @@ internal sealed class BlockWorldsSystem : GameSystem
             PlaceOnSurface(generator, map);
         }
 
-        foreach (var blocks in Game.Active<Blocks>())
+        foreach (var blocks in Game.Present<Blocks>())
         {
             if (blocks.Started || blocks.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
@@ -278,12 +281,18 @@ internal sealed class BlockWorldsSystem : GameSystem
 
         foreach (var crafting in Game.Mine<Crafting>())
         {
-            if (!Game.PanelOpenHere && Input.WasPressed(crafting.Key))
+            if (!Game.PanelOpenHere && Game.HasFocus(crafting.Entity!) && Input.WasPressed(crafting.Key))
                 crafting.IsOpen = !crafting.IsOpen;
         }
 
         foreach (var builder in Game.Mine<BlockBuilder>())
-            RunBuilder(builder);
+        {
+            // Without focus it points at nothing and digs nothing (another part of the scene has the mouse).
+            if (Game.HasFocus(builder.Entity!))
+                RunBuilder(builder);
+            else
+                (builder.Target, builder.PlaceAt, builder.Progress, builder.Cracks) = (null, null, 0, 0);
+        }
     }
 
     // What a builder points at, for its outline on this player's screen; the host does the digging.
@@ -352,7 +361,7 @@ internal sealed class BlockWorldsSystem : GameSystem
 
         hotbar.Shown = items.Select(i => (i, i is null ? 0 : contents.First(c => c.Name.Equals(i, StringComparison.OrdinalIgnoreCase)).Count)).ToList();
 
-        if (acts && !Game.PanelOpenHere)
+        if (acts && !Game.PanelOpenHere && Game.HasFocus(hotbar.Entity))
         {
             for (var i = 0; i < slots; i++)
             {
@@ -438,7 +447,7 @@ internal sealed class BlockWorldsSystem : GameSystem
     private Tilemap? WorldFor(BlockBuilder builder)
     {
         var name = builder.World?.Trim();
-        var maps = Game.Active<Tilemap>();
+        var maps = Game.Present<Tilemap>();
         if (!string.IsNullOrEmpty(name))
             return maps.FirstOrDefault(m => m.Entity!.Name == name);
         return maps.FirstOrDefault(m => m.Entity!.GetComponent<Blocks>() is not null) ?? maps.FirstOrDefault(m => m.Solid);
@@ -570,7 +579,7 @@ internal sealed class BlockWorldsSystem : GameSystem
         if (Scene.Entities.Any(e => e.Name.Equals(station, StringComparison.OrdinalIgnoreCase) && e != crafter && e.IsActive &&
                                     Vector2.Distance(CenterOf(e), here) <= reach))
             return true;
-        foreach (var blocks in Game.Active<Blocks>())
+        foreach (var blocks in Game.Present<Blocks>())
         {
             var tile = blocks.TileOf(station);
             if (tile < 0 || blocks.Entity!.GetComponent<Tilemap>() is not { } map || !Matrix4x4.Invert(map.Entity!.Transform.WorldMatrix, out var toLocal))

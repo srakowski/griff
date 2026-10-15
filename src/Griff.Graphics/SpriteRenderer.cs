@@ -282,18 +282,7 @@ public sealed class SpriteRenderer : IDisposable
         _gl.BindVertexArray(_vao);
         _gl.ActiveTexture(TextureUnit.Texture0);
 
-        // In the dark, everything up to LitCount is darkened and lit before the rest (the HUD) goes over it.
-        var sprites = frame.Sprites;
-        for (var i = 0; i < sprites.Count; i++)
-        {
-            if (i == frame.LitCount && frame.IsDark)
-                ApplyLighting(frame, width, height);
-            Add(sprites[i], frame.ViewProjection);
-        }
-
-        if (frame.IsDark && frame.LitCount >= sprites.Count)
-            ApplyLighting(frame, width, height);
-        Flush();
+        DrawSprites(frame, width, height);
         if (frame.Effects is not null)
         {
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)screen);
@@ -303,6 +292,49 @@ public sealed class SpriteRenderer : IDisposable
         _textures.EndFrame();
 
         _gl.BindVertexArray(0);
+    }
+
+    // In the dark, everything up to LitCount is darkened and lit before the rest (the HUD) goes over it; the viewports go
+    // in where the frame says, each inside its part of the screen.
+    private void DrawSprites(RenderFrame frame, int width, int height)
+    {
+        var sprites = frame.Sprites;
+        for (var i = 0; i < sprites.Count; i++)
+        {
+            if (i == frame.LitCount && frame.IsDark)
+                ApplyLighting(frame, width, height);
+            if (i == frame.ViewsAt && frame.Views.Count > 0)
+                DrawViews(frame, width, height);
+            Add(sprites[i], frame.ViewProjection);
+        }
+
+        if (frame.IsDark && frame.LitCount >= sprites.Count)
+            ApplyLighting(frame, width, height);
+        if (frame.ViewsAt >= sprites.Count && frame.Views.Count > 0)
+            DrawViews(frame, width, height);
+        Flush();
+    }
+
+    // Each view cleared to its background and drawn (lit, if it's dark) only inside its part of the screen: its frame's
+    // projection already puts it there.
+    private void DrawViews(RenderFrame frame, int width, int height)
+    {
+        Flush();
+        var views = frame.Views;
+        for (var v = 0; v < views.Count; v++)
+        {
+            var view = views[v];
+            var (x, y, w, h) = view.Pixels(width, height);
+            if (w <= 0 || h <= 0)
+                continue;
+            _gl.Enable(EnableCap.ScissorTest);
+            _gl.Scissor(x, y, (uint)w, (uint)h);
+            var background = view.Frame.Background;
+            _gl.ClearColor(background.R, background.G, background.B, 1f);
+            _gl.Clear(ClearBufferMask.ColorBufferBit);
+            DrawSprites(view.Frame, width, height);
+            _gl.Disable(EnableCap.ScissorTest);
+        }
     }
 
     /// <summary>Reads the current back buffer as top-down RGBA rows (for screenshots and tests).</summary>

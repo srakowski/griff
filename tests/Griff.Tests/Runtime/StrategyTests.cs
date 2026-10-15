@@ -589,6 +589,94 @@ public sealed class StrategyTests
         Assert.Contains("Worker", texts);
     }
 
+    // ----- Sharing a scene -----
+
+    // A commander on its own camera over a map of its own: 20 by 20 round `center`.
+    private static Entity CommanderAt(Scene scene, string name, Vector2 center, string team = "Player", Viewport? viewport = null)
+    {
+        var camera = new Entity(name);
+        camera.Transform.Position = new Vector3(center, 0);
+        camera.AddComponent<Camera>().Size = 6;
+        var commander = camera.AddComponent<Commander>();
+        (commander.EdgeScroll, commander.MapCenter, commander.MapSize, commander.Team) = (false, center, new Vector2(20, 20), team);
+        if (viewport is not null)
+            camera.AddComponent(viewport);
+        scene.Add(camera);
+        return camera;
+    }
+
+    [Fact]
+    public void TwoCommanders_OnMapsOfTheirOwn_PlayGamesOfTheirOwn()
+    {
+        var scene = new Scene();
+        Team(scene, "Player", "Gold 0");
+        var west = CommanderAt(scene, "West", new Vector2(-50, 0));
+        var east = CommanderAt(scene, "East", new Vector2(50, 0));
+        west.AddComponent<FogOfWar>();
+        var westSoldier = At(Soldier(), -50, 0);
+        var eastSoldier = At(Soldier(), 50, 0);
+        var stranger = At(Soldier("Enemy", damage: 0), 0, 0);
+        scene.Add(westSoldier);
+        scene.Add(eastSoldier);
+        scene.Add(stranger);
+        var input = new InputState();
+        var game = NewGame(scene, input);
+        Run(game, input, 0.3);
+
+        var strategy = StrategyGame.Of(game);
+        Assert.Equal(2, strategy.Games.Count);
+        Assert.Equal([westSoldier], strategy.Games[0].Units.Select(u => u.Entity));
+        Assert.Equal([eastSoldier], strategy.Games[1].Units.Select(u => u.Entity));
+
+        // Each walks on its own map.
+        eastSoldier.GetComponent<Unit>()!.MoveTo(new Vector2(55, 5));
+        Run(game, input, 3);
+        Assert.True(Vector2.Distance(Flat(eastSoldier), new Vector2(55, 5)) < 0.3f);
+
+        // The west's fog hides the west's enemies only: one off its map is no business of its fog.
+        var frame = SceneRenderer.Build(game, 16f / 9);
+        Assert.Contains(frame.Sprites, d => d.Entity == stranger);
+        Assert.Null(strategy.Games[1].Fog);
+        Assert.NotNull(strategy.Games[0].Fog);
+    }
+
+    [Fact]
+    public void ACommanderInAViewport_ShowsItsHudThere_AndTheMainViewHasNone()
+    {
+        var scene = new Scene();
+        Team(scene, "Player", "Gold 120");
+        var main = new Entity("Main Camera");
+        main.AddComponent<Camera>().Size = 5;
+        scene.Add(main);
+        CommanderAt(scene, "Strategy Camera", new Vector2(100, 0), viewport: new Viewport { Left = 0.5f, Top = 0, Width = 0.5f, Height = 1 });
+        scene.Add(At(Hall(), 100, 0));
+        var input = new InputState();
+        var game = NewGame(scene, input);
+        Run(game, input, 0.1);
+
+        var frame = SceneRenderer.Build(game, 16f / 9);
+        var view = Assert.Single(frame.Views).Frame;
+        Assert.Contains(view.Sprites.Select(d => d.Text).OfType<string>(), t => t.Contains("Gold 120"));
+        Assert.DoesNotContain(frame.Sprites.Select(d => d.Text).OfType<string>(), t => t.Contains("Gold 120"));
+    }
+
+    [Fact]
+    public void WithNoCommanderOnTheirMap_UnitsAreNoStrategyGamesBusiness()
+    {
+        var scene = new Scene();
+        CommanderAt(scene, "Commander", new Vector2(-50, 0));
+        var loose = At(Soldier(), 50, 0);
+        scene.Add(loose);
+        var input = new InputState();
+        var game = NewGame(scene, input);
+        Run(game, input, 0.1);
+
+        loose.GetComponent<Unit>()!.MoveTo(new Vector2(55, 0));
+        Run(game, input, 1);
+        Assert.Equal(new Vector2(50, 0), Flat(loose));
+        Assert.Empty(StrategyGame.Of(game).Games[0].Units);
+    }
+
     // ----- The computer -----
 
     [Fact]

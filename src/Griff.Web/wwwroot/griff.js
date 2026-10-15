@@ -11,6 +11,10 @@ const QUAD_BYTES = QUAD_FLOATS * 4;
 // The image id of a batch of holes (a scene change's iris), drawn with the shape shader; 0 is no image (white), and
 // -2, -3... are the glyph atlas's pages (see glyphs).
 const HOLE = -1;
+// Batches that start and end a viewport (see WebFrame): drawing is clipped to its part of the screen in between.
+const VIEW_START = -1000000;
+const VIEW_END = -1000001;
+const VIEW_NUMBERS = 7;
 
 // The quads and holes are drawn as the desktop renderer draws them (Griff.Graphics' SpriteRenderer), in GLSL ES.
 const VERTEX = `#version 300 es
@@ -146,13 +150,17 @@ export function glyphs(id, size, top, rows, rgba) {
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, top, size, rows, gl.RGBA, gl.UNSIGNED_BYTE, rgba.slice());
 }
 
-/** Draws a frame: the quads (as bytes), the batches (image id, quad count) and the background color. */
-export function draw(quads, batches, red, green, blue) {
+/**
+ * Draws a frame: the quads (as bytes), the batches (image id, quad count), the viewports (where each is on the screen
+ * and its background) and the background color.
+ */
+export function draw(quads, batches, views, red, green, blue) {
   const length = quads.byteLength;
   if (quadBytes.byteLength < length)
     quadBytes = new Uint8Array(Math.max(length, quadBytes.byteLength * 2));
   quads.copyTo(quadBytes.subarray(0, length));
   const runs = batches.slice();
+  const parts = views.slice();
 
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(red, green, blue, 1);
@@ -168,6 +176,23 @@ export function draw(quads, batches, red, green, blue) {
   let first = 0;
   for (let i = 0; i < runs.length; i += 2) {
     const [image, count] = [runs[i], runs[i + 1]];
+    if (image === VIEW_START) {
+      // Its part of the screen, from the bottom left in pixels as WebGL counts, cleared to its background.
+      const at = count * VIEW_NUMBERS;
+      const x = Math.round(parts[at] * canvas.width);
+      const right = Math.round((parts[at] + parts[at + 2]) * canvas.width);
+      const top = Math.round(parts[at + 1] * canvas.height);
+      const bottom = Math.round((parts[at + 1] + parts[at + 3]) * canvas.height);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(x, canvas.height - bottom, Math.max(0, right - x), Math.max(0, bottom - top));
+      gl.clearColor(parts[at + 4], parts[at + 5], parts[at + 6], 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      continue;
+    }
+    if (image === VIEW_END) {
+      gl.disable(gl.SCISSOR_TEST);
+      continue;
+    }
     if (image === HOLE) {
       gl.useProgram(holeProgram);
     } else {

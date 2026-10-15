@@ -64,6 +64,21 @@ public sealed class SandboxTools : Component
     [Distance]
     public float Reach { get; set; }
 
+    /// <summary>
+    /// The part of the scene the tools work on, by an entity's name: they grab, weld, rope, wire and remove only what's
+    /// inside that entity or standing in its area (a Room's, a tilemap's, a collider's), and spawn only in its area (or,
+    /// for an entity with no area, into it), e.g. "Workshop". Empty works on the whole scene.
+    /// </summary>
+    [EntityName]
+    public string? Within { get; set; }
+
+    /// <summary>
+    /// Untick it to put the tools down: no HUD, and clicks and keys go to whatever else has the player's input. Its Focus
+    /// action ticks it and unticks it on everything else the player plays, and another's Focus takes it back.
+    /// </summary>
+    [Focus]
+    public bool Controllable { get; set; } = true;
+
     /// <summary>The key that undoes the last prop, weld, rope or wire made.</summary>
     public Key UndoKey { get; set; } = Key.Z;
 
@@ -82,6 +97,9 @@ public sealed class SandboxTools : Component
 
     /// <summary>The tool in hand, or null if it has none.</summary>
     public SandboxTool? Current => ToolList is { Count: > 0 } tools ? tools[Math.Clamp(Selected, 0, tools.Count - 1)] : null;
+
+    /// <summary>The part of the scene it covers (see <see cref="Within"/>).</summary>
+    public Scope Covering() => Scope.Of(Entity, Within);
 
     /// <summary>The prop the Spawn tool puts down, or null if there are none.</summary>
     public string? CurrentProp => PropList is { Count: > 0 } props ? props[Math.Clamp(SelectedProp, 0, props.Count - 1)] : null;

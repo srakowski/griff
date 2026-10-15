@@ -17,7 +17,7 @@ public sealed partial class Game
 
         // Room for the widest window and a little more, so nothing pops in at the edges.
         var area = new Vector2(size * 2 * Math.Max(ViewAspect, 1) + 2, size * 2 + 2);
-        foreach (var weather in Scene.Active<Weather>())
+        foreach (var weather in Scene.Running<Weather>())
         {
             if (Vector2.Distance(weather.Area, area) > 0.5f)
             {

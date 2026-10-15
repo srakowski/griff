@@ -397,6 +397,27 @@ public sealed partial class Tilemap : Component, ISortsInParts
             scene.Vacate(RowsBounds(first, last));
     }
 
+    /// <summary>The box in the world round the map's cells, from its first row and column to its last.</summary>
+    [Area]
+    public Box Area
+    {
+        get
+        {
+            if (Entity is null)
+                return default;
+            var world = Entity.Transform.WorldMatrix;
+            var (width, height) = (Math.Max(Width, 1), Math.Max(Height, 1));
+            var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
+            foreach (var (x, y) in (ReadOnlySpan<(float, float)>)[(0, 0), (width, 0), (0, height), (width, height)])
+            {
+                var point = Vector2.Transform(PointAt(x, y), world);
+                (min, max) = (Vector2.Min(min, point), Vector2.Max(max, point));
+            }
+
+            return new Box((min + max) / 2, (max - min) / 2);
+        }
+    }
+
     // The box in the world round rows `first` to `last` of the map, a cell more all round.
     internal Box RowsBounds(int first, int last)
     {

@@ -129,7 +129,7 @@ public sealed class Coroutine
         }
     }
 
-    private static Func<bool>? WaitFor(object? yielded, Game game)
+    private Func<bool>? WaitFor(object? yielded, Game game)
     {
         switch (yielded)
         {
@@ -154,11 +154,20 @@ public sealed class Coroutine
         }
     }
 
-    private static Func<bool> SecondsFrom(Game game, double seconds)
+    private Func<bool> SecondsFrom(Game game, double seconds)
     {
-        var due = game.Time.Total + Math.Max(0, seconds);
-        return () => game.Time.Total >= due;
+        _due = game.Time.Total + Math.Max(0, seconds);
+        return () => game.Time.Total >= _due;
     }
+
+    // When a Wait(seconds) is over, in game time.
+    private double _due;
+
+    /// <summary>True while its entity, or its script's, is paused (see <see cref="Entity.IsPaused"/>): it waits.</summary>
+    internal bool IsPaused => OwnerEntity is { IsPaused: true } || OwnerBehavior?.Entity is { IsPaused: true };
+
+    // While paused: a Wait(seconds) under way ends as much later.
+    internal void Hold(double seconds) => _due += seconds;
 }
 
 /// <summary>Yield from a coroutine to wait this many seconds of game time. Made by a behavior's <c>Wait</c>.</summary>

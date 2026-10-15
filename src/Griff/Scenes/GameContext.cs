@@ -37,4 +37,7 @@ internal interface IGameContext
 
     /// <summary>Closes a panel and any opened inside it.</summary>
     void ClosePanel(Panel? panel);
+
+    /// <summary>Gives an entity the player's input, taking it from everything else the same player plays (see <see cref="FocusAttribute"/>).</summary>
+    void Focus(Entity entity);
 }

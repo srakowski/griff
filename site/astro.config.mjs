@@ -60,6 +60,7 @@ export default defineConfig({
 						{ label: 'Audio', slug: 'docs/audio' },
 						{ label: 'Text and fonts', slug: 'docs/text-and-fonts' },
 						{ label: 'Strategy, shooters, worlds', slug: 'docs/genres' },
+						{ label: 'Mixing genres', slug: 'docs/mashups' },
 						{ label: 'Scripting', slug: 'docs/scripting' },
 						{ label: 'Multiplayer', slug: 'docs/multiplayer' },
 						{ label: 'Exporting', slug: 'docs/exporting' },

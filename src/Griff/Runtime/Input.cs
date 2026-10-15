@@ -363,12 +363,30 @@ public sealed class InputState : IInput
 
     public bool WasReleased(GamepadButton button) => _padReleased.Contains(button);
 
-    public bool IsDown(string action) => Bindings(action).Any(IsDown);
+    // By index throughout: asking about an action every frame makes no garbage.
+    public bool IsDown(string action)
+    {
+        foreach (var binding in Bindings(action))
+        {
+            if (IsDown(binding))
+                return true;
+        }
+
+        return false;
+    }
 
     public bool WasPressed(string action)
     {
-        var bindings = Bindings(action);
-        return bindings.Any(WasPressed) && !bindings.Any(b => IsDown(b) && !WasPressed(b));
+        var pressed = false;
+        foreach (var binding in Bindings(action))
+        {
+            if (WasPressed(binding))
+                pressed = true;
+            else if (IsDown(binding))
+                return false;
+        }
+
+        return pressed;
     }
 
     public bool WasPressed(string action, float buffer)
@@ -391,8 +409,15 @@ public sealed class InputState : IInput
 
     public bool WasReleased(string action)
     {
-        var bindings = Bindings(action);
-        return bindings.Any(WasReleased) && !bindings.Any(IsDown);
+        var released = false;
+        foreach (var binding in Bindings(action))
+        {
+            if (IsDown(binding))
+                return false;
+            released |= WasReleased(binding);
+        }
+
+        return released;
     }
 
     public void Bind(string action, params InputBinding[] bindings)

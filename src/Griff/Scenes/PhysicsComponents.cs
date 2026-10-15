@@ -32,6 +32,7 @@ public abstract class Collider : Component
     /// The box around the shape in the world, from its entity's position and scale; for a shape that
     /// <see cref="Turns"/>, the box round it as it's turned.
     /// </summary>
+    [Area]
     public abstract Box WorldBounds { get; }
 
     /// <summary>
@@ -265,6 +266,9 @@ public sealed class Body : Component
     /// grab it with the Sandbox Tools) and it moves again. Welded to it, a whole contraption holds still.
     /// </summary>
     public bool Frozen { get; set; }
+
+    // Held still for the step: frozen, or paused with its group (see Entity.IsPaused). Others bump into it as into a wall.
+    internal bool HeldStill => Frozen || (Entity?.IsPaused ?? false);
 
     /// <summary>
     /// How heavy it is, for pushes from a Thruster and for sharing movement with what it's welded or roped

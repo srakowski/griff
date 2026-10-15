@@ -252,6 +252,10 @@ public sealed partial class Physics
             if (body.Entity!.GetComponent<Body>() != body)
                 continue;
 
+            // Paused with its group (see Entity.IsPaused): it stays where it is, keeping its velocity for when it goes on.
+            if (body.Entity.IsPaused)
+                continue;
+
             // In a network game, another machine moves this one (a player's own character, or the host's copy of
             // anything): leave it where it's put. On the host, what another player's character touches still counts.
             if (!body.Entity!.MovesHere)
@@ -263,7 +267,7 @@ public sealed partial class Physics
 
             if (_groupOf.TryGetValue(body, out var group))
             {
-                if (_movedGroups.Add(group))
+                if (_movedGroups.Add(group) && !AnyPaused(group))
                     StepGroup(group, solids, dt, onCollision);
                 continue;
             }
@@ -532,7 +536,20 @@ public sealed partial class Physics
     }
 
     // Movement's requests last one step; dropping through platforms lasts its time.
-    private static void EndStep(Body body, float dt)
+    // A welded group holds still while any of it is paused (see Entity.IsPaused).
+    private static bool AnyPaused(BodyGroup group)
+    {
+        var bodies = group.Bodies;
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            if (bodies[i].Entity is { IsPaused: true })
+                return true;
+        }
+
+        return false;
+    }
+
+        private static void EndStep(Body body, float dt)
     {
         TrackAirTime(body, dt);
         body.FloatThisStep = false;
@@ -860,7 +877,7 @@ public sealed partial class Physics
     // move takes further than the move went.
     private static bool MovedIntoBy(in Shape solid, Area area, Area other, int axis, float sign, Vector2 delta)
     {
-        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, Frozen: false })
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, HeldStill: false })
             return false;
         var push = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign) - Component(area.Center, axis);
         return MathF.Abs(push) > MathF.Abs(Component(delta, axis)) + 0.05f;

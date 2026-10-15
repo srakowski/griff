@@ -14,10 +14,25 @@ internal static class StrategyDrawing
 {
     private static readonly Color Busy = Color.FromBytes(0x4C, 0x9A, 0xFF);
 
-    /// <summary>Draws a strategy strategy's extras into <paramref name="frame"/>, while one is being played.</summary>
+    /// <summary>
+    /// Draws the strategy games' extras into <paramref name="frame"/>, while any is being played. A view from a commander's
+    /// camera shows its game (its fog, selection and HUD) and any other game on a map apart from it; another camera's view
+    /// shows each game, the first of any whose maps overlap.
+    /// </summary>
     public static void Draw(StrategySystem strategy, FrameDrawing frame)
     {
-        if (!strategy.Rts.IsActive)
+        // A view through someone's eyes (first person) sees no fog from above.
+        if (frame.SeenThrough is not null || !AnyActive(strategy.Games))
+            return;
+        DrawGames(strategy, frame);
+    }
+
+    // Apart from the checks above, so a scene without a strategy game doesn't pay for what this captures (its lambdas'
+    // closure is made as the method starts, before any return).
+    private static void DrawGames(StrategySystem strategy, FrameDrawing frame)
+    {
+        var shown = ShownGames(strategy, frame);
+        if (shown.Count == 0)
             return;
 
         // Enemy units in the fog aren't drawn; buildings going up are see-through.
@@ -31,7 +46,7 @@ internal static class StrategyDrawing
                 continue;
             }
 
-            var look = LookOf(strategy, draw.Entity, looks, frame);
+            var look = LookOf(strategy, shown, draw.Entity, looks, frame);
             if (look <= 0)
                 continue;
             kept.Add(look < 1 ? draw with { Tint = draw.Tint with { A = draw.Tint.A * look } } : draw);
@@ -40,27 +55,79 @@ internal static class StrategyDrawing
         frame.Sprites = kept;
         var thickness = frame.LineWidth;
         var over = new List<SpriteDraw>();
-        over.AddRange(FogDraws(strategy, frame.View.Center, frame.View.HalfSize));
-        over.AddRange(MarkingDraws(strategy, thickness, frame));
-        if (strategy.Rts is { Commander.Hud: true, Hud: { } hud })
+        foreach (var game in shown)
         {
-            var start = over.Count;
-            over.AddRange(HudDraws(strategy, hud, thickness, frame));
-            frame.PinToView(over, hud.View.Center, hud.View.Height / 2, start);
+            strategy.With(game, () =>
+            {
+                over.AddRange(FogDraws(strategy, frame.View.Center, frame.View.HalfSize));
+                over.AddRange(MarkingDraws(strategy, thickness, frame));
+
+                // The HUD goes in its commander's own view.
+                if (game is { Commander: { Hud: true } commander, Hud: { } hud } && commander.Entity == frame.Camera)
+                {
+                    var start = over.Count;
+                    over.AddRange(HudDraws(strategy, hud, thickness, frame));
+                    frame.PinToView(over, hud.View.Center, hud.View.Height / 2, start);
+                }
+
+                return 0;
+            });
         }
 
         frame.AddOverWorld(over);
     }
 
-    // 0 hidden, 1 as it is, in between see-through: for what a draw belongs to (the unit or building it's part of).
-    private static float LookOf(StrategySystem strategy, Entity entity, Dictionary<Entity, float> looks, FrameDrawing frame)
+    // Whether any strategy game is being played, asked without garbage (a scene without one draws none).
+    private static bool AnyActive(IReadOnlyList<StrategyState> games)
+    {
+        for (var i = 0; i < games.Count; i++)
+        {
+            if (games[i].IsActive)
+                return true;
+        }
+
+        return false;
+    }
+
+    // The games this view shows: from a commander's camera, its own first, then the others whose maps don't overlap any
+    // shown before; from any other camera, each whose map doesn't overlap one shown before.
+    private static List<StrategyState> ShownGames(StrategySystem strategy, FrameDrawing frame)
+    {
+        var shown = new List<StrategyState>();
+        foreach (var game in strategy.Games)
+        {
+            if (game.IsActive && game.Commander is { } commander && commander.Entity == frame.Camera)
+                shown.Add(game);
+        }
+
+        foreach (var game in strategy.Games)
+        {
+            if (!game.IsActive || shown.Contains(game))
+                continue;
+            if (game.Commander is not { } commander)
+            {
+                if (shown.Count == 0)
+                    shown.Add(game);
+                continue;
+            }
+
+            if (!shown.Any(s => s.Commander is null || s.Commander.MapArea.Overlaps(commander.MapArea)))
+                shown.Add(game);
+        }
+
+        return shown;
+    }
+
+    // 0 hidden, 1 as it is, in between see-through: for what a draw belongs to (the unit or building it's part of), by the
+    // fog of the first game shown whose map it's on.
+    private static float LookOf(StrategySystem strategy, List<StrategyState> shown, Entity entity, Dictionary<Entity, float> looks, FrameDrawing frame)
     {
         if (looks.TryGetValue(entity, out var known))
             return known;
         var look = 1f;
         for (var e = entity; e is not null; e = e.Parent)
         {
-            if (strategy.IsHidden(e))
+            if (GameOf(shown, e) is { } game && strategy.With(game, () => strategy.IsHidden(e)))
             {
                 look = 0;
                 break;
@@ -78,6 +145,19 @@ internal static class StrategyDrawing
 
         looks[entity] = look;
         return look;
+    }
+
+    // The first of the games shown whose map an entity is on (the game without a commander has everything on it).
+    private static StrategyState? GameOf(List<StrategyState> shown, Entity entity)
+    {
+        var at = Flat(entity.Transform.WorldPosition);
+        foreach (var game in shown)
+        {
+            if (game.Commander is not { } commander || commander.MapArea.Contains(at))
+                return game;
+        }
+
+        return null;
     }
 
     // ----- Fog -----
@@ -203,9 +283,9 @@ internal static class StrategyDrawing
                 yield return draw;
         }
 
-        if (rts.DragFrom is { } from && strategy.Input.IsMouseInView)
+        if (rts.DragFrom is { } from && rts.MouseInView)
         {
-            var to = strategy.Input.MouseWorld;
+            var to = rts.Mouse;
             var middle = (from + to) / 2;
             var size = Vector2.Abs(to - from);
             yield return Quad(middle, size, Mine with { A = 0.12f });
@@ -297,7 +377,8 @@ internal static class StrategyDrawing
         foreach (var resource in strategy.Scene.Active<Resource>())
         {
             var entity = resource.Entity!;
-            if (StrategySystem.Footprint(entity) is not { } box || !(rts.Fog?.IsExplored(box.Center) ?? true))
+            if (StrategySystem.Footprint(entity) is not { } box || !(rts.Fog?.IsExplored(box.Center) ?? true) ||
+                rts.Commander is { } commander && !commander.MapArea.Contains(box.Center))
                 continue;
             yield return Quad(ToMap(box.Center), Vector2.Max(box.HalfSize * 2 * scale, new Vector2(hud.Unit * 0.6f)), entity.GetComponent<Sprite>()?.Tint ?? Neutral);
         }

@@ -137,7 +137,9 @@ public static partial class SceneRenderer
                 var roles = entity.Roles;
                 if ((roles & ComponentRoles.Drawable) == 0)
                     continue;
-                if (entity.SoleSprite is not { } sole || entity.Parent is not null || (roles & (ComponentRoles.DrawEffect | ComponentRoles.Parallax)) != 0)
+                // What's pinned to the screen is left to the game's thread too, which knows whether this view draws it.
+                if (entity.SoleSprite is not { } sole || entity.Parent is not null ||
+                    (roles & (ComponentRoles.DrawEffect | ComponentRoles.Parallax | ComponentRoles.ScreenAnchor)) != 0)
                 {
                     left[leftCount++] = at;
                     continue;
@@ -251,7 +253,7 @@ public static partial class SceneRenderer
     // The chunked build of DrawScene (see above), with the same result: draws into `sprites` from `first` on, overwriting
     // what's there (last frame's draws) rather than clearing it first.
     private static void DrawChunked(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, int first, List<IDrawable>? overs,
-        Scratch scratch, BuildTimer? timer, bool sortByY)
+        Scratch scratch, BuildTimer? timer, bool sortByY, in ViewFilter filter)
     {
         var chunked = scratch.Chunked ??= new ChunkedScratch();
         chunked.Holding = true;
@@ -285,7 +287,7 @@ public static partial class SceneRenderer
             (job.Entities, job.Scene) = (s_noEntities, null);
         }
 
-        DrawLeft(chunked, entities, count, view, cameraSize, playing, overs, scratch.Drawables, timer, sortByY);
+        DrawLeft(chunked, entities, count, view, cameraSize, playing, overs, scratch.Drawables, timer, sortByY, filter);
 
         // The stretches of the frame, back to front, and how many draws it has.
         timer?.Mark(SortingPart);
@@ -318,7 +320,7 @@ public static partial class SceneRenderer
 
     // Draws the entities the chunks left, in hierarchy order, into the game thread's run, and puts it back to front.
     private static void DrawLeft(ChunkedScratch chunked, IReadOnlyList<Entity> entities, int count, Box view, float cameraSize, bool playing,
-        List<IDrawable>? overs, List<IDrawable> drawables, BuildTimer? timer, bool sortByY)
+        List<IDrawable>? overs, List<IDrawable> drawables, BuildTimer? timer, bool sortByY, in ViewFilter filter)
     {
         var job = chunked.Job;
         var run = chunked.LeftRun;
@@ -335,7 +337,7 @@ public static partial class SceneRenderer
             {
                 var at = left[l];
                 var entity = entities[at];
-                if (!entity.IsActive)
+                if (!entity.IsActive || !filter.Shows(entity))
                     continue;
                 timer?.Mark(LeadOf(entity));
                 if (!Describe(entity, sortByY, drawables, overs, out var entry))

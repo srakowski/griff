@@ -110,7 +110,8 @@ public sealed class SceneViewport(IWorkspace workspace, ISelection selection) : 
         {
             FitToContents(document.Scene);
         }
-        else if (document.Scene.Entities.FirstOrDefault(e => e.GetComponent<Camera>() is not null) is { } camera)
+        else if ((document.Scene.Entities.FirstOrDefault(e => e.GetComponent<Camera>() is not null && e.GetComponent<Viewport>() is null) ??
+                  document.Scene.Entities.FirstOrDefault(e => e.GetComponent<Camera>() is not null)) is { } camera)
         {
             const double margin = 1.15;
             var height = camera.GetComponent<Camera>()!.Size * 2 * margin;

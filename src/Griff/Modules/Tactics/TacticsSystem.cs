@@ -40,7 +40,7 @@ internal sealed partial class TacticsSystem : GameSystem
     internal void Run()
     {
         var units = Game.Showing<TacticsUnit>();
-        var controls = Game.Showing<TacticsControls>().FirstOrDefault();
+        var controls = ControlsInUse(Game.Showing<TacticsControls>());
         Tactics.Clear(controls);
         if (units.Count == 0)
         {
@@ -53,7 +53,8 @@ internal sealed partial class TacticsSystem : GameSystem
             UpdateUnit(unit);
 
         // Scripts' orders, and walks that have ended, where the game is run.
-        foreach (var unit in units.Where(u => Game.Runs(u.Entity!)))
+        // What a paused group holds (see PauseGroup) keeps its orders for when it goes on.
+        foreach (var unit in units.Where(u => Game.Runs(u.Entity!) && !u.Entity!.IsPaused))
         {
             var requests = unit.Requests.ToList();
             unit.Requests.Clear();
@@ -67,10 +68,24 @@ internal sealed partial class TacticsSystem : GameSystem
 
         if (controls is not null)
         {
-            if (!Game.PausedThisFrame && !Game.LocalInputBlocked && Game.TopPanel is null)
+            if (!controls.Controllable)
+                controls.Cursor = null;
+            else if (!Game.PausedThisFrame && !Game.LocalInputBlocked && Game.TopPanel is null && !controls.Entity!.IsPaused)
                 Control(controls, units);
             Show(controls, units);
         }
+    }
+
+    // The controls the player is using: the first with focus, else the first.
+    private static TacticsControls? ControlsInUse(ComponentList<TacticsControls> all)
+    {
+        foreach (var controls in all)
+        {
+            if (controls.Controllable)
+                return controls;
+        }
+
+        return all.FirstOrDefault();
     }
 
     // What a unit can do this frame: whether it can act, what it can reach and hit.
@@ -78,9 +93,9 @@ internal sealed partial class TacticsSystem : GameSystem
     {
         var entity = unit.Entity!;
         var m = entity.GetComponent<GridMovement>()!;
-        unit.CanAct = !Game.Waiting(entity) && Health.Of(entity) is not { IsDead: true };
-        unit.IsDone = TurnTaker.Of(entity) is { Actions: > 0 } taker && taker.ActionsUsed >= taker.Actions && Game.TurnOrderNow is { } order &&
-                      order.Entity?.Scene == Scene && order.IsTurn(Game.SideOf(taker));
+        unit.CanAct = !Game.Waiting(entity) && Health.Of(entity) is not { IsDead: true } && !entity.IsPaused;
+        unit.IsDone = TurnTaker.Of(entity) is { Actions: > 0 } taker && taker.ActionsUsed >= taker.Actions && Game.TurnOrderOf(entity) is { } order &&
+                      order.IsTurn(Game.SideOf(taker));
         if (!unit.CanAct || unit.IsWalking)
         {
             (unit.Reachable, unit.Targets) = ([], []);
@@ -227,7 +242,7 @@ internal sealed partial class TacticsSystem : GameSystem
     // team's.
     private bool MayCommand(TacticsUnit unit, NetPlayer? player)
     {
-        if (TurnTaker.Of(unit.Entity!) is not { } taker || Game.TurnOrderNow is not { } order || order.Entity?.Scene != Scene || order.SideList.Count == 0)
+        if (TurnTaker.Of(unit.Entity!) is not { } taker || Game.TurnOrderOf(unit.Entity) is not { } order)
             return true;
         var side = Game.SideOf(taker);
         if (order.IsComputer(side))

@@ -101,13 +101,22 @@ public sealed class Mover : Component
     public bool IsFinished => Mode == MoverMode.Once && Time >= TripSeconds;
 
     /// <summary>Seconds for one full trip, waits included, before it repeats.</summary>
-    public float TripSeconds => Legs().Sum(leg => LegSeconds(leg) + Math.Max(0, Wait));
+    public float TripSeconds
+    {
+        get
+        {
+            var total = 0f;
+            foreach (var leg in Legs())
+                total += LegSeconds(leg) + Math.Max(0, Wait);
+            return total;
+        }
+    }
 
     /// <summary>Where on its path it is <paramref name="time"/> seconds into its trip, as an offset from where it started.</summary>
     public Vector2 OffsetAt(float time)
     {
-        var legs = Legs().ToList();
-        if (legs.Count == 0 || !(Speed > 0))
+        var legs = Legs();
+        if (legs.Length == 0 || !(Speed > 0))
             return Vector2.Zero;
 
         var trip = TripSeconds;
@@ -186,22 +195,22 @@ public sealed class Mover : Component
     // Sitting at a leg's start, it hasn't set off yet, and waits there for a step.
     private float Stepped(float elapsed, bool step, float stepSeconds)
     {
-        var legs = Legs().ToList();
+        var legs = Legs();
         var trip = TripSeconds;
-        if (legs.Count == 0 || !(Speed > 0) || !(trip > 0))
+        if (legs.Length == 0 || !(Speed > 0) || !(trip > 0))
             return Time;
 
         var wait = Math.Max(0, Wait);
         var time = Mode == MoverMode.Once ? Math.Clamp(Time, 0, trip) : ((Time % trip) + trip) % trip;
         var (leg, start) = (0, 0f);
-        while (leg < legs.Count - 1 && time >= start + LegSeconds(legs[leg]) + wait)
+        while (leg < legs.Length - 1 && time >= start + LegSeconds(legs[leg]) + wait)
             start += LegSeconds(legs[leg++]) + wait;
 
         if (step && time > start)
         {
             // On to the next leg, or round to the first after the last.
             start += LegSeconds(legs[leg]) + wait;
-            (leg, start) = leg + 1 < legs.Count ? (leg + 1, start) : (0, 0f);
+            (leg, start) = leg + 1 < legs.Length ? (leg + 1, start) : (0, 0f);
             if (leg == 0 && Mode == MoverMode.Once)
                 return trip;
             time = start;
@@ -215,27 +224,38 @@ public sealed class Mover : Component
         var arrive = start + seconds;
         time = Math.Min(time + elapsed * (stepSeconds > 0 ? Math.Max(1, seconds / stepSeconds) : 1), arrive);
         // A one-way trip is over once it's at the last point.
-        return Mode == MoverMode.Once && leg == legs.Count - 1 && time >= arrive ? trip : time;
+        return Mode == MoverMode.Once && leg == legs.Length - 1 && time >= arrive ? trip : time;
     }
 
-    // Each stretch of the path, in order: there and back for ping-pong, round to the start for a loop.
-    private IEnumerable<(Vector2 From, Vector2 To)> Legs()
+    // Each stretch of the path, in order: there and back for ping-pong, round to the start for a loop. Made again only when
+    // the path or the mode changes, so a mover makes no garbage as it goes.
+    private (Vector2 From, Vector2 To)[] Legs()
     {
-        if (_path.Length < 2)
-            yield break;
-        for (var i = 0; i < _path.Length - 1; i++)
-            yield return (_path[i], _path[i + 1]);
+        if (_legs is not null && _legsFor == (_path, Mode))
+            return _legs;
+        var legs = new List<(Vector2 From, Vector2 To)>();
+        if (_path.Length >= 2)
+        {
+            for (var i = 0; i < _path.Length - 1; i++)
+                legs.Add((_path[i], _path[i + 1]));
 
-        if (Mode == MoverMode.PingPong)
-        {
-            for (var i = _path.Length - 1; i > 0; i--)
-                yield return (_path[i], _path[i - 1]);
+            if (Mode == MoverMode.PingPong)
+            {
+                for (var i = _path.Length - 1; i > 0; i--)
+                    legs.Add((_path[i], _path[i - 1]));
+            }
+            else if (Mode == MoverMode.Loop)
+            {
+                legs.Add((_path[^1], _path[0]));
+            }
         }
-        else if (Mode == MoverMode.Loop)
-        {
-            yield return (_path[^1], _path[0]);
-        }
+
+        _legsFor = (_path, Mode);
+        return _legs = [.. legs];
     }
+
+    private (Vector2 From, Vector2 To)[]? _legs;
+    private (Vector2[] Path, MoverMode Mode) _legsFor;
 
     private float LegSeconds((Vector2 From, Vector2 To) leg) => Speed > 0 ? Vector2.Distance(leg.From, leg.To) / Speed : 0;
 
@@ -702,6 +722,14 @@ public sealed class Dialogue : Component
 
     /// <summary>Stop game time while talking, so nothing moves (or gets hurt) until it's over.</summary>
     public bool PauseGame { get; set; } = true;
+
+    /// <summary>
+    /// What it stops while it's being said: empty stops the whole game; an entity's name stops only it and everything
+    /// inside it, as a <see cref="PauseGroup"/> does (the enemies, a minigame), while the rest runs on.
+    /// </summary>
+    [EntityName]
+    [ShownWhen(nameof(PauseGame))]
+    public string? Pauses { get; set; }
 
     /// <summary>A message sent with <c>Game.Send</c> when the last line is done, e.g. "TalkedToKing".</summary>
     [Names(NameKind.Message)]

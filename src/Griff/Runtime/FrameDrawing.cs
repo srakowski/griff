@@ -9,7 +9,8 @@ namespace Griff.Runtime;
 /// A running game's frame as it's being drawn, handed to each <see cref="GameSystem"/> in turn once every entity has
 /// drawn itself: first to see the world their own way (a first-person view, in DrawView), then to add what the game
 /// knows of and no single entity draws (a strategy game's fog and HUD, a tactics game's reachable cells) or change
-/// what's there (hide what's in the fog), in Draw. It's used again for the next frame, so don't keep it.
+/// what's there (hide what's in the fog), in Draw. There's one for the main view and one for each
+/// <see cref="Scenes.Viewport"/> showing (see <see cref="Viewport"/>). It's used again for the next frame, so don't keep it.
 /// </summary>
 public sealed class FrameDrawing
 {
@@ -18,15 +19,15 @@ public sealed class FrameDrawing
     private List<SpriteDraw> _sprites;
 
     internal FrameDrawing(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
-        List<SpriteDraw> sprites, int screenCount)
+        List<SpriteDraw> sprites, int screenCount, ViewFilter filter = default)
     {
-        Reset(game, scene, camera, cameraSize, aspect, view, viewProjection, sprites, screenCount);
+        Reset(game, scene, camera, cameraSize, aspect, view, viewProjection, sprites, screenCount, filter);
     }
 
     // Done with until the next frame: it lets go of this one's game, scene and draws, so they can be collected.
     internal void Release()
     {
-        (Game, Scene, Camera, _sprites) = (null!, null!, null, _released ??= []);
+        (Game, Scene, Camera, _sprites, _filter) = (null!, null!, null, _released ??= [], default);
         _released.Clear();
     }
 
@@ -35,9 +36,11 @@ public sealed class FrameDrawing
     // Starts drawing a new frame with this, as if it were new.
     [MemberNotNull(nameof(Game), nameof(Scene), nameof(_sprites))]
     internal void Reset(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
-        List<SpriteDraw> sprites, int screenCount)
+        List<SpriteDraw> sprites, int screenCount, ViewFilter filter = default)
     {
         Lit = true;
+        SeenThrough = null;
+        _filter = filter;
         Game = game!;
         Scene = scene;
         Camera = camera;
@@ -49,13 +52,25 @@ public sealed class FrameDrawing
         _screenCount = screenCount;
     }
 
+    // What this view draws, with viewports about.
+    private ViewFilter _filter;
+
+    /// <summary>
+    /// The <see cref="Scenes.Viewport"/> this frame is drawn for (see <see cref="Camera"/>, its camera), or null for the
+    /// main view, the whole screen. Every system draws into each view; a HUD of the whole screen belongs in the main one.
+    /// </summary>
+    public Viewport? Viewport => _filter.Viewport;
+
     /// <summary>The game being drawn.</summary>
     public Game Game { get; private set; }
 
     /// <summary>Its scene.</summary>
     public Scene Scene { get; private set; }
 
-    /// <summary>The camera's entity, or null if the scene has none (a default camera at the origin is used).</summary>
+    /// <summary>
+    /// The camera's entity: the main camera, or a <see cref="Viewport"/>'s; null if the scene has none (a default camera at
+    /// the origin is used).
+    /// </summary>
     public Entity? Camera { get; private set; }
 
     /// <summary>
@@ -73,7 +88,7 @@ public sealed class FrameDrawing
     /// <summary>Half the height of the camera's view, in world units.</summary>
     public float CameraSize { get; private set; }
 
-    /// <summary>The screen's width divided by its height.</summary>
+    /// <summary>The view's width divided by its height: the screen's, or a viewport's part of it.</summary>
     public float Aspect { get; private set; }
 
     /// <summary>A thin line's width in world units: about two pixels on a 720-pixel-high screen, whatever the zoom.</summary>
@@ -92,6 +107,13 @@ public sealed class FrameDrawing
     public bool Lit { get; set; } = true;
 
     /// <summary>
+    /// The entity this view sees the world through, set by a system that draws it through someone's eyes (a first-person
+    /// view's player), or null for a view from above: what draws over the world from above (a cell outline, a tool's line)
+    /// leaves such a view alone.
+    /// </summary>
+    public Entity? SeenThrough { get; set; }
+
+    /// <summary>
     /// Everything drawn so far, back to front. Change it in place (hide, fade or insert draws among the world's), or set a
     /// new list to draw the world another way. A list set here becomes the frame's (and may be reused for a later one), so
     /// don't keep it.
@@ -108,9 +130,15 @@ public sealed class FrameDrawing
 
     /// <summary>
     /// True if <paramref name="entity"/>'s draws are pinned to the screen (a HUD, a menu, something riding along inside the
-    /// camera) rather than in the world.
+    /// camera) rather than in the world. In a viewport's view, only what rides inside its camera is.
     /// </summary>
-    public bool IsOnScreen(Entity entity) => SceneRenderer.IsOnScreen(entity, Camera);
+    public bool IsOnScreen(Entity entity) => _filter.IsOnScreen(entity, Camera);
+
+    /// <summary>
+    /// True if this view draws <paramref name="entity"/> in its world: neither pinned to its screen nor another view's own
+    /// (riding inside another viewport's camera, or in a viewport's view, the main view's HUD).
+    /// </summary>
+    public bool ShowsInWorld(Entity entity) => _filter.Shows(entity) && !IsOnScreen(entity);
 
     /// <summary>
     /// Moves the draws of <paramref name="draws"/> from <paramref name="start"/> on, laid out in the world over a view
@@ -153,7 +181,7 @@ public sealed class FrameDrawing
     public List<SpriteDraw> DrawEntities(Func<Entity, bool> include)
     {
         var draws = new List<SpriteDraw>();
-        SceneRenderer.DrawScene(Scene, View, CameraSize, true, draws, include, overWorld: false);
+        SceneRenderer.DrawScene(Scene, View, CameraSize, true, draws, include, overWorld: false, filter: _filter);
         return draws;
     }
 

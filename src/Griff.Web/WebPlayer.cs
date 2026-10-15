@@ -103,7 +103,7 @@ public static partial class WebPlayer
         s_frame.Build(s_last);
         SendGlyphs();
         var background = s_frame.Background;
-        Browser.Draw(MemoryMarshal.AsBytes(s_frame.Quads), s_frame.Batches, background.R, background.G, background.B);
+        Browser.Draw(MemoryMarshal.AsBytes(s_frame.Quads), s_frame.Batches, s_frame.Views, background.R, background.G, background.B);
     }
 
     /// <summary>

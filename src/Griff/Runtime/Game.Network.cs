@@ -204,13 +204,15 @@ public sealed partial class Game
         }
     }
 
-    // What this player has (their hotbar, their tools): in a network game, what's on their own character.
-    internal ComponentList<T> Mine<T>() where T : Component => Net.IsOnline ? MineOnline<T>() : Active<T>();
+    // What this player has (their hotbar, their tools): in a network game, what's on their own character. Not what's
+    // paused, unless `evenPaused` (for a HUD that still shows what a paused player has).
+    internal ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component =>
+        Net.IsOnline ? MineOnline<T>(evenPaused) : evenPaused ? Present<T>() : Active<T>();
 
-    private ComponentList<T> MineOnline<T>() where T : Component
+    private ComponentList<T> MineOnline<T>(bool evenPaused) where T : Component
     {
         var id = (_acting ?? Net.LocalPlayer)?.Id ?? 0;
-        return Where(Showing<T>(), entity =>
+        return Where(evenPaused ? Scene.Active<T>() : Scene.Running<T>(), entity =>
         {
             var owner = NetSession.OwnerIdOf(entity);
             return (owner != 0 && owner == id) || (owner == 0 && _acting is null && Runs(entity));

@@ -99,7 +99,9 @@ public abstract class GameSystem
     /// <summary>
     /// Called as each frame is drawn, after every entity has drawn itself and the systems before this one have drawn, to
     /// add to what's drawn or change it: see <see cref="FrameDrawing"/>. Griff's own systems draw a strategy
-    /// game's fog and HUD, a tactics game's reachable cells and a block world's hotbar this way.
+    /// game's fog and HUD, a tactics game's reachable cells and a block world's hotbar this way. It's called for each view:
+    /// the main one and each <see cref="Viewport"/>'s (<see cref="FrameDrawing.Viewport"/> says which), so a HUD of the
+    /// whole screen goes in the main view only.
     /// </summary>
     protected virtual void Draw(FrameDrawing frame)
     {
@@ -108,7 +110,9 @@ public abstract class GameSystem
     /// <summary>
     /// Called as each frame is drawn, before any system's <see cref="Draw"/>, for a system that sees the world its own way
     /// (a first-person view) to draw it in place of the camera's view from above: set <see cref="FrameDrawing.Sprites"/>,
-    /// <see cref="FrameDrawing.View"/> and <see cref="FrameDrawing.ViewProjection"/>. Every system then draws over it.
+    /// <see cref="FrameDrawing.View"/> and <see cref="FrameDrawing.ViewProjection"/> (and <see cref="FrameDrawing.SeenThrough"/>).
+    /// Every system then draws over it. Called for each view too, with the view's own camera: a first-person camera can be
+    /// the main one or a viewport's.
     /// </summary>
     protected virtual void DrawView(FrameDrawing frame)
     {

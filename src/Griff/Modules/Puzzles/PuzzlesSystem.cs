@@ -100,7 +100,8 @@ internal sealed class PuzzlesSystem : GameSystem
             history.Begin(Game.Scene);
             var (undos, restart) = (history.UndoRequests, history.RestartRequested);
             (history.UndoRequests, history.RestartRequested) = (0, false);
-            if (!Game.PausedThisFrame)
+            // One that covers part of the scene hears Undo and Restart only while a grid player there has the input.
+            if (!Game.PausedThisFrame && (string.IsNullOrWhiteSpace(history.Within) || PlayerIn(history.Covering())))
             {
                 restart |= !string.IsNullOrWhiteSpace(history.RestartAction) && Game.PlayerInputs().Any(i => i.WasPressed(history.RestartAction.Trim()));
                 undos += UndoPresses(history);
@@ -116,6 +117,22 @@ internal sealed class PuzzlesSystem : GameSystem
                 UndoMove(history);
         }
     }
+
+    // A grid player that takes the player's input stands in the scope.
+    private bool PlayerIn(Scope scope)
+    {
+        foreach (var m in Game.Active<GridMovement>())
+        {
+            if (m.Controllable && IsGridPlayer(m.Entity!) && scope.Covers(m.Entity))
+                return true;
+        }
+
+        return false;
+    }
+
+    // A grid mover the player steps (not a crate, a chaser or a patrol).
+    private static bool IsGridPlayer(Entity mover) =>
+        mover.GetComponent<GridChase>() is null && mover.GetComponent<GridPatrol>() is null && mover.GetComponent<Pushable>() is null;
 
     // How long Undo has to be held before it repeats, and how often it does then.
     private const float UndoRepeatDelay = 0.35f;
@@ -146,11 +163,13 @@ internal sealed class PuzzlesSystem : GameSystem
     protected override void GridStepStarting(GridMovement movement)
     {
         var mover = movement.Entity!;
-        if (Game.Net.IsOnline || mover.GetComponent<GridChase>() is not null || mover.GetComponent<GridPatrol>() is not null ||
-            mover.GetComponent<Pushable>() is not null)
+        if (Game.Net.IsOnline || !IsGridPlayer(mover))
             return;
         foreach (var history in Game.Active<MoveHistory>())
-            history.Record();
+        {
+            if (history.Covering().Covers(mover))
+                history.Record();
+        }
     }
 
     // Back to the moment before the last move. Online there's no undo: everyone's moves are their own.
@@ -181,7 +200,7 @@ internal sealed class PuzzlesSystem : GameSystem
         {
             if (Game.Net.IsOnline || history.Moves == 0 || history.Start is not { } start)
                 return;
-            history.Remember(MoveSnapshot.Take(Game.Scene, history.Moves));
+            history.Remember(MoveSnapshot.Take(Game.Scene, history.Moves, history.Covering()));
             PutBack(history, start);
         }
 
@@ -196,8 +215,13 @@ internal sealed class PuzzlesSystem : GameSystem
         snapshot.Restore(Game.Scene);
         history.Moves = snapshot.Moves;
         // Goals the crates are put back on (or off) aren't a change: no sounds or messages, and solving it again counts.
+        var covering = history.Covering();
         foreach (var goal in Game.Showing<Goal>())
-            goal.Seen = false;
+        {
+            if (covering.Covers(goal.Entity))
+                goal.Seen = false;
+        }
+
         AllCovered.Clear();
     }
 }

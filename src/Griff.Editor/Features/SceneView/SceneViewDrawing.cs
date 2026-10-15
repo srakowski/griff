@@ -370,7 +370,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
     private void DrawCameraFrame(DrawingContext dc, Entity entity, Camera camera, bool selected)
     {
         var height = camera.Size * 2;
-        var width = height * SceneViewModel.CameraAspect;
+        var width = height * SceneViewModel.AspectOf(entity);
         var rect = new Rect(-width / 2, -height / 2, width, height);
         var pen = new Pen(selected ? style.Brush("Brush.Accent") : style.Brush("Brush.Text.Tertiary"), 1.5 / viewport.Zoom)
         {

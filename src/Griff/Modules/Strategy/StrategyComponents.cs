@@ -201,6 +201,9 @@ public enum UnitOrder
 [ComponentName("Griff.Unit")]
 public sealed class Unit : Component
 {
+    // The strategy game that runs it this frame (see StrategySystem), if any.
+    internal StrategyState? InGame { get; set; }
+
     /// <summary>The team it's on: a <see cref="Faction"/>'s Team, e.g. "Player" or "Enemy".</summary>
     public string? Team { get; set; } = "Player";
 
@@ -314,6 +317,9 @@ public sealed class Unit : Component
 [ComponentName("Griff.Building")]
 public sealed class Building : Component, INetState
 {
+    // The strategy game that runs it this frame (see StrategySystem), if any.
+    internal StrategyState? InGame { get; set; }
+
     // A building with no rally point. (Not NaN, which never equals itself, so it would be sent again and again.)
     private static readonly Vector2 NoRally = new(float.MaxValue);
 
@@ -581,6 +587,14 @@ public sealed class Commander : Component
     /// <summary>How big the map is, in world units.</summary>
     public Vector2 MapSize { get; set; } = new(48, 32);
 
+    /// <summary>
+    /// The map in the world, from <see cref="MapCenter"/> and <see cref="MapSize"/>: the strategy game it commands is played
+    /// here. Units and buildings outside it aren't its (another commander's, or no strategy game's), and its fog of war
+    /// covers only it.
+    /// </summary>
+    [Area]
+    public Box MapArea => new(MapCenter, Vector2.Abs(MapSize) / 2);
+
     /// <summary>How fast the camera pans, in world units per second.</summary>
     public float ScrollSpeed { get; set; } = 16;
 
@@ -592,6 +606,14 @@ public sealed class Commander : Component
 
     /// <summary>The furthest the mouse wheel zooms out: the camera's largest Size.</summary>
     public float MaxZoom { get; set; } = 13;
+
+    /// <summary>
+    /// Untick it to have the controls ignore the mouse and keys (selecting, orders, panning) while the game plays on:
+    /// another part of the scene has the player's input. Its Focus action ticks it and unticks it on everything else the
+    /// player plays, and another's Focus takes it back.
+    /// </summary>
+    [Focus]
+    public bool Controllable { get; set; } = true;
 
     /// <summary>Whether to show the resources bar, selection, command card and minimap.</summary>
     [Group("Screens")]

@@ -282,8 +282,17 @@ public static class ComponentActions
             }
         }
 
+        // Anything that can have focus can be given it (see FocusAttribute), unless it says for itself what Focus does.
+        if (ComponentFocus.Has(type) && !actions.Any(a => SameName(a.Name, FocusName)))
+            actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, g)));
+
         return new Found(actions, powered);
     }
+
+    private const string FocusName = "Focus";
+
+    private static readonly MethodInfo FocusMethod =
+        typeof(ComponentFocus).GetMethod(nameof(ComponentFocus.Focus), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static bool SameName(string a, string b) => ComponentAction.SameWords(a, b);
 

@@ -249,7 +249,7 @@ public sealed partial class Game
 
     private void RunLights()
     {
-        foreach (var light in Scene.Active<Light>())
+        foreach (var light in Scene.Running<Light>())
             light.AdvanceFlicker(Time.Delta);
     }
 }

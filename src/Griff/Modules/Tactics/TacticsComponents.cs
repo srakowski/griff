@@ -224,7 +224,7 @@ internal sealed record TacticsRequest(TacticsOrder Order, (int X, int Y)? Cell, 
 /// shows how far it reaches. Units that have had their go are dimmed. On the computer's turn, each of its units' reach
 /// lights up for <see cref="ComputerPause"/> before it moves.
 /// </summary>
-/// <remarks>One per scene (the first is used); it draws nothing itself. In a network game each player picks on their own screen.</remarks>
+/// <remarks>One per scene (the first with focus is used); it draws nothing itself. In a network game each player picks on their own screen.</remarks>
 [Category("Gameplay")]
 [WorksWith(typeof(TacticsUnit), Note = "the units it commands")]
 [WorksWith(typeof(TurnOrder), Note = "whose turn it is")]
@@ -238,6 +238,14 @@ public sealed class TacticsControls : Component, IPlaytestReport
     /// <summary>The input action that puts a unit back or lets it go, as a right click does: "Dash" is Shift or the gamepad's B.</summary>
     [Names(NameKind.Action)]
     public string? CancelAction { get; set; } = "Dash";
+
+    /// <summary>
+    /// Untick it to have the controls ignore the mouse, keys and gamepad (the computer's turns still play): another part of
+    /// the scene has the player's input. Its Focus action ticks it and unticks it on everything else the player plays, and
+    /// another's Focus takes it back.
+    /// </summary>
+    [Focus]
+    public bool Controllable { get; set; } = true;
 
     /// <summary>Hovering a unit nobody has picked shows how far it can walk and hit, fainter.</summary>
     public bool ShowOnHover { get; set; } = true;

@@ -54,6 +54,9 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// <summary>The shape of a camera's frame, as the game's window is.</summary>
     public const double CameraAspect = 16.0 / 9.0;
 
+    /// <summary>The shape of a camera's view in the Scene view: the screen's, or a viewport's part of it.</summary>
+    public static double AspectOf(Entity camera) => camera.GetComponent<Viewport>() is { } viewport ? viewport.AspectOn((float)CameraAspect) : CameraAspect;
+
     private const float SnapStep = 0.5f;
 
     private SceneHandles _handles;
@@ -412,7 +415,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             (min, max) = tilemap.Bounds();
         else if (entity.GetComponent<Camera>() is { } camera)
         {
-            max = new Vector2((float)(camera.Size * CameraAspect), camera.Size);
+            max = new Vector2((float)(camera.Size * AspectOf(entity)), camera.Size);
             min = -max;
         }
         else

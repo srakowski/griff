@@ -86,8 +86,12 @@ public sealed class PlatformerMovement : Component
     /// <summary>Down and Jump on a one-way platform drops through it.</summary>
     public bool DropThrough { get; set; } = true;
 
-    /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input; it still falls and lands.</summary>
+    /// <summary>
+    /// Untick it (from a script, in a cutscene) to ignore the player's input; it still falls and lands. Its Focus action
+    /// ticks it and unticks it on everything else the player plays (a board, another character), and back.
+    /// </summary>
     [Group("Control")]
+    [Focus]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face the way it's going (art should face right).</summary>
@@ -244,8 +248,12 @@ public sealed class TopDownMovement : Component
     [ShownWhen(nameof(Dash))]
     public float DashCooldown { get; set; } = 0.35f;
 
-    /// <summary>Untick it (from a script, in a cutscene) to ignore the player's input.</summary>
+    /// <summary>
+    /// Untick it (from a script, in a cutscene) to ignore the player's input. Its Focus action ticks it and unticks it on
+    /// everything else the player plays (a board, another character), and back.
+    /// </summary>
     [Group("Control")]
+    [Focus]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>
@@ -346,8 +354,10 @@ public sealed class GridMovement : Component
     /// <summary>
     /// Untick it (from a script, in a cutscene) to ignore the player's input; <see cref="Step"/> still works. Something
     /// with a <see cref="GridChase"/>, a <see cref="GridPatrol"/> or a <see cref="Pushable"/> never takes the player's input.
+    /// Its Focus action ticks it and unticks it on everything else the player plays (a board, another character).
     /// </summary>
     [Group("Control")]
+    [Focus]
     public bool Controllable { get; set; } = true;
 
     /// <summary>Flip its sprite to face left or right as it moves (art should face right).</summary>

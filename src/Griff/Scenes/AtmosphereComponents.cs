@@ -193,6 +193,7 @@ public sealed class Room : Component
     public event Action<Entity>? Entered;
 
     /// <summary>The world-space box the room covers.</summary>
+    [Area]
     public Box Area
     {
         get

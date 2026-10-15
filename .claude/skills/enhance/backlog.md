@@ -36,6 +36,21 @@ through the scene and asset tools, read by scripts, and usable by no-code compon
 - [ ] Add balance simulations in one go: run a matchup thousands of times headless and seeded, with no code for the common cases (each row of one table against each row of another: a hero of each class at each level against each enemy, using the game's own damage, health and dice) or a script for the rest; the results are a table and charts (win rate, turns or seconds to win, damage dealt, gold and XP over a run), a matrix of every pair coloured by how one-sided it is, and a sweep that changes a column by steps and shows what it does, so outliers and dead levels stand out; agents run them and read the results through the MCP.
 - [ ] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level.
 
+### Website (griff.games)
+
+At the user's request (2026-10-14), before Platforms: an open-source project site at https://griff.games (domain on
+GoDaddy) with GitHub links, docs and tutorials. The user's choices: hosted on GitHub Pages, built by a GitHub Action
+from `site/` in this repo; Astro Starlight; Griff under the MIT license. Agents don't push or touch accounts: each item
+ends with the exact steps the user must do (push, repo settings, GoDaddy DNS), written in `site/README.md`. What the
+site says stays true by itself: reference pages are generated from the code, and screenshots and steps are checked
+like demos, so they can't silently go stale.
+
+- [ ] Set up griff.games in one go: an MIT `LICENSE` (Copyright (c) 2026 Shawn Rakowski) and a README license section; an Astro Starlight site in `site/` with a landing page (the Pixel Griffin logo and "griff" wordmark, what Griff is in a sentence, the features with real screenshots from the editor and templates, Download and GitHub buttons, links to the repo, issues, releases and the license), light and dark themes, search, and a docs section seeded from the README; a GitHub Action that builds the site and deploys it to GitHub Pages on every push to main, with a `CNAME` for griff.games; and the user's checklist (enable Pages from Actions, add GoDaddy's A records for GitHub Pages and a `www` CNAME, turn on HTTPS) with a check that the built site has no broken links.
+- [ ] Add the docs in one go: getting started (install, first project, the editor's tour), guides for the editor, scenes and components, scripting, multiplayer, exporting (desktop and web) and agents (MCP), moved from the README so the README stays short and links to them; and reference pages generated at build time from the code itself (every component with its properties and descriptions as `component_describe` gives them, every editor command and its shortcut, the scripting API from its XML docs), so a new component or command appears on the site by itself.
+- [ ] Add tutorials in one go: step-by-step tutorials (a first platformer, a top-down adventure, a puzzle, making a game with an agent over MCP, and balancing with data tables) whose steps and screenshots are produced by running them in the editor like demos, with a check that fails when one no longer matches the editor, so they stay current.
+- [ ] Put playable games on the site: every template playable in the browser on its own page and in a gallery on the landing page, using the web export, built by the site's Action so they always match main.
+- [ ] Publish releases: a GitHub Action that builds the editor on a version tag, attaches a zip to a GitHub Release with notes from the commits, and the site's Download button and a releases page that always point to the latest.
+
 ### Platforms
 
 - [ ] Make the game player open and draw in its own window without WPF.

@@ -50,6 +50,18 @@ export const games = {
 			['R', 'start the level over'],
 		],
 	},
+	Physics: {
+		tagline: 'Pull back the slingshot and topple towers of wood, glass and stone onto the grubs inside.',
+		about:
+			'Three levels, each opening once the one before is won. Wood cracks, glass shatters and stone crumbles, every bird left over scores a bonus, and the best stars and score of each level are kept.',
+		controls: [
+			['Mouse or a finger', 'drag the bird back and let go'],
+			['Arrow keys', 'pull the slingshot back'],
+			['Space', 'let go'],
+			['R', 'try the level again'],
+			['Esc', 'pause'],
+		],
+	},
 	Contraption: {
 		tagline: 'Build machines in a room full of props: wheels, thrusters, ropes, hinges and logic gates.',
 		about:

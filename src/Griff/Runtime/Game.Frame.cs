@@ -353,6 +353,7 @@ public sealed partial class Game
         Step(FramePhase.Resolve, "Health", RunHealth);
         Step(FramePhase.Resolve, "Respawns", RunRespawns);
         Step(FramePhase.Resolve, "Bars", RunBars);
+        Step(FramePhase.Resolve, "Stars", RunStars);
         Step(FramePhase.Resolve, "Counters", RunCounters);
         Step(FramePhase.Resolve, "Text Outputs", ShowOutputs);
         Step(FramePhase.Resolve, "Fade", AdvanceFade);

@@ -186,9 +186,18 @@ public sealed class Follow : Component
 
     private Box? Bounds(Scene scene)
     {
-        if (string.IsNullOrWhiteSpace(StayInside) || scene.Entities.FirstOrDefault(e => e.Name == StayInside) is not { } area)
+        if (string.IsNullOrWhiteSpace(StayInside))
             return null;
-        return AreaOf(area);
+
+        // Looked for without making garbage, every step.
+        var entities = scene.Entities;
+        for (var i = 0; i < entities.Count; i++)
+        {
+            if (entities[i].Name == StayInside)
+                return AreaOf(entities[i]);
+        }
+
+        return null;
     }
 
     /// <summary>The world-space box an entity covers: its tilemap's grid, else its box collider, else its sprite.</summary>

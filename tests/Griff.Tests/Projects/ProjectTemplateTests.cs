@@ -122,6 +122,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Arcade")]
     [InlineData("Strategy")]
     [InlineData("Shooter")]
+    [InlineData("Physics")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
@@ -819,6 +820,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("FallingBlocks")]
     [InlineData("Roguelike")]
     [InlineData("Tactics")]
+    [InlineData("Physics")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
@@ -828,7 +830,7 @@ public sealed class ProjectTemplateTests : IDisposable
         var (project, scene, input, registry) = await CreateAndLoad(template);
         if (template == "Arcade")
             scene = GameLoader.LoadScene(project, registry, "Game");
-        if (template is "Puzzle" or "Match3")
+        if (template is "Puzzle" or "Match3" or "Physics")
             scene = GameLoader.LoadScene(project, registry, "Level1");
         if (template == "FallingBlocks")
             scene = GameLoader.LoadScene(project, registry, "Game");
@@ -863,6 +865,7 @@ public sealed class ProjectTemplateTests : IDisposable
             : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
             : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"
             : game.Find("Stage")?.GetComponent<Dialogue>() is { } story ? $"{story.Line} {story.Picked} {game.Find("Line")!.GetComponent<Typewriter>()!.Shown}"
+            : game.Find("Slingshot")?.GetComponent<Griff.Modules.PhysicsGames.Slingshot>() is { } slingshot ? $"{slingshot.Pull} {slingshot.ShotsLeft}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();

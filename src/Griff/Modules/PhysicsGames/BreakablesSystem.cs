@@ -123,6 +123,8 @@ internal sealed class BreakablesSystem : GameSystem
 
         if (!string.IsNullOrWhiteSpace(breakable.Sound))
             Game.PlaySoundAt(breakable.Sound.Trim(), middle);
+        if (breakable.ShowPoints && breakable.Points != 0)
+            PointsPopup.Spawn(Game, middle, breakable.Points, breakable.PointsColor, 0.55f);
         if (!string.IsNullOrWhiteSpace(breakable.BreakMessage))
             Game.Send(breakable.BreakMessage.Trim(), breakable.Points != 0 ? breakable.Points : entity, from: entity);
         breakable.RaiseBroke();

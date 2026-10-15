@@ -77,8 +77,14 @@ public abstract class ProjectTemplate
         return prefabs;
     }
 
+    /// <summary>
+    /// Sound effects of its own, besides those every template with sounds comes with, keyed by path relative to Assets
+    /// ("Sounds/shatter.wav"): recipes the Sound Maker opens to tweak.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, SoundRecipe> MoreSounds => new Dictionary<string, SoundRecipe>();
+
     /// <summary>Sound and music files, keyed by path relative to Assets, as WAV bytes.</summary>
-    public IReadOnlyDictionary<string, byte[]> Sounds() => HasSounds ? TemplateSounds.Files(Music) : new Dictionary<string, byte[]>();
+    public IReadOnlyDictionary<string, byte[]> Sounds() => HasSounds ? TemplateSounds.Files(Music, MoreSounds) : new Dictionary<string, byte[]>();
 
     public override string ToString() => Name;
 

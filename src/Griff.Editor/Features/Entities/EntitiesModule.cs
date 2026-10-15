@@ -31,6 +31,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateSliderCommand>()
             .AddCommand<CreateToggleCommand>()
             .AddCommand<CreateBarCommand>()
+            .AddCommand<CreateStarsCommand>()
             .AddCommand<CreateDialogueBoxCommand>()
             .AddCommand<CreateSwitchCommand>()
             .AddCommand<CreatePanelCommand>()
@@ -376,6 +377,21 @@ public sealed class CreateBarCommand(IWorkspace workspace, ISelection selection)
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
     protected override string EntityName => "Bar";
     protected override void Configure(Entity entity) => entity.AddComponent<Bar>();
+}
+
+/// <summary>
+/// Creates a row of three stars, so many filled: how well a level went. Set its Saved to a level's best stars in the save
+/// data (on a level select menu), or its Track and Output to a Level Goal's Stars (on the panel a won level opens).
+/// </summary>
+[Category("UI")]
+public sealed class CreateStarsCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateStars";
+    public override string Text => "Create Sta_rs";
+    public override string? Icon => Icons.Star;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
+    protected override string EntityName => "Stars";
+    protected override void Configure(Entity entity) => entity.AddComponent<Stars>().Value = 2;
 }
 
 /// <summary>

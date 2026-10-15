@@ -42,6 +42,11 @@ public static partial class WebPlayer
     private static string? s_netStatus;
     private static int? s_still;
 
+    // The game's steps since the "steps" probe last read them: how many, and how long they took (all of them, and the slowest
+    // frame's, a step).
+    private static long s_stepCount;
+    private static double s_stepMilliseconds, s_worstStepMilliseconds;
+
     /// <summary>
     /// Fetches the game exported next to the page (the files its <see cref="ExportLayout.WebFileList"/> lists, under
     /// <see cref="ExportLayout.GameFolder"/>) into <see cref="GameFolder"/>, saying how far it's got on the loading screen,
@@ -125,7 +130,14 @@ public static partial class WebPlayer
             game.ViewAspect = aspect;
             if (s_still is not { } steps)
             {
+                var (before, started) = (game.Time.Frame, System.Diagnostics.Stopwatch.GetTimestamp());
                 game.Advance(seconds);
+                if (game.Time.Frame - before is var taken and > 0)
+                {
+                    var milliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                    (s_stepCount, s_stepMilliseconds) = (s_stepCount + taken, s_stepMilliseconds + milliseconds);
+                    s_worstStepMilliseconds = Math.Max(s_worstStepMilliseconds, milliseconds / taken);
+                }
             }
             else if (steps >= 0)
             {
@@ -258,7 +270,8 @@ public static partial class WebPlayer
     /// <c>button:<i>label</i></c> where the middle of a button a system shows on the screen is (an inventory bar's item), "x,y";
     /// <c>talking</c> the name of the entity whose dialogue is being said ("" for none); <c>output:<i>entity</i>.<i>output</i></c>
     /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
-    /// heard ("name|seconds"); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
+    /// heard ("name|seconds"); <c>steps</c> the game's steps since it was last asked, "count|mean ms|worst ms" (a frame's steps
+    /// timed together); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
     /// </summary>
     [JSExport]
@@ -287,6 +300,14 @@ public static partial class WebPlayer
                 return game.HudButtons.FirstOrDefault(b => b.Label.Equals(argument, StringComparison.OrdinalIgnoreCase)) is { } button
                     ? string.Create(CultureInfo.InvariantCulture, $"{button.Rect.Center.X:0.###},{button.Rect.Center.Y:0.###}")
                     : "";
+            case "steps":
+            {
+                var read = string.Create(CultureInfo.InvariantCulture,
+                    $"{s_stepCount}|{(s_stepCount > 0 ? s_stepMilliseconds / s_stepCount : 0):0.###}|{s_worstStepMilliseconds:0.###}");
+                (s_stepCount, s_stepMilliseconds, s_worstStepMilliseconds) = (0, 0, 0);
+                return read;
+            }
+
             case "flag":
                 return game.HasFlag(argument) ? "1" : "0";
             case "talking":

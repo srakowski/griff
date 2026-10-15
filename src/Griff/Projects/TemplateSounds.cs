@@ -44,10 +44,15 @@ internal static class TemplateSounds
         (Place, SoundPreset.Blip, 13, 0.15f, 0.4f),
     ];
 
-    /// <summary>The sound effects every template with sounds comes with, plus <paramref name="music"/> (relative to Assets), as WAV bytes.</summary>
-    public static IReadOnlyDictionary<string, byte[]> Files(MusicRecipe music)
+    /// <summary>
+    /// The sound effects every template with sounds comes with, plus <paramref name="music"/> and a template's own sounds
+    /// (<paramref name="more"/>), keyed by path relative to Assets, as WAV bytes.
+    /// </summary>
+    public static IReadOnlyDictionary<string, byte[]> Files(MusicRecipe music, IReadOnlyDictionary<string, SoundRecipe>? more = null)
     {
         var files = new Dictionary<string, byte[]>();
+        foreach (var (path, recipe) in more ?? new Dictionary<string, SoundRecipe>())
+            files[path] = Wav.Encode(SoundSynth.Render(recipe), recipe);
         foreach (var (path, preset, seed, maxSeconds, volume) in Effects)
         {
             var recipe = Pick(preset, seed, maxSeconds) with { Volume = volume };

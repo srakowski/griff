@@ -100,6 +100,13 @@ public sealed class Breakable : Component, IDrawable, IPlaytestReport
     /// <summary>What it's worth as it breaks: the data its Break Message carries, for a Counter keeping the score. 0 sends the entity.</summary>
     public int Points { get; set; }
 
+    /// <summary>Shows its <see cref="Points"/> where it broke, rising and fading away: what knocking it out scored.</summary>
+    public bool ShowPoints { get; set; }
+
+    /// <summary>The color its points are shown in.</summary>
+    [ShownWhen(nameof(ShowPoints))]
+    public Color PointsColor { get; set; } = Color.White;
+
     /// <summary>A message sent as each hit damages it, with the damage as its data: a Counter of these scores every knock.</summary>
     [Names(NameKind.Message)]
     public string? DamageMessage { get; set; }

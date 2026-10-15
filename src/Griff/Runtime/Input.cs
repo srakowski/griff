@@ -436,6 +436,7 @@ public sealed class InputState : IInput
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         _actions[action.Trim()] = [.. bindings];
+        BindingsVersion++;
     }
 
     /// <summary>
@@ -454,6 +455,7 @@ public sealed class InputState : IInput
                 _actions.Remove(gone);
         }
 
+        BindingsVersion++;
         _projectActions.Clear();
         foreach (var (action, bindings) in controls)
         {
@@ -467,6 +469,7 @@ public sealed class InputState : IInput
     public void Rebind(string action, params InputBinding[] bindings)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
+        BindingsVersion++;
         _rebound[action.Trim()] = [.. bindings];
         SaveBindings();
     }
@@ -478,9 +481,14 @@ public sealed class InputState : IInput
         else
             _rebound.Remove(action.Trim());
         SaveBindings();
+        BindingsVersion++;
     }
 
     public IReadOnlyList<InputBinding> BindingsOf(string action) => Bindings(action);
+
+    // Changes whenever an action's bindings might have: bound, rebound, reset, or read from the save data. Prompts on the
+    // screen are filled in again only when it (or the device being played with) changes.
+    internal int BindingsVersion { get; private set; }
 
     /// <summary>The names of every action, built in, bound or rebound.</summary>
     public IReadOnlyCollection<string> Actions => _actions.Keys.Union(_rebound.Keys, StringComparer.OrdinalIgnoreCase).ToList();
@@ -493,6 +501,7 @@ public sealed class InputState : IInput
     {
         _saveData = saveData;
         _rebound.Clear();
+        BindingsVersion++;
         if (saveData.GetString(BindingsSaveKey) is not { } json)
             return;
 

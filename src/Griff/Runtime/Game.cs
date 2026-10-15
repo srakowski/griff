@@ -920,6 +920,18 @@ public sealed partial class Game : IGameContext
             bar.Advance(Time.Delta, Scene);
     }
 
+    // Stars show how a level went on every machine, filling one after another in real time, so they go on under a panel
+    // that pauses the game.
+    private void RunStars()
+    {
+        foreach (var stars in Showing<Stars>())
+        {
+            var saved = string.IsNullOrWhiteSpace(stars.Saved) ? 0 : SaveData.GetInt(stars.Saved.Trim());
+            if (stars.Advance(Time.UnscaledDelta, saved) && !string.IsNullOrWhiteSpace(stars.Sound))
+                Audio.Play(stars.Sound.Trim());
+        }
+    }
+
     // Counters show their count, keep their best, and pop when the count changes.
     private void RunCounters()
     {

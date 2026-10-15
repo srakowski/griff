@@ -230,6 +230,10 @@ public sealed class Text : Component, IDrawable
     /// <summary>Sets what <see cref="Shown"/> is for what it says now. Called by the game.</summary>
     internal void SetShown(string? shown) => _shown = (Said, shown);
 
+    // What its prompts were last filled in from: what it said, whether a gamepad was being played with, the action being
+    // rebound and the bindings' version (see Game.FillPrompts).
+    internal (string Said, bool Gamepad, string? Listening, int Version)? PromptedFrom;
+
     // What it says before prompts are filled in: its Value, with the output it shows filled in while the game runs.
     internal string? Said => _readout ?? Value;
 

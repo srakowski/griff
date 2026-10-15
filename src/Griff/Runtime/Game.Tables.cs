@@ -9,6 +9,10 @@ public sealed partial class Game
     private int _tablesSeen = -1;
     private TableValues[]? _tableValuesSeen;
 
+    // The Table Values that have set their values since the tables last changed: one new to the game sets its own, and a
+    // block broken away (its Table Values gone) sets nobody's again.
+    private readonly HashSet<TableValues> _tableValuesApplied = [];
+
     /// <summary>
     /// The game's tables, which scripts read (<c>Tables.Get("Spells", "Fireball")["Damage"]</c>) and
     /// <see cref="TableValues"/> components take their values from. Every host sets it as the game starts, from the
@@ -58,8 +62,13 @@ public sealed partial class Game
             return;
         _tablesSeen = _tables.Version;
         _tableValuesSeen = all;
+        if (changed || _tableValuesApplied.Count > all.Length * 2 + 16)
+            _tableValuesApplied.Clear();
         foreach (var values in all)
-            Apply(values);
+        {
+            if (values is not null && (_tableValuesApplied.Add(values) || changed))
+                Apply(values);
+        }
     }
 
     private void Apply(TableValues values)

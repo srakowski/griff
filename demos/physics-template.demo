@@ -1,0 +1,51 @@
+title: The Physics template
+intro: A slingshot game to play straight away: three levels of wood, glass and stone, stars and the best kept, with no code.
+project: Physics | Topple
+
+chapter: Pick a level | Main
+expectcount: Level 1 = 1
+expectcount: Level 3 = 1
+say: The menu has a card for each level: Timber, Glasshouse and Stone Keep, each with the best stars and score it's been won with.
+select: Level 2
+explain: field:Button.NeedsSaved | Opens once won | Each level opens once the one before has been won: its button needs the stars the last one saved.
+deselect
+
+chapter: A level | Level1
+scene: Level1
+expectcount: Grub = 2
+expectcount: Wood Plank = 6
+say: A level is a slingshot on a mound with its birds waiting behind it, and a tower of wood with two green grubs inside to knock out.
+select: Level
+explain: component:LevelGoal | Level Goal | The level goal says what the level is for: knock out every grub before the birds run out. Once they're all down, each bird left is a bonus, and the score earns one to three stars, kept in the save data.
+explain: field:LevelGoal.ThreeStars | Stars | Two stars from this many points, three from this many.
+select: Wood Plank
+explain: component:TableValues | From a table | Every block's strength, points, picture and sounds come from its material's row of the Materials table, so balancing wood, glass and stone is changing a cell.
+deselect
+
+chapter: Knock it down | Pull the bird back and let go
+play
+wait: 1.5
+expectvalue: Slingshot.Slingshot.Loaded = true
+expectvalue: Slingshot.Slingshot.ShotsLeft = 3
+gamedrag: Slingshot + 0, 1.6 > Slingshot + -2.69, 0.62
+wait: 0.3
+expectvalue: Slingshot.Slingshot.ShotsLeft = 2
+explain: game | Away it goes | The camera follows the bird. Wood cracks and splits, glass shatters, stone crumbles, each with its own sound and its points rising where it broke.
+wait: 5
+expectvalue: Level.LevelGoal.TargetsLeft = 0
+say: Both grubs are down. Once things settle, each bird left scores a bonus.
+wait: 4
+expectvalue: Level.LevelGoal.Won = true
+expectvalue: Level.LevelGoal.Stars = 2 ~ 1
+explain: game | Level complete | The stars pop in one after another, with the score and the best, and on to the next level.
+wait: 1
+stop
+
+chapter: Kept for next time | Main
+scene: Main
+play
+wait: 1
+expectvalue: Stars.Stars.Shown = 2 ~ 1
+explain: game | The best | The first card shows the stars it was won with, and the second level is open now. It all plays with a finger, the keys or a controller too.
+stop
+say: That's the Physics template: a slingshot, breakable blocks from a materials table, and a level goal with stars, all with no code.

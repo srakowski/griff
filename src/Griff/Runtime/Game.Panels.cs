@@ -269,10 +269,23 @@ public sealed partial class Game
     // "Press {Interact}" shows the key or button that does it on the device in use.
     private void FillPrompts()
     {
+        var state = Input as InputState;
         foreach (var text in Scene.Active<Text>())
         {
-            if (text.Said is { } value && value.Contains('{'))
-                text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));
+            if (text.Said is not { } value || !value.Contains('{'))
+                continue;
+
+            // Filled in again only once what it says, the device played with or the bindings change: no garbage a frame.
+            if (state is not null)
+            {
+                var from = (value, state.UsingGamepad, _panels.Rebinding, state.BindingsVersion);
+                if (text.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == from.UsingGamepad &&
+                    listening == from.Rebinding && version == from.BindingsVersion)
+                    continue;
+                text.PromptedFrom = from;
+            }
+
+            text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));
         }
     }
 

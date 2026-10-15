@@ -158,6 +158,8 @@ public sealed partial class Game
         public List<Choice> Choices { get; } = [];
 
         public List<Component> Controls { get; } = [];
+
+        public List<Button> Clicked { get; } = [];
     }
 
     // Those on the top panel (all of them without one), into a list kept for it.
@@ -177,15 +179,19 @@ public sealed partial class Game
     {
         // Only the topmost button under the mouse is hovered: highest draw order, then latest in the hierarchy.
         Button? top = null;
-        foreach (var button in buttons.Where(b => Input.IsMouseInView && AreaOf(b).Contains(Input.MouseWorld)))
+        foreach (var button in buttons)
         {
+            if (!Input.IsMouseInView || !AreaOf(button).Contains(Input.MouseWorld))
+                continue;
             if (top is null || (SceneRenderer.OrderOf(button.Entity!) ?? 0) >= (SceneRenderer.OrderOf(top.Entity!) ?? 0))
                 top = button;
         }
 
         var pressed = Input.WasPressed(MouseButton.Left);
         var released = Input.WasReleased(MouseButton.Left);
-        var clicked = new List<Button>();
+        // Kept from one frame to the next, so menus make no garbage.
+        var clicked = _menus.Clicked;
+        clicked.Clear();
         foreach (var button in buttons)
         {
             button.IsHovered = button == top;
@@ -432,7 +438,16 @@ public sealed partial class Game
 
     private void UpdateSliders(List<Slider> sliders)
     {
-        var hovered = Input.IsMouseInView ? sliders.LastOrDefault(s => AreaOf(s).Contains(Input.MouseWorld)) : null;
+        Slider? hovered = null;
+        for (var i = sliders.Count - 1; i >= 0 && Input.IsMouseInView; i--)
+        {
+            if (AreaOf(sliders[i]).Contains(Input.MouseWorld))
+            {
+                hovered = sliders[i];
+                break;
+            }
+        }
+
         foreach (var slider in sliders)
         {
             slider.IsHovered = slider == hovered;

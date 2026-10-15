@@ -11,8 +11,8 @@
 //                   checks each: the proof game, the Adventure template (Enter on its menu, taps moving its talk on,
 //                   walking where it's tapped round a table, a hotspot's pointer, a right click looking, an item taken,
 //                   picked from the inventory bar and used on the kettle, the keys on the bar, and its items kept),
-//                   then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer (--template picks some, Proof
-//                   among them; --project checks that project). See Check below for what each is checked for.
+//                   then Platformer, Shooter, Match3, Isometric, Physics, BunnyMark and Multiplayer (--template picks
+//                   some, Proof among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
 //                   files and a poster (a screenshot of it running, taken in a headless browser), and games.json, the list
@@ -44,7 +44,7 @@ const string LabelText = "Griff on the Web ♥";
 const float LabelSize = 0.8f;
 const float LabelY = 3.8f;
 // The templates --check plays unless --template picks others.
-const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,BunnyMark,Multiplayer";
+const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,BunnyMark,Multiplayer";
 
 var check = args.Contains("--check");
 var exportOnly = args.Contains("--export");
@@ -635,6 +635,9 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         case "BunnyMark":
             await Restarts(game);
             break;
+        case "Physics":
+            await Slingshots(game);
+            break;
         case "Multiplayer":
             await NetworkNotice(game, warnings);
             break;
@@ -793,6 +796,86 @@ async Task Taps(GameCheck game)
     }
 
     Console.WriteLine($"  touch: a tap on the first level's button went from {scene} to {now}");
+}
+
+// The Physics template's first level, from its menu (Enter): a finger drags the slingshot's bird and lets go, a controller's
+// stick pulls the next and A lets it go (both straight down, to launch it straight up and back), and the arrows pull the
+// last back and Space lets go, each launching a bird; the last knocks the tower down. Then the third level, the biggest
+// collapse, knocked down with the keys too. The steps of each collapse, timed, must take less than a frame (a 60th of a
+// second) on average.
+async Task Slingshots(GameCheck game)
+{
+    await game.Press("Enter");
+    await WaitFor(game, "scene", scene => scene == "Level1", "Enter on the menu didn't open the first level");
+    await Task.Delay(1500);
+    async Task<int> Left() => int.Parse(await game.Probe("output:Slingshot.Shots Left"), CultureInfo.InvariantCulture);
+
+    // Each launch, tried again for a while: the next bird is loaded a moment after the last comes to rest (or, rolled off the
+    // edge of the world, ten seconds after it went).
+    async Task Launch(string how, Func<Task> launch)
+    {
+        var before = await Left();
+        var waited = Stopwatch.StartNew();
+        while (true)
+        {
+            await launch();
+            await Task.Delay(400);
+            if (await Left() < before)
+                break;
+            if (waited.Elapsed > TimeSpan.FromSeconds(25))
+                throw new CheckFailed($"{how} didn't launch a bird ({before} shots left)");
+            await Task.Delay(1000);
+        }
+
+        Console.WriteLine($"  {how} launched a bird ({before} left, then {await Left()})");
+    }
+
+    await Launch("touch: a finger dragging the bird and letting go", async () =>
+    {
+        var (width, height) = await game.Viewport();
+        var foot = Position(await game.Probe("entity:Slingshot"));
+        var camera = Position(await game.Probe("entity:Main Camera"));
+        var scale = height / 16;
+        var (x, y) = (width / 2 + (foot.X - camera.X) * scale, height / 2 - (foot.Y + 1.6 - camera.Y) * scale);
+        await game.Drag(x, y, x, y + 1.1 * scale);
+    });
+    await Launch("controller: its stick pulling the slingshot and A", async () =>
+    {
+        await game.Pad(0, 1);
+        await Task.Delay(350);
+        await game.Pad(0, 0, pressA: true);
+        await Task.Delay(150);
+        await game.Pad(null);
+    });
+
+    await Collapse("keys: the arrows pulling the slingshot back and Space", "the first level's", 500, 250);
+
+    // The biggest collapse, the third level's (opened straight away), knocked down with the keys.
+    await game.Evaluate("location.search = '?scene=Level3'; 'ok'");
+    await Task.Delay(500);
+    await game.Open(reload: true);
+    await WaitFor(game, "scene", scene => scene == "Level3", "the third level didn't open");
+    await Task.Delay(1500);
+    await Collapse("keys", "the third level's", 540, 500);
+
+    // The keys pull the slingshot back (left, then down, held so long) and Space lets go; the steps of the collapse that follows
+    // must take less than a frame on average.
+    async Task Collapse(string how, string which, int left, int down)
+    {
+        await Launch(how, async () =>
+        {
+            await game.Hold("ArrowLeft", left);
+            await game.Hold("ArrowDown", down);
+            await game.Probe("steps");
+            await game.Press("Space");
+        });
+        await Task.Delay(4000);
+        var steps = (await game.Probe("steps")).Split('|');
+        var (count, mean, worst) = (int.Parse(steps[0], CultureInfo.InvariantCulture), double.Parse(steps[1], CultureInfo.InvariantCulture), double.Parse(steps[2], CultureInfo.InvariantCulture));
+        if (count < 10 || mean > 1000.0 / 60)
+            throw new CheckFailed($"{which} collapse's steps took {mean:0.0} ms on average ({count} steps, the slowest frame's {worst:0.0} ms a step), more than a frame");
+        Console.WriteLine($"  steps: {which} collapse's {count} steps took {mean:0.00} ms on average, the slowest frame's {worst:0.00} ms a step");
+    }
 }
 
 // BunnyMark's Space starts its run again, back to its first hundred bunnies: fewer than it had once it's added more, or
@@ -1556,10 +1639,29 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
         }
     }
 
-    // A controller in the standard layout with its left stick at (stickX, 0), as if plugged in; null unplugs it.
-    public async Task Pad(double? stickX) => await Evaluate(stickX is not { } x ? "globalThis.__griffPad = null; 'ok'"
-        : "globalThis.__griffPad = { connected: true, mapping: 'standard', axes: [" + x.ToString(CultureInfo.InvariantCulture) + ", 0, 0, 0], " +
-          "buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }; 'ok'");
+    // A controller in the standard layout with its left stick at (stickX, stickY) (down positive, as browsers have it) and A
+    // held with `pressA`, as if plugged in; null unplugs it.
+    public async Task Pad(double? stickX, double stickY = 0, bool pressA = false) => await Evaluate(stickX is not { } x ? "globalThis.__griffPad = null; 'ok'"
+        : "globalThis.__griffPad = { connected: true, mapping: 'standard', axes: [" + x.ToString(CultureInfo.InvariantCulture) + ", " +
+          stickY.ToString(CultureInfo.InvariantCulture) + ", 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: " +
+          (pressA ? "i === 0" : "false") + ", value: " + (pressA ? "i === 0 ? 1 : 0" : "0") + " })) }; 'ok'");
+
+    // A finger pressed at (x, y), CSS pixels from the page's top left, dragged to (toX, toY) over a few moves and lifted.
+    public async Task Drag(double x, double y, double toX, double toY)
+    {
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = true, ["maxTouchPoints"] = 1 });
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchStart", ["touchPoints"] = new JsonArray(new JsonObject { ["x"] = x, ["y"] = y }) });
+        for (var i = 1; i <= 8; i++)
+        {
+            await Task.Delay(40);
+            var point = new JsonObject { ["x"] = x + (toX - x) * i / 8, ["y"] = y + (toY - y) * i / 8 };
+            await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchMove", ["touchPoints"] = new JsonArray(point) });
+        }
+
+        await Task.Delay(100);
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    }
 
     private async Task Key(string type, string code, int virtualKey) => await cdp.SendAsync("Input.dispatchKeyEvent", new JsonObject
     {

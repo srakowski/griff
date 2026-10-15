@@ -263,7 +263,7 @@ internal static class PinballParts
     internal const float PivotY = -6.5f;
     internal const float PivotX = Middle - 2.025f;
 
-    private static readonly Color Chrome = Color.FromBytes(0xA8, 0xB4, 0xC8);
+    internal static readonly Color Chrome = Color.FromBytes(0xA8, 0xB4, 0xC8);
 
     /// <summary>
     /// What a new piece goes inside, given what's picked: the picked entity or the nearest it's inside that isn't a piece
@@ -301,11 +301,11 @@ internal static class PinballParts
                      Wall("Top Wall", new Vector2(Left - 0.4f, 9.2f), new Vector2(Right + 0.4f, 9.2f), 0.4f),
                      Wall("Top Left Corner", new Vector2(Left, 7.2f), new Vector2(Left + 1.8f, 9), 0.4f),
                      Wall("Top Right Corner", new Vector2(Right - 1.8f, 9), new Vector2(Right, 7.2f), 0.4f),
-                     Wall("Lane Divider", new Vector2(Divider, -9.6f), new Vector2(Divider, 5), 0.3f),
+                     Post("Lane Divider", Divider, -9.6f, 5, 0.3f),
                      Wall("Left Guide", new Vector2(Left, -4.4f), new Vector2(PivotX - 0.45f, PivotY + 0.4f), 0.25f),
                      Wall("Right Guide", new Vector2(Divider - 0.15f, -4.4f), new Vector2(2 * Middle - PivotX + 0.45f, PivotY + 0.4f), 0.25f),
-                     Wall("Post", new Vector2(-1.8f, 6.9f), new Vector2(-1.8f, 7.9f), 0.2f),
-                     Wall("Post", new Vector2(0.4f, 6.9f), new Vector2(0.4f, 7.9f), 0.2f),
+                     Post("Post", -1.8f, 6.9f, 7.9f, 0.2f),
+                     Post("Post", 0.4f, 6.9f, 7.9f, 0.2f),
                  })
             Put(walls, wall);
         yield return walls;
@@ -357,6 +357,20 @@ internal static class PinballParts
     {
         parent.ChildList.Add(child);
         child.Parent = parent;
+    }
+
+    // An upright wall `thick` across from `bottom` up to `top`, its top end rounded (a circle inside it, drawn with `image`) so
+    // a ball can't come to rest on it: it rolls off one side or the other.
+    internal static Entity Post(string name, float x, float bottom, float top, float thick, string image = PinballArt.Light)
+    {
+        var post = Wall(name, new Vector2(x, bottom), new Vector2(x, top - thick), thick);
+        var cap = new Entity("Cap");
+        cap.Transform.Position = new Vector3(0, (top - bottom) / 2, 0);
+        cap.AddComponent<CircleCollider>().Radius = thick / 2;
+        var sprite = cap.AddComponent<Sprite>();
+        (sprite.Image, sprite.Size, sprite.Tint) = (image, new Vector2(thick), Chrome);
+        Put(post, cap);
+        return post;
     }
 
     // A wall from one point to another, `thick` across, in chrome.

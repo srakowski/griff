@@ -245,20 +245,8 @@ internal sealed class PinballTemplate : ProjectTemplate
     private const float KickerX = -2.9f;
     private const float SkywayWall = 2.7f;
 
-    // An upright wall `thick` across from `bottom` up to `top`, its top end rounded (a circle inside it) so a ball can't come
-    // to rest on it: it rolls off one side or the other.
-    private static Entity Post(string name, float x, float bottom, float top, float thick)
-    {
-        var post = Wall(name, new Vector2(x, bottom), new Vector2(x, top - thick), thick);
-        var cap = new Entity("Cap");
-        cap.Transform.Position = new Vector3(0, (top - bottom) / 2, 0);
-        var round = cap.AddComponent<CircleCollider>();
-        round.Radius = thick / 2;
-        var sprite = cap.AddComponent<Sprite>();
-        (sprite.Image, sprite.Size, sprite.Tint) = (MidwayArt.Insert, new Vector2(thick), Chrome);
-        Put(post, cap);
-        return post;
-    }
+    private static Entity Post(string name, float x, float bottom, float top, float thick) =>
+        PinballParts.Post(name, x, bottom, top, thick, MidwayArt.Insert);
 
     private static readonly Color Chrome = Color.FromBytes(0xA8, 0xB4, 0xC8);
 

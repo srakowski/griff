@@ -784,6 +784,36 @@ public sealed class PinballTests
         Assert.Equal(table, ball.Parent);
     }
 
+    [Theory]
+    [InlineData(0.03f)]
+    [InlineData(-0.03f)]
+    public void A_ball_dropped_on_the_top_of_an_upright_wall_of_the_preset_rolls_off_it(float offset)
+    {
+        var table = Table(_scene);
+        var walls = Named(_scene, "Walls");
+        var uprights = walls.Children.Where(w => w.Children.Any(c => c.Name == "Cap")).ToList();
+        Assert.Equal(["Lane Divider", "Post", "Post"], uprights.Select(w => w.Name).Order());
+
+        foreach (var wall in uprights)
+        {
+            var cap = wall.Children.Single(c => c.Name == "Cap");
+            var top = cap.Transform.WorldPosition.Y + cap.GetComponent<CircleCollider>()!.Radius;
+            var x = cap.Transform.WorldPosition.X + offset;
+            var ball = AddBall(new Vector2(x, top + 0.8f));
+            Run(4);
+
+            // Off it and down (as far as the drain, which takes it out of the scene), not resting on its top.
+            if (ball.Entity!.Scene is null)
+                continue;
+            var at = At(ball.Entity!);
+            Assert.True(at.Y < top - 0.5f, $"The ball rests on {wall.Name} at {at} (top {top}).");
+            _scene.Remove(ball.Entity!);
+            Run(0.1f);
+        }
+
+        Assert.NotNull(table);
+    }
+
     // ----- To the bit, rewinds, network games and garbage -----
 
     private static Scene Played()

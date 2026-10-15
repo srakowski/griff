@@ -8,7 +8,8 @@ namespace Griff.Editor.Diagnostics.Demo;
 
 /// <summary>
 /// Real mouse and keyboard input for the guided demo: the cursor glides to where it's going and clicks, keys are
-/// pressed and typed through SendInput, so the editor reacts exactly as it would to a person.
+/// pressed and typed through SendInput, so the editor reacts exactly as it would to a person. None of it is sent unless
+/// the editor is in front (<see cref="DemoFocus"/>).
 /// </summary>
 internal sealed class DemoInput(DemoOverlay overlay, double speed)
 {
@@ -328,7 +329,18 @@ internal sealed class DemoInput(DemoOverlay overlay, double speed)
         };
     }
 
-    private static void Send(params INPUT[] inputs) => _ = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    // Every press, typed character, click, scroll and nudge goes only to the demo's own editor (see DemoFocus); letting
+    // go of a key or a button is always sent, so nothing is left held down.
+    private static void Send(params INPUT[] inputs)
+    {
+        if (inputs.Any(Presses))
+            DemoFocus.EnsureInFront(click: inputs.Any(i => i.type == InputMouse && (i.u.mi.dwFlags & (LeftDown | RightDown | Wheel)) != 0));
+        _ = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    }
+
+    private static bool Presses(INPUT input) => input.type == InputKeyboard
+        ? (input.u.ki.dwFlags & KeyRelease) == 0
+        : (input.u.mi.dwFlags & (LeftDown | RightDown | Wheel | Move)) != 0;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

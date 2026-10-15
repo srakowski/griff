@@ -91,5 +91,45 @@ public sealed class DemoSafetyTests
             }
         }, timeout: TimeSpan.FromMinutes(1));
     }
+
+    // The focus guard: a demo's keys and clicks go only to its own editor.
+    private const int Editor = 1, Chat = 2;
+
+    [Fact]
+    public void Input_goes_when_the_editor_is_in_front_without_bringing_it_there()
+    {
+        var brought = 0;
+        Assert.Null(DemoFocus.Decide(() => (Editor, "Griff"), () => ++brought > 0, p => p == Editor));
+        Assert.Equal(0, brought);
+    }
+
+    [Fact]
+    public void Another_window_in_front_is_put_behind_the_editor_once_and_input_goes()
+    {
+        var front = (Process: Chat, Title: "Chat");
+        var brought = 0;
+        Assert.Null(DemoFocus.Decide(() => front, () =>
+        {
+            brought++;
+            front = (Editor, "Griff");
+            return true;
+        }, p => p == Editor));
+        Assert.Equal(1, brought);
+    }
+
+    [Fact]
+    public void An_editor_that_cannot_be_brought_to_the_front_stops_the_demo_naming_the_window_in_front()
+    {
+        var brought = 0;
+        var refusal = DemoFocus.Decide(() => (Chat, "Claude"), () => ++brought < 0, p => p == Editor);
+        Assert.Equal("the editor isn't in front (Claude); no input sent", refusal);
+        Assert.Equal(1, brought);
+    }
+
+    [Fact]
+    public void No_window_in_front_is_not_the_editor()
+    {
+        Assert.Equal("the editor isn't in front (no window); no input sent", DemoFocus.Decide(() => (0, "no window"), () => false, p => p == Editor));
+    }
 }
 #endif

@@ -140,6 +140,15 @@ The rest of the mashup work, on top of the foundations before the genre blocks.
 - [ ] Add a kata runner that builds a 20 Games Challenge clone (start with Pong) and records what it needed: no-code components, lines of script, and what was missing.
 - [ ] Add Breakout, Flappy Bird and Space Invaders to the kata runner.
 
+### Game design (dead last)
+
+At the user's request (2026-10-14), after everything else: tools for designing and planning the game inside Griff,
+so a jam team's design, plan and game live in one project and agents can read the design for context.
+
+- [ ] Add a game design document in one go: a Design page in the project (a text file in git) with sections a template fills in (the pitch in a sentence, pillars, the core loop, mechanics, controls, characters, story, levels, art and sound direction, scope for the jam), each section able to link to the project's scenes, prefabs, tables and scripts, which show their live status (a link to something deleted is flagged); new projects start with one, and agents read and write it through the MCP so they build what it says.
+- [ ] Add planning in one go: a board of tasks (to do, doing, done) in the project, each able to link to a design section and to the assets it touches, with owners for a team, a jam clock counting down to the deadline with milestones (playable, content-complete, polish, submit), and a scope check that compares what's planned with the time left; agents can pick up and finish tasks through the MCP.
+- [ ] Add design diagrams in one go: a game-flow map drawn from the project itself (scenes and the doors, buttons and triggers between them, menus and endings), a core-loop diagram drawn by hand on a canvas, and a mood board of reference images and notes, all kept in the project.
+
 ## Done
 
 - [x] Prove a web export: the smallest build that draws a sprite and reads input in a browser. (2026-10-14)

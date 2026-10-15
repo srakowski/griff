@@ -99,6 +99,23 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 - [ ] Add fighting moves: blocking, hitstun, an input buffer and special-move inputs like quarter circles.
 - [ ] Add a Fighter template with local versus play.
 
+### Field editors
+
+At the user's request (2026-10-14), after the genres: audit every field of every component and give each one that
+asks for anything like code a custom editor that makes it a delight. "Like code" means typing a syntax or names from
+memory: lines such as `Health.Max = Health`, lists of names or layers, tile strings and maps, point and path lists,
+dice and formulas, message names, port names, colors or vectors as text, keyframes, curves, timings, input bindings.
+Plain values (a speed, a toggle, a trigger's own fields) stay as they are. Each item audits its components (scripts'
+fields count too, through the same projection), writes what it found and what each field now gets into the commit,
+and builds every affordance it found a need for, in the Inspector or the Scene view as fits (pickers listing what
+exists, visual editors, drag handles, builders for lists and maps, live previews), with undo, and with the same
+choices reaching agents through the MCP.
+
+- [ ] Give the core components' fields editors in one go: Basics, Rendering, Physics, Movement, Player, Enemies, Combat, Level and Audio.
+- [ ] Give the gameplay and UI components' fields editors in one go: Gameplay, UI, Story (dialogue, flags, choices), Wiring, Data and Multiplayer.
+- [ ] Give the genre components' fields editors in one go: Arcade, Strategy, First Person, Blocks, Contraptions and every genre module added since (puzzles, tactics, roguelike, physics games, cards, adventures, visual novels, rhythm, fighting).
+- [ ] Keep it that way in one go: an architecture test that fails when a component field that takes names, lists, paths, syntax or structured text has neither a custom editor nor an explicit mark that plain text is right for it, and the Inspector's generic editors improved for whatever is left (lists, dictionaries, vectors, colors, enums with many values), so a new component or script field can't land needing code.
+
 ### 3D and VR
 
 - [ ] Add a 3D renderer: meshes and a perspective camera with depth.

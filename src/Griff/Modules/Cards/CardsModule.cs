@@ -4,8 +4,9 @@ namespace Griff.Modules.Cards;
 
 /// <summary>
 /// Card games: cards (<see cref="Card"/>) drawn from decks (<see cref="Deck"/>) into hands (<see cref="Hand"/>) and played
-/// by dragging them onto play zones (<see cref="PlayZone"/>), shuffled, discarded and sliding between them; and Create
-/// Deck, Create Play Zone and Create Card in the Entity menu.
+/// by dragging them onto play zones (<see cref="PlayZone"/>), shuffled, discarded and sliding between them; the Cards
+/// template, a duel against the computer made from a table of cards; and Create Deck, Create Play Zone and Create Card in
+/// the Entity menu.
 /// </summary>
 public sealed class CardsModule : GameModule
 {

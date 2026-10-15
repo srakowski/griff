@@ -88,6 +88,26 @@ internal static class CardLook
 
         if (!string.IsNullOrWhiteSpace(card.Kind))
             Text(drawing, card, world, card.Kind.Trim(), new Vector2(0, -h / 2 + 0.17f * unit), 0.13f * unit, ink with { A = ink.A * 0.6f }, TextAlign.Center, font);
+
+        if (card.Entity?.GetComponent<Health>() is { } health)
+        {
+            // A creature's health in a red gem in the bottom-right corner, its number pale while it's hurt.
+            var gem = new Vector2(w / 2 - 0.24f * unit, -h / 2 + 0.24f * unit);
+            Diamond(drawing, card, world, gem, 0.46f * unit, drawing.Tint(card, Scale(LifeColor, 0.6f)));
+            Diamond(drawing, card, world, gem, 0.38f * unit, drawing.Tint(card, LifeColor));
+            Text(drawing, card, world, card.LifeText(health.Current), gem, 0.24f * unit,
+                drawing.Tint(card, health.Current < health.Max ? Color.FromBytes(0xFF, 0xD8, 0x9A) : Color.White), TextAlign.Center, font);
+        }
+    }
+
+    /// <summary>The color of a creature card's health.</summary>
+    public static readonly Color LifeColor = Color.FromBytes(0xC8, 0x34, 0x3C);
+
+    /// <summary>A card lit all over in <paramref name="color"/>: hurt, it flashes.</summary>
+    public static void Flash(Drawing drawing, Card card, Matrix4x4 world, Color color)
+    {
+        var size = card.Size;
+        Rect(drawing, world, Vector2.Zero, new Vector2(Math.Abs(size.X), Math.Abs(size.Y)), drawing.Tint(card, color));
     }
 
     /// <summary>A card's back: <paramref name="image"/> over it, or a plain back of <paramref name="color"/> with a lighter frame.</summary>

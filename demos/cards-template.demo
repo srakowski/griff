@@ -1,0 +1,64 @@
+title: The Cards template
+intro: A card duel against the computer with no code: a deck made from a table of creatures and spells, mana that grows every turn, and a lich that plays its hand against you.
+project: Cards | Card Duel
+
+chapter: A card set in a table | Creatures and spells
+say: The Cards template is a duel against the computer, and every card in it is a row of one table.
+menu: Data > Open Table > Cards
+expectcell: Orc > Health = 6
+explain: tables:cell:Orc > Prefab | Creatures and spells | Each row names the prefab its cards are made from: a creature, with health, that stays on the table and strikes as each of its side's turns starts, or a spell that does what it does and goes to the discard pile.
+expectcell: Fireball > Damage = 1d4+3
+explain: tables:cell:Fireball > Damage | Effects and costs as columns | What it costs, its damage or healing, what it's aimed at, its picture, its sound and how many go in the deck are columns too. Change a cell and the card changes.
+
+chapter: Your turn | Drag, aim and end the turn
+scene: Duel
+select: Player Row
+explain: field:PlayZone.DiscardAfter | Discard After | Your side of the table. A spell played here goes on to the discard pile a moment later; creatures stay.
+say: For this demo the deck isn't shuffled and both sides start with plenty of mana, so it plays the same every time.
+select: Deck
+set: Deck.ShuffleOnStart = false
+select: Player Hand
+set: Hand.MaxMana = 9
+select: Rival Hand
+set: Hand.MaxMana = 9
+deselect
+play
+wait: 1.5
+expectvalue: Player Hand.Hand.Mana = 10
+explain: game | Your hand | You go first. Your mana is the blue gem beside your hand, and each card's cost is in its corner.
+gamedrag: 0.3, -4.4 > Player Row
+wait: 1.2
+expectvalue: Player Row.PlayZone.Count = 1
+expectvalue: Player Hand.Hand.Mana = 5
+say: The orc goes on your side of the table. It strikes the lich at the start of each of your turns.
+gamedrag: 0.9, -4.4 > Lich
+wait: 1.5
+expectvalue: Player Row.PlayZone.Count = 1
+expectvalue: Player Hand.Hand.Mana = 1
+explain: game | A spell, aimed | Drop a spell on what it should hit, or let it go on the table and aim it with the dotted line. The fireball burns the lich and goes to the discard pile.
+
+chapter: The lich's turn | The computer plays its hand
+tap: Tab
+wait: 0.4
+explain: game | Its turn | Tab ends your turn. The computer thinks, lifts the card it's going to play, aims it, and plays it: a meteor on your orc, which it can finish off, then a fireball at you.
+wait: 4.5
+expectvalue: Turns.TurnOrder.Current = Player
+expectvalue: Player Row.PlayZone.Count = 0
+say: What it did is written above its side of the table. Then it's your turn again, with a card drawn.
+tap: Right
+tap: Space
+tap: Space
+wait: 0.6
+tap: Space
+tap: Space
+wait: 1.2
+expectvalue: Player Row.PlayZone.Count = 2
+say: The keys and a gamepad play too: left and right pick a card, and Space takes it up and plays it. A knight and a cleric.
+tap: Tab
+wait: 6
+expectvalue: Turns.TurnOrder.Current = Player
+expectvalue: Rival Row.PlayZone.Count = 2
+expectvalue: Player Hand.Hand.Said = Cleric: +2 health to Mage.
+explain: game | Creatures at work | As your turn starts, your knight strikes the lich and your cleric heals you. Bring the lich to nothing for Victory.
+stop
+say: That's the Cards template: a whole duel made from a table of cards, with no code, ready to change.

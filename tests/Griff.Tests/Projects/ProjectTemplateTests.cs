@@ -123,6 +123,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Strategy")]
     [InlineData("Shooter")]
     [InlineData("RpgStats")]
+    [InlineData("Cards")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -810,6 +811,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Roguelike")]
     [InlineData("Tactics")]
     [InlineData("RpgStats")]
+    [InlineData("Cards")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -823,6 +825,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Crypt");
         if (template is "Tactics" or "RpgStats")
             scene = GameLoader.LoadScene(project, registry, "Battle");
+        if (template == "Cards")
+            scene = GameLoader.LoadScene(project, registry, "Duel");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -842,6 +846,7 @@ public sealed class ProjectTemplateTests : IDisposable
         string Moving() => game.Find("Player") is { } player ? player.Transform.Position.ToString()
             : game.Find("Hero")?.GetComponent<Griff.Modules.Battles.Battler>() is { } hero ? $"{hero.Said} {hero.Mana} {hero.Items}"
             : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
+            : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();

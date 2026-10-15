@@ -18,9 +18,10 @@ internal sealed partial class CardsSystem
     // ----- Effects -----
 
     // A card's effects that happen `when`, done for `hand` (the player who played it, drew it, or had it), at `chosen` for
-    // those that choose. Returns what they did, for the hand's Said.
+    // those that choose. Returns what they did, for the hand's Said; FirstTarget is then the first thing they were done to.
     private string RunEffects(Card card, Hand? hand, CardWhen when, Entity? chosen)
     {
+        FirstTarget = null;
         var parts = new List<string>();
         var components = card.Entity!.Components.ToList();
         foreach (var component in components)
@@ -32,11 +33,15 @@ internal sealed partial class CardsSystem
         return string.Join(", ", parts);
     }
 
+    // The first thing the effects RunEffects last ran were done to, or null.
+    private Entity? FirstTarget { get; set; }
+
     private void Apply(CardEffect effect, Card card, Hand? hand, Entity? chosen, List<string> said)
     {
         var targets = new List<Entity>();
         UnitsFor(effect.Target, hand, chosen, targets);
         var source = card.Entity!;
+        FirstTarget ??= targets.Count > 0 ? targets[0] : null;
 
         if (effect.Damage > 0 || !string.IsNullOrWhiteSpace(effect.DamageRoll))
         {

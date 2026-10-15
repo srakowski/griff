@@ -125,6 +125,7 @@ internal sealed partial class CardsSystem
             (card.BackImage, card.BackColor) = home is null ? (null, CardLook.DefaultBack) : (home.Back, home.BackColor);
             card.HiddenHere = zone is Hand held && HiddenHere(held);
             card.Unaffordable = zone is Hand from && card.Cost > from.Mana;
+            Feel(card, seconds);
         }
 
         if (!Game.PausedThisFrame && !Game.LocalInputBlocked && Game.TopPanel is null)
@@ -133,6 +134,32 @@ internal sealed partial class CardsSystem
             LetGo();
 
         Show(zones, hands, cards, seconds);
+    }
+
+    // On this machine: a creature that strikes lunges at what it strikes and back, and one that's hurt flashes and shakes.
+    private void Feel(Card card, float seconds)
+    {
+        card.Striking = Math.Max(0, card.Striking - seconds);
+        card.Hurting = Math.Max(0, card.Hurting - seconds);
+        if (card.Strikes != card.StrikesSeen)
+        {
+            if (card.StrikesSeen >= 0)
+            {
+                var from = Center(card.Entity!);
+                var to = card.StruckAt is { Length: > 0 } name && Scene.FindNamed(name) is { } target ? Center(target) : from;
+                var way = to - from;
+                card.Lunge = way.LengthSquared() > 0.01f ? Vector2.Normalize(way) * MathF.Min(0.7f, way.Length() * 0.4f) : new Vector2(0, 0.4f);
+                card.Striking = Card.StrikeTime;
+            }
+
+            card.StrikesSeen = card.Strikes;
+        }
+
+        if (card.Entity!.GetComponent<Health>() is not { } health)
+            return;
+        if (health.Current < card.HealthSeen && health.FlashOnHit && card.Zone is PlayZone)
+            card.Hurting = Card.HurtTime;
+        card.HealthSeen = health.Current;
     }
 
     // A hidden hand of a side this machine's player isn't on (online); at one screen, of a side the computer plays, or with

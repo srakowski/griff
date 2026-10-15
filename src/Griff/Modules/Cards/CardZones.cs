@@ -112,9 +112,19 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
     [Names(NameKind.Table)]
     public string? Table { get; set; }
 
-    /// <summary>The prefab each card made from the table is a copy of, e.g. "Card": its look and parts. Empty makes plain cards.</summary>
+    /// <summary>
+    /// The prefab each card made from the table is a copy of, e.g. "Card": its look and parts. Empty makes plain cards. A row
+    /// can name its own in the <see cref="PrefabColumn"/>.
+    /// </summary>
     [Names(NameKind.Prefab)]
     public string? Prefab { get; set; }
+
+    /// <summary>
+    /// A column of the table naming the prefab each row's cards are a copy of, e.g. "Creature" for a card with a Health and
+    /// "Spell" for one without, so one table holds cards of several makes. A row with it empty (or a table without it) uses
+    /// <see cref="Prefab"/>.
+    /// </summary>
+    public string? PrefabColumn { get; set; } = "Prefab";
 
     /// <summary>A whole-number column of the table saying how many copies of each row's card go in it. A row without one gets one.</summary>
     public string? CountColumn { get; set; } = "Count";
@@ -430,7 +440,10 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     /// <summary>Cards still to draw, one a tenth of a second (Draw asks for them). Saved with the scene, so a rewind keeps them.</summary>
     public int ToDraw { get; set; }
 
-    /// <summary>What was last played from it, e.g. "Red plays Fireball on Blue Hero: 3 damage." The game sets it. Read as the "Said" output.</summary>
+    /// <summary>
+    /// What was last played from it, e.g. "Red plays Fireball on Blue Hero: 3 damage.", or what one of its cards on the table did
+    /// as its side's turn began ("Wolf: 2 damage to Blue Hero."). The game sets it. Read as the "Said" output.
+    /// </summary>
     [Output]
     public string? Said { get; set; }
 
@@ -636,6 +649,13 @@ public sealed class PlayZone : CardZone, IDrawable, IPlaytestReport
     /// <summary>The deck its Discard action puts its cards on, by name. Empty uses the scene's first face-up deck.</summary>
     [EntityName]
     public string? DiscardPile { get; set; }
+
+    /// <summary>
+    /// Seconds a card played onto it stays once it has slid into place, before it goes on to its <see cref="DiscardPile"/>:
+    /// a spell, cast and gone. Cards that stay on the table to do something (a creature, with a Health, or a card with a
+    /// Card Effect that acts each turn) stay. 0 keeps every card until its Discard action.
+    /// </summary>
+    public float DiscardAfter { get; set; }
 
     /// <summary>How big it is, in world units: cards dropped inside it are played onto it.</summary>
     [Group("Look")]

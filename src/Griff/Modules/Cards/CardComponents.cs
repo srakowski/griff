@@ -98,6 +98,14 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     [EntityName]
     public string? PlayedBy { get; set; }
 
+    /// <summary>
+    /// Seconds it has lain in its place on a play zone with a Discard After, which goes on to the zone's discard pile once
+    /// it's that long: a spell, cast and gone. Set by the game, and saved with the scene so a rewind keeps it.
+    /// </summary>
+    public float OnTableFor { get; set; }
+
+    public override bool Uses(string property) => property != nameof(OnTableFor);
+
     /// <summary>The place it's in (the deck, hand or play zone it's inside), or null.</summary>
     [DoNotSerialize]
     public CardZone? Zone => Entity?.Parent?.GetComponent<CardZone>();
@@ -209,15 +217,50 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     // Showing its back (here): face down, or hidden from this machine's player.
     internal bool ShowsBack => !FaceUp || HiddenHere;
 
+    // Each time its effects go off by themselves on the table (a creature striking as its side's turn starts), and at what
+    // (by name): sent, so every player sees it strike.
+    [Sent]
+    internal int Strikes { get; set; }
+
+    [Sent]
+    internal string? StruckAt { get; set; }
+
+    // On this machine: the strikes and the health seen so far, seconds left of a strike's lunge (and which way, how far) and
+    // of a hurt flash.
+    internal int StrikesSeen { get; set; } = -1;
+    internal float HealthSeen { get; set; } = float.NaN;
+    internal float Striking { get; set; }
+    internal Vector2 Lunge { get; set; }
+    internal float Hurting { get; set; }
+
+    /// <summary>Seconds a strike's lunge takes, there and back.</summary>
+    internal const float StrikeTime = 0.4f;
+
+    /// <summary>Seconds a hurt card flashes and shakes.</summary>
+    internal const float HurtTime = 0.35f;
+
+    // Its health as its corner shows it, worked out again only when it changes.
+    internal string LifeText(float health)
+    {
+        var shown = MathF.Max(0, MathF.Round(health));
+        if (shown != _lifeFor || _life is null)
+            (_lifeFor, _life) = (shown, shown.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return _life;
+    }
+
+    private float _lifeFor = float.NaN;
+    private string? _life;
+
     // ----- Drawing -----
 
     int? IDrawable.DrawOrder => 5;
 
     int IDrawable.DrawStep => DrawSteps.Sprite + 10;
 
-    bool IDrawEffect.DrawsOnTop => Travelling || Dragged || Lift.Value > 0.01f || Lift.Was > 0.01f;
+    bool IDrawEffect.DrawsOnTop => Travelling || Dragged || Lift.Value > 0.01f || Lift.Was > 0.01f || Striking > 0;
 
-    // Lifted out of its hand: raised, turned upright and drawn bigger about its middle; dragged, drawn where the mouse has it.
+    // Lifted out of its hand: raised, turned upright and drawn bigger about its middle; dragged, drawn where the mouse has it;
+    // striking, lunging at what it strikes and back; hurt, shaking.
     Matrix4x4? IDrawEffect.DrawTransform
     {
         get
@@ -225,6 +268,10 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
             var blend = StepBlend.For(Entity!);
             var lift = blend.Of(Lift);
             var offset = blend.Of(Offset);
+            if (Striking > 0)
+                offset += Lunge * MathF.Sin(MathF.PI * (1 - Striking / StrikeTime));
+            if (Hurting > 0)
+                offset.X += MathF.Sin(Hurting * 70) * 0.08f * (Hurting / HurtTime);
             if (lift <= 0.0005f && offset == Vector2.Zero)
                 return null;
             var world = Entity!.Transform.WorldMatrix;
@@ -251,9 +298,13 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
             CardLook.Back(drawing, this, world, Size, BackImage, BackColor);
         else if (entity.GetComponent<Sprite>() is null)
             CardLook.Face(drawing, this, world);
+        if (Hurting > 0 && !ShowsBack)
+            CardLook.Flash(drawing, this, world, HurtFlash with { A = 0.7f * Hurting / HurtTime });
         if (Highlight.A > 0)
             CardLook.Outline(drawing, this, world, Size + new Vector2(0.08f), 0.06f, drawing.Tint(this, Highlight));
     }
+
+    private static readonly Color HurtFlash = Color.FromBytes(0xFF, 0x5A, 0x4A);
 
     // Its rules text in lines that fit across it at `size`, worked out again only when the text or size changes.
     internal string[] Lines(float size, float width)

@@ -58,7 +58,7 @@ Visual novels have a page of their own: a **Stage** with backgrounds and the cha
 
 ## Card games
 
-Card games have pages of their own: decks, hands and play zones, drawing, shuffling, discarding and playing cards by dragging them, cards that deal damage, heal, draw and cost mana, and a computer that plays its hand against you, with no code, are in [Card games](/docs/cards/). They're built to mix with the rest: a **Hand** takes the player's input only while it has focus, so a card game can sit inside another game, a card's effect can **Do** any action in the scene, and decks, hands and play zones name their actions (**Draw**, **Shuffle**, **Discard**, **Gain Mana**) for triggers and wires, and their outputs (the cards in a deck, in a hand, played) for counters, bars and texts.
+Card games have pages of their own: decks, hands and play zones, drawing, shuffling, discarding and playing cards by dragging them, cards that deal damage, heal, draw and cost mana, and a computer that plays its hand against you, with no code, are in [Card games](/docs/cards/), and the **Cards** template is a whole duel against the computer made from a table of cards. They're built to mix with the rest: a **Hand** takes the player's input only while it has focus, so a card game can sit inside another game, a card's effect can **Do** any action in the scene, and decks, hands and play zones name their actions (**Draw**, **Shuffle**, **Discard**, **Gain Mana**) for triggers and wires, and their outputs (the cards in a deck, in a hand, played) for counters, bars and texts.
 
 ## Point-and-click adventures
 

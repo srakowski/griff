@@ -182,4 +182,17 @@ export const games = {
 			['Click', 'any of those, on its button'],
 		],
 	},
+	Cards: {
+		tagline: 'A card duel against the computer: creatures, spells and mana that grows every turn.',
+		about:
+			'Duel the lich: spend mana that grows each turn on creatures that strike every turn and spells that burn, heal and draw, and bring its health to nothing before it does the same to you. Every card is a row of a table, with no code.',
+		controls: [
+			['Drag a card', 'onto your side of the table to play it'],
+			['Tap a card, then the table', 'play it on a touch screen'],
+			['Drop a spell on what it hits', 'or aim it after with the dotted line'],
+			['Arrow keys and Space', 'pick a card, play it and aim it'],
+			['Shift', 'put a card back'],
+			['Tab', 'end your turn'],
+		],
+	},
 };

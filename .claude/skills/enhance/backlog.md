@@ -51,7 +51,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 
 ### Genres: cards, adventures and stories
 
-- [ ] Add a Cards template.
 - [ ] Add an Adventure template: a point-and-click adventure.
 - [ ] Add visual novel save slots, a log of lines already read, skip and auto-advance.
 - [ ] Add a Visual Novel template.
@@ -125,6 +124,9 @@ so a jam team's design, plan and game live in one project and agents can read th
 - [ ] Add design diagrams in one go: a game-flow map drawn from the project itself (scenes and the doors, buttons and triggers between them, menus and endings), a core-loop diagram drawn by hand on a canvas, and a mood board of reference images and notes, all kept in the project.
 
 ## Done
+
+- [x] Add a Cards template. (2026-10-15)
+  - A `Cards` template (`Griff.Modules.Cards.CardsTemplate`): a menu (Play, Quit) and a `Duel` scene, the mage against the computer's lich, one deck made from a `Cards` table of 16 cards (8 creatures, 8 spells; cost, damage or heal, draw, mana, target, color, picture, effect prefab, sound, count and prefab as columns), mana growing to ten, a row each with spells discarded after a moment, Victory and Defeat, art and sounds made in code. Engine: a deck's Prefab Column (a row names its prefab), a play zone's Discard After, a creature card's health gem, hurt flash and strike lunge, and a hand's Said for each-turn effects.
 
 - [x] Add physics puzzler pieces: a slingshot launcher and blocks that break on hard impacts. (2026-10-15)
   - Physics notes each step's hard knocks (`Physics.Impacts`, `Impact(Struck, By, Strength, Point)`, both ways round, once a pair a step, the harder point): for bodies that turn, from the solved contacts that pushed, as the speed they came together at as the step began times their weights shared (a crate of Mass 1 landing flat at 5 hits 5, not split between its corners); for bodies moved the old way, the speed MoveAxis stopped times the shared mass. Closing under 1 a second isn't a knock (resting towers don't count). `Collider.HeldOutIn` keeps a slingshot's held shots out of the step's solids.

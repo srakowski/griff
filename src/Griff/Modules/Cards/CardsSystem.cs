@@ -105,6 +105,12 @@ internal sealed partial class CardsSystem : GameSystem
             }
         }
 
+        foreach (var table in tables)
+        {
+            if (table.DiscardAfter > 0 && Game.Runs(table.Entity!) && !table.Entity!.IsPaused)
+                Expire(table, decks);
+        }
+
         BuryTheDead(tables, decks);
 
         foreach (var zone in zones)
@@ -155,14 +161,17 @@ internal sealed partial class CardsSystem : GameSystem
         }
 
         var countColumn = string.IsNullOrWhiteSpace(deck.CountColumn) ? -1 : table.ColumnIndex(deck.CountColumn);
+        var prefabColumn = string.IsNullOrWhiteSpace(deck.PrefabColumn) ? -1 : table.ColumnIndex(deck.PrefabColumn);
         var index = CardZone.CardsIn(deck.Entity).Count;
         foreach (var row in table.Rows)
         {
             var copies = countColumn >= 0 && !row[countColumn].IsEmpty ? (int)Math.Clamp(row[countColumn].AsWholeNumber, 0, 999) : 1;
+            var prefab = prefabColumn >= 0 && !row[prefabColumn].IsEmpty ? row[prefabColumn].ToString() : deck.Prefab;
             for (var i = 0; i < copies; i++)
             {
-                if (MakeCard(deck, row.Name, where) is not { } entity)
-                    return;
+                // A prefab that won't load makes none of its row's cards (said once in Output).
+                if (MakeCard(prefab, row.Name, where) is not { } entity)
+                    break;
                 var values = entity.GetComponent<TableValues>() ?? entity.AddComponent<TableValues>();
                 (values.Table, values.Row) = (deck.Table!.Trim(), row.Name);
                 var card = entity.GetComponent<Card>()!;
@@ -175,11 +184,12 @@ internal sealed partial class CardsSystem : GameSystem
         }
     }
 
-    // A copy of the deck's card prefab (or a plain card) named after a row, or null (said in Output) if the prefab won't load.
-    private Entity? MakeCard(Deck deck, string name, string where)
+    // A copy of a card prefab (the row's, else the deck's) or a plain card, named after a row, or null (said in Output) if
+    // the prefab won't load.
+    private Entity? MakeCard(string? prefab, string name, string where)
     {
         Entity entity;
-        if (string.IsNullOrWhiteSpace(deck.Prefab))
+        if (string.IsNullOrWhiteSpace(prefab))
         {
             entity = new Entity(name);
         }
@@ -187,11 +197,11 @@ internal sealed partial class CardsSystem : GameSystem
         {
             try
             {
-                entity = Game.PrefabLoader?.Invoke(deck.Prefab.Trim()) ?? throw new InvalidOperationException("this game can't load prefabs");
+                entity = Game.PrefabLoader?.Invoke(prefab.Trim()) ?? throw new InvalidOperationException("this game can't load prefabs");
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException or KeyNotFoundException or ArgumentException)
             {
-                Game.Warn($"{where}: its Prefab \"{deck.Prefab.Trim()}\" won't load ({ex.Message}).");
+                Game.Warn($"{where}: {name}'s prefab \"{prefab.Trim()}\" won't load ({ex.Message}).");
                 return null;
             }
 
@@ -420,8 +430,15 @@ internal sealed partial class CardsSystem : GameSystem
         {
             foreach (var card in CardZone.CardsIn(table.Entity))
             {
-                if (string.Equals(card.PlayedBy?.Trim(), name, StringComparison.Ordinal) && card.Entity!.IsActive)
-                    RunEffects(card, hand, CardWhen.EachTurn, null);
+                if (!string.Equals(card.PlayedBy?.Trim(), name, StringComparison.Ordinal) || !card.Entity!.IsActive)
+                    continue;
+                // It strikes (every player sees it lunge), and its hand says what it did.
+                var did = RunEffects(card, hand, CardWhen.EachTurn, null);
+                if (did.Length == 0)
+                    continue;
+                card.Strikes++;
+                card.StruckAt = FirstTarget is { } struck && struck != card.Entity ? struck.Name : null;
+                hand.Said = $"{card.ShownTitle}: {did}.";
             }
         }
     }
@@ -490,6 +507,35 @@ internal sealed partial class CardsSystem : GameSystem
 
         card.FaceUp = zone.PutsFaceUp;
         card.Resting = false;
+        card.OnTableFor = 0;
+    }
+
+    // The cards on a play zone with a Discard After that have lain there long enough go on to its discard pile; those that
+    // stay to do something (a creature, a card acting each turn) stay.
+    private void Expire(PlayZone table, List<Deck> decks)
+    {
+        var cards = CardZone.CardsIn(table.Entity);
+        foreach (var card in cards)
+        {
+            if (!card.Resting || Stays(card))
+                continue;
+            card.OnTableFor += Time.Delta;
+            if (card.OnTableFor >= table.DiscardAfter && PileOf(table.DiscardPile, decks) is { } pile)
+                Discard(card, pile, HandNamed(card.PlayedBy));
+        }
+    }
+
+    // A card that stays on the table to do something: a creature (with a Health), or one with an effect each turn.
+    private static bool Stays(Card card)
+    {
+        var components = card.Entity!.Components;
+        for (var i = 0; i < components.Count; i++)
+        {
+            if (components[i] is Health or CardEffect { When: CardWhen.EachTurn })
+                return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<ICardPart> PartsOf(Card card) => card.Entity!.Components.OfType<ICardPart>();

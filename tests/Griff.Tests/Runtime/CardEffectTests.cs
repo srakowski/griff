@@ -560,6 +560,132 @@ public sealed class CardEffectTests
         Assert.Equal(17f, On(client, "Blue Hero").GetComponent<Health>()!.Current);
         Assert.Equal("Red plays Zap on Blue Hero: 3 damage to Blue Hero.", On(client, "Red Hand").GetComponent<Hand>()!.Said);
     }
+
+    [Fact]
+    public void A_table_row_can_name_its_own_prefab_so_one_deck_holds_creatures_and_spells()
+    {
+        var table = new Table("Cards",
+            [new TableColumn("Prefab", ColumnType.Prefab), new TableColumn("Health", ColumnType.WholeNumber), new TableColumn("Damage", ColumnType.Dice),
+             new TableColumn("Count", ColumnType.WholeNumber)],
+            [
+                ("Wolf", [TableValue.Of("Creature"), TableValue.Of(3L), TableValue.Of(Dice.Parse("2")), TableValue.Of(2L)]),
+                ("Zap", [TableValue.Empty, TableValue.Empty, TableValue.Of(Dice.Parse("1d4")), TableValue.Of(1L)]),
+                ("Lost", [TableValue.Of("Nowhere"), TableValue.Empty, TableValue.Empty, TableValue.Of(1L)]),
+            ]);
+        _game.Tables = new TableSet([table]);
+        _game.PrefabLoader = name =>
+        {
+            var entity = new Entity(name);
+            entity.AddComponent<Card>();
+            var effect = entity.AddComponent<CardEffect>();
+            if (name == "Creature")
+            {
+                effect.When = CardWhen.EachTurn;
+                entity.AddComponent<Health>();
+                entity.AddComponent<TableValues>().Sets = ["Damage", "Health.Max = Health"];
+            }
+            else if (name != "Spell")
+            {
+                throw new KeyNotFoundException($"no prefab {name}");
+            }
+
+            return entity;
+        };
+        var warnings = new List<string>();
+        _game.Warning += (_, w) => warnings.Add(w);
+        var entity = new Entity("Deck");
+        var deck = entity.AddComponent<Deck>();
+        (deck.Table, deck.Prefab, deck.ShuffleOnStart) = ("Cards", "Spell", false);
+        _scene.Add(entity);
+        Run(Frame);
+
+        // Two wolves from the Creature prefab, with a Health from their row; a zap from the deck's; the lost row's prefab isn't there.
+        Assert.Equal(["Wolf", "Wolf", "Zap"], deck.Cards.Select(c => c.Entity!.Name));
+        var wolf = deck.Cards[0].Entity!;
+        Assert.Equal((3f, CardWhen.EachTurn), (wolf.GetComponent<Health>()!.Max, wolf.GetComponent<CardEffect>()!.When));
+        Assert.Equal("Each turn: deal 2 damage.", deck.Cards[0].ShownText);
+        Assert.Null(deck.Cards[2].Entity!.GetComponent<Health>());
+        Assert.Equal("1d4", deck.Cards[2].Entity!.GetComponent<CardEffect>()!.DamageRoll);
+        Assert.Contains(warnings, w => w.Contains("Lost's prefab \"Nowhere\" won't load", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_zone_with_Discard_After_sends_spells_to_the_discard_pile_while_creatures_and_cards_acting_each_turn_stay()
+    {
+        AddDeck();
+        AddHero("Blue Hero", "Blue", -3);
+        var red = AddHero("Red Hero", "Red", 3);
+        var hand = AddHand("Blue Hand", "Blue", -3.5f);
+        AddHand("Red Hand", "Red", 7);
+        var table = AddZone("Table", 0.5f);
+        table.DiscardAfter = 0.5f;
+        var pile = _scene.Entities.Single(e => e.Name == "Discard Pile").GetComponent<Deck>()!;
+        var bolt = AddCard(hand, "Bolt", effect: e => e.Damage = 3);
+        var wolf = AddCard(hand, "Wolf", effect: e => (e.When, e.Damage) = (CardWhen.EachTurn, 1), life: 2);
+        var totem = AddCard(hand, "Totem", effect: e => (e.When, e.Heal, e.Target) = (CardWhen.EachTurn, 1, CardTarget.Self));
+        Run(0.2f);
+        hand.Play(bolt, table);
+        hand.Play(wolf, table);
+        hand.Play(totem, table);
+        Run(Frame);
+        Assert.Equal(17f, red.Current);
+
+        // It slides into place, lies there half a second (kept with the scene, for a rewind), then goes on.
+        Run(0.5f);
+        Assert.Equal(table, bolt.Zone);
+        Assert.True(bolt.OnTableFor > 0);
+        var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+        Assert.Equal(bolt.OnTableFor, serializer.LoadFromString(serializer.SaveToString(_scene)).Entities.Single(e => e.Name == "Bolt").GetComponent<Card>()!.OnTableFor);
+        Run(0.4f);
+        Assert.Equal(pile, bolt.Zone);
+        Assert.Equal(0, bolt.OnTableFor);
+        Run(2);
+        Assert.Equal([wolf, totem], table.Cards);
+    }
+
+    [Fact]
+    public void A_creature_strikes_as_its_sides_turn_starts_lunging_at_what_it_hits_and_one_hurt_flashes()
+    {
+        var order = AddTurns(computer: "");
+        AddDeck();
+        AddHero("Blue Hero", "Blue", -3);
+        var red = AddHero("Red Hero", "Red", 3);
+        var hand = AddHand("Blue Hand", "Blue", -3.5f);
+        var redHand = AddHand("Red Hand", "Red", 7);
+        var blueRow = AddZone("Blue Row", -0.5f, from: "Blue Hand");
+        var redRow = AddZone("Red Row", 2.5f, from: "Red Hand");
+        var wolf = AddCard(hand, "Wolf", effect: e => (e.When, e.Damage) = (CardWhen.EachTurn, 2), life: 3);
+        var bolt = AddCard(redHand, "Bolt", effect: e => (e.Damage, e.Target) = (1, CardTarget.Chosen));
+        Run(0.2f);
+        hand.Play(wolf, blueRow);
+        Run(0.5f);
+        Assert.Equal(0, wolf.Strikes);
+
+        // Red's turn: its bolt hurts the wolf, which flashes and shakes for a moment.
+        order.EndTurn();
+        Run(Frame * 2);
+        redHand.Play(bolt, redRow, wolf.Entity);
+        Run(Frame * 2);
+        Assert.Equal(2f, wolf.Entity!.GetComponent<Health>()!.Current);
+        Assert.True(wolf.Hurting > 0);
+        Run(Card.HurtTime);
+        Assert.Equal(0, wolf.Hurting);
+
+        // Blue's turn: the wolf strikes Red's hero, lunging at it, and Blue's hand says so.
+        order.EndTurn();
+        Run(Frame * 2);
+        Assert.Equal(18f, red.Current);
+        Assert.Equal((1, "Red Hero"), (wolf.Strikes, wolf.StruckAt));
+        Assert.Equal("Wolf: 2 damage to Red Hero.", hand.Said);
+        Assert.True(wolf.Striking > 0);
+        Assert.True(wolf.Lunge.Y > 0, "toward Red's hero, up the table");
+        Run(Card.StrikeTime);
+        Assert.Equal(0, wolf.Striking);
+
+        // Its health shows in its corner.
+        var drawn = Griff.Rendering.SceneRenderer.Build(_game, 16f / 9).Sprites.Select(d => d.Text).OfType<string>().ToList();
+        Assert.Contains("2", drawn);
+    }
 }
 
 file static class EffectTestExtensions

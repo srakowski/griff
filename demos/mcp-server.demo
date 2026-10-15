@@ -1,7 +1,6 @@
 title: The MCP server
 intro: Agents like Claude Code can drive the editor, and every feature reaches them by itself.
-open: C:\Users\srako\Desktop\Projects\Griff Games\Hollowmere
-scene: Lantern Road
+project: Platformer | Agent Test
 
 chapter: An editor agents can drive | Help > MCP Server
 say: While the editor is open, Griff now runs a Model Context Protocol server on this computer. Agents like Claude Code connect to it and use the editor much as a person does.
@@ -11,16 +10,16 @@ say: The server keeps no list of features. Every menu command is a tool, every c
 chapter: New commands, new tools | File > Set as Start Scene
 say: Two things that only lived in the Assets panel's right click menu are now commands: Open Scene, and Set as Start Scene.
 explain: menu:File | The File menu | Being commands, they're in the File menu with shortcuts, and agents got them as tools, with nobody writing one.
-menu: File > Set as Start Scene > Lantern Road
-say: Its submenu lists every scene, so any of them can be the one the game starts in. Now it's this chapter.
+menu: File > Set as Start Scene > Main
+say: Its submenu lists every scene, so any of them can be the one the game starts in. Picking Main keeps the game starting where the template put it.
 
-chapter: Built through it | Hollowmere, chapter one
-say: To test the server, an agent built this whole level through it: the tiles and art, the sounds and music, the lights, creatures, puzzles, menus and scripts, each placed with a tool call, then playtested by pressing keys in the running game.
+chapter: Built through it | a level built by an agent
+say: To test the server, an agent built whole levels through it: the tiles and art, the sounds and music, the lights, creatures, puzzles, menus and scripts, each placed with a tool call, then playtested by pressing keys in the running game.
 play
 wait: 2
 hold: Right 1.2
 tap: Space
 hold: Right 1
-say: Embers to gather, a lantern that lights the dark, and three zones, each with its own weather, light and music.
+say: Running and jumping work as in any game, and the agent checked each by pressing the same keys.
 hold: Right 1.2
 stop

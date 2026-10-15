@@ -12,7 +12,6 @@ First, at the user's request (2026-10-14): a game playable in a browser comes be
 find out early what the browser needs; the export of whole games follows once scripts, text and drawing don't depend
 on Windows.
 
-- [ ] Compile a project's scripts into the exported game at export time, instead of loading them at runtime.
 - [ ] Rasterize text without WPF.
 - [ ] Put rendering behind a renderer interface, with OpenGL as its first implementation and WebGL for the browser.
 - [ ] Add a web export of whole games, with sound and saves, from the Build menu.
@@ -29,6 +28,7 @@ on Windows.
 
 - [ ] Make the game player open and draw in its own window without WPF.
 - [ ] Move the player's input and sound off anything still tied to WPF, with controllers through GameInput or Windows.Gaming.Input, so the same player can be hosted as a UWP app.
+- [ ] Compile a project's scripts into the exported game at export time, instead of loading them as a separate assembly at runtime (needed for Native AOT; the web player already loads the Scripts.dll compiled at export, see the web proof's Done note).
 - [ ] Make scene loading and components safe for Native AOT (no runtime code generation, nothing trimmed away), and publish exported games with Native AOT.
 - [ ] Add a Direct3D 11 renderer that draws the same as the OpenGL one (Xbox has no OpenGL).
 - [ ] Prove an Xbox export: the smallest x64 UWP package that draws a sprite and reads a controller on an Xbox Series X in Developer Mode.

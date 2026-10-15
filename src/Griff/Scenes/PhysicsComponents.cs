@@ -281,23 +281,50 @@ public sealed class Body : Component
     public float Grip { get; set; } = 0.6f;
 
     /// <summary>
+    /// True while it's asleep: once it and every body that turns touching it have been still for half a second, they fall
+    /// asleep together and stay exactly where they are, costing a fraction of what they did, until something disturbs
+    /// them: a hit, a push, its <see cref="Velocity"/> or <see cref="Spin"/> set, something pushed into it, or what holds it
+    /// up moving or going. Tick it to start it asleep, so a tower built resting on itself stands until something knocks
+    /// it; untick it to wake it. Only one that <see cref="Rotates"/> sleeps.
+    /// </summary>
+    [ShownWhen(nameof(Rotates))]
+    public bool Asleep
+    {
+        get => _asleep;
+        set
+        {
+            // Woken, it's been still for no time at all.
+            if (_asleep && !value)
+                StillFor = 0;
+            _asleep = value;
+        }
+    }
+
+    private bool _asleep;
+
+    /// <summary>
+    /// Seconds it has been all but still (see <see cref="Asleep"/>): at half a second, and every body that turns touching it
+    /// with it, it falls asleep. The game counts it.
+    /// </summary>
+    [ShownWhen(nameof(Rotates))]
+    [NotSent]
+    public float StillFor { get; set; }
+
+    /// <summary>
     /// How hard it is to turn (its moment of inertia), from its <see cref="Mass"/> and its collider's size: a long plank
     /// turns more slowly than a small crate of the same weight.
     /// </summary>
-    public float Inertia
+    public float Inertia => Entity?.GetComponent<Collider>() switch
     {
-        get
-        {
-            var mass = Math.Max(0.01f, Mass);
-            var inertia = Entity?.GetComponent<Collider>() switch
-            {
-                BoxCollider box => box.WorldShape.HalfSize is var half ? mass * (half.X * half.X + half.Y * half.Y) / 3 : 0,
-                CircleCollider circle => circle.WorldCircle.Radius is var radius ? mass * radius * radius / 2 : 0,
-                _ => mass / 6,
-            };
-            return Math.Max(1e-4f, inertia);
-        }
-    }
+        BoxCollider box => BoxInertia(box.WorldShape.HalfSize),
+        CircleCollider circle => CircleInertia(circle.WorldCircle.Radius),
+        _ => Math.Max(1e-4f, Math.Max(0.01f, Mass) / 6),
+    };
+
+    // Its inertia with a box collider of that half size in the world, or a circle of that radius.
+    internal float BoxInertia(Vector2 half) => Math.Max(1e-4f, Math.Max(0.01f, Mass) * (half.X * half.X + half.Y * half.Y) / 3);
+
+    internal float CircleInertia(float radius) => Math.Max(1e-4f, Math.Max(0.01f, Mass) * radius * radius / 2);
 
     /// <summary>What it turns round: its collider's middle in the world (its position, without a collider).</summary>
     public Vector2 CenterOfMass => Entity?.GetComponent<Collider>() is { } collider

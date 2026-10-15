@@ -45,7 +45,7 @@ set: Body.Rotates = true
 explain: field:Body.Rotates | Rotates | Now a body has Rotates. Tick it, and its box collider turns with it, which the Scene view outlines.
 play
 wait: 2
-expectat: Crate = -1.66, -2
+expectat: Crate = -1.91, -2
 expectvalue: Crate.Transform.Rotation.Z = 0 ~ 1
 explain: game | Lands on its corner | It lands on its corner and tips over, then comes to rest flat, as a real crate would.
 stop
@@ -67,7 +67,7 @@ set: Body.Spin = 400
 explain: field:Body.Spin | Spin | Spin is how fast it turns, in degrees a second. Set it, and the crate starts out spinning.
 play
 wait: 2
-expectat: Crate = -1.64, -2
+expectat: Crate = -1.47, -2
 explain: game | Spun as it fell | It spun as it fell, tumbled on landing and settled again.
 explain: entity:Ramp | A tilted ramp | The grey plank on the left rotates too, but it's frozen: a turned box that stays put, a ramp.
 hold: Left 0.6

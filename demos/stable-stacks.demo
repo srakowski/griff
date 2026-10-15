@@ -1,0 +1,135 @@
+title: Stacks that stand
+intro: Crates that rotate now stack: towers and pyramids come to rest, fall asleep and stand perfectly still, until something knocks them down.
+project: Empty | Stacks
+
+# A floor 30 wide whose top is at y = -2.5, a tower of seven crates at x = -4, a pyramid of ten at x = 4, and a heavy
+# crate out to the left to throw at the tower. Every crate rotates.
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 30, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 30, 1
+deselect
+create: Crate
+rename: Tower 1
+set: Transform.Position = -4, -2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 2
+set: Transform.Position = -4, -1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 3
+set: Transform.Position = -4, 0, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 4
+set: Transform.Position = -4, 1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 5
+set: Transform.Position = -4, 2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 6
+set: Transform.Position = -4, 3, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Tower 7
+set: Transform.Position = -4, 4, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 1
+set: Transform.Position = 2.5, -2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 2
+set: Transform.Position = 3.5, -2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 3
+set: Transform.Position = 4.5, -2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 4
+set: Transform.Position = 5.5, -2, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 5
+set: Transform.Position = 3, -1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 6
+set: Transform.Position = 4, -1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 7
+set: Transform.Position = 5, -1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 8
+set: Transform.Position = 3.5, 0, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 9
+set: Transform.Position = 4.5, 0, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Pyramid 10
+set: Transform.Position = 4, 1, 0
+set: Body.Rotates = true
+deselect
+create: Crate
+rename: Thrown
+set: Transform.Position = -12, 2.5, 0
+set: Sprite.Size = 0.8, 0.8
+set: Sprite.Tint = #B04A3C
+set: BoxCollider.Size = 0.8, 0.8
+set: Body.Rotates = true
+set: Body.Mass = 3
+deselect
+expectcomponents: Tower 7 = Transform, Sprite, BoxCollider, Body, Pushable
+
+chapter: Towers that stand | Bodies that rotate, stacked
+look: 0, 1, 6
+say: Here are crates that rotate, stacked up: a tower of seven on the left, and a pyramid of ten on the right. Until now, crates that rotate were worked out one at a time, so a stack slowly crept sideways and a tower of three or more leaned over and fell.
+play
+wait: 3
+expectat: Tower 7 = -4, 4
+expectat: Pyramid 10 = 4, 1
+explain: game | Standing | Now every crate touching another is worked out together, so the tower's weight reaches all the way down. They settle, and stand.
+select: Tower 7
+expectvalue: Tower 7.Body.Asleep = true
+explain: field:Body.Asleep | Asleep | Once a pile has stayed still for half a second it falls asleep: it stays exactly where it is, and costs next to nothing, however long the game runs.
+stop
+
+chapter: Knocked down | Anything that disturbs a stack wakes it
+select: Thrown
+set: Body.Velocity = 22, 3
+explain: entity:Thrown | A heavy crate | This heavy red crate is thrown at the tower as the game starts.
+play
+wait: 3
+expectvalue: Tower 7.Transform.Position.Y = -1.5 ~ 1.2
+explain: game | Woken | It hits the tower, which wakes and comes down. A push from a script, a player walking into a crate, or taking away what a crate rests on wakes it too.
+explain: entity:Pyramid 10 | Still asleep | The pyramid wasn't touched, so it sleeps on.
+stop
+select: Tower 3
+explain: field:Body.Asleep | Start asleep | Tick Asleep yourself, and a tower stands untouched from the start until something knocks it.

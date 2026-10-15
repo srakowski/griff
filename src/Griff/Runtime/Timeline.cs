@@ -48,6 +48,9 @@ public sealed class Timeline
     private readonly SnapshotBuffer _streamRefs = new();
     private readonly int[] _runs = new int[2 * 255];
 
+    // What physics remembers of a scene, from snapshots that have gone, to use again.
+    private readonly Stack<ContactMemory> _contactPool = [];
+
     private long _sequence;
     private int _stepsSinceSnapshot;
     // The sizes of the last whole snapshot and the last one kept as changes, for the average size.
@@ -230,6 +233,7 @@ public sealed class Timeline
         var next = 0;
         while (next < frame.Count)
             scene.Add(Read(frame, ref next, reader, seen));
+        snapshot.Contacts?.CopyTo(scene.Contacts);
         return scene;
     }
 
@@ -243,7 +247,7 @@ public sealed class Timeline
             var last = _snapshots[^1];
             _snapshots.RemoveAt(_snapshots.Count - 1);
             Bytes -= last.Bytes;
-            _stream.Return(last);
+            Return(last);
             // The next snapshot can't be written against one that's gone.
             _baseSnapshot = null;
         }
@@ -274,6 +278,12 @@ public sealed class Timeline
             Write(_current, roots[i]);
 
         snapshot.Entities = _current.Count;
+        if (scene.Contacts.Count > 0)
+        {
+            snapshot.Contacts = _contactPool.Count > 0 ? _contactPool.Pop() : new ContactMemory();
+            scene.Contacts.CopyTo(snapshot.Contacts);
+        }
+
         _snapshots.Add(snapshot);
         _pending = snapshot;
     }
@@ -304,7 +314,8 @@ public sealed class Timeline
         var snapshot = _pending!;
         (snapshot.Chunks, snapshot.Used) = _stream.Finish();
         snapshot.Refs = _streamRefs.Refs.AsSpan(0, _streamRefs.RefCount).ToArray();
-        snapshot.Bytes = snapshot.Chunks.Sum(c => (long)c.Length) + snapshot.Refs.LongLength * IntPtr.Size + _pendingStrings + 64;
+        snapshot.Bytes = snapshot.Chunks.Sum(c => (long)c.Length) + snapshot.Refs.LongLength * IntPtr.Size + _pendingStrings + 64 +
+                         48L * (snapshot.Contacts?.Count ?? 0);
         _pendingSettleMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
     }
 
@@ -533,6 +544,17 @@ public sealed class Timeline
         return entity;
     }
 
+    // A snapshot has gone: its chunks and what physics remembered with it are used again.
+    private void Return(Snapshot snapshot)
+    {
+        _stream.Return(snapshot);
+        if (snapshot.Contacts is { } contacts)
+        {
+            _contactPool.Push(contacts);
+            snapshot.Contacts = null;
+        }
+    }
+
     // The oldest goes. One that a kept snapshot is still written against stays in memory (and counted) until the oldest
     // kept one is whole.
     private void DropOldest()
@@ -553,7 +575,7 @@ public sealed class Timeline
             Bytes -= snapshot.Bytes;
             // The one the next snapshot is compared with keeps its chunks while it's written against.
             if (snapshot != _baseSnapshot)
-                _stream.Return(snapshot);
+                Return(snapshot);
         }
 
         _retained.Clear();
@@ -677,6 +699,9 @@ public sealed class Timeline
         public int[] Used { get; set; } = [];
 
         public string?[] Refs { get; set; } = [];
+
+        // What physics remembered of the scene then (how hard touching bodies that rotate pushed), or null for nothing.
+        public ContactMemory? Contacts { get; set; }
 
         // What it adds to memory: its chunks, its strings, and the strings in it that are new.
         public long Bytes { get; set; }

@@ -245,6 +245,7 @@ public sealed partial class Physics
         }
 
         _movedGroups.Clear();
+        _turning.Clear();
         foreach (var body in scene.Active<Body>())
         {
             // An entity's first body is the one that moves it.
@@ -278,11 +279,11 @@ public sealed partial class Physics
                 continue;
             }
 
+            // Bodies that turn are worked out together, once the rest have moved.
             var collider = body.Entity!.GetComponent<Collider>();
             if (body.Rotates && collider is { IsTrigger: false })
             {
-                StepTurning(body, collider, solids, dt, onCollision);
-                EndStep(body, dt);
+                _turning.Add(body);
                 continue;
             }
 
@@ -342,6 +343,17 @@ public sealed partial class Physics
                 KeepOffHexWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
             EndStep(body, dt);
         }
+
+        if (_turning.Count > 0)
+        {
+            StepTurning(scene, solids, dt, onCollision);
+            foreach (var body in _turning)
+                EndStep(body, dt);
+            _turning.Clear();
+        }
+
+        scene.Vacated.Clear();
+        scene.VacatedEverywhere = false;
 
         _grounds.Clear();
         foreach (var body in scene.All<Body>())
@@ -599,6 +611,12 @@ public sealed partial class Physics
             if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f || body.IsDroppingThrough))
                 continue;
 
+            // A body that turns which has moved into it, rather than it into that, isn't got out of along this move: that
+            // would lift it out of the top of a tower whose crate rocked into its side, and up the tower. The turning body's
+            // own step eases them apart.
+            if (MovedIntoBy(solid, area, other, axis, sign, delta))
+                continue;
+
             // A crate in the way is shoved along first, by its share of the move; whatever's left of the overlap blocks as
             // usual, but a crate that gave way doesn't stop the pusher dead (it keeps leaning into it at its own speed).
             var gaveWay = false;
@@ -838,6 +856,16 @@ public sealed partial class Physics
             point.X > Cell.Min.X && point.X < Cell.Max.X && point.Y > Cell.Min.Y && point.Y < SurfaceAt(point.X);
     }
 
+    // Whether a solid is a body that turns (and moves) which this move can't have taken it into: getting out of it along the
+    // move takes further than the move went.
+    private static bool MovedIntoBy(in Shape solid, Area area, Area other, int axis, float sign, Vector2 delta)
+    {
+        if (solid.Collider is null || solid.Entity.GetComponent<Body>() is not { Rotates: true, Frozen: false })
+            return false;
+        var push = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign) - Component(area.Center, axis);
+        return MathF.Abs(push) > MathF.Abs(Component(delta, axis)) + 0.05f;
+    }
+
     // A pushable crate's body and collider, if the solid is one that something on this layer can shove along this axis:
     // sideways always, up and down only where it doesn't fall (top-down), so landing on a crate doesn't drive it into the floor.
     // A crate on a grid is only pushed a cell at a time, by grid movers.
@@ -1054,6 +1082,9 @@ public sealed partial class Physics
         private readonly Stack<List<int>> _spare = [];
         private Func<int, Box>? _boundsOf;
 
+        // Where each shape is now, kept as they move.
+        private Area[] _areas = [];
+
         public List<Shape> All { get; } = [];
 
         public void Fill(Scene scene)
@@ -1067,7 +1098,11 @@ public sealed partial class Physics
                 _shapesOf[entity] = _shapesOf.TryGetValue(entity, out var range) ? (range.First, range.Count + 1) : (i, 1);
             }
 
-            _grid.Build(All.Count, _boundsOf ??= i => All[i].Area.Bounds);
+            if (_areas.Length < All.Count)
+                _areas = new Area[Math.Max(All.Count, _areas.Length * 2)];
+            for (var i = 0; i < All.Count; i++)
+                _areas[i] = All[i].Area;
+            _grid.Build(All.Count, _boundsOf ??= i => _areas[i].Bounds);
         }
 
         /// <summary>The solids near <paramref name="region"/>, in order, in a list to give back with <see cref="Return"/>.</summary>
@@ -1079,6 +1114,12 @@ public sealed partial class Physics
         }
 
         public void Near(Box region, List<int> into) => _grid.Near(region, into);
+
+        /// <summary>Which of its entity's shapes shape <paramref name="index"/> of <see cref="All"/> is: 0 for the first.</summary>
+        public int PartOf(int index) => _shapesOf.TryGetValue(All[index].Entity, out var range) ? index - range.First : 0;
+
+        /// <summary>Where shape <paramref name="index"/> of <see cref="All"/> is now.</summary>
+        public Area AreaOf(int index) => _areas[index];
 
         public void Return(List<int> near) => _spare.Push(near);
 
@@ -1105,7 +1146,10 @@ public sealed partial class Physics
                 for (var i = range.First; i < range.First + range.Count; i++)
                 {
                     if (All[i].Collider is not null)
-                        _grid.Move(i, All[i].Area.Bounds);
+                    {
+                        _areas[i] = All[i].Area;
+                        _grid.Move(i, _areas[i].Bounds);
+                    }
                 }
             }
 

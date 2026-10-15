@@ -43,6 +43,43 @@ public sealed class Scene
     // The sprites flashing or blinking, which the game moves on each step (and drops once they're done or gone).
     internal readonly List<Sprite> SpriteEffects = [];
 
+    // How hard bodies that rotate pushed where they touched in the last step, the next step's first guess (see ContactMemory).
+    internal readonly ContactMemory Contacts = new();
+
+    // Where solids have gone while the game runs (taken out, turned off, tiles cleared) since its last physics step, which
+    // wakes the bodies asleep there, as what held them up may have gone; or, past a few hundred of them, everywhere. The
+    // physics step reads them and forgets them. Nothing's kept while the scene isn't being played.
+    internal readonly List<Box> Vacated = [];
+    internal bool VacatedEverywhere;
+
+    // A solid shape went from this box in the world.
+    internal void Vacate(Box box)
+    {
+        if (Step <= 0)
+            return;
+        if (Vacated.Count < 256)
+            Vacated.Add(box);
+        else
+            VacatedEverywhere = true;
+    }
+
+    // An entity and what's in it are going (or being turned off): where their solids were.
+    internal void Vacate(Entity entity)
+    {
+        if (Step <= 0 || !entity.IsActive)
+            return;
+        foreach (var component in entity.ComponentList)
+        {
+            if (component is Collider { IsTrigger: false } collider)
+                Vacate(collider.WorldBounds);
+            else if (component is Tilemap { Solid: true } map)
+                Vacate(map.RowsBounds(0, map.Height - 1));
+        }
+
+        foreach (var child in entity.ChildList)
+            Vacate(child);
+    }
+
     public IReadOnlyList<Entity> Roots => _roots;
 
     /// <summary>Every entity in the scene, depth first, as it is now: adding or removing entities while going through it is safe.</summary>
@@ -279,6 +316,7 @@ public sealed class Scene
     {
         Crowds.ThrowIfRunning("remove entities");
         EnsureInScene(entity);
+        Vacate(entity);
         Detach(entity);
         foreach (var e in entity.SelfAndDescendants())
         {

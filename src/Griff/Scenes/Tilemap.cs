@@ -370,11 +370,46 @@ public sealed partial class Tilemap : Component, ISortsInParts
         set
         {
             // Copied so nobody else holds the array; the map only ever replaces it, which keeps undo snapshots intact.
-            _tiles = value?.ToArray() ?? [];
+            var tiles = value?.ToArray() ?? [];
+            if (Solid && Entity is { Scene.Step: > 0, IsActive: true } entity)
+                VacateChanged(entity.Scene!, tiles);
+            _tiles = tiles;
             _runs = null;
             _slopes = null;
             _collisionRuns = null;
         }
+    }
+
+    // While the game runs, tiles changing might take away what holds up a body asleep on them: where the rows that changed
+    // are, to wake what's there.
+    private void VacateChanged(Scene scene, string[] tiles)
+    {
+        var (first, last) = (-1, -1);
+        for (var y = 0; y < Math.Max(tiles.Length, _tiles.Length); y++)
+        {
+            if (y < tiles.Length && y < _tiles.Length && string.Equals(tiles[y], _tiles[y], StringComparison.Ordinal))
+                continue;
+            first = first < 0 ? y : first;
+            last = y;
+        }
+
+        if (first >= 0)
+            scene.Vacate(RowsBounds(first, last));
+    }
+
+    // The box in the world round rows `first` to `last` of the map, a cell more all round.
+    internal Box RowsBounds(int first, int last)
+    {
+        var world = Entity!.Transform.WorldMatrix;
+        var width = Math.Max(Width, 1);
+        var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
+        foreach (var (x, y) in (ReadOnlySpan<(float, float)>)[(-1, first - 1), (width + 1, first - 1), (-1, last + 2), (width + 1, last + 2)])
+        {
+            var point = Vector2.Transform(PointAt(x, y), world);
+            (min, max) = (Vector2.Min(min, point), Vector2.Max(max, point));
+        }
+
+        return new Box((min + max) / 2, (max - min) / 2);
     }
 
     /// <summary>Number of columns: the length of the longest row.</summary>

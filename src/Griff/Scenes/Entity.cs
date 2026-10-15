@@ -36,6 +36,8 @@ public sealed class Entity
                 return;
             if (Scene is not null)
                 Crowds.ThrowIfRunning("enable or disable entities");
+            if (!value)
+                Scene?.Vacate(this);
             _isEnabled = value;
             Scene?.EnabledChanged();
         }
@@ -197,6 +199,14 @@ public sealed class Entity
         ThrowIfInCrowd();
         if (component is Transform)
             throw new InvalidOperationException("The Transform can't be removed.");
+        if (Scene is { } scene && IsActive && component is Collider or Tilemap && _components.Contains(component))
+        {
+            if (component is Collider { IsTrigger: false } collider)
+                scene.Vacate(collider.WorldBounds);
+            else if (component is Tilemap { Solid: true } map)
+                scene.Vacate(map.RowsBounds(0, map.Height - 1));
+        }
+
         if (!_components.Remove(component))
             return false;
 

@@ -22,15 +22,20 @@ public static class Workers
         set => s_count = Math.Clamp(value, 1, 64);
     }
 
-    // The bytes the worker threads have allocated, all together: a profiler adds them to the game thread's, so garbage made
-    // on the workers is counted.
-    private static long s_allocated;
+    // The bytes the workers have allocated doing this thread's jobs: a profiler adds them to the thread's own, so garbage
+    // made on the workers is counted, and only against the game that made it (another game, or another test, running
+    // jobs on the same workers counts its own).
+    [ThreadStatic]
+    private static long t_workersAllocated;
+
+    // The bytes the workers have allocated for the job under way, each chunk's added before the chunk counts as finished.
+    private static long s_jobAllocated;
 
     /// <summary>
-    /// The bytes this thread has allocated so far, and the workers have, all told: what a profiler counts the game's
-    /// garbage by (<see cref="GC.GetAllocatedBytesForCurrentThread"/> would miss what the workers make for it).
+    /// The bytes this thread has allocated so far, and the workers have doing its work, all told: what a profiler counts
+    /// the game's garbage by (<see cref="GC.GetAllocatedBytesForCurrentThread"/> would miss what the workers make for it).
     /// </summary>
-    public static long AllocatedBytes() => GC.GetAllocatedBytesForCurrentThread() + Interlocked.Read(ref s_allocated);
+    public static long AllocatedBytes() => GC.GetAllocatedBytesForCurrentThread() + t_workersAllocated;
 
     // The job under way: its number (the high half) and the next chunk to take (the low half), in one, so a thread can only
     // take a chunk of the job it read. Each job's work and chunk count sit in one of two slots, by its number.
@@ -75,11 +80,12 @@ public static class Workers
             s_work[job & 1] = work;
             s_chunks[job & 1] = chunks;
             Volatile.Write(ref s_finished, 0);
+            Volatile.Write(ref s_jobAllocated, 0);
             s_done.Reset();
             Interlocked.Exchange(ref s_state, (long)job << 32);
             s_wake.Release(Math.Min(threads - 1, s_threads.Count));
 
-            TakeChunks();
+            TakeChunks(worker: false);
             while (Volatile.Read(ref s_finished) < chunks)
             {
                 // Woken by the last chunk's thread (or one of a job before, late): looked at again either way.
@@ -88,6 +94,7 @@ public static class Workers
             }
 
             s_work[job & 1] = null;
+            t_workersAllocated += Volatile.Read(ref s_jobAllocated);
             ThrowFirstFault(chunks);
         }
         finally
@@ -132,8 +139,9 @@ public static class Workers
             ExceptionDispatchInfo.Throw(first);
     }
 
-    // Takes chunks of the job under way until there are none left, or it's over and another has begun.
-    private static void TakeChunks()
+    // Takes chunks of the job under way until there are none left, or it's over and another has begun. A worker adds what
+    // each chunk allocates to the job's count (before the chunk counts as finished, so the job's thread sees it all).
+    private static void TakeChunks(bool worker)
     {
         var state = Volatile.Read(ref s_state);
         var job = (int)(state >> 32);
@@ -150,6 +158,7 @@ public static class Workers
                 continue;
             }
 
+            var allocated = worker ? GC.GetAllocatedBytesForCurrentThread() : 0;
             try
             {
                 work.Run(chunk);
@@ -159,6 +168,8 @@ public static class Workers
                 s_faults[chunk] = ex;
             }
 
+            if (worker)
+                Interlocked.Add(ref s_jobAllocated, GC.GetAllocatedBytesForCurrentThread() - allocated);
             if (Interlocked.Increment(ref s_finished) == chunks)
                 s_done.Set();
             state = Volatile.Read(ref s_state);
@@ -186,9 +197,7 @@ public static class Workers
         while (true)
         {
             s_wake.Wait();
-            var allocated = GC.GetAllocatedBytesForCurrentThread();
-            TakeChunks();
-            Interlocked.Add(ref s_allocated, GC.GetAllocatedBytesForCurrentThread() - allocated);
+            TakeChunks(worker: true);
         }
     }
 }

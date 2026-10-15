@@ -211,19 +211,33 @@ public sealed class SmoothDrawingTests
         var game = Play(scene);
         game.Advance(Step);
 
-        var (before, middle, after) = ThreeFrames(game);
-
-        // Each drop is drawn halfway between where it was drawn a step apart (but for any wrapping round the view).
-        var (a, b, c) = (Drops(before), Drops(middle), Drops(after));
+        // As ThreeFrames, noting which drops wrap round the area (from its bottom edge to its top) in each of the two steps.
+        game.Advance(Step);
+        var a = Drops(Draw(game));
+        var wrapped = Wrapping();
+        game.Advance(Step / 2);
+        var b = Drops(Draw(game));
+        game.Advance(Step / 2);
+        var c = Drops(Draw(game));
+        wrapped = [.. wrapped.Zip(Wrapping(), (first, second) => first || second)];
+        Assert.Equal(rain.Drops.Count, a.Count);
         Assert.Equal(a.Count, b.Count);
+        Assert.Equal(a.Count, c.Count);
         Assert.True(a.Count > 20);
-        var between = Enumerable.Range(0, a.Count).Count(i => Vector2.Distance((a[i] + c[i]) / 2, b[i]) < 1e-3f);
-        Assert.True(between > a.Count * 0.9, $"{between} of {a.Count} drops were drawn between steps.");
-        // (A drop wrapping round the area jumps, so it's drawn where it lands: one step early, out of view.)
-        Assert.True(Enumerable.Range(0, a.Count).Count(i => a[i] != c[i]) > a.Count * 0.9, "The rain didn't fall.");
+
+        // Each drop falls a little in a step, and is drawn halfway between where it was drawn a step apart. Where the drops
+        // start is random, so a few of them jump, and are left out: one wrapping round the area is drawn where it lands,
+        // one step early, out of view, and one crossing the edge of the view is drawn at its other edge.
+        var falling = Enumerable.Range(0, a.Count).Where(i => !wrapped[i] && Vector2.Distance(a[i], c[i]) < 1).ToList();
+        Assert.True(falling.Count > a.Count / 2, $"Only {falling.Count} of {a.Count} drops moved a little.");
+        Assert.All(falling, i => Assert.True(c[i].Y < a[i].Y, $"Drop {i} didn't fall."));
+        Assert.All(falling, i => Assert.True(Vector2.Distance((a[i] + c[i]) / 2, b[i]) < 1e-3f, $"Drop {i} wasn't drawn between steps."));
 
         List<Vector2> Drops(RenderFrame frame) =>
             frame.Sprites.Where(s => s.Entity == sky).Select(s => new Vector2(s.World.M41, s.World.M42)).ToList();
+
+        // Which drops wrapped round the area in the last step: they went further than any drop falls in one.
+        List<bool> Wrapping() => [.. rain.Drops.Select(d => Vector2.Distance(d.From, d.Position) > 1)];
     }
 
     // ----- Ropes, wires and debug shapes -----

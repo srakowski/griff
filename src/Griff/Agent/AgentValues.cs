@@ -15,9 +15,6 @@ namespace Griff.Agent;
 /// </summary>
 public static class AgentValues
 {
-    /// <summary>Looks up entities and components named in arguments, for methods that take them.</summary>
-    public static Func<string, Entity?>? EntityResolver { get; set; }
-
     /// <exception cref="AgentException">The JSON can't be read as a <paramref name="type"/>.</exception>
     public static object? FromJson(JsonElement element, Type type, Func<string, Entity?>? entities = null)
     {
@@ -220,7 +217,7 @@ public static class AgentValues
         if (element.ValueKind == JsonValueKind.Null)
             return null;
         var reference = element.GetString() ?? "";
-        var resolve = entities ?? EntityResolver ?? throw new AgentException("There's no scene to find entities in.");
+        var resolve = entities ?? throw new AgentException("There's no scene to find entities in.");
         return resolve(reference) ?? throw new AgentException($"There's no entity \"{reference}\".");
     }
 

@@ -22,10 +22,22 @@ jobs:
           deployment-choice: '1'
 
       - name: Build
+        id: build
         run: dotnet build src/Griff.Editor/Griff.Editor.csproj
 
+      # Each test's result goes to the log as it finishes, and to a .trx file kept with the run when one fails, so a
+      # failure can be read without signing in to see the log. The editor's tests run even when the engine's fail.
       - name: Engine tests
-        run: dotnet test tests/Griff.Tests
+        run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults
 
       - name: Editor tests
-        run: dotnet test tests/Griff.Editor.Tests
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults
+
+      - name: Keep the test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore

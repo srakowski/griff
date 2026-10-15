@@ -3,6 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <!--
+      No background garbage collections while the tests run. One that starts while a thread is between allocations counts
+      what was left of that thread's allocation context (up to a few KB) as allocated by it, so a test that checks code
+      makes no garbage would see some whenever another test running alongside set one off. Blocking collections don't.
+    -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

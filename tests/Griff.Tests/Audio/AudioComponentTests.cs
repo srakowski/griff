@@ -52,8 +52,19 @@ public class AudioComponentTests
         audio.Play("Sounds/coin.wav");
         audio.Play("Sounds/coin.wav");
         audio.Play("missing.wav");
-
         Assert.Equal(1, mixer.Playing);
+
+        // "At once" is in the game's time, not the wall clock's: however long a frame takes to work out, its sounds
+        // play once, and later frames' play again.
+        Thread.Sleep(50);
+        audio.Play("Sounds/coin.wav");
+        Assert.Equal(1, mixer.Playing);
+        audio.Advance(Step);
+        audio.Play("Sounds/coin.wav");
+        Assert.Equal(1, mixer.Playing);
+        audio.Advance(Step);
+        audio.Play("Sounds/coin.wav");
+        Assert.Equal(2, mixer.Playing);
     }
 
     [Fact]

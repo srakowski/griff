@@ -185,7 +185,7 @@ public sealed class TablesPanelTests : IDisposable
         panel.SelectAll();
         var copied = panel.Copy();
         Assert.Equal("Name\tDamage\tCost\tHits\r\nFireball\t12\t3\t2d6+3\r\nFrost Bolt\t9\t2\t1d8\r\nSpark\t2\t5\t\r\nGlow\t\t5\t\r\n", copied);
-        Assert.Equal(copied, System.Windows.Clipboard.GetText());
+        Assert.Equal(copied, services.GetRequiredService<Griff.Editor.Core.Workspace.IClipboard>().GetText());
         panel.Select("Fireball", "Damage", "Frost Bolt", "Cost");
         Assert.Equal("12\t3\r\n9\t2\r\n", panel.Copy());
         panel.SelectAll();

@@ -25,8 +25,9 @@ internal static class EditorHost
                 foreach (var module in App.Modules)
                     module.ConfigureServices(services);
 
-                // Tests never touch the user's own settings (recent projects and the like).
+                // Tests never touch the user's own settings (recent projects and the like), or the clipboard.
                 services.AddSingleton<ISettingsStore, TestSettings>();
+                services.AddSingleton<Griff.Editor.Core.Workspace.IClipboard, TestClipboard>();
                 configure(services);
                 using var provider = services.BuildServiceProvider();
                 test(provider);
@@ -51,5 +52,32 @@ internal sealed class TestSettings : ISettingsStore
 
     public void Save()
     {
+    }
+}
+
+/// <summary>
+/// A clipboard of the test's own. Windows' clipboard is shared by every program, so tests running side by side (in this
+/// run, another, or another checkout's) would copy over each other's entities between a cut and its paste.
+/// </summary>
+internal sealed class TestClipboard : Griff.Editor.Core.Workspace.IClipboard
+{
+    private readonly Dictionary<string, string> _data = [];
+
+    public string GetText() => _data.GetValueOrDefault("Text", "");
+
+    public bool SetText(string text)
+    {
+        _data.Clear();
+        _data["Text"] = text;
+        return true;
+    }
+
+    public string? Get(string format) => _data.GetValueOrDefault(format);
+
+    public bool Set(string format, string data)
+    {
+        SetText(data);
+        _data[format] = data;
+        return true;
     }
 }

@@ -22,6 +22,7 @@ public sealed class TablesPanel : ToolPanel
     private readonly TableStore _store;
     private readonly IWorkspace _workspace;
     private readonly IStatusService _status;
+    private readonly IClipboard _clipboard;
     private string? _name;
     private string _filter = "";
     private string? _message;
@@ -31,11 +32,12 @@ public sealed class TablesPanel : ToolPanel
     private int _pickedColumn = -2;
     private bool _typing;
 
-    public TablesPanel(TableStore store, IWorkspace workspace, IStatusService status)
+    public TablesPanel(TableStore store, IWorkspace workspace, IStatusService status, IClipboard clipboard)
     {
         _store = store;
         _workspace = workspace;
         _status = status;
+        _clipboard = clipboard;
         store.Changed += (_, name) =>
         {
             OnPropertyChanged(nameof(TableNames));
@@ -750,7 +752,7 @@ public sealed class TablesPanel : ToolPanel
             lines.Add([.. columns.Select(c => c < 0 ? NameHeading(table) : table.Columns[c].Name)]);
         lines.AddRange(rows.Select(r => (IReadOnlyList<string>)[.. columns.Select(c => c < 0 ? r.Name : table.Rows[r.Index].Cells[c].ToString())]));
         var text = TableText.Format(lines, '\t');
-        SetClipboard(text);
+        _clipboard.SetText(text);
         Message = $"Copied {Count(rows.Count * columns.Count, "cell")}.";
         return text;
     }
@@ -777,7 +779,7 @@ public sealed class TablesPanel : ToolPanel
     public string Paste(string? text = null)
     {
         var table = Current;
-        text ??= GetClipboard();
+        text ??= _clipboard.GetText();
         if (string.IsNullOrEmpty(text))
             return Message = "There's nothing to paste.";
         var block = TableText.Parse(text, '\t');
@@ -868,37 +870,6 @@ public sealed class TablesPanel : ToolPanel
                       (problems.Count > 0 ? $" Left out: {string.Join("; ", problems.Take(5))}{(problems.Count > 5 ? "..." : "")}." : "");
         Commit(data, "Paste", message);
         return message;
-    }
-
-    private static void SetClipboard(string text)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                Clipboard.SetDataObject(text, copy: true);
-                return;
-            }
-            catch (System.Runtime.InteropServices.COMException) when (attempt < 5)
-            {
-                Thread.Sleep(20);
-            }
-        }
-    }
-
-    private static string GetClipboard()
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                return Clipboard.ContainsText() ? Clipboard.GetText() : "";
-            }
-            catch (System.Runtime.InteropServices.COMException) when (attempt < 5)
-            {
-                Thread.Sleep(20);
-            }
-        }
     }
 
     // ----- Undo

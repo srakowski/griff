@@ -879,39 +879,12 @@ internal static class EntityEdits
 /// <summary>Entities on the clipboard are scene JSON, so they paste across scenes and even projects.</summary>
 public static class EntityClipboard
 {
+    /// <summary>The clipboard format entities are copied in (they're put there as text too).</summary>
     public const string Format = "Griff.Entity";
-
-    public static void Put(string json)
-    {
-        var data = new System.Windows.DataObject();
-        data.SetData(Format, json);
-        data.SetText(json);
-        try
-        {
-            System.Windows.Clipboard.SetDataObject(data, copy: true);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Clipboard busy; the copy is lost but nothing else is affected.
-        }
-    }
-
-    // Another app can hold the clipboard open; treat that as "nothing to paste" rather than failing.
-    public static string? Get()
-    {
-        try
-        {
-            return System.Windows.Clipboard.ContainsData(Format) ? System.Windows.Clipboard.GetData(Format) as string : null;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return null;
-        }
-    }
 }
 
 /// <summary>Copies the selected entities (and their children) to the clipboard.</summary>
-public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection, IClipboard clipboard) : EditorCommand
 {
     public override string Id => "Entity.Copy";
     public override string Text => "_Copy";
@@ -924,14 +897,14 @@ public sealed class CopyEntityCommand(IWorkspace workspace, ISelection selection
     protected override Task ExecuteCoreAsync()
     {
         if (selection.TopLevel() is { Count: > 0 } entities)
-            EntityClipboard.Put(workspace.Serializer.SerializeEntities(entities));
+            clipboard.Set(EntityClipboard.Format, workspace.Serializer.SerializeEntities(entities));
         return Task.CompletedTask;
     }
 }
 
 /// <summary>Copies the selected entities (and their children) to the clipboard and deletes them, as one undo step.</summary>
 [Destructive]
-public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection, IClipboard clipboard) : EditorCommand
 {
     public override string Id => "Entity.Cut";
     public override string Text => "Cu_t";
@@ -944,7 +917,7 @@ public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection)
     {
         if (workspace.Scene is { } document && selection.TopLevel() is { Count: > 0 } entities)
         {
-            EntityClipboard.Put(workspace.Serializer.SerializeEntities(entities));
+            clipboard.Set(EntityClipboard.Format, workspace.Serializer.SerializeEntities(entities));
             document.Execute(EntityEdits.Remove(document.Scene, entities, "Cut"));
         }
 
@@ -956,18 +929,18 @@ public sealed class CutEntityCommand(IWorkspace workspace, ISelection selection)
 /// Pastes what's on the clipboard after the selected entity (as its siblings), or at the end of the scene, and selects
 /// it. Several entities paste in their order, as one undo step.
 /// </summary>
-public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selection) : EditorCommand
+public sealed class PasteEntityCommand(IWorkspace workspace, ISelection selection, IClipboard clipboard) : EditorCommand
 {
     public override string Id => "Entity.Paste";
     public override string Text => "_Paste";
     public override KeyGesture? Gesture { get; } = new(Key.V, ModifierKeys.Control);
     public override MenuPlacement? Placement { get; } = new(Menus.Edit, Group: 1, Order: 2);
 
-    protected override bool CanExecuteCore() => workspace.Scene is not null && EntityClipboard.Get() is not null;
+    protected override bool CanExecuteCore() => workspace.Scene is not null && clipboard.Get(EntityClipboard.Format) is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (workspace.Scene is not { } document || EntityClipboard.Get() is not { } json)
+        if (workspace.Scene is not { } document || clipboard.Get(EntityClipboard.Format) is not { } json)
             return Task.CompletedTask;
 
         var entities = workspace.Serializer.DeserializeEntities(json);

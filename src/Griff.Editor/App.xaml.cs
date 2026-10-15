@@ -114,6 +114,7 @@ public partial class App : Application
         services.AddSingleton<IWorkspace, Workspace>();
         services.AddSingleton<ISelection, Selection>();
         services.AddSingleton<IExternalPrograms, ExternalPrograms>();
+        services.AddSingleton<IClipboard, WindowsClipboard>();
         services.AddSingleton<CommandRegistry>();
 
         services.AddMenu(Menus.File, "_File", order: 0);

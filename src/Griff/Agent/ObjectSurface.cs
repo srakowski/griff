@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
+using Griff.Scenes;
 
 namespace Griff.Agent;
 
@@ -85,9 +86,12 @@ public static partial class ObjectSurface
         return result;
     }
 
-    /// <summary>Sets the property at <paramref name="path"/> from JSON, converted to the property's type.</summary>
+    /// <summary>
+    /// Sets the property at <paramref name="path"/> from JSON, converted to the property's type; an entity is named as
+    /// <paramref name="entities"/> finds it.
+    /// </summary>
     /// <returns>The value it now has.</returns>
-    public static JsonNode? Set(object root, string path, JsonElement value)
+    public static JsonNode? Set(object root, string path, JsonElement value, Func<string, Entity?>? entities = null)
     {
         var (owner, member, indexes) = Split(root, path);
         if (indexes.Count > 0)
@@ -99,7 +103,7 @@ public static partial class ObjectSurface
 
         try
         {
-            property.SetValue(owner, Convert(owner, value, property.PropertyType, except: property));
+            property.SetValue(owner, Convert(owner, value, property.PropertyType, entities, except: property));
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {
@@ -111,14 +115,14 @@ public static partial class ObjectSurface
     }
 
     // A value from JSON; an object given by its label or position is one of the owner's list items.
-    private static object? Convert(object owner, JsonElement value, Type type, PropertyInfo? except = null) =>
+    private static object? Convert(object owner, JsonElement value, Type type, Func<string, Entity?>? entities, PropertyInfo? except = null) =>
         IsLeaf(type) || type == typeof(object) || value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number)
-            ? AgentValues.FromJson(value, type)
-            : Choice(owner, type, except, value);
+            ? AgentValues.FromJson(value, type, entities)
+            : Choice(owner, type, except, value, entities);
 
     // A property or argument holding one of a list's items (a picked template, a selected row, a component to add), given
     // by the item's label or position: the item is looked for in the lists the same object offers.
-    private static object? Choice(object owner, Type type, PropertyInfo? except, JsonElement value)
+    private static object? Choice(object owner, Type type, PropertyInfo? except, JsonElement value, Func<string, Entity?>? entities)
     {
         var label = value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText();
         foreach (var list in Properties(owner.GetType()).Where(p => p != except && typeof(IEnumerable).IsAssignableFrom(p.PropertyType) && p.PropertyType != typeof(string)))
@@ -136,14 +140,15 @@ public static partial class ObjectSurface
             }
         }
 
-        return AgentValues.FromJson(value, type);
+        return AgentValues.FromJson(value, type, entities);
     }
 
     /// <summary>
     /// Presses the command or calls the method at <paramref name="path"/>. <paramref name="args"/> is an array of
-    /// arguments in order, an object of them by name, or for a command, its parameter. Awaits what it returns.
+    /// arguments in order, an object of them by name, or for a command, its parameter; an entity is named as
+    /// <paramref name="entities"/> finds it. Awaits what it returns.
     /// </summary>
-    public static async Task<JsonNode?> InvokeAsync(object root, string path, JsonElement? args)
+    public static async Task<JsonNode?> InvokeAsync(object root, string path, JsonElement? args, Func<string, Entity?>? entities = null)
     {
         var (owner, member, indexes) = Split(root, path);
         if (indexes.Count == 0 && FindProperty(owner.GetType(), member) is { } property && typeof(ICommand).IsAssignableFrom(property.PropertyType))
@@ -174,7 +179,7 @@ public static partial class ObjectSurface
             throw new AgentException($"{owner.GetType().Name} has no command or method \"{member}\". {Listing(owner)}");
         }
 
-        var (method, values) = Bind(owner, candidates, args);
+        var (method, values) = Bind(owner, candidates, args, entities);
         object? returned;
         try
         {
@@ -326,7 +331,7 @@ public static partial class ObjectSurface
         yield return item.ToString() ?? "";
     }
 
-    private static (MethodInfo Method, object?[] Values) Bind(object owner, List<MethodInfo> candidates, JsonElement? args)
+    private static (MethodInfo Method, object?[] Values) Bind(object owner, List<MethodInfo> candidates, JsonElement? args, Func<string, Entity?>? entities)
     {
         var positional = args is { ValueKind: JsonValueKind.Array } array ? array.EnumerateArray().ToList() : null;
         var named = args is { ValueKind: JsonValueKind.Object } obj ? obj : (JsonElement?)null;
@@ -349,7 +354,7 @@ public static partial class ObjectSurface
                         : named!.Value.EnumerateObject().FirstOrDefault(p => p.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase)) is { Value.ValueKind: not JsonValueKind.Undefined } found
                             ? found.Value : null;
                     if (supplied is { } element)
-                        values[i] = Convert(owner, element, parameter.ParameterType);
+                        values[i] = Convert(owner, element, parameter.ParameterType, entities);
                     else if (parameter.HasDefaultValue)
                         values[i] = parameter.DefaultValue;
                     else if (parameter.ParameterType == typeof(CancellationToken))

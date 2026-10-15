@@ -461,7 +461,9 @@ public class TimelineTests
         body.Velocity = new Vector2(6, 0);
         scene.Add(ball);
         var game = new Game(scene, new InputState());
-        var timeline = new Timeline(_serializer, capacity: 100, framesPerSnapshot: 10);
+        // Remembered however long copying it out takes: how long that is depends on the machine and how busy it is (tests
+        // running alongside), and a scene too slow to copy is the last part of this test, with no budget at all.
+        var timeline = new Timeline(_serializer, capacity: 100, framesPerSnapshot: 10) { RememberBudget = TimeSpan.MaxValue };
         timeline.Record(scene, 0, force: true);
 
         // 13 steps: snapshots after steps 10 (and the first), the moment after step 13 remembered.

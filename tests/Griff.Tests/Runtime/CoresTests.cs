@@ -736,6 +736,46 @@ public sealed class CoresTests
 
     // ----- The workers -----
 
+    // Makes 1000 bytes of garbage in each chunk.
+    private sealed class Littering : IChunked
+    {
+        public void Run(int chunk)
+        {
+            GC.KeepAlive(new byte[1000 - 24]);
+            Thread.SpinWait(200);
+        }
+    }
+
+    // The garbage the workers made for this thread's jobs: what Workers.AllocatedBytes adds to the thread's own.
+    private static long WorkersPart() => Workers.AllocatedBytes() - GC.GetAllocatedBytesForCurrentThread();
+
+    [Fact]
+    public void What_the_workers_allocate_counts_against_the_thread_whose_job_it_was()
+    {
+        With(16, chunked: true, () =>
+        {
+            // Another thread's jobs (another game's, another test's) make garbage on the same workers: none of it is ours.
+            var other = new Thread(() =>
+            {
+                for (var job = 0; job < 20; job++)
+                    Workers.Run(new Littering(), 64);
+            });
+            // (The first look makes this thread's own count of them, which allocates.)
+            _ = WorkersPart();
+            var before = WorkersPart();
+            other.Start();
+            other.Join();
+            Assert.Equal(before, WorkersPart());
+
+            // Our own job's garbage counts all of it, whichever thread each chunk ran on.
+            var work = new Littering();
+            var all = Workers.AllocatedBytes();
+            Workers.Run(work, 64);
+            Assert.True(Workers.AllocatedBytes() - all >= 64 * 1000, $"{Workers.AllocatedBytes() - all}");
+            return 0;
+        });
+    }
+
     private sealed class Counting(int chunks, Func<int, bool>? throws = null) : IChunked
     {
         public int[] Runs { get; } = new int[chunks];

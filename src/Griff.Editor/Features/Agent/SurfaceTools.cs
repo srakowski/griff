@@ -24,8 +24,11 @@ public sealed class ServiceCatalog(IServiceCollection services)
 /// keeps them (its services, its panels, its windows), so a new service, panel or window is reachable the moment it
 /// exists. Read with ui_inspect, change with ui_set, act with ui_invoke.
 /// </summary>
-public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels) : IAgentToolSource
+public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catalog, IEnumerable<PanelDescriptor> panels, IAgentScene scene) : IAgentToolSource
 {
+    // ui_set and ui_invoke find the entities their values name as the scene tools do: a name, id or path in the open scene.
+    private readonly Func<string, Griff.Scenes.Entity?> _entities = SceneTools.EntitiesIn(scene);
+
     public IEnumerable<AgentTool> GetTools()
     {
         var target = Schema.String("What to work on: a name from ui_roots, e.g. \"Workspace\", \"PlayMode\", \"Assets\" or an open window's title.");
@@ -65,7 +68,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             {
                 var root = Root(args.String("target"));
                 RefuseSceneData(root, args.String("path"), "ui_set");
-                return Task.FromResult(ToolResult.Json(new JsonObject { ["now"] = ObjectSurface.Set(root, args.String("path"), args.Required("value")) }));
+                return Task.FromResult(ToolResult.Json(new JsonObject { ["now"] = ObjectSurface.Set(root, args.String("path"), args.Required("value"), _entities) }));
             },
         };
 
@@ -161,7 +164,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 10), 0, 300));
 
         // Queued, so something that opens a modal window returns while the window is open.
-        var run = Application.Current.Dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments), DispatcherPriority.Normal).Task.Unwrap();
+        var run = Application.Current.Dispatcher.InvokeAsync(() => ObjectSurface.InvokeAsync(root, path, arguments, _entities), DispatcherPriority.Normal).Task.Unwrap();
         if (await Task.WhenAny(run, Task.Delay(wait)) != run)
         {
             var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => $"\"{w.Title}\"");

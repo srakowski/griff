@@ -4,6 +4,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -24,13 +25,7 @@ public sealed class AgentModule : IEditorModule
         services.AddSingleton<IAgentProject, EditorAgentProject>();
 
         services.AddSingleton<IAgentToolSource, EditorTools>();
-        services.AddSingleton<IAgentToolSource>(sp =>
-        {
-            var scene = sp.GetRequiredService<IAgentScene>();
-            // ui_invoke and ui_set name entities the way the scene tools do (a name, id or path in the open scene).
-            AgentValues.EntityResolver = reference => scene.Scene is { } open ? SceneTools.Resolve(open, reference) : null;
-            return new SceneTools(scene);
-        });
+        services.AddSingleton<IAgentToolSource>(sp => new SceneTools(sp.GetRequiredService<IAgentScene>()));
         services.AddSingleton<IAgentToolSource>(sp => new AssetTools(sp.GetRequiredService<IAgentProject>()));
         services.AddSingleton<IAgentToolSource, CommandTools>();
         services.AddSingleton<IAgentToolSource, SurfaceTools>();
@@ -80,7 +75,7 @@ public sealed class ToggleAgentServerCommand(AgentServer server) : EditorCommand
 }
 
 /// <summary>Copies the command that adds the editor's MCP server to Claude Code, to paste into a terminal.</summary>
-public sealed class CopyAgentSetupCommand(AgentServer server, IStatusService status) : EditorCommand
+public sealed class CopyAgentSetupCommand(AgentServer server, IStatusService status, IClipboard clipboard) : EditorCommand
 {
     public override string Id => "Agent.CopySetup";
     public override string Text => "Copy MCP _Setup Command";
@@ -90,7 +85,7 @@ public sealed class CopyAgentSetupCommand(AgentServer server, IStatusService sta
 
     protected override Task ExecuteCoreAsync()
     {
-        Clipboard.SetText(server.SetupCommand);
+        clipboard.SetText(server.SetupCommand);
         status.Show($"Copied: {server.SetupCommand}");
         return Task.CompletedTask;
     }

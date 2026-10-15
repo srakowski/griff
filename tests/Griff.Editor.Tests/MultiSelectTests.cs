@@ -82,12 +82,11 @@ public class MultiSelectTests
     public void Agents_SelectSeveral_ThroughUiInvoke_ByName() => EditorHost.Run(services =>
     {
         var (_, selection, _) = Open(services);
-        // Starting the server sets up how its tools find entities by name.
-        _ = services.GetRequiredService<Griff.Editor.Features.Agent.AgentServer>();
 
-        // What ui_invoke runs (on the UI thread).
+        // What ui_invoke runs (on the UI thread): entities named as the scene tools name them, in this editor's scene.
+        var entities = Griff.Agent.SceneTools.EntitiesIn(services.GetRequiredService<Griff.Agent.IAgentScene>());
         using var args = System.Text.Json.JsonDocument.Parse("""[["C", "A1"]]""");
-        Griff.Agent.ObjectSurface.InvokeAsync(selection, "SelectEntities", args.RootElement).GetAwaiter().GetResult();
+        Griff.Agent.ObjectSurface.InvokeAsync(selection, "SelectEntities", args.RootElement, entities).GetAwaiter().GetResult();
 
         Assert.Equal(["C", "A1"], selection.Entities.Select(e => e.Name));
     });
@@ -128,67 +127,32 @@ public class MultiSelectTests
     [Fact]
     public void CutAndPaste_MoveSeveral_InOrder_EachOneUndoStep() => EditorHost.Run(services =>
     {
-        var saved = SnapshotClipboard();
-        try
-        {
-            var (document, selection, commands) = Open(services);
-            selection.SelectEntities([Named(document, "C"), Named(document, "A")]);
+        var (document, selection, commands) = Open(services);
+        selection.SelectEntities([Named(document, "C"), Named(document, "A")]);
 
-            Run(commands, "Entity.Cut");
-            Assert.Equal("B", Outline(document));
+        Run(commands, "Entity.Cut");
+        Assert.Equal("B", Outline(document));
 
-            selection.Select(Named(document, "B"));
-            Run(commands, "Entity.Paste");
-            Assert.Equal("B A(A1 A2) C", Outline(document));
-            Assert.Equal(["A", "C"], selection.Entities.Select(e => e.Name));
+        selection.Select(Named(document, "B"));
+        Run(commands, "Entity.Paste");
+        Assert.Equal("B A(A1 A2) C", Outline(document));
+        Assert.Equal(["A", "C"], selection.Entities.Select(e => e.Name));
 
-            document.History.Undo();
-            Assert.Equal("B", Outline(document));
-            document.History.Undo();
-            Assert.Equal("A(A1 A2) B C", Outline(document));
+        document.History.Undo();
+        Assert.Equal("B", Outline(document));
+        document.History.Undo();
+        Assert.Equal("A(A1 A2) B C", Outline(document));
 
-            // Copy leaves the scene alone and pastes fresh copies.
-            selection.SelectEntities([Named(document, "B"), Named(document, "A2")]);
-            Run(commands, "Entity.Copy");
-            selection.Select(Named(document, "C"));
-            Run(commands, "Entity.Paste");
-            Assert.Equal("A(A1 A2) B C A2 B", Outline(document));
-        }
-        finally
-        {
-            if (saved is not null)
-                Clipboard.SetDataObject(saved, copy: true);
-        }
+        // Copy leaves the scene alone and pastes fresh copies.
+        selection.SelectEntities([Named(document, "B"), Named(document, "A2")]);
+        Run(commands, "Entity.Copy");
+        selection.Select(Named(document, "C"));
+        Run(commands, "Entity.Paste");
+        Assert.Equal("A(A1 A2) B C A2 B", Outline(document));
+
+        // On the clipboard as text too, for pasting elsewhere.
+        Assert.Contains("\"A2\"", services.GetRequiredService<IClipboard>().GetText(), StringComparison.Ordinal);
     });
-
-    // The tests use the real clipboard; put back what was there (what can be read of it) afterwards.
-    private static DataObject? SnapshotClipboard()
-    {
-        try
-        {
-            if (Clipboard.GetDataObject() is not { } current)
-                return null;
-            var copy = new DataObject();
-            foreach (var format in current.GetFormats(autoConvert: false))
-            {
-                try
-                {
-                    if (current.GetData(format, autoConvert: false) is { } data)
-                        copy.SetData(format, data);
-                }
-                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException or OutOfMemoryException)
-                {
-                    // A format that can't be read is left out.
-                }
-            }
-
-            return copy;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return null;
-        }
-    }
 
     private static EntityNode? Find(IEnumerable<EntityNode> nodes, string name)
     {

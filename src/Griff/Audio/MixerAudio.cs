@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Griff.Runtime;
 
 namespace Griff.Audio;
@@ -23,11 +22,12 @@ public interface ISoundLibrary
 public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
 {
     // The same sound started again within this long is skipped: ten coins collected in one frame make one sound, not
-    // one ten times as loud.
-    private static readonly TimeSpan RepeatGap = TimeSpan.FromMilliseconds(30);
+    // one ten times as loud. It's counted in the game's time (what Advance adds up each frame), not the wall clock's, so
+    // a frame that takes long to work out (a hitch, a garbage collection) still plays each of its sounds once.
+    private const double RepeatGap = 0.03;
 
-    private readonly Dictionary<string, TimeSpan> _lastPlayed = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly Dictionary<string, double> _lastPlayed = new(StringComparer.OrdinalIgnoreCase);
+    private double _time;
     private readonly List<Voice> _effects = [];
     private readonly List<LoopingSound> _loops = [];
     private readonly List<(Voice Voice, float From, float Left, float Seconds)> _fadingOut = [];
@@ -97,12 +97,11 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         if (_muted || string.IsNullOrWhiteSpace(sound))
             return;
 
-        var now = _clock.Elapsed;
-        if (_lastPlayed.TryGetValue(sound, out var last) && now - last < RepeatGap)
+        if (_lastPlayed.TryGetValue(sound, out var last) && _time - last < RepeatGap)
             return;
         if (library.Load(sound.Trim()) is not { } clip)
             return;
-        _lastPlayed[sound] = now;
+        _lastPlayed[sound] = _time;
 
         _effects.RemoveAll(v => !v.IsPlaying);
         _effects.Add(mixer.Play(clip.Open(), EffectVolume(volume), Math.Clamp(pan, -1, 1), pitch));
@@ -160,6 +159,8 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
 
     public void Advance(float seconds)
     {
+        if (seconds > 0)
+            _time += seconds;
         if (_musicFade.Amount < 1)
         {
             _musicFade.Amount = Math.Min(1, _musicFade.Amount + seconds / _musicFade.Seconds);

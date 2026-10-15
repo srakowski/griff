@@ -781,6 +781,13 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
 
     // --- Helpers ---
 
+    /// <summary>
+    /// Finds entities named in arguments (an id, the start of one, a path or a name, as <see cref="Resolve"/> does) in the
+    /// scene open now: how <see cref="ObjectSurface"/> takes entities.
+    /// </summary>
+    public static Func<string, Entity?> EntitiesIn(IAgentScene scene) =>
+        reference => scene.Scene is { } open ? Resolve(open, reference) : null;
+
     /// <summary>Finds an entity by full id, the start of an id, a path ("Level/Door"), or a name.</summary>
     public static Entity Resolve(Scene scene, string reference)
     {

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The desktop's renderer: Griff.Graphics' DrawList drawn with OpenGL 3.3 (Silk.NET), images decoded by StbImageSharp. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Griff.Graphics\Griff.Graphics.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenGL" />
+    <PackageReference Include="StbImageSharp" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

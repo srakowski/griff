@@ -137,8 +137,8 @@ public sealed class Camera : Component
         }
 
         var amount = _shakeStrength * (_shakeLeft / _shakeDuration);
-        var angle = Random.Shared.NextSingle() * MathF.Tau;
-        ShakeOffset = new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle)) * amount * Random.Shared.NextSingle();
+        var angle = Rand.Value * MathF.Tau;
+        ShakeOffset = new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle)) * amount * Rand.Value;
     }
 }
 

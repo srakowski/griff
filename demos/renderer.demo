@@ -1,0 +1,53 @@
+title: One renderer, desktop and browser
+intro: Griff draws through one renderer now. Each frame becomes a draw list that OpenGL draws on the desktop and WebGL draws in the browser, so a dark scene's lights and shadows and the camera's screen effects look the same in both.
+project: Empty | Same Pixels
+
+chapter: The dark | Lights and shadows, from the draw list
+create: Sprite
+rename: Floor
+set: Sprite.Size = 30, 20
+set: Sprite.Tint = #8A8070
+say: A floor the color of stone, so we can see where the light falls.
+create: Light
+rename: Lamp
+set: Transform.Position = 0, 0, 0
+set: Light.Radius = 8
+set: Light.Shadows = true
+expectvalue: Lamp.Light.Shadows = true
+select: Floor
+create: Sprite
+rename: Wall
+set: Transform.Position = 3, 0, 0
+set: Sprite.Size = 0.6, 3
+set: Sprite.Tint = #5F574F
+add: BoxCollider
+set: BoxCollider.Size = 0.6, 3
+expectat: Lamp = 0, 0
+expectat: Wall = 3, 0
+
+select: Main Camera
+set: Camera.Ambient = #202030
+expectvalue: Main Camera.Camera.Ambient = #202030
+say: A dark ambient light on the camera, a lamp that casts shadows, and a wall in its way.
+play
+wait: 1
+expectdrawn: -3, 0 = lit
+expectdrawn: 5, 0 = dark
+explain: game | Drawn from a draw list | Every frame is turned into a draw list: its quads, already placed on the screen, and the passes that draw them. Here the floor and the wall, then a light map that starts at the ambient light, the lamp added up in it where its shadows don't reach, and the map laid over the floor.
+say: The desktop runs those passes with OpenGL. The web player runs the very same list with WebGL, with the same shaders, so the browser now shows the dark, its lights and its shadows too.
+stop
+
+chapter: Screen effects | The same in the browser
+select: Main Camera
+add: ScreenEffects
+set: ScreenEffects.Scanlines = 0.6
+set: ScreenEffects.Curvature = 0.35
+set: ScreenEffects.Palette = GameBoy
+expectvalue: Main Camera.ScreenEffects.Palette = GameBoy
+play
+wait: 1
+expectdrawn: -3, 0 = lit
+expectdrawn: 5, 0 = #0F380F
+explain: game | Screen effects | Screen effects are one more pass: the frame is drawn into a picture, and the picture onto the screen through the old TV and the handheld's four greens. In a browser they used to be left out. Now they're drawn there as here.
+say: To keep it that way, a check draws every template, and scenes like this one, both ways, on the desktop and in a browser with no window, and compares the pictures pixel by pixel.
+stop

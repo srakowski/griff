@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    How Griff draws, apart from any graphics API: IRenderer, which every renderer implements, and the DrawList a frame is
+    turned into, the same for each (its quads in clip space and the passes that draw them: sprites, text, holes, the dark
+    and its lights and shadows, screen effects). Griff.Graphics.OpenGL draws it on the desktop and Griff.Web with WebGL 2.
+    No graphics API here, so it runs in the browser too.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\Griff\Griff.csproj" />
     <ProjectReference Include="..\Griff.Fonts\Griff.Fonts.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Silk.NET.OpenGL" />
-    <PackageReference Include="StbImageSharp" />
-  </ItemGroup>
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 </Project>

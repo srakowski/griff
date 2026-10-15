@@ -200,8 +200,8 @@ public sealed class ParticleEmitter : Component, IDrawable
         var transform = Entity.Transform;
         var world = transform.WorldMatrix;
         var spin = MathF.Atan2(world.M12, world.M11);
-        var angle = Direction * (MathF.PI / 180) + spin + (Random.Shared.NextSingle() - 0.5f) * Spread * (MathF.PI / 180);
-        var speed = Speed * (1 + (Random.Shared.NextSingle() * 2 - 1) * Math.Clamp(SpeedVariation, 0, 1));
+        var angle = Direction * (MathF.PI / 180) + spin + (Rand.Value - 0.5f) * Spread * (MathF.PI / 180);
+        var speed = Speed * (1 + (Rand.Value * 2 - 1) * Math.Clamp(SpeedVariation, 0, 1));
         var velocity = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
         _particles.Add(new Particle(new Vector2(world.M41, world.M42), velocity, 0, Lifetime));
     }

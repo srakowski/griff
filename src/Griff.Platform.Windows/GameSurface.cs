@@ -39,7 +39,7 @@ public sealed class GameSurface : HwndHost
     private IntPtr _hwnd;
     private WglContext? _context;
     private GL? _gl;
-    private SpriteRenderer? _renderer;
+    private OpenGLRenderer? _renderer;
     private string? _assetRoot;
     private bool _trackingLeave;
 
@@ -100,7 +100,7 @@ public sealed class GameSurface : HwndHost
             return;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot);
+        _renderer ??= new OpenGLRenderer(_gl, AssetRoot);
         _renderer.Render(frame, width, height);
         _context.SwapBuffers();
     }
@@ -116,7 +116,7 @@ public sealed class GameSurface : HwndHost
             return null;
 
         _context.MakeCurrent();
-        _renderer ??= new SpriteRenderer(_gl, AssetRoot);
+        _renderer ??= new OpenGLRenderer(_gl, AssetRoot);
         _renderer.Render(frame, width, height);
         return (_renderer.Capture(width, height), width, height);
     }

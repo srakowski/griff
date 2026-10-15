@@ -16,13 +16,25 @@ A multiplayer game's export hosts and joins from its own menu: see [Multiplayer]
 ## In a browser
 
 Games are on their way to the browser, so a jam game can be played from its page. So far it's a proof: the web player
-(`src/Griff.Web`) runs a game's start scene and draws its sprites and text in Edge or Chrome, taking the keyboard and mouse, and
-the Build menu doesn't offer it yet. To try it, `powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1`
+(`src/Griff.Web`) runs a game's start scene and draws it as the desktop does (sprites, tilemaps, text, particles, the dark
+with its lights and shadows, screen effects) in Edge or Chrome, taking the keyboard and mouse, and the Build menu doesn't
+offer it yet. To try it, `powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1`
 publishes the web player, exports the proof game (the griffin, which the arrow keys or WASD move with a script, under a label) and
 serves it at `http://127.0.0.1:8091/` until Ctrl+C; `-Project <folder>` serves a project of yours instead, `-Port`
 another port, and `-Out <folder>` keeps the exported site. `-Check` plays it in a headless Edge or Chrome (no window, and
 software WebGL, so it needs no GPU), takes a screenshot, holds the right arrow, takes another, and passes if the label's text
-is drawn as wide as Griff lays it out and the griffin is drawn and has moved right.
+is drawn as wide as Griff lays it out and the griffin is drawn and has moved right. `-Compare` checks the browser draws
+the same pixels as the desktop: each template's start scene, and three scenes of the dark (walls and crates casting
+shadows from a lamp, a light that doesn't, sparks, a label), the second through screen effects and the third with a
+minimap (a viewport, dark and lit by itself), are exported, held still in the
+
+headless browser after 90 steps (`-Steps`; the page's `?still=<steps>` takes them on its first frame, with `Rand` started
+from 0, and stays there) and drawn by the desktop's OpenGL renderer off the screen after the same steps, and the two
+pictures are compared: it passes if, in each, at most 0.5% of the pixels differ by more than 48 in a channel and they
+differ by at most 1 on average. They differ by a few hundredths on average, at most a fifth of a percent off: single
+pixels along the edges of tiles and quads, where the GPU and SwiftShader round a pixel's middle sitting on an edge each
+their own way. `-Template` picks some by name (`-Template "Platformer,Lights"`), and `-Out <folder>` keeps each one's
+`desktop.png`, `web.png` and `diff.png`. The OpenGL renderer's own tests (`OpenGLRendererTests`) draw sprites, the dark and screen effects off the screen and check the pixels.
 
 How it works:
 - **Griff runs on .NET for WebAssembly unchanged.** `Griff.Web` is a `Microsoft.NET.Sdk.WebAssembly` project that
@@ -41,11 +53,15 @@ How it works:
   `requestAnimationFrame`, which takes the game's fixed steps that frame's time holds (`Game.Advance`, as on the desktop),
   builds its `RenderFrame`, and hands it back. The browser build is single-threaded, so the player sets `Workers.Count`
   to 1 and a big scene's work is done on the page's thread.
-- **Drawing is WebGL 2.** `WebFrame` lays a frame out as the desktop renderer's instanced quads (corners in clip space,
-  the part of the image, tint and flash) with batches split by image, one `[JSImport]` call a frame passes them (as
-  bytes: a memory view can only be of bytes, ints or doubles), and `griff.js` draws them with the desktop shaders in
-  GLSL ES 3.00. Images are read from the game's files by .NET and decoded by the browser (`createImageBitmap`); a missing
-  one draws as the magenta checker.
+- **Drawing is WebGL 2.** The browser draws what the desktop draws, the same way: `WebGLRenderer`, like the desktop's
+  `OpenGLRenderer`, turns each frame into a `DrawList` (`Griff.Graphics`: the quads in clip space, and the passes that
+  draw them), and one `[JSImport]` call a frame hands the page its quads, passes and values (as bytes and ints: a memory
+  view can only be of bytes, ints or doubles), which `griff.js` runs with WebGL 2: runs of sprites, holes, the light map
+  (a framebuffer with a stencil buffer the shadows mark) multiplied over all but the HUD, and the screen effects' picture
+  drawn onto the canvas through them. The shaders are the desktop's (`Shaders`), given to the page as it starts, in GLSL
+  ES 3.00 at full precision. Images are read from the game's files by .NET and decoded by the browser
+  (`createImageBitmap`, with no color conversion); a missing one draws as the magenta checker. Film grain is noise from
+  the GPU's sine, so it's grain everywhere but not the same grains on every GPU.
 - **Text draws as on the desktop**, from the same glyph atlas (`Griff.Fonts`, which runs in the browser as it is): a quad
   a glyph, with the rows of an atlas page that glyphs were added to that frame copied to its texture before drawing.
   Font files in the game's Assets work (Griff's free fonts too, once picked); an installed font can't (the browser has
@@ -63,9 +79,10 @@ What it found for the rest of the web export:
   all of .NET after the player is published. The largest pieces are CoreLib (4.9 MB), System.Private.Xml (3.1 MB, pulled
   in though games don't use XML), the runtime (3.0 MB), Griff (2.1 MB) and the ICU culture data (2 MB, which invariant
   globalization would drop). The proof game ran 2 to 4 seconds after the page opened, served locally.
-- **Lights, shadows and screen effects** aren't drawn yet (a dark scene shows lit), nor are **sound** (Windows'
-  NAudio; the browser has Web Audio), **saves** (they'd go to the in-memory file system and be lost with the page: they
-  need the browser's storage), **controllers** (the Gamepad API) and **fullscreen**. Multiplayer can't use UDP in a
+- **Sound** isn't played yet (Windows' NAudio; the browser has Web Audio), and there are no **saves** (they'd go to the
+  in-memory file system and be lost with the page: they need the browser's storage), **controllers** (the Gamepad API)
+  or **fullscreen**.
+ Multiplayer can't use UDP in a
   browser; it would need WebSockets or WebRTC.
 - File-based C# apps (`dotnet run tool.cs`) default to Native AOT, which turns off the reflection Griff's JSON uses;
   `tools\web.cs` turns it off as `toolsunnymark.cs` does. Native AOT exports will meet the same wall.

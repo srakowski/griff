@@ -22,10 +22,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <!-- The web player's own logic, its keys and frames: Griff.Web targets the browser, so a test can't reference it. -->
+  <!-- The web player's own logic, its keys: Griff.Web targets the browser, so a test can't reference it. -->
   <ItemGroup>
     <Compile Include="..\..\src\Griff.Web\WebKeys.cs" Link="Web\WebKeys.cs" />
-    <Compile Include="..\..\src\Griff.Web\WebFrame.cs" Link="Web\WebFrame.cs" />
   </ItemGroup>
 
   <!-- Griff's free fonts, where FreeFonts looks for them (beside the editor, here beside the tests). -->
@@ -36,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Griff\Griff.csproj" />
     <ProjectReference Include="..\..\src\Griff.Fonts\Griff.Fonts.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Graphics\Griff.Graphics.csproj" />
     <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />
   </ItemGroup>
 

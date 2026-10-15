@@ -37,6 +37,25 @@ public sealed record LoadedGame(Project Project, ComponentRegistry Components, S
 
     /// <summary>Creates an entity from one of this game's prefabs, for <see cref="Game.PrefabLoader"/>.</summary>
     public Entity LoadPrefab(string nameOrPath) => (_prefabs ??= new PrefabLibrary(Project, Components)).Instantiate(nameOrPath);
+
+    /// <summary>
+    /// The game at its start scene, reading <paramref name="input"/>: its other scenes and prefabs loaded from here, its
+    /// title and components, and the project's settings (<see cref="GameLoader.UseProjectSettings"/>), as the web player
+    /// starts it (so a check drawing it on the desktop starts it the same).
+    /// </summary>
+    public Game NewGame(InputState input)
+    {
+        var game = new Game(Scene, input)
+        {
+            SceneLoader = LoadScene,
+            PrefabLoader = LoadPrefab,
+            SceneName = SceneName,
+            Title = Project.Name,
+            Components = Components,
+        };
+        game.UseProjectSettings(Project);
+        return game;
+    }
 }
 
 /// <summary>Loads an exported game folder (or a project folder) for the player.</summary>

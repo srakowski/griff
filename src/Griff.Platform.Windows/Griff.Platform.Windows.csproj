@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Griff.Graphics\Griff.Graphics.csproj" />
+    <ProjectReference Include="..\Griff.Graphics.OpenGL\Griff.Graphics.OpenGL.csproj" />
     <ProjectReference Include="..\Griff\Griff.csproj" />
   </ItemGroup>
 

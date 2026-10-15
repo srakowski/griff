@@ -91,6 +91,9 @@ public static partial class SceneRenderer
     // Each frame drawn between steps has its own stamp, so a transform knows the matrix it worked out is this frame's.
     private static long s_drawStamps;
 
+    // The time of a scene that isn't running (the editor's), for what the renderer moves by itself.
+    private static readonly System.Diagnostics.Stopwatch s_clock = System.Diagnostics.Stopwatch.StartNew();
+
     // Turns on drawing between the game's last two steps, unless it would draw everything as it is anyway: no step yet,
     // the scene came in on the last one, or the game is drawn right at its last step.
     private static bool BlendSteps(Scene scene, Runtime.Game game)
@@ -190,6 +193,7 @@ public static partial class SceneRenderer
         var effects = viewport is null && camera?.GetComponent<ScreenEffects>() is { IsActive: true } shown ? shown : null;
         built.Effects = effects;
         built.Look = effects?.Drawn(StepBlend.For(scene, camera)) ?? default;
+        built.Time = game?.Time.Total ?? s_clock.Elapsed.TotalSeconds;
         built.ViewsAt = worldCount;
         built.ClearViews();
         if (showsViews)

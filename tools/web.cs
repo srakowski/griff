@@ -1,6 +1,6 @@
 #:sdk Microsoft.NET.Sdk.Web
 #:project ../src/Griff.Scripting/Griff.Scripting.csproj
-#:project ../src/Griff.Graphics/Griff.Graphics.csproj
+#:project ../src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj
 #:property PublishAot=false
 
 // Griff in a browser: exports a game for the web (WebExporter, with the web player Griff.Web publishes) and serves it on
@@ -8,9 +8,12 @@
 // arrow keys or WASD move (a script reads the input), under a label. With --check it plays it in a headless Edge (or
 // Chrome) through the DevTools protocol, so no window opens: it waits for the game to run, takes a screenshot, holds the
 // right arrow, takes another, and checks the label's text is drawn as wide as Griff lays it out, and the griffin is drawn
-// and moved right, then exits 0 (or 1, saying why). Otherwise it serves until
+// and moved right, then exits 0 (or 1, saying why). With --compare it checks the browser draws what the desktop draws:
+// every template's start scene, and three scenes of lights, shadows, screen effects and a viewport, held still after --steps steps
+// (90 by default) in the headless browser and drawn by the desktop's OpenGL renderer (off the screen) after the same,
+// the pictures compared pixel by pixel (--template picks some, by name, comma-separated). Otherwise it serves until
 // Ctrl+C, for a person to open the address. Run through tools\web.ps1, which publishes the web player first.
-//   dotnet run -c Release tools/web.cs -- [--check] [--project <folder>] [--port <port>] [--out <folder>]
+//   dotnet run -c Release tools/web.cs -- [--check | --compare [--template <names>] [--steps <n>]] [--project <folder>] [--port <port>] [--out <folder>]
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.WebSockets;
@@ -46,6 +49,21 @@ if (!File.Exists(Path.Combine(player, WebExporter.Page)))
 
 var work = Path.Combine(Path.GetTempPath(), "griff-web-" + Guid.NewGuid().ToString("N")[..8]);
 var site = Arg("--out") is { } outFolder ? Path.GetFullPath(outFolder) : Path.Combine(work, "site");
+if (args.Contains("--compare"))
+{
+    // Only the pictures are kept: in --out's folder if it's given.
+    var steps = int.TryParse(Arg("--steps"), CultureInfo.InvariantCulture, out var s) && s >= 0 ? s : 90;
+    try
+    {
+        return await Compare(Path.Combine(work, "site"), Arg("--out") is null ? Path.Combine(work, "pictures") : site, Path.Combine(work, "browser"), steps);
+    }
+    finally
+    {
+        foreach (var folder in new[] { "site", "projects", "browser" })
+            TryDelete(Path.Combine(work, folder));
+    }
+}
+
 try
 {
     var project = Arg("--project") is { } folder ? await Project.LoadAsync(Path.GetFullPath(folder)) : await ProofGame(Path.Combine(work, "project"));
@@ -149,40 +167,12 @@ static async Task<WebApplication> Serve(string site, int port)
 // Plays the game in a headless browser and checks the griffin is drawn and moves right while the right arrow is held.
 async Task<int> Check(string url, string profile, string shots)
 {
-    if (Browser() is not { } browser)
+    if (LaunchBrowser(profile) is not { } process)
         return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
-
-    // Software WebGL (SwiftShader), so the check draws the same on any machine and needs no GPU.
-    var process = Process.Start(new ProcessStartInfo(browser)
-    {
-        ArgumentList =
-        {
-            "--headless=new", "--remote-debugging-port=0", $"--user-data-dir={profile}", "--no-first-run",
-            "--no-default-browser-check", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=960,540",
-            "--hide-scrollbars", "--mute-audio", "about:blank",
-        },
-        UseShellExecute = false,
-        RedirectStandardError = true,
-        RedirectStandardOutput = true,
-    })!;
-    // Its own logging is drained unread, so it never waits on a full pipe.
-    process.OutputDataReceived += (_, _) => { };
-    process.ErrorDataReceived += (_, _) => { };
-    process.BeginOutputReadLine();
-    process.BeginErrorReadLine();
     try
     {
-        using var cdp = await DevTools.ConnectAsync(profile);
         var log = new List<string>();
-        cdp.Event += (method, data) =>
-        {
-            if (method == "Runtime.consoleAPICalled")
-                log.Add($"console.{data["type"]}: {string.Join(" ", data["args"]!.AsArray().Select(a => a?["value"]?.ToString() ?? a?["description"]?.ToString()))}");
-            else if (method == "Runtime.exceptionThrown")
-                log.Add($"exception: {data["exceptionDetails"]?["exception"]?["description"] ?? data["exceptionDetails"]?["text"]}");
-        };
-        await cdp.SendAsync("Runtime.enable");
-        await cdp.SendAsync("Page.enable");
+        using var cdp = await ConnectAsync(profile, log);
         var started = Stopwatch.StartNew();
         await cdp.SendAsync("Page.navigate", new JsonObject { ["url"] = url });
 
@@ -233,6 +223,339 @@ async Task<int> Check(string url, string profile, string shots)
     {
         process.Kill(entireProcessTree: true);
         await process.WaitForExitAsync();
+    }
+}
+
+// A headless Edge (or Chrome), with software WebGL (SwiftShader) so a check draws the same on any machine and needs no
+// GPU; null if there's neither.
+static Process? LaunchBrowser(string profile)
+{
+    if (Browser() is not { } browser)
+        return null;
+    var process = Process.Start(new ProcessStartInfo(browser)
+    {
+        ArgumentList =
+        {
+            "--headless=new", "--remote-debugging-port=0", $"--user-data-dir={profile}", "--no-first-run",
+            "--no-default-browser-check", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=960,540",
+            "--force-device-scale-factor=1", "--hide-scrollbars", "--mute-audio", "about:blank",
+        },
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+    })!;
+    // Its own logging is drained unread, so it never waits on a full pipe.
+    process.OutputDataReceived += (_, _) => { };
+    process.ErrorDataReceived += (_, _) => { };
+    process.BeginOutputReadLine();
+    process.BeginErrorReadLine();
+    return process;
+}
+
+// The browser's page over the DevTools protocol, with what the page logs and throws added to `log`.
+static async Task<DevTools> ConnectAsync(string profile, List<string> log)
+{
+    var cdp = await DevTools.ConnectAsync(profile);
+    cdp.Event += (method, data) =>
+    {
+        lock (log)
+        {
+            if (method == "Runtime.consoleAPICalled")
+                log.Add($"console.{data["type"]}: {string.Join(" ", data["args"]!.AsArray().Select(a => a?["value"]?.ToString() ?? a?["description"]?.ToString()))}");
+            else if (method == "Runtime.exceptionThrown")
+                log.Add($"exception: {data["exceptionDetails"]?["exception"]?["description"] ?? data["exceptionDetails"]?["text"]}");
+        }
+    };
+    await cdp.SendAsync("Runtime.enable");
+    await cdp.SendAsync("Page.enable");
+    return cdp;
+}
+
+// Same frame, same pixels: each template's start scene (and three scenes of the dark, lights and shadows, the second with
+// screen effects, the third with a minimap viewport) is exported for the web, held still after `steps` steps in the browser (?still=) and drawn by the
+// desktop's OpenGL renderer after the same steps, and the two pictures are compared. Passes if every game's differ by
+// little: at most MaxOffShare of the pixels more than MaxOff in a channel, and MaxMean on average. Each game's
+// desktop.png, web.png and diff.png (what differs, brightened) go in `shots`.
+async Task<int> Compare(string root, string shots, string profile, int steps)
+{
+    const double MaxOffShare = 0.005, MaxMean = 1.0;
+    const int MaxOff = 48;
+    var chosen = Arg("--template")?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    bool Wanted(string name) => chosen is null || chosen.Any(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+    var games = ProjectTemplates.All.Where(t => Wanted(t.Name))
+        .Select(t => (t.Name, Make: (Func<string, Task<Project>>)(folder => Project.CreateAsync(folder, t.Title, t))))
+        .ToList();
+    foreach (var showcase in new[] { "Lights", "Effects", "Viewports" })
+    {
+        if (Wanted(showcase))
+            games.Add((showcase, folder => Showcase(folder, showcase)));
+    }
+
+    if (games.Count == 0)
+        return Fail($"No template called {Arg("--template")}. Templates: {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}, Lights, Effects, Viewports.");
+
+    Directory.CreateDirectory(root);
+    await using var server = await Serve(root, port);
+    if (LaunchBrowser(profile) is not { } process)
+        return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+    var failed = new List<string>();
+    try
+    {
+        var log = new List<string>();
+        using var cdp = await ConnectAsync(profile, log);
+        Console.WriteLine($"Comparing {games.Count} games after {steps} steps: the desktop's OpenGL against the browser's WebGL (headless, SwiftShader).");
+        foreach (var (name, make) in games)
+        {
+            var slug = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+            var site = Path.Combine(root, slug);
+            lock (log)
+                log.Clear();
+            try
+            {
+                var project = await make(Path.Combine(work, "projects", slug));
+                var export = WebExporter.Export(project, player, site);
+                if (!export.Success)
+                {
+                    failed.Add($"{name}: the export failed: {export.Error}");
+                    continue;
+                }
+
+                if (await Still(cdp, $"http://127.0.0.1:{port}/{slug}/?still={steps}") is not var (web, width, height))
+                {
+                    lock (log)
+                        failed.Add($"{name}: it didn't run in the browser.\n  {string.Join("\n  ", log)}");
+                    continue;
+                }
+
+                var desktop = await DrawOnDesktop(Path.Combine(site, ExportLayout.GameFolder), steps, width, height);
+                var (offShare, mean, worst, diff) = Difference(desktop, web, width, height);
+                Png(Path.Combine(shots, slug, "desktop.png"), desktop, width, height);
+                Png(Path.Combine(shots, slug, "web.png"), web, width, height);
+                Png(Path.Combine(shots, slug, "diff.png"), diff, width, height);
+                var same = offShare <= MaxOffShare && mean <= MaxMean;
+                Console.WriteLine($"  {(same ? "same" : "DIFFERENT"),-9} {name,-18} {width}x{height}: {offShare:P2} of pixels off by more than {MaxOff}, " +
+                                  $"{mean:0.00} off on average, {worst} at most");
+                if (!same)
+                    failed.Add($"{name}: {offShare:P2} of its pixels differ by more than {MaxOff} (at most {MaxOffShare:P1}), {mean:0.00} on average (at most {MaxMean:0.0}); see {Path.Combine(shots, slug)}");
+            }
+#pragma warning disable CA1031 // One game failing to compare is reported with the rest.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                failed.Add($"{name}: {ex.Message}");
+            }
+            finally
+            {
+                TryDelete(site);
+            }
+        }
+    }
+    finally
+    {
+        process.Kill(entireProcessTree: true);
+        await process.WaitForExitAsync();
+    }
+
+    Console.WriteLine($"Pictures: {shots}");
+    foreach (var failure in failed)
+        Console.Error.WriteLine(failure);
+    if (failed.Count > 0)
+        return 1;
+    Console.WriteLine($"Same pixels: all {games.Count} games draw the same on the desktop and in the browser.");
+    return 0;
+
+    // A pixel is off by its channel furthest from the other picture's (red, green and blue: the canvas has no alpha).
+    (double OffShare, double Mean, int Worst, byte[] Diff) Difference(byte[] a, byte[] b, int width, int height)
+    {
+        var diff = new byte[width * height * 4];
+        long total = 0;
+        var (off, worst) = (0, 0);
+        for (var i = 0; i < width * height; i++)
+        {
+            var most = 0;
+            for (var c = 0; c < 3; c++)
+            {
+                var d = Math.Abs(a[i * 4 + c] - b[i * 4 + c]);
+                total += d;
+                most = Math.Max(most, d);
+            }
+
+            worst = Math.Max(worst, most);
+            if (most > MaxOff)
+                off++;
+            var shown = (byte)Math.Min(255, most * 4);
+            (diff[i * 4], diff[i * 4 + 1], diff[i * 4 + 2], diff[i * 4 + 3]) = (shown, shown, shown, 255);
+        }
+
+        return ((double)off / (width * height), total / (width * height * 3.0), worst, diff);
+    }
+}
+
+// Opens the game at `url` held still and returns its picture once every image is decoded: the canvas's pixels, read
+// right after a frame is drawn (top-down RGBA).
+static async Task<(byte[] Pixels, int Width, int Height)?> Still(DevTools cdp, string url)
+{
+    await cdp.SendAsync("Page.navigate", new JsonObject { ["url"] = url });
+    var started = Stopwatch.StartNew();
+    var settled = 0;
+    while (true)
+    {
+        await Task.Delay(100);
+        var status = await Evaluate(cdp, "globalThis.griff ? griff.status + '|' + griff.frames + '|' + griff.pending : 'loading|0|0'");
+        var parts = status.Split('|');
+        if (status.StartsWith("failed", StringComparison.Ordinal) || started.Elapsed > TimeSpan.FromSeconds(90))
+            return null;
+        // A few frames after the last image was decoded, so the frame drawn has them all.
+        settled = parts[0] == "running" && int.Parse(parts[1], CultureInfo.InvariantCulture) >= 3 && parts[2] == "0" ? settled + 1 : 0;
+        if (settled >= 3)
+            break;
+    }
+
+    var result = await cdp.SendAsync("Runtime.evaluate", new JsonObject
+    {
+        ["expression"] = "griff.capture().then(p => document.getElementById('game').width + 'x' + document.getElementById('game').height + ':' + p)",
+        ["awaitPromise"] = true,
+        ["returnByValue"] = true,
+    });
+    var text = result["result"]?["value"]?.ToString() ?? "";
+    var colon = text.IndexOf(':', StringComparison.Ordinal);
+    var size = text[..colon].Split('x');
+    return (Convert.FromBase64String(text[(colon + 1)..]), int.Parse(size[0], CultureInfo.InvariantCulture), int.Parse(size[1], CultureInfo.InvariantCulture));
+}
+
+// The exported game drawn by the desktop's renderer, off the screen, as the web player draws it held still: started the
+// same, `steps` steps of a frame each, and its frame built at the canvas's aspect.
+static async Task<byte[]> DrawOnDesktop(string gameFolder, int steps, int width, int height)
+{
+    var loaded = await GameLoader.LoadAsync(gameFolder);
+    Griff.Rand.Seed(0);
+    var game = loaded.NewGame(new InputState { IsMouseInView = false });
+    var aspect = (float)width / height;
+    game.ViewAspect = aspect;
+    for (var i = 0; i < steps; i++)
+        game.Advance(1.0 / game.Time.StepRate);
+    var frame = Griff.Rendering.SceneRenderer.Build(game, aspect);
+    using var gl = new Griff.Graphics.OffscreenGL(width, height, loaded.Project.AssetsPath);
+    gl.Render(frame);
+    return gl.Capture();
+}
+
+// A scene of everything the dark draws: walls of a tilemap and crates casting shadows from a lamp, a light that doesn't,
+// the griffin, sparks and a label, all lit. "Effects" sees it through screen effects too (all but the film grain, which
+// is noise from each GPU's sine and so differs by design); "Viewports" adds a minimap, a second camera drawn into the
+// top right corner, dark and lit by itself.
+async Task<Project> Showcase(string folder, string kind)
+{
+    var effects = kind == "Effects";
+    var project = await Project.CreateAsync(folder, kind == "Lights" ? "Lights and Shadows" : kind, ProjectTemplates.Empty);
+    File.Copy(Path.Combine(repo!.FullName, "assets", "griff.png"), Path.Combine(project.AssetsPath, "Griffin.png"));
+    var scenePath = project.StartScenePath!;
+    var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+    Scene scene;
+    await using (var read = File.OpenRead(scenePath))
+        scene = serializer.Load(read);
+
+    var camera = scene.Entities.First(e => e.GetComponent<Camera>() is not null);
+    camera.GetComponent<Camera>()!.Ambient = new Griff.Color(0.16f, 0.16f, 0.26f);
+    if (effects)
+    {
+        var look = camera.AddComponent<ScreenEffects>();
+        (look.Vignette, look.Scanlines, look.Curvature, look.Aberration) = (0.6f, 0.5f, 0.4f, 0.5f);
+        (look.Saturation, look.Contrast, look.Brightness, look.Tint) = (1.3f, 1.15f, 0.03f, new Griff.Color(1f, 0.95f, 0.85f));
+    }
+
+    if (kind == "Viewports")
+    {
+        var minimap = new Entity("Minimap");
+        minimap.Transform.Position = new System.Numerics.Vector3(1, 0, 0);
+        var view = minimap.AddComponent<Camera>();
+        (view.Size, view.Ambient, view.Background) = (7, new Griff.Color(0.3f, 0.3f, 0.4f), new Griff.Color(0.1f, 0.15f, 0.1f));
+        minimap.AddComponent<Viewport>();
+        scene.Add(minimap);
+    }
+
+    Entity Add(string name, float x, float y)
+    {
+        var entity = new Entity(name);
+        entity.Transform.Position = new System.Numerics.Vector3(x, y, 0);
+        scene.Add(entity);
+        return entity;
+    }
+
+    var walls = Add("Walls", -9.5f, 5.5f).AddComponent<Tilemap>();
+    walls.TileSize = 1;
+    walls.FillRect(0, 0, 19, 0, 0);
+    walls.FillRect(0, 10, 19, 10, 0);
+    foreach (var (x, y) in new[] { (5, 4), (14, 4), (5, 7), (14, 7) })
+        walls.SetTile(x, y, 0);
+    foreach (var (x, y) in new[] { (2.5f, 1f), (2.5f, -2f), (-4f, -2.5f) })
+    {
+        var crate = Add("Crate", x, y);
+        var sprite = crate.AddComponent<Sprite>();
+        (sprite.Size, sprite.Tint) = (System.Numerics.Vector2.One, new Griff.Color(0.75f, 0.55f, 0.35f));
+        crate.AddComponent<BoxCollider>().Size = System.Numerics.Vector2.One;
+    }
+
+    var lamp = Add("Lamp", 0, 0).AddComponent<Light>();
+    (lamp.Radius, lamp.Shadows, lamp.Color, lamp.Softness) = (9, true, new Griff.Color(1f, 0.85f, 0.6f), 0.5f);
+    var glow = Add("Glow", -6, 3).AddComponent<Light>();
+    (glow.Radius, glow.Color) = (4, new Griff.Color(0.4f, 0.6f, 1f));
+    var griffin = Add("Griffin", -2, 0.5f).AddComponent<Sprite>();
+    (griffin.Image, griffin.Size) = ("Griffin.png", new System.Numerics.Vector2(3, 3));
+    var sparks = Add("Sparks", 5, -3).AddComponent<ParticleEmitter>();
+    (sparks.Rate, sparks.Lifetime, sparks.StartColor, sparks.EndColor) = (30, 1.5f, new Griff.Color(1f, 0.6f, 0.2f), new Griff.Color(1f, 0.2f, 0.1f, 0f));
+    var label = Add("Label", 0, 3.8f).AddComponent<Text>();
+    (label.Value, label.Size, label.Color) = (kind == "Lights" ? "Lights and Shadows ♥" : kind, 0.8f, new Griff.Color(1f, 0.83f, 0.3f));
+
+    await using (var write = File.Create(scenePath))
+        serializer.Save(scene, write);
+    return project;
+}
+
+// Writes top-down RGBA pixels as a PNG (no filtering, zlib-compressed rows), alpha made opaque.
+static void Png(string path, byte[] rgba, int width, int height)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    var raw = new MemoryStream();
+    using (var zlib = new System.IO.Compression.ZLibStream(raw, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+    {
+        var row = new byte[width * 4 + 1];
+        for (var y = 0; y < height; y++)
+        {
+            Array.Copy(rgba, y * width * 4, row, 1, width * 4);
+            for (var x = 0; x < width; x++)
+                row[1 + x * 4 + 3] = 255;
+            zlib.Write(row);
+        }
+    }
+
+    using var file = File.Create(path);
+    file.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    var header = new byte[13];
+    System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, width);
+    System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), height);
+    (header[8], header[9]) = (8, 6);
+    Chunk(file, "IHDR", header);
+    Chunk(file, "IDAT", raw.ToArray());
+    Chunk(file, "IEND", []);
+
+    static void Chunk(Stream file, string type, byte[] data)
+    {
+        Span<byte> number = stackalloc byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(number, data.Length);
+        file.Write(number);
+        var body = Encoding.ASCII.GetBytes(type).Concat(data).ToArray();
+        file.Write(body);
+        var crc = 0xFFFFFFFFu;
+        foreach (var b in body)
+        {
+            crc ^= b;
+            for (var k = 0; k < 8; k++)
+                crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+        }
+
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(number, ~crc);
+        file.Write(number);
     }
 }
 

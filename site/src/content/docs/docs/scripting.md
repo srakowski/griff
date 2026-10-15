@@ -123,8 +123,9 @@ foreach (var enemy in Game.FindAll<Enemy>())
     enemy.Hit();
 Game.Find<ScoreCounter>()?.Add(1);
 
-// Random spawn points, loot rolls and variety.
+// Random spawn points, loot rolls and variety. Rand.Seed(42) makes a run repeat (particles and camera shake draw from Rand too).
 if (Rand.Chance(0.25f))
+
     Game.Spawn(Rand.Pick(["Coin", "Gem"]), Rand.InsideCircle(3));
 
 // Sequences that take time: a coroutine waits with `yield return` and picks up where it left off.

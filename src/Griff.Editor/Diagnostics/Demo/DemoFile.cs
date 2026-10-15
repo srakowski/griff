@@ -598,6 +598,11 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "closefloat: Output": close the floating window the panel is in, putting its panels back.
                 await ui.CloseFloating(a);
                 break;
+            case "expectdrawn":
+                // "expectdrawn: -3, 0 = lit" (or "dark", or "#FF004D"): the game view's picture, as the renderer draws it, at
+                // that point of the world: lit (a channel over 80), dark (every channel under 40) or that color (within 24).
+                await ExpectDrawn(a);
+                break;
             case "expectprofiler":
                 // "expectprofiler: frames", "expectprofiler: recording = false", "expectprofiler: entities = 2006",
                 // "expectprofiler: cost = Bunny" or "expectprofiler: no garbage = Lights": what the Profiler panel shows (it has
@@ -1700,8 +1705,43 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     // "frames" (it has recorded some), "recording = true|false", "entities = <n>" (as it last counted them), "cost = <name>",
     // or "no garbage = <name>" (a cost it shows that makes no garbage).
+    private async Task ExpectDrawn(string text)
+    {
+        var (atText, want) = Split2(text, '=');
+        var at = Vector(atText);
+        var surface = CurrentSurface;
+        (int R, int G, int B)? seen = null;
+        bool Matches()
+        {
+            if (workspace.Scene is not { } document)
+                return false;
+            var aspect = surface.Aspect;
+            var frame = play.Game is { } game ? Rendering.SceneRenderer.Build(game, aspect) : Rendering.SceneRenderer.Build(document.Scene, aspect);
+            if (surface.Capture(frame) is not var (pixels, width, height))
+                return false;
+            var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(at, 0, 1), frame.ViewProjection);
+            var x = Math.Clamp((int)((clip.X / clip.W * 0.5f + 0.5f) * width), 0, width - 1);
+            var y = Math.Clamp((int)((0.5f - clip.Y / clip.W * 0.5f) * height), 0, height - 1);
+            var i = (y * width + x) * 4;
+            var color = (pixels[i], pixels[i + 1], pixels[i + 2]);
+            seen = color;
+            return want.ToLowerInvariant() switch
+            {
+                "lit" => Math.Max(color.Item1, Math.Max(color.Item2, color.Item3)) > 80,
+                "dark" => Math.Max(color.Item1, Math.Max(color.Item2, color.Item3)) < 40,
+                _ => Color.TryParse(want, out var c) &&
+
+                     Math.Abs(color.Item1 - c.R * 255) <= 24 && Math.Abs(color.Item2 - c.G * 255) <= 24 && Math.Abs(color.Item3 - c.B * 255) <= 24,
+            };
+        }
+
+        if (!await Until(Matches, 3000))
+            throw new InvalidOperationException($"Expected the game drawn {want} at {at.X}, {at.Y}, but it's {(seen is { } s ? $"#{s.R:X2}{s.G:X2}{s.B:X2}" : "not drawn")} there.");
+    }
+
     private async Task ExpectProfiler(string text)
     {
+
         var profiler = DemoUi.Profiler;
         var (what, value) = Split2(text, '=');
         var (holds, shows) = what.ToLowerInvariant() switch

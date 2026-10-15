@@ -1,5 +1,5 @@
 #:project ../src/Griff.Scripting/Griff.Scripting.csproj
-#:project ../src/Griff.Graphics/Griff.Graphics.csproj
+#:project ../src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj
 #:property PublishAot=false
 #:property AllowUnsafeBlocks=true
 
@@ -23,7 +23,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Griff.Graphics;
 using Griff.Input;
 using Griff.Projects;
@@ -258,108 +257,32 @@ static int Fail(string message)
     return 1;
 }
 
-// An OpenGL context on a window that's never shown, drawing into a framebuffer of its own the size of a 720p game.
-sealed class HiddenGl : IDisposable
+// The renderer drawing into a framebuffer the size of a 720p game, on a window that's never shown (OffscreenGL), timing
+// the GPU's work on each frame.
+sealed class HiddenGl(string assets) : IDisposable
 {
-    private const int Width = 1280, Height = 720;
-    private readonly IntPtr _window, _dc, _context, _opengl32;
-    private readonly Silk.NET.OpenGL.GL _gl;
-    private readonly SpriteRenderer _renderer;
-
-    public HiddenGl(string assets)
-    {
-        _window = CreateWindowEx(0, "static", "BunnyBench", 0x80000000, 0, 0, Width, Height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        _dc = GetDC(_window);
-        var format = new PixelFormat { Size = (ushort)Marshal.SizeOf<PixelFormat>(), Version = 1, Flags = 0x4 | 0x20 | 0x1, ColorBits = 32, AlphaBits = 8, DepthBits = 24, StencilBits = 8 };
-        SetPixelFormat(_dc, ChoosePixelFormat(_dc, ref format), ref format);
-        _context = wglCreateContext(_dc);
-        wglMakeCurrent(_dc, _context);
-        _opengl32 = LoadLibrary("opengl32.dll");
-        _gl = Silk.NET.OpenGL.GL.GetApi(name =>
-        {
-            var address = wglGetProcAddress(name);
-            return address is 0 or 1 or 2 or 3 or -1 ? GetProcAddress(_opengl32, name) : address;
-        });
-
-        var framebuffer = _gl.GenFramebuffer();
-        _gl.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, framebuffer);
-        var color = _gl.GenRenderbuffer();
-        _gl.BindRenderbuffer(Silk.NET.OpenGL.RenderbufferTarget.Renderbuffer, color);
-        _gl.RenderbufferStorage(Silk.NET.OpenGL.RenderbufferTarget.Renderbuffer, Silk.NET.OpenGL.InternalFormat.Rgba8, Width, Height);
-        _gl.FramebufferRenderbuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, Silk.NET.OpenGL.FramebufferAttachment.ColorAttachment0,
-            Silk.NET.OpenGL.RenderbufferTarget.Renderbuffer, color);
-        _renderer = new SpriteRenderer(_gl, assets);
-    }
-
+    private readonly OffscreenGL _offscreen = new(1280, 720, assets);
     private uint _query;
 
     // Draws the frame, timing the GPU's work on it.
     public void Draw(RenderFrame frame)
     {
+        var gl = _offscreen.GL;
         if (_query == 0)
-            _query = _gl.GenQuery();
-        _gl.BeginQuery(Silk.NET.OpenGL.QueryTarget.TimeElapsed, _query);
-        _renderer.Render(frame, Width, Height);
-        _gl.EndQuery(Silk.NET.OpenGL.QueryTarget.TimeElapsed);
+            _query = gl.GenQuery();
+        gl.BeginQuery(Silk.NET.OpenGL.QueryTarget.TimeElapsed, _query);
+        _offscreen.Render(frame);
+        gl.EndQuery(Silk.NET.OpenGL.QueryTarget.TimeElapsed);
     }
 
     // Waits for the GPU to finish the frame, and returns how long its work took in milliseconds.
     public double Finish()
     {
-        _gl.Finish();
-        _gl.GetQueryObject(_query, Silk.NET.OpenGL.QueryObjectParameterName.Result, out ulong nanoseconds);
+        var gl = _offscreen.GL;
+        gl.Finish();
+        gl.GetQueryObject(_query, Silk.NET.OpenGL.QueryObjectParameterName.Result, out ulong nanoseconds);
         return nanoseconds / 1e6;
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
-        wglDeleteContext(_context);
-        DestroyWindow(_window);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PixelFormat
-    {
-        public ushort Size, Version;
-        public uint Flags;
-        public byte PixelType, ColorBits, RedBits, RedShift, GreenBits, GreenShift, BlueBits, BlueShift, AlphaBits, AlphaShift;
-        public byte AccumBits, AccumRedBits, AccumGreenBits, AccumBlueBits, AccumAlphaBits, DepthBits, StencilBits, AuxBuffers, LayerType, Reserved;
-        public uint LayerMask, VisibleMask, DamageMask;
-    }
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr CreateWindowEx(int exStyle, string className, string windowName, uint style, int x, int y, int width, int height,
-        IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
-
-    [DllImport("user32.dll")]
-    private static extern bool DestroyWindow(IntPtr window);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetDC(IntPtr window);
-
-    [DllImport("gdi32.dll")]
-    private static extern int ChoosePixelFormat(IntPtr dc, ref PixelFormat format);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool SetPixelFormat(IntPtr dc, int format, ref PixelFormat descriptor);
-
-    [DllImport("opengl32.dll")]
-    private static extern IntPtr wglCreateContext(IntPtr dc);
-
-    [DllImport("opengl32.dll")]
-    private static extern bool wglMakeCurrent(IntPtr dc, IntPtr context);
-
-    [DllImport("opengl32.dll")]
-    private static extern bool wglDeleteContext(IntPtr context);
-
-    [DllImport("opengl32.dll", CharSet = CharSet.Ansi, BestFitMapping = false)]
-    private static extern IntPtr wglGetProcAddress(string name);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr LoadLibrary(string name);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Ansi, BestFitMapping = false)]
-    private static extern IntPtr GetProcAddress(IntPtr module, string name);
+    public void Dispose() => _offscreen.Dispose();
 }

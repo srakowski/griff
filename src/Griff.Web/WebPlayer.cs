@@ -1,7 +1,7 @@
+using System.Globalization;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
-using Griff.Fonts;
+using Griff.Graphics;
 using Griff.Input;
 using Griff.Rendering;
 using Griff.Runtime;
@@ -11,23 +11,27 @@ namespace Griff.Web;
 /// <summary>
 /// Plays a Griff game in the browser. The page calls <see cref="Frame"/> once for each frame the screen shows (its
 /// <c>requestAnimationFrame</c>): the game takes the steps that frame's time holds, as on the desktop, and its picture
-/// is handed to the page to draw with WebGL. The page sends the keyboard and mouse here as they happen.
+/// is drawn with WebGL (<see cref="WebGLRenderer"/>). The page sends the keyboard and mouse here as they happen.
 /// </summary>
+/// <remarks>
+/// With <c>?still=<i>steps</i></c> on the page's address, the game takes that many steps on its first frame (its
+/// <see cref="Rand"/> numbers started from 0) and then stays still, drawn again each frame: a moment of it to compare
+/// with the desktop's picture of the same moment (<c>tools\web.ps1 -Compare</c>).
+
+/// </remarks>
 public static partial class WebPlayer
 {
     /// <summary>Where the game's files go in the browser's in-memory file system, for <see cref="GameLoader"/>.</summary>
     public const string GameFolder = "/game";
 
     private static readonly InputState s_input = new() { IsMouseInView = false };
-    private static readonly Dictionary<string, int> s_images = new(StringComparer.OrdinalIgnoreCase);
-    private static WebFrame s_frame = new(ImageId);
-    private static byte[] s_glyphRows = [];
-    private static LoadedGame? s_loaded;
+    private static WebGLRenderer? s_renderer;
     private static Game? s_game;
     private static RenderFrame? s_last;
     private static double s_lastTime = -1;
     private static Vector2 s_pointer;
     private static bool s_faulted;
+    private static int? s_still;
 
     /// <summary>
     /// Fetches the game exported next to the page (the files its <see cref="ExportLayout.WebFileList"/> lists, under
@@ -54,31 +58,39 @@ public static partial class WebPlayer
     /// <summary>Starts <paramref name="loaded"/>'s start scene, set up as the desktop player sets it up, and the page's frames.</summary>
     public static void Run(LoadedGame loaded)
     {
-        s_loaded = loaded;
-        s_frame = new WebFrame(ImageId, loaded.Project.AssetsPath);
+        s_renderer = new WebGLRenderer(loaded.Project.AssetsPath);
         // The browser build has one thread (the page's): a big scene's work is done on it rather than shared out.
         Workers.Count = 1;
-        s_game = new Game(loaded.Scene, s_input)
-        {
-            SceneLoader = loaded.LoadScene,
-            PrefabLoader = loaded.LoadPrefab,
-            SceneName = loaded.SceneName,
-            Title = loaded.Project.Name,
-            Components = loaded.Components,
-        };
-        s_game.UseProjectSettings(loaded.Project);
+        // A still moment is the same moment wherever it's reached: its random numbers (Rand) start from 0.
+        s_still = Still(Browser.Query());
+        if (s_still is not null)
+            Rand.Seed(0);
+        s_game = loaded.NewGame(s_input);
         // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
         s_game.Warning += (_, message) => Console.WriteLine(message);
         foreach (var warning in loaded.Warnings)
             Console.WriteLine(warning);
-        Browser.Start(loaded.Project.Name);
+        Browser.Start(loaded.Project.Name, Shaders.Web, Shaders.Vertex, Shaders.Sprite, Shaders.Shape, Shaders.Effects);
+    }
+
+    /// <summary>The steps <c>?still=<i>steps</i></c> asks for in an address's query, or null if it doesn't.</summary>
+    private static int? Still(string query)
+    {
+        foreach (var part in query.TrimStart('?').Split('&'))
+        {
+            if (part.StartsWith("still=", StringComparison.Ordinal) &&
+                int.TryParse(part["still=".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var steps))
+                return steps;
+        }
+
+        return null;
     }
 
     /// <summary>A frame of the screen, shown at <paramref name="now"/> (milliseconds) on a canvas this many pixels big.</summary>
     [JSExport]
     public static void Frame(double now, int width, int height)
     {
-        if (s_game is null || s_faulted)
+        if (s_game is null || s_renderer is null || s_faulted)
             return;
         var seconds = s_lastTime < 0 ? 0 : (now - s_lastTime) / 1000;
         s_lastTime = now;
@@ -87,8 +99,18 @@ public static partial class WebPlayer
         {
             UpdatePointer();
             s_game.ViewAspect = aspect;
-            s_game.Advance(seconds);
+            if (s_still is not { } steps)
+            {
+                s_game.Advance(seconds);
+            }
+            else if (steps >= 0)
+            {
+                TakeSteps(s_game, steps);
+                s_still = -1;
+            }
+
             s_last = SceneRenderer.Build(s_game, aspect, recycle: s_last);
+            s_renderer.Render(s_last, width, height);
         }
 #pragma warning disable CA1031 // A game that throws stops, and says why, as the desktop player's does.
         catch (Exception ex)
@@ -97,13 +119,15 @@ public static partial class WebPlayer
             s_faulted = true;
             Console.Error.WriteLine(ex);
             Browser.Fail($"The game hit an error: {ex.Message}");
-            return;
         }
+    }
 
-        s_frame.Build(s_last);
-        SendGlyphs();
-        var background = s_frame.Background;
-        Browser.Draw(MemoryMarshal.AsBytes(s_frame.Quads), s_frame.Batches, s_frame.Views, background.R, background.G, background.B);
+    /// <summary>Takes <paramref name="steps"/> of <paramref name="game"/>'s steps, a frame of one step each, as a still moment of it is reached.</summary>
+    private static void TakeSteps(Game game, int steps)
+    {
+        var step = 1.0 / game.Time.StepRate;
+        for (var i = 0; i < steps; i++)
+            game.Advance(step);
     }
 
     /// <summary>
@@ -174,35 +198,5 @@ public static partial class WebPlayer
             var world = Vector4.Transform(new Vector4(s_pointer, 0, 1), inverse);
             s_input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
         }
-    }
-
-    // The rows of the glyph pages that glyphs were drawn into since the last frame, for the page to copy to its textures
-    // before drawing the frame.
-    private static void SendGlyphs()
-    {
-        var pages = s_frame.Glyphs.Pages;
-        for (var i = 0; i < pages.Count; i++)
-        {
-            if (!pages[i].TakeChanges(out var top, out var rows))
-                continue;
-            var length = rows * GlyphPage.Size * 4;
-            if (s_glyphRows.Length < length)
-                s_glyphRows = new byte[GlyphPage.Size * GlyphPage.Size * 4];
-            pages[i].CopyRgba(top, rows, s_glyphRows);
-            Browser.Glyphs(WebFrame.GlyphPageId(i), GlyphPage.Size, top, rows, s_glyphRows.AsSpan(0, length));
-        }
-    }
-
-    // Each image the game draws is read from the game's files once and given to the page under a number; one that can't
-    // be read is given as nothing, which the page draws as the missing image's checker, as the desktop does.
-    private static int ImageId(string image)
-    {
-        if (s_images.TryGetValue(image, out var id))
-            return id;
-        id = s_images.Count + 1;
-        s_images[image] = id;
-        var path = Path.Combine(s_loaded!.Project.AssetsPath, image.Replace('\\', '/'));
-        Browser.LoadImage(id, File.Exists(path) ? File.ReadAllBytes(path) : []);
-        return id;
     }
 }

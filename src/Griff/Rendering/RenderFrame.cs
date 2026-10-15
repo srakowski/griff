@@ -60,6 +60,12 @@ public sealed class RenderFrame
     /// <summary>The <see cref="Effects"/>' settings as this frame is drawn with them: between the game's last two steps, as a tween of them goes.</summary>
     public ScreenLook Look { get; internal set; }
 
+    /// <summary>
+    /// Seconds into the game (its steps' time, so a frame of a game is drawn the same wherever it's drawn), for what the
+    /// renderer moves by itself, like film grain; a scene that isn't running counts from when Griff started.
+    /// </summary>
+    public double Time { get; internal set; }
+
     /// <summary>True if the scene is dark, so the renderer darkens the first <see cref="LitCount"/> sprites and adds lights.</summary>
     public bool IsDark => Ambient.R < 1 || Ambient.G < 1 || Ambient.B < 1;
 

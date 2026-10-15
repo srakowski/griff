@@ -1,0 +1,427 @@
+<UserControl x:Class="Griff.Editor.Features.Data.SimulationsPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:data="clr-namespace:Griff.Editor.Features.Data"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+             xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=data:SimulationsPanel}"
+             d:DesignHeight="300" d:DesignWidth="1000">
+    <UserControl.Resources>
+        <Style x:Key="Worded" TargetType="Button" BasedOn="{StaticResource Style.Button.Toolbar}">
+            <Setter Property="Width" Value="Auto" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Secondary}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Overline}">
+            <Setter Property="Margin" Value="0,8,0,3" />
+        </Style>
+        <data:LeanBrushConverter x:Key="LeanBrush" />
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- Toolbar: which simulation, run it, and what came of it -->
+        <Border DockPanel.Dock="Top"
+                Padding="4,2"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1">
+            <WrapPanel Orientation="Horizontal">
+                <ComboBox Width="130"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding SimulationNames}"
+                          SelectedItem="{Binding SimulationName, Mode=TwoWay}"
+                          Tag="sims:simulation"
+                          ToolTip="The simulation to set up and run" />
+                <Button x:Name="NewButton" Margin="2,0,0,0" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:new" ToolTip="New Simulation...">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Simulation}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="RunButton" Style="{StaticResource Worded}" Tag="sims:run" ToolTip="Play every pair its runs, headless and seeded, across the cores">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Foreground="{DynamicResource Brush.Status.Success}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Play}" />
+                        <TextBlock Margin="4,0,2,0" VerticalAlignment="Center" Text="Run" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="StopButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:stop" ToolTip="Stop: the results stay as they were">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Stop}" />
+                </Button>
+                <ProgressBar Width="80"
+                             Height="6"
+                             Margin="6,0"
+                             VerticalAlignment="Center"
+                             Maximum="1"
+                             Tag="sims:progress"
+                             Value="{Binding Progress, Mode=OneWay}"
+                             Visibility="{Binding IsRunning, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding ProgressText}" />
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Undo}" />
+                </Button>
+                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Redo}" />
+                </Button>
+                <Button x:Name="ExportButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:export" ToolTip="Export the results to a CSV file...">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Export}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+
+                <!-- Which results: the tab, the measure, the step and the pair -->
+                <ListBox VerticalAlignment="Center"
+                         IsEnabled="{Binding HasResults}"
+                         ItemsSource="{Binding Tabs}"
+                         SelectedItem="{Binding Tab, Mode=TwoWay}"
+                         Tag="sims:tabs"
+                         ToolTip="What to show: every pair, the matrix of pairs, the sweep, or a pair over a run">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Margin="4,1" Text="{Binding}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding HasResults, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <ComboBox Width="110" Margin="8,0,0,0" VerticalAlignment="Center" ItemsSource="{Binding Measures}" SelectedItem="{Binding Measure, Mode=TwoWay}" Tag="sims:measure"
+                              ToolTip="The measure: what the matrix and the charts show of each pair (Win %, Turns, Damage Dealt, Gold, XP...)" />
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- What the last thing done said -->
+        <TextBlock DockPanel.Dock="Bottom"
+                   Margin="8,3"
+                   Visibility="{Binding ShowsMessage, Converter={x:Static converters:BoolToVisibilityConverter.Default}}"
+                   Style="{StaticResource Style.Text.Secondary}"
+                   Tag="sims:message"
+                   Text="{Binding Message}"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip="{Binding Message}" />
+
+        <!-- The settings: what it plays, saved to its file as they change -->
+        <Border DockPanel.Dock="Left"
+                Width="290"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,1,0"
+                IsEnabled="{Binding HasSimulation}"
+                Tag="sims:settings">
+            <ScrollViewer Padding="8,0,8,6" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="Arena" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Scene" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,1" ItemsSource="{Binding Scenes}" SelectedItem="{Binding Arena, Mode=TwoWay}" Tag="sims:arena"
+                                  ToolTip="The scene the fights are played in: the sides' entities, and what they fight with (Health, attacks, a Turn Order)" />
+
+                        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="First side (its wins are counted)" />
+                        <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="Entity" />
+                        <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,1" ItemsSource="{Binding EntityNames}" SelectedItem="{Binding FirstEntity, Mode=TwoWay}" Tag="sims:first:entity"
+                                  ToolTip="The arena's entity that plays this side (every entity of that name plays for it); it takes each row's values through its Table Values" />
+                        <TextBlock Grid.Row="4" Style="{StaticResource Label}" Text="Table" />
+                        <ComboBox Grid.Row="4" Grid.Column="1" Margin="0,1" ItemsSource="{Binding TableChoices}" SelectedItem="{Binding FirstTable, Mode=TwoWay, TargetNullValue=''}" Tag="sims:first:table"
+                                  ToolTip="The table its rows come from, e.g. Classes; none plays the entity as it is" />
+                        <TextBlock Grid.Row="5" Style="{StaticResource Label}" Text="Rows" />
+                        <controls:CommitTextBox Grid.Row="5" Grid.Column="1" Margin="0,1" Tag="sims:first:rows" Text="{Binding FirstRows}" ToolTip="The rows it plays as, separated by commas; empty plays every row" />
+
+                        <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Style="{StaticResource Heading}" Text="Second side" />
+                        <TextBlock Grid.Row="7" Style="{StaticResource Label}" Text="Entity" />
+                        <ComboBox Grid.Row="7" Grid.Column="1" Margin="0,1" ItemsSource="{Binding EntityNames}" SelectedItem="{Binding SecondEntity, Mode=TwoWay}" Tag="sims:second:entity"
+                                  ToolTip="The arena's entity that plays this side" />
+                        <TextBlock Grid.Row="8" Style="{StaticResource Label}" Text="Table" />
+                        <ComboBox Grid.Row="8" Grid.Column="1" Margin="0,1" ItemsSource="{Binding TableChoices}" SelectedItem="{Binding SecondTable, Mode=TwoWay, TargetNullValue=''}" Tag="sims:second:table"
+                                  ToolTip="The table its rows come from, e.g. Enemies" />
+                        <TextBlock Grid.Row="9" Style="{StaticResource Label}" Text="Rows" />
+                        <controls:CommitTextBox Grid.Row="9" Grid.Column="1" Margin="0,1" Tag="sims:second:rows" Text="{Binding SecondRows}" ToolTip="The rows it plays as, separated by commas; empty plays every row" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Runs" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Each pair" />
+                        <controls:CommitTextBox Grid.Column="1" Margin="0,1" Tag="sims:runs" Text="{Binding Runs}" ToolTip="How many times each pair is played" />
+                        <TextBlock Grid.Column="2" Margin="8,0,6,0" Style="{StaticResource Label}" Text="Seed" />
+                        <controls:CommitTextBox Grid.Column="3" Margin="0,1" Tag="sims:seed" Text="{Binding Seed}" ToolTip="Where the runs' random numbers start: the same seed plays the same fights, on any machine" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Time limit" />
+                        <controls:CommitTextBox Grid.Row="1" Grid.Column="1" Margin="0,1" Tag="sims:timelimit" Text="{Binding TimeLimit}" ToolTip="Seconds of game time a fight lasts at most before it's a draw" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Rewards" />
+                        <controls:CommitTextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" Tag="sims:rewards" Text="{Binding Rewards}" ToolTip="The second side's columns the first earns by beating it, separated by commas: Gold, XP" />
+                        <TextBlock Grid.Row="3" VerticalAlignment="Top" Margin="0,3,6,0" Style="{StaticResource Label}" Text="Track" />
+                        <controls:CommitTextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" MinHeight="38" Margin="0,1" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" Tag="sims:track" Text="{Binding Track}"
+                                                ToolTip="Outputs read through each fight, a line each, charted over a run: Gold = Purse.Count, or XP = Hero.Amount:XP" />
+                    </Grid>
+
+                    <CheckBox Margin="0,8,0,3" Content="Sweep a column by steps" IsChecked="{Binding Sweeps}" Tag="sims:sweeps"
+                              ToolTip="Play the whole matchup again at each step of a column (a class's Level from 1 to 10), to see what it does: dead levels and jumps stand out" />
+                    <Grid Visibility="{Binding Sweeps, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Label}" Text="Table" />
+                        <ComboBox Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" ItemsSource="{Binding TableNames}" SelectedItem="{Binding SweepTable, Mode=TwoWay}" Tag="sims:sweep:table" ToolTip="The table whose column changes" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Column" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" ItemsSource="{Binding SweepColumns}" SelectedItem="{Binding SweepColumn, Mode=TwoWay}" Tag="sims:sweep:column"
+                                  ToolTip="The column that changes: a number, not a formula (formulas reading it change with it)" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Row" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,1" ItemsSource="{Binding SweepRowChoices}" SelectedItem="{Binding SweepRow, Mode=TwoWay, TargetNullValue=''}" Tag="sims:sweep:row"
+                                  ToolTip="The row it changes in; none changes it in every row" />
+                        <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="From, to" />
+                        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal">
+                            <controls:CommitTextBox Width="50" Margin="0,1" Tag="sims:sweep:from" Text="{Binding SweepFrom}" ToolTip="Its first value" />
+                            <TextBlock Margin="4,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="to" />
+                            <controls:CommitTextBox Width="50" Margin="0,1" Tag="sims:sweep:to" Text="{Binding SweepTo}" ToolTip="Its last value" />
+                            <TextBlock Margin="4,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="by" />
+                            <controls:CommitTextBox Width="44" Margin="0,1" Tag="sims:sweep:step" Text="{Binding SweepStep}" ToolTip="How much it changes each step" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Or a script" />
+                    <ComboBox Margin="0,1" ItemsSource="{Binding ScriptChoices}" SelectedItem="{Binding Script, Mode=TwoWay, TargetNullValue=''}" Tag="sims:script"
+                              ToolTip="A script (a class deriving from SimulationScript) that plays each run instead: a gauntlet of fights, an economy. None plays the arena." />
+
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource Style.Text.Secondary}" Tag="sims:size" Text="{Binding Size}" TextWrapping="Wrap" />
+                    <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding SettingsProblems}" Tag="sims:problems">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,1" Foreground="{DynamicResource Brush.Status.Warning}" Text="{Binding}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Grid>
+            <DockPanel Visibility="{Binding HasSimulation, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                <Grid Margin="6,2,6,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" MinWidth="200" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="2*" MinWidth="160" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- The tab's grid: every pair, the matrix, the sweep or the run -->
+                    <DockPanel>
+                        <!-- What came of it, and what stands out -->
+                        <StackPanel DockPanel.Dock="Top" Margin="2,0,0,4">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.Status.Warning}"
+                                           Style="{StaticResource Style.Text.Caption}"
+                                           Text="Changed since: run it again"
+                                           ToolTip="The settings have changed since these results were played"
+                                           Visibility="{Binding IsStale, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                                <TextBlock FontWeight="SemiBold" Tag="sims:summary" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Summary}" />
+                            </DockPanel>
+                            <ScrollViewer MaxHeight="36" VerticalScrollBarVisibility="Auto" Tag="sims:findings">
+                                <ItemsControl ItemsSource="{Binding Findings}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <TextBlock Margin="0,1,6,0" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Icon}" FontSize="11" Text="{x:Static theme:Icons.Warning}" />
+                                                <TextBlock Style="{StaticResource Style.Text.Secondary}" Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                        <Grid>
+                            <DataGrid x:Name="ResultsGrid"
+                                      AutoGenerateColumns="True"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      IsReadOnly="True"
+                                      ItemsSource="{Binding ResultsView}"
+                                      Tag="sims:results"
+                                      Visibility="{Binding ShowsResults, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                            <DataGrid AutoGenerateColumns="True"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      IsReadOnly="True"
+                                      x:Name="TabGrid"
+                                      ItemsSource="{Binding TabView}"
+                                      Tag="sims:tabgrid"
+                                      Visibility="{Binding ShowsTabGrid, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Tag="sims:matrix"
+                                          Visibility="{Binding ShowsMatrix, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Width="96" Style="{StaticResource Style.Text.Caption}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="won by the row" />
+                                        <ItemsControl ItemsSource="{Binding MatrixColumns}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Width="74" Margin="1,0" Style="{StaticResource Style.Text.Secondary}" Text="{Binding}" TextAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Matrix}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,1" Orientation="Horizontal">
+                                                    <TextBlock Width="96" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                                    <ItemsControl ItemsSource="{Binding Cells}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Width="74"
+                                                                        Height="24"
+                                                                        Margin="1,0"
+                                                                        Background="{Binding Lean, Converter={StaticResource LeanBrush}}"
+                                                                        BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                                                        BorderThickness="1"
+                                                                        CornerRadius="2"
+                                                                        ToolTip="{Binding Tooltip}">
+                                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding Text}" />
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel Margin="96,6,0,0" Orientation="Horizontal">
+                                        <Border Width="12" Height="10" Margin="0,0,4,0" Background="{Binding Source={x:Static data:LeanBrushConverter.FirstExample}, Converter={StaticResource LeanBrush}}" />
+                                        <TextBlock Margin="0,0,12,0" Style="{StaticResource Style.Text.Caption}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="the row wins" />
+                                        <Border Width="12" Height="10" Margin="0,0,4,0" Background="{Binding Source={x:Static data:LeanBrushConverter.SecondExample}, Converter={StaticResource LeanBrush}}" />
+                                        <TextBlock Style="{StaticResource Style.Text.Caption}" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="the column wins: the stronger the colour, the more one-sided" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                            <TextBlock Margin="16"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource Style.Text.Secondary}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="Not run yet. Run plays every pair its runs, headless and seeded, across the cores."
+                                       Visibility="{Binding HasResults, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
+                        </Grid>
+                    </DockPanel>
+
+                    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" />
+
+                    <!-- The chart: the measure over the pairs, the rows, the sweep's steps or a run -->
+                    <DockPanel Grid.Column="2">
+                        <DockPanel DockPanel.Dock="Top">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding HasSteps, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                                    <ComboBox Width="84" Margin="6,0,0,0" VerticalAlignment="Center" ItemsSource="{Binding StepNames}" SelectedIndex="{Binding StepIndex, Mode=TwoWay}" Tag="sims:step"
+                                              ToolTip="The step: which of the sweep's steps the results, matrix and run show" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding ShowsRun, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                                    <ComboBox Width="140" Margin="6,0,0,0" VerticalAlignment="Center" ItemsSource="{Binding RunPairs}" SelectedItem="{Binding RunPair, Mode=TwoWay}" Tag="sims:pair"
+                                              ToolTip="The pair whose health, gold, XP and tracked values over a run show" />
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Style="{StaticResource Style.Text.Secondary}" Tag="sims:charttitle" Text="{Binding Chart.Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Chart.Title}" />
+                        </DockPanel>
+                        <TextBlock DockPanel.Dock="Bottom"
+                                   Style="{StaticResource Style.Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Text.Tertiary}"
+                                   Tag="sims:chartsummary"
+                                   Text="{Binding Chart.Summary}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Chart.Summary}" />
+                        <Grid>
+                            <data:TableChart x:Name="Chart"
+                                             Model="{Binding Chart}"
+                                             Version="{Binding Chart.Version}"
+                                             Tag="sims:chart"
+                                             ValueBrush="{DynamicResource Brush.Accent}"
+                                             SpreadBrush="{DynamicResource Brush.Selection}"
+                                             RangeBrush="{DynamicResource Brush.Text.Secondary}"
+                                             CurveBrush="{DynamicResource Brush.Status.Info}"
+                                             GridBrush="{DynamicResource Brush.Border.Subtle}"
+                                             TextBrush="{DynamicResource Brush.Text.Tertiary}"
+                                             HoverBrush="{DynamicResource Brush.Text.Primary}" />
+                            <TextBlock Margin="8"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource Style.Text.Secondary}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding Chart.Note}"
+                                       Visibility="{Binding Chart.HasChart, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
+                        </Grid>
+                    </DockPanel>
+                </Grid>
+            </DockPanel>
+
+            <TextBlock Margin="16"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Style.Text.Secondary}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsEmpty, Converter={x:Static converters:BoolToVisibilityConverter.Default}}"
+                       Text="No simulations yet. Data &gt; New Simulation makes one: each class against each enemy in an arena scene, played thousands of times by the game's own rules, to see which is too strong." />
+            <TextBlock Margin="16"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource Brush.Status.Warning}"
+                       Tag="sims:problem"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="{Binding Problem}"
+                       Visibility="{Binding HasProblem, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -63,7 +63,8 @@ public static class GameLoader
 {
     /// <summary>
     /// Sets <paramref name="game"/> up as <paramref name="project"/> says, before it starts: its controls (the game's own
-    /// input actions), its step rate and its tables (every <c>.table</c> file in Assets, see <see cref="Game.Tables"/>).
+    /// input actions), its step rate, its tables (every <c>.table</c> file in Assets, see <see cref="Game.Tables"/>) and its
+    /// balance simulations (every <c>.sim</c> file, see <see cref="Game.Simulate"/>).
     /// Every host does this, so a game plays the same in the editor, exported and in a browser.
     /// </summary>
     public static void UseProjectSettings(this Game game, Project project)
@@ -71,6 +72,7 @@ public static class GameLoader
         (game.Input as InputState)?.UseControls(project.Controls);
         game.Time.StepRate = project.StepRate;
         game.Tables = Griff.Data.TableSet.Load(project.AssetsPath);
+        game.Simulations = Griff.Data.SimulationFile.LoadAll(project.AssetsPath);
     }
 
     public static async Task<LoadedGame> LoadAsync(string gameFolder)

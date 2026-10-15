@@ -47,7 +47,7 @@ In the **Scene view**:
 
 ## Arranging panels
 
-Drag a panel's tab (Hierarchy, Inspector, Assets, Output, Profiler, Tables) to move it; a box shows where it will go before you let go. Drop it right by an edge of the window to dock it along that whole side, near an edge of another panel (or of the Scene and Game tabs) to dock it beside that, or on another panel's tabs or middle to tab it with them. Drop it over the middle of the Scene view, or outside the editor, and it floats in a window of its own, which keeps the editor's shortcuts; hold Ctrl to float it wherever it's dropped, and press Escape to call a drag off. Drag the gutters between panels to resize them. Closing a floating window puts its panels back with the ones they start beside.
+Drag a panel's tab (Hierarchy, Inspector, Assets, Output, Profiler, Tables, Simulations) to move it; a box shows where it will go before you let go. Drop it right by an edge of the window to dock it along that whole side, near an edge of another panel (or of the Scene and Game tabs) to dock it beside that, or on another panel's tabs or middle to tab it with them. Drop it over the middle of the Scene view, or outside the editor, and it floats in a window of its own, which keeps the editor's shortcuts; hold Ctrl to float it wherever it's dropped, and press Escape to call a drag off. Drag the gutters between panels to resize them. Closing a floating window puts its panels back with the ones they start beside.
 
 ## Saving layouts
 

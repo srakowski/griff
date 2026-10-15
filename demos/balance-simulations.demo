@@ -1,0 +1,70 @@
+title: Balance simulations
+intro: Each class against each enemy, thousands of times, by the game's own rules.
+project: Empty | Balance
+write: Tables/Classes.table | balance-simulations/Classes.table
+write: Tables/Enemies.table | balance-simulations/Enemies.table
+write: Scenes/Arena.scene | balance-simulations/Arena.scene
+scene: Arena
+
+chapter: An arena and two tables | Data > New Simulation
+explain: entity:Hero | The arena | The arena is a scene of the game: a hero and an enemy taking turns, each chasing the other and hitting what it walks into, each taking its health and damage from a row of a table.
+say: The Classes table gives a warrior, a mage and a rogue health and damage that grow with their level, and the Enemies table a slime, a goblin and an ogre, with the gold and XP they're worth.
+say: Data, New Simulation sets up a matchup from the open scene: its entities with Table Values are the two sides.
+menu: Data > New Simulation...
+prompt: Balance
+expectsim: arena = Arena
+expectsim: first:entity = Hero
+expectsim: first:table = Classes
+expectsim: second:table = Enemies
+explain: sims:settings | The settings | Each class plays each enemy, the number of runs each, with random numbers from a seed. Every change is saved to the simulation's file, and Control Z undoes it.
+simset: runs = 300
+expectsim: runs = 300
+spot: sims:size | Nine pairs, three hundred runs each
+
+chapter: Thousands of fights | Run
+say: Run plays them all headless, as fast as the computer goes, on every core. The same seed plays the same fights on any machine.
+simrun
+explain: sims:summary | What came of it | Two thousand seven hundred fights in a second or so, and how often the classes won.
+expectfinding: Ogre is beaten in 0%
+explain: sims:findings | What stands out | Pairs where one side always wins, and a row far from the rest: nobody beats the ogre at level one.
+explain: sims:results | Every pair | Each pair's win rate, turns, damage dealt and taken, and the gold and XP it earned.
+simtab: Matrix
+expectmatrix: Warrior > Slime = 100%
+expectmatrix: Mage > Ogre = 0%
+explain: sims:matrix | The matrix | Every pair, coloured by how one-sided it is: orange where the class wins, blue where the enemy does, plain where it's even.
+spot: sims:chart | Each class's win rate over all the enemies
+
+chapter: Each class at each level | A sweep
+say: A sweep plays the whole matchup again with a column changed by steps. Here, each class's level, from one to eight, against the ogre.
+simset: second:rows = Ogre
+simset: sweeps = true
+expectsim: sweep:table = Classes
+expectsim: sweep:column = Level
+simset: sweep:to = 8
+expectsim: sweep:to = 8
+simrun
+simtab: Sweep
+explain: sims:chart | Win rate over the levels | A line for each class: where it starts beating the ogre, levels that change nothing, and levels that jump, which the findings name.
+expectfinding: Level
+
+chapter: A fight, turn by turn | Over a Run
+simtab: Over a Run
+simset: step = Level 6
+simset: pair = Warrior vs Ogre
+explain: sims:chart | Health over a fight | Each side's health as the fight goes, a point a turn, averaged over the runs.
+
+chapter: Anything else in a script | SimulationScript
+say: Anything else is a short script. This gauntlet sends each hero through every enemy in turn, with the arena's own fights, adding up the gold and XP as it goes.
+write: Scripts/Gauntlet.cs | balance-simulations/Gauntlet.cs
+code: Assets/Scripts/Gauntlet.cs | Gauntlet.cs
+hidecode
+simset: sweeps = false
+simset: second:table =
+simset: second:rows =
+simset: script = Gauntlet
+expectsim: script = Gauntlet
+simrun
+simtab: Over a Run
+simset: pair = Warrior vs Enemy
+explain: sims:chart | Gold and XP over a run | What a warrior earns as it fights its way through, until the ogre stops it.
+say: Agents run simulations too, and read every result, through the editor's MCP.

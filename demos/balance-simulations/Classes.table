@@ -1,0 +1,15 @@
+{
+  "columns": [
+    { "name": "Level", "type": "whole number" },
+    { "name": "Base Health", "type": "number" },
+    { "name": "Growth", "type": "number" },
+    { "name": "Health", "type": "number", "formula": "=[Base Health] + Growth * (Level - 1)" },
+    { "name": "Sides", "type": "whole number" },
+    { "name": "Damage", "type": "dice", "formula": "=Dice(1, Sides, Level)" }
+  ],
+  "rows": {
+    "Warrior": { "Level": 1, "Base Health": 14, "Growth": 3, "Sides": 6 },
+    "Mage": { "Level": 1, "Base Health": 8, "Growth": 1, "Sides": 8 },
+    "Rogue": { "Level": 1, "Base Health": 10, "Growth": 2, "Sides": 8 }
+  }
+}

@@ -208,7 +208,17 @@ public sealed class Scene
         {
             index = new ComponentIndex<T>();
             _indexes.Add(typeof(T), index);
-            _indexesFor.Clear();
+            // The component types it lists learn of it; the rest are as they were (worked out afresh, a scene's first
+            // step, asking for a hundred kinds, spent most of its time and garbage here).
+            List<Type>? lists = null;
+            foreach (var type in _indexesFor.Keys)
+            {
+                if (typeof(T).IsAssignableFrom(type))
+                    (lists ??= []).Add(type);
+            }
+
+            foreach (var type in lists ?? [])
+                _indexesFor[type] = [.. _indexesFor[type], index];
             _indexesChanged = true;
         }
 

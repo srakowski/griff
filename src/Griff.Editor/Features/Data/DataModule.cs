@@ -11,7 +11,8 @@ namespace Griff.Editor.Features.Data;
 
 /// <summary>
 /// Tables of game data (items, spells, enemies, level curves), edited like a spreadsheet in the Tables panel and read by
-/// scripts and the Table Values component: the Data menu, the panel, and the store that keeps the project's tables.
+/// scripts and the Table Values component, and balance simulations that play them thousands of times: the Data menu, the
+/// Tables and Simulations panels, and the stores that keep the project's tables and simulations.
 /// </summary>
 public sealed class DataModule : IEditorModule
 {
@@ -22,6 +23,8 @@ public sealed class DataModule : IEditorModule
         services.AddMenu(Menu, "_Data", order: 7);
         services.AddSingleton<TableStore>();
         services.AddPanel<TablesPanel, TablesPanelView>();
+        services.AddSingleton<SimulationStore>();
+        services.AddPanel<SimulationsPanel, SimulationsPanelView>();
         services
             .AddCommand<NewTableCommand>()
             .AddCommand<OpenTableCommand>()
@@ -45,7 +48,15 @@ public sealed class DataModule : IEditorModule
             .AddCommand<PasteCellsCommand>()
             .AddCommand<ClearCellsCommand>()
             .AddCommand<UndoTableCommand>()
-            .AddCommand<RedoTableCommand>();
+            .AddCommand<RedoTableCommand>()
+            .AddCommand<NewSimulationCommand>()
+            .AddCommand<OpenSimulationCommand>()
+            .AddCommand<ShowSimulationsCommand>()
+            .AddCommand<RunSimulationCommand>()
+            .AddCommand<StopSimulationCommand>()
+            .AddCommand<ExportSimulationResultsCommand>()
+            .AddCommand<UndoSimulationCommand>()
+            .AddCommand<RedoSimulationCommand>();
     }
 }
 

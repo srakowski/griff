@@ -144,6 +144,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
         await run; // Rethrows what it threw, e.g. a question it needs answered.
         text.Append(CultureInfo.InvariantCulture, $"Done: {command.DisplayText.TrimEnd('.')}.");
+        if (command.Outcome is { Length: > 0 } outcome)
+            text.Append(' ').Append(outcome);
         // A game that paused on an error straight away (Pause on Exceptions off, or not in a script).
         if (command is PlayCommand or PlayWithPlayersCommand && play.IsPlaying && play.IsPaused && !debugger.IsPaused)
             text.Append(" The game paused on an error in its first frame: output_read shows it.");

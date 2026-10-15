@@ -53,6 +53,12 @@ public abstract class EditorCommand : ICommand
     /// <summary>For a command that picks a setting: the one of its <see cref="Choices"/> in effect now, ticked in its submenu. Null for none.</summary>
     public virtual string? Chosen => null;
 
+    /// <summary>
+    /// What the command came to the last time it ran, said to an agent after it finishes (a simulation's results, say); null
+    /// for nothing more than that it ran. A command sets it as it runs.
+    /// </summary>
+    public string? Outcome { get; protected set; }
+
     public event EventHandler? CanExecuteChanged
     {
         add => CommandManager.RequerySuggested += value;
@@ -79,6 +85,7 @@ public abstract class EditorCommand : ICommand
 
         // Disable the command while it runs so a slow save can't be triggered twice.
         _isExecuting = true;
+        Outcome = null;
         CommandManager.InvalidateRequerySuggested();
         try
         {

@@ -20,6 +20,7 @@ public enum AssetKind
     Scene,
     Prefab,
     Table,
+    Simulation,
     File,
 }
 
@@ -49,6 +50,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
         AssetKind.Scene => Icons.SceneFile,
         AssetKind.Prefab => Icons.Package,
         AssetKind.Table => Icons.Table,
+        AssetKind.Simulation => Icons.Simulation,
         _ => Icons.New,
     };
 
@@ -79,6 +81,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
             Project.SceneExtension => AssetKind.Scene,
             Project.PrefabExtension => AssetKind.Prefab,
             Griff.Data.TableFile.Extension => AssetKind.Table,
+            Griff.Data.SimulationFile.Extension => AssetKind.Simulation,
             _ => AssetKind.File,
         };
     }

@@ -200,7 +200,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var way = grid.Toward(Game.Flat(target.Transform.WorldPosition) - Game.Flat(entity.Transform.WorldPosition), m.Diagonal);
         var here = CellOf(m, grid);
         Game.Lunge(m, grid, grid.Step(here, ((int)way.X, (int)way.Y)), way, 0);
-        if (Health.Of(target) is { } health && health.Damage(unit.Damage, entity))
+        if (Health.Of(target) is { } health && health.Damage(unit.RollDamage(), entity))
         {
             Game.PlayIfSet(unit.AttackSound);
             if (!string.IsNullOrWhiteSpace(unit.HitEffect))

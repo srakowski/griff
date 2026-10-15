@@ -130,6 +130,9 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Raised when the scene is to be brought to the front: by <see cref="ShowScene"/> (even when it's showing already, behind another tab) and when a project opens.</summary>
     event EventHandler? SceneShown;
 
+    /// <summary>Every type the project's loaded scripts define (components, balance simulations); empty before they build.</summary>
+    IReadOnlyList<Type> ScriptTypes { get; }
+
     /// <summary>Compiles the project's scripts now and swaps them into the open scenes if they build.</summary>
     ReloadResult? ReloadScripts();
 
@@ -196,6 +199,8 @@ public sealed class Workspace(
         Project is { } project ? (_names ??= new(Components, p => Griff.Fonts.FontChoices.For(p.AssetsPath))).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
     public ScriptHost Scripts => _scripts ??= new ScriptHost(Components) { WithProbes = true };
+
+    public IReadOnlyList<Type> ScriptTypes => Scripts.Assembly?.GetTypes() ?? [];
 
     public ProbeTable ScriptProbes => Scripts.Probes;
 

@@ -310,7 +310,7 @@ public sealed partial class Game
             return;
         }
 
-        if (Health.Of(victim) is not { } health || !health.Damage(bump.Damage, bump.Entity))
+        if (Health.Of(victim) is not { } health || !health.Damage(bump.RollDamage(), bump.Entity))
             return;
         PlayIfSet(bump.Sound);
         if (!string.IsNullOrWhiteSpace(bump.Effect))

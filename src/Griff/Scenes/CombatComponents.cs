@@ -126,6 +126,22 @@ public sealed class BumpAttack : Component
     /// <summary>Hit points each hit takes away.</summary>
     public float Damage { get; set; } = 1;
 
+    /// <summary>
+    /// Dice rolled for each hit's damage in place of <see cref="Damage"/>, e.g. "1d8+2"; empty hits for Damage every time.
+    /// Table Values sets it from a dice column given for Damage.
+    /// </summary>
+    [RollsFor(nameof(Damage))]
+    public string? DamageRoll
+    {
+        get => _roll.Text;
+        set => _roll.Text = value;
+    }
+
+    private DiceRoll _roll;
+
+    /// <summary>The damage of one hit: <see cref="DamageRoll"/> rolled, or <see cref="Damage"/>.</summary>
+    public float RollDamage() => _roll.Roll(Damage);
+
     /// <summary>The collision layers it hurts, e.g. "Enemy" (or "Player" for a monster). Empty hurts anything with health.</summary>
     [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; } = "Enemy";

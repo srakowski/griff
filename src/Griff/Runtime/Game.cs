@@ -1053,7 +1053,7 @@ public sealed partial class Game : IGameContext
             var hurt = health.Entity!;
             if (AlreadyStruck(source, hurt, out var swing))
                 continue;
-            var landed = touch.Kill ? !health.IsDead && KillNow(health) : health.Damage(touch.Amount, source);
+            var landed = touch.Kill ? !health.IsDead && KillNow(health) : health.Damage(touch.RollAmount(), source);
             if (landed && touch.Knockback > 0 && hurt.GetComponent<Body>() is { } body)
             {
                 var away = hurt.Transform.WorldPosition - source.Transform.WorldPosition;

@@ -156,6 +156,30 @@ public sealed class TableSet
         return other.Find(name) ?? throw new KeyNotFoundException(other.NoRow(name));
     }
 
+    /// <summary>
+    /// The table called <paramref name="name"/> as its file has it, formula columns not worked out (their cells empty), or
+    /// null. Throws if its file doesn't read.
+    /// </summary>
+    public Table? Source(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !_current.Tables.TryGetValue(KeyOf(name), out var entry))
+            return null;
+        return entry.Table ?? throw new InvalidDataException(entry.Error);
+    }
+
+    /// <summary>
+    /// A new set of these tables with <paramref name="table"/> in place of the one of its name (or added), its formulas
+    /// and those reading it worked out again: what a balance simulation plays each step of a sweep with.
+    /// </summary>
+    public TableSet With(Table table)
+    {
+        var tables = new Dictionary<string, Entry>(_current.Tables, StringComparer.OrdinalIgnoreCase)
+        {
+            [table.Name] = new Entry(table, null, _current.Tables.TryGetValue(table.Name, out var old) ? old.Path : null),
+        };
+        return new TableSet { _current = new Snapshot(tables) };
+    }
+
     /// <summary>Says there's no table <paramref name="name"/>, and which there are.</summary>
     public string NoTable(string? name) => _current.Tables.Count == 0
         ? $"There's no table called \"{name}\": the game has no tables. Make one with Data > New Table."

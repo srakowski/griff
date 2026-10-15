@@ -429,6 +429,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var written = Path.Combine(workspace.Project!.AssetsPath, assetFile);
                 Directory.CreateDirectory(Path.GetDirectoryName(written)!);
                 File.WriteAllBytes(written, File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, sourceFile)));
+                // What keeps it loaded hears of it at once (a table, a simulation), as asset_write tells it.
+                workspace.AssetChanged(assetFile.Replace(Path.DirectorySeparatorChar, '/'));
                 if (assetFile.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && workspace.ReloadScripts() is { Success: false } failed)
                     throw new InvalidOperationException($"{assetFile} doesn't compile: {string.Join("; ", failed.Diagnostics.Where(d => d.IsError))}");
                 break;
@@ -668,6 +670,46 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "expectchart: 100 (1) to 50,000 (30), 9,870 on average.": the chart's summary of the column it shows.
                 if (!await Until(() => DemoUi.Tables.Chart.Summary == a, 3000))
                     throw new InvalidOperationException($"Expected the chart to say \"{a}\", but it says \"{DemoUi.Tables.Chart.Summary}\".");
+                break;
+            case "simset":
+                // "simset: runs = 100", "simset: first:table = Classes", "simset: sweeps = true": set one of the Simulations
+                // panel's settings with the real mouse and keyboard.
+                var (simSetting, simValue) = Split2(a, '=');
+                await ui.SimSet(simSetting, simValue);
+                break;
+            case "expectsim":
+                // "expectsim: arena = Arena": one of the Simulations panel's settings reads that.
+                var (expectSetting, expectSim) = Split2(a, '=');
+                if (!await Until(() => string.Equals(DemoUi.SimSetting(expectSetting), expectSim, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected the simulation's {expectSetting} to be {expectSim}, but it's {DemoUi.SimSetting(expectSetting)}.");
+                break;
+            case "simrun":
+                // "simrun": click Run in the Simulations panel and wait for the results.
+                await ui.SimRun();
+                break;
+            case "simtab":
+                // "simtab: Matrix": show one of the Simulations panel's tabs of results.
+                await ui.SimTab(a);
+                break;
+            case "expectmatrix":
+                // "expectmatrix: Warrior > Ogre = 0%": a cell of the Simulations panel's matrix reads that.
+                var (matrixAt, matrixValue) = Split2(a, '=');
+                var (matrixRow, matrixColumn) = DemoUi.CellName(matrixAt);
+                string MatrixNow()
+                {
+                    var sims = DemoUi.Simulations;
+                    var r = sims.Matrix.FirstOrDefault(m => string.Equals(m.Name, matrixRow, StringComparison.OrdinalIgnoreCase));
+                    var c = sims.MatrixColumns.ToList().FindIndex(m => string.Equals(m, matrixColumn, StringComparison.OrdinalIgnoreCase));
+                    return r is null || c < 0 ? "(none)" : r.Cells[c].Text;
+                }
+
+                if (!await Until(() => MatrixNow() == matrixValue, 3000))
+                    throw new InvalidOperationException($"Expected the matrix's {matrixRow} > {matrixColumn} to read {matrixValue}, but it reads {MatrixNow()}.");
+                break;
+            case "expectfinding":
+                // "expectfinding: Ogre is beaten in 0%": the Simulations panel's findings say something with that in it.
+                if (!await Until(() => DemoUi.Simulations.Findings.Any(f => f.Contains(a, StringComparison.OrdinalIgnoreCase)), 3000))
+                    throw new InvalidOperationException($"Expected a finding saying \"{a}\", but it says: {string.Join(" | ", DemoUi.Simulations.Findings)}");
                 break;
             case "clipboard":
                 // "clipboard: Ogre\t20\nWisp\t3": put text on the clipboard, as copying cells in a spreadsheet does (\t
@@ -1638,6 +1680,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "filter" => DemoUi.FilterBox(name),
             "profiler" => DemoUi.ProfilerPart(name),
             "tables" => DemoUi.TablesPart(name),
+            "sims" => DemoUi.SimsPart(name),
             "picker" => DemoUi.PickerPart(name) ?? throw new InvalidOperationException($"No {name} in an open field list."),
             "pick" when name.Split('.', 2) is [var component, var field] =>
                 DemoUi.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
@@ -1647,7 +1690,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

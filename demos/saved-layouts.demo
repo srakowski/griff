@@ -6,7 +6,7 @@ chapter: Save a layout | View > Save Layout...
 say: Say you like the Inspector on the left, with the Output log in a window of its own.
 dock: Inspector > left
 float: Output > 150, -60
-expectlayout: Inspector | Hierarchy | (Documents / Assets, Profiler, Tables); floating: Output
+expectlayout: Inspector | Hierarchy | (Documents / Assets, Profiler, Tables, Simulations); floating: Output
 explain: menu:View | Save it | The View menu saves where the panels are now, under a name of your choosing.
 menu: View > Save Layout...
 prompt: Level Building
@@ -14,12 +14,12 @@ say: Close the editor and it opens again just like this, floating windows and al
 
 chapter: Back to the start | View > Reset Layout
 menu: View > Reset Layout
-expectlayout: Hierarchy | (Documents / Assets, Output, Profiler, Tables) | Inspector
+expectlayout: Hierarchy | (Documents / Assets, Output, Profiler, Tables, Simulations) | Inspector
 explain: panel:Inspector | Reset | Reset Layout puts every panel back where it starts out, and closes floating windows.
 
 chapter: Switch layouts | View > Layouts
 menu: View > Layouts > Level Building
-expectlayout: Inspector | Hierarchy | (Documents / Assets, Profiler, Tables); floating: Output
+expectlayout: Inspector | Hierarchy | (Documents / Assets, Profiler, Tables, Simulations); floating: Output
 explain: float:Output | Switched back | The Layouts menu lists every layout you've saved. Pick one, and the panels go where it has them.
 menu: View > Delete Layout > Level Building
 say: Delete Layout forgets one you no longer want. Agents can save, load and reset layouts too.

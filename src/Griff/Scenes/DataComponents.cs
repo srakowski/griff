@@ -212,6 +212,19 @@ public sealed class TableValues : Component
             var value = row[target.Column];
             try
             {
+                // A number with dice of its own to roll each time it's used (a hit's damage): dice go there, rolled each hit,
+                // and the number is their average; a plain number empties them.
+                if (RollFor(target) is { } roll)
+                {
+                    var dice = value.Kind == TableValueKind.Dice ? value.AsDice : (Dice?)null;
+                    roll.SetValue(target.Component, dice?.ToString());
+                    if (dice is { } rolled)
+                    {
+                        target.Property.SetValue(target.Component, Convert(TableValue.Of(rolled.Average), target.Property.PropertyType));
+                        continue;
+                    }
+                }
+
                 target.Property.SetValue(target.Component, Convert(value, target.Property.PropertyType));
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException or TargetInvocationException)
@@ -246,6 +259,14 @@ public sealed class TableValues : Component
         return TableMapping.Convert(value, type);
     }
 
+    // The text property marked [RollsFor] the target's property, if its component has one.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, string), PropertyInfo?> s_rolls = new();
+
+    private static PropertyInfo? RollFor(Target target) =>
+        target.Property.PropertyType == typeof(string) ? null : s_rolls.GetOrAdd((target.Component.GetType(), target.Property.Name), key =>
+            key.Item1.GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(p =>
+                p.PropertyType == typeof(string) && p.CanWrite && p.GetCustomAttribute<RollsForAttribute>()?.Property == key.Item2));
+
     // FNV-1a, so the same values give the same text in every game and on every machine.
     private static string Fingerprint(string session, string table, string row, IEnumerable<(string Target, string Value)> values)
     {
@@ -272,4 +293,38 @@ public sealed class TableValues : Component
 
         return $"{session}:{hash.ToString("x16", CultureInfo.InvariantCulture)}";
     }
+}
+
+/// <summary>
+/// Marks a text property holding dice (<c>"1d8+2"</c>) that are rolled each time the number property it names is used: a
+/// hit's damage rolled for each hit rather than once. Table Values sets it from a dice column given for that number
+/// property (and the number to the dice's average, which is what the Inspector shows).
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class RollsForAttribute(string property) : Attribute
+{
+    /// <summary>The number property the dice stand in for, e.g. "Damage".</summary>
+    public string Property { get; } = property;
+}
+
+// Dice written as text, read once when the text changes: rolled each hit with Rand, or the plain number when it's empty
+// (or doesn't read as dice).
+internal struct DiceRoll
+{
+    private string? _text;
+    private Dice? _dice;
+
+    public string? Text
+    {
+        readonly get => _text;
+        set
+        {
+            if (value == _text)
+                return;
+            _text = value;
+            _dice = Dice.TryParse(value, out var dice) ? dice : null;
+        }
+    }
+
+    public readonly float Roll(float otherwise) => _dice is { } dice ? dice.Roll() : otherwise;
 }

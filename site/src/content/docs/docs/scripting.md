@@ -51,7 +51,7 @@ public class PlayerController : Behavior
 }
 ```
 
-Scripts read the game's tables with `Tables`: `float damage = Tables.Get("Spells", "Fireball")["Damage"];`, or a class of their own filled from a row, `Tables.Get<Spell>("Spells", "Fireball")` (see [Tables of game data](/docs/data-tables/#tables-in-scripts)).
+Scripts read the game's tables with `Tables`: `float damage = Tables.Get("Spells", "Fireball")["Damage"];`, or a class of their own filled from a row, `Tables.Get<Spell>("Spells", "Fireball")` (see [Tables of game data](/docs/data-tables/#tables-in-scripts)). A `SimulationScript` plays a balance simulation's runs, and `Game.Simulate("Balance")` plays one from a game (see [Script simulations](/docs/data-tables/#script-simulations)).
 
 Describe a script for the component catalog and the Inspector's tooltips with a `///` summary over the class and its properties (say what units a number is in), and say how it fits with other components using attributes:
 

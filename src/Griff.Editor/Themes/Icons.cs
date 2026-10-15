@@ -65,6 +65,7 @@ public static class Icons
     public const string Gamepad = "\uE7FC";
     public const string Profiler = "\uE9D9";
     public const string Table = "\uF0E2";
+    public const string Simulation = "\uE8B1";
     public const string Chart = "";
     public const string Draw = "";
 

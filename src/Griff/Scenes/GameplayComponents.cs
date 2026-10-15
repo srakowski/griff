@@ -248,6 +248,22 @@ public sealed class DamageOnTouch : Component
     public float Amount { get; set; } = 1;
 
     /// <summary>
+    /// Dice rolled for each hit in place of <see cref="Amount"/>, e.g. "1d8+2"; empty hits for Amount every time.
+    /// Table Values sets it from a dice column given for Amount.
+    /// </summary>
+    [RollsFor(nameof(Amount))]
+    public string? AmountRoll
+    {
+        get => _roll.Text;
+        set => _roll.Text = value;
+    }
+
+    private DiceRoll _roll;
+
+    /// <summary>The damage of one hit: <see cref="AmountRoll"/> rolled, or <see cref="Amount"/>.</summary>
+    public float RollAmount() => _roll.Roll(Amount);
+
+    /// <summary>
     /// The collision layers it hurts, e.g. "Player" on spikes and enemies, "Enemy" on the player's bullets. Empty hurts
     /// anything with health.
     /// </summary>

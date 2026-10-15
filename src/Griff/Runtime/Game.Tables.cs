@@ -80,3 +80,30 @@ public sealed partial class Game
         }
     }
 }
+
+public sealed partial class Game
+{
+    /// <summary>
+    /// The project's balance simulations by name (every <c>.sim</c> file in Assets), which <see cref="Simulate"/> plays.
+    /// Every host sets it as the game starts (see <see cref="GameLoader.UseProjectSettings"/>).
+    /// </summary>
+    public IReadOnlyDictionary<string, Simulation> Simulations { get; set; } = new Dictionary<string, Simulation>();
+
+    /// <summary>
+    /// Plays the balance simulation called <paramref name="name"/> (see <see cref="Simulation"/>) with this game's tables,
+    /// scenes, prefabs and scripts, headless, and says how it went: each pair's win rate, turns, damage, gold and XP, and
+    /// what stands out. The same results in the editor, exported and in the web player. It takes as long as its runs do
+    /// (thousands take seconds), so call it from a debug menu or a tool rather than every step.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">There's no simulation called that.</exception>
+    /// <exception cref="SimulationException">Its settings name something that isn't there, saying what.</exception>
+    public SimulationResults Simulate(string name, int? threads = null)
+    {
+        Crowds.ThrowIfRunning("run simulations");
+        var simulation = Simulations.TryGetValue(name.Trim(), out var found) ? found
+            : throw new KeyNotFoundException(Simulations.Count == 0
+                ? $"There's no simulation called \"{name}\": the game has none. Make one with Data > New Simulation."
+                : $"There's no simulation called \"{name}\". The simulations: {string.Join(", ", Simulations.Keys.Order(StringComparer.OrdinalIgnoreCase))}.");
+        return SimulationRunner.Run(simulation, SimulationHost.Of(this), threads: threads);
+    }
+}

@@ -32,7 +32,7 @@ public sealed record AssetFeedback(string Message, bool IsError = false);
 /// </summary>
 public sealed class AssetTools(IAgentProject project) : IAgentToolSource
 {
-    private static readonly string[] TextExtensions = [".cs", ".scene", ".prefab", ".table", ".json", ".txt", ".md", ".griff", ".csv", ".xml", ".ini", ".shader", ".glsl"];
+    private static readonly string[] TextExtensions = [".cs", ".scene", ".prefab", ".table", ".sim", ".json", ".txt", ".md", ".griff", ".csv", ".xml", ".ini", ".shader", ".glsl"];
     private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".bmp", ".gif"];
 
     public IEnumerable<AgentTool> GetTools()
@@ -74,7 +74,9 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
                 "\"formula\", like \"=Base * 1.15 ^ (Level - 1)\", and no cells; one generated a row a level keeps its \"curve\", like " +
                 "{ \"kind\": \"exponential\", \"first\": 100, \"last\": 50000, \"levels\": 50 }), and \"rows\", an object of rows by name, each an " +
                 "object of its cells by column) is read straight away and reaches the running game; the answer says if it doesn't read, and " +
-                "what's wrong with its formulas.",
+                "what's wrong with its formulas. A balance simulation (.sim: JSON with \"arena\", a scene; \"first\" and \"second\", each " +
+                "{ \"entity\", \"table\", \"rows\" }; \"runs\", \"seed\", \"timeLimit\", \"rewards\", \"track\", \"sweep\" { \"table\", \"column\", \"from\", " +
+                "\"to\", \"step\" } or \"script\") is read straight away; the answer says what's missing for it to run (Data_RunSimulation runs it).",
             InputSchema = Schema.Object([
                 ("path", Schema.String("The path under Assets, e.g. \"Scripts/Spinner.cs\" or \"Sprites/hero.png\".")),
                 ("text", Schema.String("The file's text.")),

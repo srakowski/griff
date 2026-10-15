@@ -28,7 +28,8 @@ public sealed class TableChart : FrameworkElement
 
     private const double Left = 46;
     private const double Right = 10;
-    private const double Top = 8;
+    // Room over the plot for the lines' key, when there are lines.
+    private double Top => Model is { Lines.Count: > 0 } ? 22 : 8;
     private const double Bottom = 15;
     private const double HandleRadius = 5;
 
@@ -75,7 +76,9 @@ public sealed class TableChart : FrameworkElement
 
     // ----- Where things go
 
-    private int Slots => Model is { } model ? Math.Max(1, Math.Max(model.Points.Count, model.Preview.Count)) : 1;
+    private int Slots => Model is { } model
+        ? Math.Max(1, Math.Max(Math.Max(model.Points.Count, model.Preview.Count), Math.Max(model.Labels.Count, model.Lines.Count == 0 ? 0 : model.Lines.Max(l => l.Values.Count))))
+        : 1;
 
     private double PlotWidth => Math.Max(1, ActualWidth - Left - Right);
 
@@ -109,7 +112,7 @@ public sealed class TableChart : FrameworkElement
     private (double Low, double High) Range()
     {
         var model = Model!;
-        var values = model.Points.Where(p => !p.IsEmpty).SelectMany(p => new[] { p.Low, p.High, p.Value })
+        var values = model.Points.Where(p => !p.IsEmpty).SelectMany(p => new[] { p.Low, p.High, p.Value }).Concat(model.Lines.SelectMany(l => l.Values))
             .Concat(model.Preview).Concat(model.Handles.Select(h => h.Value)).Where(double.IsFinite).ToList();
         if (values.Count == 0)
             return (0, 1);
@@ -204,6 +207,33 @@ public sealed class TableChart : FrameworkElement
             }
         }
 
+        // Lines of their own (a class each over a sweep's levels), each its colour, with a key in the top right.
+        for (var l = model.Lines.Count - 1; l >= 0; l--)
+        {
+            var brush = SeriesBrush(l);
+            var pen = new Pen(brush, l == 0 ? 2.5 : 2) { LineJoin = PenLineJoin.Round };
+            Polyline(drawing, pen, model.Lines[l].Values.Select((v, i) => (i, v)));
+            if (model.Lines[l].Values.Count <= 40)
+            {
+                for (var i = 0; i < model.Lines[l].Values.Count; i++)
+                {
+                    if (double.IsFinite(model.Lines[l].Values[i]))
+                        drawing.DrawEllipse(brush, null, new Point(X(i), Y(model.Lines[l].Values[i])), 2, 2);
+                }
+            }
+        }
+
+        var keyRight = ActualWidth - Right;
+        for (var l = model.Lines.Count - 1; l >= 0; l--)
+        {
+            var key = Text(model.Lines[l].Name, 10, TextBrush);
+            keyRight -= key.Width;
+            drawing.DrawRectangle(Background(), null, new Rect(keyRight - 12, 4, key.Width + 14, key.Height));
+            drawing.DrawText(key, new Point(keyRight, 4));
+            drawing.DrawRectangle(SeriesBrush(l), null, new Rect(keyRight - 10, 4 + key.Height / 2 - 3, 7, 6));
+            keyRight -= 18;
+        }
+
         // The curve the editor would generate, dashed over the values, and the points it's drawn through.
         if (model.Preview.Count > 0)
         {
@@ -215,11 +245,19 @@ public sealed class TableChart : FrameworkElement
             drawing.DrawEllipse(Background(), new Pen(CurveBrush, 2), new Point(X(handle.Level - 1), Y(handle.Value)), HandleRadius, HandleRadius);
 
         // The first and last rows' names along the bottom (and the middle one's, with room).
-        var names = Math.Max(points.Count, model.Preview.Count);
-        var labelled = names <= 1 ? new[] { 0 } : names * 60 < PlotWidth ? Enumerable.Range(0, names).ToArray() : new[] { 0, (names - 1) / 2, names - 1 }.Distinct().ToArray();
+        var names = Slots;
+        string NameAt(int i) => i < points.Count ? points[i].Label : i < model.Labels.Count ? model.Labels[i] : (i + 1).ToString(CultureInfo.InvariantCulture);
+        // Every name when they fit (long ones, like a simulation's pairs, need more room than a level's number).
+        var widest = names <= 200 ? Enumerable.Range(0, names).Max(i => Text(NameAt(i), 10, TextBrush).Width) + 8 : 60;
+        var room = Math.Max(60, widest);
+        var labelled = names <= 1 ? new[] { 0 }
+            : names * room < PlotWidth ? Enumerable.Range(0, names).ToArray()
+            : 3 * room < PlotWidth || widest <= 60 ? new[] { 0, (names - 1) / 2, names - 1 }.Distinct().ToArray()
+            : 2 * room < PlotWidth ? [0, names - 1]
+            : [];
         foreach (var i in labelled)
         {
-            var name = i < points.Count ? points[i].Label : (i + 1).ToString(CultureInfo.InvariantCulture);
+            var name = NameAt(i);
             var text = Text(name, 10, TextBrush);
             var x = Math.Clamp(X(i) - text.Width / 2, Left - 8, ActualWidth - text.Width);
             drawing.DrawText(text, new Point(x, Top + PlotHeight + 1));
@@ -232,6 +270,9 @@ public sealed class TableChart : FrameworkElement
             var x = Math.Round(X(_hover)) + 0.5;
             drawing.DrawLine(new Pen(HoverBrush, 1), new Point(x, Top), new Point(x, Top + PlotHeight));
             var says = _hover < points.Count ? points[_hover].Readout : "";
+            if (model.Lines.Count > 0)
+                says = (_hover < model.Labels.Count ? model.Labels[_hover] : (_hover + 1).ToString(CultureInfo.InvariantCulture)) + ": " +
+                       string.Join(", ", model.Lines.Where(l => _hover < l.Values.Count && double.IsFinite(l.Values[_hover])).Select(l => $"{l.Name} {TablesPanel.Format(Math.Round(l.Values[_hover], 2))}"));
             if (_hover < model.Preview.Count)
                 says += (says.Length > 0 ? "; " : $"{_hover + 1}: ") + $"the curve gives {TablesPanel.Format(model.Preview[_hover])}";
             HoverText = says;
@@ -248,6 +289,11 @@ public sealed class TableChart : FrameworkElement
     }
 
     private Brush Background() => (Brush)(TryFindResource("Brush.Surface.Panel") ?? Brushes.Black);
+
+    // The colours lines are told apart by, from the theme: the accent first, then the status colours.
+    private static readonly string[] SeriesKeys = ["Brush.Accent", "Brush.Status.Info", "Brush.Status.Success", "Brush.Status.Warning", "Brush.Status.Error", "Brush.Text.Secondary"];
+
+    private Brush SeriesBrush(int index) => TryFindResource(SeriesKeys[index % SeriesKeys.Length]) as Brush ?? ValueBrush ?? Brushes.Gray;
 
     private void Polyline(DrawingContext drawing, Pen pen, IEnumerable<(int Index, double Value)> values)
     {

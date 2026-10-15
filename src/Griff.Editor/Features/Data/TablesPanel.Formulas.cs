@@ -211,9 +211,13 @@ public sealed record TableChartPoint(string Label, double Value, double Low, dou
     }
 }
 
+/// <summary>One of a chart's lines (see <see cref="TableChartModel.Lines"/>): its name in the key, and a value at each place (NaN for none).</summary>
+public sealed record TableChartLine(string Name, IReadOnlyList<double> Values);
+
 /// <summary>
 /// The Tables panel's chart of the picked column: its values over the rows (bars) or over the levels (a line), dice as
-/// their average, range and spread, and while the curve editor is open, the curve it would generate.
+/// their average, range and spread, and while the curve editor is open, the curve it would generate. The Simulations panel
+/// charts its results with it too (<see cref="ShowValues"/>), lines and all.
 /// </summary>
 public sealed class TableChartModel : ObservableObject
 {
@@ -246,8 +250,41 @@ public sealed class TableChartModel : ObservableObject
     /// <summary>Goes up each time it changes, so it's drawn again.</summary>
     public int Version { get; private set; }
 
+    /// <summary>
+    /// Lines drawn over the same places as the points, each its own colour with its name in a key (a class each, over a
+    /// sweep's levels); empty for a chart of one column.
+    /// </summary>
+    public IReadOnlyList<TableChartLine> Lines { get; private set; } = [];
+
+    /// <summary>The places along the bottom when it charts only <see cref="Lines"/>: a level, a turn, a pair each.</summary>
+    public IReadOnlyList<string> Labels { get; private set; } = [];
+
+    /// <summary>
+    /// Charts <paramref name="points"/> as bars (or a line, <paramref name="line"/>) and <paramref name="lines"/> over
+    /// <paramref name="labels"/>: any values, not a table's column (a simulation's results). <paramref name="note"/> says why
+    /// there's nothing to chart.
+    /// </summary>
+    public void ShowValues(string title, IReadOnlyList<TableChartPoint> points, IReadOnlyList<TableChartLine>? lines = null,
+        IReadOnlyList<string>? labels = null, bool line = false, string? summary = null, string? note = null)
+    {
+        Note = note;
+        Title = note is null ? title : "";
+        IsDice = false;
+        OverLevels = line || (lines?.Count ?? 0) > 0;
+        Points = note is null ? points : [];
+        Lines = note is null ? lines ?? [] : [];
+        Labels = labels ?? [.. points.Select(p => p.Label)];
+        Preview = [];
+        Handles = [];
+        Summary = note is not null ? "" : summary ?? (points.Count > 0 ? Summarize(points) : "");
+        Version++;
+        OnPropertyChanged(string.Empty);
+    }
+
     internal void Show(TableColumn? column, string? table, IReadOnlyList<TableChartPoint> points, bool levels, TableCurveModel curve)
     {
+        Lines = [];
+        Labels = [];
         if (column is null || !column.IsNumeric)
         {
             Note = column is null ? "Pick a number, whole number, dice or yes/no column to chart it." : $"{column.Name} holds {TableColumn.TypeName(column.Type)}: pick a number, whole number, dice or yes/no column to chart it.";

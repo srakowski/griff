@@ -1,6 +1,6 @@
 ---
 title: "Tables of game data"
-description: "Items, spells, enemies and level curves in tables edited like a spreadsheet, with formulas, curves and charts, pasted from Excel and Google Sheets, read by scripts and set on components with no code."
+description: "Items, spells, enemies and level curves in tables edited like a spreadsheet, with formulas, curves and charts, pasted from Excel and Google Sheets, read by scripts, set on components with no code, and balanced by simulating thousands of fights."
 ---
 
 ## Tables
@@ -72,7 +72,7 @@ A row or column renamed in the panel is listed under `renamedRows` or `renamedCo
 
 ## Table Values: a row's values with no code
 
-Add a **Table Values** to an entity and its other components take their values from a row with no code: its **Table** (`Enemies`, picked from the project's tables) and **Row** (`Slime`, picked from the table's rows; left empty, the row named like the entity, so every copy of a Slime prefab finds the Slime row), and **Sets**, a line for each property and the column it takes: `Health.Max = Health`, `DamageOnTouch.Amount = Damage`, or `Speed` for every Speed on the entity from the Speed column. With **Sets** empty, every property named like a column takes it (a column called `Patrol.Speed` sets that one). The values are set as the entity starts in the game (spawned ones straight away, so they play their first step with them) and again whenever the row changes while the game runs: edit a cell, or an agent writes the file, and the next step has it, never part way through a step, so a game plays the same given the same changes at the same steps. A number given dice rolls them, once (a Slime's health from `2d8`); rewinding doesn't roll them again, nor set a value the game has changed since, unless the row changed. In the Inspector the fields it sets carry a small table mark, whose tooltip says where they come from. A table or row that isn't there is flagged in the Inspector (the **Table** or **Row** field in yellow), a line of **Sets** naming a component or property the entity hasn't got is noted above its fields, and any of them, or a column the table hasn't got, is said in Output as the game starts, once, while the rest is set and the game plays on.
+Add a **Table Values** to an entity and its other components take their values from a row with no code: its **Table** (`Enemies`, picked from the project's tables) and **Row** (`Slime`, picked from the table's rows; left empty, the row named like the entity, so every copy of a Slime prefab finds the Slime row), and **Sets**, a line for each property and the column it takes: `Health.Max = Health`, `DamageOnTouch.Amount = Damage`, or `Speed` for every Speed on the entity from the Speed column. With **Sets** empty, every property named like a column takes it (a column called `Patrol.Speed` sets that one). The values are set as the entity starts in the game (spawned ones straight away, so they play their first step with them) and again whenever the row changes while the game runs: edit a cell, or an agent writes the file, and the next step has it, never part way through a step, so a game plays the same given the same changes at the same steps. A number given dice rolls them, once (a Slime's health from `2d8`), except a hit's damage (a Bump Attack's, a Tactics Unit's or a Damage On Touch's), which keeps the dice and rolls them for each hit, showing their average (its **Damage Roll** or **Amount Roll** holds them); rewinding doesn't roll them again, nor set a value the game has changed since, unless the row changed. In the Inspector the fields it sets carry a small table mark, whose tooltip says where they come from. A table or row that isn't there is flagged in the Inspector (the **Table** or **Row** field in yellow), a line of **Sets** naming a component or property the entity hasn't got is noted above its fields, and any of them, or a column the table hasn't got, is said in Output as the game starts, once, while the rest is set and the game plays on.
 
 ## Tables in scripts
 
@@ -90,3 +90,78 @@ var upgrade = Tables.Linked(Tables.Get("Spells", "Fireball"), "Upgrade");   // t
 ```
 
 An empty cell is 0, "" or no. A table, row or column that isn't there throws, saying which there are (`The Spells table has no row "Firebal". Its rows: Fireball, Frost Bolt.`), so the game stops at the line in the editor; `Tables.Find("Spells", "Fireball")` gives null instead. A table changed while the game runs reaches scripts as the next step begins, and crowd scripts can read tables from any core. Formula columns read as what they work out to (and the formulas reading a changed table are worked out again with it); `Tables.Problems` lists what's wrong with them. `Dice.Parse("2d6+3")` reads dice written anywhere, and `Dice.Of(2, 6, 3)` makes 2d6+3.
+
+## Balance simulations
+
+Whether a class is too strong at level 6, or an ogre too much for anyone below level 4, is found by playing the fight thousands of times, not by guessing. A balance simulation does that headless, as fast as the computer goes and across all its cores: **Data → New Simulation...** makes one in `Assets/Simulations` and shows it in the **Simulations** panel (beside Tables, or **Data → Simulations**), and **Run** plays it.
+
+With no code, a simulation plays each row of one table against each row of another (each class against each enemy) in an **arena**: a scene of your game with an entity for each side (a Hero and an Enemy) and whatever they fight with. Each run is a game of its own, played by the game's own rules: the arena loads afresh, each side's entity takes its row's values through its **Table Values** (one is added, setting every property named like a column, if it has none), and its Health, attacks, turn order and dice play the fight out, step by step, until one side is beaten (every entity of that name dead or gone) or the **Time Limit** passes (a draw). Both sides have to play themselves: give each a Turn Taker on a Turn Order whose **Computer Sides** name both (with Grid Chase and Bump Attack, or Tactics Units), or real-time Attacks and Chases with their **Target**s set. New Simulation starts from the open scene: its first two entities with Table Values are the sides, each with the table it reads.
+
+Its settings, down the side of the panel and saved to its file as they change (Ctrl+Z undoes them):
+
+- **Arena**: the scene the fights are played in (the open one as it is in the editor, saved or not).
+- **First side** and **Second side**: each an **Entity** of the arena, the **Table** its rows come from, and the **Rows** to play (empty plays them all). The first side's wins are what the results count.
+- **Runs** a pair (200), the **Seed** the runs' random numbers come from, and the **Time Limit** in seconds of game time.
+- **Rewards**: the second side's columns the first earns by beating it (`Gold, XP`), dice rolled.
+- **Track**: outputs read through each fight, a line each, as a Counter reads them: `Gold = Purse.Count`, `XP = Hero.Amount:XP`.
+- **Sweep a column by steps**: a **Table**'s **Column** (a number, not a formula) set to each value **From** one **to** another **by** a step, in every row or one **Row**, and the whole matchup played at each. A Classes table whose Health and Damage are formulas of its Level (`=[Base Health] + Growth * (Level - 1)`, `=Dice(1, Sides, Level)`) swept over Level from 1 to 10 plays each class at each level against each enemy.
+- **Or a script**, for everything else (below).
+
+The same seed plays the same fights, to the last bit, on every machine, in the web player and on any number of cores: each run's random numbers come from a seed of its own, made from the simulation's seed, the step, the two rows' names and the run's number, and the results are added up in the same order however the runs were shared out. Thousands of runs take a second or two (a small arena plays about 2,500 fights a second on a 16-thread desktop, 450 on one thread); the panel shows how far it's got, the editor carries on meanwhile, and **Stop** stops it, leaving the results as they were.
+
+## Results: a table, a matrix, a sweep and a run
+
+The panel's results come in four tabs, each beside a chart of the **Measure** picked: **Win %**, **Loss %**, **Draw %**, **Turns** and **Seconds** (and **Turns to Win** and **Seconds to Win**, of the fights won), **Damage Dealt** and **Damage Taken**, what was earned (**Gold**, **XP**) and the values tracked, each the average over a pair's runs.
+
+- **Results**: every pair, a row each, with every measure, charted as bars.
+- **Matrix**: a row for each of the first side's rows and a column for each of the second's, each cell coloured by how one-sided the pair is: the panel's own colour when each side wins as often, more of the accent the more the row wins, more of the blue the more the column does. Resting on a cell says how it went (`Warrior against Ogre: won 2 of 200, lost 198; 2.1 turns...`), and the chart beside it shows each row's measure over all the columns: which class is strongest.
+- **Sweep**: a line for each of the first side's rows (and all of them together) over the sweep's steps, and its table.
+- **Over a Run**: a pair's values as a fight goes, a point each turn (each second without a Turn Order): each side's health, the values tracked and what was earned.
+
+With a sweep, **Step** (by the chart's title) picks which step the results, the matrix and the run show. Over the results, under their summary, what stands out is said in a line or two each: pairs where one side wins 95% of the time or more, a row far from the rest (`Rogue wins 88% of its fights, 31 points over the middle Classes row (57%): too strong?`, `Ogre is beaten in 0% of fights...: too strong?`), fights the time limit ends, and over a sweep, levels that change nothing (`Mage: Level 4 to 6 change nothing (30% to 30.5%): dead levels.`, `Warrior: every fight won from Level 7 on, so the levels after it change nothing.`) and levels that jump (`Level 4 to 5 jumps from 5% to 55%, where a step usually changes it 5 points.`). What the games said as they played (a Table Values naming a column the table hasn't got) is listed too. **Export** (the panel's export button) writes every pair at every step to a CSV file for a spreadsheet.
+
+## Script simulations
+
+A script plays what the matchup doesn't: a gauntlet of fights with gold and XP carried from one to the next, an economy, a dungeon run. Make a class deriving from `SimulationScript` and pick it as the simulation's **Script**; it's made afresh for each run and given the run's pair of rows (the sides' tables and rows as the matchup has them; a side with no table plays once). `Rand` and dice give the run's own numbers, so scripts are seeded and shared across the cores as the matchup is, and `run.Fight` plays the arena's fight between any two rows, by the game's own rules.
+
+```csharp
+public class Gauntlet : SimulationScript
+{
+    public override void Run(SimulationRun run)
+    {
+        foreach (var enemy in run.Tables["Enemies"].Rows)
+        {
+            var fight = run.Fight(run.First, enemy);   // the arena's fight: Won, Lost, Turns, Seconds, DamageDealt, DamageTaken
+            run.Turns += fight.Turns;
+            if (!fight.Won) { run.Lose(); return; }
+            run.Earn("Gold", enemy["Gold"]);            // added up, and charted over the run
+            run.Earn("XP", enemy["XP"]);
+        }
+        run.Win();
+    }
+}
+```
+
+`run.First` and `run.Second` are the rows, `run.Tables` the tables (with the sweep's step in them), `run.Step` the sweep's value, `run.Win()`, `run.Lose()` and `run.Draw()` say how it ended (a draw unless it says), `run.Turns`, `run.Seconds`, `run.DamageDealt` and `run.DamageTaken` are averaged like the matchup's, `run.Earn` adds to what the first side earned, and `run.Track("Health", hp)` puts a point on a value's chart over the run. A script that throws makes its run a draw, and what it threw is listed with the results. Breakpoints don't stop simulations: they run off the game's thread.
+
+A game can play its own simulations too, the same as the editor does: `Game.Simulate("Balance")` gives the results (`results.Steps[0].Pair("Warrior", "Ogre")["Win %"]`, `results.Findings`), exported or in the browser, for a debug menu or a game that tunes itself.
+
+## Simulation files
+
+A simulation is a `.sim` file in Assets, a line a setting:
+
+```json
+{
+  "arena": "Arena",
+  "first": { "entity": "Hero", "table": "Classes" },
+  "second": { "entity": "Enemy", "table": "Enemies", "rows": ["Slime", "Ogre"] },
+  "runs": 200,
+  "seed": 1,
+  "timeLimit": 120,
+  "rewards": ["Gold", "XP"],
+  "track": ["Gold = Purse.Count"],
+  "sweep": { "table": "Classes", "column": "Level", "from": 1, "to": 10, "step": 1 }
+}
+```
+
+A scripted one has `"script": "Gauntlet"`. What the file holds that Griff doesn't know is kept. Agents write one with `asset_write` (the answer says what it plays, or what's missing for it to run), run it with `Data_RunSimulation` (which answers with the summary and what stands out) and read the rest from the Simulations panel (see [Agents](/docs/agents/)).

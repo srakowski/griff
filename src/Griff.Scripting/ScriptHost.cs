@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.Loader;
 using Griff.Editing;
 using Griff.Scenes;
@@ -33,6 +34,9 @@ public sealed class ScriptHost(ComponentRegistry registry)
     private AssemblyLoadContext? _context;
     private List<Type> _types = [];
     private string? _loadedSources;
+
+    /// <summary>The scripts loaded now, or null before any have built: their components, and anything else they define (balance simulations).</summary>
+    public Assembly? Assembly { get; private set; }
 
     /// <summary>Component types from the currently loaded scripts.</summary>
     public IReadOnlyList<Type> ComponentTypes => _types;
@@ -76,6 +80,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
         UnregisterCurrent();
         ComponentSwap.Restore(snapshot, serializer);
         _loadedSources = null;
+        Assembly = null;
         Probes.Clear();
         Probes = ProbeTable.Empty;
     }
@@ -116,6 +121,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
 
         var old = _context;
         _context = context;
+        Assembly = assembly;
         _types = registered;
         // The old scripts may still be running (held at a breakpoint): they stop at none from now on.
         Probes.Clear();

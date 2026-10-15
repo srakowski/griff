@@ -48,6 +48,8 @@ public partial class AssetsView : UserControl
             _audio.TogglePreview(node.AssetPath);
         else if (node.Kind == AssetKind.Image)
             _art.OpenPainter(editing: node.AssetPath);
+        else if (node.Kind == AssetKind.Simulation)
+            Choose("Data.OpenSimulation", node.AssetPath);
         else if (node.Kind == AssetKind.Table)
             Choose("Data.OpenTable", node.AssetPath);
         else if (node.Kind != AssetKind.Folder)
@@ -95,6 +97,12 @@ public partial class AssetsView : UserControl
             Add(menu, "Open in Another Program", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
             menu.Items.Add(new Separator());
         }
+        else if (node is { Kind: AssetKind.Simulation })
+        {
+            Add(menu, "Open in Simulations Panel", Icons.Simulation, () => Choose("Data.OpenSimulation", node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            menu.Items.Add(new Separator());
+        }
         else if (node is { Kind: AssetKind.Table })
         {
             Add(menu, "Open in Tables Panel", Icons.Table, () => Choose("Data.OpenTable", node.AssetPath));
@@ -114,6 +122,7 @@ public partial class AssetsView : UserControl
         AddCommand(menu, "Art.NewSprite");
         AddCommand(menu, "Art.NewTileset");
         AddCommand(menu, "Data.NewTable");
+        AddCommand(menu, "Data.NewSimulation");
         AddCommand(menu, "Data.ImportCsv");
         menu.Items.Add(new Separator());
         Add(menu, "New Folder...", Icons.Folder, () => Panel?.NewFolder(FolderOf(node)));

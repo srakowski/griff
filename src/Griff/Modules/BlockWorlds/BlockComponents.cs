@@ -259,6 +259,7 @@ public sealed class Blocks : Component, ILightSource
     /// the game runs, instead of a new world. Empty starts over each time.
     /// </summary>
     [Group("Saving")]
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
 
     /// <summary>A prefab spawned where a block breaks, e.g. a puff of dust.</summary>

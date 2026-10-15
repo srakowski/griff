@@ -75,6 +75,7 @@ public sealed class LevelGoal : Component, IPlaytestReport
     /// A name to keep the level's best in the save data under, e.g. "Level1": the best stars as "Level1.Stars" and the best
     /// score as "Level1.Best", for a level select menu. Empty keeps nothing.
     /// </summary>
+    [Names(NameKind.Saved, Defines = true, Suffixes = [".Stars", ".Best"])]
     public string? SaveAs { get; set; }
 
     // ----- Sound and messages -----

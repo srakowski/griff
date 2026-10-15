@@ -46,6 +46,7 @@ public sealed class Stars : Component, IDrawable
     /// A name in the game's save data whose number it shows, e.g. "Level1.Stars": the best stars a level has had, saved by
     /// its Level Goal, for a level select menu.
     /// </summary>
+    [Names(NameKind.Saved)]
     public string? Saved { get; set; }
 
     // Its arrow from what it shows says what it shows.

@@ -29,15 +29,7 @@ public sealed record SavedGame(string Slot, DateTimeOffset Saved, string? SceneN
     /// "{time}" the time ("14:03"), "{scene}" the scene's name and "{line}" the line being said (or the scene's name when
     /// nobody was talking).
     /// </summary>
-    public string Describe(string format)
-    {
-        var local = Saved.ToLocalTime();
-        return format.Replace("{slot}", Slot, StringComparison.OrdinalIgnoreCase)
-            .Replace("{date}", local.ToString("d MMM yyyy", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("{time}", local.ToString("HH:mm", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("{scene}", SceneName ?? "", StringComparison.OrdinalIgnoreCase)
-            .Replace("{line}", Line.Length > 0 ? Line : SceneName ?? "", StringComparison.OrdinalIgnoreCase);
-    }
+    public string Describe(string format) => SaveSlot.Fill(format, Slot, Saved, SceneName, Line);
 }
 
 // Saved games: the scene as it is (the stage, where a talk has got to, everything), the flags and a screenshot, kept in a

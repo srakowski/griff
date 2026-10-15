@@ -28,12 +28,15 @@ public sealed class TurnOrder : Component
     /// The sides in the order they take turns, separated by commas, e.g. "Player, Enemy". A side with no turn takers left
     /// is skipped (unless no side has any, for a game whose scripts take the turns).
     /// </summary>
+    [Names(NameKind.Kind, Scope = "Side", Many = true, Defines = true, From = "a turn order's Sides")]
+    [NameList(Noun = "side", Least = 1)]
     public string? Sides { get; set; } = "Player, Enemy";
 
     /// <summary>
     /// The sides the computer plays, e.g. "Enemy". End Turn doesn't end their turns: they end once their turn takers have
     /// used their actions or <see cref="ComputerTurnTime"/> runs out, or when a script ends them.
     /// </summary>
+    [Names(NameKind.Kind, Scope = "Side", Many = true, From = "a turn order's Sides")]
     public string? ComputerSides { get; set; } = "Enemy";
 
     /// <summary>Seconds a person's turn lasts before it passes by itself, e.g. 30 for a timer as in Worms. 0 lasts until they end it.</summary>
@@ -62,6 +65,7 @@ public sealed class TurnOrder : Component
     /// timed turn, e.g. "{0}'s turn ({2})".
     /// </summary>
     [Group("Messages")]
+    [Format("{0} the side whose turn it is", "{1} the round", "{2} the seconds left of a timed turn", Preview = nameof(ReadsAs))]
     public string? Format { get; set; } = "{0}'s turn";
 
     /// <summary>
@@ -96,6 +100,7 @@ public sealed class TurnOrder : Component
     /// </summary>
     [Group("State")]
     [Output("Turn")]
+    [Names(NameKind.Kind, Scope = "Side", From = "a turn order's Sides")]
     public string? Current { get; set; }
 
     /// <summary>How many times the turns have come round, from 1. The game counts it; it's 0 until the game starts.</summary>
@@ -108,6 +113,26 @@ public sealed class TurnOrder : Component
 
     /// <summary>Seconds until the <see cref="Current"/> side's turn starts, between turns. The game counts it down.</summary>
     public float StartsIn { get; set; }
+
+    /// <summary>
+    /// What its <see cref="Text"/> says with <paramref name="format"/> as its <see cref="Format"/>: the side whose turn it is
+    /// (the first before the game starts), the round (1 before it starts) and the seconds left of a timed turn.
+    /// </summary>
+    public string ReadsAs(string? format)
+    {
+        if (string.IsNullOrEmpty(format))
+            return "";
+        var side = string.IsNullOrWhiteSpace(Current) ? SideList.Count > 0 ? SideList[0] : "" : Current.Trim();
+        var seconds = TurnTime > 0 ? ((int)MathF.Ceiling(TimeLeft > 0 ? TimeLeft : TurnTime)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+        try
+        {
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, format, side, Math.Max(1, Round), seconds);
+        }
+        catch (FormatException)
+        {
+            return format;
+        }
+    }
 
     /// <summary>The sides in order, from <see cref="Sides"/>.</summary>
     public IReadOnlyList<string> SideList => Parsed(Sides, ref _sidesFrom, ref _sides);
@@ -232,6 +257,7 @@ public sealed class TurnTaker : Component
     /// The side it acts for, one of its turn order's Sides, e.g. "Player". In a network game with teams, a player's
     /// character is on its player's team instead.
     /// </summary>
+    [Names(NameKind.Kind, Scope = "Side", From = "a turn order's Sides")]
     public string? Side { get; set; } = "Player";
 
     /// <summary>

@@ -158,6 +158,7 @@ public sealed class Button : Component, IDrawEffect
     Color IDrawEffect.Tint(IDrawable drawn, Color color) => drawn is Sprite or Text ? Shade(color) : color;
 
     /// <summary>The clickable area, centered on the entity, in world units before the transform's scale. Rotation is ignored.</summary>
+    [Resizable(Upright = true)]
     public Vector2 Size { get; set; } = new(3, 1);
 
     /// <summary>What clicking it does with no code: load a scene, restart, quit, open or close a panel, rebind a key and so on.</summary>
@@ -177,6 +178,7 @@ public sealed class Button : Component, IDrawEffect
     /// where the player left off, and goes to <see cref="Scene"/> while nothing's saved there.
     /// </summary>
     [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene])]
+    [Names(NameKind.Saved)]
     public string? SavedScene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
@@ -203,6 +205,7 @@ public sealed class Button : Component, IDrawEffect
 
     /// <summary>For <see cref="ButtonAction.Do"/>: what to do it with, for an action that takes a value (Damage 2). Empty uses the action's own default.</summary>
     [ShownWhen(nameof(Action), Is = [ButtonAction.Do])]
+    [ActionValue(nameof(Do))]
     public string? With { get; set; }
 
     /// <summary>
@@ -210,6 +213,7 @@ public sealed class Button : Component, IDrawEffect
     /// on or inside.
     /// </summary>
     [ShownWhen(nameof(Action), Is = [ButtonAction.SaveGame, ButtonAction.LoadGame, ButtonAction.DeleteSave])]
+    [Names(NameKind.Kind, Scope = "Save Slot", Defines = true, From = "the save slots and buttons")]
     public string? Slot { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
@@ -228,6 +232,7 @@ public sealed class Button : Component, IDrawEffect
     /// A name in <c>Game.SaveData</c> that has to be saved for the button to work, e.g. "level" for a Continue button
     /// that does nothing until there's a game to continue. Empty always works.
     /// </summary>
+    [Names(NameKind.Saved)]
     public string? NeedsSaved { get; set; }
 
     /// <summary>A key that clicks the button too, e.g. Enter for a Play button. None for mouse only.</summary>
@@ -426,6 +431,7 @@ public sealed class Bar : Component, IDrawable
         : null;
 
     /// <summary>World units before the transform's scale, centered on the entity.</summary>
+    [Resizable]
     public Vector2 Size { get; set; } = new(3, 0.35f);
 
     /// <summary>The color of the full part.</summary>
@@ -557,6 +563,7 @@ public sealed class Slider : Component, IDrawable
     /// A name to keep the value under in <c>Game.SaveData</c>, e.g. "difficulty": it's saved whenever it changes and comes
     /// back next time. Read it from scripts with <c>Game.SaveData.GetFloat("difficulty")</c>.
     /// </summary>
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
 
     /// <summary>A sound played as the value changes, e.g. "Sounds/blip.wav": with the sound volume, you hear how loud it is.</summary>
@@ -568,6 +575,7 @@ public sealed class Slider : Component, IDrawable
 
     /// <summary>World units before the transform's scale, centered on the entity. It's dragged along its width.</summary>
     [Group("Look")]
+    [Resizable]
     public Vector2 Size { get; set; } = new(4, 0.5f);
 
     /// <summary>The color of the part up to the handle.</summary>
@@ -636,6 +644,7 @@ public sealed class Toggle : Component
     public GameSetting Setting { get; set; }
 
     /// <summary>A name to keep it under in <c>Game.SaveData</c>, e.g. "screenShake"; read it with <c>GetBool</c>.</summary>
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
 
     /// <summary>What the entity's <see cref="Text"/> says while it's on, e.g. "Sound: On". Empty leaves the text alone.</summary>
@@ -705,6 +714,7 @@ public sealed class Panel : Component
     /// <see cref="OpenOn"/> action, <see cref="OpenMessage"/> and buttons that open it do nothing. Its Open action and
     /// scripts still open it.
     /// </summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>
@@ -755,15 +765,18 @@ public sealed class Panel : Component
 public sealed class Choice : Component
 {
     /// <summary>What can be picked, one per row.</summary>
+    [NameList(Noun = "option", Least = 1)]
     public IReadOnlyList<string> Options { get; set; } = ["Easy", "Normal", "Hard"];
 
     /// <summary>Which option is picked, from 0.</summary>
     public int Index { get; set; } = 1;
 
     /// <summary>What the entity's <see cref="Text"/> says, with {0} for the option: "Difficulty: &lt; {0} &gt;". Empty leaves the text alone.</summary>
+    [Format("{0} the option picked", Preview = nameof(ReadsAs), Replaced = true)]
     public string? Format { get; set; } = "{0}";
 
     /// <summary>A name to keep the option under in <c>Game.SaveData</c>, e.g. "difficulty". It's saved as the option's text.</summary>
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
 
     /// <summary>Whether going past the last option comes round to the first again (and back).</summary>
@@ -779,7 +792,10 @@ public sealed class Choice : Component
     public event Action<Choice>? Changed;
 
     /// <summary>What the label says for the option picked; null leaves it alone.</summary>
-    public string? Display() => string.IsNullOrEmpty(Format) ? null : Format.Replace("{0}", Value ?? "");
+    public string? Display() => string.IsNullOrEmpty(Format) ? null : ReadsAs(Format);
+
+    /// <summary>What its text says with <paramref name="format"/> as its <see cref="Format"/>, with the option picked now.</summary>
+    public string ReadsAs(string? format) => (format ?? "").Replace("{0}", Value ?? "", StringComparison.Ordinal);
 
     /// <summary>
     /// The index <paramref name="steps"/> along from the one picked (negative goes back), wrapping round or stopping at the

@@ -94,6 +94,9 @@
                     </Button>
                     <Button x:Name="MoveUpButton" Command="{Binding MoveUpCommand}" Content="Up" Style="{StaticResource Small}" ToolTip="Move this line up" />
                     <Button x:Name="MoveDownButton" Command="{Binding MoveDownCommand}" Content="Down" Style="{StaticResource Small}" ToolTip="Move this line down" />
+                    <Button x:Name="AddChoiceButton" Command="{Binding AddChoiceCommand}" Content="Add Choice" Style="{StaticResource Small}" ToolTip="Add a choice after this line: it's offered under the line before it" />
+                    <Button x:Name="AddPartButton" Command="{Binding AddPartCommand}" Content="Add Part" Style="{StaticResource Small}" ToolTip="Start a part after this line, which choices and go-tos can go to" />
+                    <Button x:Name="AddGoToButton" Command="{Binding AddGoToCommand}" Content="Add Go To" Style="{StaticResource Small}" ToolTip="Go to a part (or end) after this line" />
                 </WrapPanel>
                 <ListBox x:Name="LineList" ItemsSource="{Binding Lines}" SelectedIndex="{Binding SelectedIndex}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
@@ -127,6 +130,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Style="{StaticResource Label}" Text="Said by" />
@@ -141,7 +145,42 @@
 
                     <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="As written" />
                     <TextBox x:Name="RowBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" Style="{StaticResource Style.TextBox.Code}" Text="{Binding RowText, UpdateSourceTrigger=LostFocus}" ToolTip="The whole line as it's written in the dialogue's Lines, tags and all" KeyDown="OnTextKeyDown" />
+
+                    <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="Goes to" Visibility="{Binding CanGoTo, Converter={StaticResource Visible}}" />
+                    <ComboBox x:Name="GoesToBox" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" ItemsSource="{Binding GoToChoices}" SelectedItem="{Binding GoesTo}" Style="{StaticResource Pick}"
+                              ToolTip="Where it goes when it's picked (a choice) or reached (a go-to): one of the dialogue's parts, or End" Visibility="{Binding CanGoTo, Converter={StaticResource Visible}}" />
                 </Grid>
+
+                <!-- Its flags and messages -->
+                <TextBlock Margin="0,8,0,6" DockPanel.Dock="Top" Style="{StaticResource Heading}" Text="Flags and messages" />
+                <ItemsControl x:Name="TagList" DockPanel.Dock="Top" ItemsSource="{Binding StoryTags}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="story:StoryTagRow">
+                            <DockPanel Margin="0,0,0,4">
+                                <Button Command="{Binding DataContext.RemoveTagCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"
+                                        DockPanel.Dock="Right"
+                                        Style="{StaticResource Style.Button.Toolbar}"
+                                        ToolTip="Remove this">
+                                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding Description}" ToolTip="{Binding Tag}" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <WrapPanel x:Name="NewTag" Margin="0,2,0,0" DockPanel.Dock="Top" IsEnabled="{Binding CanHaveTags}">
+                    <ComboBox x:Name="TagKindBox" ItemsSource="{Binding TagKinds}" SelectedItem="{Binding NewTagKind}" Style="{StaticResource Pick}" MinWidth="80"
+                              ToolTip="if: said only while the flag is set; if not: only while it isn't; set and clear: the flag, when it's said; send: a message, when it's said" />
+                    <TextBox x:Name="TagNameBox" Width="150" Margin="0,0,2,6" Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}" ToolTip="The flag (one the project sets, or a new one) or the message" />
+                    <ComboBox x:Name="TagNamePick" Width="26" Margin="0,0,8,6" ItemsSource="{Binding NewTagNames}" SelectedItem="{Binding NewTagPick}" ToolTip="Pick a flag the project sets, or a message it sends or hears" />
+                    <Button x:Name="AddTagButton" Command="{Binding AddTagCommand}" Style="{StaticResource Small}" Margin="0,0,0,6" ToolTip="Add this to the line">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Margin="0,0,6,0" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                            <TextBlock Text="Add" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
 
                 <!-- Its stage directions -->
                 <TextBlock Margin="0,8,0,6" DockPanel.Dock="Top" Style="{StaticResource Heading}" Text="Stage directions" />

@@ -42,6 +42,8 @@ public sealed class Multiplayer : Component
     /// Faction teams players take: "Player, Enemy". Empty is everyone for themselves.
     /// </summary>
     [Group("Teams")]
+    [Names(NameKind.Kind, Scope = "Team", Many = true, Defines = true, From = "a Multiplayer's Teams")]
+    [NameList(Noun = "team")]
     public string? Teams { get; set; }
 
     /// <summary>Players on the same team can hurt each other.</summary>
@@ -140,6 +142,7 @@ public sealed class Networked : Component
 public sealed class PlayerSpawn : Component
 {
     /// <summary>The team that appears here: a name from <see cref="Multiplayer.Teams"/>. Empty is anyone.</summary>
+    [Names(NameKind.Kind, Scope = "Team", From = "a Multiplayer's Teams")]
     public string? Team { get; set; }
 }
 
@@ -176,6 +179,7 @@ public sealed class TextField : Component
     public int MaxLength { get; set; } = 24;
 
     /// <summary>The clickable area, centered on the entity, in world units before its scale.</summary>
+    [Resizable]
     public System.Numerics.Vector2 Size { get; set; } = new(5, 1);
 
     /// <summary>What it's for: a player name or an address it fills in (and remembers) for network games.</summary>

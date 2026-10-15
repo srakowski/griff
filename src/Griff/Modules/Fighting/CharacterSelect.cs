@@ -54,6 +54,7 @@ public sealed class CharacterSelect : Component, IPlaytestReport
     /// A name to keep the picks under in the save data, e.g. "Pick": "Pick.1" and "Pick.2" (the characters), "Pick.Computer"
     /// (whether the computer plays the second), and "Pick.Scene" (this scene, for a "Character Select" button to come back to).
     /// </summary>
+    [Names(NameKind.Saved, Defines = true, Suffixes = [".1", ".2", ".Computer", ".Scene"])]
     public string? SaveAs { get; set; } = "Pick";
 
     /// <summary>How many cards to a row: the cursors move across and down them. 0 puts them all in one row.</summary>

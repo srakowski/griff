@@ -18,9 +18,12 @@ public sealed class StoryModule : IEditorModule
 
 /// <summary>
 /// Opens the Dialogue Editor on the selected entity's dialogue (or the dialogue of the stage a selected character is on):
-/// its lines listed, and for the line picked who says it and with what expression, what's said, and its stage directions
-/// (show, hide or move a character, change the background, cut, fade or slide), each picked from lists of what the stage
-/// has, with a preview of the stage at that line. Each change is one undo step. It follows the selection.
+/// its lines listed, and for the line picked who says it and with what expression, what's said, its flags and messages
+/// (said only while a flag is or isn't set, setting and clearing flags, sending messages: picked from those the project
+/// has), where a choice or go-to goes (picked from the dialogue's parts), and its stage directions (show, hide or move a
+/// character, change the background, cut, fade or slide), each picked from lists of what the stage has, with a preview of
+/// the stage at that line; choices, parts and go-tos are added with a click. Each change is one undo step. It follows the
+/// selection.
 /// </summary>
 public sealed class OpenDialogueEditorCommand(DialogueEditor editor, IWorkspace workspace) : EditorCommand
 {

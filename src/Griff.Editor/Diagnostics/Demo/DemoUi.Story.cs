@@ -23,8 +23,9 @@ internal sealed partial class DemoUi
 
     /// <summary>
     /// A part of the open Dialogue Editor: line:3 (a line in the list, from 1), list, speaker, expression, said, row,
-    /// directions, kind, who, position, face, background, transition, adddirection, problems, preview, previewtext, add,
-    /// remove, up, down, notice, entity, close; or the whole window.
+    /// directions, kind, who, position, face, background, transition, adddirection, goesto, tags, tagkind, tagname, addtag,
+    /// problems, preview, previewtext, add, addchoice, addpart, addgoto, remove, up, down, notice, entity, close; or the
+    /// whole window.
     /// </summary>
     public static FrameworkElement DialoguePart(string part)
     {
@@ -49,6 +50,15 @@ internal sealed partial class DemoUi
             "background" => Named("BackgroundBox"),
             "transition" => Named("TransitionBox"),
             "adddirection" => Named("AddDirectionButton"),
+            "goesto" => Named("GoesToBox"),
+            "tags" => Named("TagList"),
+            "tagkind" => Named("TagKindBox"),
+            "tagname" => Named("TagNameBox"),
+            "tagpick" => Named("TagNamePick"),
+            "addtag" => Named("AddTagButton"),
+            "addchoice" => Named("AddChoiceButton"),
+            "addpart" => Named("AddPartButton"),
+            "addgoto" => Named("AddGoToButton"),
             "problems" => Named("ProblemsText"),
             "preview" => Named("Preview"),
             "previewtext" => Named("PreviewText"),
@@ -59,7 +69,7 @@ internal sealed partial class DemoUi
             "notice" => Named("NoticeBar"),
             "entity" => Named("EntityName"),
             "close" => Named("CloseButton"),
-            _ => throw new FormatException($"Unknown Dialogue Editor part \"{part}\" (line:, list, speaker, expression, said, row, directions, kind, who, position, face, background, transition, adddirection, problems, preview, previewtext, add, remove, up, down, notice, entity, close)."),
+            _ => throw new FormatException($"Unknown Dialogue Editor part \"{part}\" (line:, list, speaker, expression, said, row, directions, kind, who, position, face, background, transition, adddirection, goesto, tags, tagkind, tagname, addtag, problems, preview, previewtext, add, addchoice, addpart, addgoto, remove, up, down, notice, entity, close)."),
         };
     }
 

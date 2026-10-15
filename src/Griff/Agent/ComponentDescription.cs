@@ -84,6 +84,8 @@ public static class ComponentDescription
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
             if (property.Offset is { } offset)
                 text.Append(CultureInfo.InvariantCulture, $" (A point offset from the entity, in {(offset.World ? "world units" : "its own units, before its scale and turned with it")}: with Distance Handles the Scene view puts a knob on it to drag.)");
+            if (property.Resizable is { } area)
+                text.Append(CultureInfo.InvariantCulture, $" (A rectangle's size, around {(area.Center is { } center ? $"the point {JsonNamingPolicy.CamelCase.ConvertName(center)} says" : "the entity")}, in its own units before its scale: with Resize handles the Scene view puts handles on its edges and corners to drag.)");
             if (property.Editor is { } editor)
                 text.Append(" (").Append(editor.Describe()).Append(')');
             if (property.Info.IsDefined(typeof(NotSentAttribute), true))

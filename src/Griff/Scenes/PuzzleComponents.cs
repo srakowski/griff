@@ -187,6 +187,7 @@ public sealed class Inventory : Component
     private IReadOnlyList<(string Item, IReadOnlyList<(string Verb, string Argument)> Effects)> _effects = [];
 
     /// <summary>What it holds, one kind per row: a name and how many, e.g. "Key 2" (just "Key" is one).</summary>
+    [ItemCounts]
     public IReadOnlyList<string> Items
     {
         get => _rows ??= _items.Select(i => i.Count == 1 ? i.Name : $"{i.Name} {i.Count.ToString(CultureInfo.InvariantCulture)}").ToList();
@@ -214,6 +215,7 @@ public sealed class Inventory : Component
     /// it out; a potion that only heals isn't used up at full health.
     /// </summary>
     [Group("Using Items")]
+    [ItemUses]
     public IReadOnlyList<string> ItemUses
     {
         get => _uses;
@@ -236,6 +238,7 @@ public sealed class Inventory : Component
     /// room). Empty keeps nothing. Game → Clear Save Data forgets it while you test.
     /// </summary>
     [Group("Saving")]
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
 
     /// <summary>Set by the game once it has taken what it holds from the save data, so a rewind doesn't do it again. Leave it be.</summary>

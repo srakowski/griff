@@ -10,7 +10,7 @@ namespace Griff.Editor.Tests;
 /// the editor the Inspector gives it. A field that slips back to a plain box, or a new one that lands as one, shows here.
 /// Fields of plain values (numbers, toggles, choices, colors) keep the editors their kinds get.
 /// </summary>
-public sealed class FieldEditorAuditTests
+public sealed partial class FieldEditorAuditTests
 {
     /// <summary>The categories this audit covers.</summary>
     private static readonly string[] Categories = ["Basics", "Rendering", "Physics", "Movement", "Combat", "Level", "Audio"];

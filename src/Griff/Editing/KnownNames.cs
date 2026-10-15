@@ -14,7 +14,7 @@ namespace Griff.Editing;
 /// </summary>
 public sealed partial class KnownNames
 {
-    private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard, _items, _flags;
+    private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard, _items, _flags, _saved;
     private readonly Dictionary<string, HashSet<string>> _kinds = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Regex> _sentPatterns;
     private readonly Dictionary<string, TableNames> _tables;
@@ -25,12 +25,14 @@ public sealed partial class KnownNames
     /// <param name="items">The items something gives (a pickup's Item, a script's <c>Add("Key")</c>).</param>
     /// <param name="flags">The flags something sets or clears (a trigger's Set Flag, a dialogue's [set], a script's <c>SetFlag</c>).</param>
     /// <param name="kinds">The kinds things say they are, each with its scope ("Crate", "Red").</param>
+    /// <param name="saved">The names values are kept under in the save data (a slider's Save As, a script's <c>SaveData.Set("best", ...)</c>).</param>
     public KnownNames(IEnumerable<string> prefabs, IEnumerable<string> scenes, IEnumerable<string> actions,
         IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null,
         Func<FontNames>? fonts = null, IEnumerable<string>? items = null, IEnumerable<string>? flags = null,
-        IEnumerable<(string Scope, string Name)>? kinds = null)
+        IEnumerable<(string Scope, string Name)>? kinds = null, IEnumerable<string>? saved = null)
     {
         _items = new(items ?? [], StringComparer.OrdinalIgnoreCase);
+        _saved = new(saved ?? [], StringComparer.Ordinal);
         _flags = new(flags ?? [], StringComparer.OrdinalIgnoreCase);
         foreach (var (scope, name) in kinds ?? [])
         {
@@ -81,6 +83,12 @@ public sealed partial class KnownNames
     /// <summary>The flags something sets or clears: a trigger's Set Flag, a dialogue's [set], a script's <c>SetFlag</c>.</summary>
     public IReadOnlyCollection<string> Flags => _flags;
 
+    /// <summary>
+    /// The names values are kept under in the save data: a Save As, a counter's Save Best As, a script's
+    /// <c>SaveData.Set</c>. Flags, saved there too, aren't among them (see <see cref="Flags"/>).
+    /// </summary>
+    public IReadOnlyCollection<string> Saved => _saved;
+
     /// <summary>The kinds things of <paramref name="scope"/> say they are ("Red" for a crate), or none.</summary>
     public IReadOnlyCollection<string> KindsOf(string? scope) => _kinds.TryGetValue(scope ?? "", out var names) ? names : [];
 
@@ -119,6 +127,8 @@ public sealed partial class KnownNames
         NameKind.Flag when kind.Condition => [.. _flags.Order(StringComparer.OrdinalIgnoreCase)
             .SelectMany(f => new[] { new NameChoice(f, "while it's set"), new NameChoice($"not {f}", "while it isn't set") })],
         NameKind.Flag => Sorted(_flags),
+        NameKind.Saved => [.. _saved.Order(StringComparer.OrdinalIgnoreCase).Select(n => new NameChoice(n, null)),
+            .. _flags.Where(f => !_saved.Contains(f)).Order(StringComparer.OrdinalIgnoreCase).Select(f => new NameChoice(f, "a flag"))],
         _ => [.. _sent.Union(_heard).Order(StringComparer.OrdinalIgnoreCase).Select(m => new NameChoice(m,
             (_sent.Contains(m), _heard.Contains(m)) switch { (true, true) => "sent and heard", (true, false) => "sent", _ => "heard" }))],
     };
@@ -211,6 +221,8 @@ public sealed partial class KnownNames
         NameKind.Item => _items.Contains(name),
         NameKind.Flag => _flags.Contains(FlagOf(name)),
         NameKind.Kind => KindsOf(kind.Scope).Contains(name),
+        // Save data keys are case-sensitive, as SaveData keeps them; flags are kept there too.
+        NameKind.Saved => _saved.Contains(name) || _flags.Contains(name),
         _ when IsPattern(name) => true,
         _ when kind.Hears => _sent.Contains(name) || _sentPatterns.Any(p => p.IsMatch(name)),
         _ => _heard.Contains(name),
@@ -251,7 +263,9 @@ public sealed partial class KnownNames
                              "instead (Griff's free fonts go into Assets when picked, or with Art > Add Free Font)",
             NameKind.Item => $"Nothing gives the item {quoted}: no pickup's Item or script's Add",
             NameKind.Flag => $"Nothing sets the flag {string.Join(" or ", names.Select(n => $"\"{FlagOf(n)}\""))}: no trigger's Set Flag, dialogue's [set] or script's SetFlag",
+            NameKind.Kind when kind.From is { } from => $"There's no {ScopeWord(kind)} called {quoted} in {from}",
             NameKind.Kind => $"No {ScopeWord(kind)} is of the kind {quoted}: give one that Kind",
+            NameKind.Saved => $"Nothing keeps a value under {quoted} in the save data: no Save As field or script's SaveData.Set does",
             _ when kind.Hears => $"Nothing sends {quoted}: no component's message, dialogue's [send] or script's Game.Send",
             _ => $"Nothing listens for {quoted}: no Counter, Trigger, Sound Player or script's On",
         };
@@ -269,7 +283,9 @@ public sealed partial class KnownNames
         NameKind.Row => "a row of a table",
         NameKind.Item => "an item",
         NameKind.Flag => "a flag",
+        NameKind.Kind when kind.From is not null => $"a {ScopeWord(kind)}",
         NameKind.Kind => $"a {ScopeWord(kind)} kind",
+        NameKind.Saved => "a name in the save data",
         _ => "a message",
     };
 
@@ -310,6 +326,9 @@ public sealed partial class KnownNames
         /// <summary>Kinds things say they are, with their scope: ("Crate", "Red").</summary>
         public IReadOnlyCollection<(string Scope, string Name)> Kinds { get; init; } = [];
 
+        /// <summary>Names values are kept under in the save data: a Save As, a script's <c>SaveData.Set("best", ...)</c>.</summary>
+        public IReadOnlyCollection<string> Saved { get; init; } = [];
+
         public static Found Empty { get; } = new([], [], []);
     }
 
@@ -321,10 +340,17 @@ public sealed partial class KnownNames
     {
         var (layers, sent, heard) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(), new HashSet<string>());
         var (items, flags, kinds) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<(string, string)>());
+        var saved = new HashSet<string>(StringComparer.Ordinal);
         foreach (var component in entities.SelectMany(e => e.Components).Where(c => registry.IsRegistered(c.GetType())))
         {
             foreach (var property in registry.Get(component.GetType()).Properties)
             {
+                // An inventory's own items are items it has to give.
+                if (property.Editor is ItemCountsAttribute && property.GetValue(component) is IReadOnlyList<string> held)
+                    items.UnionWith(held.Select(l => ItemCountsAttribute.Read(l).Item).Where(i => i.Length > 0));
+                // What items do when they're used sends messages too ("send Teleport").
+                if (property.Editor is ItemUsesAttribute && property.GetValue(component) is IReadOnlyList<string> uses)
+                    sent.UnionWith(uses.Select(ItemUsesAttribute.Read).SelectMany(u => u?.Effects ?? []).Where(e => e.Verb == "send" && e.Argument.Length > 0).Select(e => e.Argument));
                 if (property.Names is not { } kind)
                     continue;
                 var names = Split(property.GetValue(component), kind);
@@ -338,6 +364,8 @@ public sealed partial class KnownNames
                     flags.UnionWith(names.Select(FlagOf));
                 else if (kind.Kind == NameKind.Kind && kind.Defines)
                     kinds.UnionWith(names.Select(n => (kind.Scope ?? "", n)));
+                else if (kind.Kind == NameKind.Saved && kind.Defines)
+                    saved.UnionWith(kind.Suffixes is { Length: > 0 } suffixes ? names.SelectMany(n => suffixes.Select(s => n + s)) : names);
             }
 
             if (component is Dialogue dialogue)
@@ -359,7 +387,7 @@ public sealed partial class KnownNames
                 flags.Add(with.Trim().Trim('"'));
         }
 
-        return new(layers, sent, heard) { Items = items, Flags = flags, Kinds = kinds };
+        return new(layers, sent, heard) { Items = items, Flags = flags, Kinds = kinds, Saved = saved };
     }
 
     // "SetFlag", "Set Flag", "Trigger.SetFlag" and the same for Clear.
@@ -372,7 +400,7 @@ public sealed partial class KnownNames
 
     /// <summary>
     /// What a script's code sends (<c>Send("Score")</c>), listens for (<c>On("Score", ...)</c>), puts things on
-    /// (<c>Layer = "Bullet"</c>), gives (<c>Add("Key")</c>) and sets (<c>SetFlag("MetKing")</c>).
+    /// (<c>Layer = "Bullet"</c>), gives (<c>Add("Key")</c>), sets (<c>SetFlag("MetKing")</c>) and saves (<c>SaveData.Set("best", ...)</c>).
     /// </summary>
     public static Found Scan(string code) => new(
         [.. ScriptLayer().Matches(code).Select(m => m.Groups[1].Value)],
@@ -381,7 +409,11 @@ public sealed partial class KnownNames
     {
         Items = [.. ScriptItem().Matches(code).Select(m => m.Groups[1].Value)],
         Flags = [.. ScriptFlag().Matches(code).Select(m => m.Groups[1].Value)],
+        Saved = [.. ScriptSaved().Matches(code).Select(m => m.Groups[1].Value)],
     };
+
+    [GeneratedRegex("""\bSaveData\s*\.\s*Set\s*\(\s*"([^"\\]+)"\s*,""")]
+    private static partial Regex ScriptSaved();
 
     [GeneratedRegex("""\bAdd\s*\(\s*"([^"\\]+)"\s*(?:,\s*\d+\s*)?\)""")]
     private static partial Regex ScriptItem();
@@ -417,7 +449,8 @@ public sealed partial class KnownNames
             fonts is null ? null : () => fonts(project),
             all.SelectMany(f => f.Items),
             all.SelectMany(f => f.Flags),
-            all.SelectMany(f => f.Kinds));
+            all.SelectMany(f => f.Kinds),
+            all.SelectMany(f => f.Saved));
     }
 }
 

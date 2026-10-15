@@ -9,6 +9,7 @@
     <!-- Fields with editors of their own (FieldEditor): each editor's template, by its type -->
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="FieldEditors/FieldEditorTemplates.xaml" />
+        <ResourceDictionary Source="FieldEditors/GameplayEditorTemplates.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <converters:BoolToVisibilityConverter x:Key="Field.Visible" />

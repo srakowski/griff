@@ -97,6 +97,14 @@ public sealed class ComponentAction
     /// <summary>What its value is, from the method's parameter, e.g. "amount" or "flag"; null for one that takes none.</summary>
     public string? ValueName { get; }
 
+    /// <summary>
+    /// For an action done with a name: what the name names, when its parameter is marked <see cref="NamesAttribute"/> (a
+    /// trigger's Set Flag a flag, its Load Scene a scene), so a trigger's or button's With picks from those; null otherwise.
+    /// </summary>
+    public NamesAttribute? ValueNames => ValueType == typeof(string)
+        ? Method.GetParameters().LastOrDefault()?.GetCustomAttribute<NamesAttribute>()
+        : null;
+
     /// <summary>True if it needs the game it runs in (it's set off only while one runs).</summary>
     public bool TakesGame { get; }
 

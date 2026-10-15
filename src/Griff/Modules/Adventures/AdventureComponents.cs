@@ -534,6 +534,7 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     /// button (a Load Scene button whose Saved Scene is this name) carries on in the room the player left. Empty keeps nothing.
     /// </summary>
     [Group("Saving")]
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveRoomAs { get; set; }
 
     /// <summary>

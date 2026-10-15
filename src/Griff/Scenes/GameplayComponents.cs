@@ -410,12 +410,14 @@ public sealed class Counter : Component
     /// "{0:000000}" (and <c>{2}</c> what it's out of and <c>{3}</c> how many are left, e.g. with <see cref="CountGoals"/>
     /// how many goals there are and how many are still uncovered). Empty shows just the number.
     /// </summary>
+    [Format("{0} the count", "{1} the best", "{2} what it's out of", "{3} how many are left", Preview = nameof(ReadsAs))]
     public string? Format { get; set; } = "Score: {0}";
 
     /// <summary>
     /// A name to keep the best count under in <c>Game.SaveData</c>, e.g. "best". Whenever the count beats it, it's saved,
     /// so another counter (on a menu, with Format "Best: {1}") can show it.
     /// </summary>
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveBestAs { get; set; }
 
     /// <summary>
@@ -606,13 +608,16 @@ public sealed class Counter : Component
     }
 
     /// <summary>The text to show: <see cref="Format"/> filled in, or just the number if it can't be.</summary>
-    public string Display()
+    public string Display() => ReadsAs(Format);
+
+    /// <summary>What its text says with <paramref name="format"/> as its <see cref="Format"/>, as the count is now.</summary>
+    public string ReadsAs(string? format)
     {
-        if (string.IsNullOrEmpty(Format))
+        if (string.IsNullOrEmpty(format))
             return Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
-            return string.Format(System.Globalization.CultureInfo.InvariantCulture, Format, Value, Best, Total, Left);
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, format, Value, Best, Total, Left);
         }
         catch (FormatException)
         {
@@ -729,6 +734,7 @@ public sealed class Spawner : Component
     /// "[set AlarmRaised]" or a script's <c>Game.SetFlag</c>), or "not AlarmRaised" to spawn only while it isn't. Its count
     /// down waits until then; its Spawn action still spawns one.
     /// </summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>

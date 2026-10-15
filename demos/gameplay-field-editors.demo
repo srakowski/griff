@@ -1,0 +1,67 @@
+title: Gameplay and UI field editors
+intro: The gameplay, UI, story, wiring, data and multiplayer components' fields that took something typed from memory have editors of their own now: formats with holes, lists of names, items and their uses, dialogue flags and choices, and UI areas.
+project: Empty | Field Kit Two
+
+chapter: Text with holes | A counter's format
+create: Text
+rename: Score
+add: Counter
+explain: field:Counter.Format | Format | A counter's format has holes the game fills in. Each one has a button now, saying what it puts in, and underneath it says how the text reads right now.
+click: editor:Counter.Format:insert:{1}
+expectvalue: Score.Counter.Format = Score: {0}{1}
+explain: editor:Counter.Format:preview | Reads now | The best goes in after the count, and the line under it shows how it reads.
+key: Ctrl+Z
+expectvalue: Score.Counter.Format = Score: {0}
+
+chapter: Names in order | Sides, and a side picked
+create: Turn Order
+explain: field:TurnOrder.Sides | Sides | A turn order's sides were names typed with commas between them. Each is a row now, to rename, move up or take out.
+click: editor:TurnOrder.Sides:add
+editorset: TurnOrder.Sides:name:3 = Pirates
+expectvalue: Turns.TurnOrder.Sides = Player, Enemy, Pirates
+create: Empty
+rename: Captain
+add: Turn Taker
+pick: TurnTaker.Side = Pirates
+expectvalue: Captain.TurnTaker.Side = Pirates
+expectflagged: TurnTaker.Side = none
+explain: field:TurnTaker.Side | Side | A turn taker's side is picked from the sides there are, and flagged when it names none.
+
+chapter: Items and what they do | An inventory
+add: Inventory
+explain: field:Inventory.Items | Items | What an inventory holds is a row an item now, with how many.
+set: Inventory.Items = Key
+editorset: Inventory.Items:count:1 = 3
+expectvalue: Captain.Inventory.Items = Key 3
+set: Inventory.Item Uses = Potion: heal 3
+explain: field:Inventory.Item Uses | Item Uses | And what each item does is a row too: heal, spawn a prefab, or send a message, each picked rather than spelled out.
+choose: Inventory.Item Uses:verb:1:1 = send
+editorset: Inventory.Item Uses:argument:1:1 = Drank
+expectvalue: Captain.Inventory.ItemUses = Potion: send Drank
+
+chapter: A dialogue's flags and choices | The Dialogue Editor
+create: Empty
+rename: Guide
+add: Dialogue
+explain: editor:Dialogue.Lines:dialogueeditor | Dialogue Editor | A dialogue's lines say how many lines, choices and parts they hold, with the Dialogue Editor a click away.
+click: editor:Dialogue.Lines:dialogueeditor
+dialogue
+dialogueline: 1
+dialogueset: tagkind = set
+dialogueset: tagname = MetGuide
+click: dialogue:addtag
+expectvalue: Guide.Dialogue.Lines = [set MetGuide] Hello!
+explain: dialogue:tags | Flags and messages | The flags a line needs, sets and clears, and the messages it sends, are listed in words and added from lists of what the project has.
+click: dialogue:addchoice
+dialogueset: goesto = End
+expectvalue: Guide.Dialogue.Lines = [set MetGuide] Hello!\n> ... -> End
+explain: dialogue:goesto | Goes to | And where a choice goes is picked from the dialogue's parts.
+click: dialogue:close
+
+chapter: UI areas | Resized in the Scene view
+create: Slider
+menu: View > Resize Handles
+explain: scene | Resize handles | With resize handles out, a slider's size, a button's clickable area or a save slot's picture has handles of its own to drag.
+resize: Ctrl+Slider.right = 6
+expectvalue: Slider.Slider.Size.X = 6
+say: Every one of these is an undo step, and agents get the same choices through the editor's tools.

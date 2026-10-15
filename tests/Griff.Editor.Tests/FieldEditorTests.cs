@@ -111,7 +111,7 @@ public sealed class FieldEditorTests : IDisposable
     [Fact]
     public void EveryFieldEditor_HasATemplate_InTheInspectorsFieldTemplates() => EditorHost.Run(services =>
     {
-        // Drawn, the templates are checked by the field editors demo (they take the editor's theme from the app).
+        // Drawn with the theme, they are checked by FieldEditorTemplateTests.
         _ = System.IO.Packaging.PackUriHelper.UriSchemePack;
         var templates = new System.Windows.ResourceDictionary
         {

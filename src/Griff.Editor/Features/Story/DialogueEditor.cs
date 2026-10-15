@@ -19,9 +19,12 @@ namespace Griff.Editor.Features.Story;
 /// the speaker lit and the others dimmed. Every change rewrites the dialogue's Lines as one undo step, so it's the same
 /// as typing them. It follows the selection, so it stays open beside the scene. Agents work it the same way: select a
 /// line (<see cref="SelectLine"/>), set <see cref="Speaker"/>, <see cref="Expression"/> and <see cref="Said"/>, add
-/// directions (<see cref="AddDirection"/>) and read <see cref="PreviewText"/>.
+/// directions (<see cref="AddDirection"/>) and read <see cref="PreviewText"/>. For any dialogue, a stage or not, the line
+/// picked's flags and messages are listed and added from what the project has (<see cref="AddTag"/>), a choice's or
+/// go-to's <see cref="GoesTo"/> is picked from the parts, and choices, parts and go-tos are added (<see cref="AddChoice"/>,
+/// <see cref="AddPart"/>, <see cref="AddGoTo"/>).
 /// </summary>
-public sealed class DialogueEditor : ObservableObject
+public sealed partial class DialogueEditor : ObservableObject
 {
     /// <summary>What the speaker list calls nobody: the line is said as it is (a narrator, a sign).</summary>
     public const string Nobody = "(nobody)";
@@ -522,6 +525,7 @@ public sealed class DialogueEditor : ObservableObject
         MoveDownCommand.NotifyCanExecuteChanged();
         AddDirectionCommand.NotifyCanExecuteChanged();
         AddLineCommand.NotifyCanExecuteChanged();
+        NotifyStory();
     }
 
     private IReadOnlyList<string> ExpressionsOf(string? who) =>

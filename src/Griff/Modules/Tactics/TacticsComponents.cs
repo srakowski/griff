@@ -43,6 +43,7 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
     /// Table Values sets it from a dice column given for Damage.
     /// </summary>
     [RollsFor(nameof(Damage))]
+    [Dice]
     public string? DamageRoll
     {
         get => _roll.Text;

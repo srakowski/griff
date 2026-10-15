@@ -31,6 +31,7 @@ public sealed class TableValues : Component
     /// <see cref="Choice"/> with Save As "hero" picks the class the hero plays. With nothing saved under it, <see cref="Row"/>
     /// is read.
     /// </summary>
+    [Names(NameKind.Saved)]
     public string? SavedRow { get; set; }
 
     /// <summary>The row <see cref="SavedRow"/> picked as the game last set the values; null for none. Set by the game.</summary>
@@ -42,6 +43,7 @@ public sealed class TableValues : Component
     /// <c>Speed</c> (every Speed on the entity, from the Speed column) or <c>Patrol.Speed = Walk Speed</c>. A number
     /// property given dice rolls them once, as the entity starts. Empty sets every property named like a column.
     /// </summary>
+    [TableSets(nameof(Table))]
     public IReadOnlyList<string> Sets { get; set; } = [];
 
     /// <summary>
@@ -62,6 +64,34 @@ public sealed class TableValues : Component
         var problems = new List<string>();
         Targets(null, problems);
         return problems.Count == 0 ? null : "Sets: " + string.Join("; ", problems) + ".";
+    }
+
+    /// <summary>The lines of <see cref="Sets"/> that name a component or property its entity hasn't got, each said in words.</summary>
+    public IReadOnlyList<string> LineProblems()
+    {
+        var problems = new List<string>();
+        if (Entity is not null && Lines().Count > 0)
+            Targets(null, problems);
+        return problems;
+    }
+
+    /// <summary>
+    /// What a line of <see cref="Sets"/> can set on its entity: each property of its other components that takes a value
+    /// from a table (a number, whole number, true or false, name, choice or color), as "Health.Max".
+    /// </summary>
+    public IReadOnlyList<string> Settable() =>
+        Entity is not { } entity ? [] :
+        [.. entity.Components.Where(c => c != this && c is not MissingComponent and not Transform).SelectMany(c => c.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.SetMethod!.IsPublic && p.GetIndexParameters().Length == 0 && p.GetCustomAttribute<DoNotSerializeAttribute>() is null && CanTake(p.PropertyType))
+            .Select(p => $"{c.GetType().Name}.{p.Name}")).Distinct()];
+
+    /// <summary>A line of <see cref="Sets"/> written: "Health.Max = Health", or just "Speed" when the column's named like the property.</summary>
+    public static string WriteLine(string target, string? column)
+    {
+        var property = target.Trim();
+        var name = property[(property.LastIndexOf('.') + 1)..];
+        return string.IsNullOrWhiteSpace(column) || column.Trim() == name ? property : $"{property} = {column.Trim()}";
     }
 
     /// <summary>The row it reads: the one <see cref="SavedRow"/> picked, else <see cref="Row"/>, or the entity's name when that's empty.</summary>

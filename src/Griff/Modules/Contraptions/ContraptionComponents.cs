@@ -146,6 +146,7 @@ public sealed class Thruster : Component
     public float Force { get; set; } = 60;
 
     /// <summary>Which way it pushes, turned with the entity: up is (0, 1).</summary>
+    [Direction]
     public Vector2 Direction { get; set; } = Vector2.UnitY;
 
     /// <summary>Its input: how hard it pushes, from 0 (off) to 1 (full). Wire something to its "Power", or set it.</summary>
@@ -369,6 +370,7 @@ public sealed class WireDisplay : Component, IDrawable
     public float Value { get; set; }
 
     /// <summary>How the number is written, e.g. "0" for whole numbers or "0.00" for two decimals.</summary>
+    [NumberFormat(Sample = nameof(Value))]
     public string? Format { get; set; } = "0.##";
 
     /// <summary>The number as shown.</summary>
@@ -430,7 +432,34 @@ public sealed class Wire : Component, IDrawable
     /// or one of its components' actions, e.g. "Spawn", "Fire" or "Damage", done once each time the signal comes on (with
     /// the signal as its amount).
     /// </summary>
+    [ChoiceOf(nameof(InputChoices), Noun = "one of its entity's inputs: Power, Show, its parts' own (a gate's A and B, a lamp's On...) or one of its actions")]
     public string? Input { get; set; } = "Power";
+
+    /// <summary>
+    /// The inputs its entity has, that <see cref="Input"/> can name: "Power" and "Show", its parts' own (a gate's "A" and
+    /// "B", a lamp's or switch's "On", a display's "Value", a light's "Brightness"), then each of its components' actions.
+    /// </summary>
+    public IReadOnlyList<string> InputChoices()
+    {
+        var inputs = new List<string> { "Power", "Show" };
+        if (Entity is not { } entity)
+            return inputs;
+        if (entity.GetComponent<WireGate>() is not null)
+            inputs.AddRange(["A", "B"]);
+        if (entity.GetComponent<WireLamp>() is not null || entity.GetComponent<Switch>() is not null)
+            inputs.Add("On");
+        if (entity.GetComponent<WireDisplay>() is not null)
+            inputs.Add("Value");
+        if (entity.GetComponent<Light>() is not null)
+            inputs.Add("Brightness");
+        foreach (var action in ComponentActions.On([entity]))
+        {
+            if (!inputs.Any(i => ComponentAction.SameWords(i, action.Name)))
+                inputs.Add(action.Name);
+        }
+
+        return inputs;
+    }
 
     /// <summary>The entity it comes from, by name. The nearest one with that name is used.</summary>
     [EntityName(Incoming = true)]

@@ -43,7 +43,12 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     /// The shapes that come, by letter: I (four in a line), J, L, O (a square), S, T and Z. Each comes once in every
     /// round of them, shuffled, so none is kept away for long. "IIO" would deal twice as many I's as O's.
     /// </summary>
+    [LetterCounts(AllShapes, Noun = "pieces", Cells = nameof(ShapeCells))]
     public string? Pieces { get; set; } = AllShapes;
+
+    /// <summary>The cells of a shape (one of <see cref="AllShapes"/>) as it comes in, (x, y) with y up; none for another letter.</summary>
+    public static IReadOnlyList<(int X, int Y)> ShapeCells(char shape) =>
+        AllShapes.Contains(char.ToUpperInvariant(shape)) ? [.. FallingShapes.Cells(char.ToUpperInvariant(shape), 0, 0, 0).Select(c => (c.X, -c.Y))] : [];
 
     /// <summary>The tile the I lands as; the J lands as the next, then L, O, S, T and Z.</summary>
     public int FirstTile { get; set; }

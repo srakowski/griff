@@ -866,8 +866,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     System.Numerics.Vector2 Proportional(float lead) => resizeSpot.X != 0
                         ? new System.Numerics.Vector2(lead, current.Y * lead / current.X)
                         : new System.Numerics.Vector2(current.X * lead / current.Y, lead);
-                    // A sprite grows around its middle; a box keeps its opposite side.
-                    resizeTo = shape is Griff.Scenes.Sprite
+                    // A sprite (or an area around its entity) grows around its middle; a box keeps its opposite side.
+                    resizeTo = SceneViewModel.ShapeFrame.GrowsAroundMiddle(shape)
                         ? shapeFrame.Center + resizeSpot * newSize / 2
                         : shapeFrame.Center - resizeSpot * current / 2 + resizeSpot * newSize;
                     resizeTo = new System.Numerics.Vector2(resizeSpot.X == 0 ? shapeFrame.Center.X : resizeTo.X, resizeSpot.Y == 0 ? shapeFrame.Center.Y : resizeTo.Y);

@@ -1156,6 +1156,27 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var chrome = style.Brush("Brush.Surface.Chrome");
         var halo = new Pen(chrome, 4);
         Point? dragged = null;
+
+        // A UI part's area (a button's clickable area) has nothing else drawn round it: outline it.
+        if (model.Handles == SceneHandles.Resize)
+        {
+            var outline = new Pen(color, 1) { DashStyle = DashStyles.Dash };
+            foreach (var area in model.ResizableShapes().Where(c => SceneViewModel.ShapeFrame.AreaOf(c) is not null))
+            {
+                if (SceneViewModel.ShapeFrame.Of(area) is not { } frame)
+                    continue;
+                Point Corner(float x, float y) => viewport.ToScreen(frame.ToWorld(frame.HandleAt(new Vector2(x, y))));
+                var figure = new StreamGeometry();
+                using (var g = figure.Open())
+                {
+                    g.BeginFigure(Corner(-1, -1), false, true);
+                    g.PolyLineTo([Corner(1, -1), Corner(1, 1), Corner(-1, 1)], true, false);
+                }
+
+                dc.DrawGeometry(null, outline, figure);
+            }
+        }
+
         foreach (var (shape, spot, point) in handles.ResizeHandles())
         {
             var active = input.Drag == SceneDrag.Resize
@@ -1176,6 +1197,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             {
                 Sprite sprite => sprite.Size,
                 BoxCollider box => box.Size,
+                _ when SceneViewModel.ShapeFrame.AreaOf(resizing) is var (sized, _) => (Vector2)sized.GetValue(resizing)!,
                 _ => Vector2.Zero,
             };
             var label = style.Text(resizing is CircleCollider circle ? $"r {Number(circle.Radius)}" : $"{Number(size.X)} × {Number(size.Y)}", "Brush.Text.Primary");

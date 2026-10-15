@@ -25,7 +25,7 @@ select: Bridge
 add: Wire
 pick: Wire.From = Score
 pick: Wire.Output = Reached
-set: Wire.Input = Show
+choose: Wire.Input:choice = Show
 expectvalue: Bridge.Wire.Output = Reached
 explain: field:Wire.Output | Output | A wire carries any output that gives a number or true or false. This one shows the bridge once the score reaches one coin.
 

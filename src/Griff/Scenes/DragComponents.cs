@@ -22,6 +22,7 @@ public sealed class Draggable : Component, IDrawEffect
     bool IDrawEffect.DrawsOnTop => IsHeld;
 
     /// <summary>What kind of thing it is, e.g. "Card" or "Red Gem": a <see cref="DropTarget"/>'s Accepts names the kinds it takes.</summary>
+    [Names(NameKind.Kind, Scope = "Draggable", Defines = true)]
     public string? Kind { get; set; }
 
     /// <summary>
@@ -97,6 +98,7 @@ public sealed class Draggable : Component, IDrawEffect
 public sealed class DropTarget : Component
 {
     /// <summary>The kinds of thing it takes (each a draggable's Kind), separated by commas, e.g. "Red Gem, Blue Gem". Empty takes anything.</summary>
+    [Names(NameKind.Kind, Scope = "Draggable", Many = true)]
     public string? Accepts { get; set; }
 
     /// <summary>How many things it holds at once; more are turned away. 0 holds any number: a bin, a discard pile.</summary>
@@ -211,6 +213,7 @@ public sealed class Grabber : Component
     /// right, or up or down in a top-down game), Y how far up. (0, 1) is over a character's head, (0.8, 0) in front of it,
     /// (0, 0) a cursor's middle.
     /// </summary>
+    [Offset(World = true)]
     public Vector2 HoldOffset { get; set; }
 
     /// <summary>The color what it would pick up turns, so the player can see what a press takes. Transparent leaves things alone.</summary>

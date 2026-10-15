@@ -15,7 +15,10 @@ public enum SceneHandles
     /// <summary>Scale it: its transform's scale, and everything else selected with it.</summary>
     Scale,
 
-    /// <summary>Resize its sprite: the sprite's size, around the entity's position.</summary>
+    /// <summary>
+    /// Resize its sprite (the sprite's size, around the entity's position) and the areas of its UI parts (a button's
+    /// clickable area, a bar's or slider's size: sizes marked <see cref="ResizableAttribute"/>).
+    /// </summary>
     Resize,
 
     /// <summary>Resize its box and circle colliders: a box's size and offset (its opposite side stays), a circle's radius.</summary>
@@ -270,8 +273,9 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     }
 
     /// <summary>
-    /// The primary selection's shapes the square handles resize in the current <see cref="Handles"/> mode: its sprite
-    /// (Resize), or its box and circle colliders (Collider). Empty when scaling, or with nothing selected.
+    /// The primary selection's shapes the square handles resize in the current <see cref="Handles"/> mode: its sprite and
+    /// the components with an area (Resize: a button's clickable area, a bar's size), or its box and circle colliders
+    /// (Collider). Empty when scaling, or with nothing selected.
     /// </summary>
     public IReadOnlyList<Component> ResizableShapes()
     {
@@ -279,7 +283,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             return [];
         return Handles switch
         {
-            SceneHandles.Resize => primary.Components.OfType<Sprite>().Take(1).ToList<Component>(),
+            SceneHandles.Resize => [.. primary.Components.OfType<Sprite>().Take(1), .. primary.Components.Where(c => ShapeFrame.AreaOf(c) is not null)],
             SceneHandles.Collider => primary.Components.Where(c => c is BoxCollider or CircleCollider).ToList(),
             _ => [],
         };
@@ -287,7 +291,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
     /// <summary>
     /// Resizes a shape on the primary selection as one undo step: <paramref name="component"/> is "Sprite",
-    /// "BoxCollider" or "CircleCollider" (its first one). <paramref name="size"/> is the new size in its own units, as
+    /// "BoxCollider", "CircleCollider" or a component with an area ("Button", "Slider": see <see cref="ResizableAttribute"/>),
+    /// its first one. <paramref name="size"/> is the new size in its own units, as
     /// the Inspector shows it (a circle's diameter, as its X); <paramref name="keep"/> is the point of it that stays
     /// where it is, from -1 to 1 along its own axes: (-1, 0) keeps the left edge, (0, 0) the middle. A box or circle
     /// keeps it by moving its offset; a sprite by moving its entity, and everything on it (its colliders and children)
@@ -295,7 +300,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// </summary>
     public void ResizeShape(string component, Vector2 size, Vector2 keep)
     {
-        var shape = selection.Entity?.Components.FirstOrDefault(c => c is Sprite or BoxCollider or CircleCollider &&
+        var shape = selection.Entity?.Components.FirstOrDefault(c => (c is Sprite or BoxCollider or CircleCollider || ShapeFrame.AreaOf(c) is not null) &&
             string.Equals(c.GetType().Name, component.Trim(), StringComparison.OrdinalIgnoreCase));
         if (shape is null || BeginResize(shape) is not { } resize)
             return;
@@ -316,6 +321,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             return null;
 
         PropertyDescriptor Property(Component c, string name) => workspace.Components.Get(c.GetType()).Properties.Single(p => p.Name == name);
+        if (ShapeFrame.AreaOf(shape) is var (sized, area))
+            return new ShapeResize(document, shape, frame, Property(shape, sized.Name), area.Center is { } center ? Property(shape, center) : Property(primary.Transform, nameof(Transform.Position)));
         return shape switch
         {
             Sprite => new ShapeResize(document, shape, frame, Property(shape, nameof(Sprite.Size)), Property(primary.Transform, nameof(Transform.Position))),
@@ -669,7 +676,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
         /// </summary>
         public static ShapeFrame? Of(Component shape)
         {
-            if (shape.Entity is not { } entity || shape is not (Sprite or BoxCollider or CircleCollider))
+            var area = AreaOf(shape);
+            if (shape.Entity is not { } entity || shape is not (Sprite or BoxCollider or CircleCollider) && area is null)
                 return null;
             var world = entity.Transform.WorldMatrix;
             var (axisX, axisY) = (Flat(Vector3.TransformNormal(Vector3.UnitX, world)), Flat(Vector3.TransformNormal(Vector3.UnitY, world)));
@@ -682,6 +690,9 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             var (turnedX, turnedY) = turns ? (axisX / scale.X, axisY / scale.Y) : (Vector2.UnitX, Vector2.UnitY);
             ShapeFrame frame = shape switch
             {
+                _ when area is var (sized, marked) => marked.Upright
+                    ? new(origin, new Vector2(scale.X, 0), new Vector2(0, scale.Y), MiddleOf(shape, marked), (Vector2)sized.GetValue(shape)!, false)
+                    : new(origin, axisX, axisY, MiddleOf(shape, marked), (Vector2)sized.GetValue(shape)!, false),
                 Sprite sprite => new(origin, axisX, axisY, Vector2.Zero, sprite.Size, false),
                 BoxCollider box when turns => new(origin, axisX, axisY, box.Offset, box.Size, false),
                 CircleCollider circle when turns => new(origin, turnedX * round, turnedY * round, circle.Offset, new Vector2(circle.Radius * 2), true),
@@ -691,6 +702,31 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             };
             return MathF.Abs(frame.AxisX.X * frame.AxisY.Y - frame.AxisX.Y * frame.AxisY.X) < 1e-8f ? null : frame;
         }
+
+        /// <summary>
+        /// The size a component's handles resize when it isn't a sprite or collider: its first <see cref="Vector2"/> marked
+        /// <see cref="ResizableAttribute"/> (a button's clickable area), or null for none.
+        /// </summary>
+        public static (System.Reflection.PropertyInfo Property, ResizableAttribute Area)? AreaOf(Component component) =>
+            component is Sprite or Collider ? null : Areas.GetOrAdd(component.GetType(), type => type
+                .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.PropertyType == typeof(Vector2) && p.GetIndexParameters().Length == 0)
+                .Select(p => (p, System.Reflection.CustomAttributeExtensions.GetCustomAttribute<ResizableAttribute>(p)))
+                .Where(p => p.Item2 is not null)
+                .Select(p => ((System.Reflection.PropertyInfo, ResizableAttribute)?)(p.p, p.Item2!))
+                .FirstOrDefault());
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo Property, ResizableAttribute Area)?> Areas = new();
+
+        /// <summary>
+        /// True for a shape that grows around its middle as an edge is dragged (a sprite, an area centered on its entity),
+        /// rather than keeping its opposite side where it is (a box, an area with its own center).
+        /// </summary>
+        public static bool GrowsAroundMiddle(Component shape) => shape is Sprite || AreaOf(shape) is { Area.Center: null };
+
+        // Where an area's middle is from its entity: the point its Center property names, or the entity itself.
+        private static Vector2 MiddleOf(Component shape, ResizableAttribute area) =>
+            area.Center is { } name && shape.GetType().GetProperty(name)?.GetValue(shape) is Vector2 center ? center : Vector2.Zero;
 
         /// <summary>
         /// Where its handles are, from -1 to 1 along its own axes: corners and edge middles for a rectangle, the four
@@ -769,8 +805,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             }
 
             // A sprite grows around its entity's position, so nothing else on the entity moves; a box keeps its opposite
-            // side, moving its offset.
-            var aroundMiddle = Shape is Sprite;
+            // side, moving its offset. An area does as a sprite does, unless it has a center of its own.
+            var aroundMiddle = ShapeFrame.GrowsAroundMiddle(Shape);
             var pinned = aroundMiddle ? Center : Center - spot * Size / 2;
             var line = aroundMiddle ? spot * Size / 2 : spot * Size;
             Vector2 size;
@@ -819,8 +855,8 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
             var center = Center + keep * (Size - size) / 2;
             List<(Component, PropertyDescriptor, object?)> values = Shape switch
             {
-                // A sprite is always around its entity's position, so keeping a side moves the entity.
-                Sprite => [(Shape, _size, size), (Shape.Entity!.Transform, _center,
+                // A sprite (or an area with no center) is always around its entity's position, so keeping a side moves the entity.
+                _ when ShapeFrame.GrowsAroundMiddle(Shape) => [(Shape, _size, size), (Shape.Entity!.Transform, _center,
                     _position + Vector3.TransformNormal(new Vector3(Frame.ToWorld(center) - Frame.ToWorld(Center), 0), _parentInverse))],
                 CircleCollider => [(Shape, _size, size.X / 2), (Shape, _center, center)],
                 _ => [(Shape, _size, size), (Shape, _center, center)],

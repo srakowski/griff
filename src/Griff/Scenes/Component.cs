@@ -279,14 +279,22 @@ public enum NameKind
     /// kinds of the same <see cref="NamesAttribute.Scope"/> ("Crate") go together.
     /// </summary>
     Kind,
+
+    /// <summary>
+    /// A name in the game's save data (<c>Game.SaveData</c>), e.g. "difficulty": one a slider's, toggle's or choice's Save As
+    /// keeps a value under (or a counter's Save Best As, an inventory's Save As, a script's <c>SaveData.Set</c>), which a
+    /// button's Needs Saved, a Table Values' Saved Row or a Stars' Saved reads. Flags are saved there too.
+    /// </summary>
+    Saved,
 }
 
 /// <summary>
 /// Marks a string property as naming a prefab, scene, input action, collision layer, message, table, table row, font,
-/// item, flag or kind: the editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of
-/// them.
+/// item, flag, kind or saved value: the editor's Inspector lets you pick one from a list of those the project has, and flags a
+/// name that matches none of them. On an action's value (a parameter of a method marked <see cref="ActionAttribute"/>) it
+/// says what the value names, so a trigger's or button's With is picked from those.
 /// </summary>
-[AttributeUsage(AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
 public sealed class NamesAttribute(NameKind kind) : Attribute
 {
     public NameKind Kind { get; } = kind;
@@ -320,6 +328,19 @@ public sealed class NamesAttribute(NameKind kind) : Attribute
     /// while it isn't set, and the picker offers both.
     /// </summary>
     public bool Condition { get; init; }
+
+    /// <summary>
+    /// For a <see cref="NameKind.Kind"/> whose names are things' own names rather than kinds they're of (a turn order's
+    /// sides, a game's teams): where they're given, e.g. "a turn order's Sides", which the warning for one that isn't
+    /// there names ("There's no side called "Enmy" in a turn order's Sides").
+    /// </summary>
+    public string? From { get; init; }
+
+    /// <summary>
+    /// For a <see cref="NameKind.Saved"/> name it <see cref="Defines"/>: what's added to it for the names it saves under,
+    /// e.g. [".Stars", ".Best"] for a level goal saving "Level1.Stars" and "Level1.Best"; none saves under the name itself.
+    /// </summary>
+    public string[]? Suffixes { get; init; }
 }
 
 /// <summary>

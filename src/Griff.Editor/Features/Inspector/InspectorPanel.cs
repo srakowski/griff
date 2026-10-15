@@ -1717,7 +1717,9 @@ public sealed class PropertyField : ObservableObject
             NameKind.Font => "Choose a font, each shown in its own face: the ones safe to ship first (Griff's free fonts are copied into Assets), or drag a font file here from the Assets panel",
             NameKind.Item => "Choose an item something gives (a pickup's Item), or type a new one",
             NameKind.Flag => "Choose a flag something sets (a trigger's Set Flag, a dialogue's [set]), or \"not\" one for while it isn't set",
+            NameKind.Kind when _property.Names!.From is { } from => $"Choose {KnownNames.Noun(_property.Names!)} from {from}, or type a new one",
             NameKind.Kind => $"Choose {KnownNames.Noun(_property.Names!)} something is, or type a new one",
+            NameKind.Saved => "Choose a name something keeps a value under in the save data (a Save As, a script's SaveData.Set), or type a new one",
             _ => "Choose a scene from the project, or drag one here from the Assets panel",
         },
     };
@@ -1810,7 +1812,9 @@ public sealed class PropertyField : ObservableObject
                     NameKind.Message => "No messages sent or heard yet: type one to use it",
                     NameKind.Item => "Nothing gives an item yet: give a pickup an Item, or type one",
                     NameKind.Flag => "Nothing sets a flag yet: a trigger's Set Flag or a dialogue's [set] does, or type one",
+                    NameKind.Kind when kind.From is { } from => $"There's no {KnownNames.Noun(kind)[(KnownNames.Noun(kind).IndexOf(' ') + 1)..]} in {from} yet: type one to use it",
                     NameKind.Kind => $"Nothing says it's {KnownNames.Noun(kind)} yet: type one to use it",
+                    NameKind.Saved => "Nothing keeps a value in the save data yet: give a slider, toggle or choice a Save As, or type one",
                     _ => "None in the project yet: type one to use it",
                 }, NamesMany, true, none);
                 break;

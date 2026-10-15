@@ -52,6 +52,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// The tile numbers that are gems, each its own kind: numbers and ranges, e.g. "0-5" for six kinds. Any other tile on
     /// the board is a fixed block.
     /// </summary>
+    [TileNumbers]
     public string? Gems
     {
         get => _gems;
@@ -114,6 +115,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// Gems to clear to win the level, as kind:count pairs, e.g. "0:20, 3:15" for 20 of tile 0 and 15 of tile 3. With a
     /// <see cref="TargetScore"/> too, both have to be done.
     /// </summary>
+    [TileCounts]
     public string? Collect { get; set; }
 
     /// <summary>

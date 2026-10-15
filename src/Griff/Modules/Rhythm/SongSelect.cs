@@ -53,9 +53,11 @@ public sealed class SongSelect : Component, IPlaytestReport
 
     /// <summary>A name to keep the song picked under in the save data, e.g. "Song": a Note Lanes' Saved Song.</summary>
     [Group("Saving")]
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; } = "Song";
 
     /// <summary>A name to keep the difficulty picked under in the save data, e.g. "Difficulty": a Note Lanes' Saved Difficulty.</summary>
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveDifficultyAs { get; set; } = "Difficulty";
 
     /// <summary>The name the lanes keep their best scores under (their Save Best As), to show each song's best: "Best".</summary>

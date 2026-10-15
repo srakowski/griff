@@ -38,6 +38,7 @@ public sealed class Backlog : Component, IDrawable
 
     /// <summary>How big the log is, in world units, centered on the entity.</summary>
     [Group("Look")]
+    [Resizable]
     public Vector2 Size { get; set; } = new(13, 6.4f);
 
     /// <summary>How tall its text is.</summary>
@@ -181,12 +182,15 @@ public sealed class Backlog : Component, IDrawable
 public sealed class SaveSlot : Component, IDrawable
 {
     /// <summary>The slot's name: "1", "2"... or one of your own ("Chapter 2"). "Quick" is the one quick saves use.</summary>
+    [Names(NameKind.Kind, Scope = "Save Slot", Defines = true, From = "the save slots and buttons")]
     public string? Slot { get; set; } = "1";
 
     /// <summary>
     /// What it says about the game saved there: "{slot}" is the slot's name, "{date}" and "{time}" when it was saved,
     /// "{scene}" the scene's name and "{line}" the line being said (or the scene's name).
     /// </summary>
+    [Format("{slot} the slot's name", "{date} the day it was saved", "{time} the time it was saved", "{scene} the scene's name",
+        "{line} the line being said (or the scene's name)", Preview = nameof(ReadsAs), Replaced = true)]
     public string? Format { get; set; } = "{date}  {time}\n{line}";
 
     /// <summary>What it says while nothing is saved there.</summary>
@@ -194,15 +198,18 @@ public sealed class SaveSlot : Component, IDrawable
 
     /// <summary>How big the screenshot is, in world units.</summary>
     [Group("Look")]
+    [Resizable(Center = nameof(PictureOffset))]
     public Vector2 PictureSize { get; set; } = new(3.2f, 1.8f);
 
     /// <summary>Where the screenshot's middle is, from the entity's.</summary>
+    [Offset]
     public Vector2 PictureOffset { get; set; } = new(0, 0.35f);
 
     /// <summary>How tall its words are.</summary>
     public float TextSize { get; set; } = 0.24f;
 
     /// <summary>Where its words' first line is, from the entity's middle.</summary>
+    [Offset]
     public Vector2 TextOffset { get; set; } = new(0, -0.8f);
 
     /// <summary>The color of its words.</summary>
@@ -232,6 +239,26 @@ public sealed class SaveSlot : Component, IDrawable
     /// </summary>
     [DoNotSerialize]
     public string Description { get; internal set; } = "";
+
+    /// <summary>
+    /// What it says with <paramref name="format"/> as its <see cref="Format"/> about a game saved there now, on a line of
+    /// talk: for the Inspector to show how it reads.
+    /// </summary>
+    public string ReadsAs(string? format) => Fill(format ?? "", Slot?.Trim() ?? "", DateTimeOffset.Now, "Chapter 1", "Ava: Shall we go?");
+
+    /// <summary>
+    /// <paramref name="format"/> filled in for a game saved in <paramref name="slot"/> at <paramref name="saved"/>: "{slot}",
+    /// "{date}" ("15 Oct 2026"), "{time}" ("14:03"), "{scene}" and "{line}" (the line being said, or the scene's name).
+    /// </summary>
+    public static string Fill(string format, string slot, DateTimeOffset saved, string? scene, string line)
+    {
+        var local = saved.ToLocalTime();
+        return format.Replace("{slot}", slot, StringComparison.OrdinalIgnoreCase)
+            .Replace("{date}", local.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("{time}", local.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("{scene}", scene ?? "", StringComparison.OrdinalIgnoreCase)
+            .Replace("{line}", line.Length > 0 ? line : scene ?? "", StringComparison.OrdinalIgnoreCase);
+    }
 
     int? IDrawable.DrawOrder => Order;
 

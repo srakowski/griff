@@ -725,6 +725,7 @@ public sealed class Dialogue : Component
     /// "[show Ava left happy]", "[hide Ava]", "[move Ava right]" and "[background Park fade]". Start a row with "\" to say
     /// it as it is, "&gt;", "#", "[" and all.
     /// </summary>
+    [DialogueLines]
     public IReadOnlyList<string> Lines { get; set; } = ["Hello!"];
 
     /// <summary>
@@ -1000,6 +1001,34 @@ public sealed class Dialogue : Component
             return null;
         throw new InvalidOperationException(
             $"The dialogue on \"{Entity?.Name}\" goes to \"{name}\", but none of its lines is \"# {name}\" (or \"-> End\" to end).");
+    }
+
+    /// <summary>The parts its lines start ("# Shop"), by name, in order.</summary>
+    public IReadOnlyList<string> PartNames()
+    {
+        var parts = new List<string>();
+        for (var row = 0; row < Lines.Count; row++)
+        {
+            if (Row(row) is { Kind: RowKind.Part, To: { Length: > 0 } name })
+                parts.Add(name);
+        }
+
+        return parts;
+    }
+
+    /// <summary>The parts its choices and go-tos go to that none of its lines starts (End always ends), each once.</summary>
+    public IReadOnlyList<string> GoesNowhere()
+    {
+        var parts = PartNames();
+        var nowhere = new List<string>();
+        for (var row = 0; row < Lines.Count; row++)
+        {
+            if (Row(row) is { Kind: RowKind.Choice or RowKind.GoTo, To: { Length: > 0 } to } && !parts.Contains(to, StringComparer.OrdinalIgnoreCase) &&
+                !to.Equals("End", StringComparison.OrdinalIgnoreCase) && !nowhere.Contains(to, StringComparer.OrdinalIgnoreCase))
+                nowhere.Add(to);
+        }
+
+        return nowhere;
     }
 
     /// <summary>

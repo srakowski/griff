@@ -1,0 +1,278 @@
+<!-- The gameplay, UI, story, wiring, data and multiplayer fields' own editors (FieldEditor), one template per editor's type,
+     found by its type. They use the shared parts in FieldEditorTemplates.xaml (Editor.Note, Editor.SmallButton...), merged in. Each
+     part a demo can click is tagged "editor:<part>" (a row's parts "editor:<part>:<row>"). -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
+                    xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                    xmlns:theme="clr-namespace:Griff.Editor.Themes">
+
+    <!-- The shared parts, merged here so this file's templates find them as they're drawn -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="FieldEditorTemplates.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Text with holes: as typed, a button for each hole, and how it reads now -->
+    <DataTemplate DataType="{x:Type inspector:FormatEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Tag="editor:text" Text="{Binding Field.TextValue}" />
+            <ItemsControl Margin="0,3,0,0" ItemsSource="{Binding Holes, Mode=OneTime}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:HoleChoice">
+                        <Button Margin="0,0,3,3" Padding="6,1" Command="{Binding InsertCommand}" ToolTip="{Binding Tip}"
+                                Tag="{Binding Hole, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:insert:}">
+                            <TextBlock FontFamily="{StaticResource Font.Mono}" Text="{Binding Hole, StringFormat='+ {0}'}" />
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:preview" Text="{Binding Preview}" />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- A number format: as typed, the common ones to pick, and a number written that way -->
+    <DataTemplate DataType="{x:Type inspector:NumberFormatEditor}">
+        <StackPanel>
+            <DockPanel>
+                <ComboBox Width="150" Margin="3,0,0,0" DockPanel.Dock="Right" ItemsSource="{Binding Choices, Mode=OneTime}" SelectedItem="{Binding Choice, Delay=1}" Tag="editor:choice" ToolTip="The common ways to write a number" />
+                <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="A number format, like 0.00" />
+            </DockPanel>
+            <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:preview" Text="{Binding Preview}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Names in order: a row each to rename, move up and take out, and Add -->
+    <DataTemplate DataType="{x:Type inspector:NameListEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" MaxHeight="90" AcceptsReturn="{Binding IsList, Mode=OneTime}" Tag="editor:text" Text="{Binding Typed}" VerticalScrollBarVisibility="Auto"
+                                    ToolTip="The names as typed: separated by commas, or one a line" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:NameRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <TextBlock Width="18" VerticalAlignment="Center" DockPanel.Dock="Left" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Number}" />
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right" IsEnabled="{Binding CanRemove}"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this one out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding MoveUpCommand}" DockPanel.Dock="Right" IsEnabled="{Binding CanMoveUp}"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:up:}" ToolTip="Move it up the list">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveUp}" />
+                            </Button>
+                            <controls:CommitTextBox Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:name:}" Text="{Binding Name}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Style="{StaticResource Editor.AddButton}" Command="{Binding AddCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                    <TextBlock Margin="6,0,0,0" Text="{Binding AddText}" />
+                </StackPanel>
+            </Button>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Letters counted: each letter's picture and how many times it comes -->
+    <DataTemplate DataType="{x:Type inspector:LetterCountsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="The letters as typed, each as many times as it comes" />
+            <ItemsControl ItemsSource="{Binding Letters, Mode=OneTime}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="2" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:LetterRow">
+                        <DockPanel Margin="0,0,6,3">
+                            <Border Width="28" Height="18" Margin="0,0,4,0" DockPanel.Dock="Left">
+                                <Path Data="{Binding Picture, Mode=OneTime}" Fill="{DynamicResource Brush.Accent}" Stretch="Uniform" />
+                            </Border>
+                            <controls:NumberField IsInteger="True" Label="{Binding Letter, Mode=OneTime}" Step="0.1"
+                                                  Tag="{Binding Letter, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:count:}" Value="{Binding Count}" ToolTip="How many times it comes in a round" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:summary" Text="{Binding Summary}" />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- An action's value: a number box, a tick or a list of names, as the action wants, with what it takes -->
+    <DataTemplate DataType="{x:Type inspector:ActionValueEditor}">
+        <StackPanel>
+            <controls:NumberField IsInteger="{Binding IsInteger}" Tag="editor:number" Value="{Binding Number}" Visibility="{Binding IsNumber, Converter={StaticResource Editor.Visible}}" />
+            <CheckBox HorizontalAlignment="Left" IsChecked="{Binding Flag}" Tag="editor:flag" Visibility="{Binding IsBool, Converter={StaticResource Editor.Visible}}" />
+            <DockPanel Visibility="{Binding IsTyped, Converter={StaticResource Editor.Visible}}">
+                <ComboBox Width="26" Margin="2,0,0,0" DockPanel.Dock="Right" ItemsSource="{Binding Choices}" SelectedItem="{Binding Pick, Delay=1}" Tag="editor:name"
+                          ToolTip="Pick one the project has" Visibility="{Binding IsName, Converter={StaticResource Editor.Visible}}" />
+                <controls:CommitTextBox Tag="editor:text" Text="{Binding Field.TextValue}" />
+            </DockPanel>
+            <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:note" Text="{Binding Note}" />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- A dialogue's lines: as typed, what they hold, and the Dialogue Editor -->
+    <DataTemplate DataType="{x:Type inspector:DialogueLinesEditor}">
+        <StackPanel>
+            <controls:CommitTextBox MinHeight="44" MaxHeight="220" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" HorizontalScrollBarVisibility="Auto"
+                                    Tag="editor:text" Text="{Binding Field.LinesValue}" TextWrapping="NoWrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" />
+            <DockPanel Margin="0,3,0,0">
+                <Button Padding="8,2" Command="{Binding OpenDialogueEditorCommand}" DockPanel.Dock="Left" Tag="editor:dialogueeditor"
+                        ToolTip="Build each line from lists: who says it, its choices and where they go, the flags it needs and sets, the messages it sends (Entity > Edit Dialogue)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Rename}" />
+                        <TextBlock Margin="6,0,0,0" Text="Dialogue Editor" />
+                    </StackPanel>
+                </Button>
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Tag="editor:summary" Text="{Binding Summary}" />
+            </DockPanel>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Items and how many: a row each, the item picked or typed and how many; pick one under them to add it -->
+    <DataTemplate DataType="{x:Type inspector:ItemCountsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" MinHeight="22" MaxHeight="90" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" HorizontalScrollBarVisibility="Auto"
+                                    Tag="editor:text" Text="{Binding Field.LinesValue}" TextWrapping="NoWrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" ToolTip="Items as typed, one a line: Key 2" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:ItemCountRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this one out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <controls:NumberField Width="56" Margin="3,0,0,0" DockPanel.Dock="Right" IsInteger="True" Label="×" Step="0.1"
+                                                  Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:count:}" Value="{Binding Count}" ToolTip="How many" />
+                            <ComboBox Width="26" Margin="2,0,0,0" DockPanel.Dock="Right" ItemsSource="{Binding Choices}" SelectedItem="{Binding Pick, Delay=1}"
+                                      Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:pickitem:}" ToolTip="Pick one of the items the game gives" />
+                            <controls:CommitTextBox Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:item:}" Text="{Binding Item}" ToolTip="The item: one the game gives, or a new one" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ComboBox Margin="0,2,0,0" ItemsSource="{Binding Items}" SelectedItem="{Binding AddItem, Delay=1}" Tag="editor:add" ToolTip="Add one of the items the game gives" />
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Add one: pick an item above." />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- What items do: a row an item, and under it what it does, a row each -->
+    <DataTemplate DataType="{x:Type inspector:ItemUsesEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" MinHeight="22" MaxHeight="90" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" HorizontalScrollBarVisibility="Auto"
+                                    Tag="editor:text" Text="{Binding Field.LinesValue}" TextWrapping="NoWrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" ToolTip="Uses as typed, one item a line: Bomb: spawn Explosion, send Boom" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:ItemUseRow">
+                        <StackPanel Margin="0,0,0,4">
+                            <DockPanel>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this item's use out">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding AddEffectCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:addeffect:}" ToolTip="It does something else too">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                                </Button>
+                                <ComboBox Width="26" Margin="2,0,0,0" DockPanel.Dock="Right" ItemsSource="{Binding Choices}" SelectedItem="{Binding Pick, Delay=1}"
+                                      Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:pickitem:}" ToolTip="Pick one of the items the game gives" />
+                                <controls:CommitTextBox Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:item:}" Text="{Binding Item}" ToolTip="The item: one the game gives, or a new one" />
+                            </DockPanel>
+                            <ItemsControl Margin="16,2,0,0" ItemsSource="{Binding Effects}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="inspector:ItemEffectRow">
+                                        <DockPanel Margin="0,0,0,2">
+                                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                                    Tag="{Binding Key, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:removeeffect:}" ToolTip="It doesn't do this">
+                                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Clear}" />
+                                            </Button>
+                                            <ComboBox Width="70" Margin="0,0,3,0" DockPanel.Dock="Left" ItemsSource="{Binding Verbs, Mode=OneTime}" SelectedItem="{Binding Verb, Delay=1}"
+                                                      Tag="{Binding Key, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:verb:}" ToolTip="Heal hit points, spawn a prefab where it stands, or send a message" />
+                                            <ComboBox Width="26" Margin="2,0,0,0" DockPanel.Dock="Right" Visibility="{Binding HasChoices, Converter={StaticResource Editor.Visible}}" ItemsSource="{Binding Choices}" SelectedItem="{Binding Pick, Delay=1}"
+                                      Tag="{Binding Key, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:pickargument:}" ToolTip="Pick one of the project's prefabs or messages" />
+                                            <controls:CommitTextBox Tag="{Binding Key, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:argument:}" Text="{Binding Argument}" ToolTip="How much it heals, the prefab it spawns, or the message it sends" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ComboBox Margin="0,2,0,0" ItemsSource="{Binding Items}" SelectedItem="{Binding AddItem, Delay=1}" Tag="editor:add" ToolTip="Give one of the items the game gives a use" />
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Add one: pick an item above." />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Tiles and how many: a row each with its picture; the tiles to click under them add or take one out -->
+    <DataTemplate DataType="{x:Type inspector:TileCountsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Tiles and how many as typed: 0:20, 3:15" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:TileCountRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <Border Width="22" Height="22" Margin="0,0,4,0" DockPanel.Dock="Left" Background="{Binding Fill}" CornerRadius="2">
+                                <Image RenderOptions.BitmapScalingMode="NearestNeighbor" Source="{Binding Picture}" Stretch="Uniform" />
+                            </Border>
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this one out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <controls:NumberField Width="64" Margin="3,0,0,0" DockPanel.Dock="Right" IsInteger="True" Label="×" Step="0.1"
+                                                  Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:count:}" Value="{Binding Count}" ToolTip="How many" />
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Name}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl Margin="0,3,0,0" ItemTemplate="{StaticResource Editor.Tile}" ItemsPanel="{StaticResource Editor.TileStrip}" ItemsSource="{Binding Tiles}" Focusable="False" />
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Click a tile to add it, or again to take it out." />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Which properties take which columns: a row each, property and column picked; pick a property under them to add it -->
+    <DataTemplate DataType="{x:Type inspector:TableSetsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" MinHeight="22" MaxHeight="90" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" HorizontalScrollBarVisibility="Auto"
+                                    Tag="editor:text" Text="{Binding Field.LinesValue}" TextWrapping="NoWrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" ToolTip="Lines as typed: Health.Max = Health" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:TableSetRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this line out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <UniformGrid Rows="1">
+                                <ComboBox Margin="0,0,3,0" ItemsSource="{Binding Properties}" SelectedItem="{Binding Property, Delay=1}"
+                                          Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:property:}" ToolTip="The property it sets" />
+                                <ComboBox ItemsSource="{Binding Columns}" SelectedItem="{Binding Column, Delay=1}"
+                                          Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:column:}" ToolTip="The table's column it takes" />
+                            </UniformGrid>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource Editor.Note}" Text="{Binding Note}" />
+            <ComboBox Margin="0,2,0,0" ItemsSource="{Binding Properties}" SelectedItem="{Binding AddProperty, Delay=1}" Tag="editor:add" ToolTip="Add a property the table sets, taking the column named like it" />
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Add one: pick a property above." />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+</ResourceDictionary>

@@ -47,6 +47,7 @@ public sealed class Trigger : Component
     /// What to do it with, for an action that takes a value: how much (Damage 2), a name (Set Flag "MetGuide") or true or
     /// false. Empty uses the action's own default (1 for an amount).
     /// </summary>
+    [ActionValue(nameof(Do))]
     public string? With { get; set; }
 
     /// <summary>Hear it with the message's own number as the value, when it sends one (a beat's number, the points scored), rather than <see cref="With"/>.</summary>
@@ -64,7 +65,7 @@ public sealed class Trigger : Component
 #pragma warning disable CA1822 // An action is done on a component, so it's an instance method even when it needs nothing of it.
     /// <summary>Sets <paramref name="flag"/> in the game's save data, as a dialogue's "[set Flag]" does.</summary>
     [Action]
-    private void SetFlag(IGameContext game, string? flag)
+    private void SetFlag(IGameContext game, [Names(NameKind.Flag)] string? flag)
     {
         if (!string.IsNullOrWhiteSpace(flag))
             game.SetFlag(flag, on: true);
@@ -72,7 +73,7 @@ public sealed class Trigger : Component
 
     /// <summary>Clears <paramref name="flag"/> in the game's save data, as a dialogue's "[clear Flag]" does.</summary>
     [Action]
-    private void ClearFlag(IGameContext game, string? flag)
+    private void ClearFlag(IGameContext game, [Names(NameKind.Flag)] string? flag)
     {
         if (!string.IsNullOrWhiteSpace(flag))
             game.SetFlag(flag, on: false);
@@ -83,7 +84,7 @@ public sealed class Trigger : Component
     /// does: the end of a story, the next level once a boss is beaten.
     /// </summary>
     [Action]
-    private void LoadScene(IGameContext game, string? scene)
+    private void LoadScene(IGameContext game, [Names(NameKind.Scene)] string? scene)
     {
         if (!string.IsNullOrWhiteSpace(scene))
             game.LoadScene(scene.Trim(), SceneFade);

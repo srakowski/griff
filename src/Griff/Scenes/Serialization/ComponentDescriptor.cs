@@ -224,6 +224,7 @@ public sealed class PropertyDescriptor
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
         Editor = property.GetCustomAttribute<FieldEditorAttribute>();
         Offset = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<OffsetAttribute>() : null;
+        Resizable = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<ResizableAttribute>() : null;
     }
 
     // A string called Font, or ending in Font ("TitleFont"), names a font without being marked.
@@ -279,6 +280,9 @@ public sealed class PropertyDescriptor
 
     /// <summary>For a <see cref="System.Numerics.Vector2"/> marked <see cref="OffsetAttribute"/>: a point offset from the entity, which the Scene view puts a knob on.</summary>
     public OffsetAttribute? Offset { get; }
+
+    /// <summary>For a <see cref="System.Numerics.Vector2"/> marked <see cref="ResizableAttribute"/>: a rectangle's size, which the Scene view puts resize handles on.</summary>
+    public ResizableAttribute? Resizable { get; }
 
     /// <summary>The subheading the Inspector shows it under, from the <see cref="GroupAttribute"/> on it or before it; null for none.</summary>
     public string? Group { get; }

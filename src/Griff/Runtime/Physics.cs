@@ -611,6 +611,17 @@ public sealed partial class Physics
             if (MovedIntoBy(solid, area, other, axis, sign, delta))
                 continue;
 
+            // A body that falls, already sunk into the top of something that doesn't move before this sideways move, less
+            // deep than across (placed a little into the floor, as an enemy whose collider is bigger than its sprite is): lifted
+            // onto it, rather than shoved out sideways to the floor's end as if it had walked into a wall.
+            if (axis == 0 && carrier is null && pusher is null && body.GravityScale > 0 && Gravity.Y < 0 && area.Center.Y > other.Center.Y &&
+                solid.Entity.GetComponent<Body>() is null && SunkInto(boundsBefore, other.Bounds) is var (across, down) && down > 1e-4f && down < across)
+            {
+                Translate(solids, entity, new Vector2(0, other.Center.Y + area.ContactDistance(other, 1, -1) - area.Center.Y));
+                area = Area.Of(collider);
+                continue;
+            }
+
             // A crate in the way is shoved along first, by its share of the move; whatever's left of the overlap blocks as
             // usual, but a crate that gave way doesn't stop the pusher dead (it keeps leaning into it at its own speed).
             var gaveWay = false;
@@ -853,6 +864,10 @@ public sealed partial class Physics
         private bool Inside(Vector2 point) =>
             point.X > Cell.Min.X && point.X < Cell.Max.X && point.Y > Cell.Min.Y && point.Y < SurfaceAt(point.X);
     }
+
+    // How far two boxes overlap across and up and down (either is 0 or less when they don't).
+    private static (float Across, float Down) SunkInto(Box a, Box b) =>
+        (MathF.Min(a.Max.X, b.Max.X) - MathF.Max(a.Min.X, b.Min.X), MathF.Min(a.Max.Y, b.Max.Y) - MathF.Max(a.Min.Y, b.Min.Y));
 
     // Whether a solid is a body that turns (and moves) which this move can't have taken it into: getting out of it along the
     // move takes further than the move went.

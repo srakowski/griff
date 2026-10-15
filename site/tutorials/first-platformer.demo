@@ -4,7 +4,7 @@ summary: Build a small platformer from an empty project: a hero, a level, a coin
 project: Empty | My Platformer
 
 chapter: A hero | Entity > Characters > Platformer Player
-say: Start a new project from the Empty template (File, New Project). It opens on a scene with just a camera. The Entity menu makes ready-made things, and the first one a platformer needs is its hero.
+say: Start a new project from the Empty template (File, New Project). It opens on a scene with just a camera. The Entity menu makes ready-made things, sorted by kind, and the first one a platformer needs is its hero, under Characters.
 deselect
 create: Platformer Player
 expectcomponents: Player = Transform, Sprite, BoxCollider, Body, PlatformerMovement
@@ -83,10 +83,11 @@ set: Transform.Position = -4, -2.1, 0
 set: Sprite.Size = 0.8, 0.8
 set: Sprite.Tint = #57AB5A
 add: Patrol
+set: BoxCollider.Size = 0.8, 0.8
 add: DamageOnTouch
 set: DamageOnTouch.Layers = Player
 expectcomponents: Slime = Transform, Sprite, BoxCollider, Body, Patrol, DamageOnTouch
-say: Patrol walks back and forth and brings the collider and body it needs. Damage On Touch hurts anything on the Player layer it meets.
+say: Patrol walks back and forth and brings the collider and body it needs; the collider is made the slime's size. Damage On Touch hurts anything on the Player layer it meets.
 shot: slime
 
 chapter: Play the finished level | Collect the coin

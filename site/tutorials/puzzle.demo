@@ -33,7 +33,7 @@ rename: Crate B
 set: Transform.Position.X = 2.5
 set: Transform.Position.Y = -3.5
 deselect
-say: In a scene with a grid player, a crate (under Physics) is a grid crate: a Pushable that slides one cell when the player steps into it, as long as the cell beyond is free.
+say: In a scene with a grid player, the crate is made for the grid: a Pushable that slides one cell when the player steps into it, as long as the cell beyond is free.
 deselect
 create: Goal
 rename: Goal A

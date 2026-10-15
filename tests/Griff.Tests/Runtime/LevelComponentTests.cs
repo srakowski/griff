@@ -223,6 +223,42 @@ public class LevelComponentTests
     }
 
     [Fact]
+    public void Patrol_PlacedALittleIntoTheFloor_IsLiftedOntoIt_NotShovedOffItsEnd()
+    {
+        // A first platformer's slime: its collider a little taller than where it was placed allows, so 0.1 into the floor.
+        // The first step's sideways move used to shove it out sideways to the floor's end, where it fell off.
+        _game.Physics.Gravity = new Vector2(0, -25);
+        AddBox("Floor", new Vector2(0, -0.5f), new Vector2(16, 1));
+        var walker = AddWalker(new Vector2(-4, 0.3f));
+
+        Run(Step);
+
+        Assert.Equal(-4, Position(walker).X, 0.1f);
+        Assert.Equal(0.4f, Position(walker).Y, 0.01f);
+        Assert.True(walker.GetComponent<Body>()!.IsGrounded);
+        Assert.False(walker.GetComponent<Patrol>()!.GoingLeft);
+
+        Run(1);
+
+        Assert.Equal(0.4f, Position(walker).Y, 0.01f);
+        Assert.Equal(-1, Position(walker).X, 0.2f);
+    }
+
+    [Fact]
+    public void Body_SunkIntoTheSideOfAWall_IsStillPushedOutSideways()
+    {
+        // Deeper up and down than across: the side of a wall, so out of the side as before.
+        AddBox("Wall", new Vector2(0, 0), new Vector2(1, 4));
+        var crate = AddBox("Crate", new Vector2(-0.8f, 0), new Vector2(0.8f, 0.8f));
+        crate.AddComponent<Body>().Velocity = new Vector2(1, 0);
+
+        Run(Step);
+
+        Assert.Equal(-0.9f, Position(crate).X, 0.01f);
+        Assert.Equal(0, Position(crate).Y, 0.01f);
+    }
+
+    [Fact]
     public void Patrol_TurnsAtItsLeftAndRight_OnALongFloor()
     {
         _game.Physics.Gravity = new Vector2(0, -25);

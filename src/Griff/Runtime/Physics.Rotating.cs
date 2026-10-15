@@ -11,7 +11,9 @@ namespace Griff.Runtime;
 // tips over and falls flat), starting from the pushes of the part before, and the first from the step before's (kept with
 // the scene), so a tower's weight is carried all the way down it and it stands. Overlaps are eased apart rather than
 // kicked. Bodies that have all stayed still together for a moment fall asleep and aren't worked out until something
-// disturbs them. Whatever else moves meets them as the turned boxes they are.
+// disturbs them. Whatever else moves meets them as the turned boxes they are. A circle is a ball: it rolls, held back from
+// rolling at each point it touches by its rolling resistance (and, top-down, by the ground under the view), grips as hard
+// as it hits so its spin goes into its bounces, and passes over the joins between things laid end to end.
 public sealed partial class Physics
 {
     // Shapes this close are touching: what a body rests on, is grounded on and reports bumping into.
@@ -61,6 +63,7 @@ public sealed partial class Physics
     // bodies moved the old way they touch) and the contacts between them and everything else.
     private readonly List<Body> _turning = [];
     private readonly HashSet<Body> _sleepers = [];
+    private readonly HashSet<Guid> _sleeping = [];
     private readonly List<Mover> _movers = [];
     private readonly Dictionary<Body, int> _moverOf = [];
     private readonly List<Contact> _solving = [];
@@ -158,18 +161,26 @@ public sealed partial class Physics
         Gather(body, solids, solids.FilterOf(collider), ref self, self.IsCircle ? self.Radius : half.X, TouchSkin, HullBounds(ref self).Min.Y, turning: false);
 
         // Still something under it, if it falls, and nothing pushed into it. (Something moved the old way that runs into it
-        // knocks it, which wakes it.)
+        // knocks it, which wakes it.) What's under it may be one thing below it, or things either side of it it's wedged
+        // between: a ball in a heap against a wall rests on a ball down to one side and the wall.
         var pull = body.FloatThisStep ? Vector2.Zero : Gravity * body.GravityScale;
         var up = pull == Vector2.Zero ? Vector2.Zero : -Vector2.Normalize(pull);
         var held = up == Vector2.Zero;
+        var (left, right) = (false, false);
         foreach (var contact in _contacts)
         {
             if (contact.Gap < -WakeDepth)
                 return false;
-            held |= Vector2.Dot(contact.Normal, up) > 0.5f;
+            var lifts = Vector2.Dot(contact.Normal, up);
+            held |= lifts > 0.5f;
+            if (lifts > -0.01f)
+            {
+                var side = Cross(up, contact.Normal);
+                (left, right) = (left || side > 0, right || side < 0);
+            }
         }
 
-        if (!held)
+        if (!held && !(left && right))
             return false;
 
         Touching(body, onCollision, report: true);
@@ -235,8 +246,14 @@ public sealed partial class Physics
         var pull = body.FloatThisStep ? Vector2.Zero : Gravity * body.GravityScale;
         var velocity = body.Velocity;
         var spin = Math.Clamp(body.Spin * MathF.PI / 180, -MaxSpin, MaxSpin);
-        var margin = ((velocity + pull * dt).Length() + MathF.Abs(spin) * reach) * dt + TouchSkin;
+        // How far it could go this step (a ball turning doesn't bring its edge any nearer anything).
+        var margin = ((velocity + pull * dt).Length() + (self.IsCircle ? 0 : MathF.Abs(spin) * reach)) * dt + TouchSkin;
         _widestMargin = MathF.Max(_widestMargin, margin);
+
+        // A ball with nothing pulling it (top-down) rolls on the ground under the view, slowed as on level ground.
+        var floor = self.IsCircle && pull == Vector2.Zero
+            ? Math.Max(0, body.RollingResistance) * (Gravity != Vector2.Zero ? Gravity.Length() : DefaultGravity.Length())
+            : 0;
 
         var index = _movers.Count;
         _movers.Add(new Mover
@@ -244,7 +261,9 @@ public sealed partial class Physics
             Body = body,
             Collider = collider,
             Turns = true,
+            Round = self.IsCircle,
             Pull = pull,
+            Floor = floor,
             Center = self.Center,
             InverseMass = 1 / Math.Max(0.01f, body.Mass),
             InverseInertia = 1 / (self.IsCircle ? body.CircleInertia(self.Radius) : body.BoxInertia(half)),
@@ -373,8 +392,10 @@ public sealed partial class Physics
             ref var a = ref movers[contact.A];
             var normal = contact.Normal;
             var tangent = new Vector2(-normal.Y, normal.X);
-            contact.ArmA = contact.Underfoot ? Vector2.Zero : contact.Point - a.Center;
+            // A ball touches where its edge meets the normal, however far off the point found is yet.
+            contact.ArmA = contact.Underfoot ? Vector2.Zero : a.Round ? -normal * a.Reach : contact.Point - a.Center;
             var (bounce, grip) = (a.Body.Bounciness, Math.Clamp(a.Body.Grip, 0, 1));
+            var rolling = a.Round && !contact.Underfoot ? Math.Max(0, a.Body.RollingResistance) * a.Reach : 0;
             var (otherMass, otherInertia) = (0f, 0f);
             if (contact.B >= 0)
             {
@@ -382,10 +403,12 @@ public sealed partial class Physics
                 otherMass = b.InverseMass;
                 if (b.Turns)
                 {
-                    contact.ArmB = contact.Point - b.Center;
+                    contact.ArmB = b.Round ? normal * b.Reach : contact.Point - b.Center;
                     otherInertia = b.InverseInertia;
                     grip = MathF.Sqrt(grip * Math.Clamp(b.Body.Grip, 0, 1));
                     bounce = MathF.Max(bounce, b.Body.Bounciness);
+                    if (b.Round)
+                        rolling = MathF.Max(rolling, Math.Max(0, b.Body.RollingResistance) * b.Reach);
                 }
             }
 
@@ -398,22 +421,31 @@ public sealed partial class Physics
             contact.TangentMass = 1 / (masses + a.InverseInertia * slide * slide + otherInertia * otherSlide * otherSlide);
             contact.Grip = grip;
             contact.Bounce = Math.Clamp(bounce, 0, 1);
+            contact.Rolling = rolling;
+            contact.RollMass = rolling > 0 ? 1 / (a.InverseInertia + otherInertia) : 0;
             contact.Approach = Vector2.Dot(Relative(movers, ref contact), normal);
             if (memory.TryGet(new ContactKey(a.Body.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), out var pushed))
-                (contact.Pushed, contact.Rubbed) = (pushed.X, pushed.Y);
+                (contact.Pushed, contact.Rubbed, contact.Rolled) = (pushed.X, pushed.Y, rolling > 0 ? pushed.Z : 0);
         }
 
         for (var step = 0; step < SolveParts; step++)
         {
             foreach (ref var mover in movers)
             {
-                if (mover.Turns)
-                    mover.Velocity += mover.Pull * part;
+                if (!mover.Turns)
+                    continue;
+                mover.Velocity += mover.Pull * part;
+                if (mover.Floor > 0)
+                    RollOnFloor(ref mover, part);
             }
 
             // The pushes of the part before (of the step before, to begin with), as a first guess at this part's.
             foreach (ref var contact in contacts)
+            {
                 Apply(movers, ref contact, contact.Normal * contact.Pushed + new Vector2(-contact.Normal.Y, contact.Normal.X) * contact.Rubbed);
+                if (contact.Rolled != 0)
+                    Twist(movers, ref contact, contact.Rolled);
+            }
 
             for (var pass = 0; pass < PushPasses; pass++)
                 PushAll(movers, contacts, softness, inversePart, ease: true);
@@ -431,25 +463,60 @@ public sealed partial class Physics
             PushAll(movers, contacts, softness, inversePart, ease: false);
         }
 
-        // Bounces: what hit hard enough goes back apart at its share of how fast it came together.
+        // Bounces: what hit hard enough goes back apart at its share of how fast it came together. A ball that hit grips as
+        // hard as it hit, so its spin goes into the bounce (topspin kicks it on, backspin back) and what it slid along
+        // sets it spinning.
         foreach (ref var contact in contacts)
         {
-            if (contact.Bounce == 0 || contact.Approach > -SettleSpeed || contact.MostPushed == 0)
+            if (contact.Approach > -SettleSpeed || contact.MostPushed == 0)
                 continue;
-            var approach = Vector2.Dot(Relative(movers, ref contact), contact.Normal);
-            var push = -contact.NormalMass * (approach + contact.Bounce * contact.Approach);
-            var pushed = Math.Max(contact.Pushed + push, 0);
-            Apply(movers, ref contact, contact.Normal * (pushed - contact.Pushed));
-            contact.Pushed = pushed;
+            var bounced = 0f;
+            if (contact.Bounce > 0)
+            {
+                var approach = Vector2.Dot(Relative(movers, ref contact), contact.Normal);
+                var push = -contact.NormalMass * (approach + contact.Bounce * contact.Approach);
+                var pushed = Math.Max(contact.Pushed + push, 0);
+                Apply(movers, ref contact, contact.Normal * (pushed - contact.Pushed));
+                bounced = pushed - contact.Pushed;
+                contact.Pushed = pushed;
+            }
+
+            if (contact.Grip > 0 && (movers[contact.A].Round || contact.B >= 0 && movers[contact.B].Round))
+            {
+                var tangent = new Vector2(-contact.Normal.Y, contact.Normal.X);
+                var limit = contact.Grip * (contact.NormalMass * -contact.Approach + Math.Max(0, bounced));
+                var rub = Math.Clamp(-Vector2.Dot(Relative(movers, ref contact), tangent) * contact.TangentMass, -limit, limit);
+                Apply(movers, ref contact, tangent * rub);
+            }
         }
+    }
+
+    // How much of what holds a ball back from rolling slows how fast it goes: its turning takes the rest.
+    private const float RollingShare = 2 / 3f;
+
+    // A ball rolling on the ground under a top-down view: slowed as rolling on level ground slows it, and its turning as
+    // spinning on the spot would.
+    private static void RollOnFloor(ref Mover mover, float part)
+    {
+        var speed = mover.Velocity.Length();
+        if (speed > 0)
+            mover.Velocity *= Math.Max(0, speed - mover.Floor * RollingShare * part) / speed;
+        if (mover.Spin != 0)
+            mover.Spin = MathF.Sign(mover.Spin) * Math.Max(0, MathF.Abs(mover.Spin) - 2 * mover.Floor / Math.Max(1e-3f, mover.Reach) * part);
     }
 
     // How hard each contact pushed, kept with the scene for the next step's first guess.
     private void Remember(ContactMemory memory)
     {
-        memory.Clear();
+        // What sleeps on keeps what it remembers, for when it wakes. (With everything asleep, there's nothing new.)
+        if (_movers.Count == 0)
+            return;
+        _sleeping.Clear();
+        foreach (var body in _sleepers)
+            _sleeping.Add(body.Entity!.Id);
+        memory.KeepOnly(_sleeping);
         foreach (var contact in _solving)
-            memory.Set(new ContactKey(_movers[contact.A].Body.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), new Vector2(contact.Pushed, contact.Rubbed));
+            memory.Set(new ContactKey(_movers[contact.A].Body.Entity!.Id, contact.Solid.Id, contact.Part, contact.Feature), new Vector3(contact.Pushed, contact.Rubbed, contact.Rolled));
     }
 
     private readonly record struct Softness(float BiasRate, float MassScale, float ImpulseScale);
@@ -537,8 +604,36 @@ public sealed partial class Physics
     // together. A gap may close only as far as it goes this part; an overlap, with `ease`, is eased apart.
     private static void Push(Span<Mover> movers, ref Contact contact, Softness softness, float inversePart, bool ease)
     {
+        Roll(movers, ref contact);
         Grip(movers, ref contact);
         Press(movers, ref contact, softness, inversePart, ease);
+    }
+
+    // Holding a ball back from rolling: as much against its turning (on what it touches) as stops it, up to its rolling
+    // resistance times its radius times how hard they press. Its grip turns that into slowing it down.
+    private static void Roll(Span<Mover> movers, ref Contact contact)
+    {
+        if (contact.Rolling == 0)
+            return;
+        var turning = movers[contact.A].Spin;
+        if (contact.B >= 0)
+            turning -= movers[contact.B].Spin;
+        var limit = contact.Rolling * contact.Pushed;
+        var rolled = Math.Clamp(contact.Rolled - turning * contact.RollMass, -limit, limit);
+        Twist(movers, ref contact, rolled - contact.Rolled);
+        contact.Rolled = rolled;
+    }
+
+    // A twist at a contact: one way on the turning body, the other way on what it touches.
+    private static void Twist(Span<Mover> movers, ref Contact contact, float twist)
+    {
+        ref var a = ref movers[contact.A];
+        a.Spin += a.InverseInertia * twist;
+        if (contact.B >= 0)
+        {
+            ref var b = ref movers[contact.B];
+            b.Spin -= b.InverseInertia * twist;
+        }
     }
 
     // Grip: as much against the sliding as it takes to stop it, up to the grip times how hard they press.
@@ -570,12 +665,12 @@ public sealed partial class Physics
     private static float GapNow(Span<Mover> movers, ref Contact contact)
     {
         ref var a = ref movers[contact.A];
-        var moved = a.Moved + Rotate(contact.ArmA, a.TurnCos, a.TurnSin) - contact.ArmA;
+        var moved = a.Round ? a.Moved : a.Moved + Rotate(contact.ArmA, a.TurnCos, a.TurnSin) - contact.ArmA;
         if (contact.B >= 0)
         {
             ref var b = ref movers[contact.B];
             if (b.Turns)
-                moved -= b.Moved + Rotate(contact.ArmB, b.TurnCos, b.TurnSin) - contact.ArmB;
+                moved -= b.Round ? b.Moved : b.Moved + Rotate(contact.ArmB, b.TurnCos, b.TurnSin) - contact.ArmB;
         }
 
         return contact.Gap + Vector2.Dot(moved, contact.Normal);
@@ -612,7 +707,7 @@ public sealed partial class Physics
     {
         var mover = _movers[i];
         var entity = mover.Body.Entity!;
-        var travel = mover.Moved.Length() + MathF.Abs(mover.Turned) * mover.Reach;
+        var travel = mover.Moved.Length() + (mover.Round ? 0 : MathF.Abs(mover.Turned) * mover.Reach);
         var parts = Math.Clamp((int)MathF.Ceiling(travel / (TurnPartShare * mover.Thickness)), 1, MaxTurnParts);
         if (parts == 1)
         {
@@ -653,7 +748,7 @@ public sealed partial class Physics
     {
         var body = mover.Body;
         if (normal.Y > mover.GroundUp)
-            (mover.GroundUp, body.Ground) = (normal.Y, solid);
+            (mover.GroundUp, mover.GroundNormal, body.Ground) = (normal.Y, normal, solid);
         if (MathF.Abs(normal.X) > 0.9f)
             body.WallSide = -MathF.Sign(normal.X);
         if (!mover.Reported && solid != mover.Touched)
@@ -666,11 +761,31 @@ public sealed partial class Physics
     {
         var body = mover.Body;
         body.IsGrounded = body.Ground is not null;
-        if (body.IsGrounded)
+        if (body.IsGrounded && mover.Round)
+            RubRolling(ref mover, body.Friction, dt);
+        else if (body.IsGrounded)
             Rub(body, body.Friction, dt);
         var still = !mover.Rode && body.Velocity.LengthSquared() < SleepSpeed * SleepSpeed &&
                     MathF.Abs(mover.Spin) * mover.Reach < SleepSpeed;
         body.StillFor = still ? body.StillFor + dt : 0;
+    }
+
+    // A ball's friction slows only its sliding: where it touches the ground, how fast that goes along it, by `friction` units
+    // a second every second, its turning taking its share. Rolling, it isn't sliding, so it rolls on.
+    private static void RubRolling(ref Mover mover, float friction, float dt)
+    {
+        if (!(friction > 0))
+            return;
+        var body = mover.Body;
+        var (normal, spin) = (mover.GroundNormal, body.Spin * MathF.PI / 180);
+        var tangent = new Vector2(-normal.Y, normal.X);
+        var arm = -normal * mover.Reach;
+        var sliding = Vector2.Dot(body.Velocity + new Vector2(-spin * arm.Y, spin * arm.X), tangent);
+        var slowed = MathF.Sign(sliding) * Math.Max(0, MathF.Abs(sliding) - friction * dt);
+        var turn = Cross(arm, tangent);
+        var push = (slowed - sliding) / (mover.InverseMass + mover.InverseInertia * turn * turn);
+        body.Velocity += tangent * (push * mover.InverseMass);
+        body.Spin += mover.InverseInertia * turn * push * 180 / MathF.PI;
     }
 
     // Each island of turning bodies that have all been still long enough falls asleep.
@@ -830,6 +945,43 @@ public sealed partial class Physics
                 }
             }
         }
+
+        if (self.IsCircle && contacts.Count > 1)
+            LeaveOutFlushCorners();
+    }
+
+    // A ball meeting a corner (rather than a side), in a contact's Feature.
+    private const int CornerFeature = 1 << 10;
+
+    // Two circles meeting, in a contact's Feature.
+    private const int RoundFeature = 1 << 11;
+
+    // A corner this close to a side's line lies along it.
+    private const float FlushSkin = 1e-3f;
+
+    // Leaves out the corners a ball touches that lie flush along a side it touches of something else (where two crates,
+    // platforms or tile runs meet end to end at the same height): rolling over the join, it would otherwise catch on the
+    // next one's corner and hop.
+    private void LeaveOutFlushCorners()
+    {
+        var contacts = CollectionsMarshal.AsSpan(_contacts);
+        var count = contacts.Length;
+        for (var i = count - 1; i >= 0; i--)
+        {
+            if (contacts[i].Feature != CornerFeature)
+                continue;
+            for (var j = 0; j < count; j++)
+            {
+                ref var side = ref contacts[j];
+                if (j == i || side.Feature is CornerFeature or RoundFeature || side.Underfoot || Vector2.Dot(side.Normal, contacts[i].Normal) <= 0 ||
+                    MathF.Abs(Vector2.Dot(side.Normal, contacts[i].Point - side.Point)) > FlushSkin)
+                    continue;
+                _contacts.RemoveAt(i);
+                contacts = CollectionsMarshal.AsSpan(_contacts);
+                count--;
+                break;
+            }
+        }
     }
 
     private void Add(ref Manifold manifold, Entity solid, Body? other, int part, bool underfoot = false)
@@ -951,12 +1103,18 @@ public sealed partial class Physics
         public float Grip;
         public float Bounce;
 
+        // For a ball: its rolling resistance times its radius (the most it's held back from rolling, for how hard it's
+        // pressed), and how hard it is to change how fast the two turn on each other.
+        public float Rolling;
+        public float RollMass;
+
         // How fast they came together as the step began.
         public float Approach;
 
         // The push apart and the grip so far in this part of the step, and the most a part pushed.
         public float Pushed;
         public float Rubbed;
+        public float Rolled;
         public float MostPushed;
     }
 
@@ -968,8 +1126,15 @@ public sealed partial class Physics
         public Collider? Collider;
         public bool Turns;
 
+        // A circle: turning it doesn't move where it touches anything.
+        public bool Round;
+
         // Gravity on it this step.
         public Vector2 Pull;
+
+        // A ball with nothing pulling it rolls on the ground under the view: its rolling resistance times gravity.
+        public float Floor;
+
         public Vector2 Center;
         public float InverseMass;
         public float InverseInertia;
@@ -1002,8 +1167,9 @@ public sealed partial class Physics
         public bool Rode;
         public bool Reported;
 
-        // After its move: how much what it stands on faces up, and the last thing it said it touched.
+        // After its move: how much what it stands on faces up (and which way), and the last thing it said it touched.
         public float GroundUp;
+        public Vector2 GroundNormal;
         public Entity? Touched;
     }
 
@@ -1154,7 +1320,7 @@ public sealed partial class Physics
             if (gap > margin)
                 return false;
             manifold.Normal = distance > 1e-6f ? between / distance : Vector2.UnitY;
-            manifold.Add(b.Center + manifold.Normal * b.Radius, gap);
+            manifold.Add(b.Center + manifold.Normal * b.Radius, gap, RoundFeature);
             return true;
         }
 
@@ -1162,10 +1328,10 @@ public sealed partial class Physics
         {
             ref var polygon = ref a.IsCircle ? ref b : ref a;
             ref var circle = ref a.IsCircle ? ref a : ref b;
-            if (!PolygonAndCircle(ref polygon, circle.Center, circle.Radius, margin, out var normal, out var point, out var gap))
+            if (!PolygonAndCircle(ref polygon, circle.Center, circle.Radius, margin, out var normal, out var point, out var gap, out var corner))
                 return false;
             manifold.Normal = a.IsCircle ? normal : -normal;
-            manifold.Add(point, gap);
+            manifold.Add(point, gap, corner ? CornerFeature : 0);
             return true;
         }
 
@@ -1174,10 +1340,11 @@ public sealed partial class Physics
     }
 
     // A polygon and a circle: the normal out of the polygon towards the circle's middle, a point on the polygon where they
-    // touch, and how far apart they are.
-    private static bool PolygonAndCircle(ref Hull polygon, Vector2 center, float radius, float margin, out Vector2 normal, out Vector2 point, out float gap)
+    // touch, how far apart they are, and whether that's one of its corners (rather than along a side).
+    private static bool PolygonAndCircle(ref Hull polygon, Vector2 center, float radius, float margin, out Vector2 normal, out Vector2 point, out float gap,
+        out bool corner)
     {
-        (normal, point, gap) = (default, default, 0);
+        (normal, point, gap, corner) = (default, default, 0, false);
         var (best, side) = (float.NegativeInfinity, 0);
         for (var i = 0; i < polygon.Count; i++)
         {
@@ -1193,14 +1360,14 @@ public sealed partial class Physics
         if (best > 1e-6f)
         {
             // Off past an end of its nearest side, it meets that corner.
-            var corner = Vector2.Dot(center - from, to - from) <= 0 ? from : Vector2.Dot(center - to, from - to) <= 0 ? to : (Vector2?)null;
-            if (corner is { } at)
+            var end = Vector2.Dot(center - from, to - from) <= 0 ? from : Vector2.Dot(center - to, from - to) <= 0 ? to : (Vector2?)null;
+            if (end is { } at)
             {
                 var away = center - at;
                 var distance = away.Length();
                 if (distance - radius > margin)
                     return false;
-                (normal, point, gap) = (distance > 1e-6f ? away / distance : face, at, distance - radius);
+                (normal, point, gap, corner) = (distance > 1e-6f ? away / distance : face, at, distance - radius, true);
                 return true;
             }
         }

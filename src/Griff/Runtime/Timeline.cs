@@ -315,7 +315,7 @@ public sealed class Timeline
         (snapshot.Chunks, snapshot.Used) = _stream.Finish();
         snapshot.Refs = _streamRefs.Refs.AsSpan(0, _streamRefs.RefCount).ToArray();
         snapshot.Bytes = snapshot.Chunks.Sum(c => (long)c.Length) + snapshot.Refs.LongLength * IntPtr.Size + _pendingStrings + 64 +
-                         48L * (snapshot.Contacts?.Count ?? 0);
+                         52L * (snapshot.Contacts?.Count ?? 0);
         _pendingSettleMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
     }
 

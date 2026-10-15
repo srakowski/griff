@@ -206,10 +206,12 @@ internal sealed class ContraptionTemplate : ProjectTemplate
 
     private static Entity CrateProp() => Prop("Crate", TemplateArt.CrateArt, Vector2.One, Color.White, 1);
 
+    // A bouncy ball that rolls: along the floor, down planks and off whatever it's kicked into.
     private static Entity BallProp()
     {
         var ball = Prop("Ball", ContraptionsArt.BallArt, new Vector2(0.8f), Color.White, 0.6f, round: true);
-        ball.GetComponent<Body>()!.Bounciness = 0.7f;
+        var body = ball.GetComponent<Body>()!;
+        (body.Bounciness, body.Rotates) = (0.7f, true);
         return ball;
     }
 

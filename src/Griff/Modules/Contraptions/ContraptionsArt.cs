@@ -25,13 +25,25 @@ internal static class ContraptionsArt
         [ChipArt] = Chip().Png(),
     };
 
+    // A red ball with a white band round it and a spot on each side, so it's plain to see turning as it rolls. It's lit
+    // evenly all round (darker towards its edge), not from one side, so it looks right however far it has turned.
     private static Canvas Ball()
     {
         var c = new Canvas(32, 32, 41);
         c.Ellipse(15, 15, 15, 15, Rgb(0xE5, 0x53, 0x4B));
         c.Ellipse(15, 15, 15, 4, Rgb(0xF2, 0xF2, 0xF2));
-        c.Ellipse(10, 9, 4, 3, Rgb(0xFF, 0x9A, 0x90));
-        c.Shade(0.25f);
+        c.Ellipse(15, 6, 2, 2, Rgb(0xF2, 0xF2, 0xF2));
+        c.Ellipse(15, 24, 2, 2, Rgb(0x8E, 0x2A, 0x25));
+        for (var y = 0; y < c.Height; y++)
+        {
+            for (var x = 0; x < c.Width; x++)
+            {
+                var (dx, dy) = ((x - 15) / 15.5f, (y - 15) / 15.5f);
+                if (c.Get(x, y) is { A: > 0 } p)
+                    c.Set(x, y, p.Times(1.08f - 0.4f * (dx * dx + dy * dy)));
+            }
+        }
+
         return c;
     }
 

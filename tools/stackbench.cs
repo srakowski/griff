@@ -3,11 +3,11 @@
 #:property TieredCompilation=false
 
 // StackBench: what bodies that rotate cost a physics step when they're stacked up, measured in Release with nothing on the
-// screen. Builds a pyramid of crates that rotate (and, with --tower, a tower of ten beside it) on a floor, lets them settle,
-// then times steps of the pile awake (woken before each step, so every crate and contact is worked out, as while a pile
-// settles or is knocked about) and asleep, printing the median, mean and worst step and the bytes allocated meanwhile.
-// The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower]
+// screen. Builds a pyramid of crates that rotate (and, with --tower, a tower of ten beside it; with --balls 60, that many
+// balls heaped in a bin instead) on a floor, lets them settle, then times steps of the pile awake (woken before each step,
+// so every body and contact is worked out, as while a pile settles or is knocked about) and asleep, printing the median,
+// mean and worst step and the bytes allocated meanwhile. The numbers are this computer's: compare runs on the same one.
+//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
@@ -25,10 +25,28 @@ floor.Transform.Position = new Vector3(0, -0.5f, 0);
 floor.AddComponent<BoxCollider>().Size = new Vector2(200, 1);
 scene.Add(floor);
 var bodies = new List<Body>();
-for (var row = 0; row < rows; row++)
+var balls = Arg("--balls", 0);
+if (balls > 0)
 {
-    for (var i = 0; i < rows - row; i++)
-        bodies.Add(Crate(new Vector2((i - (rows - row - 1) / 2f) * 1.01f, 0.5f + row * 1.01f)));
+    // A bin ten balls wide, filled a row of ten (a little off true, so they tumble) at a time.
+    foreach (var x in new[] { -5.5f, 5.5f })
+    {
+        var side = new Entity("Side");
+        side.Transform.Position = new Vector3(x, balls / 10f + 2, 0);
+        side.AddComponent<BoxCollider>().Size = new Vector2(1, balls / 5f + 4);
+        scene.Add(side);
+    }
+
+    for (var i = 0; i < balls; i++)
+        bodies.Add(Ball(new Vector2(-4.5f + i % 10 + (i / 10 % 2) * 0.3f, 0.5f + i / 10 * 1.1f)));
+}
+else
+{
+    for (var row = 0; row < rows; row++)
+    {
+        for (var i = 0; i < rows - row; i++)
+            bodies.Add(Crate(new Vector2((i - (rows - row - 1) / 2f) * 1.01f, 0.5f + row * 1.01f)));
+    }
 }
 
 if (args.Contains("--tower"))
@@ -51,7 +69,9 @@ for (var i = 0; i < 120; i++)
     game.Tick(Frame);
 var asleep = Time(() => game.Tick(Frame));
 
-Console.WriteLine($"{bodies.Count} crates that rotate ({rows} rows{(args.Contains("--tower") ? " and a tower of ten" : "")}); {settled} asleep after 3 s");
+Console.WriteLine(balls > 0
+    ? $"{balls} balls that rotate in a bin{(args.Contains("--tower") ? " and a tower of ten crates" : "")}; {settled} asleep after 3 s"
+    : $"{bodies.Count} crates that rotate ({rows} rows{(args.Contains("--tower") ? " and a tower of ten" : "")}); {settled} asleep after 3 s");
 Console.WriteLine($"awake:  {awake}");
 Console.WriteLine($"asleep: {asleep}");
 return;
@@ -61,6 +81,17 @@ Body Crate(Vector2 at)
     var entity = new Entity("Crate");
     entity.Transform.Position = new Vector3(at, 0);
     entity.AddComponent<BoxCollider>();
+    var body = entity.AddComponent<Body>();
+    body.Rotates = true;
+    scene.Add(entity);
+    return body;
+}
+
+Body Ball(Vector2 at)
+{
+    var entity = new Entity("Ball");
+    entity.Transform.Position = new Vector3(at, 0);
+    entity.AddComponent<CircleCollider>().Radius = 0.45f;
     var body = entity.AddComponent<Body>();
     body.Rotates = true;
     scene.Add(entity);

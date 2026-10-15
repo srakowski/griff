@@ -1,0 +1,99 @@
+title: Balls that roll
+intro: A ball that rotates now rolls: without slipping down slopes and along the ground, slowed to rest by its rolling resistance, its spin carried into its bounces, and pushed along by players.
+project: Contraption | Rolling
+
+# A new scene in the Contraption project, which has a ball picture (Textures/ball.png), its camera moved out to see it
+# all: a floor 40 wide whose top is at y = -2.5, a frozen ramp tilted 15 degrees on the left, a crate at x = 7.5 for the
+# ball to roll up to, and a bouncy ball held up in the air (frozen) out to the right.
+menu: File > New Scene...
+prompt: Rolling
+select: Main Camera
+set: Transform.Position = 1, 2, 0
+set: Camera.Size = 9
+deselect
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 40, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 40, 1
+deselect
+create: Crate
+rename: Ramp
+set: Transform.Position = -9, -1.4, 0
+set: Transform.Rotation.Z = -15
+set: Sprite.Size = 8, 0.4
+set: Sprite.Tint = #8C6A48
+set: BoxCollider.Size = 8, 0.4
+set: Body.Rotates = true
+set: Body.Frozen = true
+deselect
+create: Crate
+set: Transform.Position = 7.5, -2, 0
+set: Body.Rotates = true
+deselect
+create: Sprite
+rename: Bouncy
+set: Transform.Position = 11, 3, 0
+pickimage: Sprite.Image = Textures/ball.png
+set: Sprite.Size = 0.8, 0.8
+set: Sprite.Tint = #9CC8FF
+add: CircleCollider
+set: CircleCollider.Radius = 0.4
+add: Body
+set: Body.Rotates = true
+set: Body.Bounciness = 0.7
+set: Body.Frozen = true
+deselect
+expectcomponents: Bouncy = Transform, Sprite, CircleCollider, Body
+
+chapter: A ball that rolls | A circle whose body rotates
+look: 1, 0, 8
+create: Sprite
+rename: Ball
+set: Transform.Position = -12, 0.6, 0
+pickimage: Sprite.Image = Textures/ball.png
+set: Sprite.Size = 0.8, 0.8
+add: CircleCollider
+set: CircleCollider.Radius = 0.4
+add: Body
+say: Here's a ball: a sprite with a circle collider and a body, at the top of a ramp.
+set: Body.Rotates = true
+explain: field:Body.Rotates | Rotates | Tick Rotates and a ball rolls. It used to slide down a slope with its picture turning anyhow; now it rolls without slipping, turning just as far as it goes.
+play
+wait: 3
+explain: game | Rolling | Down the ramp and along the floor it rolls, its stripe turning with it, and it slows as it goes.
+wait: 4
+expectvalue: Ball.Transform.Position.X = 6.6 ~ 0.4
+expectvalue: Ball.Body.Asleep = true
+explain: entity:Crate | Comes to rest | Rolling resistance brought it to rest against the crate, and the two fell asleep together.
+stop
+select: Ball
+explain: field:Body.RollingResistance | Rolling Resistance | Rolling resistance is how much rolling slows it. Zero rolls on and on; the default stops a ball rolling at five units a second in about three seconds. Grip keeps it from slipping.
+
+chapter: Spin into a bounce | Topspin kicks it on
+select: Bouncy
+set: Body.Frozen = false
+set: Body.Spin = -720
+explain: field:Body.Spin | Spinning | This bouncy ball is dropped spinning clockwise, as topspin.
+play
+wait: 4.5
+expectvalue: Bouncy.Transform.Position.X = 15 ~ 0.6
+explain: game | Carried into the bounce | It falls straight down, but its spin grips the floor as it lands, so it bounces off to the right and rolls away.
+stop
+
+chapter: Pushed along | Players push it, scripts kick it
+select: Ball
+set: Transform.Position = -3, -2.1, 0
+deselect
+create: Platformer Player
+set: Transform.Position = -4.5, -2, 0
+say: A player walking into a ball pushes it along ahead of them. A script kicks one by setting its velocity, or pushes it off its middle to put spin on it.
+play
+wait: 0.5
+hold: Right 0.8
+wait: 3
+expectvalue: Ball.Transform.Position.X = 6.6 ~ 0.6
+explain: game | Rolls on | When the player stops, the ball rolls on by itself, and comes to rest against the crate.
+stop

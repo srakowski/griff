@@ -173,7 +173,9 @@ public sealed class BoxCollider : Collider
 /// </summary>
 /// <remarks>
 /// Circle bodies don't roll unless their <see cref="Body"/> <see cref="Body.Rotates"/>: one resting on a corner stays
-/// balanced there.
+/// balanced there. One that rotates rolls: along the ground, down slopes and over tile floors without slipping, slowed by
+/// its <see cref="Body.RollingResistance"/> until it rests, with its spin carried into its bounces and its sprite turning
+/// as it goes.
 /// </remarks>
 [Category("Physics")]
 [WorksWith(typeof(Body), Note = "to make it move and fall")]
@@ -289,6 +291,15 @@ public sealed class Body : Component
     /// </summary>
     [ShownWhen(nameof(Rotates))]
     public float Grip { get; set; } = 0.6f;
+
+    /// <summary>
+    /// How much a round one (a <see cref="CircleCollider"/>) is slowed as it rolls, so a ball comes to rest: 0 rolls on and
+    /// on, 0.1 (the default) stops a ball rolling at 5 units a second in about 3 seconds, and 1 hardly rolls at all. It
+    /// rests on a slope up to about this steep (rise over run). With no gravity on it (a top-down game, Gravity Scale 0) it
+    /// rolls on the ground under the view and slows the same way; set it to 0 for one floating in space.
+    /// </summary>
+    [ShownWhen(nameof(Rotates))]
+    public float RollingResistance { get; set; } = 0.1f;
 
     /// <summary>
     /// True while it's asleep: once it and every body that turns touching it have been still for half a second, they fall

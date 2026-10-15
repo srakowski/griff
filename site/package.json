@@ -7,13 +7,14 @@
     "dev": "astro dev --host 127.0.0.1 --port 4321",
     "reference": "dotnet run -p:SkipPlayers=true ../tools/docs.cs -- --out src/content/docs/reference",
     "build": "astro build",
-    "build:all": "npm run reference && npm run build",
+    "games": "node scripts/games.mjs build",
+    "build:all": "npm run reference && npm run games && npm run build",
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "check-links": "node scripts/check-links.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "og": "node scripts/og.mjs",
-    "predev": "node scripts/tutorials.mjs pages",
-    "prebuild": "node scripts/tutorials.mjs pages",
+    "predev": "node scripts/tutorials.mjs pages && node scripts/games.mjs pages",
+    "prebuild": "node scripts/tutorials.mjs pages && node scripts/games.mjs pages",
     "tutorials": "node scripts/tutorials.mjs run"
   },
   "dependencies": {

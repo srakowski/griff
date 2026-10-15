@@ -1,0 +1,45 @@
+---
+// A game of the site (public/play/<slug>/, built by `npm run games`) on its page: its poster with a Play button, which a
+// click swaps for the game itself in a frame (the game, .NET and its files only download then, so a page of games stays
+// light, and the click is the one a browser wants before it lets a page make sound). Without scripts the poster is a link
+// to the game on its own page.
+interface Props {
+	slug: string;
+	title: string;
+}
+const { slug, title } = Astro.props;
+const address = `/play/${slug}/`;
+---
+
+<div class="play" data-address={address} data-title={title}>
+	<a class="play-start" href={address}>
+		<img src={`${address}poster.webp`} width="960" height="540" alt={`${title}, running`} loading="eager" decoding="async" />
+		<span class="play-button">Play {title}</span>
+	</a>
+</div>
+<p class="play-links">
+	<a href={address}>Open it in its own tab</a>
+	<button type="button" class="play-fullscreen" hidden>Fullscreen</button>
+</p>
+
+<script>
+	for (const play of document.querySelectorAll<HTMLElement>('.play')) {
+		const start = play.querySelector<HTMLAnchorElement>('.play-start');
+		const fullscreen = play.parentElement?.querySelector<HTMLButtonElement>('.play-fullscreen');
+		let frame: HTMLIFrameElement | null = null;
+		start?.addEventListener('click', (event) => {
+			event.preventDefault();
+			frame = document.createElement('iframe');
+			frame.src = play.dataset.address!;
+			frame.title = `${play.dataset.title}, playing`;
+			frame.allow = 'autoplay; fullscreen; gamepad; pointer-lock; clipboard-write';
+			frame.allowFullscreen = true;
+			frame.addEventListener('load', () => frame?.focus());
+			play.classList.add('playing');
+			play.replaceChildren(frame);
+			frame.focus();
+			if (fullscreen) fullscreen.hidden = false;
+		});
+		fullscreen?.addEventListener('click', () => frame?.requestFullscreen?.());
+	}
+</script>

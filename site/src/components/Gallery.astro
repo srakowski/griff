@@ -1,0 +1,32 @@
+---
+// The gallery of playable games: a card each, its poster and a line about it, linking to its page. Posters are what
+// `npm run games` took of each game running, loaded lazily, so the landing page doesn't start any game.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { games as words } from '../data/games.mjs';
+
+const list = JSON.parse(readFileSync(join(process.cwd(), 'public', 'play', 'games.json'), 'utf8'));
+const games = [...list.games].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+---
+
+<div class="gallery">
+	{
+		games.map((game, i) => (
+			<a class="game-card" href={`/games/${game.slug}/`}>
+				<img
+					src={`/play/${game.slug}/poster.webp`}
+					width="960"
+					height="540"
+					alt={`${game.title}, running`}
+					loading={i < 2 ? 'eager' : 'lazy'}
+					decoding="async"
+				/>
+				<span class="game-card-text">
+					<strong>{game.title}</strong>
+					<span>{words[game.name]?.tagline}</span>
+					<span class="game-card-play">Play in your browser</span>
+				</span>
+			</a>
+		))
+	}
+</div>

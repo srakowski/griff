@@ -1,5 +1,5 @@
-# Builds griff.games from site/ (Astro Starlight), checks it has no broken links, and deploys it to GitHub Pages on every
-# push to main, and after every release (the Release workflow starts it, so the Releases page lists the new one). The
+# Builds griff.games from site/ (Astro Starlight) with the playable games (every template exported for the web from this
+# commit), checks it has no broken links, and deploys it to GitHub Pages on every push to main, and after every release (the Release workflow starts it, so the Releases page lists the new one). The
 # repository's Pages source must be "GitHub Actions" (see site/README.md).
 name: Site
 
@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths: ['site/**', '.github/workflows/site.yml', 'tools/docs.cs', 'global.json', 'src/**']
+    paths: ['site/**', '.github/workflows/site.yml', 'tools/docs.cs', 'tools/web.cs', 'tools/web.ps1', 'global.json', 'src/**']
   workflow_dispatch:
 
 # Only what deploying to Pages needs; the build job reads the repository and nothing else.
@@ -40,8 +40,30 @@ jobs:
           path: site/src/content/docs/reference
           if-no-files-found: error
 
+  # The playable games: every template exported for the web (tools/web.ps1 -Site: .NET and the web player once, then each game
+  # with a poster taken in the runner's Edge), so what the site lets people play is always what main builds. Needs Windows
+  # for the same reason the reference does: the exporter and the posters' browser. The build job takes the folder.
+  games:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Export the games
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/web.ps1 -Site site/public/play
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: games
+          path: site/public/play
+          if-no-files-found: error
+
   build:
-    needs: reference
+    needs: [reference, games]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,6 +81,11 @@ jobs:
         with:
           name: reference
           path: site/src/content/docs/reference
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: games
+          path: site/public/play
 
       - name: Install
         run: npm ci

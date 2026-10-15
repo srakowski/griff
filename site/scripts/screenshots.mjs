@@ -31,14 +31,6 @@ const shots = [
 	{ name: 'editor', template: 'Platformer', view: 'editor', width: 1600, before: [['Entity_Hide', { entity: 'Paused' }], ['select', { entities: ['Player'] }]] },
 	{ name: 'editor-tilemap', template: 'Isometric', view: 'editor', width: 1600, before: [['Entity_Hide', { entity: 'Paused' }], ['select', { entities: ['Courtyard'] }]] },
 	{ name: 'editor-script', template: 'Arcade', view: 'editor', width: 1600, before: [['ui_invoke', { target: 'ScriptEditors', path: 'Open', args: ['{assets}/Scripts/Ship.cs', 1] }]] },
-	{ name: 'isometric', template: 'Isometric', view: 'game', play: 1 },
-	{ name: 'match-3', template: 'Match-3', view: 'game', play: 1, keys: [{ tap: ['Enter'] }, { wait: 1 }] },
-	{ name: 'strategy', template: 'Strategy', view: 'game', play: 2 },
-	{ name: 'shooter', template: 'Shooter', view: 'game', play: 1.5 },
-	{ name: 'sandbox', template: 'Sandbox', view: 'game', play: 1.5 },
-	{ name: 'tactics', template: 'Tactics', view: 'game', play: 1, keys: [{ tap: ['Enter'] }, { wait: 1 }] },
-	{ name: 'roguelike', template: 'Roguelike', view: 'game', play: 1, keys: [{ tap: ['Enter'] }, { wait: 1 }] },
-	{ name: 'falling-blocks', template: 'Falling Blocks', view: 'game', play: 0.5, keys: [{ tap: ['Enter'] }, { wait: 1 }, { tap: ['Left'] }, { tap: ['Left'] }, { tap: ['Space'] }, { wait: 0.5 }, { tap: ['Right'] }, { tap: ['Right'] }, { tap: ['Space'] }, { wait: 0.5 }, { tap: ['Up'] }, { tap: ['Space'] }, { wait: 1 }] },
 ];
 
 let nextId = 1;

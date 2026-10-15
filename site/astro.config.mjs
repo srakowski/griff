@@ -66,6 +66,12 @@ export default defineConfig({
 					],
 				},
 				{
+					// One page a template, written by scripts/games.mjs into src/content/docs/games/ (the index first).
+					label: 'Play',
+					collapsed: true,
+					items: [{ autogenerate: { directory: 'games' } }],
+				},
+				{
 					label: 'Guides',
 					items: [
 						{ label: 'The editor', slug: 'docs/editor' },

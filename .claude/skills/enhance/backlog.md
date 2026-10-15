@@ -30,8 +30,6 @@ ends with the exact steps the user must do (push, repo settings, DNS), written i
 site says stays true by itself: reference pages are generated from the code, and screenshots and steps are checked
 like demos, so they can't silently go stale.
 
-- [ ] Put playable games on the site: every template playable in the browser on its own page and in a gallery on the landing page, using the web export, built by the site's Action so they always match main.
-
 ### Platforms
 
 - [ ] Make the game player open and draw in its own window without WPF.
@@ -141,6 +139,11 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Put playable games on the site: every template playable in the browser on its own page and in a gallery on the landing page, using the web export, built by the site's Action so they always match main. (2026-10-15)
+  - `toolsweb.ps1 -Site <folder>` (`web.cs` `BuildSite`) exports every template but Empty for the site: .NET and the web player once in `_player/` (every export's `_framework` is checked identical first), then `<slug>/` with its page (whose script is the shared `../_player/main.js`; the page fetches its game relative to itself), game folder, notices and `poster.webp` (960 x 540, taken in the headless browser after the game has run 2.5 s, hint hidden, each game three tries), and `games.json` (title, order, network play from `NetworkWarnings`, sizes). `npm run games` in `site/` runs it into `site/public/play/` (git-ignored). 16 games: 75.5 MB in all, .NET and the player 28.1 MB (10.5 MB gzipped), 2.8 to 3.1 MB each.
+  - Pages: `scripts/games.mjs pages` (prebuild) writes `src/content/docs/games/` (git-ignored) from `games.json` and `src/data/games.mjs` (tagline, paragraph, controls; fails for a template without an entry or an entry without a template): a page each with a poster and Play button (`PlayGame.astro`: a click starts the game in a frame, so nothing downloads until someone plays and the click lets sound start), controls, sound-starts-on-click, saves, controllers, network play not available (where `NetworkWarnings` says so), the download size and its notices; a gallery (`Gallery.astro`) on the landing page, replacing the eight editor screenshots (deleted, with their shots), and on `/games/`; a Play group in the sidebar. The link check covers the games' files.
+  - CI: the Site workflow's new Windows `games` job exports them (setup-dotnet from `global.json`, Edge on the runner) and uploads `games`; `build` (Ubuntu) downloads it into `site/public/play` before `npm run build`. GitHub Pages was checked to answer gzip (HTML, JS, WebAssembly) even to a browser asking for Brotli, so no `.br` files are published.
+  - Checked locally: the built site served on 127.0.0.1, headless Edge opened the landing page (16 cards) and the Platformer, Top-down and Shooter pages, clicked Play, each ran in its frame within seconds, drew, and moved its player on a key (the sound hint went on the key); link check passes (43,856 links).
 - [x] Add tutorials in one go: step-by-step tutorials (a first platformer, a top-down adventure, a puzzle, making a game with an agent over MCP, and balancing with data tables) whose steps and screenshots are produced by running them in the editor like demos, with a check that fails when one no longer matches the editor, so they stay current. (2026-10-15)
   - Tutorials are `.demo` scripts in `site/tutorials/` run by the demo player (new `shot:`, `agent:`, `expectagent:`, `step:`, `summary:` commands); `site/scripts/tutorials.mjs` writes the pages and checks them against the generated reference at build, and `npm run tutorials` plays them and takes the pictures (lossless WebP in `site/src/assets/tutorials/`).
 - [x] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level. (2026-10-15)

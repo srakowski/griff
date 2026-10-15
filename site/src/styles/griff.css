@@ -135,3 +135,110 @@
 	flex-wrap: wrap;
 	gap: 0.5rem 1.5rem;
 }
+
+/* The playable games: the gallery of cards (landing page, Play), and a game's frame on its page. */
+.gallery {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+	gap: 1.25rem;
+	margin-top: 1.5rem;
+}
+.game-card {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--griff-card-border);
+	background: var(--griff-card);
+	border-radius: 0.5rem;
+	overflow: hidden;
+	text-decoration: none;
+	color: inherit;
+}
+.game-card:hover,
+.game-card:focus-visible {
+	border-color: var(--sl-color-accent);
+}
+.game-card img {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 9;
+	object-fit: cover;
+	border-bottom: 1px solid var(--griff-card-border);
+	margin: 0 !important;
+}
+.game-card-text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding: 0.85rem 1rem 1rem;
+	color: var(--sl-color-gray-2);
+	font-size: var(--sl-text-sm);
+}
+.game-card-text strong {
+	color: var(--sl-color-white);
+	font-size: var(--sl-text-lg);
+}
+.game-card-play {
+	color: var(--sl-color-accent-high);
+	font-weight: 600;
+}
+
+.play {
+	position: relative;
+	aspect-ratio: 16 / 9;
+	background: #000;
+	border-radius: 0.5rem;
+	overflow: hidden;
+	border: 1px solid var(--griff-card-border);
+	margin-top: 1rem;
+}
+.play iframe,
+.play-start,
+.play-start img {
+	display: block;
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	margin: 0 !important;
+}
+.play-start img {
+	object-fit: cover;
+	image-rendering: pixelated;
+}
+.play-button {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	padding: 0.7rem 1.4rem;
+	border-radius: 0.5rem;
+	background: var(--sl-color-accent);
+	color: #fff;
+	font-weight: 700;
+	font-size: var(--sl-text-lg);
+	box-shadow: 0 4px 24px rgb(0 0 0 / 0.5);
+}
+.play-start:hover .play-button,
+.play-start:focus-visible .play-button {
+	background: var(--sl-color-accent-high);
+	color: #16171b;
+}
+.play-links {
+	display: flex;
+	gap: 1.5rem;
+	align-items: baseline;
+}
+.play-links button {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--sl-color-text-accent);
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+.play-links button[hidden] {
+	display: none;
+}

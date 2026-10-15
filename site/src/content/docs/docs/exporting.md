@@ -65,6 +65,14 @@ griffin, which the arrow keys, WASD or a stick move, under a label). `-Export -O
 (`-Zip` adds the zip for itch.io), as Build for Web does; without `-Export` it serves it at `http://127.0.0.1:8091/`
 (`-Port` another) until Ctrl+C.
 
+`-Site <folder>` makes the website's playable games (the [Play](/games/) pages): every template exported into the folder
+with .NET and the player once, in `_player/`, shared by every game (a game's page loads the player from there, and a
+browser keeps it between games), then a folder for each game with its page, its files and a poster (a screenshot of it
+running, taken in the headless browser), and `games.json`, which the site's pages and gallery are written from. It is
+`npm run games` in `site/`, and the Site workflow runs it on every push to main, so the games on griff.games are always
+main's templates. A page needs a template's tagline, paragraph and controls in `site/src/data/games.mjs`, and the
+build fails without them.
+
 `-Check` plays games in a headless Edge or Chrome (no window, software WebGL, muted) and passes if all of them work: the
 proof game, and the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (`-Template` picks some,
 `-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping

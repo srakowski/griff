@@ -11,9 +11,11 @@ src/components/         The header's logo and wordmark, the footer, the landing 
 src/data/releases.mjs   The releases, read from GitHub when the site is built, for the Releases page
 src/styles/griff.css    Griff's colours in light and dark, the wordmark's font, the landing page's layout
 src/assets/screens/     The screenshots (made by scripts/screenshots.mjs; see Screenshots below)
-public/                 Served as they are: the logo, the wordmark's font and its license, CNAME
+public/                 Served as they are: the logo, the wordmark's font and its license, CNAME, and play/ (the
+                        playable games, git-ignored; see Playable games below)
+src/data/games.mjs      The words around each playable game: its tagline, paragraph and controls
 tutorials/              The tutorials: a .demo script each (and the files it writes into its project)
-scripts/                check-links.mjs, screenshots.mjs and tutorials.mjs
+scripts/                check-links.mjs, games.mjs, screenshots.mjs, tutorials.mjs and og.mjs
 ```
 
 The tool that writes `reference/` is `tools/docs.cs` in the repository's root.
@@ -29,9 +31,10 @@ With Node 24 (and npm 11) and the .NET SDK `global.json` pins (Windows), in this
 ```sh
 npm ci                 # once, and after package-lock.json changes
 npm run reference      # the reference pages, written from the code (once, and when components or commands change)
+npm run games          # the playable games, exported from the templates (once, and when templates or the web player change)
 npm run dev            # http://127.0.0.1:4321/, reloading as you edit
 npm run build          # the site, into dist/ (the reference has to be there: it says so if not)
-npm run build:all      # npm run reference, then npm run build
+npm run build:all      # npm run reference, npm run games, then npm run build
 npm run preview        # dist/ at http://127.0.0.1:4321/
 npm run check-links    # after a build: every link inside the site has to lead somewhere
 ```
@@ -61,9 +64,36 @@ builds the editor's real services the way `tests/Griff.Editor.Tests` does, so it
 does it in a `reference` job on a Windows runner (set up with `global.json`'s SDK), passes the pages on as an artifact
 to the `build` job, and the link check then covers them with the guides.
 
+## Playable games
+
+Every template (Empty aside) is playable on the site: a page each at `/games/<slug>/`, a gallery of them on the landing page
+and on `/games/`, and the games themselves at `/play/<slug>/`. They are exported by `tools/web.ps1 -Site` (the web export,
+see the exporting guide) into `public/play/`, which is git-ignored: nothing built is committed. `npm run games` makes them
+here (Windows, the .NET SDK, Edge or Chrome; about five minutes; `-- --only Platformer,Match3` for some, `-- --port` for the
+poster browser's server), and `npm run build` writes their pages (`scripts/games.mjs pages`, into
+`src/content/docs/games/`, git-ignored) and fails if the games aren't built, or a template has no entry in
+`src/data/games.mjs`, or that file names a template that's gone.
+
+- **One copy of .NET.** The exports share `public/play/_player/` (main.js, griff.js and `_framework`, 28 MB, about 10.5 MB
+  gzipped): each game's page starts the shared main.js, and its files are fetched relative to the page, so a visitor
+  downloads .NET once and the browser keeps it for the next game. `--site` checks every export's .NET files are the same
+  before sharing them. A game's own files are 3 to 8 MB (its sounds, music, scenes and compiled scripts).
+- **Compression.** GitHub Pages compresses what it serves with gzip (checked: it answers `Content-Encoding: gzip`
+  to a browser that accepts Brotli, for HTML, JavaScript and WebAssembly) and doesn't use precompressed `.br` files, so
+  none are published; the export leaves them out.
+- **Posters.** The gallery's pictures are `poster.webp`, a screenshot of each game running in the headless browser
+  (960 x 540), so they match the game. A game on its page is its poster with a Play button; clicking it starts the game
+  in a frame (so nothing downloads until someone plays, and the click lets the page make sound).
+- **The words.** `src/data/games.mjs` holds each game's tagline, paragraph and controls. The page also says sound starts
+  on click, that saves stay in the browser and, for a game set up for network play (`NetworkWarnings`), that network
+  play isn't available on the web. A new template needs an entry there (the build says so).
+- **CI.** The Site workflow's `games` job (Windows, like `reference`) runs `tools/web.ps1 -Site site/public/play` and
+  uploads the folder as the `games` artifact; the `build` job (Ubuntu) downloads it before `npm run build`, so the deployed
+  site always has the games of the commit it was built from.
+
 ## Screenshots
 
-The pictures on the landing page are real: `scripts/screenshots.mjs` drives Griff's editor over its MCP server, makes a
+The editor pictures on the landing page are real (the games' pictures are the posters `npm run games` takes): `scripts/screenshots.mjs` drives Griff's editor over its MCP server, makes a
 project from each template in a temporary folder, plays it, and saves what the `editor_screenshot` tool shows to
 `src/assets/screens/` as lossless WebP (editor shots shrunk to 1600 wide at most, game shots at their own size), so
 pixel art and the editor's text stay sharp at a fraction of a PNG's size. To take them again:

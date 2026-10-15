@@ -5,3 +5,6 @@ dist/
 src/content/docs/reference/
 # Written from tutorials/*.demo by `npm run build` (scripts/tutorials.mjs); see README.md.
 src/content/docs/tutorials/
+# Built by `npm run games` (tools/web.ps1 -Site) and written from it (scripts/games.mjs); see README.md.
+public/play/
+src/content/docs/games/

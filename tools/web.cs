@@ -10,12 +10,16 @@
 //   --check         plays games in a headless Edge (or Chrome) through the DevTools protocol, so no window opens, and
 //                   checks each: the proof game, then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
 //                   (--template picks some; --project checks that project). See Check below for what each is checked for.
-//   --compare       checks the browser draws what the desktop draws: every scene of every template, and three scenes of
+//   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
+//                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
+//                   files and a poster (a screenshot of it running, taken in a headless browser), and games.json, the list
+//                   the site's pages and gallery are written from (--template picks some, comma-separated).
+//   --compare      checks the browser draws what the desktop draws: every scene of every template, and three scenes of
 //                   lights, shadows, screen effects and a viewport, held still after --steps steps (90) in the headless
 //                   browser and drawn by the desktop's OpenGL renderer (off the screen) after the same, compared pixel by
 //                   pixel (--template picks some, by name, comma-separated).
 // Run through tools\web.ps1, which publishes the web player first.
-//   dotnet run -c Release tools/web.cs -- [--export [--zip] | --check | --compare [--steps <n>]] [--project <folder> | --template <names>] [--port <port>] [--out <folder>]
+//   dotnet run -c Release tools/web.cs -- [--export [--zip] | --site <folder> | --check | --compare [--steps <n>]] [--project <folder> | --template <names>] [--port <port>] [--out <folder>]
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.WebSockets;
@@ -80,6 +84,19 @@ if (check)
     {
         foreach (var folder in new[] { "site", "projects", "browser" })
             TryDelete(Path.Combine(work, folder));
+    }
+}
+
+if (Arg("--site") is { } siteFolder)
+{
+    // The site's playable games: every template exported, laid out to share one copy of .NET, with a poster each.
+    try
+    {
+        return await BuildSite(Path.GetFullPath(siteFolder), Path.Combine(work, "browser"));
+    }
+    finally
+    {
+        TryDelete(work);
     }
 }
 
@@ -183,6 +200,156 @@ async Task<Project> ProofGame(string folder)
 
 // Serves the site to this computer only (127.0.0.1, so no firewall asks), as files: .NET's are WebAssembly, the game's
 // are fetched as bytes.
+// Every template (but Empty) as a game of the website: <folder>/_player holds the web player (main.js, griff.js and .NET in
+// _framework) once, <folder>/<slug>/ holds a game's page (index.html, whose script is the shared main.js), its game folder,
+// its notices and poster.webp, and <folder>/games.json lists them for the site's build. The games' pages fetch their files
+// relative to themselves, so they share .NET (and the browser's cache of it) while each stays a complete web export.
+async Task<int> BuildSite(string folder, string profile)
+{
+    const string ListFile = "games.json";
+    if (Directory.Exists(folder) && !File.Exists(Path.Combine(folder, ListFile)) && Directory.EnumerateFileSystemEntries(folder).Any())
+        return Fail($"\"{folder}\" isn't empty and wasn't written by --site. Choose another folder.");
+
+    var templates = ProjectTemplates.All.Where(t => t.Name != "Empty").ToList();
+    if (Arg("--template")?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) is { } wanted)
+        templates = [.. wanted.Select(n => ProjectTemplates.Find(n) ?? throw new ArgumentException($"No template called {n}."))];
+
+    var stage = Path.Combine(work, "stage");
+    Directory.CreateDirectory(stage);
+    var games = new List<(ProjectTemplate Template, string Slug, bool Network)>();
+    string? frameworkOf = null;
+    foreach (var template in templates)
+    {
+        var slug = new string(template.Title.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+        var project = await Project.CreateAsync(Path.Combine(work, "projects", slug), template.Title, template);
+        var exported = Path.Combine(stage, slug);
+        var export = WebExporter.Export(project, player, exported);
+        if (!export.Success)
+            return Fail($"{template.Name}: the export failed: {export.Error}\n{string.Join("\n", export.Diagnostics.Select(d => d.ToString()))}");
+        // Every export carries the same published player: they must agree, or sharing one copy would break a game.
+        var framework = string.Join("\n", Directory.EnumerateFiles(Path.Combine(exported, "_framework")).Order(StringComparer.Ordinal)
+            .Select(f => $"{Path.GetFileName(f)} {new FileInfo(f).Length}"));
+        frameworkOf ??= framework;
+        if (framework != frameworkOf)
+            return Fail($"{template.Name}'s .NET files differ from the other games'.");
+        games.Add((template, slug, WebExporter.NetworkWarnings(project).Count > 0));
+        Console.WriteLine($"{template.Name}: exported");
+    }
+
+    // Laid out: one player, and each game's own files beside its page.
+    var layout = Path.Combine(work, "layout");
+    var shared = Path.Combine(layout, "_player");
+    Directory.CreateDirectory(shared);
+    var first = Path.Combine(stage, games[0].Slug);
+    Directory.Move(Path.Combine(first, "_framework"), Path.Combine(shared, "_framework"));
+    File.Copy(Path.Combine(first, "main.js"), Path.Combine(shared, "main.js"));
+    File.Copy(Path.Combine(first, "griff.js"), Path.Combine(shared, "griff.js"));
+    foreach (var game in games)
+    {
+        var from = Path.Combine(stage, game.Slug);
+        var to = Path.Combine(layout, game.Slug);
+        if (Directory.Exists(Path.Combine(from, "_framework")))
+            Directory.Delete(Path.Combine(from, "_framework"), recursive: true);
+        foreach (var leftover in new[] { "main.js", "griff.js", ExportLayout.Marker })
+            File.Delete(Path.Combine(from, leftover));
+        Directory.Move(from, to);
+        var page = Path.Combine(to, WebExporter.Page);
+        var html = File.ReadAllText(page);
+        const string Script = "src=\"main.js\"";
+        if (!html.Contains(Script, StringComparison.Ordinal))
+            return Fail($"{game.Template.Name}'s page doesn't start from main.js any more; --site rewrites that line.");
+        File.WriteAllText(page, html.Replace(Script, "src=\"../_player/main.js\"", StringComparison.Ordinal));
+    }
+
+    // A poster for each: the game running, as a visitor first sees it.
+    await using (var server = await Serve(layout, port))
+    {
+        if (LaunchBrowser(profile) is not { } process)
+            return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+        try
+        {
+            var log = new List<string>();
+            using var cdp = await ConnectAsync(profile, log);
+            await cdp.SendAsync("Emulation.setDeviceMetricsOverride", new JsonObject { ["width"] = 960, ["height"] = 540, ["deviceScaleFactor"] = 1, ["mobile"] = false });
+            foreach (var game in games)
+            {
+                var check = new GameCheck(cdp, game.Template.Name, $"http://127.0.0.1:{port}/{game.Slug}/", Path.Combine(work, "shots"));
+                // A slow or busy machine can take a while to get a software-drawn game going: each gets three tries.
+                for (var attempt = 1; ; attempt++)
+                {
+                    try
+                    {
+                        await check.Open(reload: attempt > 1);
+                        await Task.Delay(2500);
+                        // The page's sound hint and notices belong to the page, not to the picture of the game.
+                        await check.Evaluate("document.getElementById('hint').hidden = true; document.getElementById('notice').hidden = true; 'ok'");
+                        var (share, colors) = Drawn(await check.Screenshot(game.Slug + ".png"));
+                        if (share < 0.02 || colors < 3)
+                            return Fail($"{game.Template.Name}: next to nothing is drawn ({share:P1} differs from the background, {colors} colors).");
+                        var shot = await cdp.SendAsync("Page.captureScreenshot", new JsonObject { ["format"] = "webp", ["quality"] = 92 });
+                        File.WriteAllBytes(Path.Combine(layout, game.Slug, "poster.webp"), Convert.FromBase64String(shot["data"]!.ToString()));
+                        break;
+                    }
+                    catch (Exception ex) when (ex is CheckFailed or TimeoutException or InvalidOperationException)
+                    {
+                        if (attempt < 3)
+                        {
+                            Console.WriteLine($"  {game.Template.Name}: {ex.Message}; trying again");
+                            continue;
+                        }
+
+                        lock (log)
+                            return Fail($"{game.Template.Name}: {ex.Message}{(log.Count > 0 ? "\n  " + string.Join("\n  ", log) : "")}");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+    }
+
+    // What the site's pages are written from, and what it all weighs.
+    static long Folder(string path) => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
+    var playerBytes = Folder(shared);
+    long gzipped = 0;
+    foreach (var file in Directory.EnumerateFiles(shared, "*", SearchOption.AllDirectories))
+    {
+        using var counted = new CountingStream();
+        using (var gzip = new System.IO.Compression.GZipStream(counted, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+        using (var input = File.OpenRead(file))
+            input.CopyTo(gzip);
+        gzipped += counted.Length;
+    }
+
+    var list = new JsonObject
+    {
+        ["playerBytes"] = playerBytes,
+        ["playerGzipBytes"] = gzipped,
+        ["games"] = new JsonArray(games.Select(g => (JsonNode)new JsonObject
+        {
+            ["slug"] = g.Slug,
+            ["name"] = g.Template.Name,
+            ["title"] = g.Template.Title,
+            ["description"] = g.Template.Description,
+            ["order"] = g.Template.Order,
+            ["network"] = g.Network,
+            ["bytes"] = Folder(Path.Combine(layout, g.Slug)),
+        }).ToArray()),
+    };
+    File.WriteAllText(Path.Combine(layout, ListFile), list.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+    if (Directory.Exists(folder))
+        Directory.Delete(folder, recursive: true);
+    Directory.CreateDirectory(Path.GetDirectoryName(folder)!);
+    Directory.Move(layout, folder);
+    Console.WriteLine($"{games.Count} games in {folder}: {Folder(folder) / 1048576.0:0.0} MB in all, of which .NET and the player {playerBytes / 1048576.0:0.0} MB " +
+                      $"(about {gzipped / 1048576.0:0.0} MB gzipped, downloaded once) are shared by every game.");
+    return 0;
+}
+
 static async Task<WebApplication> Serve(string site, int port)
 {
     var builder = WebApplication.CreateSlimBuilder();
@@ -1281,6 +1448,36 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
             throw new InvalidOperationException($"The page threw evaluating {expression}: {thrown["exception"]?["description"] ?? thrown["text"]}");
         return result["result"]?["value"]?.ToString() ?? "";
     }
+}
+
+// Counts the bytes written to it and keeps none.
+sealed class CountingStream : Stream
+{
+    private long _length;
+
+    public override bool CanRead => false;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => true;
+
+    public override long Length => _length;
+
+    public override long Position { get => _length; set => throw new NotSupportedException(); }
+
+    public override void Flush()
+    {
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => _length += count;
+
+    public override void Write(ReadOnlySpan<byte> buffer) => _length += buffer.Length;
 }
 
 sealed class CheckFailed(string message) : Exception(message);

@@ -4,6 +4,8 @@
   <name> (a template made into a project) or, with neither, the proof game (the griffin, which the arrow keys, WASD or a
   stick move, under a label).
   -Export writes the export to -Out and stops (with -Zip, a zip for itch.io beside it): the command line's Build > Web.
+  -Site <folder> exports every template for the website into <folder> (the site's playable games): .NET once in _player,
+  then a folder, page and poster for each game, and games.json; -Template picks some. site\package.json's `npm run games`.
   -Check plays games in a headless Edge (or Chrome) instead, with no window, and exits 0 if all pass: the proof game and
   the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (-Template picks some, -Project checks
   that project). Each must run and draw; its sound must wait for a click or key, saying so, with its music keeping time,
@@ -14,13 +16,14 @@
   lights, shadows, screen effects and a viewport, held still after -Steps steps (90) in the headless browser and drawn by
   the desktop's OpenGL renderer after the same, compared pixel by pixel; -Template picks some (comma-separated names).
   Screenshots and pictures go in -Out's folder.
-    powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1 [-Export [-Zip] | -Check | -Compare [-Steps 90]] [-Project <folder> | -Template <names>] [-Port 8091] [-Out <folder>] [-NoBuild]
+    powershell -NoProfile -ExecutionPolicy Bypass -File tools\web.ps1 [-Export [-Zip] | -Site <folder> | -Check | -Compare [-Steps 90]] [-Project <folder> | -Template <names>] [-Port 8091] [-Out <folder>] [-NoBuild]
 #>
 param(
     [switch]$Export,
     [switch]$Zip,
     [switch]$Check,
     [switch]$Compare,
+    [string]$Site,
     [string]$Template,
     [int]$Steps = -1,
     [string]$Project,
@@ -41,6 +44,7 @@ try {
     $arguments = @('--port', $Port)
     if ($Export) { $arguments += '--export' }
     if ($Zip) { $arguments += '--zip' }
+    if ($Site) { $arguments += @('--site', $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Site)) }
     if ($Check) { $arguments += '--check' }
     if ($Compare) { $arguments += '--compare' }
     if ($Template) { $arguments += @('--template', $Template) }

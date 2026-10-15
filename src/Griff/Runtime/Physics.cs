@@ -256,6 +256,7 @@ public sealed partial class Physics
         }
 
         CollectJoints(scene);
+        CollectRopes(scene);
         _movedGroups.Clear();
         _turning.Clear();
         _turningGroups.Clear();
@@ -277,6 +278,10 @@ public sealed partial class Physics
                     ReportContacts(body, solids, onCollision);
                 continue;
             }
+
+            // A player on a rope goes where they hold it: the rope moves them, with the bodies that turn.
+            if (Climbs(body))
+                continue;
 
             // A welded group is one body: held still with what holds it, or worked out with the bodies that turn.
             if (_groupOf.TryGetValue(body, out var group))
@@ -368,7 +373,7 @@ public sealed partial class Physics
             EndStep(body, dt);
         }
 
-        if (_turning.Count > 0 || _turningGroups.Count > 0)
+        if (_turning.Count > 0 || _turningGroups.Count > 0 || _ropes.Count > 0)
         {
             StepTurning(scene, solids, dt, onCollision);
             foreach (var body in _turning)

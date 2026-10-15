@@ -1,0 +1,88 @@
+title: Ropes
+intro: Ropes hang and sag, swing, wrap round what they meet and snap; tie them between things, hang things on them, and climb and swing on them.
+project: Platformer | Ropes
+
+# A new scene in the Platformer project, its camera moved out to see it all: a floor 40 wide whose top is at y = -2.5, and
+# a ceiling whose bottom is at y = 5.7.
+menu: File > New Scene...
+prompt: Ropes
+select: Main Camera
+set: Transform.Position = 0, 1, 0
+set: Camera.Size = 7
+deselect
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 40, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 40, 1
+deselect
+create: Sprite
+rename: Ceiling
+set: Transform.Position = 0, 6, 0
+set: Sprite.Size = 40, 0.6
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 40, 0.6
+
+chapter: A rope to swing on | Hung loose from the ceiling, its ends and length dragged in the Scene view
+menu: Entity > Add Rope
+expectvalue: Ceiling.Rope.LooseEnd = true
+say: Add Rope on something that doesn't move hangs a loose rope from its bottom, drawn as it will hang.
+explain: handle:Rope.Start | Where it's tied | Drag the knob at its top to move where it's tied.
+path: Rope.Start = -3, -0.3
+expectvalue: Ceiling.Rope.Anchor.X = -3 ~ 0.01
+explain: handle:Rope.Length | Its length | And the knob at its tip to make it longer or shorter. Each drag is one undo step.
+path: Rope.Length = 7.5
+expectvalue: Ceiling.Rope.Length = 7.5 ~ 0.05
+explain: handle:Rope.End | Its loose end | A loose end starts out towards where this knob is: here, straight down, so it hangs still to begin with.
+path: Rope.End = -3, 2.7
+expectvalue: Ceiling.Rope.OtherAnchor.X = -3 ~ 0.01
+deselect
+
+chapter: A bucket | Hung from a hook, swinging, and snapping when it's pulled too hard
+create: Sprite
+rename: Bucket
+set: Transform.Position = 4, 1, 0
+set: Sprite.Size = 0.8, 0.8
+set: Sprite.Tint = #B07F4A
+add: BoxCollider
+set: BoxCollider.Size = 0.8, 0.8
+add: Body
+set: Body.Rotates = true
+menu: Entity > Add Rope
+expectvalue: Bucket.Rope.Length = 3
+say: On something that moves, it hangs it from a hook in the world, three above its top. With the hook moved to one side and the rope let out, it will swing.
+path: Rope.End = 1.5, 4.4
+path: Rope.Length = 4.5
+expectvalue: Bucket.Rope.Length = 4.5 ~ 0.05
+explain: component:Rope | Breaking | A Break Force snaps it when it's pulled harder than that; it then says Broke, an output, and sends its Break Message.
+set: Rope.BreakForce = 60
+deselect
+create: Sprite
+rename: Peg
+set: Transform.Position = 2, 1.2, 0
+set: Sprite.Size = 0.4, 0.4
+set: Sprite.Tint = #8C93A0
+add: BoxCollider
+set: BoxCollider.Size = 0.4, 0.4
+say: It meets the world too: swinging round this peg, the bucket's rope wraps round it.
+deselect
+
+chapter: Climbing | A player grabs the rope, climbs it and swings on it
+create: Platformer Player
+set: Transform.Position = -2.5, -2, 0
+deselect
+play
+wait: 2
+say: Up grabs the rope, and climbs it.
+hold: Up 1.2
+expectvalue: Player.PlatformerMovement.IsOnRope = true
+say: Left and right swing on it, and jump lets go, keeping the swing.
+hold: Right 1.5
+tap: Space
+wait: 1.5
+expectvalue: Player.PlatformerMovement.IsOnRope = false
+explain: entity:Bucket | Swinging | The bucket swings on its rope, round the peg.
+stop

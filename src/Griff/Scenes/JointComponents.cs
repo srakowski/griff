@@ -130,7 +130,7 @@ public sealed class HingeJoint : Component
     }
 
     // The entity called `name` nearest this one (not itself).
-    private static Entity? Nearest(Scene scene, Entity from, string name)
+    internal static Entity? Nearest(Scene scene, Entity from, string name)
     {
         var here = Flat(from.Transform.WorldPosition);
         Entity? best = null;

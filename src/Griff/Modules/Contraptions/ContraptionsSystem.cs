@@ -383,8 +383,11 @@ internal sealed partial class ContraptionsSystem : GameSystem
         else
         {
             var rope = first.AddComponent<Rope>();
-            (rope.To, rope.Other, rope.Offset, rope.OtherOffset) = (thing.Name, thing, Sandbox.FirstAt, at);
-            rope.Length = Vector2.Distance(CenterOf(first) + rope.Offset, CenterOf(thing) + rope.OtherOffset);
+            var (from, to) = (CenterOf(first) + Sandbox.FirstAt, CenterOf(thing) + at);
+            rope.TieTo(thing);
+            rope.Anchor = Matrix4x4.Invert(first.Transform.WorldMatrix, out var ownFirst) ? Vector2.Transform(from, ownFirst) : Vector2.Zero;
+            rope.OtherAnchor = Matrix4x4.Invert(thing.Transform.WorldMatrix, out var ownThing) ? Vector2.Transform(to, ownThing) : Vector2.Zero;
+            rope.Length = Math.Max(0.1f, Vector2.Distance(from, to));
             made = rope;
             SandboxNote($"Tied {first.Name} to {thing.Name}");
         }
@@ -494,7 +497,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
                 var linked = component switch
                 {
                     Weld weld => (weld.Other?.Scene == Scene ? weld.Other : WirePorts.Find(weld.Entity!, weld.To)) == entity,
-                    Rope rope => (rope.Other?.Scene == Scene ? rope.Other : WirePorts.Find(rope.Entity!, rope.To)) == entity,
+                    Rope rope => rope.OtherEntity == entity,
                     HingeJoint hinge => hinge.OtherEntity == entity,
                     Wire wire => (wire.Source ?? WirePorts.Find(wire.Entity!, wire.From)) == entity,
                     _ => false,
@@ -623,74 +626,6 @@ internal sealed partial class ContraptionsSystem : GameSystem
 
     // A body and everything welded to it.
     private List<Body> GroupOf(Body body) => Sandbox.Groups.TryGetValue(body, out var group) ? group.Bodies : [body];
-
-    // After physics: ropes pull their ends back within reach, sharing the pull by weight, and stop them pulling apart.
-    internal void RunRopes()
-    {
-        var ropes = Game.Active<Rope>();
-        if (ropes.Count == 0 || Time.Delta <= 0)
-            return;
-        for (var pass = 0; pass < 3; pass++)
-        {
-            foreach (var rope in ropes)
-            {
-                var host = rope.Entity!;
-                var other = rope.Other = rope.Other?.Scene == Scene ? rope.Other : WirePorts.Find(host, rope.To);
-                if (other is null || other == host)
-                    continue;
-                var a = CenterOf(host) + rope.Offset;
-                var b = CenterOf(other) + rope.OtherOffset;
-                if (rope.Length <= 0)
-                    rope.Length = Vector2.Distance(a, b);
-                var distance = Vector2.Distance(a, b);
-                if (distance <= rope.Length || distance < 1e-5f)
-                    continue;
-
-                var direction = (b - a) / distance;
-                var hostGroup = Movable(host);
-                var otherGroup = Movable(other);
-                var (hostShare, otherShare) = Shares(hostGroup, otherGroup);
-                if (hostShare + otherShare <= 0)
-                    continue;
-                var excess = distance - rope.Length;
-                if (hostGroup.Count > 0)
-                    Physics.Nudge(Scene, hostGroup, direction * excess * hostShare);
-                if (otherGroup.Count > 0)
-                    Physics.Nudge(Scene, otherGroup, -direction * excess * otherShare);
-
-                // Moving apart along the rope stops; the rope shares the stop by weight.
-                var hostVelocity = hostGroup.Count > 0 ? hostGroup[0].Velocity : Vector2.Zero;
-                var otherVelocity = otherGroup.Count > 0 ? otherGroup[0].Velocity : Vector2.Zero;
-                var apart = Vector2.Dot(otherVelocity - hostVelocity, direction);
-                if (apart <= 0)
-                    continue;
-                foreach (var body in hostGroup)
-                    body.Velocity += direction * apart * hostShare;
-                foreach (var body in otherGroup)
-                    body.Velocity -= direction * apart * otherShare;
-            }
-        }
-    }
-
-    // The bodies that move when a rope pulls on an entity: its weld group, or none if it's fixed in place.
-    private List<Body> Movable(Entity entity)
-    {
-        if (entity.GetComponent<Body>() is not { } body)
-            return [];
-        var group = GroupOf(body);
-        if (group.Any(b => b.Frozen) || (Sandbox.Groups.TryGetValue(body, out var g) && g.Anchored))
-            return [];
-        return group;
-    }
-
-    // How much of a pull each end takes: the lighter end moves more, and a fixed end not at all.
-    private static (float Host, float Other) Shares(List<Body> host, List<Body> other)
-    {
-        var hostInverse = host.Count > 0 ? 1 / Math.Max(0.01f, host.Sum(b => b.Mass)) : 0;
-        var otherInverse = other.Count > 0 ? 1 / Math.Max(0.01f, other.Sum(b => b.Mass)) : 0;
-        var total = hostInverse + otherInverse;
-        return total <= 0 ? (0, 0) : (hostInverse / total, otherInverse / total);
-    }
 }
 
 /// <summary>A weld as grouping sees it: its entity, what it's welded to, their bodies, and whether that's there.</summary>

@@ -493,6 +493,14 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 dc.DrawEllipse(solid.Brush, null, pin, 1.5, 1.5);
             }
 
+            // A rope: a ring where it's tied on, and one at its other end (tied to something or the world; not a loose one).
+            foreach (var rope in entity.GetComponents<Rope>())
+            {
+                dc.DrawEllipse(null, solid, viewport.ToScreen(rope.WorldAnchor), 3.5, 3.5);
+                if (!rope.EndIsLoose)
+                    dc.DrawEllipse(null, solid, viewport.ToScreen(rope.WorldOtherAnchor), 3.5, 3.5);
+            }
+
             // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons.
             foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric))
             {
@@ -973,6 +981,16 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     var (side, value) = point.Index < 0 ? ("Lower", hinge.LowerAngle) : ("Upper", hinge.UpperAngle);
                     text = dragging ? $"{side} {Number(value)}°" : hovered ? $"{side} {Number(value)}°  ·  double-click to clear limits" : side;
                 }
+            }
+            else if (point.Component is Rope rope)
+            {
+                var tied = rope.EndIsLoose ? "loose" : string.IsNullOrWhiteSpace(rope.To) ? "to the world" : $"to {rope.To}";
+                text = point.Index switch
+                {
+                    0 => dragging ? $"Rope  ·  {Number(rope.Anchor.X)}, {Number(rope.Anchor.Y)}" : hovered ? "Rope  ·  drag to move" : "Rope",
+                    1 => dragging ? $"End {tied}  ·  {Number(rope.OtherAnchor.X)}, {Number(rope.OtherAnchor.Y)}" : hovered ? $"End {tied}  ·  drag to move" : "End",
+                    _ => dragging ? $"Length {Number(rope.Length)}" : hovered ? $"Length {Number(rope.PlacedLength)}  ·  drag to lengthen, double-click for as far apart as its ends" : $"Length {Number(rope.PlacedLength)}",
+                };
             }
             else
             {

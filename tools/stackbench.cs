@@ -7,11 +7,12 @@
 // balls heaped in a bin instead; with --shapes 60, that many polygons, triangles, pentagons, hexagons and concave Ls, heaped
 // in a bin; with --hinges 60, that many planks hinged into chains of five hanging from the ceiling, let go from the side so
 // they swing; with --welded 60, that many crates welded in pairs into Ls, heaped in a bin) on a floor, lets them settle,
-// then times steps of the pile awake (woken before each step,
-// so every body and contact is worked out, as while a pile settles or is knocked about) and asleep, printing the median,
+// then times steps of the pile awake (woken before each step, so every body and contact is worked out, as while a pile
+// settles or is knocked about) and asleep. With --ropes 40, that many ropes 3 long instead, swinging down from hooks over
+// pegs, every other one with a crate on its end, timed as they swing from the start and again ten seconds on. It prints the median,
 // mean and worst step and the bytes allocated meanwhile. The numbers are this computer's: compare runs on the same one.
 //   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60] [--hinges 60]
-//     [--welded 60]
+//     [--welded 60] [--ropes 40]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
@@ -34,6 +35,45 @@ var balls = Arg("--balls", 0);
 var shapes = Arg("--shapes", 0);
 var hinges = Arg("--hinges", 0);
 var welded = Arg("--welded", 0);
+var ropes = Arg("--ropes", 0);
+if (ropes > 0)
+{
+    // Ropes 3 long from hooks along the ceiling, laid out level so they swing down: every other one with a crate on its end,
+    // the rest loose, each over a peg below its hook it drapes over and wraps round.
+    for (var i = 0; i < ropes; i++)
+    {
+        var at = new Vector2(i * 4 - ropes * 2, 12);
+        var hook = new Entity($"Hook {i}");
+        hook.Transform.Position = new Vector3(at, 0);
+        scene.Add(hook);
+        var peg = new Entity("Peg");
+        peg.Transform.Position = new Vector3(at + new Vector2(1.2f, -1.8f), 0);
+        peg.AddComponent<BoxCollider>().Size = new Vector2(0.3f, 0.3f);
+        scene.Add(peg);
+        if (i % 2 == 0)
+        {
+            var body = Crate(at + new Vector2(3, 0), new Vector2(0.6f, 0.6f));
+            var rope = body.Entity!.AddComponent<Rope>();
+            rope.To = hook.Name;
+            bodies.Add(body);
+        }
+        else
+        {
+            var rope = hook.AddComponent<Rope>();
+            (rope.LooseEnd, rope.OtherAnchor) = (true, at + new Vector2(3, 0));
+        }
+    }
+
+    var swinging = Time(() => game.Tick(Frame));
+    for (var i = 0; i < 600; i++)
+        game.Tick(Frame);
+    var hanging = Time(() => game.Tick(Frame));
+    Console.WriteLine($"{ropes} ropes 3 long ({ropes / 2 + ropes % 2} with a crate on the end) swinging over pegs");
+    Console.WriteLine($"swinging: {swinging}");
+    Console.WriteLine($"later:    {hanging}");
+    return;
+}
+
 if (hinges > 0)
 {
     // Chains of five planks, each hinged by its left end to the right end of the one before, the first to the ceiling; laid

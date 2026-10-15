@@ -886,11 +886,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // point to the middle of the cell that many cells from where it was placed. "path: PolygonCollider.2 = 1, 0.5"
                 // (or "PolygonCollider.+3" for the plus on the side after point 2) drags a polygon's point to there in its own units.
                 // "path: HingeJoint.Anchor = -2, 0" drags a hinge's knob to there in its entity's own units; "path:
-                // HingeJoint.Lower = -45" (or Upper) drags the end of its arc round to that many degrees.
+                // HingeJoint.Lower = -45" (or Upper) drags the end of its arc round to that many degrees. "path: Rope.Start = 0, 0.5"
+                // drags a rope's start to there in its entity's own units, "path: Rope.End = 4, 6" its other end to there in the own units
+                // of what it's tied to (or in the world), and "path: Rope.Length = 5" the knob at its middle to where that makes it 5 long.
                 var (pathText, pathModifiers) = ParseModifiedName(a);
                 var (pathName, pathValue) = Split2(pathText, '=');
                 var (pathHandle, pathFrom) = ui.PathKnob(pathName)
-                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol, a Patrol, a Polygon Collider or a Hinge Joint.");
+                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol, a Patrol, a Polygon Collider, a Hinge Joint or a Rope.");
                 var pathComponent = (pathHandle.Point?.Component ?? pathHandle.Path)!;
                 var pathEntity = pathComponent.Entity!;
                 var pathParent = pathEntity.Parent?.Transform.WorldMatrix ?? System.Numerics.Matrix4x4.Identity;
@@ -911,6 +913,17 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     pathTo = pathHandle.Index == 0
                         ? System.Numerics.Vector2.Transform(Vector(pathValue), pathEntity.Transform.WorldMatrix)
                         : SceneViewModel.ArcOf(pathHinge).At(float.Parse(pathValue, CultureInfo.InvariantCulture));
+                }
+                else if (pathComponent is Griff.Scenes.Rope pathRope)
+                {
+                    var other = pathRope.OtherEntity;
+                    pathTo = pathHandle.Index switch
+                    {
+                        0 => System.Numerics.Vector2.Transform(Vector(pathValue), pathEntity.Transform.WorldMatrix),
+                        1 when !string.IsNullOrWhiteSpace(pathRope.To) && other is not null => System.Numerics.Vector2.Transform(Vector(pathValue), other.Transform.WorldMatrix),
+                        1 => Vector(pathValue),
+                        _ => SceneViewModel.RopeLengthPoint(pathRope, float.Parse(pathValue, CultureInfo.InvariantCulture)),
+                    };
                 }
                 else if (pathComponent is Griff.Scenes.Patrol pathPatrol)
                 {
@@ -1242,7 +1255,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             .FirstOrDefault(c => c.GetType().Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
         var property = component is null ? null : workspace.Components.Get(component.GetType()).Properties
             .FirstOrDefault(p => p.Name.Equals(fieldName.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
-        var value = property?.GetValue(component!);
+        // What a component says about itself as it runs and doesn't save (a player's Is On Rope) reads too.
+        var value = property is not null ? property.GetValue(component!)
+            : component?.GetType().GetProperty(fieldName.Replace(" ", ""), System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.GetValue(component);
         if (axis is not null)
         {
             value = (value, axis.ToUpperInvariant()) switch

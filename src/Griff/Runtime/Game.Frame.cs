@@ -583,6 +583,14 @@ public sealed partial class Game
         if (Time.Delta <= 0)
             return;
         Physics.Step(Scene, Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
+
+        // Ropes that snapped say so.
+        foreach (var rope in Physics.Snapped)
+        {
+            if (!string.IsNullOrWhiteSpace(rope.BreakMessage) && rope.Entity is { } entity)
+                Send(rope.BreakMessage.Trim(), entity, from: entity);
+        }
+
         foreach (var (trigger, other) in Physics.TriggerPairs)
         {
             _touches.Add((trigger, other));

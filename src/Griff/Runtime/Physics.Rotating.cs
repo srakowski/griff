@@ -125,7 +125,7 @@ public sealed partial class Physics
 
         // What each touches, or could reach this step; each pair once. A sleeper it touches, or is hinged to, wakes and
         // joins in.
-        WakeJoined(solids);
+        WakeTied(solids);
         var gathered = 0;
         do
         {
@@ -135,9 +135,9 @@ public sealed partial class Physics
                     GatherFor(gathered, solids);
             }
         }
-        while (WakeJoined(solids));
+        while (WakeTied(solids));
 
-        Solve(scene.Contacts, dt);
+        Solve(scene.Contacts, solids, dt);
         Remember(scene.Contacts);
 
         // A body inside another that turns goes its own way in the world: it's moved after what it's in, from where it was.
@@ -209,6 +209,8 @@ public sealed partial class Physics
         }
 
         FallAsleep();
+        if (_ropes.Count > 0)
+            FinishRopes(scene.Contacts, CollectionsMarshal.AsSpan(movers), solids, dt, onCollision);
     }
 
     // Whether a solid has gone (taken out, turned off, tiles cleared) from beside a sleeping body since the last step: what
@@ -804,7 +806,7 @@ public sealed partial class Physics
     // the part before's, and the first part from the step before's, which the scene remembers) that stop what's coming
     // together and ease what overlaps apart, then they move, then the pushes again without the easing apart, so it doesn't
     // fling them. Then the bounces.
-    private void Solve(ContactMemory memory, float dt)
+    private void Solve(ContactMemory memory, Solids solids, float dt)
     {
         var movers = CollectionsMarshal.AsSpan(_movers);
         var contacts = CollectionsMarshal.AsSpan(_solving);
@@ -873,6 +875,8 @@ public sealed partial class Physics
 
         SetUpJoints(memory, movers, dt);
         var joints = _rows.Count > 0;
+        SetUpRopes(movers, solids, dt);
+        var ropes = _dots.Count > 0;
 
         for (var step = 0; step < SolveParts; step++)
         {
@@ -885,6 +889,9 @@ public sealed partial class Physics
                     RollOnFloor(ref mover, part);
             }
 
+            if (ropes)
+                PullRopes(part);
+
             // The pushes of the part before (of the step before, to begin with), as a first guess at this part's.
             foreach (ref var contact in contacts)
             {
@@ -895,11 +902,15 @@ public sealed partial class Physics
 
             if (joints)
                 WarmJoints(movers);
+            if (ropes)
+                WarmRopes(movers, dt, step * part);
 
             for (var pass = 0; pass < PushPasses; pass++)
             {
                 if (joints)
                     SolveJoints(movers, jointSoftness, inversePart, ease: true, dt, step * part);
+                if (ropes)
+                    SolveRopes(movers, jointSoftness, inversePart, ease: true, dt, step * part);
                 PushAll(movers, contacts, softness, inversePart, ease: true);
             }
 
@@ -913,8 +924,12 @@ public sealed partial class Physics
                 (mover.TurnSin, mover.TurnCos) = MathF.SinCos(mover.Turned);
             }
 
+            if (ropes)
+                MoveRopes(part);
             if (joints)
                 SolveJoints(movers, jointSoftness, inversePart, ease: false, dt, (step + 1) * part);
+            if (ropes)
+                SolveRopes(movers, jointSoftness, inversePart, ease: false, dt, (step + 1) * part);
             PushAll(movers, contacts, softness, inversePart, ease: false);
         }
 

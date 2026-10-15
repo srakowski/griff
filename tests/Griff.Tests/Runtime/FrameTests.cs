@@ -28,7 +28,7 @@ public class FrameTests
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
             "Simulate: Sprite Effects", "Simulate: Prompts", "Simulate: Typewriters", "Simulate: Pickup Spin",
-            "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics", "Physics: Ropes",
+            "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
             "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Dialogues", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Touch Damage",
@@ -71,7 +71,7 @@ public class FrameTests
         Assert.Equal("Switches", game.Frame.Single(s => s.Name == "Switches").System?.Name);
         Assert.Equal("Block Worlds", game.Frame.Single(s => s.Name == "Worlds").System?.Name);
         Assert.Equal("Block Worlds", game.Frame.Single(s => s.Name == "Blocks").System?.Name);
-        foreach (var name in (string[])["Tools", "Thrusters", "Welds", "Ropes", "Wiring"])
+        foreach (var name in (string[])["Tools", "Thrusters", "Welds", "Wiring"])
             Assert.Equal("Contraptions", game.Frame.Single(s => s.Name == name).System?.Name);
         Assert.Equal("Dungeons", game.Frame.Single(s => s.Name == "Dungeons").System?.Name);
         Assert.Equal("First Person", game.Frame.Single(s => s.Name == "First Person").System?.Name);

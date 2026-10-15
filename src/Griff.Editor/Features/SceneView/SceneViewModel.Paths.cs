@@ -11,8 +11,9 @@ namespace Griff.Editor.Features.SceneView;
 /// A point on the primary selection's path that the Scene view puts a handle on: one of its <see cref="Mover"/>'s or
 /// <see cref="GridPatrol"/>'s Points (<see cref="Index"/> 1 is the first after the start), where its <see cref="Patrol"/>
 /// turns (<see cref="Index"/> -1 for its Left, 1 for its Right), one of its <see cref="PolygonCollider"/>'s Points
-/// (<see cref="Index"/> 1 is the first), or its <see cref="HingeJoint"/>'s anchor (<see cref="Index"/> 0) and the ends of
-/// its limits' arc (-1 for its Lower Angle, 1 for its Upper). <see cref="World"/> is where it is in the world (a grid
+/// (<see cref="Index"/> 1 is the first), its <see cref="HingeJoint"/>'s anchor (<see cref="Index"/> 0) and the ends of
+/// its limits' arc (-1 for its Lower Angle, 1 for its Upper), or its <see cref="Rope"/>'s two ends (0 where it's tied on the
+/// entity, 1 its other end) and middle (2, its length). <see cref="World"/> is where it is in the world (a grid
 /// patrol's, the middle of its cell). A patrol's side with no turn set walks on until a wall or an edge: it's
 /// <see cref="Open"/>, and its handle sits at the end of a short stub, to drag out.
 /// </summary>
@@ -20,12 +21,14 @@ public sealed record ScenePathPoint(Component Component, int Index, Vector2 Worl
 {
     /// <summary>
     /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left", "Patrol.Right", "PolygonCollider.1", "HingeJoint.Anchor",
-    /// "HingeJoint.Lower" or "HingeJoint.Upper", as <see cref="SceneViewModel.DragPathPoint"/> takes it.
+    /// "HingeJoint.Lower", "HingeJoint.Upper", "Rope.Start", "Rope.End" or "Rope.Length", as
+    /// <see cref="SceneViewModel.DragPathPoint"/> takes it.
     /// </summary>
     public string Key => Component switch
     {
         Patrol => Index < 0 ? "Patrol.Left" : "Patrol.Right",
         HingeJoint => Index < 0 ? "HingeJoint.Lower" : Index > 0 ? "HingeJoint.Upper" : "HingeJoint.Anchor",
+        Rope => Index == 0 ? "Rope.Start" : Index == 1 ? "Rope.End" : "Rope.Length",
         _ => $"{Component.GetType().Name}.{Index}",
     };
 
@@ -142,7 +145,67 @@ public sealed partial class SceneViewModel
             }
         }
 
+        // A rope's two ends, and its middle as it hangs (its length): the length knob first, taken where it sits on its loose end.
+        if (primary.GetComponent<Rope>() is { } rope)
+        {
+            var (start, end, middle) = KnobsOf(rope);
+            points.Add(new ScenePathPoint(rope, 0, start));
+            points.Add(new ScenePathPoint(rope, 2, middle));
+            points.Add(new ScenePathPoint(rope, 1, end));
+        }
+
         return points;
+    }
+
+    /// <summary>
+    /// Where a rope's knobs go in the world: where it's tied on its entity, its other end (on what it's tied to, or where its
+    /// loose end starts), and the knob for its length: the middle of the rope as it hangs, or (loose) the tip of it.
+    /// </summary>
+    public static (Vector2 Start, Vector2 End, Vector2 Length) KnobsOf(Rope rope)
+    {
+        var (start, end) = (rope.WorldAnchor, rope.WorldOtherAnchor);
+        if (rope.EndIsLoose)
+            return (start, end, LooseTip(rope, rope.PlacedLength));
+        Span<Vector2> shape = stackalloc Vector2[Rope.MaxPoints];
+        var count = rope.Shape(shape, StepBlend.AsIs);
+        var middle = count % 2 == 1 ? shape[count / 2] : (shape[count / 2 - 1] + shape[count / 2]) / 2;
+        return (start, end, middle);
+    }
+
+    /// <summary>
+    /// Where a rope's length knob goes for it to be <paramref name="length"/> long: below the middle between its ends (or, loose,
+    /// that far along it), for a drag of the knob to set it.
+    /// </summary>
+    public static Vector2 RopeLengthPoint(Rope rope, float length)
+    {
+        if (rope.EndIsLoose)
+            return LooseTip(rope, length);
+        var (start, end) = (rope.WorldAnchor, rope.WorldOtherAnchor);
+        var half = Vector2.Distance(start, end) / 2;
+        var across = end - start;
+        var down = across.LengthSquared() > 1e-8f ? Vector2.Normalize(new Vector2(across.Y, -across.X)) : -Vector2.UnitY;
+        if (down.Y > 0)
+            down = -down;
+        return (start + end) / 2 + down * MathF.Sqrt(MathF.Max(0, length * length / 4 - half * half));
+    }
+
+    // The tip of a loose rope `length` long: laid out towards where its end starts, and on down from there.
+    private static Vector2 LooseTip(Rope rope, float length)
+    {
+        var (start, end) = (rope.WorldAnchor, rope.WorldOtherAnchor);
+        var reach = Vector2.Distance(start, end);
+        return length <= reach && reach > 1e-5f ? start + (end - start) / reach * length : end - new Vector2(0, length - reach);
+    }
+
+    // How long a rope is with its length knob dragged to `world`: the way from its start through there to its other end (or,
+    // loose, to where its end starts and on down to there), never shorter than its ends are apart.
+    private static float RopeLengthAt(Rope rope, Vector2 world)
+    {
+        var (start, end) = (rope.WorldAnchor, rope.WorldOtherAnchor);
+        var reach = Vector2.Distance(start, end);
+        if (rope.EndIsLoose)
+            return MathF.Max(0.1f, world.Y < end.Y ? reach + (end.Y - world.Y) : Vector2.Distance(start, world));
+        return MathF.Max(reach, Vector2.Distance(start, world) + Vector2.Distance(world, end));
     }
 
     /// <summary>
@@ -167,13 +230,16 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2", "GridPatrol.1",
-    /// "Patrol.Left", "PolygonCollider.3", "HingeJoint.Anchor", "HingeJoint.Lower" or "HingeJoint.Upper", to a point in the
+    /// "Patrol.Left", "PolygonCollider.3", "HingeJoint.Anchor", "HingeJoint.Lower", "HingeJoint.Upper", "Rope.Start", "Rope.End"
+    /// or "Rope.Length", to a point in the
     /// world, as one undo step. A mover's point lands there, its offset on hundredths (<paramref name="snap"/>: half units); a
     /// grid patrol's lands on the cell there; a patrol's turn goes level with it on its side, and dragging it back past where
     /// the patrol was placed clears it, so it walks on until a wall or an edge; a polygon's point lands there, in its own
     /// units on hundredths (<paramref name="snap"/>: half units); a hinge's anchor too (joining the two again there if the
     /// game had joined them), and a hinge's limit goes to the angle round its arc the point is at, in whole degrees
-    /// (<paramref name="snap"/>: fifteens).
+    /// (<paramref name="snap"/>: fifteens). A rope's start lands there in its entity's own units, its end in the own units of what it's
+    /// tied to (or in the world), and its length is the way from its start through the point to its end (loose: on down to the
+    /// point), on hundredths (<paramref name="snap"/>: half units).
     /// </summary>
     public void DragPathPoint(string point, Vector2 to, bool snap = false)
     {
@@ -218,7 +284,8 @@ public sealed partial class SceneViewModel
     /// <summary>
     /// Takes a point off the primary selection's path, as one undo step: a mover's or grid patrol's point (it keeps at
     /// least one, to go to), a patrol's turn (it then walks on until a wall or an edge on that side), a polygon's point
-    /// (it keeps at least three), or a hinge's limit (it then swings freely; its anchor stays).
+    /// (it keeps at least three), a hinge's limit (it then swings freely; its anchor stays), or a rope's length (it's then as long as
+    /// its ends are apart as the game starts).
     /// </summary>
     public void RemovePathPoint(string point)
     {
@@ -230,6 +297,9 @@ public sealed partial class SceneViewModel
             HingeJoint when found.Index == 0 =>
                 throw new InvalidOperationException("A hinge needs its anchor: drag it instead, or remove the Hinge Joint."),
             HingeJoint hinge => (Property(hinge, nameof(HingeJoint.Limit)), (object?)false),
+            Rope when found.Index < 2 =>
+                throw new InvalidOperationException("A rope needs both its ends: drag this one instead, or remove the Rope."),
+            Rope rope => (Property(rope, nameof(Rope.Length)), (object?)0f),
             Mover or GridPatrol when PointCount(found.Component) <= 1 =>
                 throw new InvalidOperationException("It needs somewhere to go: that's its only point. Drag it instead."),
             Mover or GridPatrol => (Property(found.Component, nameof(Mover.Points)),
@@ -260,6 +330,8 @@ public sealed partial class SceneViewModel
             PolygonCollider polygon => new PathPointDrag(document, polygon, Property(polygon, nameof(PolygonCollider.Points)), point.Index, insert: false),
             HingeJoint hinge => new PathPointDrag(document, hinge, Property(hinge, point.Index < 0 ? nameof(HingeJoint.LowerAngle) : point.Index > 0 ? nameof(HingeJoint.UpperAngle) : nameof(HingeJoint.Anchor)),
                 point.Index, insert: false, joined: point.Index == 0 && hinge.Joined ? Property(hinge, nameof(HingeJoint.Joined)) : null),
+            Rope rope => new PathPointDrag(document, rope, Property(rope, point.Index == 0 ? nameof(Rope.Anchor) : point.Index == 1 ? nameof(Rope.OtherAnchor) : nameof(Rope.Length)),
+                point.Index, insert: false),
             _ => null,
         };
     }
@@ -284,7 +356,7 @@ public sealed partial class SceneViewModel
         var points = PathPoints();
         return points.FirstOrDefault(p => string.Equals(p.Key, point.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException(points.Count == 0
-                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol, a Patrol, a Polygon Collider or a Hinge Joint."
+                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol, a Patrol, a Polygon Collider, a Hinge Joint or a Rope."
                 : $"The selection has no path point \"{point}\"; it has {string.Join(", ", points.Select(p => p.Key))}.");
     }
 
@@ -391,6 +463,8 @@ public sealed partial class SceneViewModel
             object? value;
             if (Component is HingeJoint hinge)
                 value = Index == 0 ? HingeAnchor(hinge, world, Fit) : HingeLimit(hinge, world, snap);
+            else if (Component is Rope rope)
+                value = Index == 2 ? Fit(RopeLengthAt(rope, world)) : Index == 0 ? OwnPoint(rope.Entity!, world, Fit) : RopeEnd(rope, world, Fit);
             else if (Component is Patrol)
                 value = MathF.Max(0, Fit(offset.X * MathF.Sign(Index)));
             else
@@ -413,11 +487,18 @@ public sealed partial class SceneViewModel
         }
 
         // A hinge's anchor at a point in the world, in its entity's own units.
-        private static Vector2 HingeAnchor(HingeJoint hinge, Vector2 world, Func<float, float> fit)
+        private static Vector2 HingeAnchor(HingeJoint hinge, Vector2 world, Func<float, float> fit) => OwnPoint(hinge.Entity!, world, fit);
+
+        // A point in the world in an entity's own units.
+        private static Vector2 OwnPoint(Entity entity, Vector2 world, Func<float, float> fit)
         {
-            var own = Matrix4x4.Invert(hinge.Entity!.Transform.WorldMatrix, out var toOwn) ? Vector2.Transform(world, toOwn) : world;
+            var own = Matrix4x4.Invert(entity.Transform.WorldMatrix, out var toOwn) ? Vector2.Transform(world, toOwn) : world;
             return new Vector2(fit(own.X), fit(own.Y));
         }
+
+        // A rope's other end at a point in the world: in the own units of what it's tied to, or in the world.
+        private static Vector2 RopeEnd(Rope rope, Vector2 world, Func<float, float> fit) =>
+            !string.IsNullOrWhiteSpace(rope.To) && rope.OtherEntity is { } other ? OwnPoint(other, world, fit) : new Vector2(fit(world.X), fit(world.Y));
 
         // A hinge's limit at the angle round its arc a point in the world is at, in whole degrees (with snap, fifteens),
         // kept on its own side of the other limit.

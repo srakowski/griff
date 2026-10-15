@@ -58,7 +58,8 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<LockEntityCommand>()
             .AddCommand<HideEntityCommand>()
             .AddCommand<FitPolygonColliderCommand>()
-            .AddCommand<AddHingeCommand>();
+            .AddCommand<AddHingeCommand>()
+            .AddCommand<AddRopeCommand>();
 
         // The modules' presets (Create Match Board, Create Tactics Unit) and actions (Generate Dungeon), each a command of its own.
         foreach (var preset in EntityPreset.All)

@@ -25,6 +25,10 @@ public sealed partial class Game
     {
         if (Time.Delta <= 0 || PausedThisFrame)
             return;
+
+        // Ropes laid out (or brought back from a rewind) before anyone grabs one.
+        if (Scene.Active<Rope>().Count > 0)
+            Physics.ReadyRopes(Scene);
         foreach (var movement in Moving<PlatformerMovement>())
             RunPlatformer(movement);
         foreach (var movement in Moving<TopDownMovement>())
@@ -81,9 +85,50 @@ public sealed partial class Game
         else
             m.WallAge += dt;
 
+        // Ropes: up grabs one at its hands (in the air too); on one, it climbs up and down it, swings on it left and right,
+        // and jumps off it (or, holding down, lets go). The rope moves it.
+        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero);
+        if (body.Climbing is { } rope && (rope.Entity is not { IsActive: true } ropeEntity || ropeEntity.Scene != Scene || !rope.Climbable))
+            Physics.Release(body);
+        if (body.Climbing is null && m.IsOnRope)
+            (m.IsOnRope, m.IsClimbing) = (false, false);
+        if (body.Climbing is null && y > 0.5f && !m.IsDashing && m.RegrabLeft <= 0 && bounds.HalfSize != Vector2.Zero && !body.Rotates)
+        {
+            var hands = bounds.Center + new Vector2(0, bounds.HalfSize.Y * 0.6f);
+            if (Physics.RopeNear(Scene, hands, bounds.HalfSize.X + 0.25f, body) is { } grab)
+            {
+                Physics.Hold(grab.Rope, body, grab.At);
+                Shift(entity, grab.Point - hands);
+            }
+        }
+
+        if (body.Climbing is not null)
+        {
+            (m.IsOnRope, m.IsClimbing, m.IsJumping) = (true, true, false);
+            m.JumpsLeft = m.AirJumps;
+            m.AirDashUsed = false;
+            Physics.Steer(body, MathF.Abs(y) > 0.1f ? y * m.ClimbSpeed : 0, x);
+            v = body.Velocity;
+            if (control && keys.WasPressed("Jump", Math.Max(0, m.JumpBuffer)))
+            {
+                // Jump off it, keeping its swing; or just let go, holding down.
+                Physics.Release(body);
+                (m.IsOnRope, m.IsClimbing, m.RegrabLeft) = (false, false, RegrabTime);
+                if (y >= -0.5f)
+                {
+                    v = new Vector2(v.X + x * m.Speed * 0.5f, MathF.Max(v.Y + jumpSpeed * 0.5f, jumpSpeed));
+                    Jumped(m, ref jumped, sound: true);
+                }
+            }
+
+            if (MathF.Abs(x) > 0.1f)
+                m.Facing = MathF.Sign(x);
+            Finish();
+            return;
+        }
+
         // Ladders: up grabs one it's in front of, down one under its feet (below the one-way floor it stands on, if that's
         // what it's on). It stays on while any of it is on the ladder, or it's still climbing up through the floor at the top.
-        var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Flat(entity.Transform.WorldPosition), Vector2.Zero);
         var oneWayFloor = grounded ? Physics.OneWayFloorBottom(Scene, body) : null;
         var reach = bounds.HalfSize.X / 2;
         var front = LadderAt(bounds.Center, reach);

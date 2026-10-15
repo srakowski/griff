@@ -17,10 +17,9 @@ public sealed class ContraptionsModule : GameModule
         // Once the HUD is laid out, so a click on it isn't taken for one in the world.
         game.StepAfter("HUD", "Tools", contraptions, contraptions.RunTools);
 
-        // Thrusters push and welded bodies are grouped before physics moves things; ropes pull their ends together after.
+        // Thrusters push and welded bodies are grouped before physics moves things.
         game.StepBefore("Physics", "Thrusters", contraptions, contraptions.RunThrusters);
         game.StepBefore("Physics", "Welds", contraptions, contraptions.GroupWelds);
-        game.StepAfter("Physics", "Ropes", contraptions, contraptions.RunRopes);
 
         // Once what physics caused is known (pressure plates, sensors), before anything acts on it.
         game.StepBefore("Bouncers", "Wiring", contraptions, contraptions.RunWiring);

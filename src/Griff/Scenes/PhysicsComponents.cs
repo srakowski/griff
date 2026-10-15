@@ -724,6 +724,26 @@ public sealed class Body : Component
     // passing through one-way platforms (climbing a ladder through one).
     internal bool FloatThisStep { get; set; }
 
+    // The rope it hangs on (a player climbing it): the rope moves it.
+    internal Rope? Climbing;
+
+    // Off the rope it hangs on, if any.
+    internal void LetGoOfRope()
+    {
+        if (Climbing is not { } rope)
+            return;
+        Climbing = null;
+        var climbers = rope.Climbers;
+        for (var i = 0; i < climbers.Count; i++)
+        {
+            if (climbers[i].Body == this)
+            {
+                climbers.RemoveAt(i);
+                return;
+            }
+        }
+    }
+
     internal bool PassOneWayThisStep { get; set; }
 
     /// <summary>

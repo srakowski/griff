@@ -133,50 +133,6 @@ public sealed class Weld : Component
 }
 
 /// <summary>
-/// Ties its entity to another with a rope: they can come closer, but never further apart than <see cref="Length"/>.
-/// Hang a crate from the ceiling, tie a balloon to a box, tow a cart. Either end can be something that doesn't move.
-/// </summary>
-[Category("Contraptions")]
-[ComponentName("Griff.Rope")]
-public sealed class Rope : Component, IDrawable
-{
-    // Over the world, from this end to the other.
-    int? IDrawable.DrawOrder => null;
-
-    int IDrawable.DrawStep => DrawSteps.OverWorld;
-
-    void IDrawable.Draw(Drawing drawing)
-    {
-        var entity = Entity!;
-        var other = Other?.Scene == entity.Scene ? Other : Contraptions.Find(entity, To);
-        if (other is null || !other.IsActive || !(Width > 0))
-            return;
-        drawing.Line(Contraptions.CenterOf(entity) + Offset, Contraptions.CenterOf(other) + OtherOffset, Width, Color);
-    }
-
-    /// <summary>The entity at the other end, by name. The nearest one with that name is used.</summary>
-    [EntityName]
-    public string? To { get; set; }
-
-    /// <summary>How long the rope is, in world units. 0 is as far apart as the two ends start.</summary>
-    public float Length { get; set; }
-
-    /// <summary>Where the rope is tied on this entity, from its middle.</summary>
-    public Vector2 Offset { get; set; }
-
-    /// <summary>Where the rope is tied on the other entity, from its middle.</summary>
-    public Vector2 OtherOffset { get; set; }
-
-    /// <summary>The rope's color.</summary>
-    public Color Color { get; set; } = Color.FromBytes(0xC8, 0xA9, 0x6E);
-
-    /// <summary>How thick the rope is drawn, in world units.</summary>
-    public float Width { get; set; } = 0.06f;
-
-    internal Entity? Other { get; set; }
-}
-
-/// <summary>
 /// Pushes its <see cref="Body"/> (and whatever it's welded to) along <see cref="Direction"/> while it has
 /// <see cref="Power"/>: wire a button to it to lift a platform or drive a cart. A <see cref="ParticleEmitter"/> on it
 /// fires while it pushes.

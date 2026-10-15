@@ -11,7 +11,7 @@ namespace Griff.Modules.Contraptions;
 // no-code components.
 internal sealed class ContraptionTemplate : ProjectTemplate
 {
-    public override string Description => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, wheels, balloons, thrusters, lamps, buttons and logic gates, weld, hinge and rope them together (a cart on wheels, a windmill), and wire buttons to thrusters to make a lift. A/D to walk, Space to jump, 1-7 for tools, E to press buttons, Z to undo.";
+    public override string Description => "Build machines in a room full of props: grab and throw things, freeze them in the air, spawn crates, wheels, balloons, thrusters, lamps, buttons and logic gates, weld, hinge and rope them together (a cart on wheels, a windmill), and wire buttons to thrusters to make a lift; jump to the rope and climb and swing on it. A/D to walk, Space to jump, W to grab and climb the rope, 1-7 for tools, E to press buttons, Z to undo.";
 
     public override int Order => 70;
 
@@ -67,7 +67,12 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         var room = new Entity("Room");
         scene.Add(room);
         scene.Add(Box("Floor", new Vector2(0, -8), new Vector2(40, 1), WallGray), room);
-        scene.Add(Box("Ceiling", new Vector2(0, 8), new Vector2(40, 1), WallGray), room);
+        var ceiling = Box("Ceiling", new Vector2(0, 8), new Vector2(40, 1), WallGray);
+        scene.Add(ceiling, room);
+
+        // A rope hanging from the ceiling: jump and hold up to grab it, climb it and swing on it.
+        var swing = ceiling.AddComponent<Rope>();
+        (swing.Anchor, swing.LooseEnd, swing.OtherAnchor, swing.Length) = (new Vector2(-5, -0.5f), true, new Vector2(-5, -5), 12.5f);
         scene.Add(Box("Wall", new Vector2(-19.5f, 0), new Vector2(1, 17), WallGray), room);
         scene.Add(Box("Wall", new Vector2(19.5f, 0), new Vector2(1, 17), WallGray), room);
 
@@ -85,7 +90,7 @@ internal sealed class ContraptionTemplate : ProjectTemplate
         scene.Add(hook);
         var lamp = Placed(LampProp(), new Vector2(-16, 3));
         var rope = lamp.AddComponent<Rope>();
-        rope.To = "Hook";
+        (rope.To, rope.Anchor) = ("Hook", new Vector2(0, 0.4f));
         scene.Add(lamp);
         var button = Placed(ButtonProp(), new Vector2(-17.5f, -7.1f));
         button.GetComponent<Body>()!.Frozen = true;

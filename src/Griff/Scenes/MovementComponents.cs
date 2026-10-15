@@ -6,9 +6,9 @@ namespace Griff.Scenes;
 /// A platformer's player with no code: runs with A/D, the arrow keys, the D-pad or the stick, and jumps with the Jump
 /// action (Space or the gamepad's A), forgivingly: a jump pressed just before landing still happens, and one pressed just
 /// after running off a ledge still counts. Letting go early makes a short hop. Turn on air jumps, wall jumps and a dash
-/// as the game needs them. It climbs <see cref="Ladder"/>s and a tilemap's ladder tiles, drops through one-way platforms
-/// on down and Jump, and plays its <see cref="Animation"/>'s Idle, Run, Jump, Fall, Climb, Dash and WallSlide clips if it
-/// has them. Needs a <see cref="Body"/> and a collider.
+/// as the game needs them. It climbs <see cref="Ladder"/>s and a tilemap's ladder tiles, climbs and swings on <see cref="Rope"/>s,
+/// drops through one-way platforms on down and Jump, and plays its <see cref="Animation"/>'s Idle, Run, Jump, Fall, Climb,
+/// Dash and WallSlide clips if it has them. Needs a <see cref="Body"/> and a collider.
 /// </summary>
 [Category("Movement")]
 [Requires(typeof(Body))]
@@ -116,9 +116,13 @@ public sealed class PlatformerMovement : Component
     [DoNotSerialize]
     public int Facing { get; set; } = 1;
 
-    /// <summary>True while it's on a ladder.</summary>
+    /// <summary>True while it's on a ladder or a rope.</summary>
     [DoNotSerialize]
     public bool IsClimbing { get; internal set; }
+
+    /// <summary>True while it hangs on a <see cref="Rope"/>, climbing it or swinging on it.</summary>
+    [DoNotSerialize]
+    public bool IsOnRope { get; internal set; }
 
     /// <summary>True while it's dashing.</summary>
     [DoNotSerialize]
@@ -158,6 +162,9 @@ public sealed class PlatformerMovement : Component
         JumpsLeft = AirJumps;
         AirDashUsed = false;
         IsClimbing = false;
+        IsOnRope = false;
+        if (Entity?.GetComponent<Body>() is { Climbing: not null } body)
+            body.LetGoOfRope();
     }
 
     internal void RaiseJumped() => Jumped?.Invoke(this);

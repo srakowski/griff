@@ -29,7 +29,17 @@ export default defineConfig({
 				SiteTitle: './src/components/SiteTitle.astro',
 				Footer: './src/components/Footer.astro',
 			},
+			// Starlight emits og:title, og:type, og:url, og:site_name, og:description and twitter:card on every page;
+			// the card image (npm run og) and the touch icon are ours.
 			head: [
+				{ tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://griff.games/og.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image:type', content: 'image/png' } },
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+				{ tag: 'meta', attrs: { property: 'og:image:alt', content: 'The Pixel Griffin and the griff wordmark: a game engine for game jams' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://griff.games/og.png' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image:alt', content: 'The Pixel Griffin and the griff wordmark: a game engine for game jams' } },
 				{
 					tag: 'link',
 					attrs: { rel: 'preload', href: '/fonts/JetBrainsMono-ExtraBold.woff2', as: 'font', type: 'font/woff2', crossorigin: '' },

@@ -165,4 +165,16 @@ public sealed class DialogueEditorTests : IDisposable
         Assert.True(command.CanExecute());
         Assert.Equal(new MenuPlacement(Menus.Entity, 1, 4), command.Placement);
     });
+
+    [Fact]
+    public void Close_IsReachableByAgentsThroughUiInvoke_AndDoesNothingWithoutAWindow() => EditorHost.Run(services =>
+    {
+        var editor = services.GetRequiredService<DialogueEditor>();
+        var surface = services.GetServices<Griff.Agent.IAgentToolSource>().OfType<SurfaceTools>().Single();
+        Assert.Contains(surface.All(), r => r.Name == "DialogueEditor" && r.Target == editor);
+        Assert.Contains(typeof(DialogueEditor).GetMethods(), m => m.Name == nameof(DialogueEditor.Close) && m.GetParameters().Length == 0);
+
+        Assert.Null(editor.Window);
+        editor.Close();
+    });
 }

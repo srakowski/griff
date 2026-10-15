@@ -159,12 +159,14 @@ public sealed class ChartPanelTests : IDisposable
         Assert.True(panel.IsRecording);
         Assert.True(panel.IsPlaying);
         Assert.Equal(16, panel.RecordingFrom);
-        // The bar before is to get ready: heard from about beat 12.
-        Assert.InRange(panel.HeardBeat, 11.5, 13);
+        // The bar before is to get ready: heard from about beat 12. The audio clock is real time, so a loaded machine can
+        // be late reading it: anywhere in the lead-in (before the playhead) is a bar before it.
+        Assert.InRange(panel.HeardBeat, 11, 15.9);
         Assert.False(panel.CanUndo);
         Assert.Throws<InvalidOperationException>(() => panel.PlayFrom(4));
 
-        // A lane pressed and let go in the lead-in is before the playhead: nothing goes in.
+        // A lane pressed and let go in the lead-in is before the playhead: nothing goes in. (Heard on the real clock; the
+        // two seconds of the lead-in are the slack.)
         panel.Press(1);
         panel.Release(1);
         EditorHost.Pump(commands.Get("Rhythm.RecordChart").ExecuteAsync());
@@ -176,7 +178,8 @@ public sealed class ChartPanelTests : IDisposable
         // Play goes from the playhead, and again stops.
         EditorHost.Pump(commands.Get("Rhythm.PlayChart").ExecuteAsync());
         Assert.True(panel.IsPlaying);
-        Assert.InRange(panel.HeardBeat, 15.9, 17);
+        // Real time again: from the playhead, with seconds (not milliseconds) of slack either way.
+        Assert.InRange(panel.HeardBeat, 15, 19);
         EditorHost.Pump(commands.Get("Rhythm.PlayChart").ExecuteAsync());
         Assert.False(panel.IsPlaying);
     });

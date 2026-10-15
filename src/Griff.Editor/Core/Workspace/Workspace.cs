@@ -403,6 +403,11 @@ public sealed class Workspace(
 
     public async Task CreateProjectAsync(string location, string name, ProjectTemplate? template = null)
     {
+        // An empty or relative location would resolve against the editor's working directory.
+        if (string.IsNullOrWhiteSpace(location) || !Path.IsPathFullyQualified(location.Trim()))
+            throw new ArgumentException("Location must be a full folder path, like C:\\Games.", nameof(location));
+        location = location.Trim();
+
         if (!await ConfirmCloseProjectAsync())
             return;
 

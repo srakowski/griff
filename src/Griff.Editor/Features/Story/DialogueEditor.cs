@@ -311,6 +311,9 @@ public sealed partial class DialogueEditor : ObservableObject
         }
     }
 
+    /// <summary>Closes the Dialogue Editor's window, if it's open.</summary>
+    public void Close() => _window?.Close();
+
     // ----- Editing -----
 
     /// <summary>Picks line <paramref name="index"/> (from 0) to edit and preview.</summary>

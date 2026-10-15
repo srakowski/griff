@@ -243,4 +243,21 @@ public sealed class AgentGapTests : IDisposable
 
         public void OpenInBrowser(string url) => Calls.Add("browse " + url);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Games")]
+    [InlineData(@"..\Games")]
+    public void CreatingAProject_WithAnEmptyOrRelativeLocation_IsRejected_NotMadeInTheWorkingDirectory(string location) => EditorHost.Run(services =>
+    {
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
+        var workspace = services.GetRequiredService<IWorkspace>();
+        var before = Directory.GetDirectories(Directory.GetCurrentDirectory()).Length;
+
+        var error = Assert.Throws<ArgumentException>(() => Wait(workspace.CreateProjectAsync(location, "Game")));
+        Assert.Contains("full folder path", error.Message);
+        Assert.Null(workspace.Project);
+        Assert.Equal(before, Directory.GetDirectories(Directory.GetCurrentDirectory()).Length);
+    });
 }

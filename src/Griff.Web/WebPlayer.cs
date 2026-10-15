@@ -38,6 +38,7 @@ public static partial class WebPlayer
     private static Vector2 s_pointer;
     private static bool s_faulted, s_quit, s_soundWaiting, s_noticed, s_syncingFullscreen;
     private static float s_rumble;
+    private static MouseCursor s_cursor;
     private static string? s_netStatus;
     private static int? s_still;
 
@@ -246,7 +247,8 @@ public static partial class WebPlayer
     /// <summary>
     /// For checks (and anyone curious in the console): <c>scene</c> is the scene's name; <c>entity:<i>name</i></c> where
     /// that entity is ("x,y,z", or "" for none); <c>count</c> how many entities there are; <c>save:<i>key</i></c> a saved
-    /// value, and <c>save:<i>key</i>=<i>value</i></c> saves one; <c>music</c> the music playing and how much of it has been
+    /// value, and <c>save:<i>key</i>=<i>value</i></c> saves one; <c>flag:<i>name</i></c> whether a flag is set (1 or 0);
+    /// <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
     /// </summary>
@@ -272,6 +274,8 @@ public static partial class WebPlayer
             case "save":
                 return !game.SaveData.Has(argument) ? ""
                     : game.SaveData.GetString(argument) ?? game.SaveData.GetFloat(argument).ToString(CultureInfo.InvariantCulture);
+            case "flag":
+                return game.HasFlag(argument) ? "1" : "0";
             case "music":
                 return string.Create(CultureInfo.InvariantCulture, $"{game.Audio.Music}|{game.Audio.MusicTime:0.###}");
             case "status":
@@ -358,6 +362,19 @@ public static partial class WebPlayer
             Browser.Rumble(s_rumble = s_input.RumbleStrength);
         if (s_input.IsMouseLocked && !s_input.WantsMouseLock)
             Browser.ReleaseMouse();
+        if (s_input.Cursor != s_cursor)
+        {
+            s_cursor = s_input.Cursor;
+            Browser.Cursor(s_cursor switch
+            {
+                MouseCursor.Hand => "pointer",
+                MouseCursor.Cross => "crosshair",
+                MouseCursor.Look => "help",
+                MouseCursor.Hidden => "none",
+                _ => "default",
+            });
+        }
+
         var status = game.Net.Status;
         if (!ReferenceEquals(status, s_netStatus))
         {

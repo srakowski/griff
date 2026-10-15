@@ -8,8 +8,9 @@
 // neither, the proof game (the griffin, a sprite, which the arrow keys, WASD or a stick move, under a label).
 //   --export        exports to --out and stops there (--zip packs it for itch.io too): what a script or a site's build uses.
 //   --check         plays games in a headless Edge (or Chrome) through the DevTools protocol, so no window opens, and
-//                   checks each: the proof game, then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
-//                   (--template picks some; --project checks that project). See Check below for what each is checked for.
+//                   checks each: the proof game, an adventure (walking where it's tapped, a hotspot's pointer, a right
+//                   click and a tap on it), then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
+//                   (--template picks some, Proof and Adventure among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
 //                   files and a poster (a screenshot of it running, taken in a headless browser), and games.json, the list
@@ -196,6 +197,106 @@ async Task<Project> ProofGame(string folder)
     await using (var write = File.Create(scenePath))
         serializer.Save(scene, write);
     return project;
+}
+
+// An adventure: a room's floor with a table in it, a player who walks where it's tapped or clicked, and a bell on the
+// wall to look at (a right click) and ring (a tap), each setting a flag in its saves, so walking round things, hotspots,
+// the pointer over them, right clicks and touch all have to work in the browser. The view is 10 high, round the middle.
+async Task<Project> AdventureGame(string folder)
+{
+    var project = await Project.CreateAsync(folder, "Griff Adventure", ProjectTemplates.Empty);
+    var scenePath = project.StartScenePath!;
+    var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+    Scene scene;
+    await using (var read = File.OpenRead(scenePath))
+        scene = serializer.Load(read);
+
+    var floor = new Entity("Floor");
+    floor.AddComponent<Griff.Modules.Adventures.WalkArea>().Points = "-8 -4; 8 -4; 8 0; -8 0";
+    scene.Add(floor);
+    var table = new Entity("Table");
+    table.Transform.Position = new System.Numerics.Vector3(0, -2, 0);
+    var hole = table.AddComponent<Griff.Modules.Adventures.WalkArea>();
+    (hole.Points, hole.Blocks) = ("-1 -1; 1 -1; 1 1; -1 1", true);
+    var top = table.AddComponent<Sprite>();
+    (top.Size, top.Tint) = (new System.Numerics.Vector2(2, 2), new Griff.Color(0.55f, 0.35f, 0.2f));
+    scene.Add(table);
+
+    var player = new Entity("Player");
+    var body = player.AddComponent<Sprite>();
+    (body.Size, body.Tint, body.Order) = (new System.Numerics.Vector2(0.8f, 1.6f), new Griff.Color(0.3f, 0.55f, 0.95f), 10);
+    player.AddComponent<Griff.Modules.Adventures.Walker>().Speed = 5;
+    player.Transform.Position = new System.Numerics.Vector3(-5, -1.2f, 0);
+    scene.Add(player);
+
+    var bell = new Entity("Bell");
+    bell.Transform.Position = new System.Numerics.Vector3(5, 2.5f, 0);
+    var shine = bell.AddComponent<Sprite>();
+    (shine.Size, shine.Tint) = (new System.Numerics.Vector2(1, 1), new Griff.Color(1f, 0.83f, 0.3f));
+    var hotspot = bell.AddComponent<Griff.Modules.Adventures.Hotspot>();
+    (hotspot.StandAt, hotspot.LookLine, hotspot.LookFlag, hotspot.UseLine, hotspot.UseFlag) =
+        (new System.Numerics.Vector2(0, -4.5f), "A brass bell.", "Saw", "Ding!", "Rang");
+    scene.Add(bell);
+    await using (var write = File.Create(scenePath))
+        serializer.Save(scene, write);
+    return project;
+}
+
+// The adventure: a tap on the floor past the table walks the player round it to there; the pointer over the bell is a
+// hand, and off it an arrow; a right click on the bell walks over and looks at it, and a tap on it rings it.
+async Task AdventureInput(GameCheck game)
+{
+    var (width, height) = await game.Viewport();
+    (double X, double Y) Screen(double x, double y) => (width / 2 + x * height / 10, height * (0.5 - y / 10));
+    static System.Numerics.Vector2 Feet(string probe)
+    {
+        var at = Position(probe);
+        return new System.Numerics.Vector2(at.X, at.Y - 0.8f);
+    }
+
+    var (tapX, tapY) = Screen(3, -2);
+    await game.Tap(tapX, tapY);
+    var walked = Stopwatch.StartNew();
+    System.Numerics.Vector2 feet;
+    while (System.Numerics.Vector2.Distance(feet = Feet(await game.Probe("entity:Player")), new System.Numerics.Vector2(3, -2)) > 0.2f)
+    {
+        if (walked.Elapsed > TimeSpan.FromSeconds(6))
+            throw new CheckFailed($"a tap on the floor at (3, -2) didn't walk the player there round the table (its feet are at {feet})");
+        await Task.Delay(100);
+    }
+
+    Console.WriteLine($"  touch: a tap on the floor walked the player there, round the table, in {walked.Elapsed.TotalSeconds:0.0} s");
+
+    var (bellX, bellY) = Screen(5, 2.5);
+    await game.MouseTo(bellX, bellY);
+    await Task.Delay(300);
+    var over = await game.Evaluate("document.getElementById('game').style.cursor");
+    var (awayX, awayY) = Screen(-6, 3.5);
+    await game.MouseTo(awayX, awayY);
+    await Task.Delay(300);
+    var away = await game.Evaluate("document.getElementById('game').style.cursor");
+    if (over != "pointer" || away != "default")
+        throw new CheckFailed($"the pointer over the bell is \"{over}\" (not a hand, \"pointer\"), and off it \"{away}\"");
+    Console.WriteLine("  mouse: the pointer is a hand over the bell and an arrow off it");
+
+    await game.Click(bellX, bellY, "right");
+    await WaitForSave(game, "Saw", "a right click on the bell didn't walk over and look at it");
+    Console.WriteLine("  mouse: a right click on the bell walked over and looked at it");
+    await game.Tap(bellX, bellY);
+    await WaitForSave(game, "Rang", "a tap on the bell didn't ring it");
+    Console.WriteLine("  touch: a tap on the bell rang it");
+}
+
+// Waits (up to 6 s) for a flag to be set.
+static async Task WaitForSave(GameCheck game, string flag, string otherwise)
+{
+    var waited = Stopwatch.StartNew();
+    while (await game.Probe($"flag:{flag}") != "1")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(6))
+            throw new CheckFailed(otherwise);
+        await Task.Delay(100);
+    }
 }
 
 // Serves the site to this computer only (127.0.0.1, so no firewall asks), as files: .NET's are WebAssembly, the game's
@@ -388,11 +489,13 @@ async Task<int> CheckGames(string root, string shots, string profile)
     }
     else
     {
-        var names = (Arg("--template") ?? "Proof," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var names = (Arg("--template") ?? "Proof,Adventure," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (var name in names)
         {
             if (name.Equals("Proof", StringComparison.OrdinalIgnoreCase))
                 games.Add(("Proof", ProofGame));
+            else if (name.Equals("Adventure", StringComparison.OrdinalIgnoreCase))
+                games.Add(("Adventure", AdventureGame));
             else if (ProjectTemplates.Find(name) is { } template)
                 games.Add((template.Name, f => Project.CreateAsync(f, template.Title, template)));
             else
@@ -488,6 +591,14 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         await Saves(game, "runs");
         await Sizes(game);
         await Fullscreen(game);
+        return;
+    }
+
+    if (name == "Adventure")
+    {
+        await NoSound(game);
+        await AdventureInput(game);
+        await Saves(game, null);
         return;
     }
 
@@ -1415,6 +1526,25 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
         await Task.Delay(50);
         await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
         await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    }
+
+    // The mouse moved to (x, y), CSS pixels from the page's top left.
+    public async Task MouseTo(double x, double y) =>
+        await cdp.SendAsync("Input.dispatchMouseEvent", new JsonObject { ["type"] = "mouseMoved", ["x"] = x, ["y"] = y });
+
+    // A click of the mouse's "left" or "right" button at (x, y).
+    public async Task Click(double x, double y, string button = "left")
+    {
+        await MouseTo(x, y);
+        foreach (var type in new[] { "mousePressed", "mouseReleased" })
+        {
+            await cdp.SendAsync("Input.dispatchMouseEvent", new JsonObject
+            {
+                ["type"] = type, ["x"] = x, ["y"] = y, ["button"] = button, ["clickCount"] = 1,
+                ["buttons"] = type == "mousePressed" ? (button == "right" ? 2 : 1) : 0,
+            });
+            await Task.Delay(50);
+        }
     }
 
     // A controller in the standard layout with its left stick at (stickX, 0), as if plugged in; null unplugs it.

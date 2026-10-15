@@ -33,6 +33,7 @@ public sealed class GameSurface : HwndHost
     private const int WmMouseLeave = 0x02A3;
     private const int WmMouseWheel = 0x020A;
     private const int WmNcHitTest = 0x0084;
+    private const int WmSetCursor = 0x0020;
     private const int HtClient = 1;
     private const uint TmeLeave = 0x00000002;
 
@@ -54,6 +55,23 @@ public sealed class GameSurface : HwndHost
 
     /// <summary>Raised when the mouse wheel turns over the surface, in notches (positive is away from the user).</summary>
     public event Action<float>? MouseWheelTurned;
+
+    /// <summary>The pointer shown over the surface (see <c>IInput.Cursor</c>): the arrow unless the game asks for another.</summary>
+    public Griff.Input.MouseCursor Pointer
+    {
+        get => _pointer;
+        set
+        {
+            if (_pointer == value)
+                return;
+            _pointer = value;
+            // Shown straight away if the mouse is over the surface, rather than when it next moves.
+            if (_hwnd != IntPtr.Zero && GetCursorPos(out var at) && WindowFromPoint(at) == _hwnd)
+                SetCursor(PointerHandle(value));
+        }
+    }
+
+    private Griff.Input.MouseCursor _pointer;
 
     /// <summary>Folder that sprite image paths are relative to (the project's Assets folder).</summary>
     public string? AssetRoot
@@ -161,6 +179,10 @@ public sealed class GameSurface : HwndHost
                 // A "static" window lets the mouse fall through to the window behind it; the game wants it.
                 handled = true;
                 return new IntPtr(HtClient);
+            case WmSetCursor when (lParam.ToInt64() & 0xFFFF) == HtClient:
+                SetCursor(PointerHandle(_pointer));
+                handled = true;
+                return new IntPtr(1);
             case WmMouseMove:
                 // Ask Windows to tell us when the cursor leaves, once per visit.
                 if (!_trackingLeave)
@@ -201,6 +223,16 @@ public sealed class GameSurface : HwndHost
         _ => Runtime.MouseButton.Left,
     };
 
+    // The system's pointer for each kind (none for Hidden), loaded once.
+    private static IntPtr PointerHandle(Griff.Input.MouseCursor pointer) => pointer switch
+    {
+        Griff.Input.MouseCursor.Hidden => IntPtr.Zero,
+        Griff.Input.MouseCursor.Hand => LoadCursor(IntPtr.Zero, new IntPtr(32649)),
+        Griff.Input.MouseCursor.Cross => LoadCursor(IntPtr.Zero, new IntPtr(32515)),
+        Griff.Input.MouseCursor.Look => LoadCursor(IntPtr.Zero, new IntPtr(32651)),
+        _ => LoadCursor(IntPtr.Zero, new IntPtr(32512)),
+    };
+
     private static Point PointFrom(IntPtr lParam)
     {
         var value = lParam.ToInt64();
@@ -234,4 +266,22 @@ public sealed class GameSurface : HwndHost
 
     [DllImport("user32.dll")]
     private static extern bool TrackMouseEvent(ref TrackMouseEventInfo info);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X, Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadCursor(IntPtr instance, IntPtr name);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCursor(IntPtr cursor);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(NativePoint point);
 }

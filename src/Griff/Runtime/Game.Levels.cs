@@ -495,7 +495,7 @@ public sealed partial class Game
         {
             if (talking.Entity?.Scene != Scene)
                 EndDialogue(finished: false);
-            else if (!_levels.TalkJustStarted && !RunChoices(talking) && Input.WasPressed("Interact"))
+            else if (!_levels.TalkJustStarted && !RunChoices(talking) && (Input.WasPressed("Interact") || ClickAdvances(talking)))
                 AdvanceDialogue(talking);
             _levels.TalkJustStarted = false;
             return;
@@ -540,6 +540,12 @@ public sealed partial class Game
             _levels.DialoguesTouched.UnionWith(touched);
         }
     }
+
+    // A click (or a tap) on the game moves a talk on as Interact does, so it can be played with the mouse or on a touch
+    // screen: it finishes the line typing out or shows the next. Choices are picked by clicking them, so a click elsewhere
+    // while they're offered does nothing, and nor does one on a button.
+    private bool ClickAdvances(Dialogue talking) =>
+        Input.WasPressed(MouseButton.Left) && Input.IsMouseInView && (talking.Choices.Count == 0 || IsTyping(talking)) && !MouseOnUi;
 
     /// <summary>
     /// Starts <paramref name="dialogue"/> straight away, as if the player had pressed Interact beside it: from a script, a

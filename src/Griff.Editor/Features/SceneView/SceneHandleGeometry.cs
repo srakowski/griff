@@ -201,21 +201,24 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
             AddMoverPluses(handles, mover);
         if (primary.GetComponent<GridPatrol>() is { } patrol && primary.GetComponent<GridMovement>() is not null)
             AddGridPatrolPluses(handles, patrol);
-        if (primary.GetComponent<PolygonCollider>() is { } polygon)
-            AddPolygonPluses(handles, polygon);
+        foreach (var component in primary.Components)
+        {
+            if (component is IPointOutline outline)
+                AddPolygonPluses(handles, component, outline);
+        }
         return handles;
     }
 
-    // A plus halfway along each side of a polygon long enough on screen, the one after point i adding point i + 1 (the
-    // side from its last point back to its first adding one after the last).
-    private void AddPolygonPluses(List<PathHandle> handles, PolygonCollider polygon)
+    // A plus halfway along each side of a polygon (or another outline) long enough on screen, the one after point i adding
+    // point i + 1 (the side from its last point back to its first adding one after the last).
+    private void AddPolygonPluses(List<PathHandle> handles, Component polygon, IPointOutline outline)
     {
-        var points = polygon.GivenPoints.Select(p => viewport.ToScreen(polygon.ToWorld(p))).ToList();
+        var points = outline.GivenPoints.Select(p => viewport.ToScreen(outline.ToWorld(p))).ToList();
         for (var i = 0; i < points.Count && points.Count >= 2; i++)
         {
             var (from, to) = (points[i], points[(i + 1) % points.Count]);
             if ((to - from).Length >= PathGap)
-                handles.Add(new PathHandle($"PolygonCollider.+{i + 2}", from + (to - from) / 2, null, polygon, i + 2));
+                handles.Add(new PathHandle($"{polygon.GetType().Name}.+{i + 2}", from + (to - from) / 2, null, polygon, i + 2));
         }
     }
 

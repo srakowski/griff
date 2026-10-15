@@ -190,6 +190,11 @@ export function releaseMouse() {
     document.exitPointerLock();
 }
 
+/** Shows the pointer the game asks for over it (a CSS cursor: "default", "pointer", "crosshair", "help" or "none"). */
+export function cursor(name) {
+  canvas.style.cursor = name;
+}
+
 /** Says (or stops saying) that sound starts with a click or a key: the browser holds it until then. */
 export function soundWaiting(waiting) {
   hint.hidden = !waiting || !audio || audio.context.state === 'running';

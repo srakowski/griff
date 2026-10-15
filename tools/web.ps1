@@ -6,9 +6,10 @@
   -Export writes the export to -Out and stops (with -Zip, a zip for itch.io beside it): the command line's Build > Web.
   -Site <folder> exports every template for the website into <folder> (the site's playable games): .NET once in _player,
   then a folder, page and poster for each game, and games.json; -Template picks some. site\package.json's `npm run games`.
-  -Check plays games in a headless Edge (or Chrome) instead, with no window, and exits 0 if all pass: the proof game and
-  the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (-Template picks some, -Project checks
-  that project). Each must run and draw; its sound must wait for a click or key, saying so, with its music keeping time,
+  -Check plays games in a headless Edge (or Chrome) instead, with no window, and exits 0 if all pass: the proof game, an
+  adventure (a tap walks round a table, the pointer is a hand over a hotspot, a right click looks at it and a tap uses it)
+  and the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (-Template picks some, Proof and
+  Adventure among them; -Project checks that project). Each must run and draw; its sound must wait for a click or key, saying so, with its music keeping time,
   then play through Web Audio; input must reach it (keys, a tap, a controller, as each game takes them); and its saves
   must survive reloading the page. The proof game is also checked at a phone's and a 4K screen's size and going
   fullscreen, Match-3 quitting, and Multiplayer saying network play isn't there.

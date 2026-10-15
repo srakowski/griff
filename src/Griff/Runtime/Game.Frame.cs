@@ -608,6 +608,8 @@ public sealed partial class Game
     // A new scene: systems whose script stayed behind go, and the rest forget the last scene, Griff's first.
     private void SystemsSceneChanged()
     {
+        // The pointer starts each scene as the arrow; what sets it there sets it again.
+        Input.Cursor = Griff.Input.MouseCursor.Arrow;
         foreach (var system in _systems.Where(s => s.Owner is { } owner && owner.Entity?.Scene != Scene).ToList())
             RemoveSystem(system);
         foreach (var system in _systems.ToList())

@@ -19,7 +19,7 @@ public class FrameTests
             "Begin: Dungeons",
             "Begin: Script Start",
             "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
-            "Logic: Beat Clocks", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: First Person",
+            "Logic: Beat Clocks", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
@@ -57,10 +57,10 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        // Griff's core systems, then each module's in module order (Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks,
+        // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks,
         // First Person, Match-3, Puzzles, Strategy, Tactics): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "First Person",
+        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "First Person",
             "Match Boards", "Puzzles", "Strategy", "Tactics"], game.Systems.Select(s => s.Name));
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
         Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
@@ -74,6 +74,7 @@ public class FrameTests
         foreach (var name in (string[])["Tools", "Thrusters", "Welds", "Wiring"])
             Assert.Equal("Contraptions", game.Frame.Single(s => s.Name == name).System?.Name);
         Assert.Equal("Dungeons", game.Frame.Single(s => s.Name == "Dungeons").System?.Name);
+        Assert.Equal("Adventures", game.Frame.Single(s => s.Name == "Walkers").System?.Name);
         Assert.Equal("First Person", game.Frame.Single(s => s.Name == "First Person").System?.Name);
         Assert.Equal("Puzzles", game.Frame.Single(s => s.Name == "Move History").System?.Name);
         Assert.Equal("Puzzles", game.Frame.Single(s => s.Name == "Goals").System?.Name);
@@ -142,7 +143,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(15, game.Systems.Count);
+        Assert.Equal(16, game.Systems.Count);
     }
 
     [Fact]

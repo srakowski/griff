@@ -40,9 +40,9 @@ public class GameModuleTests
     [Fact]
     public void Modules_AreFound_ByName()
     {
-        Assert.Equal(["Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Blocks", "First Person", "Match-3", "Puzzles", "Strategy", "Tactics"],
+        Assert.Equal(["Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Blocks", "First Person", "Match-3", "Puzzles", "Strategy", "Tactics"],
             GameModule.All.Select(m => m.Name));
-        Assert.Equal(["Griff.Modules.Battles", "Griff.Modules.BlockWorlds", "Griff.Modules.Cards", "Griff.Modules.Contraptions", "Griff.Modules.Dungeons", "Griff.Modules.FallingBlocks",
+        Assert.Equal(["Griff.Modules.Adventures", "Griff.Modules.Battles", "Griff.Modules.BlockWorlds", "Griff.Modules.Cards", "Griff.Modules.Contraptions", "Griff.Modules.Dungeons", "Griff.Modules.FallingBlocks",
             "Griff.Modules.FirstPerson", "Griff.Modules.Match3", "Griff.Modules.Puzzles", "Griff.Modules.Strategy", "Griff.Modules.Tactics"],
             GameModule.All.Select(m => m.Namespace));
     }
@@ -60,6 +60,7 @@ public class GameModuleTests
         Assert.Equal("First Person", GameModule.Of(typeof(Weapon))?.Name);
         Assert.Equal("Puzzles", GameModule.Of(typeof(MoveHistory))?.Name);
         Assert.Equal("Cards", GameModule.Of(typeof(Griff.Modules.Cards.Hand))?.Name);
+        Assert.Equal("Adventures", GameModule.Of(typeof(Griff.Modules.Adventures.Hotspot))?.Name);
         Assert.Null(GameModule.Of(typeof(TurnOrder)));
         Assert.Null(GameModule.Of(typeof(Trail)));
         Assert.Null(GameModule.Of(typeof(Sprite)));
@@ -70,7 +71,8 @@ public class GameModuleTests
     public void Presets_AreFound_InMenuOrder_EachInItsModule()
     {
         Assert.Equal(["Entity.CreateTacticsUnit", "Entity.CreateGoal", "Entity.CreateMatchBoard", "Entity.CreateFallingBoard", "Entity.CreateDungeon",
-            "Entity.CreateDeck", "Entity.CreatePlayZone", "Entity.CreateCard"],
+            "Entity.CreateDeck", "Entity.CreatePlayZone", "Entity.CreateCard",
+            "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker"],
             EntityPreset.All.Select(p => p.Id));
         Assert.All(EntityPreset.All, p => Assert.NotNull(GameModule.Of(p.GetType())));
         Assert.All(EntityPreset.All, p => Assert.False(DocComments.Summary(p.GetType()).IsEmpty));

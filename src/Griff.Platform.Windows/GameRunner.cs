@@ -217,6 +217,7 @@ public sealed class GameRunner : IDisposable
             XInputGamepad.StopRumble();
         }
 
+        ShowPointer();
         RenderLatest();
     }
 
@@ -263,9 +264,13 @@ public sealed class GameRunner : IDisposable
                 _heldUntil = Stopwatch.GetTimestamp();
         }
 
+        ShowPointer();
         if (IsRunning && Game.Time.Frame != steps)
             Ticked?.Invoke(this, EventArgs.Empty);
     }
+
+    // The pointer the game asks for (see IInput.Cursor) over the surface; the arrow while it's paused, for the editor.
+    private void ShowPointer() => _surface.Pointer = IsPaused ? Griff.Input.MouseCursor.Arrow : _input.Cursor;
 
     // When a script last let go of a breakpoint it stood at in this game's frame (a Stopwatch timestamp).
     private long _heldUntil;

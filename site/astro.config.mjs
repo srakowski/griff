@@ -85,6 +85,7 @@ export default defineConfig({
 						{ label: 'Roguelikes, turns and tactics', slug: 'docs/turns' },
 						{ label: 'Card games', slug: 'docs/cards' },
 						{ label: 'Dialogue, switches and items', slug: 'docs/story' },
+						{ label: 'Point-and-click adventures', slug: 'docs/adventures' },
 						{ label: 'Tables of game data', slug: 'docs/data-tables' },
 						{ label: 'Audio', slug: 'docs/audio' },
 						{ label: 'Text and fonts', slug: 'docs/text-and-fonts' },

@@ -58,7 +58,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 
 - [ ] Add card effects without code (damage, draw, cost) and a turn-based card opponent.
 - [ ] Add a Cards template.
-- [ ] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it.
 - [ ] Add using inventory items on hotspots and on each other.
 - [ ] Add an Adventure template: a point-and-click adventure.
 - [ ] Add visual novel scenes: backgrounds and characters on screen with positions and expressions, driven by dialogue.
@@ -134,6 +133,10 @@ so a jam team's design, plan and game live in one project and agents can read th
 - [ ] Add design diagrams in one go: a game-flow map drawn from the project itself (scenes and the doors, buttons and triggers between them, menus and endings), a core-loop diagram drawn by hand on a canvas, and a mood board of reference images and notes, all kept in the project.
 
 ## Done
+
+- [x] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it. (2026-10-15)
+  - `Griff.Modules.Adventures`: `WalkArea` (a polygon floor edited in the Scene view; Blocks for holes; Far/Near Scale for depth), `Walker` (shortest way over a visibility graph of the floor's inside corners and the holes' corners, Walk/Idle clips, speech over its head, verbs, Walk To/Stop/Say, state kept for rewinds), `Hotspot` (name and pointer on hover, Stand At, Look and Use each with a line, an action, a flag and a message, Use Talks, Needs Flag), and Entity menu presets.
+  - Core: `IPointOutline` (the Scene view edits any outline's points), `IInput.Cursor` (desktop and browser pointers), and clicks or taps move dialogue on. `tools\web.ps1 -Check` plays an adventure in the browser.
 
 - [x] Make ropes swing and sag. (2026-10-15)
   - `Rope` (Physics; moved from Contraptions, `[FormerName("Griff.Rope")]`, Offset/Other Offset kept as Anchor/Other Anchor): To, Anchor, Other Anchor, Loose End, Length (0: as far apart as placed; changing it winches), Stiffness (1 rigid; lower a spring that gives and bounces), Gravity Scale, Collide, Climbable, Break Force, Break Message, Broke (an output; untick or Mend to join it), Tension output, Color, Width; Cut and Mend actions. Laid out hanging at rest along a catenary (or loose: towards its end and on down), drawn as a Catmull-Rom curve blended between steps, and drawn the same way in the editor before playing.

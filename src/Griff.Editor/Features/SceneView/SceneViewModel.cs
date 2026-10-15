@@ -146,11 +146,12 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
                 return entity;
         }
 
-        // Inside a polygon collider with nothing drawn there (a hill, a ramp, a rock's outline drawn in the level), the
-        // polygon: after everything drawn, so a player standing in front of it is still picked.
+        // Inside a polygon collider (or another outline: a walk area, a hotspot) with nothing drawn there (a hill, a ramp, a
+        // rock's outline drawn in the level, a room's floor), the polygon: after everything drawn, so a player standing in
+        // front of it is still picked.
         foreach (var entity in DrawOrder(document.Scene).Reverse())
         {
-            if (!entity.IsLockedInHierarchy && entity.GetComponent<PolygonCollider>() is { } polygon && polygon.Contains(world))
+            if (!entity.IsLockedInHierarchy && entity.Components.Any(c => c is IPointOutline { GivenPoints.Count: >= 3 } outline && outline.Contains(world)))
                 return entity;
         }
 

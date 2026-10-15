@@ -1,0 +1,123 @@
+title: Point-and-click adventures
+intro: Click somewhere and the player walks there, round whatever's in the way; click a hotspot and it walks over to look at it or use it. No code.
+project: Empty | Adventure
+
+chapter: A floor to walk on | Walk areas and a walker
+# Built from Empty and Sprite (Create Walk Area, Create Hotspot and Create Walker make the same, but the Entity menu is
+# taller than a check's screen).
+create: Empty
+rename: Floor
+set: Transform.Position = 0, -2, 0
+add: WalkArea
+expectcomponents: Floor = Transform, WalkArea
+explain: component:WalkArea | A walk area | A walk area is a shape round the floor of a room, where the player can walk. The Scene view draws it in blue.
+explain: handle:WalkArea.2 | A corner | Drag its corners to fit the room, or a plus to add one; each change is one undo step.
+path: WalkArea.2 = 6, -1.5
+path: WalkArea.3 = 5, 1.5
+expectvalue: Floor.WalkArea.Points = -4 -1.5; 6 -1.5; 5 1.5; -4 1.5
+deselect
+create: Sprite
+rename: Player
+set: Transform.Position = -3, -1.4, 0
+set: Sprite.Size = 0.8, 1.6
+set: Sprite.Tint = #4C8DF0
+set: Sprite.Order = 10
+add: Walker
+explain: component:Walker | A walker | A walker is the player: it walks wherever the floor is clicked, on its feet, the bottom of its sprite.
+deselect
+create: Empty
+rename: Table
+set: Transform.Position = 0, -2, 0
+add: WalkArea
+set: WalkArea.Blocks = true
+set: WalkArea.Points = -1 -0.7; 1 -0.7; 1 0.7; -1 0.7
+add: Sprite
+set: Sprite.Size = 2, 1.4
+set: Sprite.Tint = #8A5A33
+explain: field:WalkArea.Blocks | A hole | Ticking Blocks makes a hole in the floor where nobody walks: a table in the middle of the room.
+deselect
+play
+wait: 0.5
+gameclick: 3.5, -2.2
+wait: 2.5
+expectat: Player = 3.5, -1.4
+explain: game | Round the table | A click on the floor walks the player there, round the table, along the shortest way, facing the way it goes.
+gameclick: -3, -3
+wait: 2.5
+expectat: Player = -3, -2.2
+stop
+
+chapter: Something to look at | Hotspots
+deselect
+create: Sprite
+rename: Bell
+set: Transform.Position = 4.5, 2, 0
+add: Hotspot
+set: Hotspot.Name = Brass Bell
+set: Hotspot.Points = -0.5 -0.5; 0.5 -0.5; 0.5 0.5; -0.5 0.5
+set: Hotspot.StandAt = 0, -4
+set: Hotspot.LookLine = A brass bell, thick with dust.
+set: Hotspot.UseLine = Ding!
+set: Hotspot.UseFlag = RangBell
+set: Sprite.Size = 0.8, 0.8
+set: Sprite.Tint = #E8C54A
+explain: component:Hotspot | A hotspot | A hotspot is something to look at and use: a line for each, and an action, a flag or a message too. Stand At is where the player stands to do it.
+deselect
+play
+wait: 0.5
+gamehover: Bell
+wait: 0.5
+explain: game | Its name | Over a hotspot the pointer shows its name and turns into a hand.
+gameorder: Bell
+wait: 2.5
+expectvalue: Player.Walker.Said = A brass bell, thick with dust.
+explain: game | Looked at | A right click walks over and looks at it: the player says its line.
+gameclick: Bell
+wait: 1.2
+expectvalue: Player.Walker.Said = Ding!
+expectvalue: Bell.Hotspot.TimesUsed = 1
+explain: game | Used | A left click uses it, setting its flag as well.
+stop
+
+chapter: Someone to talk to | Using a character starts its dialogue
+deselect
+create: Dialogue Box
+deselect
+create: Sprite
+rename: Guard
+set: Transform.Position = -4.5, -0.5, 0
+set: Sprite.Size = 0.8, 1.6
+set: Sprite.Tint = #57AB5A
+add: Hotspot
+set: Hotspot.StandAt = 1.5, -1.5
+set: Hotspot.UseTalks = true
+add: Dialogue
+set: Dialogue.Lines = Halt! Who rang that bell?\nKeep it down, will you?
+explain: field:Hotspot.UseTalks | Talking | Use Talks starts the dialogue on the hotspot's entity, so a character is a hotspot with something to say.
+deselect
+play
+wait: 0.5
+gameclick: Guard
+wait: 2.5
+expectvalue: Dialogue Box.Text.Value = Halt! Who rang that bell?
+explain: game | Clicks move it on | Clicks and taps move the talk on, so the whole game plays with the mouse or on a touch screen.
+gameclick: 0, 3
+wait: 1
+expectvalue: Dialogue Box.Text.Value = Keep it down, will you?
+gameclick: 0, 3
+wait: 1
+expectat: Player = -3, -1.2
+stop
+
+chapter: Further away | Depth
+select: Floor
+set: WalkArea.FarScale = 0.6
+explain: field:WalkArea.FarScale | Far Scale | Far Scale shrinks walkers towards the top of the floor, as if further away, and they walk slower there too.
+deselect
+play
+wait: 0.5
+gameclick: 4, 1
+wait: 3
+expectat: Player = 4, 0.25
+explain: game | Smaller | At the back of the room the player is drawn smaller.
+stop

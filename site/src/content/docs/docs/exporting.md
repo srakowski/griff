@@ -74,10 +74,11 @@ main's templates. A page needs a template's tagline, paragraph and controls in `
 build fails without them.
 
 `-Check` plays games in a headless Edge or Chrome (no window, software WebGL, muted) and passes if all of them work: the
-proof game, and the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (`-Template` picks some,
-`-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping
+proof game, an adventure, and the Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer templates (`-Template`
+picks some, `Proof` and `Adventure` among them; `-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping
 time, then play through Web Audio (an AnalyserNode in the page hears it) still in time; input must reach it (the arrow
-keys and WASD move the player, a tap opens Match-3's first level, a controller's stick moves the platformer and the
+keys and WASD move the player, a tap opens Match-3's first level, a tap walks the adventure's player round a table, its
+pointer is a hand over a hotspot, and a right click there looks at it and a tap uses it, a controller's stick moves the platformer and the
 griffin, Space restarts BunnyMark); and its saves must survive reloading the page (the proof game's script counts its
 plays). The proof game's label must be drawn as wide as Griff lays it out, the game must fit a phone's page and a 4K
 screen and go fullscreen and back; Match-3's Quit must end it; and Multiplayer must be warned of at export and say in the

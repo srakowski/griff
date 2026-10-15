@@ -78,6 +78,10 @@ internal static partial class Browser
     [JSImport("releaseMouse", "griff")]
     public static partial void ReleaseMouse();
 
+    /// <summary>Shows a CSS cursor over the game ("default", "pointer", "crosshair", "help" or "none"): see <c>IInput.Cursor</c>.</summary>
+    [JSImport("cursor", "griff")]
+    public static partial void Cursor(string name);
+
     /// <summary>Shows a line over the game for a while (that network play isn't there in a browser).</summary>
     [JSImport("notice", "griff")]
     public static partial void Notice(string message);

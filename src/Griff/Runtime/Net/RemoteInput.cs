@@ -277,6 +277,9 @@ internal sealed class RemoteInput : IInput
 
     public bool IsMouseLocked { get; private set; }
 
+    // The pointer is shown on the player's own machine.
+    public MouseCursor Cursor { get; set; }
+
     public float Horizontal => Combine(Axis(Key.A, Key.Left, Key.D, Key.Right), PadAxis(GamepadButton.DPadLeft, GamepadButton.DPadRight), LeftStick.X);
 
     public float Vertical => Combine(Axis(Key.S, Key.Down, Key.W, Key.Up), PadAxis(GamepadButton.DPadDown, GamepadButton.DPadUp), LeftStick.Y);
@@ -368,6 +371,7 @@ internal sealed class NoInput(IInput bindings) : IInput
     public Vector2 MouseDelta => Vector2.Zero;
     public bool WantsMouseLock { get => false; set { } }
     public bool IsMouseLocked => false;
+    public MouseCursor Cursor { get => bindings.Cursor; set => bindings.Cursor = value; }
     public float Horizontal => 0;
     public float Vertical => 0;
     public Vector2 Move => Vector2.Zero;

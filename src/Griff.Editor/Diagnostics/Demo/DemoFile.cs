@@ -904,9 +904,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     pathTo = SceneViewModel.CellOf(pathGrid, (int)MathF.Round(cell.X), (int)MathF.Round(cell.Y))
                         ?? throw new InvalidOperationException($"{pathEntity.Name} has no Grid Movement to step it.");
                 }
-                else if (pathComponent is Griff.Scenes.PolygonCollider pathPolygon)
+                else if (pathComponent is Griff.Scenes.IPointOutline pathOutline)
                 {
-                    pathTo = pathPolygon.ToWorld(Vector(pathValue));
+                    pathTo = pathOutline.ToWorld(Vector(pathValue));
                 }
                 else if (pathComponent is Griff.Scenes.HingeJoint pathHinge)
                 {

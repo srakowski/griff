@@ -997,7 +997,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 var offset = point.Component switch
                 {
                     GridPatrol grid => new Vector2(grid.Path[point.Index].X, grid.Path[point.Index].Y),
-                    PolygonCollider polygon => polygon.GivenPoints[point.Index - 1],
+                    IPointOutline outline => outline.GivenPoints[point.Index - 1],
                     _ => ((Mover)point.Component).Path[point.Index],
                 };
                 text = dragging ? $"{point.Index}  ·  {Number(offset.X)}, {Number(offset.Y)}"

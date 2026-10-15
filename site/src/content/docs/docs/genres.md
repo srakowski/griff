@@ -55,3 +55,7 @@ The **Contraption** template is a room to build machines in, Garry's Mod and Wir
 ## Card games
 
 Card games have pages of their own: decks, hands and play zones, drawing, shuffling, discarding and playing cards by dragging them, with no code, are in [Card games](/docs/cards/). They're built to mix with the rest: a **Hand** takes the player's input only while it has focus, so a card game can sit inside another game, and decks, hands and play zones name their actions (**Draw**, **Shuffle**, **Discard**) for triggers and wires, and their outputs (the cards in a deck, in a hand, played) for counters, bars and texts.
+
+## Point-and-click adventures
+
+Walk areas drawn round a room's floor (with holes for the furniture, and depth so the player shrinks into the distance), a walker that goes where the player clicks or taps along the shortest way round, and hotspots that show their name under the pointer and answer a look or a use with a line, an action, a flag or a conversation, all with no code: see [Point-and-click adventures](/docs/adventures/).

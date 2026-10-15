@@ -188,6 +188,13 @@ public interface IInput
     /// <summary>True while the game has the mouse (see <see cref="WantsMouseLock"/>).</summary>
     bool IsMouseLocked { get; }
 
+    /// <summary>
+    /// What the mouse pointer looks like over the game, e.g. <c>Input.Cursor = MouseCursor.Hand</c> over something to
+    /// click: the system's own pointers, on the desktop and in a browser. It stays as it's set (an adventure's
+    /// <c>Walker</c> sets it over hotspots by itself) and goes back to the arrow as each scene starts.
+    /// </summary>
+    MouseCursor Cursor { get; set; }
+
     /// <summary>-1..1 from A/D, the left/right arrows, the D-pad or the left stick.</summary>
     float Horizontal { get; }
 
@@ -291,6 +298,8 @@ public sealed class InputState : IInput
 
     /// <summary>Set by the platform while it holds the mouse for the game (see <see cref="WantsMouseLock"/>).</summary>
     public bool IsMouseLocked { get; set; }
+
+    public MouseCursor Cursor { get; set; }
 
     public Vector2 LeftStick { get; private set; }
 

@@ -232,7 +232,7 @@ public sealed class CircleCollider : Collider
 [Category("Physics")]
 [WorksWith(typeof(Body), Note = "to make it move and fall")]
 [ComponentName("PolygonCollider")]
-public sealed class PolygonCollider : Collider
+public sealed class PolygonCollider : Collider, IPointOutline
 {
     /// <summary>A new polygon's points: a triangle 1 across.</summary>
     public const string DefaultPoints = "-0.5 -0.5; 0.5 -0.5; 0 0.5";

@@ -10,8 +10,8 @@ namespace Griff.Editor.Features.SceneView;
 /// <summary>
 /// A point on the primary selection's path that the Scene view puts a handle on: one of its <see cref="Mover"/>'s or
 /// <see cref="GridPatrol"/>'s Points (<see cref="Index"/> 1 is the first after the start), where its <see cref="Patrol"/>
-/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right), one of its <see cref="PolygonCollider"/>'s Points
-/// (<see cref="Index"/> 1 is the first), its <see cref="HingeJoint"/>'s anchor (<see cref="Index"/> 0) and the ends of
+/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right), one of the Points of its <see cref="PolygonCollider"/>
+/// or another outline (any <see cref="IPointOutline"/>, such as a walk area; <see cref="Index"/> 1 is the first), its <see cref="HingeJoint"/>'s anchor (<see cref="Index"/> 0) and the ends of
 /// its limits' arc (-1 for its Lower Angle, 1 for its Upper), or its <see cref="Rope"/>'s two ends (0 where it's tied on the
 /// entity, 1 its other end) and middle (2, its length). <see cref="World"/> is where it is in the world (a grid
 /// patrol's, the middle of its cell). A patrol's side with no turn set walks on until a wall or an edge: it's
@@ -20,7 +20,8 @@ namespace Griff.Editor.Features.SceneView;
 public sealed record ScenePathPoint(Component Component, int Index, Vector2 World, bool Open = false)
 {
     /// <summary>
-    /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left", "Patrol.Right", "PolygonCollider.1", "HingeJoint.Anchor",
+    /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left", "Patrol.Right", "PolygonCollider.1" (or another outline's,
+    /// "WalkArea.1"), "HingeJoint.Anchor",
     /// "HingeJoint.Lower", "HingeJoint.Upper", "Rope.Start", "Rope.End" or "Rope.Length", as
     /// <see cref="SceneViewModel.DragPathPoint"/> takes it.
     /// </summary>
@@ -112,7 +113,7 @@ public sealed partial class SceneViewModel
     /// <summary>
     /// The points on the primary selection's path the Scene view puts handles on: its mover's and grid patrol's points
     /// after the start (the start is where the entity is placed: move the entity to move it), its patrol's Left and
-    /// Right turns, and its polygon collider's points.
+    /// Right turns, and the points of its polygon collider and any other outline (a walk area's, a hotspot's).
     /// </summary>
     public IReadOnlyList<ScenePathPoint> PathPoints()
     {
@@ -130,8 +131,11 @@ public sealed partial class SceneViewModel
             points.Add(new ScenePathPoint(patrol, 1, route.Right, route.RightOpen));
         }
 
-        if (primary.GetComponent<PolygonCollider>() is { } polygon)
-            points.AddRange(polygon.GivenPoints.Select((point, i) => new ScenePathPoint(polygon, i + 1, polygon.ToWorld(point))));
+        foreach (var component in primary.Components)
+        {
+            if (component is IPointOutline outline)
+                points.AddRange(outline.GivenPoints.Select((point, i) => new ScenePathPoint(component, i + 1, outline.ToWorld(point))));
+        }
 
         // A hinge's anchor, and with limits, the two ends of the arc it swings through.
         if (primary.GetComponent<HingeJoint>() is { } hinge)
@@ -230,7 +234,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2", "GridPatrol.1",
-    /// "Patrol.Left", "PolygonCollider.3", "HingeJoint.Anchor", "HingeJoint.Lower", "HingeJoint.Upper", "Rope.Start", "Rope.End"
+    /// "Patrol.Left", "PolygonCollider.3" (or another outline's,
+    /// "WalkArea.3"), "HingeJoint.Anchor", "HingeJoint.Lower", "HingeJoint.Upper", "Rope.Start", "Rope.End"
     /// or "Rope.Length", to a point in the
     /// world, as one undo step. A mover's point lands there, its offset on hundredths (<paramref name="snap"/>: half units); a
     /// grid patrol's lands on the cell there; a patrol's turn goes level with it on its side, and dragging it back past where
@@ -252,7 +257,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Adds a point to the primary selection's mover (or with none, its grid patrol, or with neither, its polygon
-    /// collider; <paramref name="component"/> names which, e.g. "PolygonCollider") at a point in the world, as one undo
+    /// collider or other outline; <paramref name="component"/> names which, e.g. "PolygonCollider" or "WalkArea") at a point
+    /// in the world, as one undo
     /// step: it becomes point <paramref name="index"/> (on a path 1 is right after the start, on a polygon its first point;
     /// one past the last adds it at the end, a polygon's between its last and first), a mover's offset or a polygon's point
     /// on hundredths (<paramref name="snap"/>: half units), a grid patrol's on the cell there.
@@ -261,17 +267,17 @@ public sealed partial class SceneViewModel
     {
         var entity = selection.Entity;
         var path = component is { Length: > 0 }
-            ? entity?.Components.FirstOrDefault(c => c is Mover or GridPatrol or PolygonCollider && c.GetType().Name.Equals(component.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
-            : (Component?)entity?.GetComponent<Mover>() ?? (Component?)entity?.GetComponent<GridPatrol>() ?? entity?.GetComponent<PolygonCollider>();
+            ? entity?.Components.FirstOrDefault(c => c is Mover or GridPatrol or IPointOutline && c.GetType().Name.Equals(component.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
+            : (Component?)entity?.GetComponent<Mover>() ?? (Component?)entity?.GetComponent<GridPatrol>() ?? entity?.Components.FirstOrDefault(c => c is IPointOutline);
         if (path is null)
             throw new ArgumentException(component is { Length: > 0 }
                 ? $"The selection has no {component} to add a point to."
-                : "The selection has no Mover, Grid Patrol or Polygon Collider to add a point to.");
+                : "The selection has no Mover, Grid Patrol, Polygon Collider or other outline (a Walk Area, a Hotspot) to add a point to.");
         if (path is GridPatrol && path.Entity!.GetComponent<GridMovement>() is null)
             throw new ArgumentException("The selection's Grid Patrol has no Grid Movement to step it: add one first.");
         var count = PointCount(path);
         if (index < 1 || index > count + 1)
-            throw new ArgumentOutOfRangeException(nameof(index), path is PolygonCollider
+            throw new ArgumentOutOfRangeException(nameof(index), path is IPointOutline
                 ? $"A point goes from 1 (before the first) to {count + 1} (after the last)."
                 : $"A point goes from 1 (right after the start) to {count + 1} (after the last).");
         if (BeginInsertPathPoint(path, index) is not { } drag)
@@ -283,8 +289,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Takes a point off the primary selection's path, as one undo step: a mover's or grid patrol's point (it keeps at
-    /// least one, to go to), a patrol's turn (it then walks on until a wall or an edge on that side), a polygon's point
-    /// (it keeps at least three), a hinge's limit (it then swings freely; its anchor stays), or a rope's length (it's then as long as
+    /// least one, to go to), a patrol's turn (it then walks on until a wall or an edge on that side), a polygon's (or other
+    /// outline's) point (it keeps at least three), a hinge's limit (it then swings freely; its anchor stays), or a rope's length (it's then as long as
     /// its ends are apart as the game starts).
     /// </summary>
     public void RemovePathPoint(string point)
@@ -304,9 +310,9 @@ public sealed partial class SceneViewModel
                 throw new InvalidOperationException("It needs somewhere to go: that's its only point. Drag it instead."),
             Mover or GridPatrol => (Property(found.Component, nameof(Mover.Points)),
                 (object?)FormatPoints(PointsOf(found.Component).Where((_, i) => i != found.Index - 1))),
-            PolygonCollider when PointCount(found.Component) <= 3 =>
+            IPointOutline when PointCount(found.Component) <= 3 =>
                 throw new InvalidOperationException("A polygon needs at least three points: drag this one instead."),
-            PolygonCollider => (Property(found.Component, nameof(PolygonCollider.Points)),
+            IPointOutline => (Property(found.Component, nameof(PolygonCollider.Points)),
                 (object?)FormatPoints(PointsOf(found.Component).Where((_, i) => i != found.Index - 1))),
             _ => (Property(found.Component, found.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), 0f),
         };
@@ -327,7 +333,7 @@ public sealed partial class SceneViewModel
         {
             Mover or GridPatrol => new PathPointDrag(document, point.Component, Property(point.Component, nameof(Mover.Points)), point.Index, insert: false),
             Patrol patrol => new PathPointDrag(document, patrol, Property(patrol, point.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), point.Index, insert: false),
-            PolygonCollider polygon => new PathPointDrag(document, polygon, Property(polygon, nameof(PolygonCollider.Points)), point.Index, insert: false),
+            IPointOutline => new PathPointDrag(document, point.Component, Property(point.Component, nameof(PolygonCollider.Points)), point.Index, insert: false),
             HingeJoint hinge => new PathPointDrag(document, hinge, Property(hinge, point.Index < 0 ? nameof(HingeJoint.LowerAngle) : point.Index > 0 ? nameof(HingeJoint.UpperAngle) : nameof(HingeJoint.Anchor)),
                 point.Index, insert: false, joined: point.Index == 0 && hinge.Joined ? Property(hinge, nameof(HingeJoint.Joined)) : null),
             Rope rope => new PathPointDrag(document, rope, Property(rope, point.Index == 0 ? nameof(Rope.Anchor) : point.Index == 1 ? nameof(Rope.OtherAnchor) : nameof(Rope.Length)),
@@ -337,17 +343,17 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Starts dragging a new point into the primary selection's <see cref="Mover"/>, <see cref="GridPatrol"/> or
-    /// <see cref="PolygonCollider"/>, for a drag of the handle between two of its points (or past its last): the first
+    /// Starts dragging a new point into the primary selection's <see cref="Mover"/>, <see cref="GridPatrol"/>,
+    /// <see cref="PolygonCollider"/> or other outline (<see cref="IPointOutline"/>), for a drag of the handle between two of its points (or past its last): the first
     /// <see cref="PathPointDrag.To"/> adds it as point <paramref name="index"/>, and the whole drag is one undo step. Null
     /// when it isn't the primary selection's, or a grid patrol has no <see cref="GridMovement"/> to step it.
     /// </summary>
     public PathPointDrag? BeginInsertPathPoint(Component path, int index)
     {
         if (workspace.Scene is not { } document || selection.Entity is not { } primary || path.Entity != primary ||
-            path is not (Mover or GridPatrol or PolygonCollider) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
+            path is not (Mover or GridPatrol or IPointOutline) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
             return null;
-        // Mover, GridPatrol and PolygonCollider all call theirs Points.
+        // Mover, GridPatrol, PolygonCollider and every other outline call theirs Points.
         return new PathPointDrag(document, path, Property(path, nameof(Mover.Points)), Math.Clamp(index, 1, PointCount(path) + 1), insert: true);
     }
 
@@ -356,19 +362,19 @@ public sealed partial class SceneViewModel
         var points = PathPoints();
         return points.FirstOrDefault(p => string.Equals(p.Key, point.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException(points.Count == 0
-                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol, a Patrol, a Polygon Collider, a Hinge Joint or a Rope."
+                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol, a Patrol, a Polygon Collider (or another outline: a Walk Area, a Hotspot), a Hinge Joint or a Rope."
                 : $"The selection has no path point \"{point}\"; it has {string.Join(", ", points.Select(p => p.Key))}.");
     }
 
     private PropertyDescriptor Property(Component component, string name) =>
         workspace.Components.Get(component.GetType()).Properties.Single(p => p.Name == name);
 
-    // A mover's or grid patrol's points after the start, as offsets from it; a polygon's points.
+    // A mover's or grid patrol's points after the start, as offsets from it; a polygon's (or other outline's) points.
     private static List<Vector2> PointsOf(Component path) => path switch
     {
         Mover mover => mover.Path.Skip(1).ToList(),
         GridPatrol patrol => patrol.Path.Skip(1).Select(p => new Vector2(p.X, p.Y)).ToList(),
-        PolygonCollider polygon => polygon.GivenPoints.ToList(),
+        IPointOutline outline => outline.GivenPoints.ToList(),
         _ => [],
     };
 
@@ -470,7 +476,7 @@ public sealed partial class SceneViewModel
             else
             {
                 var points = _points.ToList();
-                var own = Component is PolygonCollider polygon ? polygon.FromWorld(world) : offset;
+                var own = Component is IPointOutline outline ? outline.FromWorld(world) : offset;
                 var point = _grid?.CellAt(world) is (int x, int y)
                     ? new Vector2(x - _home.X, _home.Y - y)
                     : new Vector2(Fit(own.X), Fit(own.Y));

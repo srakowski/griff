@@ -10,7 +10,7 @@ expectvalue: Combo.Text.Output = Combo Hits
 say: Training Pair makes a fighter to play and a training dummy facing it, with the dummy's health and your combo over them.
 select: Fighter
 explain: component:FightingCharacter | Fighting Character | A Fighting Character walks, jumps, crouches and blocks on the directions, faces its opponent by itself, and does its moves.
-explain: field:FightingCharacter.Moves | Its moves | Each move is a line: a name, the input in numpad notation, and its frame data. Two three six P is a quarter circle forward and punch.
+explain: field:FightingCharacter.Moves | Its moves | Each move has a name, an input in numpad notation and its frame data; the Inspector lists them with their inputs as arrows, and the Move List edits them. Two three six P is a quarter circle forward and punch.
 
 chapter: The Move List | Entity > Edit Moves
 menu: Entity > Edit Moves...

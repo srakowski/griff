@@ -74,6 +74,7 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// (or move names). E.g. <c>Jab: 5P frames 3/2/6 cancels special</c>, <c>Fireball: 236P frames 12/4/30</c>. When two
     /// fit, the longer motion wins, then the one whose last direction came nearest the button, then the one listed first.
     /// </summary>
+    [MoveList]
     public IReadOnlyList<string> Moves
     {
         get => _moves;
@@ -95,6 +96,7 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// The buttons its moves name and the input action each is, e.g. "P Punch, K Kick" or "L Light, M Medium, H Heavy" (with
     /// those actions added in Controls). Up to eight.
     /// </summary>
+    [Buttons]
     public string? Buttons
     {
         get => _buttons;

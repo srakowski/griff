@@ -51,6 +51,7 @@ public sealed class CardEffect : Component, ICardPart
 
     /// <summary>Dice rolled each time in place of <see cref="Damage"/>, e.g. "1d6+1"; empty deals Damage every time.</summary>
     [RollsFor(nameof(Damage))]
+    [Dice]
     public string? DamageRoll
     {
         get => _damage.Text;
@@ -62,6 +63,7 @@ public sealed class CardEffect : Component, ICardPart
 
     /// <summary>Dice rolled each time in place of <see cref="Heal"/>, e.g. "2d4".</summary>
     [RollsFor(nameof(Heal))]
+    [Dice]
     public string? HealRoll
     {
         get => _heal.Text;
@@ -85,6 +87,7 @@ public sealed class CardEffect : Component, ICardPart
     /// "Health.Max" (one component's).
     /// </summary>
     [ShownWhen(nameof(Buff))]
+    [Stat]
     public string? BuffStat { get; set; } = "Value";
 
     /// <summary>
@@ -100,6 +103,7 @@ public sealed class CardEffect : Component, ICardPart
     public string? DoOn { get; set; }
 
     /// <summary>What to do it with, for an action that takes a value: how much, a name, or true or false. Empty uses the action's own default.</summary>
+    [ActionValue(nameof(Do))]
     public string? With { get; set; }
 
     /// <summary>A sound played as it happens, e.g. "Sounds/zap.wav".</summary>

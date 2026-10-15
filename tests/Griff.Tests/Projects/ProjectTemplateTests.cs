@@ -115,6 +115,40 @@ public sealed class ProjectTemplateTests : IDisposable
         Assert.Empty(unmatched);
     }
 
+    // A field with an editor of its own (dice, points, rows of items, a recipe...) flags a value that doesn't read; a
+    // template's should all read.
+    [Theory]
+    [MemberData(nameof(EveryTemplate))]
+    public async Task Template_FieldsWithEditorsOfTheirOwn_AllRead(string template)
+    {
+        var (project, _, _, registry) = await CreateAndLoad(template);
+        var serializer = new SceneSerializer(registry);
+        var entities = new List<(string File, Entity Entity)>();
+        foreach (var path in project.FindScenes())
+            entities.AddRange(serializer.LoadFromString(await File.ReadAllTextAsync(path)).Entities.SelectMany(e => e.SelfAndDescendants()).Select(e => (Path.GetFileName(path), e)));
+        foreach (var path in project.FindPrefabs())
+            entities.AddRange(serializer.LoadPrefabFromString(await File.ReadAllTextAsync(path)).SelfAndDescendants().Select(e => (Path.GetFileName(path), e)));
+
+        var problems = entities
+            .SelectMany(e => e.Entity.Components.Where(c => registry.IsRegistered(c.GetType())).SelectMany(c => registry.Get(c.GetType()).Properties
+                .Where(p => p.Editor is not null)
+                .Select(p => (e.File, e.Entity.Name, Field: $"{c.GetType().Name}.{p.Name}", Problem: p.Editor!.Problem(c, p.GetValue(c))))))
+            .Where(u => u.Problem is not null)
+            .Select(u => $"{u.File}: {u.Name} {u.Field}: {u.Problem}");
+        Assert.Empty(problems);
+
+        // Each row of a rows field reads the same written back, so changing one cell leaves the rest as they were.
+        var rows = entities
+            .SelectMany(e => e.Entity.Components.Where(c => registry.IsRegistered(c.GetType())).SelectMany(c => registry.Get(c.GetType()).Properties
+                .Where(p => p.Editor is RowsAttribute)
+                .SelectMany(p => ((RowsAttribute)p.Editor!).Rows(p.GetValue(c)).Select(r => (Rows: (RowsAttribute)p.Editor!, Row: r)))));
+        foreach (var (attribute, row) in rows)
+        {
+            var cells = attribute.Read(row)!;
+            Assert.Equal(cells, attribute.Read(attribute.Write(cells)));
+        }
+    }
+
     [Theory]
     [InlineData("Platformer")]
     [InlineData("TopDown")]

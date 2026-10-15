@@ -170,6 +170,40 @@ Each change is one undo step on every selected entity; a value that doesn't read
 
 What every field of the core components (Basics, Rendering, Physics, Movement, Combat, Level and Audio) and of the gameplay and UI ones (Gameplay, UI, Story, Wiring, Data and Multiplayer) gets is listed in the editor's tests (`FieldEditorAuditTests`): pickers for names, sounds and images, these editors for the little languages, and plain boxes only for numbers, toggles, choices, colors and the few names a component gives itself (a battler's **Title**, a speaker's **Name**), words it shows (a toggle's **On Text**, a scoreboard's **Title**) or what the game writes (a backlog's **Lines**). `FieldEditorTemplateTests` draws every editor from its template with the editor's theme loaded, so a template that would fail in the Inspector fails there.
 
+## The genres' fields
+
+The genre components' lists are rows too, each row a few cells: a box, a picker (the small list beside a box offers what the project has; a name it has none of is yellow), a number to drag, a tile with its picture and the tileset a click away, a picture or a sound from the project's, a color with the palette to pick from, or a list of parts with how many of each. A row's up arrow moves it up the list and its × takes it out; **Add** puts a new one on the end, already named after something the project has. Rows of several cells take the section's whole width, under the field's name. A row typed so it doesn't read shows as typed, with what's wrong, to put right.
+
+| Genre | Field | What it gets |
+| --- | --- | --- |
+| Adventures | Hotspot **Use Gives**, Use With **Gives** | items and how many, a row each; what's given counts as given, so other fields offer it |
+| | Inventory Bar **Descriptions**, **Icons**, **Combinations** | an item and its line; an item and its picture, with the sheet's frames across and down and which; the two items, what they make (parts with how many) and the line said |
+| | Use With **Item**, Hotspot and Use With **Needs Flag**, **Look Flag**, **Use Flag**, **Flag** | items and flags picked; a flag a hotspot sets offers "not" to clear it |
+| | Hotspot **Look With**, **Use With**, Use With **With**, Card Effect **With** | a box to fit what the action takes: a number, a tick, a name (a flag for Set Flag), or a word that it takes nothing |
+| | Hotspot **Arrive At** | the next room's hotspots, then its other entities, from the scene **Goes To** names |
+| | Hotspot and Walk Area **Points**, Hotspot **Stand At** | point rows (a walk area keeps three); a knob in the Scene view with Distance handles |
+| Blocks | Blocks **Items**, **Drops**, **Hardness**, World Generator **Ores** | an item and its tile; a tile and what it gives (or nothing); a tile (or range) and its seconds, or its share of the stone |
+| | **Unbreakable**, **Falling Tiles**, **Glowing Tiles** | tiles clicked off the tileset |
+| | Crafting **Recipes**, Hotbar **Colors**, Block Builder **Item** | what it makes and how many, the workbench, and what it takes as parts; an item and its color; an item picked |
+| Cards | Card **Kind**, Play Zone **Accepts** | card kinds picked from what the cards say they are |
+| | Card Effect **Damage Roll**, **Heal Roll**, **Buff Stat** | dice built; the numbers of the scene's cards and what has health ("Value", "Health.Max") |
+| | Deck **Prefab Column**, **Count Column**, **Back** | the table's columns picked (the deck's own defaults aren't flagged on a table without them); a picture picked |
+| Contraptions | Sandbox Tools **Tools** | the tools in order, a row each picked |
+| Fighting | Fighting Character **Moves**, Hitboxes **Boxes** | the moves listed with their inputs as arrows and their frames, **Move List** a click away; the boxes by clip and frame, **Clip Editor** a click away |
+| | Fighting Character **Buttons**, Computer Fighter **Use Moves** | a button's letter and its input action; the moves ticked from the fighter's own |
+| | Character Select **Pick Actions**, Hitboxes **Team** | actions and teams picked |
+| Physics games | Bumper, Plunger and Tilt **Direction** | a compass (a bumper's middle is none: straight away from it); turned with the entity in the Scene view |
+| | Slingshot **Pouch**, **Default Pull** | knobs in the Scene view, the pull's from the pouch |
+| Rhythm | Note Lanes **Song**, **Difficulty**, **Actions**, **Colors** | music picked; a difficulty the chart has; actions picked; a color a row |
+| | Song Select **Songs**, **Difficulties** | music a row, each saying which table is its chart and its notes and difficulties; the difficulties the charts have |
+| Strategy | Faction **Resources**, Unit and Building **Cost**, Resource **Kind** | resources and how much, picked from what the factions have and the resources give |
+| | **Team** fields, **Hotkey** | the factions' teams; a letter |
+| Visual novels | Stage **Positions**, **Backgrounds**, **Background** | a name and how far across and up; a name and a picture, or a color or two; picked from its backgrounds |
+| | Character **Expressions**, **Expression**, **Position** | a name and a picture or one of its animation's clips; picked from its expressions and its stage's positions |
+| First person | Weapon **Ammo**, **Needs Item** | items picked |
+
+Names kept in the save data are picked the same way: a song select's **Save As** and **Save Difficulty As**, a level goal's, a block world's, a character select's and a walker's **Save Room As** keep things there, and note lanes' **Saved Song** and **Saved Difficulty**, a song select's **Best From** and a versus match's **Picks** read them (what's kept under "Level1" reads as "Level1.Stars" too), flagged when nothing keeps it. Script fields get these editors the same way: `[Counts(NameKind.Item)]`, `[ListOf(Choices = [...])]`, `[ChoicesOf(nameof(...))]`, `[ActionValue(nameof(Do))]`, `[InScene(nameof(Scene))]`, `[Stat]`, `[AssetFile(AssetFileKind.Image)]`, `[Names(NameKind.Saved)]` and `[Names(NameKind.Column, Table = nameof(Table))]`, and a script can make its own kind of rows by deriving from `RowsAttribute` (its columns, and how a row reads and writes). Agents work the rows through `ui_invoke` on the field's `Editor` (`Add`, `Set(2, "Item", "Key")`, `Remove`, `MoveUp`) or `ui_set` on `Rows[1].Cells[0].Value`; `component_describe` lists what each column can name. What every genre field gets is in `GenreFieldEditorAuditTests`.
+
 ## Editing several at once
 
 With several entities selected, the Inspector edits the components they all have, changing all of them together, as one undo step. Components only some of them have are listed after, greyed, with how many have them ("on 2 of 3", and which in the tooltip) and **Add to All**, which gives the rest a copy of the one shown, its values and whatever it needs included. A value they don't share shows as `—` (a check box half-filled, a list blank) until you set it. A vector's axes are separate, so typing an X lines them all up across while each keeps its own Y. The checkbox by the name enables or disables them all; **Add Component** and the remove button add and remove a component on every one of them. Names stay one per entity.

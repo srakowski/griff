@@ -22,12 +22,14 @@ public sealed class Faction : Component
     private Dictionary<string, int>? _parsed;
 
     /// <summary>The team's name, e.g. "Player" or "Enemy". Units and buildings with this Team belong to it.</summary>
+    [Names(NameKind.Kind, Scope = "Team", Defines = true)]
     public string? Team { get; set; } = "Player";
 
     /// <summary>The team's color: selection rings, its dots on the minimap.</summary>
     public Color Color { get; set; } = Color.FromBytes(0x4C, 0x9A, 0xFF);
 
     /// <summary>What it has to spend, e.g. "Gold 250, Wood 100". Starts as what it starts with.</summary>
+    [Counts(NameKind.Kind, Scope = "Resource", Defines = true, What = "Resource")]
     public string? Resources
     {
         get => _resources;
@@ -123,6 +125,9 @@ public sealed class Faction : Component
 /// <summary>Reads and writes amounts of resources: "150 Gold, 50 Wood" (or "Gold 150").</summary>
 public static class Costs
 {
+    /// <summary>The keys a unit's or building's Hotkey can be: the letters A to Z.</summary>
+    public static IReadOnlyList<string> Letters { get; } = [.. Enumerable.Range('A', 26).Select(c => ((char)c).ToString())];
+
     /// <summary>The amounts in <paramref name="text"/>, by resource; empty for nothing (or nothing readable).</summary>
     public static Dictionary<string, int> Parse(string? text)
     {
@@ -205,6 +210,7 @@ public sealed class Unit : Component
     internal StrategyState? InGame { get; set; }
 
     /// <summary>The team it's on: a <see cref="Faction"/>'s Team, e.g. "Player" or "Enemy".</summary>
+    [Names(NameKind.Kind, Scope = "Team")]
     public string? Team { get; set; } = "Player";
 
     /// <summary>World units per second.</summary>
@@ -222,13 +228,18 @@ public sealed class Unit : Component
     public int Supply { get; set; } = 1;
 
     /// <summary>What training it costs, e.g. "50 Gold" or "60 Gold, 20 Wood".</summary>
+    [Counts(NameKind.Kind, Scope = "Resource", CountFirst = true, What = "Resource")]
     public string? Cost { get; set; } = "50 Gold";
 
     /// <summary>Seconds a <see cref="Producer"/> takes to train it.</summary>
     public float TrainTime { get; set; } = 3;
 
     /// <summary>The key that trains it from a building, e.g. "W". Empty uses its first letter.</summary>
+    [ChoiceOf(nameof(Keys), Noun = "a letter key")]
     public string? Hotkey { get; set; }
+
+    // The keys a hotkey can be: the letters.
+    private static IReadOnlyList<string> Keys() => Costs.Letters;
 
     /// <summary>What it's doing now.</summary>
     [DoNotSerialize]
@@ -327,6 +338,7 @@ public sealed class Building : Component, INetState
     void INetState.Network(NetState state) => state.Add(() => Rally ?? NoRally, rally => Rally = rally != NoRally ? rally : null);
 
     /// <summary>The team it's on: a <see cref="Faction"/>'s Team.</summary>
+    [Names(NameKind.Kind, Scope = "Team")]
     public string? Team { get; set; } = "Player";
 
     /// <summary>The ground it covers, in world units; units walk around it.</summary>
@@ -338,6 +350,7 @@ public sealed class Building : Component, INetState
 
     /// <summary>What it costs to build, e.g. "150 Gold, 50 Wood".</summary>
     [Group("Building It")]
+    [Counts(NameKind.Kind, Scope = "Resource", CountFirst = true, What = "Resource")]
     public string? Cost { get; set; } = "150 Gold";
 
     /// <summary>Seconds a worker takes to put it up.</summary>
@@ -352,7 +365,11 @@ public sealed class Building : Component, INetState
 
     /// <summary>The key that builds it, e.g. "B". Empty uses its first letter.</summary>
     [Group("Building It")]
+    [ChoiceOf(nameof(Keys), Noun = "a letter key")]
     public string? Hotkey { get; set; }
+
+    // The keys a hotkey can be: the letters.
+    private static IReadOnlyList<string> Keys() => Costs.Letters;
 
     /// <summary>How far along it is, from 0 (just placed) to 1 (finished). Buildings in a scene start finished.</summary>
     [Group("State")]
@@ -509,6 +526,7 @@ public sealed class Worker : Component
 public sealed class Resource : Component
 {
     /// <summary>What it gives, e.g. "Gold" or "Wood".</summary>
+    [Names(NameKind.Kind, Scope = "Resource", Defines = true)]
     public string? Kind { get; set; } = "Gold";
 
     /// <summary>How much is left.</summary>
@@ -578,6 +596,7 @@ public sealed class Fighter : Component
 public sealed class Commander : Component
 {
     /// <summary>The team the player commands: a <see cref="Faction"/>'s Team.</summary>
+    [Names(NameKind.Kind, Scope = "Team")]
     public string? Team { get; set; } = "Player";
 
     /// <summary>The middle of the map, in world units. The camera, minimap and pathfinding stay within the map.</summary>

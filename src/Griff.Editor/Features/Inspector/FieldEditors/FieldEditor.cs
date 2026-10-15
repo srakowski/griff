@@ -54,6 +54,12 @@ public abstract class FieldEditor : ObservableObject
             Host.Seal();
     }
 
+    /// <summary>
+    /// True for an editor that takes the Inspector section's whole width under the field's name, rather than the space beside
+    /// it: rows of several cells, ticks.
+    /// </summary>
+    public virtual bool Stacks => false;
+
     /// <summary>Shows the value as it is now: the field calls it as its value changes (an undo, a drag in the Scene view).</summary>
     public virtual void Refresh() => OnPropertyChanged(string.Empty);
 
@@ -61,11 +67,28 @@ public abstract class FieldEditor : ObservableObject
     /// The editors there are, by the attribute that asks for each: every non-abstract <see cref="FieldEditor{TAttribute}"/>
     /// in the editor.
     /// </summary>
-    public static IReadOnlyDictionary<Type, Type> Kinds => Found.Value;
+    public static IReadOnlyDictionary<Type, Type> Kinds => Concrete.Value;
+
+    // The editors of attributes a field can be marked with: not those of the abstract ones others are made from (rows), which
+    // Found keeps for them to fall back to.
+    private static readonly Lazy<IReadOnlyDictionary<Type, Type>> Concrete = new(() => Found.Value.Where(k => !k.Key.IsAbstract).ToDictionary());
 
     /// <summary>The editor for <paramref name="field"/>, marked <paramref name="attribute"/>; null when no editor takes it.</summary>
     public static FieldEditor? Create(PropertyField field, FieldEditorAttribute attribute) =>
-        Kinds.TryGetValue(attribute.GetType(), out var type) ? (FieldEditor)Activator.CreateInstance(type, field, attribute)! : null;
+        EditorOf(attribute.GetType()) is { } type ? (FieldEditor)Activator.CreateInstance(type, field, attribute)! : null;
+
+    // The editor for an attribute's type, or for the nearest type it's made from that has one (a script's own kind of rows
+    // gets the rows' editor).
+    private static Type? EditorOf(Type attribute)
+    {
+        for (var t = attribute; t is not null && t != typeof(FieldEditorAttribute); t = t.BaseType)
+        {
+            if (Found.Value.TryGetValue(t, out var editor))
+                return editor;
+        }
+
+        return null;
+    }
 
     private static Dictionary<Type, Type> Discover()
     {
@@ -83,6 +106,16 @@ public abstract class FieldEditor : ObservableObject
                         throw new InvalidOperationException($"{type.Name} and {editors[attribute].Name} both edit [{attribute.Name}].");
                     break;
                 }
+            }
+        }
+
+        // Griff's attributes made from one an editor takes (each kind of rows) get its editor.
+        foreach (var attribute in typeof(FieldEditorAttribute).Assembly.GetTypes().Where(t => t is { IsAbstract: false } && t.IsSubclassOf(typeof(FieldEditorAttribute))))
+        {
+            for (var t = attribute.BaseType; t is not null && !editors.ContainsKey(attribute); t = t.BaseType)
+            {
+                if (editors.TryGetValue(t, out var editor))
+                    editors[attribute] = editor;
             }
         }
 

@@ -63,6 +63,7 @@ public sealed class WorldGenerator : Component
     /// Ores in the stone: a tile and how much of the stone it makes up, separated by commas, e.g. "3 6%, 4 3%". Each
     /// comes in little veins; the second and later ores lie deeper.
     /// </summary>
+    [TileAmounts("Share", "%")]
     public string? Ores { get; set; } = "3 6%, 4 3%";
 
     /// <summary>Patches of sand along the surface, from 0 (none) to 1 (everywhere).</summary>
@@ -149,6 +150,7 @@ public sealed class Blocks : Component, ILightSource
     /// The blocks the player can carry and put down, one per row: the item's name and its tile, e.g. "Dirt 1". Mining a
     /// tile gives the item named for it here, unless <see cref="Drops"/> says otherwise.
     /// </summary>
+    [BlockItems]
     public IReadOnlyList<string> Items
     {
         get => _items;
@@ -175,6 +177,7 @@ public sealed class Blocks : Component, ILightSource
     /// Tiles that give something else when mined: a tile and an item, separated by commas, e.g. "0 Dirt, 6 Sapling".
     /// "6 nothing" gives nothing.
     /// </summary>
+    [TileDrops]
     public string? Drops
     {
         get => _dropsText;
@@ -197,6 +200,7 @@ public sealed class Blocks : Component, ILightSource
     /// <summary>
     /// Blocks that take longer (or less long) to break: tiles and seconds, separated by commas, e.g. "2 0.8, 3-4 1.2".
     /// </summary>
+    [TileAmounts("Seconds")]
     public string? Hardness
     {
         get => _hardness;
@@ -214,6 +218,7 @@ public sealed class Blocks : Component, ILightSource
     }
 
     /// <summary>Tiles that can't be broken, like the bottom of the world: tile numbers and ranges, e.g. "9".</summary>
+    [TileNumbers]
     public string? Unbreakable
     {
         get => _unbreakable;
@@ -221,6 +226,7 @@ public sealed class Blocks : Component, ILightSource
     }
 
     /// <summary>Tiles that fall when there's nothing under them, like sand and gravel: tile numbers and ranges.</summary>
+    [TileNumbers]
     public string? FallingTiles
     {
         get => _falling;
@@ -231,6 +237,7 @@ public sealed class Blocks : Component, ILightSource
     /// Tiles that give off light, like torches and lava: tile numbers and ranges. They light up a dark scene (a camera
     /// with an <see cref="Camera.Ambient"/> light) like a <see cref="Light"/> would.
     /// </summary>
+    [TileNumbers]
     public string? GlowingTiles
     {
         get => _glowing;
@@ -358,6 +365,7 @@ public sealed class BlockBuilder : Component
     public bool Controllable { get; set; } = true;
 
     /// <summary>The item it puts down. The <see cref="Hotbar"/> sets it to whatever's picked there.</summary>
+    [Names(NameKind.Item)]
     public string? Item { get; set; } = "Dirt";
 
     /// <summary>The name of the world's entity. Empty uses the first <see cref="Blocks"/> map in the scene.</summary>
@@ -415,6 +423,7 @@ public sealed class Hotbar : Component, IClaimsNumberKeys
     public int Selected { get; set; }
 
     /// <summary>Item colors for the slots, one per row: a name and a color, e.g. "Dirt #8B5A2B". Others get a color from their name.</summary>
+    [ItemColors]
     public IReadOnlyList<string> Colors { get; set; } = [];
 
     /// <summary>
@@ -497,6 +506,7 @@ public sealed class Crafting : Component
     private IReadOnlyList<Recipe> _parsed = [];
 
     /// <summary>One recipe per row, e.g. "Planks 4 = Wood" or "Furnace = Stone 8 @ Workbench".</summary>
+    [Recipes]
     public IReadOnlyList<string> Recipes
     {
         get => _recipes;

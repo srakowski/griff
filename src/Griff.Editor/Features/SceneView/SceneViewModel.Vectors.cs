@@ -42,18 +42,34 @@ public sealed partial class SceneViewModel
         var here = Flat(primary.Transform.WorldPosition);
         foreach (var component in primary.Components.Where(c => workspace.Components.IsRegistered(c.GetType())))
         {
-            foreach (var property in workspace.Components.Get(component.GetType()).Properties)
+            var properties = workspace.Components.Get(component.GetType()).Properties;
+            foreach (var property in properties)
             {
                 if (property.GetValue(component) is not Vector2 value)
                     continue;
                 if (property.Offset is { } offset)
-                    vectors.Add(new SceneVector(component, property, here, offset.World ? here + value : Vector2.Transform(value, primary.Transform.WorldMatrix), false));
-                else if (property.Editor is DirectionAttribute)
-                    vectors.Add(new SceneVector(component, property, here, here + Way(value) * DirectionReach, true));
+                {
+                    var from = OriginOf(component, properties, offset, primary, here);
+                    vectors.Add(new SceneVector(component, property, from, offset.World ? from + value : Vector2.Transform(value, primary.Transform.WorldMatrix) + (from - here), false));
+                }
+                else if (property.Editor is DirectionAttribute direction)
+                {
+                    var way = direction.Turned ? Vector2.TransformNormal(value, primary.Transform.WorldMatrix) : value;
+                    vectors.Add(new SceneVector(component, property, here, here + Way(way) * DirectionReach, true));
+                }
             }
         }
 
         return vectors;
+    }
+
+    // Where an offset is measured from: the entity, or the point another offset of its component marks (its Center).
+    private static Vector2 OriginOf(Component component, IReadOnlyList<PropertyDescriptor> properties, OffsetAttribute offset, Entity entity, Vector2 here)
+    {
+        if (offset.Center is not { } center || properties.FirstOrDefault(p => p.Name == center) is not { Offset: { } other } property ||
+            property.GetValue(component) is not Vector2 point)
+            return here;
+        return other.World ? here + point : Vector2.Transform(point, entity.Transform.WorldMatrix);
     }
 
     // A direction as a unit vector; none points right.
@@ -119,6 +135,9 @@ public sealed partial class SceneViewModel
             if (Vector.IsDirection)
             {
                 var toward = world - here;
+                // A direction turned with its entity is set in the entity's own space.
+                if (Vector.Property.Editor is DirectionAttribute { Turned: true } && Matrix4x4.Invert(entity.Transform.WorldMatrix, out var unturn))
+                    toward = Vector2.TransformNormal(toward, unturn);
                 if (toward.LengthSquared() < 1e-6f)
                     return;
                 value = snap ? Nearest(toward) : Fit(Vector2.Normalize(toward), RoundStep);
@@ -126,9 +145,11 @@ public sealed partial class SceneViewModel
             else
             {
                 var step = snap ? SnapStep : RoundStep;
+                // Measured from the entity, or from the point another offset marks (a pull from the pouch).
+                var from = Vector.Origin;
                 var own = Vector.Property.Offset!.World || !Matrix4x4.Invert(entity.Transform.WorldMatrix, out var toOwn)
-                    ? world - here
-                    : Vector2.Transform(world, toOwn);
+                    ? world - from
+                    : Vector2.Transform(world, toOwn) - (from == here ? Vector2.Zero : Vector2.Transform(from, toOwn));
                 value = Fit(own, step);
             }
 

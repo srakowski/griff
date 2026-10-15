@@ -29,6 +29,20 @@ internal sealed partial class DemoUi
         await Click(combo);
         var option = await WaitFor(() => Find<ComboBoxItem>(i => i.IsVisible && i.Content?.ToString() == item), $"option {item}");
         await Settle(80);
+        // A long list slides open (upwards, near the bottom of the screen) and scrolls to what's picked: wait for the option
+        // to stay put before clicking it.
+        var at = option.PointToScreen(default);
+        for (var tries = 0; tries < 12; tries++)
+        {
+            await Settle(50);
+            var now = option.PointToScreen(default);
+            if (now == at)
+                break;
+            at = now;
+        }
+
+        option.BringIntoView();
+        await Settle(30);
         await Click(option);
         if (combo.IsDropDownOpen)
             combo.IsDropDownOpen = false;

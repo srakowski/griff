@@ -51,6 +51,7 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     public int Value { get; set; }
 
     /// <summary>What kind of card it is, e.g. "Spell" or "Hearts": a play zone's Accepts names the kinds it takes.</summary>
+    [Names(NameKind.Kind, Scope = "Card", Defines = true)]
     public string? Kind { get; set; }
 
     /// <summary>

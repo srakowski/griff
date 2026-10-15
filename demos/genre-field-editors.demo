@@ -1,0 +1,75 @@
+title: Genre field editors
+intro: The genre components' fields that took lists and names typed from memory have editors now: rows of items, recipes, costs and colors, the next room's hotspots, a difficulty picked from the charts, ticks for a fighter's moves and a compass that can point nowhere.
+project: Adventure | Field Kit Two
+scene: Kitchen
+
+chapter: Adventures | Items, rooms and lines
+select: Kettle
+explain: field:UseWith.Gives | Gives | What using the cup on the kettle gives was items and counts typed with commas. Each is a row now: the item picked from what the game gives, and how many.
+click: editor:UseWith.Gives:add
+choose: UseWith.Gives:item:2:pick = Sardines
+editorset: UseWith.Gives:count:2 = 2
+expectvalue: Kettle.UseWith.Gives = Tea, Sardines 2
+select: Back Door
+explain: field:Hotspot.Arrive At | Arrive At | Where the walker comes in, in the next room, is picked from that room's hotspots.
+choose: Hotspot.Arrive At:choice = Apple Tree
+expectvalue: Back Door.Hotspot.ArriveAt = Apple Tree
+select: Player
+explain: field:InventoryBar.Combinations | Combinations | Items that go together are rows too: the two items, what they make, and what the walker says, each in a box of its own.
+editorset: InventoryBar.Combinations:line:1 = I hook a sardine on. Here, kitty.
+expectvalue: Player.InventoryBar.Combinations = Fishy Rod = Fishing Rod + Sardines: I hook a sardine on. Here, kitty.
+
+chapter: Blocks | Items, tiles and recipes
+create: Empty
+rename: World
+add: Blocks
+explain: field:Blocks.Items | Items | A block world's items were a name and a tile number a line. Now the name and the tile have boxes of their own, with the tile's picture beside it.
+click: editor:Blocks.Items:add
+editorset: Blocks.Items:item:1 = Stone
+editorset: Blocks.Items:tile:1 = 2
+expectvalue: World.Blocks.Items = Stone 2
+add: Crafting
+explain: field:Crafting.Recipes | Recipes | A recipe says what it makes and how many, what it takes, and the workbench it needs. What it takes is a list of parts to add and take away.
+click: editor:Crafting.Recipes:add
+editorset: Crafting.Recipes:makes:1 = Torch
+editorset: Crafting.Recipes:count:1 = 4
+choose: Crafting.Recipes:takes:1:add = Sardines
+click: editor:Crafting.Recipes:part:1:remove
+expectvalue: World.Crafting.Recipes = Torch 4 = Sardines
+
+chapter: Strategy and rhythm | Costs, keys and difficulties
+create: Empty
+rename: Knight
+add: Unit
+explain: field:Unit.Cost | Cost | A unit's cost is resources and how much of each, a row a resource.
+editorset: Unit.Cost:count:1 = 75
+expectvalue: Knight.Unit.Cost = 75 Gold
+explain: field:Unit.Hotkey | Hotkey | Its hotkey is picked from the letters.
+choose: Unit.Hotkey:choice = K
+expectvalue: Knight.Unit.Hotkey = K
+create: Empty
+rename: Lanes
+add: Note Lanes
+explain: field:NoteLanes.Difficulty | Difficulty | The difficulty note lanes play is picked from the ones the charts have, and their colors are rows of colors to set.
+choose: NoteLanes.Difficulty:difficulty:1:pick = Hard
+expectvalue: Lanes.NoteLanes.Difficulty = Hard
+editorset: NoteLanes.Colors:color:1 = #FFFFFF
+expectvalue: Lanes.NoteLanes.Colors = #FFFFFF #F2BC4B #4BC4F2 #9A72F2
+
+chapter: Fighters and pinball | Ticks and a compass
+create: Training Pair
+select: Dummy
+add: Computer Fighter
+explain: field:FightingCharacter.Moves | Moves | A fighter's moves show with their inputs as arrows and their frames, the Move List a click away.
+explain: field:ComputerFighter.Use Moves | Use Moves | The moves the computer uses are ticked from the fighter's own.
+click: editor:ComputerFighter.Use Moves:tick:Palm
+expectvalue: Dummy.ComputerFighter.UseMoves = Palm
+create: Empty
+rename: Kicker
+add: Bumper
+explain: field:Bumper.Direction | Direction | A bumper's direction is turned with it, and its compass has a middle too: no direction, knocking things straight away from it, as a pop bumper does.
+click: editor:Bumper.Direction:way:Up
+expectvalue: Kicker.Bumper.Direction.Y = 1
+click: editor:Bumper.Direction:way:None
+expectvalue: Kicker.Bumper.Direction.Y = 0
+say: Every one of these is an undo step, and agents get the same choices through the editor's tools.

@@ -286,6 +286,12 @@ public enum NameKind
     /// button's Needs Saved, a Table Values' Saved Row or a Stars' Saved reads. Flags are saved there too.
     /// </summary>
     Saved,
+
+    /// <summary>
+    /// A column of a table, by name, e.g. "Count": of the table another property of the component names (see
+    /// <see cref="NamesAttribute.Table"/>).
+    /// </summary>
+    Column,
 }
 
 /// <summary>
@@ -339,6 +345,7 @@ public sealed class NamesAttribute(NameKind kind) : Attribute
     /// <summary>
     /// For a <see cref="NameKind.Saved"/> name it <see cref="Defines"/>: what's added to it for the names it saves under,
     /// e.g. [".Stars", ".Best"] for a level goal saving "Level1.Stars" and "Level1.Best"; none saves under the name itself.
+    /// On a name it reads, what it reads under it: a versus match's Picks "Pick" reads "Pick.1" and "Pick.2".
     /// </summary>
     public string[]? Suffixes { get; init; }
 }

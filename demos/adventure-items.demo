@@ -32,11 +32,13 @@ set: Sprite.Tint = #E8C54A
 add: Hotspot
 set: Hotspot.StandAt = 0, 1
 set: Hotspot.UseLine = I'll take that.
-set: Hotspot.UseGives = Key
+click: editor:Hotspot.UseGives:add
+editorset: Hotspot.UseGives:item:1 = Key
+expectvalue: Key.Hotspot.UseGives = Key
 set: Hotspot.UseFlag = TookKey
 set: Hotspot.NeedsFlag = not TookKey
 set: Hotspot.HideWhenGone = true
-explain: field:Hotspot.UseGives | Use Gives | A hotspot's Use Gives puts an item in the player's inventory. With a flag, and Hide When Gone, it can only be taken once.
+explain: field:Hotspot.UseGives | Use Gives | A hotspot's Use Gives puts items in the player's inventory, a row each with how many. With a flag, and Hide When Gone, it can only be taken once.
 deselect
 play
 wait: 0.5
@@ -80,9 +82,17 @@ chapter: Putting two together | Combinations, and the keys
 menu: Game > Clear Save Data
 select: Player
 set: Inventory.Items = Rope\nHook
-set: InventoryBar.Combinations = Grappling Hook = Rope + Hook: I tie the rope to the hook.
-explain: field:InventoryBar.Combinations | Combinations | Combinations say which items go together and what they make, one per row, with a line to say.
-set: InventoryBar.Descriptions = Grappling Hook: Ready to climb.
+click: editor:InventoryBar.Combinations:add
+editorset: InventoryBar.Combinations:first:1 = Rope
+editorset: InventoryBar.Combinations:second:1 = Hook
+editorset: InventoryBar.Combinations:part:1 = Grappling Hook
+editorset: InventoryBar.Combinations:line:1 = I tie the rope to the hook.
+expectvalue: Player.InventoryBar.Combinations = Grappling Hook = Rope + Hook: I tie the rope to the hook.
+explain: field:InventoryBar.Combinations | Combinations | Combinations say which items go together and what they make, a row each: the two items, what they make, and a line to say.
+click: editor:InventoryBar.Descriptions:add
+editorset: InventoryBar.Descriptions:item:1 = Grappling Hook
+editorset: InventoryBar.Descriptions:line:1 = Ready to climb.
+expectvalue: Player.InventoryBar.Descriptions = Grappling Hook: Ready to climb.
 deselect
 play
 wait: 0.5

@@ -1316,8 +1316,8 @@ public sealed class PropertyField : ObservableObject
         var type = property.Type;
         Kind = type == typeof(bool) ? FieldKind.Bool
             : type == typeof(int) || type == typeof(float) || type == typeof(double) ? FieldKind.Number
-            : type == typeof(string) && IsSoundName(property.Name) ? FieldKind.Sound
-            : type == typeof(string) && IsImageName(property.Name) ? FieldKind.Image
+            : type == typeof(string) && (IsSoundName(property.Name) || property.File?.Kind is AssetFileKind.Sound or AssetFileKind.Music) ? FieldKind.Sound
+            : type == typeof(string) && (IsImageName(property.Name) || property.File?.Kind == AssetFileKind.Image) ? FieldKind.Image
             : property.EntityName is not null ? FieldKind.Entity
             : property.Names is not null ? FieldKind.Name
             : property.ActionName is not null ? FieldKind.Action
@@ -1354,6 +1354,9 @@ public sealed class PropertyField : ObservableObject
     /// points; null otherwise.
     /// </summary>
     public FieldEditor? Editor { get; }
+
+    /// <summary>True when its editor takes the section's whole width, under its name (see <see cref="FieldEditor.Stacks"/>).</summary>
+    public bool Stacks => Editor?.Stacks == true;
 
     /// <summary>The components it edits, one per selected entity, the primary one's first.</summary>
     internal IReadOnlyList<Component> Components => _components;
@@ -1500,7 +1503,7 @@ public sealed class PropertyField : ObservableObject
     }
 
     /// <summary>For a sound field: whether it's music (made in the Sound Maker's Music mode) rather than an effect.</summary>
-    public bool IsMusic => _property.Name == "Music";
+    public bool IsMusic => _property.Name == "Music" || _property.File?.Kind == AssetFileKind.Music;
 
     /// <summary>For a sound field: set to a file that isn't in the project.</summary>
     public bool IsSoundMissing => Kind == FieldKind.Sound && !IsMixed && Value is string { Length: > 0 } path &&
@@ -1720,6 +1723,7 @@ public sealed class PropertyField : ObservableObject
             NameKind.Kind when _property.Names!.From is { } from => $"Choose {KnownNames.Noun(_property.Names!)} from {from}, or type a new one",
             NameKind.Kind => $"Choose {KnownNames.Noun(_property.Names!)} something is, or type a new one",
             NameKind.Saved => "Choose a name something keeps a value under in the save data (a Save As, a script's SaveData.Set), or type a new one",
+            NameKind.Column => "Choose a column of the table",
             _ => "Choose a scene from the project, or drag one here from the Assets panel",
         },
     };
@@ -1815,6 +1819,7 @@ public sealed class PropertyField : ObservableObject
                     NameKind.Kind when kind.From is { } from => $"There's no {KnownNames.Noun(kind)[(KnownNames.Noun(kind).IndexOf(' ') + 1)..]} in {from} yet: type one to use it",
                     NameKind.Kind => $"Nothing says it's {KnownNames.Noun(kind)} yet: type one to use it",
                     NameKind.Saved => "Nothing keeps a value in the save data yet: give a slider, toggle or choice a Save As, or type one",
+                    NameKind.Column => "Pick a table first, or give it columns in the Tables panel",
                     _ => "None in the project yet: type one to use it",
                 }, NamesMany, true, none);
                 break;

@@ -68,6 +68,7 @@ public sealed class CharacterSelect : Component, IPlaytestReport
 
     /// <summary>The input actions that pick, separated by commas.</summary>
     [Group("Controls")]
+    [Names(NameKind.Action, Many = true)]
     public string? PickActions
     {
         get => _pickActions;

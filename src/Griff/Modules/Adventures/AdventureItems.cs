@@ -47,6 +47,7 @@ public sealed class InventoryBar : Component, IPlaytestReport
 
     /// <summary>What the walker says on looking at each item, one per row: the item, a colon and the line, e.g. "Key: A rusty old key."</summary>
     [Group("Items")]
+    [ItemLines]
     public IReadOnlyList<string> Descriptions
     {
         get => _descriptions;
@@ -64,6 +65,7 @@ public sealed class InventoryBar : Component, IPlaytestReport
     /// a sprite sheet with its columns and rows and the frame, "Rope: Sprites/items.png 4x2 5". An item with none uses the
     /// picture of a hotspot in the scene that gives it, or a tile with its name.
     /// </summary>
+    [ItemIcons]
     public IReadOnlyList<string> Icons
     {
         get => _icons;
@@ -84,6 +86,7 @@ public sealed class InventoryBar : Component, IPlaytestReport
     /// walker says, e.g. "Grappling Hook = Rope + Hook: I tie the rope to the hook." Both are used up and what it makes is
     /// put in; to keep one, make it again ("Knife + Short Rope = Knife + Rope").
     /// </summary>
+    [Combinations]
     public IReadOnlyList<string> Combinations
     {
         get => _combinations;
@@ -311,6 +314,7 @@ public sealed class UseWith : Component
     private List<string> _items = [];
 
     /// <summary>The item that's used on the hotspot, e.g. "Key"; several separated by commas each do the same.</summary>
+    [Names(NameKind.Item, Many = true)]
     public string? Item
     {
         get => _item;
@@ -322,6 +326,7 @@ public sealed class UseWith : Component
     }
 
     /// <summary>A flag it needs to count, e.g. "DoorLocked", or "not DoorOpen"; while it doesn't hold, the item is the wrong one here. Empty always counts.</summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>What the walker says, e.g. "The key turns. It's open!"</summary>
@@ -340,9 +345,11 @@ public sealed class UseWith : Component
     public string? Targets { get; set; }
 
     /// <summary>What Do is done with, for an action that takes a value. Empty uses the action's own default.</summary>
+    [ActionValue(nameof(Do))]
     public string? With { get; set; }
 
     /// <summary>A flag set, e.g. "DoorOpen"; "not Name" clears one. Flags are kept in the save data.</summary>
+    [Names(NameKind.Flag, Condition = true, Defines = true)]
     public string? Flag { get; set; }
 
     /// <summary>A message sent, with the walker as its data.</summary>
@@ -353,6 +360,7 @@ public sealed class UseWith : Component
     public bool KeepsItem { get; set; }
 
     /// <summary>Items put in the walker's inventory, separated by commas, each with how many if more than one: "Coin 3, Map".</summary>
+    [Counts(NameKind.Item, Defines = true)]
     public string? Gives
     {
         get => _gives;

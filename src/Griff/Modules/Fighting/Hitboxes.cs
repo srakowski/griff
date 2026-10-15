@@ -41,6 +41,7 @@ public sealed class Hitboxes : Component, IPlaytestReport
     /// does, e.g. <c>Punch 2 hit at 0.6,0.3 size 0.5x0.25 damage 3 knockback 4,2 stun 12</c> or <c>Idle 0 hurt at 0,0.7
     /// radius 0.3 multiplier 1.5</c>. Draw them in the Clip Editor rather than typing them.
     /// </summary>
+    [FrameBoxes]
     public IReadOnlyList<string> Boxes
     {
         get => _boxes;
@@ -53,6 +54,7 @@ public sealed class Hitboxes : Component, IPlaytestReport
     }
 
     /// <summary>Its side: its hitboxes hit the hurtboxes of other teams only, so teammates don't hit each other. Empty hits anyone else.</summary>
+    [Names(NameKind.Kind, Scope = "Hitbox team", Defines = true)]
     public string? Team { get; set; }
 
     /// <summary>

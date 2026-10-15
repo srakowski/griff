@@ -134,18 +134,29 @@ public sealed class DirectionEditor : FieldEditor<DirectionAttribute>
     public DirectionEditor(PropertyField field, DirectionAttribute attribute)
         : base(field, attribute)
     {
-        Ways = [.. DirectionAttribute.Ways.Select(w => new WayChoice(w.Name, w.Way, this))];
+        Ways = [.. DirectionAttribute.Ways.Select(w => new WayChoice(w.Name, w.Way, this)),
+            .. attribute.None is null ? Array.Empty<WayChoice>() : [new WayChoice(NoneName, Vector2.Zero, this)]];
     }
 
     /// <summary>The eight ways, the compass's buttons, from up and to the left round to down and to the right.</summary>
     public IReadOnlyList<WayChoice> Ways { get; }
 
-    /// <summary>The way it points, when it's one of the eight ("Up Right"); otherwise null.</summary>
-    public string? Way => Field.IsMixed ? null : Field.Value is Vector2 v ? DirectionAttribute.NameOf(v) : null;
+    /// <summary>What the compass's middle is called, for a direction that may be none: (0, 0).</summary>
+    public const string NoneName = "None";
+
+    /// <summary>The way it points, when it's one of the eight ("Up Right"), or None for (0, 0) where that means something; otherwise null.</summary>
+    public string? Way => Field.IsMixed ? null : Field.Value is Vector2 v ? v == Vector2.Zero && Attribute.None is not null ? NoneName : DirectionAttribute.NameOf(v) : null;
 
     /// <summary>Points it one of the eight ways, by name ("Up", "Down Left"), as one undo step.</summary>
     public void Point(string way)
     {
+        if (Attribute.None is not null && way.Trim().Equals(NoneName, StringComparison.OrdinalIgnoreCase))
+        {
+            Field.Value = Vector2.Zero;
+            Host.Seal();
+            return;
+        }
+
         var found = DirectionAttribute.Ways.FirstOrDefault(w => w.Name.Equals(way.Trim(), StringComparison.OrdinalIgnoreCase) ||
             w.Name.Replace(" ", "", StringComparison.Ordinal).Equals(way.Trim(), StringComparison.OrdinalIgnoreCase));
         if (found.Name is null)
@@ -177,6 +188,7 @@ public sealed class WayChoice(string name, Vector2 way, DirectionEditor owner) :
         (> 0, 0) => "→",
         (< 0, < 0) => "↙",
         (0, < 0) => "↓",
+        (0, 0) => "•",
         _ => "↘",
     };
 

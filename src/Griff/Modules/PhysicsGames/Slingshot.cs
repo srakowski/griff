@@ -53,12 +53,14 @@ public sealed class Slingshot : Component, IDrawable, IPlaytestReport, IActionRe
     public float MinPull { get; set; } = 0.3f;
 
     /// <summary>Where a loaded shot rests, from its position (its foot): in the fork at its top.</summary>
+    [Offset]
     public Vector2 Pouch { get; set; } = new(0, 1.6f);
 
     /// <summary>
     /// How far its pouch is pulled (in the world) when its Launch action launches with nobody pulling it: (-2, -1) launches up
     /// and to the right at full power.
     /// </summary>
+    [Offset(World = true, Center = nameof(Pouch))]
     public Vector2 DefaultPull { get; set; } = new(-1.8f, -0.9f);
 
     /// <summary>

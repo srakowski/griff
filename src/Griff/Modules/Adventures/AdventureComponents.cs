@@ -38,6 +38,7 @@ public sealed class WalkArea : Component, IPointOutline, IDrawable
     /// round the entity: "-4 -1.5; 4 -1.5; 4 1.5; -4 1.5" is a floor 8 wide and 3 deep. They can go round either way, and
     /// the shape can be any shape with straight sides (an L, a ring of a room round a pillar is two areas or a hole).
     /// </summary>
+    [Points(Least = 3)]
     public string? Points
     {
         get => _points;
@@ -196,6 +197,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// view, for something painted into the background (a window, a crack in the wall). Empty uses its collider, or else
     /// its sprite, or else a square a unit across.
     /// </summary>
+    [Points]
     public string? Points
     {
         get => _points;
@@ -210,6 +212,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// Where the walker stands to look at or use it, from its entity, in world units: (0, -1.5) is in front of a door
     /// 1.5 below its middle. A spot off the floor walks as close as it can.
     /// </summary>
+    [Offset(World = true)]
     public Vector2 StandAt { get; set; }
 
     /// <summary>Walks over to it before looking or using; untick it for something seen from afar (the moon, a distant ship).</summary>
@@ -222,6 +225,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// A flag it needs to be there, e.g. "OpenedDrawer", or "not TookKey" for one that's gone once a flag is set: until
     /// then the pointer passes over it and clicks walk past. Empty is always there.
     /// </summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>
@@ -246,9 +250,11 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     public string? LookTargets { get; set; }
 
     /// <summary>What Look Do is done with, for an action that takes a value (Damage 2). Empty uses the action's own default.</summary>
+    [ActionValue(nameof(LookDo))]
     public string? LookWith { get; set; }
 
     /// <summary>A flag set on looking at it, e.g. "SawCrack"; "not Name" clears one.</summary>
+    [Names(NameKind.Flag, Condition = true, Defines = true)]
     public string? LookFlag { get; set; }
 
     /// <summary>A message sent on looking at it, with the walker as its data.</summary>
@@ -274,9 +280,11 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     public string? UseTargets { get; set; }
 
     /// <summary>What Use Do is done with, for an action that takes a value. Empty uses the action's own default.</summary>
+    [ActionValue(nameof(UseDo))]
     public string? UseWith { get; set; }
 
     /// <summary>A flag set on using it, e.g. "TookKey"; "not Name" clears one.</summary>
+    [Names(NameKind.Flag, Condition = true, Defines = true)]
     public string? UseFlag { get; set; }
 
     /// <summary>A message sent on using it, with the walker as its data.</summary>
@@ -287,6 +295,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// Items put in the walker's inventory on using it, separated by commas, each with how many if more than one: "Key",
     /// "Coin 3, Map". For something taken once, give it a Use Flag and Needs Flag "not" that flag, with Hide When Gone.
     /// </summary>
+    [Counts(NameKind.Item, Defines = true)]
     public string? UseGives
     {
         get => _gives;
@@ -311,6 +320,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// Stand At: the door back), or of anything else (it stands where that is). Empty leaves it where that scene has it.
     /// </summary>
     [ShownWhen(nameof(GoesTo))]
+    [InScene(nameof(GoesTo))]
     public string? ArriveAt { get; set; }
 
     /// <summary>

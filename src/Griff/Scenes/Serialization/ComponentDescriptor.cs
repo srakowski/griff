@@ -225,7 +225,11 @@ public sealed class PropertyDescriptor
         Editor = property.GetCustomAttribute<FieldEditorAttribute>();
         Offset = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<OffsetAttribute>() : null;
         Resizable = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<ResizableAttribute>() : null;
+        File = property.GetCustomAttribute<AssetFileAttribute>();
     }
+
+    /// <summary>For a string marked <see cref="AssetFileAttribute"/>: the kind of file in Assets it names, which its name doesn't say.</summary>
+    public AssetFileAttribute? File { get; }
 
     // A string called Font, or ending in Font ("TitleFont"), names a font without being marked.
     private static readonly NamesAttribute FontNames = new(NameKind.Font);

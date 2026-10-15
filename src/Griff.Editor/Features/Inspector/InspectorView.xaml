@@ -296,6 +296,10 @@
                                                     <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="Label" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
                                                 <DockPanel>
                                                     <!-- Changed from the prefab: a mark in the margin, which opens Revert and Apply to Prefab -->
                                                     <Button x:Name="OverrideMark"
@@ -342,12 +346,20 @@
                                                         </TextBlock.InputBindings>
                                                     </TextBlock>
                                                 </DockPanel>
-                                                <ContentControl Grid.Column="1"
+                                                <ContentControl x:Name="FieldEditor"
+                                                                Grid.Column="1"
                                                                 Content="{Binding}"
                                                                 ContentTemplateSelector="{StaticResource FieldSelector}"
                                                                 Focusable="False" />
                                             </Grid>
                                             <DataTemplate.Triggers>
+                                                <!-- An editor of rows takes the section's whole width, under its name -->
+                                                <DataTrigger Binding="{Binding Stacks, Mode=OneTime}" Value="True">
+                                                    <Setter TargetName="FieldEditor" Property="Grid.Row" Value="1" />
+                                                    <Setter TargetName="FieldEditor" Property="Grid.Column" Value="0" />
+                                                    <Setter TargetName="FieldEditor" Property="Grid.ColumnSpan" Value="2" />
+                                                    <Setter TargetName="FieldEditor" Property="Margin" Value="0,3,0,2" />
+                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsOverridden}" Value="True">
                                                     <Setter TargetName="OverrideMark" Property="Visibility" Value="Visible" />
                                                     <Setter TargetName="FieldLabel" Property="FontWeight" Value="SemiBold" />

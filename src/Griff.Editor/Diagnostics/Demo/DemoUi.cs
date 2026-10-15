@@ -552,7 +552,9 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
-            var box = Descendants<TextBox>(row).First();
+            // A field whose editor has no box to type in (a fighter's moves, rows not yet added) is set as the field would be.
+            if (Descendants<TextBox>(row).FirstOrDefault() is not { } box)
+                break;
             await EditBox(box, text, attempt == 0 ? note : null);
             await Settle(40);
             if (InspectorRow(component, label) is { } fresh && TextMatches(fresh, text))

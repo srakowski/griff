@@ -34,6 +34,7 @@ public sealed class Stage : Component, IDrawable
     /// Where characters stand, one per row: a one-word name and how far across from the stage's middle (and, after a
     /// comma, how far up), e.g. "Left: -4.5" or "FarLeft: -7, -0.5". Tags name them: "[show Ava left]".
     /// </summary>
+    [Positions]
     public IReadOnlyList<string> Positions { get; set; } = DefaultPositions;
 
     /// <summary>
@@ -41,11 +42,16 @@ public sealed class Stage : Component, IDrawable
     /// #10183A"), or a color at the top running to another at the bottom ("Dusk: #F2A65A #3A2F5B"). Tags name them:
     /// "[background Park fade]".
     /// </summary>
+    [Backgrounds]
     public IReadOnlyList<string> Backgrounds { get; set; } = ["Day: #8EC5FF #E8F4FF", "Night: #0B1026 #2B3A67"];
 
     /// <summary>The background showing, one of <see cref="Backgrounds"/>: set it here for the one the game starts with.</summary>
     [Output]
+    [ChoiceOf(nameof(BackgroundNames), Noun = "one of its backgrounds (Backgrounds)")]
     public string? Background { get; set; } = "Day";
+
+    // Its backgrounds' names, to pick Background from.
+    private IReadOnlyList<string> BackgroundNames() => StageLines.Names(Backgrounds);
 
     /// <summary>How big the background is, in world units (as much as the camera shows, for a whole screen).</summary>
     public Vector2 Size { get; set; } = new(16, 9);
@@ -210,9 +216,11 @@ public sealed class Character : Component, IDrawEffect
     /// How they can look, one per row: a one-word name and a picture for their sprite ("Happy: Characters/ava-happy.png"),
     /// or the name of a clip their animation plays ("Laugh: Laugh").
     /// </summary>
+    [Expressions]
     public IReadOnlyList<string> Expressions { get; set; } = [];
 
     /// <summary>How they look now, one of <see cref="Expressions"/>: their sprite shows it as soon as it's set.</summary>
+    [ChoiceOf(nameof(ExpressionNames), Noun = "one of their expressions (Expressions)")]
     public string? Expression
     {
         get => _expression;
@@ -226,6 +234,7 @@ public sealed class Character : Component, IDrawEffect
     }
 
     /// <summary>Where on the stage they stand, one of its positions: set here, they stand there.</summary>
+    [ChoiceOf(nameof(PositionNames), Noun = "one of their stage's positions")]
     public string? Position
     {
         get => _position;
@@ -239,6 +248,13 @@ public sealed class Character : Component, IDrawEffect
                 StageDirector.Place(this, stage, spot);
         }
     }
+
+    // Their expressions' names and their stage's positions', to pick Expression and Position from.
+    private IReadOnlyList<string> ExpressionNames() => StageLines.Names(Expressions);
+
+    private IReadOnlyList<string> PositionNames() => Entity is { } entity && (Stage.StageOf(entity) ?? entity.Scene?.AllNow<Stage>().FirstOrDefault()) is { } stage
+        ? [.. StageLines.Spots(stage.Positions).Select(s => s.Name)]
+        : [];
 
     /// <summary>How much of them shows, from 0 (not at all) to 1, as they fade in and out.</summary>
     [Group("State")]

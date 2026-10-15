@@ -32,6 +32,7 @@ public sealed class Plunger : Component, IDrawable, IPlaytestReport, IActionRead
     public float PullTime { get; set; } = 1;
 
     /// <summary>Which way it shoots, in its own space (turned with it): (0, 1) is up.</summary>
+    [Direction(Turned = true)]
     public Vector2 Direction { get; set; } = Vector2.UnitY;
 
     /// <summary>The collision layers it shoots, e.g. "Ball". Empty shoots any body resting on it.</summary>

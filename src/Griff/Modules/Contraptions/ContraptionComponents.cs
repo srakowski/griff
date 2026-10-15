@@ -52,6 +52,7 @@ public enum SandboxTool
 public sealed class SandboxTools : Component
 {
     /// <summary>The tools it has, in order, separated by commas: Grab, Spawn, Weld, Hinge, Rope, Wire and Remove.</summary>
+    [ListOf(What = "Tool", Choices = ["Grab", "Spawn", "Weld", "Hinge", "Rope", "Wire", "Remove"])]
     public string? Tools { get; set; } = "Grab, Spawn, Weld, Hinge, Rope, Wire, Remove";
 
     /// <summary>The props the Spawn tool can put down, by prefab name, separated by commas, e.g. "Crate, Ball, Lamp".</summary>

@@ -34,6 +34,7 @@ public sealed class Tilt : Component, IDrawable, IPlaytestReport
     /// Which way a nudge pushes the balls, in the world: (0, 1) is up the table. Holding left or right as it's nudged (the
     /// arrows, A and D, the stick) pushes them that way too.
     /// </summary>
+    [Direction]
     public Vector2 NudgeDirection { get; set; } = Vector2.UnitY;
 
     /// <summary>How many nudges close together only warn: the next tilts.</summary>

@@ -15,6 +15,7 @@ namespace Griff.Editing;
 public sealed partial class KnownNames
 {
     private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard, _items, _flags, _saved;
+    private readonly Dictionary<string, IReadOnlyList<string>> _places = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<string>> _kinds = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Regex> _sentPatterns;
     private readonly Dictionary<string, TableNames> _tables;
@@ -25,12 +26,16 @@ public sealed partial class KnownNames
     /// <param name="items">The items something gives (a pickup's Item, a script's <c>Add("Key")</c>).</param>
     /// <param name="flags">The flags something sets or clears (a trigger's Set Flag, a dialogue's [set], a script's <c>SetFlag</c>).</param>
     /// <param name="kinds">The kinds things say they are, each with its scope ("Crate", "Red").</param>
-    /// <param name="saved">The names values are kept under in the save data (a slider's Save As, a script's <c>SaveData.Set("best", ...)</c>).</param>
+    /// <param name="saved">The names things keep in the save data under (a song select's Save As).</param>
+    /// <param name="places">Each scene's entities' names, hotspots first ("Garden": "Gate", "Well"...).</param>
     public KnownNames(IEnumerable<string> prefabs, IEnumerable<string> scenes, IEnumerable<string> actions,
         IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null,
         Func<FontNames>? fonts = null, IEnumerable<string>? items = null, IEnumerable<string>? flags = null,
-        IEnumerable<(string Scope, string Name)>? kinds = null, IEnumerable<string>? saved = null)
+        IEnumerable<(string Scope, string Name)>? kinds = null, IEnumerable<string>? saved = null,
+        IEnumerable<(string Scene, IReadOnlyList<string> Entities)>? places = null)
     {
+        foreach (var (scene, entities) in places ?? [])
+            _places[scene] = entities;
         _items = new(items ?? [], StringComparer.OrdinalIgnoreCase);
         _saved = new(saved ?? [], StringComparer.Ordinal);
         _flags = new(flags ?? [], StringComparer.OrdinalIgnoreCase);
@@ -89,12 +94,30 @@ public sealed partial class KnownNames
     /// </summary>
     public IReadOnlyCollection<string> Saved => _saved;
 
+    /// <summary>
+    /// The names of the entities in the scene called <paramref name="scene"/>, hotspots and the like first; none when there's
+    /// no such scene.
+    /// </summary>
+    public IReadOnlyList<string> EntitiesIn(string? scene) =>
+        scene is not null && _places.TryGetValue(AssetName(scene.Trim(), Project.SceneExtension), out var names) ? names : [];
+
     /// <summary>The kinds things of <paramref name="scope"/> say they are ("Red" for a crate), or none.</summary>
     public IReadOnlyCollection<string> KindsOf(string? scope) => _kinds.TryGetValue(scope ?? "", out var names) ? names : [];
 
     /// <summary>The columns of the table called <paramref name="table"/>, or null if there's no such table.</summary>
     public IReadOnlyList<string>? ColumnsOf(string? table) =>
         table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) ? names.Columns : null;
+
+    /// <summary>
+    /// What the column called <paramref name="column"/> of the table called <paramref name="table"/> can say, when it's a column
+    /// of choices (see <see cref="TableNames.Choices"/>); none otherwise.
+    /// </summary>
+    public IReadOnlyList<string> ChoicesOf(string? table, string column) =>
+        table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) &&
+        names.Choices.TryGetValue(column, out var choices) ? choices : [];
+
+    /// <summary>True if there's a table called <paramref name="table"/>.</summary>
+    public bool HasTable(string? table) => table is not null && _tables.ContainsKey(AssetName(table.Trim(), Data.TableFile.Extension));
 
     /// <summary>The rows of the table called <paramref name="table"/> (or none, if there's no such table).</summary>
     public IReadOnlyList<string> RowsOf(string? table) =>
@@ -122,8 +145,11 @@ public sealed partial class KnownNames
         NameKind.Layer => Sorted(_layers),
         NameKind.Table => Sorted(_tables.Keys),
         NameKind.Row => [.. RowsOf(TableOf(component, kind)).Select(r => new NameChoice(r, null))],
+        NameKind.Column => [.. (ColumnsOf(TableOf(component, kind)) ?? []).Select(c => new NameChoice(c, null))],
         NameKind.Item => Sorted(_items),
         NameKind.Kind => Sorted(KindsOf(kind.Scope)),
+        NameKind.Flag when kind is { Condition: true, Defines: true } => [.. _flags.Order(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(f => new[] { new NameChoice(f, "sets it"), new NameChoice($"not {f}", "clears it") })],
         NameKind.Flag when kind.Condition => [.. _flags.Order(StringComparer.OrdinalIgnoreCase)
             .SelectMany(f => new[] { new NameChoice(f, "while it's set"), new NameChoice($"not {f}", "while it isn't set") })],
         NameKind.Flag => Sorted(_flags),
@@ -178,6 +204,15 @@ public sealed partial class KnownNames
             return [.. rows.Where(r => !names.Has(r)).Distinct()];
         }
 
+        if (kind.Kind == NameKind.Column)
+        {
+            // A column of a table that isn't there isn't flagged here: the table's field is. Nor is the component's own
+            // default (a deck's "Count"), which a table can do without.
+            if (TableOf(component, kind) is not { } table || ColumnsOf(table) is not { } columns || Equals(value, DefaultOf(component.GetType(), property)))
+                return [];
+            return [.. Split(value, kind).Where(c => !columns.Contains(c, StringComparer.OrdinalIgnoreCase)).Distinct()];
+        }
+
         if (kind is { Kind: NameKind.Message, Hears: false } && Equals(value, DefaultOf(component.GetType(), property)))
             return [];
         return Unmatched(kind, value);
@@ -216,13 +251,13 @@ public sealed partial class KnownNames
         NameKind.Layer => _layers.Contains(name),
         NameKind.Table => _tables.ContainsKey(AssetName(name, Data.TableFile.Extension)),
         // A row is matched against its table, which takes the component (see Unmatched(Component, ...)).
-        NameKind.Row => true,
+        NameKind.Row or NameKind.Column => true,
         NameKind.Font => Fonts is not { } fonts || fonts.Draws(name),
         NameKind.Item => _items.Contains(name),
         NameKind.Flag => _flags.Contains(FlagOf(name)),
         NameKind.Kind => KindsOf(kind.Scope).Contains(name),
         // Save data keys are case-sensitive, as SaveData keeps them; flags are kept there too.
-        NameKind.Saved => _saved.Contains(name) || _flags.Contains(name),
+        NameKind.Saved => _saved.Contains(name) || _flags.Contains(name) || kind is { Defines: false, Suffixes: { Length: > 0 } read } && read.Any(r => _saved.Contains(name + r)),
         _ when IsPattern(name) => true,
         _ when kind.Hears => _sent.Contains(name) || _sentPatterns.Any(p => p.IsMatch(name)),
         _ => _heard.Contains(name),
@@ -259,6 +294,7 @@ public sealed partial class KnownNames
             NameKind.Layer => $"Nothing is on the layer {quoted}: no collider or tilemap has it as its Layer",
             NameKind.Table => $"There's no table called {quoted} in the project: make one with Data > New Table",
             NameKind.Row => $"The table has no row called {quoted}: add it in the Tables panel",
+            NameKind.Column => $"The table has no column called {quoted}: add it in the Tables panel",
             NameKind.Font => $"There's no font file in Assets or font installed on this PC called {quoted}, so the built-in font draws " +
                              "instead (Griff's free fonts go into Assets when picked, or with Art > Add Free Font)",
             NameKind.Item => $"Nothing gives the item {quoted}: no pickup's Item or script's Add",
@@ -281,6 +317,7 @@ public sealed partial class KnownNames
         NameKind.Layer => "a collision layer",
         NameKind.Table => "a table",
         NameKind.Row => "a row of a table",
+        NameKind.Column => "a column of a table",
         NameKind.Item => "an item",
         NameKind.Flag => "a flag",
         NameKind.Kind when kind.From is not null => $"a {ScopeWord(kind)}",
@@ -329,7 +366,21 @@ public sealed partial class KnownNames
         /// <summary>Names values are kept under in the save data: a Save As, a script's <c>SaveData.Set("best", ...)</c>.</summary>
         public IReadOnlyCollection<string> Saved { get; init; } = [];
 
+        /// <summary>For a scene: its name and its entities' names, hotspots first; null for anything else.</summary>
+        public (string Scene, IReadOnlyList<string> Entities)? Place { get; init; }
+
         public static Found Empty { get; } = new([], [], []);
+    }
+
+    /// <summary>
+    /// The names of <paramref name="entities"/>, as a field naming something in their scene picks from: those an adventure's
+    /// walker arrives at (hotspots) first, then the rest, each once.
+    /// </summary>
+    public static IReadOnlyList<string> PlacesIn(IEnumerable<Entity> entities)
+    {
+        var all = entities.SelectMany(e => e.SelfAndDescendants()).Where(e => !string.IsNullOrWhiteSpace(e.Name)).ToList();
+        return [.. all.Where(e => e.Components.Any(c => c.GetType().Name == "Hotspot")).Concat(all).Select(e => e.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>
@@ -341,6 +392,23 @@ public sealed partial class KnownNames
         var (layers, sent, heard) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(), new HashSet<string>());
         var (items, flags, kinds) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<(string, string)>());
         var saved = new HashSet<string>(StringComparer.Ordinal);
+
+        void Gather(NamesAttribute kind, IEnumerable<string> names)
+        {
+            if (kind.Kind == NameKind.Layer && kind.Defines)
+                layers.UnionWith(names);
+            else if (kind.Kind == NameKind.Message)
+                (kind.Hears ? heard : sent).UnionWith(names);
+            else if (kind.Kind == NameKind.Item && kind.Defines)
+                items.UnionWith(names);
+            else if (kind.Kind == NameKind.Flag && kind.Defines)
+                flags.UnionWith(names.Select(FlagOf));
+            else if (kind.Kind == NameKind.Kind && kind.Defines)
+                kinds.UnionWith(names.Select(n => (kind.Scope ?? "", n)));
+            else if (kind.Kind == NameKind.Saved && kind.Defines)
+                saved.UnionWith(kind.Suffixes is { Length: > 0 } suffixes ? names.SelectMany(n => suffixes.Select(s => n + s)) : names);
+        }
+
         foreach (var component in entities.SelectMany(e => e.Components).Where(c => registry.IsRegistered(c.GetType())))
         {
             foreach (var property in registry.Get(component.GetType()).Properties)
@@ -351,21 +419,17 @@ public sealed partial class KnownNames
                 // What items do when they're used sends messages too ("send Teleport").
                 if (property.Editor is ItemUsesAttribute && property.GetValue(component) is IReadOnlyList<string> uses)
                     sent.UnionWith(uses.Select(ItemUsesAttribute.Read).SelectMany(u => u?.Effects ?? []).Where(e => e.Verb == "send" && e.Argument.Length > 0).Select(e => e.Argument));
-                if (property.Names is not { } kind)
-                    continue;
-                var names = Split(property.GetValue(component), kind);
-                if (kind.Kind == NameKind.Layer && kind.Defines)
-                    layers.UnionWith(names);
-                else if (kind.Kind == NameKind.Message)
-                    (kind.Hears ? heard : sent).UnionWith(names);
-                else if (kind.Kind == NameKind.Item && kind.Defines)
-                    items.UnionWith(names);
-                else if (kind.Kind == NameKind.Flag && kind.Defines)
-                    flags.UnionWith(names.Select(FlagOf));
-                else if (kind.Kind == NameKind.Kind && kind.Defines)
-                    kinds.UnionWith(names.Select(n => (kind.Scope ?? "", n)));
-                else if (kind.Kind == NameKind.Saved && kind.Defines)
-                    saved.UnionWith(kind.Suffixes is { Length: > 0 } suffixes ? names.SelectMany(n => suffixes.Select(s => n + s)) : names);
+                if (property.Names is { } kind)
+                    Gather(kind, Split(property.GetValue(component), kind));
+                // Rows of names (an item and how many, a recipe) give theirs too.
+                if (property.Editor is RowsAttribute rows)
+                {
+                    foreach (var (named, name) in rows.Named(property.GetValue(component)))
+                    {
+                        if (!(named.Kind == NameKind.Item && name.Equals("nothing", StringComparison.OrdinalIgnoreCase)))
+                            Gather(named, [name]);
+                    }
+                }
             }
 
             if (component is Dialogue dialogue)
@@ -450,7 +514,8 @@ public sealed partial class KnownNames
             all.SelectMany(f => f.Items),
             all.SelectMany(f => f.Flags),
             all.SelectMany(f => f.Kinds),
-            all.SelectMany(f => f.Saved));
+            all.SelectMany(f => f.Saved),
+            all.Where(f => f.Place is not null).Select(f => f.Place!.Value));
     }
 }
 
@@ -473,9 +538,29 @@ public sealed class TableNames(string name, IReadOnlyList<string> rows, IEnumera
     /// <summary>True if a row is (or was) called <paramref name="row"/>.</summary>
     public bool Has(string row) => _all.Contains(row.Trim());
 
+    /// <summary>
+    /// What a column of choices can say, by the column's name: its choices, then any other value its rows hold (a chart's
+    /// Difficulty: "Easy", "Normal", "Hard").
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Choices { get; init; } =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The names in <paramref name="table"/>.</summary>
-    public static TableNames Of(Data.Table table) =>
-        new(table.Name, [.. table.Rows.Select(r => r.Name)], table.RenamedRows.Keys, [.. table.Columns.Select(c => c.Name)]);
+    public static TableNames Of(Data.Table table)
+    {
+        var choices = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < table.Columns.Count; i++)
+        {
+            if (table.Columns[i] is not { Choices: { Count: > 0 } offered } column)
+                continue;
+            var at = i;
+            choices[column.Name] = [.. offered.Concat(table.Rows.Select(r => r[at]).Where(v => !v.IsEmpty)
+                .SelectMany(v => v.AsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)];
+        }
+
+        return new(table.Name, [.. table.Rows.Select(r => r.Name)], table.RenamedRows.Keys, [.. table.Columns.Select(c => c.Name)]) { Choices = choices };
+    }
 }
 
 /// <summary>
@@ -559,7 +644,13 @@ public sealed class KnownNameIndex(ComponentRegistry registry, Func<Project, Fon
         }
 
         foreach (var scene in project.FindScenes())
-            Read(scene, text => KnownNames.Collect(serializer.LoadFromString(text).Entities, registry));
+        {
+            var name = Path.GetFileNameWithoutExtension(scene);
+            Read(scene, text => serializer.LoadFromString(text).Entities is var entities
+                ? KnownNames.Collect(entities, registry) with { Place = (name, KnownNames.PlacesIn(entities)) }
+                : KnownNames.Found.Empty);
+        }
+
         foreach (var prefab in project.FindPrefabs())
             Read(prefab, text => KnownNames.Collect(serializer.LoadPrefabFromString(text).SelfAndDescendants(), registry));
         if (Directory.Exists(project.AssetsPath))
@@ -609,7 +700,14 @@ public sealed class KnownNameIndex(ComponentRegistry registry, Func<Project, Fon
         foreach (var gone in _tables.Keys.Where(k => !seen.Contains(k)).ToList())
             _tables.Remove(gone);
         if (open is not null)
-            found.Add(KnownNames.Collect(open, registry));
+        {
+            var entities = open.ToList();
+            var isScene = openPath is not null && openPath.EndsWith(Project.SceneExtension, StringComparison.OrdinalIgnoreCase);
+            found.Add(KnownNames.Collect(entities, registry) with
+            {
+                Place = isScene ? (Path.GetFileNameWithoutExtension(openPath!), KnownNames.PlacesIn(entities.Where(e => e.Parent is null))) : null,
+            });
+        }
         return KnownNames.From(project, found, tables, fonts);
     }
 }

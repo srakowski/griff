@@ -73,6 +73,7 @@ public sealed class VersusMatch : Component, IPlaytestReport
     /// starts, and "Pick.Computer" says the computer plays the second. Empty fights the two in the scene.
     /// </summary>
     [Group("Fighters Picked")]
+    [Names(NameKind.Saved, Suffixes = [".1", ".2"])]
     public string? Picks { get; set; } = "Pick";
 
     /// <summary>The computer plays the second fighter (as it does when the picks say so): a <see cref="ComputerFighter"/> is given to it.</summary>

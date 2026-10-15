@@ -29,7 +29,7 @@ public sealed partial class FieldEditorAuditTests
     };
 
     // What the Inspector gives a field, as the audit table says it.
-    private static string EditorOf(PropertyField field) => field.Kind switch
+    internal static string EditorOf(PropertyField field) => field.Kind switch
     {
         FieldKind.Custom => field.Editor!.GetType().Name.Replace("Editor", "", StringComparison.Ordinal),
         FieldKind.Name => $"Names:{field.Property.Names!.Kind}{(field.NamesMany ? "*" : "")}",

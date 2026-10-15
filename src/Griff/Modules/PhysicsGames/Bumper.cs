@@ -29,6 +29,7 @@ public sealed class Bumper : Component, IDrawEffect, IPlaytestReport
     /// middle, as a pop bumper does. Set it, e.g. (0.85, 0.5), for a slingshot kicker: it knocks only what touches its side
     /// facing that way, that way.
     /// </summary>
+    [Direction(Turned = true, None = "straight away from its middle, as a pop bumper knocks")]
     public Vector2 Direction { get; set; }
 
     /// <summary>The collision layers it knocks, e.g. "Ball". Empty knocks any body (but flippers).</summary>

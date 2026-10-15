@@ -83,9 +83,16 @@ public static class ComponentDescription
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
             if (property.Offset is { } offset)
-                text.Append(CultureInfo.InvariantCulture, $" (A point offset from the entity, in {(offset.World ? "world units" : "its own units, before its scale and turned with it")}: with Distance Handles the Scene view puts a knob on it to drag.)");
+                text.Append(CultureInfo.InvariantCulture, $" (A point offset from {(offset.Center is { } center ? $"the point {JsonNamingPolicy.CamelCase.ConvertName(center)} marks" : "the entity")}, in {(offset.World ? "world units" : "its own units, before its scale and turned with it")}: with Distance Handles the Scene view puts a knob on it to drag.)");
             if (property.Resizable is { } area)
                 text.Append(CultureInfo.InvariantCulture, $" (A rectangle's size, around {(area.Center is { } center ? $"the point {JsonNamingPolicy.CamelCase.ConvertName(center)} says" : "the entity")}, in its own units before its scale: with Resize handles the Scene view puts handles on its edges and corners to drag.)");
+            if (property.File is { } file)
+                text.Append(file.Kind switch
+                {
+                    AssetFileKind.Image => " (A picture in Assets, e.g. \"Sprites/back.png\".)",
+                    AssetFileKind.Music => " (Music in Assets, e.g. \"Music/song.wav\".)",
+                    _ => " (A sound in Assets, e.g. \"Sounds/hit.wav\".)",
+                });
             if (property.Editor is { } editor)
                 text.Append(" (").Append(editor.Describe()).Append(')');
             if (property.Info.IsDefined(typeof(NotSentAttribute), true))
@@ -104,6 +111,7 @@ public static class ComponentDescription
             if (property.Names is { } names)
                 text.Append(names switch
                 {
+                    { Kind: NameKind.Flag, Condition: true, Defines: true } => " (Sets a flag: \"Name\" sets it, \"not Name\" clears it; other fields can name it.)",
                     { Defines: true } => $" (Names {KnownNames.Noun(names)}: this entity's own, which other fields can name.)",
                     { Kind: NameKind.Flag, Condition: true } => " (Names a flag: \"Name\" holds while it's set, \"not Name\" while it isn't.)",
                     { Many: true } => $" (Names {KnownNames.Noun(names)[(KnownNames.Noun(names).IndexOf(' ') + 1)..]}s: their names, separated by commas.)",
@@ -111,6 +119,15 @@ public static class ComponentDescription
                 });
             if (property.Names is { } named && known?.Choices(named) is { Count: > 0 } choices)
                 text.Append(ChoicesText(named, choices));
+            // A rows field's columns naming things say what there is to name, as a names field does.
+            if (property.Editor is RowsAttribute rows && known is not null)
+            {
+                foreach (var column in rows.Columns.Where(c => c.Names is not null))
+                {
+                    if (known.Choices(column.Names!) is { Count: > 0 } offered)
+                        text.Append(CultureInfo.InvariantCulture, $" {column.Name}:").Append(ChoicesText(column.Names!, offered));
+                }
+            }
             text.AppendLine();
         }
 

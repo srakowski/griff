@@ -57,7 +57,11 @@ public sealed class ComputerFighter : Component, IPlaytestReport
     public float Range { get; set; } = 1.5f;
 
     /// <summary>The moves it uses, by name, separated by commas; empty for every one the fighter has.</summary>
+    [ChoicesOf(nameof(MoveNames), Noun = "its fighter's moves", None = "every one")]
     public string? UseMoves { get; set; }
+
+    // The moves its fighter has, to pick Use Moves from.
+    private IReadOnlyList<string> MoveNames() => Entity?.GetComponent<FightingCharacter>() is { } fighter ? [.. fighter.MoveList.Select(m => m.Name)] : [];
 
     // ----- State, kept with the scene -----
 

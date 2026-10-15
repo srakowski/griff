@@ -79,12 +79,14 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// playing (a Background Music's), or with none, clicks a metronome at its clock's tempo.
     /// </summary>
     [Group("Chart")]
+    [AssetFile(AssetFileKind.Music)]
     public string? Song { get; set; }
 
     /// <summary>
     /// A name in the save data holding the song to play, e.g. "Song" (where a <see cref="SongSelect"/> keeps the one picked):
     /// while a song is saved there it's played in place of <see cref="Song"/>, with its own chart (the table named like it).
     /// </summary>
+    [Names(NameKind.Saved)]
     public string? SavedSong { get; set; }
 
     /// <summary>
@@ -98,12 +100,14 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// Which of the chart's difficulties to play, e.g. "Hard": its notes whose Difficulty names it, and those that name none.
     /// Empty plays only the notes that name none.
     /// </summary>
+    [Difficulties(One = true)]
     public string? Difficulty { get; set; } = "Normal";
 
     /// <summary>
     /// A value a menu saved (a <see cref="Choice"/>'s or a <see cref="SongSelect"/>'s Save As, e.g. "difficulty") naming the
     /// difficulty to play, when the chart has it; <see cref="Difficulty"/> otherwise.
     /// </summary>
+    [Names(NameKind.Saved)]
     public string? SavedDifficulty { get; set; }
 
     /// <summary>The entity whose <see cref="BeatClock"/> times the notes. Empty: its own, or else the scene's first.</summary>
@@ -143,6 +147,7 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// the arrows, and the D-pad or the face buttons. A lane without one is pressed by touch alone.
     /// </summary>
     [Group("Controls")]
+    [Names(NameKind.Action, Many = true)]
     public string? Actions
     {
         get => _actions;
@@ -184,6 +189,7 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// for more lanes than colors.
     /// </summary>
     [Group("Look")]
+    [ListOf(What = "Color", Colors = true, Separator = " ")]
     public string? Colors
     {
         get => _colors;
@@ -238,6 +244,7 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// <see cref="SongSelect"/> show. Empty keeps none.
     /// </summary>
     [Group("Scores")]
+    [Names(NameKind.Saved, Defines = true)]
     public string? SaveBestAs { get; set; } = "Best";
 
     /// <summary>True while its chart plays. Saved with the scene, so a rewind carries the song on from there.</summary>

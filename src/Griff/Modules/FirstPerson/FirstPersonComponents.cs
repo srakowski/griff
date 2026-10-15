@@ -219,9 +219,11 @@ public sealed class Weapon : Component
 
     /// <summary>The <see cref="Inventory"/> item each shot uses up, e.g. "Bullets". Empty never runs out.</summary>
     [Group("Ammo and Items")]
+    [Names(NameKind.Item)]
     public string? Ammo { get; set; }
 
     /// <summary>An item the player must have to use it, e.g. "Shotgun", given by a <see cref="Pickup"/>. Empty is always ready.</summary>
+    [Names(NameKind.Item)]
     public string? NeedsItem { get; set; }
 
     /// <summary>A prefab to launch instead of hitting straight away, e.g. "Rocket" or "Plasma". It needs a <see cref="Body"/> to fly.</summary>

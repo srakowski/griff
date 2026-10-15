@@ -229,8 +229,8 @@ public sealed class ChoiceOfAttribute(string member) : FieldEditorAttribute
     public IReadOnlyList<string> Choices(Component component)
     {
         var type = component.GetType();
-        var found = (object?)type.GetProperty(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(component)
-            ?? type.GetMethod(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, Type.EmptyTypes)?.Invoke(component, null);
+        var found = (object?)type.GetProperty(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)?.GetValue(component)
+            ?? type.GetMethod(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, Type.EmptyTypes)?.Invoke(component, null);
         return found is IEnumerable<string> names ? [.. names] : [];
     }
 
@@ -289,8 +289,17 @@ public sealed class DirectionAttribute : FieldEditorAttribute
 
     public override string FitsText => "a Vector2";
 
+    /// <summary>
+    /// It's in the entity's own space, turned with it (a plunger's, a bumper's), rather than the world's: the Scene view draws
+    /// it turned, and a drag sets it back in the entity's own.
+    /// </summary>
+    public bool Turned { get; init; }
+
+    /// <summary>What (0, 0) means, for a direction that may be none, e.g. "straight away from its middle": the compass offers it.</summary>
+    public string? None { get; init; }
+
     public override string Describe() =>
-        "A direction, x right and y up: [0, 1] is up, [1, 0] right, [1, 1] up and to the right. The Inspector has a compass of the eight ways; with Distance Handles the Scene view draws it as an arrow to drag round.";
+        $"A direction, x right and y up: [0, 1] is up, [1, 0] right, [1, 1] up and to the right{(Turned ? ", in its own space (turned with the entity)" : "")}{(None is null ? "" : $"; [0, 0] is {None}")}. The Inspector has a compass of the eight ways; with Distance Handles the Scene view draws it as an arrow to drag round.";
 
     /// <summary>The eight ways, by name, each with its direction: "Up" (0, 1), "Up Right" (1, 1)...</summary>
     public static IReadOnlyList<(string Name, Vector2 Way)> Ways { get; } =
@@ -327,6 +336,12 @@ public sealed class OffsetAttribute : Attribute
     /// scale and turned with it (a light's).
     /// </summary>
     public bool World { get; init; }
+
+    /// <summary>
+    /// Another offset of the component it's from, rather than the entity (a slingshot's pull, from its pouch): its knob is
+    /// drawn and dragged from there.
+    /// </summary>
+    public string? Center { get; init; }
 }
 
 /// <summary>

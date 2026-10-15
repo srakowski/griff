@@ -124,9 +124,11 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
     /// "Spell" for one without, so one table holds cards of several makes. A row with it empty (or a table without it) uses
     /// <see cref="Prefab"/>.
     /// </summary>
+    [Names(NameKind.Column, Table = nameof(Table))]
     public string? PrefabColumn { get; set; } = "Prefab";
 
     /// <summary>A whole-number column of the table saying how many copies of each row's card go in it. A row without one gets one.</summary>
+    [Names(NameKind.Column, Table = nameof(Table))]
     public string? CountColumn { get; set; } = "Count";
 
     /// <summary>How big its pile is drawn: its cards' size.</summary>
@@ -134,6 +136,7 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
     public Vector2 Size { get; set; } = new(1.6f, 2.24f);
 
     /// <summary>The picture on the back of its cards. Empty draws a plain back of <see cref="BackColor"/>.</summary>
+    [AssetFile(AssetFileKind.Image)]
     public string? Back { get; set; }
 
     /// <summary>The color of its cards' backs.</summary>
@@ -631,6 +634,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 public sealed class PlayZone : CardZone, IDrawable, IPlaytestReport
 {
     /// <summary>The kinds of card it takes (each a card's Kind), separated by commas, e.g. "Creature, Spell". Empty takes any.</summary>
+    [Names(NameKind.Kind, Scope = "Card", Many = true)]
     public string? Accepts { get; set; }
 
     /// <summary>The most cards it holds: once it has this many it takes no more. 0 is no limit.</summary>

@@ -10,6 +10,7 @@
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="FieldEditors/FieldEditorTemplates.xaml" />
         <ResourceDictionary Source="FieldEditors/GameplayEditorTemplates.xaml" />
+        <ResourceDictionary Source="FieldEditors/RowEditorTemplates.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <converters:BoolToVisibilityConverter x:Key="Field.Visible" />

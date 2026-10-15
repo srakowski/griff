@@ -30,6 +30,7 @@ public sealed class SongSelect : Component, IPlaytestReport
     /// The songs to pick from, in the order of its cards, e.g. "Music/First Light.wav". Each one's chart is the table named
     /// like it.
     /// </summary>
+    [Songs]
     public IReadOnlyList<string> Songs
     {
         get => _songs;
@@ -41,6 +42,7 @@ public sealed class SongSelect : Component, IPlaytestReport
     }
 
     /// <summary>The difficulties to pick from, easiest first: the names the charts' Difficulty column uses.</summary>
+    [Difficulties]
     public IReadOnlyList<string> Difficulties { get; set; } = ["Easy", "Normal", "Hard"];
 
     /// <summary>The scene to load as a song is picked, e.g. "Play": its Note Lanes play what was picked.</summary>
@@ -61,6 +63,7 @@ public sealed class SongSelect : Component, IPlaytestReport
     public string? SaveDifficultyAs { get; set; } = "Difficulty";
 
     /// <summary>The name the lanes keep their best scores under (their Save Best As), to show each song's best: "Best".</summary>
+    [Names(NameKind.Saved)]
     public string? BestFrom { get; set; } = "Best";
 
     /// <summary>Plays the song picked out, from <see cref="PreviewFrom"/>, over and over while it's picked out.</summary>
@@ -75,6 +78,7 @@ public sealed class SongSelect : Component, IPlaytestReport
 
     /// <summary>The input actions that play the song picked out, separated by commas: Jump is Space and the gamepad's A, Interact Enter and E.</summary>
     [Group("Controls")]
+    [Names(NameKind.Action, Many = true)]
     public string? PlayActions
     {
         get => _playActions;

@@ -46,6 +46,10 @@ public sealed class Scene
     // How hard bodies that rotate pushed where they touched in the last step, the next step's first guess (see ContactMemory).
     internal readonly ContactMemory Contacts = new();
 
+    // Seconds left of a hit stop holding the game still as its last step ended, kept with a rewind's snapshot so a game
+    // put back into one finishes it (see Game.HitStop).
+    internal float HeldStill;
+
     // Where solids have gone while the game runs (taken out, turned off, tiles cleared) since its last physics step, which
     // wakes the bodies asleep there, as what held them up may have gone; or, past a few hundred of them, everywhere. The
     // physics step reads them and forgets them. Nothing's kept while the scene isn't being played.

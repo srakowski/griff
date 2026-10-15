@@ -193,6 +193,7 @@ public sealed partial class Game
             try
             {
                 Step(step);
+                Scene.HeldStill = Time.FrozenLeft;
             }
             finally
             {
@@ -217,6 +218,7 @@ public sealed partial class Game
         ThrowIfStopped();
         Time.CountFrame(seconds);
         Step(seconds);
+        Scene.HeldStill = Time.FrozenLeft;
         Time.Blend = 1;
         Stepped?.Invoke(this, EventArgs.Empty);
     }

@@ -144,6 +144,7 @@ public sealed class Timeline
     private bool _rememberedCopy;
     private Frame _spare = new();
     private double _spareTime;
+    private float _spareHeldStill;
 
     /// <summary>
     /// The most a step may spend copying the scene out for <see cref="Remember"/>, on average (a quarter millisecond unless
@@ -171,7 +172,7 @@ public sealed class Timeline
         var roots = scene.Roots;
         for (var i = 0; i < roots.Count; i++)
             Write(_spare, roots[i]);
-        (_rememberedCopy, _spareTime) = (true, time);
+        (_rememberedCopy, _spareTime, _spareHeldStill) = (true, time, scene.HeldStill);
         _averageCapture = Average(_averageCapture, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
     }
 
@@ -196,7 +197,7 @@ public sealed class Timeline
         if (_settling is not null)
             Keep(trim: true);
         var basis = _baseSnapshot is { Chain: < KeyEvery - 1 } last ? last : null;
-        var kept = new Snapshot(_spareTime, ++_sequence, basis);
+        var kept = new Snapshot(_spareTime, ++_sequence, basis) { HeldStill = _spareHeldStill };
         (_current, _spare) = (_spare, _current);
         kept.Entities = _current.Count;
         _snapshots.Add(kept);
@@ -237,6 +238,7 @@ public sealed class Timeline
         while (next < frame.Count)
             scene.Add(Read(frame, ref next, reader, seen));
         snapshot.Contacts?.CopyTo(scene.Contacts);
+        scene.HeldStill = snapshot.HeldStill;
         return scene;
     }
 
@@ -281,6 +283,7 @@ public sealed class Timeline
             Write(_current, roots[i]);
 
         snapshot.Entities = _current.Count;
+        snapshot.HeldStill = scene.HeldStill;
         if (scene.Contacts.Count > 0)
         {
             snapshot.Contacts = _contactPool.Count > 0 ? _contactPool.Pop() : new ContactMemory();
@@ -705,6 +708,9 @@ public sealed class Timeline
 
         // What physics remembered of the scene then (how hard touching bodies that rotate pushed), or null for nothing.
         public ContactMemory? Contacts { get; set; }
+
+        // Seconds left of a hit stop then (see Scene.HeldStill).
+        public float HeldStill { get; set; }
 
         // What it adds to memory: its chunks, its strings, and the strings in it that are new.
         public long Bytes { get; set; }

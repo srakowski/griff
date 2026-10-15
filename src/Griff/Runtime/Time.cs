@@ -85,6 +85,9 @@ public sealed class Time
     public float SlowMotionScale => _slowLeft > 0 ? SlowMotionAt(_slowLeft) : 1;
 
     private float _frozenFor;
+
+    /// <summary>Seconds left of the hit stop under way (see <see cref="IsFrozen"/>).</summary>
+    internal float FrozenLeft => _frozenFor;
     private float _slowScale = 1;
     private float _slowSeconds;
     private float _slowLeft;

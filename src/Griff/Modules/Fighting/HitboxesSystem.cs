@@ -58,7 +58,8 @@ internal sealed class HitboxesSystem : GameSystem
         {
             var attacker = all[i];
             var entity = attacker.Entity!;
-            if (entity.IsPaused || !HasHitboxes(attacker.Now()))
+            // A fighter's hitboxes hit only while its move is active.
+            if (entity.IsPaused || !FightersSystem.CanStrike(entity) || !HasHitboxes(attacker.Now()))
                 continue;
 
             for (var j = 0; j < all.Count; j++)
@@ -193,7 +194,15 @@ internal sealed class HitboxesSystem : GameSystem
 
         var game = Game;
         var from = attacker.Entity!;
+        var fighter = from.GetComponent<FightingCharacter>();
+        if (target.GetComponent<FightingCharacter>() is { } guard && FightersSystem.Blocks(guard, from, fighter?.Current?.Hits ?? MoveHeight.Mid))
+        {
+            Block(landing, guard, fighter, health);
+            return;
+        }
+
         attacker.Strike(box.Group, target);
+        var wasStunned = boxes is { Hitstun: > 0 };
         var damage = box.Damage * multiplier;
         if (health is not null && damage > 0)
             health.Damage(damage, from);
@@ -205,6 +214,12 @@ internal sealed class HitboxesSystem : GameSystem
         var hit = new HitInfo(from, target, damage, knockback, box.Stun, box.Group, point);
         attacker.Hits++;
         attacker.JustHit = true;
+        if (fighter is not null)
+        {
+            fighter.Connected = true;
+            FightersSystem.CountCombo(fighter, target, wasStunned, damage);
+        }
+
         if (boxes is not null)
         {
             if (box.Stun > 0)
@@ -224,6 +239,37 @@ internal sealed class HitboxesSystem : GameSystem
             game.HitStop(attacker.HitStop);
         attacker.RaiseHit(hit);
         boxes?.RaiseGotHit(hit);
+    }
+
+    // A fighter blocks the hit: chip damage, a little pushback, blockstun, and its own sound, effect and message.
+    private void Block(Landing landing, FightingCharacter guard, FightingCharacter? fighter, Health? health)
+    {
+        var (attacker, target, _, box, multiplier, point) = landing;
+        var game = Game;
+        var from = attacker.Entity!;
+        var move = fighter?.Current;
+        attacker.Strike(box.Group, target);
+        var chip = box.Damage * multiplier * Math.Clamp(move?.Chip ?? guard.ChipDamage, 0, 1);
+        if (health is not null && chip > 0)
+            health.Damage(chip, from);
+        var push = box.Knockback.X * FacingOf(from) * Math.Clamp(guard.BlockPushback, 0, 1);
+        if (push != 0 && target.GetComponent<Body>() is { } body)
+            body.Velocity = new Vector2(push, body.Velocity.Y);
+        var blockstun = move is { Blockstun: > 0 } ? move.Blockstun : (int)MathF.Round(box.Stun * 2 / 3f);
+        guard.Blockstun = Math.Max(guard.Blockstun, blockstun);
+        (guard.JustBlocked, guard.Blocking) = (true, true);
+        if (fighter is not null)
+            fighter.Connected = true;
+
+        if (!string.IsNullOrWhiteSpace(guard.BlockMessage))
+            game.Send(guard.BlockMessage.Trim(), chip, from: target);
+        if (!string.IsNullOrWhiteSpace(guard.BlockSound))
+            game.PlaySoundAt(guard.BlockSound.Trim(), point);
+        if (!string.IsNullOrWhiteSpace(guard.BlockEffect) && game.PrefabLoader is not null)
+            game.Spawn(guard.BlockEffect.Trim(), point);
+        if (attacker.HitStop > 0)
+            game.HitStop(attacker.HitStop / 2);
+        guard.RaiseBlocked(new HitInfo(from, target, chip, new Vector2(push, 0), blockstun, box.Group, point));
     }
 
     /// <summary>Which way <paramref name="entity"/> faces along X: 1 to the right, -1 when its sprite is flipped (or it's mirrored).</summary>
@@ -291,7 +337,7 @@ internal sealed class HitboxesSystem : GameSystem
             {
                 var color = box.IsHit ? HitColor : boxes.Hitstun > 0 ? StunColor : HurtColor;
                 // A hitbox whose group has hit already this swing is spent: drawn faint.
-                var spent = box.IsHit && boxes.Struck.Count > 0 && Spent(boxes, box.Group);
+                var spent = box.IsHit && (boxes.Struck.Count > 0 && Spent(boxes, box.Group) || !FightersSystem.CanStrike(entity));
                 var (shape, round) = World(world, sprite, box);
                 if (round)
                 {

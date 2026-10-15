@@ -275,6 +275,8 @@ public sealed class InputState : IInput
             ["RightFlipper"] = [Key.RightShift, Key.Slash, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
             ["Plunger"] = [Key.Space, Key.Down, GamepadButton.A],
             ["Nudge"] = [Key.N, Key.Up, GamepadButton.B],
+            ["Punch"] = [Key.U, Key.J, GamepadButton.X],
+            ["Kick"] = [Key.I, Key.K, GamepadButton.A],
         };
 
     private readonly Dictionary<string, InputBinding[]> _actions =

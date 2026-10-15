@@ -109,6 +109,8 @@ menu: Entity > Genres > Falling Blocks > Falling Board
 chapter: Fighting | Entity > Genres > Fighting
 deselect
 menu: Entity > Genres > Fighting > Sparring Pair
+deselect
+menu: Entity > Genres > Fighting > Training Pair
 
 chapter: Match-3 | Entity > Genres > Match-3
 deselect

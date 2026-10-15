@@ -1,11 +1,15 @@
 ---
 title: "Fighting games"
-description: "Hitboxes and hurtboxes on each frame of an animation, drawn in the Clip Editor, that land hits with damage, knockback and hitstun, frame by frame."
+description: "Fighters with moves in numpad notation (quarter circles, dragon punches, charges), blocking high and low, hitstun and combos, an input buffer and cancels; hitboxes and hurtboxes on each frame of an animation, drawn in the Clip Editor."
 ---
 
 ## A sparring pair
 
 **Entity → Genres → Fighting → Sparring Pair** makes something to try it on straight away: a brawler to play and a sandbag beside it, on a floor of their own, with a line over them showing the sandbag's health. Play, walk up to the sandbag (the arrows or WASD) and punch it with the Attack action (X, L, the right mouse button or the gamepad's X): on the frames its fist is out it lands, once a punch, and the sandbag flashes, loses 2 health and flies back (the brawler's head takes half as much again, for a second brawler to find). Turn on **Game → Show Hitboxes** to watch the boxes as it plays: hitboxes red, hurtboxes blue. Its pictures go in `Assets/Fighting`, to repaint; select the brawler and open **Art → Animation Clips** to see its boxes on each frame and change them. Everything is in the Inspector, with no code.
+
+## A training pair
+
+**Entity → Genres → Fighting → Training Pair** makes two fighters to try moves on: one to play and a training dummy facing it, on a floor of their own, with the dummy's health and your combo over them. Walk with the arrows or A and D (holding back, away from the dummy, blocks; down crouches; up jumps, straight or forward or back), punch with **P** (U, J or the gamepad's X) and kick with **K** (I, K or the gamepad's A). It has a jab (`5P`), a kick (`5K`), a low kick (`2K`, blocked only crouching), a kick in the air (`j.K`), a palm strike on a quarter circle forward (`236P`: down, down-forward, forward and P), an uppercut on a dragon punch (`623P`: forward, down, down-forward and P) and a rush on a charge (`[4]6K`: hold back a moment, then forward and K). The jab, kick and low kick cancel into the specials once they connect, so a jab and then a quick quarter circle lands a two-hit combo. The dummy just stands there: set its **Auto Block** to **Always** to practise against a guard, or tick its **Controllable** to play it. Its pictures go in `Assets/Fighting`; **Entity → Edit Moves...** edits the moves and the Clip Editor their boxes.
 
 ## Hitboxes and hurtboxes
 
@@ -43,13 +47,87 @@ A hit lands on the step the frame showing it comes, after physics: the boxes are
 
 **Game → Show Hitboxes** draws every box in play over the running game: hitboxes red, hurtboxes blue (yellow in hitstun), and a hitbox that has already hit this swing faint. It stays on for the games played after, in Play with Players' windows and after a rewind. A game can show them itself, for a training mode: `Game.ShowHitboxes = true`.
 
+## Fighters
+
+A **Fighting Character** makes an entity a fighter with no code (it needs a **Body**, a collider and a **Hitboxes**). It reads the controls of whoever plays it: the directions (the arrows, WASD, the D-pad or the stick) and its **Buttons**, each a letter its moves are written with and the input action it is (`P Punch, K Kick` to start with; `L Light, M Medium, H Heavy` with those actions added in **Game → Controls**). Forward walks at **Walk Speed**, back at **Back Walk Speed**, up jumps (**Jump Height**, sideways at **Jump Speed** for a jump forward or back), down crouches, and on the ground it slows to a stop by its **Friction** after a knockback or a lunge. It faces its **Opponent** by itself (an entity by name, or empty for the nearest other fighter not on its **Team**) whenever it's on the ground and free, so forward is always towards them, and it plays its **Animation**'s `Idle`, `Walk` (or `Run`), `WalkBack`, `Crouch`, `Jump`, `Block`, `CrouchBlock` and `Hurt` clips when it has them.
+
+Untick **Controllable** for a fighter nobody plays (a dummy, a cutscene); its **Focus** action gives it the player's input as other genres' pieces do. Its **Perform** action does a move by name as if its input were pressed, for a trigger, a wire or a computer opponent's script.
+
+## Moves and their inputs
+
+Its **Moves** are a line each: a name and a colon, the input, then the move's settings.
+
+```
+Jab: 5P frames 3/2/7 cancels special
+Low Kick: 2K frames 5/3/14 low cancels special
+Fireball: 236P frames 12/4/30 chip 0.25
+Uppercut: 623P clip Rising frames 3/10/26 push 1,8
+Rush: [4]6K clip Palm frames 8/8/18 push 7,0
+Air Kick: j.K clip Kick frames 3/10/2
+```
+
+Inputs are written in numpad notation, the directions as the keys of a number pad for a fighter facing right: 6 forward, 4 back, 2 down, 8 up, 3 down-forward, 1 down-back, 5 neither. Then the button.
+
+| Input | Means |
+| --- | --- |
+| `5P` | P standing (also while walking, unless there's a `6P` or `4P`) |
+| `2K` | K crouching (down-back and down-forward too, unless there's a `1K` or `3K`) |
+| `6P` | P while holding forward |
+| `P` | P whatever the direction |
+| `236P` | quarter circle forward: down, down-forward, forward, P |
+| `214K` | quarter circle back |
+| `623P` | dragon punch: forward, down, down-forward |
+| `41236P` | half circle forward |
+| `22K` | down, down (let go between) |
+| `[4]6P` | charge: back held for **Charge Frames** steps, then forward and P |
+| `[2]8K` | charge down, then up and K |
+| `j.K` | K in the air (any input can start with `j.`) |
+
+Directions are read the way the fighter faces, so a quarter circle forward works from either side. A motion's directions must come in order within **Motion Frames** steps of the button (other directions between them don't matter, and the button can come a few steps after the last one); a charge's let-go direction can lean either way (3 or 9 for 6). When several moves fit what was pressed, the longest motion wins (a special over a normal, a half circle over a quarter circle), then of two as long the one whose last direction came nearest the button (so walking forward into a quarter circle, `6 2 3 6 P`, is the quarter circle, though `6 2 3` is in it too), then the exact direction over the near one (`6P` over `5P` while holding forward), then the move listed first. A move on the ground comes out only on the ground, one with `j.` only in the air (and ends as the fighter lands).
+
+A move's settings, all optional:
+
+- `clip Name`: the animation clip it plays; left out, the one named like the move without spaces (`Low Kick` plays `LowKick`).
+- `frames 3/2/7`: its startup, active and recovery, in steps (frames, at 60 a second), or `startup 3`, `active 2` and `recovery 7` one at a time. See below.
+- `low` or `high`: where it must be blocked (see Blocking). Mid, blockable either way, if left out.
+- `blockstun 10`, `chip 0.25`: what a blocked hit does (see Blocking).
+- `push 2,0`: how fast it sends the fighter forward and up as it starts to hit: a lunge, a rising uppercut.
+- `message Name`, `sound Path`: a message sent and a sound played as it starts.
+- `cancels special`, last: what it can be cancelled into (see Cancels and combos): move names with commas between, `special`, `normal` or `any`.
+
+## Startup, active and recovery
+
+A move plays its clip over its frame data: the clip's frames before its first hitbox are spread over its **startup**, the frames with hitboxes over its **active** steps, and the rest over its **recovery**. Its hitboxes hit only while it's active, whatever frame shows, so the frame data says exactly when it hits: `frames 3/2/7` hits on its fourth and fifth steps and leaves the fighter free on its thirteenth. Left out, each part takes as long as its frames take at the clip's own speed. Everything is counted in steps, at the game's step rate, so it's the same on every machine and every time; a hit stop holds the move where it is.
+
+## The input buffer
+
+A button pressed up to **Buffer Frames** steps (8 to start with) before the fighter can act comes out the moment it can: as a move or blockstun ends, or as it lands. A motion done during a move counts too, so a quarter circle finished a moment before the jab ends brings out the palm on its first free step, and so do presses during a hit stop, so a cancel pressed as the hit lands comes out as the freeze ends. Each press makes one move.
+
+## Cancels and combos
+
+Once a move has hit or been blocked, it can be cancelled, from its first active step on, into what its `cancels` names: a press of one of those (buffered or not) starts it at once, cutting the rest short. `cancels special` lets a jab go straight into any special move, `cancels Kick` chains into the kick.
+
+A hit holds what it hits in **hitstun** for the hitbox's stun steps (its **Hitboxes**' Hitstun): a fighter in hitstun does nothing (its move is cut short, it plays its `Hurt` clip and slides to a stop) until it recovers. Each hit a fighter lands while the one it's hitting is still in hitstun from its last counts towards its **Combo**; the combo is over once they recover. The Move List shows what a move leaves on hit and on block: `+6 on hit` means the fighter is free 6 steps before its opponent, time to land another move. **Combo**, **Combo Damage** and **Best Combo** are outputs, and **Combo Hits** is the combo from its second hit on (one hit is no combo yet), for a text: `{0:0' hit combo';;#}` shows "3 hit combo", and nothing until then.
+
+## Blocking
+
+Holding back, away from the attacker, blocks: standing (back) blocks mid and high hits, crouching (down-back) mid and low ones. A fighter blocks only on the ground and free (not during a move or hitstun); a cross-up from behind is blocked by holding the other way. A blocked hit does only **chip damage** (its damage times the move's `chip`, or the blocker's **Chip Damage**, a tenth to start with), pushes the blocker back by **Block Pushback** of its knockback, and holds it in **blockstun** for the move's `blockstun` steps (two thirds of the hitbox's stun if left out), playing its `Block` or `CrouchBlock` clip; a hit that comes during blockstun is blocked too. It plays the blocker's **Block Sound**, spawns its **Block Effect**, sends its **Block Message** with the chip as its data, freezes the game for half the attacker's hit stop, and counts as the attack connecting, so it can cancel. **Auto Block** blocks with no one holding back: **Standing**, **Crouching** or **Always** (the right way for each hit), for a training dummy or a computer opponent. Its **Blocking**, **Blocked** and **Blockstun** outputs say what it's doing.
+
+## The Move List
+
+Select a fighter and choose **Entity → Edit Moves...**: its moves are listed with their inputs drawn as arrows (`↓↘→ P`), what the motion is called and their frame data. For the move picked, pick its motion from a list of every direction and the common motions (quarter circles, dragon punches, half circles, charges) and its button, or type the input; pick its clip from the animation's, and type its startup, active and recovery (0 for the clip's own), where it's blocked, its blockstun, chip, push and cancels. Its frames are drawn as a bar (startup green, active red, recovery blue) with what it leaves on hit and on block and its damage, and what's wrong is said: a clip it hasn't got or with no hitbox, a button it hasn't got, a cancel into a move it doesn't have. **Up** and **Down** order the moves (the one listed first wins a tie). Each change is one undo step, the same as typing the line. Agents work it through `ui_invoke MoveListEditor AddMove`, `ui_set MoveListEditor MoveInput 236P` and the rest, or set **Moves** with the scene tools.
+
+## Moves in a table
+
+A fighter's **Moves Table** names a table of more moves, a row each: the row's name, and columns **Input**, **Clip**, **Startup**, **Active** and **Recovery** (or **Frames**, `3/2/7`), **Hits** (`Low` or `High`), **Blockstun**, **Chip**, **Push**, **Cancels**, **Message** and **Sound**, any left out. They come after its own moves, and a table changed while the game runs takes effect at once. **Make Moves Table** in the Move List moves a fighter's own moves into a new table (`Fighter Moves`) and points its Moves Table at it, so a cast's frame data can be balanced side by side like a spreadsheet in **Data → Tables**.
+
 ## Frame by frame, rewinds and multiplayer
 
-The boxes follow the frame the entity shows at each step of the game, worked out just as the animation picks it, so a hit lands on the same step every time, at any frame rate, and the same input always lands the same hits. An animation's **Time**, the hitstun, what a swing has already hit and the hits landed are kept with the scene, so a rewind back into the middle of a punch carries on from there and lands as it did. In a network game the host works out the hits (as it does all damage) and everyone sees them.
+The boxes follow the frame the entity shows at each step of the game, worked out just as the animation picks it, so a hit lands on the same step every time, at any frame rate, and the same input always lands the same hits. An animation's **Time**, the hitstun, what a swing has already hit and the hits landed are kept with the scene, so a rewind back into the middle of a punch carries on from there and lands as it did. A fighter's move and the step it's on, its blockstun, combo, what it has pressed lately (the input history its motions and buffer read) and whether it's on the ground are kept too, and so is a hit stop under way, so a rewind into the middle of a quarter circle (even in the freeze of the hit it cancels) still brings out the palm, on the same step as before. In a network game the host runs every fighter on its own player's keys (each player's fighter answers to their controls only) and works out the hits (as it does all damage), and everyone sees them.
 
 ## Scripting
 
-A **Hitboxes** raises `Hit` as one of its hitboxes lands and `GotHit` as one of its hurtboxes is hit, each with a `HitInfo`: the `Attacker`, the `Target`, the `Damage` dealt, the `Knockback` it was sent flying at, the `Stun`, the hitbox's `Group` and the `Point` where the boxes met. `Now()` gives the boxes of the frame the entity shows, `Showing()` which clip and frame that is, and `On("Punch", 2)` the boxes of any frame; `FrameBox.TryParse` and `ToString` read and write their lines.
+A **Hitboxes** raises `Hit` as one of its hitboxes lands and `GotHit` as one of its hurtboxes is hit, each with a `HitInfo`: the `Attacker`, the `Target`, the `Damage` dealt, the `Knockback` it was sent flying at, the `Stun`, the hitbox's `Group` and the `Point` where the boxes met. `Now()` gives the boxes of the frame the entity shows, `Showing()` which clip and frame that is, and `On("Punch", 2)` the boxes of any frame; `FrameBox.TryParse` and `ToString` read and write their lines. A **Fighting Character** raises `MoveStarted` with the `FighterMove` as each move starts and `Blocked` with a `HitInfo` as it blocks; `Perform("Palm")` does a move, `MoveList` and `Current` are its moves and the one it's doing, and `Phase` which part of it (`MovePhase.Startup`, `Active` or `Recovery`). `MoveInput.Parse("236P")` reads an input (`Describe()` says "quarter circle forward + P", `Arrows()` "↓↘→ P"), `FighterMove.Parse` a move's line, and `FightingCharacter.TimingOf` works out a move's startup, active and recovery and the clip frame at each step.
 
 ```csharp
 public class Fighter : Behavior
@@ -64,4 +142,4 @@ public class Fighter : Behavior
 
 ## Mixing it with other games
 
-A **Hitboxes** takes no input of its own, so it goes on anything: a platformer hero's sword drawn on its Attack clip (an **Attack** with no Hitbox plays the clip, and its frames hit), an enemy's bite, a boss whose weak spot is a hurtbox with a multiplier of 3. Its actions (**Stun**, **Recover**) are for triggers and wires, and its outputs (**Hit**, **Got Hit**, **Hits**, **Hitstun**, **Stunned**) for counters, bars, texts and wires.
+A **Hitboxes** takes no input of its own, so it goes on anything: a platformer hero's sword drawn on its Attack clip (an **Attack** with no Hitbox plays the clip, and its frames hit), an enemy's bite, a boss whose weak spot is a hurtbox with a multiplier of 3. Its actions (**Stun**, **Recover**) are for triggers and wires, and its outputs (**Hit**, **Got Hit**, **Hits**, **Hitstun**, **Stunned**) for counters, bars, texts and wires. A **Fighting Character** takes input only while it has focus (its **Controllable**), has the actions **Perform** (a move by name, so a rhythm note or a card can throw a palm strike) and **Reset Combo**, and the outputs **Move**, **Phase**, **Free**, **Blockstun**, **Blocking**, **Blocked**, **Crouching**, **Combo**, **Combo Hits**, **Combo Damage** and **Best Combo**; each move's `message` tells the rest of the game it started.

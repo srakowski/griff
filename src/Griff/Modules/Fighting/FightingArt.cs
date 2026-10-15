@@ -4,11 +4,12 @@ using static Griff.Projects.TemplateArt;
 namespace Griff.Modules.Fighting;
 
 /// <summary>
-/// The pictures Create Sparring Pair puts in a project, painted in code as pixel art: a brawler's sprite sheet (two frames
-/// standing, two running and four of a punch, in cells of 24 by 32) and a sandbag on a stand. Saved as PNGs under
-/// Fighting/, so they open (and can be repainted) in the Sprite Painter.
+/// The pictures Create Sparring Pair and Create Training Pair put in a project, painted in code as pixel art: a brawler's
+/// sprite sheet (two frames standing, two running and four of a punch, in cells of 24 by 32), a sandbag on a stand, and a
+/// fighter's sheet (see FightingArt.Fighter.cs). Saved as PNGs under Fighting/, so they open (and can be repainted) in the
+/// Sprite Painter.
 /// </summary>
-internal static class FightingArt
+internal static partial class FightingArt
 {
     public const string Brawler = "Fighting/brawler.png";
     public const string Sandbag = "Fighting/sandbag.png";

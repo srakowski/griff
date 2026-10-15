@@ -1076,6 +1076,28 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (dialogueField, dialogueValue) = Split2(a, '=');
                 await ui.DialogueSet(dialogueField, dialogueValue);
                 break;
+            case "moves":
+                await DemoUi.WaitForMoveList();
+                break;
+            case "movepick":
+                // "movepick: Palm" clicks the Move List's move called Palm.
+                await ui.MovesPick(a);
+                break;
+            case "moveset":
+                // "moveset: motion = 236" picks from a list; "moveset: startup = 8" types into a box.
+                var (moveField, moveValue) = Split2(a, '=');
+                await ui.MovesSet(moveField, moveValue);
+                break;
+            case "expectmove":
+                // What the Move List says about the move picked (its arrows, what the motion's called, its frame data, what it
+                // leaves on hit and block, its problems) has this in it.
+                await DemoUi.WaitForMoveList();
+                string MoveSays() => DemoUi.MoveList?.Model is { } moves
+                    ? string.Join(" | ", moves.InputArrows, moves.InputDescription, moves.FrameSummary, moves.Advantage, moves.Problems)
+                    : "";
+                if (!await Until(() => MoveSays().Contains(a, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"The Move List says \"{MoveSays()}\", not \"{a}\".");
+                break;
             case "expectpreview":
                 // The Dialogue Editor's preview of the stage, in words, has this in it.
                 await DemoUi.WaitForDialogueEditor();
@@ -1840,6 +1862,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "painter" => DemoUi.PainterPart(name),
             "clips" => DemoUi.ClipsPart(name),
             "dialogue" => DemoUi.DialoguePart(name),
+            "moves" => DemoUi.MovesPart(name),
             "image" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
                 DemoUi.ImageButton(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No image field {name[..at]} in the Inspector."),
             "color" => ui.ColorPart(name),
@@ -1857,7 +1880,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 

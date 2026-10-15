@@ -122,7 +122,7 @@ public sealed class SparringPreset : EntityPreset
         return sandbag;
     }
 
-    private static string Free(Scene scene, string name)
+    internal static string Free(Scene scene, string name)
     {
         var taken = scene.Entities.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!taken.Contains(name))

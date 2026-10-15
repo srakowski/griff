@@ -43,6 +43,9 @@ public sealed partial class Game : IGameContext
         (input as InputState)?.UseSaveData(_saveData);
         LoadSettings();
         SyncPanels();
+        // A scene put back into a hit stop (a rewind) finishes it.
+        if (scene.HeldStill > 0)
+            Time.Freeze(scene.HeldStill);
     }
 
     public Scene Scene { get; private set; }

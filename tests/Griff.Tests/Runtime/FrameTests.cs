@@ -19,7 +19,7 @@ public class FrameTests
             "Begin: Dungeons",
             "Begin: Script Start",
             "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
-            "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: First Person",
+            "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: Fighters", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
@@ -30,7 +30,7 @@ public class FrameTests
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
             "Simulate: Sprite Effects", "Simulate: Prompts", "Simulate: Typewriters", "Simulate: Pickup Spin",
             "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
-            "Physics: Breakables", "Physics: Level Goals", "Physics: Pinball", "Physics: Carrying",
+            "Physics: Fighters Landing", "Physics: Breakables", "Physics: Level Goals", "Physics: Pinball", "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Stage Input", "Resolve: Dialogues", "Resolve: Stages", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Hitboxes", "Resolve: Touch Damage",
             "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Stars", "Resolve: Counters", "Resolve: Text Outputs", "Resolve: Fade",
@@ -61,7 +61,7 @@ public class FrameTests
         // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks, Fighting,
         // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Hitboxes", "First Person",
+        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Fighters", "Hitboxes", "First Person",
             "Match Boards", "Slingshots", "Breakables", "Level Goals", "Pinball", "Puzzles", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
         Assert.Equal("Slingshots", game.Frame.Single(s => s.Name == "Slingshots").System?.Name);
         Assert.Equal("Breakables", game.Frame.Single(s => s.Name == "Breakables").System?.Name);
@@ -147,7 +147,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(22, game.Systems.Count);
+        Assert.Equal(23, game.Systems.Count);
     }
 
     [Fact]

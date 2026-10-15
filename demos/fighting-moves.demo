@@ -1,0 +1,58 @@
+﻿title: Fighting moves
+intro: Fighters whose moves are written in numpad notation: quarter circles, dragon punches and charges, an input buffer, cancels into combos, blocking high and low, and hitstun.
+project: Empty | Training
+
+chapter: A training pair | Entity > Genres > Fighting
+create: Training Pair
+expectcount: Fighter = 1
+expectcount: Dummy = 1
+expectvalue: Combo.Text.Output = Combo Hits
+say: Training Pair makes a fighter to play and a training dummy facing it, with the dummy's health and your combo over them.
+select: Fighter
+explain: component:FightingCharacter | Fighting Character | A Fighting Character walks, jumps, crouches and blocks on the directions, faces its opponent by itself, and does its moves.
+explain: field:FightingCharacter.Moves | Its moves | Each move is a line: a name, the input in numpad notation, and its frame data. Two three six P is a quarter circle forward and punch.
+
+chapter: The Move List | Entity > Edit Moves
+menu: Entity > Edit Moves...
+moves
+movepick: Palm
+expectmove: quarter circle forward + P
+explain: moves:arrows | The input, as arrows | The Move List draws each input as arrows, for a fighter facing right, and says what the motion is called.
+explain: moves:frames | Frame data | Its startup, active and recovery steps, drawn as a bar. Its hitboxes only hit while it's active.
+moveset: motion = 214
+expectmove: quarter circle back + P
+say: Pick a motion from the list: quarter circles, dragon punches, half circles and charges. Every change is one undo step, the same as typing the line.
+moveset: motion = 236
+moveset: startup = 8
+expectmove: Startup 8
+moveset: startup = 10
+movepick: Jab
+expectmove: +6 on hit
+explain: moves:advantage | On hit and on block | The jab leaves the fighter six steps ahead on hit: time to cancel it into a special.
+click: moves:close
+
+chapter: Combos | Cancels and hitstun
+menu: Game > Show Hitboxes
+play
+wait: 0.5
+hold: Right 0.55
+agent: game_input {"steps": [{"tap": ["Kick"]}, {"hold": ["Down"], "seconds": 0.04}, {"hold": ["Down", "Right"], "seconds": 0.04}, {"hold": ["Right"], "tap": ["Punch"], "seconds": 0.05}, {"wait": 1}], "watch": ["Dummy"]}
+expectvalue: Fighter.FightingCharacter.BestCombo = 2
+explain: game | Kick, cancelled into the palm | The kick connects, and a quarter circle cancels it into the palm strike while the dummy is still stunned: a two hit combo.
+agent: game_input {"steps": [{"hold": ["Right"], "seconds": 0.3}, {"hold": ["Down"], "seconds": 0.04}, {"hold": ["Down", "Right"], "tap": ["Punch"], "seconds": 0.05}, {"wait": 1.2}], "watch": ["Dummy"]}
+say: Forward, down, down forward and punch is a dragon punch: the uppercut. Motions are read the way the fighter faces, and a press made a few frames early still comes out.
+stop
+
+chapter: Blocking | Hold back
+select: Dummy
+set: FightingCharacter.AutoBlock = Always
+explain: field:FightingCharacter.AutoBlock | Auto Block | Holding back blocks. A dummy set to always block guards high or low as each hit needs.
+play
+wait: 0.5
+hold: Right 0.55
+tap: K
+wait: 0.8
+expectvalue: Dummy.Health.Current = 29.7
+explain: game | Blocked | The kick is blocked: only a little chip damage, and the dummy is held in blockstun. A low kick has to be blocked crouching, an overhead standing.
+stop
+say: That's fighting moves: special inputs, the input buffer, cancels and combos, hitstun and blocking, all frame by frame, the same across a rewind and in a network game.

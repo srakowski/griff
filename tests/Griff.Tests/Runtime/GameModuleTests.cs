@@ -73,7 +73,8 @@ public class GameModuleTests
     {
         Assert.Equal(["Entity.CreateTacticsUnit", "Entity.CreateGoal", "Entity.CreateMatchBoard", "Entity.CreateFallingBoard", "Entity.CreateDungeon",
             "Entity.CreateDeck", "Entity.CreatePlayZone", "Entity.CreateCard",
-            "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker", "Entity.CreateItem", "Entity.CreateStage", "Entity.CreateCharacter", "Entity.CreateReadingMenus", "Entity.CreateSlingshot", "Entity.CreateTower", "Entity.CreateSparring"],
+            "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker", "Entity.CreateItem", "Entity.CreateStage", "Entity.CreateCharacter", "Entity.CreateReadingMenus", "Entity.CreateSlingshot", "Entity.CreateTower",
+            "Entity.CreatePinballTable", "Entity.CreateSparring", "Entity.CreateFlippers", "Entity.CreateBumper", "Entity.CreateKickers", "Entity.CreatePlunger", "Entity.CreateDropTargets", "Entity.CreateLanes"],
             EntityPreset.All.Select(p => p.Id));
         Assert.All(EntityPreset.All, p => Assert.NotNull(GameModule.Of(p.GetType())));
         Assert.All(EntityPreset.All, p => Assert.False(DocComments.Summary(p.GetType()).IsEmpty));

@@ -72,18 +72,32 @@ internal sealed class MessageBoard
         if (!_listeners.TryGetValue(message, out var list))
             return 0;
 
+        // Those listening as it's sent, in a list kept for the next (one for each message being sent at once), so sending
+        // makes no garbage.
+        var listening = _spare.Count > 0 ? _spare.Pop() : [];
+        listening.AddRange(list);
         var heard = 0;
-        foreach (var listener in list.ToList())
+        try
         {
-            if (!route.IsEveryone && !route.Reaches(listener.OwnerEntity ?? listener.OwnerBehavior?.Entity))
-                continue;
-            if (listener.Deliver(data, scene))
-                heard++;
+            foreach (var listener in listening)
+            {
+                if (!route.IsEveryone && !route.Reaches(listener.OwnerEntity ?? listener.OwnerBehavior?.Entity))
+                    continue;
+                if (listener.Deliver(data, scene))
+                    heard++;
+            }
+        }
+        finally
+        {
+            listening.Clear();
+            _spare.Push(listening);
         }
 
         list.RemoveAll(l => !l.IsActive);
         return heard;
     }
+
+    private readonly Stack<List<MessageListener>> _spare = new();
 
     /// <summary>Drops listeners whose owners are gone, e.g. after a scene switch.</summary>
     public void Prune(Scene scene)

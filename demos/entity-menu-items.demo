@@ -119,6 +119,20 @@ deselect
 menu: Entity > Genres > Physics Games > Slingshot
 deselect
 menu: Entity > Genres > Physics Games > Tower
+deselect
+menu: Entity > Genres > Physics Games > Pinball Table
+deselect
+menu: Entity > Genres > Physics Games > Flippers
+deselect
+menu: Entity > Genres > Physics Games > Bumper
+deselect
+menu: Entity > Genres > Physics Games > Kickers
+deselect
+menu: Entity > Genres > Physics Games > Plunger
+deselect
+menu: Entity > Genres > Physics Games > Drop Targets
+deselect
+menu: Entity > Genres > Physics Games > Lanes
 
 chapter: Puzzles | Entity > Genres > Puzzles
 deselect

@@ -13,11 +13,13 @@
 // --breakable 150, that many Breakable posts and planks stacked into towers five storeys high, asleep, and a heavy ball
 // thrown through them, timed step by step as they crack, break into pieces and collapse (once untimed first, so nothing is
 // compiled while it's timed); with --sturdy too, too strong to break, so they only crack and fall (a big collapse, nothing
-// added to the scene). It prints the median, mean and worst step and the bytes allocated meanwhile (for a collapse, the
+// added to the scene). With --pinball 20, that many pinball tables (Create Pinball Table) side by side, each with its ball
+// shot from the plunger at full power and two more dropped in from the top, the flippers flipping now and then, timed as
+// they play, and watched for a ball that gets out of its table (through a wall or a flipper) and for the fastest one. It prints the median, mean and worst step and the bytes allocated meanwhile (for a collapse, the
 // scene's first step, which sets everything up, apart from the rest). The numbers are this computer's: compare runs on the
 // same one.
 //   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60] [--hinges 60]
-//     [--welded 60] [--ropes 40] [--breakable 150 [--sturdy]]
+//     [--welded 60] [--ropes 40] [--breakable 150 [--sturdy]] [--pinball 20]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
@@ -77,6 +79,101 @@ if (ropes > 0)
     Console.WriteLine($"{ropes} ropes 3 long ({ropes / 2 + ropes % 2} with a crate on the end) swinging over pegs");
     Console.WriteLine($"swinging: {swinging}");
     Console.WriteLine($"later:    {hanging}");
+    return;
+}
+
+var pinball = Arg("--pinball", 0);
+if (pinball > 0)
+{
+    // Tables 12 apart, each with three balls: the one on its plunger, and two dropped in over the bumpers.
+    (Scene Scene, Game Game, List<Entity> Balls) Tables()
+    {
+        var tables = new Scene();
+        var preset = Griff.Editing.EntityPreset.All.Single(p => p.Id == "Entity.CreatePinballTable");
+        var balls = new List<Entity>();
+        for (var i = 0; i < pinball; i++)
+        {
+            var table = new Entity(preset.EntityName(tables));
+            preset.Configure(table, tables);
+            var parts = preset.CreateChildren(tables).ToList();
+            table.Transform.Position = new Vector3(i * 12, 0, 0);
+            tables.Add(table);
+            foreach (var part in parts)
+                tables.Add(part, table);
+            var ball = table.Children.Single(e => e.Name == "Ball");
+            balls.Add(ball);
+            for (var extra = 0; extra < 2; extra++)
+            {
+                var more = new Entity("Ball");
+                more.Transform.Position = new Vector3(-2 + extra * 2.5f, 6.5f, 0);
+                more.AddComponent<CircleCollider>().Radius = 0.3f;
+                var body = more.AddComponent<Body>();
+                (body.Rotates, body.Bounciness, body.RollingResistance, body.Grip, body.Velocity) = (true, 0.3f, 0.02f, 0.3f, new Vector2(extra == 0 ? 3 : -4, 0));
+                tables.Add(more, table);
+                balls.Add(more);
+            }
+        }
+
+        return (tables, new Game(tables, new InputState()), balls);
+    }
+
+    // Shot at full power a moment in; each table's flippers flipped every so often, the tables out of step.
+    void Play(Game played, Scene tables, int step)
+    {
+        if (step == 10)
+        {
+            foreach (var plunger in tables.All<Plunger>())
+                played.Do(plunger.Entity!, "Launch");
+        }
+
+        foreach (var flipper in tables.All<Flipper>())
+        {
+            var table = flipper.Entity!.Parent!;
+            if ((step + (int)(table.Transform.Position.X / 12) * 7) % 45 == 0)
+                played.Do(flipper.Entity!, "Flip");
+        }
+    }
+
+    var (warmScene, warm, _) = Tables();
+    for (var i = 0; i < steps; i++)
+    {
+        Play(warm, warmScene, i);
+        warm.Tick(Frame);
+    }
+
+    var (timedScene, playing, played) = Tables();
+    var times = new double[steps];
+    var (fastest, escaped, allocatedAll, firstStep) = (0f, new HashSet<Entity>(), 0L, 0L);
+    for (var i = 0; i < steps; i++)
+    {
+        Play(playing, timedScene, i);
+        var start = Stopwatch.GetTimestamp();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        playing.Tick(Frame);
+        var made = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (i == 0)
+            firstStep = made;
+        else
+            allocatedAll += made;
+        times[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        foreach (var ball in played)
+        {
+            if (ball.Scene is null || ball.Parent is null || !ball.IsActive || ball.GetComponent<Body>() is not { } body)
+                continue;
+            fastest = MathF.Max(fastest, body.Velocity.Length());
+            var at = ball.Transform.WorldPosition - ball.Parent!.Transform.WorldPosition;
+            if (MathF.Abs(at.X) > 5.3f || at.Y > 9.3f || at.Y < -10.7f)
+                escaped.Add(ball);
+        }
+    }
+
+    var allocated = allocatedAll / Math.Max(1, steps - 1);
+    Array.Sort(times);
+    var score = timedScene.All<Bumper>().Sum(b => b.Hits);
+    Console.WriteLine($"{pinball} pinball tables, three balls each, shot and flipped: fastest ball {fastest:0.0} units a second, " +
+        $"{escaped.Count} got out of their table, {score} bumper hits, {timedScene.All<Drain>().Sum(d => d.Ball - 1)} balls lost");
+    Console.WriteLine($"play: median {times[steps / 2]:0.000} ms, mean {times.Average():0.000} ms, worst {times[^1]:0.000} ms a step, " +
+        $"{allocated} bytes a step after the first (taking balls lost off the table and serving them), {firstStep / 1024} KB the first");
     return;
 }
 

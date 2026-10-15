@@ -18,6 +18,11 @@ public sealed partial class Game : IGameContext
     private readonly List<Entity> _kept = [];
     private readonly MessageBoard _messages = new();
     private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
+
+    // Who touched what in this frame's physics, both ways round (triggers and what's in them too), for systems that look
+    // for themselves without making garbage.
+    internal HashSet<(Entity Source, Entity Target)> Touches => _touches;
+
     private string? _pendingScene;
     // A fade out on its way to a scene, or to a call (FadeThrough) with no scene change.
     private (string? Scene, Action? Then, float Seconds)? _fadingOut;
@@ -350,44 +355,84 @@ public sealed partial class Game : IGameContext
             Net.Relay(message, data, route);
         var heard = _messages.Send(message, data, Scene, route);
 
-        // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something
-        // else); or 1 a message, whatever it sends.
-        var counters = Active<Counter>()
-            .Where(c => c.Message?.Trim() == message && !c.CountsOwn && route.Reaches(c.Entity)).ToList();
-        foreach (var counter in counters)
-            counter.Add(counter.OnePerMessage ? 1 : CountOf(data));
-
-        // So do sound players.
-        var players = Scene.Active<SoundPlayer>()
-            .Where(p => p.Message?.Trim() == message && route.Reaches(p.Entity)).ToList();
-        foreach (var player in players)
-            Play(player);
-
-        // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
-        var done = 0;
-        var hearers = Scene.Active<IHearsMessages>();
-        if (hearers.Count > 0)
+        // Each kind that hears it is picked out first (what hearing it does can change the scene), into lists kept for the
+        // next message, so sending one makes no garbage.
+        var picked = PickList();
+        try
         {
-            foreach (var hearer in hearers.ToList())
+            // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count
+            // something else); or 1 a message, whatever it sends.
+            foreach (var counter in Active<Counter>())
             {
-                if (hearer is Component { Entity: { } entity } && Runs(entity) && route.Reaches(entity) && hearer.Hear(message, data))
+                if (Named(counter.Message, message) && !counter.CountsOwn && route.Reaches(counter.Entity))
+                    picked.Add(counter);
+            }
+
+            var counters = picked.Count;
+            foreach (var component in picked)
+            {
+                var counter = (Counter)component;
+                counter.Add(counter.OnePerMessage ? 1 : CountOf(data));
+            }
+
+            // So do sound players.
+            picked.Clear();
+            foreach (var player in Scene.Active<SoundPlayer>())
+            {
+                if (Named(player.Message, message) && route.Reaches(player.Entity))
+                    picked.Add(player);
+            }
+
+            var players = picked.Count;
+            foreach (var player in picked)
+                Play((SoundPlayer)player);
+
+            // And components that hear messages themselves (a dungeon going down a floor on its message) where the game is run.
+            var done = 0;
+            picked.Clear();
+            foreach (var hearer in Scene.Active<IHearsMessages>())
+            {
+                if (hearer is Component component)
+                    picked.Add(component);
+            }
+
+            foreach (var component in picked)
+            {
+                if (component.Entity is { } entity && Runs(entity) && route.Reaches(entity) && ((IHearsMessages)component).Hear(message, data))
                     done++;
             }
+
+            // And triggers do what they do.
+            done += FireTriggers(message, data, route);
+
+            // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that
+            // isn't set: after the triggers, so one that sets the flag on this message lets it open.
+            picked.Clear();
+            foreach (var panel in Scene.All<Panel>())
+            {
+                if (Named(panel.OpenMessage, message) && !panel.Entity!.IsEnabled && (panel.Entity.Parent is null || panel.Entity.Parent.IsActive) &&
+                    route.Reaches(panel.Entity) && FlagHolds(panel.NeedsFlag))
+                    picked.Add(panel);
+            }
+
+            foreach (var panel in picked)
+                OpenPanel((Panel)panel);
+            return heard + counters + players + picked.Count + done;
+        }
+        finally
+        {
+            picked.Clear();
+            _pickLists.Push(picked);
         }
 
-        // And triggers do what they do.
-        done += FireTriggers(message, data, route);
-
-        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that
-        // isn't set: after the triggers, so one that sets the flag on this message lets it open.
-        var panels = Scene.All<Panel>()
-            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive) &&
-                        route.Reaches(p.Entity) && FlagHolds(p.NeedsFlag))
-            .ToList();
-        foreach (var panel in panels)
-            OpenPanel(panel);
-        return heard + counters.Count + players.Count + panels.Count + done;
+        static bool Named(string? name, string message) => name is not null && name.AsSpan().Trim().SequenceEqual(message);
     }
+
+    // Lists Deliver picks out what hears a message into, one for each message being sent at once (one sent as another is
+    // heard), kept for the next.
+    private readonly Stack<List<Component>> _pickLists = new();
+
+    private List<Component> PickList() => _pickLists.Count > 0 ? _pickLists.Pop() : [];
 
     /// <summary>The middle of an entity: its collider's, or its position.</summary>
     internal static Vector2 CenterOf(Entity entity)
@@ -802,9 +847,15 @@ public sealed partial class Game : IGameContext
 
     private void OnTrigger(Entity trigger, Entity other, bool entered)
     {
-        Notify(trigger, behavior => behavior.RunTrigger(other, entered));
-        Notify(other, behavior => behavior.RunTrigger(trigger, entered));
+        // Most things going in and out of triggers (a ball through a pinball lane) have no scripts to tell (and telling them
+        // is apart, so nothing is made for them unless there are).
+        if (HasBehaviors(trigger))
+            NotifyTrigger(trigger, other, entered);
+        if (HasBehaviors(other))
+            NotifyTrigger(other, trigger, entered);
     }
+
+    private void NotifyTrigger(Entity entity, Entity other, bool entered) => Notify(entity, behavior => behavior.RunTrigger(other, entered));
 
     // Lifetimes run on game time; the fade out is an ordinary FadeTo, so it shows on sprites, text and tilemaps alike.
     private void RunLifetimes()

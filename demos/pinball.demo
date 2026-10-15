@@ -1,0 +1,58 @@
+title: Pinball pieces
+intro: Flippers, bumpers and kickers, a plunger, drop targets and lanes, a drain with a ball save, and the tilt: pinball with no code.
+project: Empty | Silver Ball
+
+chapter: A table | Entity > Genres > Physics Games
+create: Pinball Table
+expectcount: Bumper = 3
+expectcount: Drop Target = 3
+expectcount: Lane = 3
+expectcount: Ball = 1
+expectvalue: Main Camera.Camera.Size = 10
+say: Create Pinball Table makes a whole little table: walls, a plunger in its lane with the ball resting on it, two flippers over the drain, bumpers, kickers, lanes and drop targets, with the score and the ball beside it.
+select: Left Flipper
+explain: component:Flipper | Flipper | A flipper is a paddle on a hinge. Hold its button and it snaps up as far as the hinge's limits let it, and drops as it's let go.
+explain: field:Flipper.Speed | Speed and Strength | It swings this fast and this hard, so the ball comes off it hard and the same every time: faster the further along the paddle it is.
+select: Bumper
+explain: component:Bumper | Bumper | A bumper knocks whatever touches it away hard, as it flashes, pops, plays its sound and sends its points to the score.
+select: Left Kicker
+explain: field:Bumper.Direction | A kicker | With a direction, a bumper is a slingshot kicker: only its rubber side kicks, that way.
+select: Plunger
+explain: component:Plunger | Plunger | Hold its button to pull it back, the longer the further, and let go to shoot. A gamepad's stick pulls it as far as it's pushed.
+select: Drain
+explain: component:Drain | Drain | The drain loses balls and serves the next onto the plunger. A ball lost soon after it's shot is saved and shot again.
+select: Pinball Table
+explain: component:Tilt | Tilt | Nudge the table to push the ball, but nudge too often and it warns, then tilts: the flippers drop and the table goes dead until the ball drains.
+deselect
+
+chapter: Play | Shoot, flip and nudge
+play
+wait: 1
+expectvalue: Plunger.Plunger.Loaded = true
+expectvalue: Balls.Counter.Value = 1
+hold: Space 1.2
+wait: 0.3
+expectvalue: Plunger.Plunger.Launches = 1
+explain: game | Away it goes | Held a second, the plunger shoots the ball at full power up its lane and round the top, through the lanes and into the bumpers.
+wait: 3
+expectvalue: Score.Counter.Value = 50000 ~ 49990
+say: Everything it hits scores, through a Counter: bumpers, kickers, lanes and targets.
+hold: LeftShift 0.4
+expectvalue: Left Flipper.Flipper.Flips = 1
+hold: RightShift 0.4
+expectvalue: Right Flipper.Flipper.Flips = 1
+explain: game | The flippers | Left Shift and Right Shift flip, or Z and slash, or a gamepad's shoulders. A fast ball never goes through them.
+tap: N
+expectvalue: Pinball Table.Tilt.Nudges = 1
+say: N nudges the table, giving the ball a push.
+tap: N
+tap: N
+tap: N
+tap: N
+expectvalue: Pinball Table.Tilt.Tilted = true
+explain: game | Tilt | Nudged too often, the table warns, then tilts: the flippers won't go up until the ball drains.
+hold: LeftShift 0.3
+expectvalue: Left Flipper.Flipper.Flips = 1
+wait: 1
+stop
+say: That's pinball with no code: flippers, bumpers, kickers, a plunger, targets and lanes that score, a drain with a ball save, and the tilt, each naming its actions and outputs for triggers and wires, the same to the bit in a rewind, and played in a network game.

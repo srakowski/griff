@@ -271,6 +271,10 @@ public sealed class InputState : IInput
             ["Skip"] = [Key.LeftControl, Key.RightControl, GamepadButton.RightTrigger],
             ["Auto"] = [Key.A, GamepadButton.X],
             ["Log"] = [Key.H, GamepadButton.LeftShoulder],
+            ["LeftFlipper"] = [Key.LeftShift, Key.Z, GamepadButton.LeftShoulder, GamepadButton.LeftTrigger],
+            ["RightFlipper"] = [Key.RightShift, Key.Slash, GamepadButton.RightShoulder, GamepadButton.RightTrigger],
+            ["Plunger"] = [Key.Space, Key.Down, GamepadButton.A],
+            ["Nudge"] = [Key.N, Key.Up, GamepadButton.B],
         };
 
     private readonly Dictionary<string, InputBinding[]> _actions =

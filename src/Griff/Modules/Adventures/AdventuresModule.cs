@@ -4,8 +4,9 @@ namespace Griff.Modules.Adventures;
 
 /// <summary>
 /// Point-and-click adventures: walk areas a character finds its way round (<see cref="WalkArea"/>), the character that
-/// walks where the player clicks (<see cref="Walker"/>), and things to look at and use (<see cref="Hotspot"/>), with
-/// Create Walk Area, Create Hotspot and Create Walker in the Entity menu.
+/// walks where the player clicks (<see cref="Walker"/>), things to look at and use (<see cref="Hotspot"/>), and items to
+/// pick up, use on things (<see cref="UseWith"/>) and put together (<see cref="InventoryBar"/>), with
+/// Create Walk Area, Create Hotspot, Create Walker and Create Item in the Entity menu.
 /// </summary>
 public sealed class AdventuresModule : GameModule
 {

@@ -1,0 +1,101 @@
+title: Items in adventures
+intro: Pick things up, use them on what's in the room and put two together, with no code: by clicking, tapping, or with the keys.
+project: Empty | Adventure Items
+
+chapter: Something to take | Items and the inventory bar
+# Built from Empty and Sprite, a component at a time (Entity > Genres > Adventures > Walker and Item make the same in
+# one go).
+create: Empty
+rename: Floor
+set: Transform.Position = 0, -2, 0
+add: WalkArea
+set: WalkArea.Points = -7 -1.5; 7 -1.5; 7 1.5; -7 1.5
+deselect
+create: Sprite
+rename: Player
+set: Transform.Position = -4, -1.4, 0
+set: Sprite.Size = 0.8, 1.6
+set: Sprite.Tint = #4C8DF0
+set: Sprite.Order = 10
+add: Walker
+add: InventoryBar
+expectcomponents: Player = Transform, Sprite, Walker, Inventory, InventoryBar
+explain: component:InventoryBar | An inventory bar | An inventory bar shows what the player carries along the bottom of the screen, each item with its icon and name.
+set: Inventory.SaveAs = Items
+explain: field:Inventory.SaveAs | Save As | Save As keeps what the player carries between runs, and from room to room, as flags are kept.
+deselect
+create: Sprite
+rename: Key
+set: Transform.Position = 3, -2.5, 0
+set: Sprite.Size = 0.5, 0.5
+set: Sprite.Tint = #E8C54A
+add: Hotspot
+set: Hotspot.StandAt = 0, 1
+set: Hotspot.UseLine = I'll take that.
+set: Hotspot.UseGives = Key
+set: Hotspot.UseFlag = TookKey
+set: Hotspot.NeedsFlag = not TookKey
+set: Hotspot.HideWhenGone = true
+explain: field:Hotspot.UseGives | Use Gives | A hotspot's Use Gives puts an item in the player's inventory. With a flag, and Hide When Gone, it can only be taken once.
+deselect
+play
+wait: 0.5
+gameclick: Key
+wait: 3.5
+expectvalue: Player.Walker.Said = I'll take that.
+explain: game | In the bar | The key is in the bar now, and gone from the room for good.
+stop
+
+chapter: Using it on something | Use With
+deselect
+create: Sprite
+rename: Door
+set: Transform.Position = -1, 1.5, 0
+set: Sprite.Size = 1.2, 2
+set: Sprite.Tint = #8A5A33
+add: Hotspot
+set: Hotspot.StandAt = 0, -2.5
+set: Hotspot.UseLine = It's locked.
+add: UseWith
+expectcomponents: Door = Transform, Sprite, Hotspot, UseWith
+set: UseWith.Item = Key
+set: UseWith.Line = The key turns. It's open!
+set: UseWith.Flag = DoorOpen
+explain: component:UseWith | Use With | A Use With says what an item used on a hotspot does: a line, an action, a flag, a message, something given in return. The item is given up, unless it keeps it.
+deselect
+play
+wait: 0.5
+gamebutton: item:Key
+wait: 0.5
+expectvalue: Player.InventoryBar.Holding = Key
+explain: game | On the pointer | Clicking an item picks it up, and the pointer turns into it.
+gameclick: Door
+wait: 2.5
+expectvalue: Player.Walker.Said = The key turns. It's open!
+expectvalue: Door.UseWith.TimesUsed = 1
+explain: game | Used | Clicking the door walks over and uses the key on it. Any other item gets the hotspot's Wrong Item Line, or the bar's Wrong Line.
+stop
+
+chapter: Putting two together | Combinations, and the keys
+menu: Game > Clear Save Data
+select: Player
+set: Inventory.Items = Rope\nHook
+set: InventoryBar.Combinations = Grappling Hook = Rope + Hook: I tie the rope to the hook.
+explain: field:InventoryBar.Combinations | Combinations | Combinations say which items go together and what they make, one per row, with a line to say.
+set: InventoryBar.Descriptions = Grappling Hook: Ready to climb.
+deselect
+play
+wait: 0.5
+gamebutton: item:Rope
+wait: 0.3
+gamebutton: item:Hook
+wait: 0.5
+expectvalue: Player.Walker.Said = I tie the rope to the hook.
+explain: game | Together | Picking the rope and clicking the hook makes a grappling hook.
+tap: E
+wait: 0.3
+tap: X
+wait: 0.5
+expectvalue: Player.Walker.Said = Ready to climb.
+explain: game | The keys | The keys and a controller play it too: Interact goes over to the bar, and Attack looks at an item. Left and right go from hotspot to hotspot, and Jump uses one.
+stop

@@ -23,24 +23,45 @@ public static class Playtesting
     }
 
     /// <summary>
-    /// The point in the world an agent names for the mouse: <c>[x, y]</c> in world units, or an entity's name for its
-    /// middle (its collider's, if it has one). Throws an <see cref="AgentException"/> saying what's wrong otherwise.
+    /// The point in the world an agent names for the mouse: <c>[x, y]</c> in world units, an entity's name for its middle
+    /// (its collider's, if it has one), or the label of a button a system shows on the screen (an inventory bar's item, a
+    /// hotbar's slot: see <see cref="Game.HudButtons"/>) for its middle, after its kind (<c>"Item: Key"</c>) when an
+    /// entity has the same name. Throws an <see cref="AgentException"/> saying what's wrong otherwise.
     /// </summary>
-    public static Vector2 PointOf(JsonElement value, Scene scene)
+    public static Vector2 PointOf(JsonElement value, Scene scene, Game? game = null)
     {
         if (value.ValueKind == JsonValueKind.Array && value.GetArrayLength() == 2 &&
             value.EnumerateArray().All(v => v.ValueKind == JsonValueKind.Number))
             return new Vector2(value[0].GetSingle(), value[1].GetSingle());
         if (value.ValueKind == JsonValueKind.String)
         {
-            var name = value.GetString()!;
-            var entity = scene.FindNamed(name, activeOnly: true) ?? scene.FindNamed(name)
-                         ?? throw new AgentException($"There's no \"{name}\" in the game to point at.");
+            var name = value.GetString()!.Trim();
+            var buttons = game?.HudButtons ?? [];
+            var colon = name.IndexOf(':');
+            if (colon > 0 && buttons.FirstOrDefault(b => b.Kind.Equals(name[..colon].Trim(), StringComparison.OrdinalIgnoreCase) &&
+                                                         b.Label.Equals(name[(colon + 1)..].Trim(), StringComparison.OrdinalIgnoreCase)) is { } kindAndLabel)
+                return kindAndLabel.Rect.Center;
+            if (scene.FindNamed(name, activeOnly: true) is { } active)
+                return Game.CenterOf(active);
+            if (buttons.FirstOrDefault(b => b.Label.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } button)
+                return button.Rect.Center;
+            var entity = scene.FindNamed(name)
+                         ?? throw new AgentException($"There's no \"{name}\" in the game to point at" +
+                                                     (buttons.Count > 0 ? $" (the buttons on the screen: {ButtonList(buttons)})." : "."));
             return Game.CenterOf(entity);
         }
 
-        throw new AgentException($"A point is [x, y] in world units or an entity's name, not {value.GetRawText()}.");
+        throw new AgentException($"A point is [x, y] in world units, an entity's name or a button on the screen, not {value.GetRawText()}.");
     }
+
+    /// <summary>
+    /// The buttons systems show on the screen (an inventory bar's items, a hotbar's slots), to click by label, e.g.
+    /// <c>On the screen: Item: Key, Item: Rope.</c> Null when there are none.
+    /// </summary>
+    public static string? Buttons(Game game) =>
+        game.HudButtons is { Count: > 0 } buttons ? $"On the screen (click them by label): {ButtonList(buttons)}." : null;
+
+    private static string ButtonList(IEnumerable<HudButton> buttons) => string.Join(", ", buttons.Select(b => $"{b.Kind}: {b.Label}"));
 
     /// <summary>
     /// What <paramref name="entity"/>'s drag and drop is doing, to add to where it is: <c>, held</c>, <c>, on Slot 2</c>, or

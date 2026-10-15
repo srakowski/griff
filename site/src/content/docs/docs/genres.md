@@ -62,4 +62,4 @@ Card games have pages of their own: decks, hands and play zones, drawing, shuffl
 
 ## Point-and-click adventures
 
-Walk areas drawn round a room's floor (with holes for the furniture, and depth so the player shrinks into the distance), a walker that goes where the player clicks or taps along the shortest way round, and hotspots that show their name under the pointer and answer a look or a use with a line, an action, a flag or a conversation, all with no code: see [Point-and-click adventures](/docs/adventures/).
+Walk areas drawn round a room's floor (with holes for the furniture, and depth so the player shrinks into the distance), a walker that goes where the player clicks or taps along the shortest way round, and hotspots that show their name under the pointer and answer a look or a use with a line, an action, a flag or a conversation, with an inventory bar of items to pick up, use on things and put together, all with no code and with the mouse, touch, keys or a controller: see [Point-and-click adventures](/docs/adventures/).

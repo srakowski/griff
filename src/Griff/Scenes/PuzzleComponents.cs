@@ -170,7 +170,10 @@ public sealed class Switch : Component
 /// locked <see cref="Door"/>s and <see cref="Switch"/>es use up its keys. A <see cref="Counter"/> with an
 /// <see cref="Counter.Item"/> shows how many there are.
 /// </summary>
-/// <remarks>It's saved with the scene, so it rewinds with everything else and you can start a playtest holding a key.</remarks>
+/// <remarks>
+/// It's saved with the scene, so it rewinds with everything else and you can start a playtest holding a key; with
+/// <see cref="SaveAs"/> it's kept in the save data too, from one run (and one scene) to the next.
+/// </remarks>
 [Category("Gameplay")]
 [ComponentName("Griff.Inventory")]
 public sealed class Inventory : Component
@@ -189,6 +192,7 @@ public sealed class Inventory : Component
         {
             _items.Clear();
             _rows = null;
+            Version++;
             foreach (var row in value ?? [])
             {
                 var text = row.Trim();
@@ -224,6 +228,19 @@ public sealed class Inventory : Component
     /// <summary>A sound played as an item is used, e.g. "Sounds/drink.wav".</summary>
     public string? UseSound { get; set; }
 
+    /// <summary>
+    /// Keeps what it holds in the game's save data under this name, e.g. "Items", so it's still there the next time the
+    /// game runs, and an inventory saved as the same name in the next scene starts with it (a player walking from room to
+    /// room). Empty keeps nothing. Game → Clear Save Data forgets it while you test.
+    /// </summary>
+    [Group("Saving")]
+    public string? SaveAs { get; set; }
+
+    /// <summary>Set by the game once it has taken what it holds from the save data, so a rewind doesn't do it again. Leave it be.</summary>
+    public bool Loaded { get; set; }
+
+    public override bool Uses(string property) => property != nameof(Loaded);
+
     /// <summary>Raised when what it holds changes, with the item's name.</summary>
     public event Action<string>? Changed;
 
@@ -246,6 +263,14 @@ public sealed class Inventory : Component
 
     /// <summary>Everything it holds and how many, in the order each was first added.</summary>
     public IReadOnlyList<(string Name, int Count)> Contents => _items.ToList();
+
+    // What it holds, without a copy (for what reads it every frame), and a number that goes up whenever that changes.
+    internal IReadOnlyList<(string Name, int Count)> Held => _items;
+
+    internal int Version { get; private set; }
+
+    // The Version last kept in the save data.
+    internal int SavedVersion { get; set; } = -1;
 
     /// <summary>How many of <paramref name="item"/> it holds (names ignore case). Read as "Count:Key".</summary>
     [Output(Example = "Key")]
@@ -277,6 +302,7 @@ public sealed class Inventory : Component
         var names = _items.Select(i => i.Name).ToList();
         _items.Clear();
         _rows = null;
+        Version++;
         foreach (var name in names)
             Changed?.Invoke(name);
     }
@@ -289,6 +315,7 @@ public sealed class Inventory : Component
         var i = IndexOf(item);
         var total = (i >= 0 ? _items[i].Count : 0) + count;
         _rows = null;
+        Version++;
         if (i >= 0 && total <= 0)
             _items.RemoveAt(i);
         else if (i >= 0)

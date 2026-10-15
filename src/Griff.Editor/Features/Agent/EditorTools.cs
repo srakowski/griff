@@ -67,7 +67,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 "The mouse: \"point\" moves it to a point, \"click\" clicks there (\"button\": \"Right\" for the right button), and \"drag\" presses " +
                 "at \"from\", moves to \"to\" over \"seconds\" (default 0.5) and lets go, e.g. {\"drag\": {\"from\": \"Card\", \"to\": \"Slot\"}} " +
                 "(with \"release\": false in it, it keeps holding, to see what's held over what, until a {\"release\": true} step lets go). " +
-                "A point is [x, y] in world units or an entity's name (its middle). The real mouse takes over again once it moves over the game. " +
+                "A point is [x, y] in world units, an entity's name (its middle), or a button on the screen by its label (an inventory bar's item, \"Item: Key\"; the report lists them). The real mouse takes over again once it moves over the game. " +
                 "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
                 "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
                 "freezes it, so nothing happens while you decide the next move; the next game_input resumes it. The editor window has to be on screen for the game to run.",
@@ -426,6 +426,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
         if (_usedMouse)
             log.AppendLine(Playtesting.Mouse(game));
+        if (Playtesting.Buttons(game) is { } buttons)
+            log.AppendLine(buttons);
 
         if (Playtesting.Talking(game) is { } talking)
             log.AppendLine(talking);
@@ -449,7 +451,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         if (step.TryGetProperty("point", out var point))
         {
             _usedMouse = true;
-            play.PointAt(Playtesting.PointOf(point, game.Scene));
+            play.PointAt(Playtesting.PointOf(point, game.Scene, game));
             await FramesAsync(2);
             return true;
         }
@@ -457,7 +459,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         if (step.TryGetProperty("click", out var click))
         {
             _usedMouse = true;
-            play.PointAt(Playtesting.PointOf(click, game.Scene));
+            play.PointAt(Playtesting.PointOf(click, game.Scene, game));
             await FramesAsync(1);
             input.SetMouseButton(button, true);
             await FramesAsync(2);
@@ -478,8 +480,8 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         if (drag.ValueKind != JsonValueKind.Object || !drag.TryGetProperty("from", out var fromValue) || !drag.TryGetProperty("to", out var toValue))
             throw new AgentException("A drag is {\"from\": point, \"to\": point}, each [x, y] or an entity's name.");
         _usedMouse = true;
-        var from = Playtesting.PointOf(fromValue, game.Scene);
-        var to = Playtesting.PointOf(toValue, game.Scene);
+        var from = Playtesting.PointOf(fromValue, game.Scene, game);
+        var to = Playtesting.PointOf(toValue, game.Scene, game);
         var seconds = step.TryGetProperty("seconds", out var s) && s.ValueKind == JsonValueKind.Number ? Math.Clamp(s.GetDouble(), 0.05, 10) : 0.5;
         play.PointAt(from);
         await FramesAsync(1);

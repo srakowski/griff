@@ -11,7 +11,7 @@ namespace Griff.Modules.Adventures;
 /// player's mouse), its walk along the way its <see cref="WalkMap"/> finds, what it does with a <see cref="Hotspot"/> once
 /// it's there, and what it says; on each screen, the hotspot under the pointer, its name by it and the pointer's look.
 /// </summary>
-internal sealed class AdventuresSystem : GameSystem
+internal sealed partial class AdventuresSystem : GameSystem
 {
     // How far apart a walker's feet and where it's going count as there.
     private const float There = 0.01f;
@@ -25,12 +25,14 @@ internal sealed class AdventuresSystem : GameSystem
     {
         _setCursor = false;
         _named = default;
+        ItemsSceneChanged();
     }
 
     // After the movements, so a click this frame sets off this frame; before the dialogues, so a talk a hotspot starts
     // doesn't hear the click that started it.
     internal void Run()
     {
+        ShowOrHide();
         var walkers = Game.Showing<Walker>();
         var hotspots = Game.Showing<Hotspot>();
         Hover(walkers, hotspots);
@@ -38,6 +40,8 @@ internal sealed class AdventuresSystem : GameSystem
         {
             foreach (var hotspot in hotspots)
                 hotspot.Asked = null;
+            foreach (var bar in Game.Showing<InventoryBar>())
+                bar.Asked.Clear();
             return;
         }
 
@@ -60,19 +64,28 @@ internal sealed class AdventuresSystem : GameSystem
                 GoTo(walker, place);
             }
 
+            KeepBarTidy(walker);
             if (walker.Controllable && !Game.PausedThisFrame && Game.Talking is null && Game.TopPanel is null)
+            {
                 Click(walker, hotspots);
+                Keys(walker, hotspots);
+            }
+
             Walk(walker, dt);
         }
 
-        // A hotspot's Look or Use action: the player's walker goes over to it.
+        // An inventory bar's Combine and Look At actions.
+        RunBarActions(walkers);
+
+        // A hotspot's Look, Use or Use Item action: the player's walker goes over to it.
         foreach (var hotspot in hotspots)
         {
             if (hotspot.Asked is not { } verb)
                 continue;
-            hotspot.Asked = null;
+            var item = hotspot.AskedItem;
+            (hotspot.Asked, hotspot.AskedItem) = (null, null);
             if (InCharge(walkers) is { } walker && Game.Runs(walker.Entity!))
-                Approach(walker, hotspot, verb);
+                Approach(walker, hotspot, verb, item);
         }
     }
 
@@ -95,17 +108,60 @@ internal sealed class AdventuresSystem : GameSystem
         var entity = walker.Entity!;
         var input = Game.InputOf(entity);
         var left = input.WasPressed(MouseButton.Left);
-        var right = walker.RightClickLooks && input.WasPressed(MouseButton.Right);
-        if (!left && !right || !Pointer(walker, input, out var at) || OnUi(input))
+        var rightPressed = input.WasPressed(MouseButton.Right);
+        var bar = entity.GetComponent<InventoryBar>();
+        if (!left && bar is { Dragged: { } dragged } && input.WasReleased(MouseButton.Left))
+        {
+            bar.Dragged = null;
+            Drop(walker, bar, dragged, hotspots, input);
+        }
+
+        if (!left && !rightPressed || !Pointer(walker, input, out var at))
+            return;
+
+        // The mouse is in use: the keys' pointer goes. A click on the inventory bar is the bar's.
+        walker.Pointed = null;
+        if (bar is not null)
+            bar.Dragged = null;
+        if (bar is not null)
+            bar.Cursor = -1;
+        if (bar is not null && BarClick(walker, bar, input, at, left, rightPressed))
+            return;
+        if (OnUi(input))
+            return;
+
+        // A right click puts back the item on the pointer.
+        var holding = bar?.Holding;
+        if (holding is not null && rightPressed)
+        {
+            bar!.PutBack();
+            return;
+        }
+
+        var right = walker.RightClickLooks && rightPressed;
+        if (!left && !right)
             return;
 
         // A click moves on what it's saying, and goes where it was clicked.
         if (walker.SayLeft > 0)
             (walker.Said, walker.SayLeft) = (null, 0);
         if (HotspotAt(hotspots, at) is { } hotspot)
-            Approach(walker, hotspot, right ? AdventureVerb.Look : walker.Verb);
+        {
+            if (holding is not null)
+            {
+                // The item on the pointer is used on it, and leaves the pointer.
+                bar!.Holding = null;
+                Approach(walker, hotspot, AdventureVerb.Use, holding);
+            }
+            else
+            {
+                Approach(walker, hotspot, right ? AdventureVerb.Look : walker.Verb);
+            }
+        }
         else
+        {
             WalkTo(walker, at, null);
+        }
     }
 
     // Where the pointer is in the world, through the walker's camera (the main view without one); false while it's off it.
@@ -148,17 +204,17 @@ internal sealed class AdventuresSystem : GameSystem
     // ----- Walking -----
 
     // Off to a hotspot to look at it or use it: straight away if it's not walked to, or the walker is there already.
-    private void Approach(Walker walker, Hotspot hotspot, AdventureVerb verb)
+    private void Approach(Walker walker, Hotspot hotspot, AdventureVerb verb, string? item = null)
     {
         if (!hotspot.WalkThere)
         {
             walker.Stop();
-            Act(walker, hotspot, verb);
+            Act(walker, hotspot, verb, item);
             return;
         }
 
         WalkTo(walker, hotspot.StandPoint, hotspot);
-        walker.HeadingVerb = verb;
+        (walker.HeadingVerb, walker.HeadingItem) = (verb, item);
         if (!walker.IsWalking)
             Arrive(walker);
     }
@@ -186,6 +242,7 @@ internal sealed class AdventuresSystem : GameSystem
         walker.Route = path.Count == 0 ? null : FormatRoute(path);
         walker.HeadingHotspot = hotspot;
         walker.Heading = hotspot?.Entity!.Name;
+        walker.HeadingItem = null;
     }
 
     // A step along its route, at its speed (slower further up a walk area that scales with depth), facing the way it goes.
@@ -255,10 +312,10 @@ internal sealed class AdventuresSystem : GameSystem
         var hotspot = walker.HeadingHotspot is { Entity: { } entity } heading && entity.Scene == Game.Scene && entity.Name == walker.Heading
             ? heading
             : FindHotspot(walker.Heading);
-        var verb = walker.HeadingVerb;
-        (walker.Heading, walker.HeadingHotspot) = (null, null);
+        var (verb, item) = (walker.HeadingVerb, walker.HeadingItem);
+        (walker.Heading, walker.HeadingHotspot, walker.HeadingItem) = (null, null, null);
         if (hotspot is not null && hotspot.Entity!.IsActive)
-            Act(walker, hotspot, verb);
+            Act(walker, hotspot, verb, string.IsNullOrWhiteSpace(item) ? null : item.Trim());
     }
 
     // The hotspot on an entity called this (one rewound to, whose walker named it).
@@ -301,45 +358,30 @@ internal sealed class AdventuresSystem : GameSystem
 
     // ----- Looking and using -----
 
-    // Does what a hotspot does for a verb: its flag, its action, its message, its line and (using it) its talk. Something
-    // with nothing to use is looked at.
-    private void Act(Walker walker, Hotspot hotspot, AdventureVerb verb)
+    // Does what a hotspot does for a verb: its flag, its action, its message, what it gives, its line and (using it) its
+    // talk; or, with an item, what its Use With for that item does. Something with nothing to use is looked at.
+    private void Act(Walker walker, Hotspot hotspot, AdventureVerb verb, string? item = null)
     {
         var entity = hotspot.Entity!;
-        if (verb == AdventureVerb.Use && !hotspot.CanUse)
-            verb = AdventureVerb.Look;
-
-        // It turns to face what it looks at or uses.
-        var middle = Game.CenterOf(entity);
-        var toward = middle.X - walker.Feet.X;
-        if (MathF.Abs(toward) > There)
+        Face(walker, entity);
+        if (item is not null)
         {
-            walker.Facing = new Vector2(MathF.Sign(toward), 0);
-            if (walker.FlipSprite)
-                Game.Face(walker.Entity!, MathF.Sign(toward));
+            UseItemOn(walker, hotspot, item);
+            return;
         }
 
+        if (verb == AdventureVerb.Use && !hotspot.CanUse)
+            verb = AdventureVerb.Look;
         var look = verb == AdventureVerb.Look;
         if (look)
             hotspot.TimesLooked++;
         else
             hotspot.TimesUsed++;
-        SetFlag(look ? hotspot.LookFlag : hotspot.UseFlag);
-        var action = look ? hotspot.LookDo : hotspot.UseDo;
-        if (!string.IsNullOrWhiteSpace(action))
-        {
-            var targets = look ? hotspot.LookTargets : hotspot.UseTargets;
-            var with = look ? hotspot.LookWith : hotspot.UseWith;
-            foreach (var target in string.IsNullOrWhiteSpace(targets) ? [entity] : Switch.Named(entity, targets).ToList())
-            {
-                if (target.Scene == Game.Scene)
-                    Game.Do(target, action.Trim(), string.IsNullOrWhiteSpace(with) ? null : with.Trim());
-            }
-        }
-
-        var message = look ? hotspot.LookMessage : hotspot.UseMessage;
-        if (!string.IsNullOrWhiteSpace(message))
-            Game.Send(message.Trim(), walker.Entity, from: entity);
+        Respond(walker, entity, look ? hotspot.LookFlag : hotspot.UseFlag, look ? hotspot.LookDo : hotspot.UseDo,
+            look ? hotspot.LookTargets : hotspot.UseTargets, look ? hotspot.LookWith : hotspot.UseWith,
+            look ? hotspot.LookMessage : hotspot.UseMessage);
+        if (!look)
+            Give(walker, hotspot.Gives);
         var line = look ? hotspot.LookLine : hotspot.UseLine;
         if (!string.IsNullOrWhiteSpace(line))
             walker.Say(line);
@@ -347,6 +389,35 @@ internal sealed class AdventuresSystem : GameSystem
             Game.StartDialogue(dialogue);
         walker.RaiseDid(hotspot, verb);
         hotspot.RaiseDone(walker, verb);
+    }
+
+    // It turns to face what it looks at or uses.
+    private static void Face(Walker walker, Entity entity)
+    {
+        var middle = Game.CenterOf(entity);
+        var toward = middle.X - walker.Feet.X;
+        if (MathF.Abs(toward) <= There)
+            return;
+        walker.Facing = new Vector2(MathF.Sign(toward), 0);
+        if (walker.FlipSprite)
+            Game.Face(walker.Entity!, MathF.Sign(toward));
+    }
+
+    // A flag set or cleared, an action done on targets (or the hotspot's entity) and a message sent with the walker.
+    private void Respond(Walker walker, Entity entity, string? flag, string? action, string? targets, string? with, string? message)
+    {
+        SetFlag(flag);
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            foreach (var target in string.IsNullOrWhiteSpace(targets) ? [entity] : Switch.Named(entity, targets).ToList())
+            {
+                if (target.Scene == Game.Scene)
+                    Game.Do(target, action.Trim(), string.IsNullOrWhiteSpace(with) ? null : with.Trim());
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(message))
+            Game.Send(message.Trim(), walker.Entity, from: entity);
     }
 
     // "Name" sets a flag; "not Name" (or "!Name") clears it.
@@ -372,21 +443,37 @@ internal sealed class AdventuresSystem : GameSystem
         Walker? mine = null;
         foreach (var walker in walkers)
         {
-            (walker.Hovered, walker.HoveredHotspot) = (null, null);
+            (walker.Hovered, walker.HoveredHotspot, walker.HoveredItem) = (null, null, null);
             if (mine is null && walker.Controllable && IsMine(walker.Entity!))
                 mine = walker;
         }
 
         Hotspot? over = null;
+        string? item = null;
+        var holding = false;
         if (mine is not null && !Game.PausedThisFrame && Game.Talking is null && Game.TopPanel is null && !mine.Entity!.IsPaused &&
-            Pointer(mine, Game.Input, out var at) && !Game.MouseOnUi)
-            over = HotspotAt(hotspots, at);
-        if (mine is not null && over is not null)
-            (mine.Hovered, mine.HoveredHotspot) = (over.Called, over);
-
-        if (over is not null)
+            Pointer(mine, Game.Input, out var at))
         {
-            Game.Input.Cursor = over.Cursor;
+            var bar = mine.Entity.GetComponent<InventoryBar>();
+            holding = bar?.Holding is not null;
+            if (bar is not null && BarLayout(mine, bar, Game.Input) is { } layout && layout.Back.Contains(at))
+                item = layout.ItemAt(at, ItemsOf(bar).Count) is var index and >= 0 ? ItemsOf(bar)[index].Name : null;
+            else if (!Game.MouseOnUi)
+                over = HotspotAt(hotspots, at);
+        }
+
+        if (mine is not null)
+        {
+            mine.HoveredItem = item;
+            if (over is not null)
+                (mine.Hovered, mine.HoveredHotspot) = (over.Called, over);
+        }
+
+        // With an item on the pointer, the item is drawn in its place.
+        MouseCursor? cursor = holding ? MouseCursor.Hidden : over?.Cursor ?? (item is not null ? MouseCursor.Hand : null);
+        if (cursor is { } look)
+        {
+            Game.Input.Cursor = look;
             _setCursor = true;
         }
         else if (_setCursor)
@@ -403,7 +490,7 @@ internal sealed class AdventuresSystem : GameSystem
     // frame so drawing them makes no garbage while they stay the same.
     private readonly List<SpriteDraw> _labels = [];
     private (string? Said, List<string> Lines) _wrapped = (null, []);
-    private (Hotspot? Over, bool Look, string? Called, string Text) _named;
+    private (object? Over, bool Look, string? Called, string? Holding, string Text) _named;
 
     protected override void Draw(FrameDrawing frame)
     {
@@ -413,6 +500,7 @@ internal sealed class AdventuresSystem : GameSystem
         var size = frame.CameraSize / 13;
         var shadow = Color.FromBytes(0, 0, 0, 0xC0);
         _labels.Clear();
+        DrawItems(frame, walkers, size, shadow);
         foreach (var walker in walkers)
         {
             if (!InView(walker, frame))
@@ -442,19 +530,38 @@ internal sealed class AdventuresSystem : GameSystem
                     Label(_labels, lines[i], new Vector2(x, y - i * size * 1.15f), size, walker.SpeechColor, shadow, frame.LineWidth);
             }
 
-            // The name of what's under the pointer, just above it ("Look at ..." while the verb is Look).
-            if (walker.ShowNames && walker.HoveredHotspot is { } hovered && Pointer(walker, Game.Input, out var mouse))
+            // The name of what's under the pointer, just above it ("Look at ..." while the verb is Look, "Use Key with ..."
+            // with an item on the pointer).
+            if (walker.ShowNames && string.IsNullOrEmpty(walker.Pointed) && (walker.HoveredHotspot is not null || walker.HoveredItem is not null) &&
+                Pointer(walker, Game.Input, out var mouse))
             {
-                var look = walker.Verb == AdventureVerb.Look;
-                var called = hovered.Called;
-                if (_named.Over != hovered || _named.Look != look || _named.Called != called)
-                    _named = (hovered, look, called, look ? $"Look at {called}" : called);
-                Label(_labels, _named.Text, mouse + new Vector2(0, size * 1.6f), size * 0.85f, walker.NameColor, shadow, frame.LineWidth);
+                var text = NameShown(walker, walker.HoveredHotspot, walker.HoveredItem);
+                Label(_labels, text, mouse + new Vector2(0, size * 1.6f), size * 0.85f, walker.NameColor, shadow, frame.LineWidth);
             }
         }
 
+        DrawHeld(frame, walkers);
         if (_labels.Count > 0)
             frame.AddOverWorld(_labels);
+    }
+
+    // What's said by the pointer over a hotspot or an item: its name, "Look at" it, or "Use" the item on the pointer
+    // "with" it. Made again only when it changes, so it makes no garbage while it stays the same.
+    private string NameShown(Walker walker, Hotspot? hotspot, string? item)
+    {
+        var look = walker.Verb == AdventureVerb.Look;
+        var called = hotspot?.Called ?? item!;
+        var holding = walker.Entity!.GetComponent<InventoryBar>()?.Holding;
+        if (holding is not null && item is not null && holding.Equals(item, StringComparison.OrdinalIgnoreCase))
+            holding = null;
+        var over = (object?)hotspot ?? item;
+        if (!Equals(_named.Over, over) || _named.Look != look || _named.Called != called || _named.Holding != holding)
+        {
+            var text = holding is not null ? $"Use {holding} with {called}" : look ? $"Look at {called}" : called;
+            _named = (over, look, called, holding, text);
+        }
+
+        return _named.Text;
     }
 
     // About how many letters a line it says has before it goes on below.

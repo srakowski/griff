@@ -248,6 +248,7 @@ public static partial class WebPlayer
     /// For checks (and anyone curious in the console): <c>scene</c> is the scene's name; <c>entity:<i>name</i></c> where
     /// that entity is ("x,y,z", or "" for none); <c>count</c> how many entities there are; <c>save:<i>key</i></c> a saved
     /// value, and <c>save:<i>key</i>=<i>value</i></c> saves one; <c>flag:<i>name</i></c> whether a flag is set (1 or 0);
+    /// <c>button:<i>label</i></c> where the middle of a button a system shows on the screen is (an inventory bar's item), "x,y";
     /// <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
@@ -274,6 +275,10 @@ public static partial class WebPlayer
             case "save":
                 return !game.SaveData.Has(argument) ? ""
                     : game.SaveData.GetString(argument) ?? game.SaveData.GetFloat(argument).ToString(CultureInfo.InvariantCulture);
+            case "button":
+                return game.HudButtons.FirstOrDefault(b => b.Label.Equals(argument, StringComparison.OrdinalIgnoreCase)) is { } button
+                    ? string.Create(CultureInfo.InvariantCulture, $"{button.Rect.Center.X:0.###},{button.Rect.Center.Y:0.###}")
+                    : "";
             case "flag":
                 return game.HasFlag(argument) ? "1" : "0";
             case "music":

@@ -9,7 +9,8 @@
 //   --export        exports to --out and stops there (--zip packs it for itch.io too): what a script or a site's build uses.
 //   --check         plays games in a headless Edge (or Chrome) through the DevTools protocol, so no window opens, and
 //                   checks each: the proof game, an adventure (walking where it's tapped, a hotspot's pointer, a right
-//                   click and a tap on it), then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
+//                   click and a tap on it, an item taken, picked from the inventory bar and used on a door, and two put
+//                   together with the keys), then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
 //                   (--template picks some, Proof and Adventure among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
@@ -199,9 +200,10 @@ async Task<Project> ProofGame(string folder)
     return project;
 }
 
-// An adventure: a room's floor with a table in it, a player who walks where it's tapped or clicked, and a bell on the
-// wall to look at (a right click) and ring (a tap), each setting a flag in its saves, so walking round things, hotspots,
-// the pointer over them, right clicks and touch all have to work in the browser. The view is 10 high, round the middle.
+// An adventure: a room's floor with a table in it, a player who walks where it's tapped or clicked, a bell on the wall
+// to look at (a right click) and ring (a tap), each setting a flag in its saves, a key to take and a door it unlocks, and
+// a rope and a hook to put together in the inventory bar, so walking round things, hotspots, the pointer over them, right
+// clicks, items, keys and touch all have to work in the browser. The view is 10 high, round the middle.
 async Task<Project> AdventureGame(string folder)
 {
     var project = await Project.CreateAsync(folder, "Griff Adventure", ProjectTemplates.Empty);
@@ -227,7 +229,29 @@ async Task<Project> AdventureGame(string folder)
     (body.Size, body.Tint, body.Order) = (new System.Numerics.Vector2(0.8f, 1.6f), new Griff.Color(0.3f, 0.55f, 0.95f), 10);
     player.AddComponent<Griff.Modules.Adventures.Walker>().Speed = 5;
     player.Transform.Position = new System.Numerics.Vector3(-5, -1.2f, 0);
+    // What the player carries (a rope and a hook to put together), kept in its saves, in a bar along the bottom.
+    var carried = player.AddComponent<Inventory>();
+    (carried.Items, carried.SaveAs) = (["Rope", "Hook"], "Items");
+    player.AddComponent<Griff.Modules.Adventures.InventoryBar>().Combinations = ["Grappling Hook = Rope + Hook: Ready to climb."];
     scene.Add(player);
+
+    // A key on the floor to take, once, and a door on the wall it unlocks.
+    var key = new Entity("Key");
+    key.Transform.Position = new System.Numerics.Vector3(6.5f, -3, 0);
+    var gold = key.AddComponent<Sprite>();
+    (gold.Size, gold.Tint) = (new System.Numerics.Vector2(0.6f, 0.6f), new Griff.Color(0.95f, 0.8f, 0.3f));
+    var take = key.AddComponent<Griff.Modules.Adventures.Hotspot>();
+    (take.StandAt, take.UseGives, take.UseFlag, take.NeedsFlag, take.HideWhenGone) = (new System.Numerics.Vector2(0, 1.2f), "Key", "TookKey", "not TookKey", true);
+    scene.Add(key);
+    var door = new Entity("Door");
+    door.Transform.Position = new System.Numerics.Vector3(-2.5f, 2.5f, 0);
+    var wood = door.AddComponent<Sprite>();
+    (wood.Size, wood.Tint) = (new System.Numerics.Vector2(1.4f, 2.4f), new Griff.Color(0.45f, 0.3f, 0.2f));
+    var shut = door.AddComponent<Griff.Modules.Adventures.Hotspot>();
+    (shut.StandAt, shut.LookLine) = (new System.Numerics.Vector2(0, -3.5f), "A locked door.");
+    var unlock = door.AddComponent<Griff.Modules.Adventures.UseWith>();
+    (unlock.Item, unlock.Flag, unlock.Line) = ("Key", "Unlocked", "It opens.");
+    scene.Add(door);
 
     var bell = new Entity("Bell");
     bell.Transform.Position = new System.Numerics.Vector3(5, 2.5f, 0);
@@ -285,6 +309,49 @@ async Task AdventureInput(GameCheck game)
     await game.Tap(bellX, bellY);
     await WaitForSave(game, "Rang", "a tap on the bell didn't ring it");
     Console.WriteLine("  touch: a tap on the bell rang it");
+
+    // Items: a tap on the key takes it into the bar; a click on it there picks it up (the pointer turns into it), and a
+    // click on the door uses it there.
+    await game.Tap(Screen(6.5, -3).X, Screen(6.5, -3).Y);
+    await WaitFor(game, "save:Items", items => items.Split('\n').Contains("Key"), "a tap on the key didn't put it in the inventory");
+    Console.WriteLine("  touch: a tap on the key put it in the inventory bar");
+    var slot = await game.Probe("button:Key");
+    if (slot.Split(',') is not [var slotX, var slotY])
+        throw new CheckFailed("the inventory bar doesn't show the key");
+    var (keyX, keyY) = Screen(double.Parse(slotX, CultureInfo.InvariantCulture), double.Parse(slotY, CultureInfo.InvariantCulture));
+    await game.Click(keyX, keyY);
+    await Task.Delay(300);
+    var holding = await game.Evaluate("document.getElementById('game').style.cursor");
+    if (holding != "none")
+        throw new CheckFailed($"with the key picked up, the pointer is \"{holding}\" (not hidden, \"none\", for the key drawn in its place)");
+    var (doorX, doorY) = Screen(-2.5, 2.5);
+    await game.Click(doorX, doorY);
+    await WaitForSave(game, "Unlocked", "the key picked from the bar and clicked on the door didn't unlock it");
+    if ((await game.Probe("save:Items")).Split('\n').Contains("Key"))
+        throw new CheckFailed("the key used on the door is still in the inventory");
+    Console.WriteLine("  mouse: the key picked from the bar (the pointer turned into it) and clicked on the door unlocked it, and was used up");
+
+    // The keys: Interact goes to the bar, Space picks the rope, and Interact, Right and Space put it together with the hook.
+    foreach (var code in new[] { "KeyE", "Space", "KeyE", "ArrowRight", "Space" })
+    {
+        await game.Press(code);
+        await Task.Delay(150);
+    }
+
+    await WaitFor(game, "save:Items", items => items.Split('\n').Contains("Grappling Hook"), "the keys didn't put the rope and the hook together");
+    Console.WriteLine("  keys: the rope and the hook picked on the bar with the keys made a grappling hook");
+}
+
+// Waits (up to 6 s) for what a probe says to be as asked.
+static async Task WaitFor(GameCheck game, string probe, Func<string, bool> done, string otherwise)
+{
+    var waited = Stopwatch.StartNew();
+    while (!done(await game.Probe(probe)))
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(6))
+            throw new CheckFailed($"{otherwise} ({probe} is \"{await game.Probe(probe)}\")");
+        await Task.Delay(100);
+    }
 }
 
 // Waits (up to 6 s) for a flag to be set.

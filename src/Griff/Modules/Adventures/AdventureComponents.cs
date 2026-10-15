@@ -170,12 +170,16 @@ public sealed class WalkArea : Component, IPointOutline, IDrawable
 /// </summary>
 /// <remarks>
 /// <see cref="NeedsFlag"/> keeps it out of reach until a flag is set (a hidden drawer), or while one is
-/// (<c>not TookKey</c>, for a key that's gone once taken). Looking and using are counted (<see cref="TimesLooked"/>, <see cref="TimesUsed"/>),
-/// for a <see cref="Counter"/> or a trigger. Its Look and Use actions do the same as a click, for a trigger or a script.
+/// (<c>not TookKey</c>, for a key that's gone once taken), and <see cref="HideWhenGone"/> hides it then too. Using it can
+/// put items in the walker's inventory (<see cref="UseGives"/>), and items from the <see cref="InventoryBar"/> are used on
+/// it by its <see cref="UseWith"/>s (anything else gets its <see cref="WrongItemLine"/>). Looking and using are counted
+/// (<see cref="TimesLooked"/>, <see cref="TimesUsed"/>), for a <see cref="Counter"/> or a trigger. Its Look and Use actions
+/// do the same as a click, for a trigger or a script, and Use Item uses an item on it.
 /// </remarks>
 [Category("Adventure")]
 [WorksWith(typeof(Walker), Note = "the character that walks over and looks at it or uses it")]
 [WorksWith(typeof(Dialogue), Note = "started when it's used, with Use Talks")]
+[WorksWith(typeof(UseWith), Note = "what each item used on it does")]
 [ComponentName("Griff.Hotspot")]
 public sealed class Hotspot : Component, IPointOutline, IDrawable
 {
@@ -218,6 +222,12 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
     /// then the pointer passes over it and clicks walk past. Empty is always there.
     /// </summary>
     public string? NeedsFlag { get; set; }
+
+    /// <summary>
+    /// Hides its entity while its <see cref="NeedsFlag"/> keeps it out of reach, and shows it again once it doesn't: a key
+    /// that's gone once taken, a ladder that's there once it's put up.
+    /// </summary>
+    public bool HideWhenGone { get; set; }
 
     /// <summary>What the walker says on looking at it, e.g. "A rusty old key."</summary>
     [Group("Look")]
@@ -272,6 +282,28 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
     [Names(NameKind.Message)]
     public string? UseMessage { get; set; }
 
+    /// <summary>
+    /// Items put in the walker's inventory on using it, separated by commas, each with how many if more than one: "Key",
+    /// "Coin 3, Map". For something taken once, give it a Use Flag and Needs Flag "not" that flag, with Hide When Gone.
+    /// </summary>
+    public string? UseGives
+    {
+        get => _gives;
+        set => (_gives, Gives) = (value, ItemCounts.Parse(value));
+    }
+
+    private string? _gives;
+
+    // Its Use Gives, read once each time it changes.
+    internal List<(string Item, int Count)> Gives { get; private set; } = [];
+
+    /// <summary>
+    /// What the walker says when an item it has no <see cref="UseWith"/> for is used on it, e.g. "The dog sniffs it and
+    /// looks away." Empty uses the inventory bar's Wrong Line.
+    /// </summary>
+    [Group("Items")]
+    public string? WrongItemLine { get; set; }
+
     /// <summary>How many times it has been looked at. The game counts them.</summary>
     [Group("State")]
     [Output]
@@ -289,7 +321,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 
     /// <summary>True if using it does anything; with nothing to use, a click to use it looks at it instead.</summary>
     public bool CanUse => !string.IsNullOrWhiteSpace(UseLine) || UseTalks || !string.IsNullOrWhiteSpace(UseDo) ||
-                          !string.IsNullOrWhiteSpace(UseFlag) || !string.IsNullOrWhiteSpace(UseMessage);
+                          !string.IsNullOrWhiteSpace(UseFlag) || !string.IsNullOrWhiteSpace(UseMessage) || !string.IsNullOrWhiteSpace(UseGives);
 
     /// <inheritdoc/>
     public IReadOnlyList<Vector2> GivenPoints => _given;
@@ -306,11 +338,22 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 
     /// <summary>Walks the player's walker over and looks at it, as a right click on it does.</summary>
     [Action]
-    public void Look() => Asked = AdventureVerb.Look;
+    public void Look() => (Asked, AskedItem) = (AdventureVerb.Look, null);
 
     /// <summary>Walks the player's walker over and uses it, as a left click on it does.</summary>
     [Action]
-    public void Use() => Asked = AdventureVerb.Use;
+    public void Use() => (Asked, AskedItem) = (AdventureVerb.Use, null);
+
+    /// <summary>
+    /// Walks the player's walker over and uses <paramref name="item"/> on it (if the walker has one), as picking it from the
+    /// inventory bar and clicking this does.
+    /// </summary>
+    [Action]
+    public void UseItem(string? item)
+    {
+        if (!string.IsNullOrWhiteSpace(item))
+            (Asked, AskedItem) = (AdventureVerb.Use, item.Trim());
+    }
 
     /// <inheritdoc/>
     public Vector2 ToWorld(Vector2 point) => Vector2.Transform(point, Entity!.Transform.WorldMatrix);
@@ -324,6 +367,8 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 
     // Asked for by its actions, carried out by the game at its next step. Not saved.
     internal AdventureVerb? Asked { get; set; }
+
+    internal string? AskedItem { get; set; }
 
     internal void RaiseDone(Walker walker, AdventureVerb verb) => Done?.Invoke(walker, verb);
 
@@ -383,8 +428,12 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 /// <remarks>
 /// It takes clicks while it's <see cref="Controllable"/>, which Focus hands over (an adventure inside another game). Its
 /// <see cref="Verb"/> is what a left click on a hotspot does: buttons whose Action is Do can switch it (Choose Look,
-/// Choose Use) for a verb bar. A trigger or script can walk it with Walk To, stop it and make it say something. It ignores
-/// gravity. In a network game, each player's walker answers to their own mouse, and the host walks it.
+/// Choose Use) for a verb bar. With an <see cref="InventoryBar"/>, an item picked from it and clicked on a hotspot is used
+/// there. The keys and a controller play it too: left and right go from hotspot to hotspot in view, its
+/// <see cref="UseAction"/> and <see cref="LookAction"/> use or look at the one they're on, and its
+/// <see cref="ItemsAction"/> goes over to the inventory bar. A trigger or script can walk it with Walk To, stop it and make
+/// it say something. It ignores gravity. In a network game, each player's walker answers to their own mouse and keys,
+/// and the host walks it.
 /// </remarks>
 [Category("Adventure")]
 [WorksWith(typeof(WalkArea), Note = "in the scene: where it can walk")]
@@ -422,6 +471,27 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     /// </summary>
     [EntityName]
     public string? Camera { get; set; }
+
+    /// <summary>
+    /// The input action that, played with the keys or a controller, uses the hotspot they're on (with the item picked from
+    /// the inventory bar, if any), or picks the item they're on in the bar: "Jump" is Space or the gamepad's A. The arrows,
+    /// A and D, the d-pad or the stick go from one hotspot (or item) to the next.
+    /// </summary>
+    [Group("Keys and Controller")]
+    [Names(NameKind.Action)]
+    public string? UseAction { get; set; } = "Jump";
+
+    /// <summary>The input action that looks at the hotspot or item the keys are on: "Attack" is X, L or the gamepad's X.</summary>
+    [Names(NameKind.Action)]
+    public string? LookAction { get; set; } = "Attack";
+
+    /// <summary>The input action that takes the keys to the inventory bar and back: "Interact" is E, Enter or the gamepad's Y.</summary>
+    [Names(NameKind.Action)]
+    public string? ItemsAction { get; set; } = "Interact";
+
+    /// <summary>The input action that puts back the item on the pointer, or leaves the bar: "Dash" is Shift or the gamepad's B.</summary>
+    [Names(NameKind.Action)]
+    public string? CancelAction { get; set; } = "Dash";
 
     /// <summary>The color of what it says, over its head.</summary>
     [Group("Speech")]
@@ -461,6 +531,15 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     /// <summary>What it does with the hotspot it's walking to (<see cref="Heading"/>) once it gets there.</summary>
     public AdventureVerb HeadingVerb { get; set; }
 
+    /// <summary>The item it's going to use on the hotspot it's walking to (<see cref="Heading"/>); empty to just use or look at it.</summary>
+    public string? HeadingItem { get; set; }
+
+    /// <summary>
+    /// The entity of the hotspot the keys or a controller are on, to use or look at with their Use and Look actions; empty
+    /// while they're not (the mouse is in use).
+    /// </summary>
+    public string? Pointed { get; set; }
+
     /// <summary>The way it faces, as a unit vector: down to start with. The game sets it as it walks.</summary>
     public Vector2 Facing { get; set; } = -Vector2.UnitY;
 
@@ -488,6 +567,10 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     [DoNotSerialize]
     public Hotspot? HoveredHotspot { get; internal set; }
 
+    /// <summary>The item on its <see cref="InventoryBar"/> under the pointer on this machine, or null.</summary>
+    [DoNotSerialize]
+    public string? HoveredItem { get; internal set; }
+
     /// <summary>Raised when it gets where it was walking to.</summary>
     public event Action<Walker>? Arrived;
 
@@ -496,6 +579,9 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
 
     /// <summary>Raised as it looks at or uses a hotspot.</summary>
     public event Action<Walker, Hotspot, AdventureVerb>? Did;
+
+    /// <summary>Raised as it uses an item on a hotspot, with whether the hotspot had a <see cref="UseWith"/> for it.</summary>
+    public event Action<Walker, Hotspot, string, bool>? UsedItem;
 
     /// <summary>
     /// Walks to <paramref name="place"/>: an entity's name (a hotspot's stand point, or where anything else is), or a point
@@ -510,6 +596,7 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     {
         Route = null;
         Heading = null;
+        HeadingItem = null;
         AskedTo = null;
     }
 
@@ -566,6 +653,14 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
 
     internal void RaiseDid(Hotspot hotspot, AdventureVerb verb) => Did?.Invoke(this, hotspot, verb);
 
+    internal void RaiseUsedItem(Hotspot hotspot, string item, bool worked) => UsedItem?.Invoke(this, hotspot, item, worked);
+
+    // Which way the stick was last pushed (-1, 0 or 1), so holding it over moves the keys on once.
+    internal int Stick { get; set; }
+
+    // Where the mouse was on the screen (from the middle of the view) when the keys were last used, to notice it moving.
+    internal Vector2? LastMouse { get; set; }
+
     // Drawn smaller further up a walk area that scales with depth, about its feet, so they stay on the floor.
     Matrix4x4? IDrawEffect.DrawTransform
     {
@@ -587,15 +682,19 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
             var end = _routePoints[^1];
             text += string.IsNullOrEmpty(Heading)
                 ? string.Create(CultureInfo.InvariantCulture, $", walking to ({end.X:0.##}, {end.Y:0.##})")
+                : !string.IsNullOrEmpty(HeadingItem) ? $", walking to {Heading} to use {HeadingItem} on it"
                 : $", walking to {Heading} to {(HeadingVerb == AdventureVerb.Look ? "look at" : "use")} it";
         }
 
         if (!string.IsNullOrEmpty(Said))
             text += $", says \"{Said}\"";
+        if (!string.IsNullOrEmpty(Pointed))
+            text += $", the keys on {Pointed}";
         return text + (Verb == AdventureVerb.Look ? ", verb Look" : "");
     }
 
-    string IPlaytestReport.MouseReport() => string.IsNullOrEmpty(Hovered) ? "" : $", over {Hovered}";
+    string IPlaytestReport.MouseReport() =>
+        !string.IsNullOrEmpty(Hovered) ? $", over {Hovered}" : !string.IsNullOrEmpty(HoveredItem) ? $", over {HoveredItem} in the inventory bar" : "";
 }
 
 /// <summary>Points-in-shapes for walk areas and hotspots.</summary>

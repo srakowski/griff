@@ -32,7 +32,7 @@ public sealed record AssetFeedback(string Message, bool IsError = false);
 /// </summary>
 public sealed class AssetTools(IAgentProject project) : IAgentToolSource
 {
-    private static readonly string[] TextExtensions = [".cs", ".scene", ".prefab", ".json", ".txt", ".md", ".griff", ".csv", ".xml", ".ini", ".shader", ".glsl"];
+    private static readonly string[] TextExtensions = [".cs", ".scene", ".prefab", ".table", ".json", ".txt", ".md", ".griff", ".csv", ".xml", ".ini", ".shader", ".glsl"];
     private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".bmp", ".gif"];
 
     public IEnumerable<AgentTool> GetTools()
@@ -42,7 +42,7 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             Name = "assets_list",
             Title = "List Assets",
             ReadOnly = true,
-            Description = "Lists the files in the project's Assets folder (scripts, scenes, prefabs, sprites, tiles, sounds, music), " +
+            Description = "Lists the files in the project's Assets folder (scripts, scenes, prefabs, tables, sprites, tiles, sounds, music), " +
                 "with their sizes. Paths are relative to Assets, e.g. \"Sprites/hero.png\", which is how components name them.",
             InputSchema = Schema.Object([
                 ("folder", Schema.String("Only this folder, e.g. \"Sprites\".")),
@@ -56,7 +56,7 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             Name = "asset_read",
             Title = "Read Asset",
             ReadOnly = true,
-            Description = "Reads a file from Assets: text files as text (scripts, scenes, prefabs), pictures as an image you can see.",
+            Description = "Reads a file from Assets: text files as text (scripts, scenes, prefabs, tables), pictures as an image you can see.",
             InputSchema = Schema.Object([("path", Schema.String("The path under Assets, e.g. \"Scripts/Player.cs\"."))], "path"),
             Invoke = args => Task.FromResult(Read(args)),
         };
@@ -68,7 +68,10 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
             Destructive = true,
             Description = "Writes a file into Assets, making folders as needed and replacing any file already there: \"text\" for " +
                 "scripts and other text, or \"base64\" for binary files like PNG pictures or WAV sounds. A C# script is compiled " +
-                "straight away and swapped into the scene (and the running game); the answer says whether it built and lists any errors.",
+                "straight away and swapped into the scene (and the running game); the answer says whether it built and lists any errors. " +
+                "A table (.table: JSON with \"columns\", each { \"name\", \"type\" } with a type of " + string.Join(", ", Data.TableColumn.TypeNames) +
+                " (a choice lists its \"choices\", a row names its \"table\"), and \"rows\", an object of rows by name, each an object of its " +
+                "cells by column) is read straight away and reaches the running game; the answer says if it doesn't read.",
             InputSchema = Schema.Object([
                 ("path", Schema.String("The path under Assets, e.g. \"Scripts/Spinner.cs\" or \"Sprites/hero.png\".")),
                 ("text", Schema.String("The file's text.")),

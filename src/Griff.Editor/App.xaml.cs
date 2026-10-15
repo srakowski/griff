@@ -14,6 +14,7 @@ using Griff.Editor.Features.Assets;
 using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Build;
 using Griff.Editor.Features.Controls;
+using Griff.Editor.Features.Data;
 using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.DesignSystem;
 using Griff.Editor.Features.Editing;
@@ -59,6 +60,7 @@ public partial class App : Application
         new ControlsModule(),
         new OutputModule(),
         new ProfilerModule(),
+        new DataModule(),
         new DesignSystemModule(),
         new AgentModule(),
     ];

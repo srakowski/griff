@@ -3,7 +3,7 @@ title: "Scripting"
 description: "Scripts are plain C# classes: the script editor, breakpoints, components you describe for the Inspector, and what a behavior can use."
 ---
 
-Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Input`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
+Scripts are plain C# classes in your project's `Assets` folder. **Entity → New Script** creates one, attaches it to the selected entity and opens it. Common namespaces (`System`, `System.Collections`, `System.Numerics`, `Griff`, `Griff.Data`, `Griff.Input`, `Griff.Runtime`, `Griff.Scenes`) are imported automatically.
 
 ## The script editor
 
@@ -50,6 +50,8 @@ public class PlayerController : Behavior
     }
 }
 ```
+
+Scripts read the game's tables with `Tables`: `float damage = Tables.Get("Spells", "Fireball")["Damage"];`, or a class of their own filled from a row, `Tables.Get<Spell>("Spells", "Fireball")` (see [Tables of game data](/docs/data-tables/#tables-in-scripts)).
 
 Describe a script for the component catalog and the Inspector's tooltips with a `///` summary over the class and its properties (say what units a number is in), and say how it fits with other components using attributes:
 

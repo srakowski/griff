@@ -8,17 +8,23 @@ namespace Griff.Editing;
 
 /// <summary>
 /// The names a project's fields can name besides entities (see <see cref="NamesAttribute"/>): its prefabs and scenes,
-/// its input actions, the collision layers its colliders and tilemaps are on, and the messages its components and
-/// scripts send and listen for. The Inspector lists them in a field's picker and flags a name that matches none.
+/// its input actions, the collision layers its colliders and tilemaps are on, the messages its components and scripts
+/// send and listen for, and its tables and their rows. The Inspector lists them in a field's picker and flags a name that
+/// matches none.
 /// </summary>
 public sealed partial class KnownNames
 {
     private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard;
     private readonly List<Regex> _sentPatterns;
+    private readonly Dictionary<string, TableNames> _tables;
 
+    /// <param name="tables">The project's tables by name, each with its rows' names (and the names its rows had before they were renamed).</param>
     public KnownNames(IEnumerable<string> prefabs, IEnumerable<string> scenes, IEnumerable<string> actions,
-        IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard)
+        IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null)
     {
+        _tables = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var table in tables ?? [])
+            _tables.TryAdd(table.Name, table);
         _prefabs = new(prefabs, StringComparer.OrdinalIgnoreCase);
         _scenes = new(scenes, StringComparer.OrdinalIgnoreCase);
         _actions = new(actions, StringComparer.OrdinalIgnoreCase);
@@ -48,16 +54,35 @@ public sealed partial class KnownNames
     /// <summary>The messages listened for: by counters, triggers, sound players and scripts' <c>On</c>.</summary>
     public IReadOnlyCollection<string> Heard => _heard;
 
+    /// <summary>The tables' names, e.g. "Enemies".</summary>
+    public IReadOnlyCollection<string> Tables => _tables.Keys;
+
+    /// <summary>The columns of the table called <paramref name="table"/>, or null if there's no such table.</summary>
+    public IReadOnlyList<string>? ColumnsOf(string? table) =>
+        table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) ? names.Columns : null;
+
+    /// <summary>The rows of the table called <paramref name="table"/> (or none, if there's no such table).</summary>
+    public IReadOnlyList<string> RowsOf(string? table) =>
+        table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) ? names.Rows : [];
+
     /// <summary>
     /// What a field naming <paramref name="kind"/> can pick from, alphabetically, each with a word on it for messages
     /// ("sent", "heard", or both).
     /// </summary>
-    public IReadOnlyList<NameChoice> Choices(NamesAttribute kind) => kind.Kind switch
+    public IReadOnlyList<NameChoice> Choices(NamesAttribute kind) => Choices(kind, null);
+
+    /// <summary>
+    /// As <see cref="Choices(NamesAttribute)"/>, for a field of <paramref name="component"/>: a row field lists the rows
+    /// of the table the component's other field names, in the table's order.
+    /// </summary>
+    public IReadOnlyList<NameChoice> Choices(NamesAttribute kind, Component? component) => kind.Kind switch
     {
         NameKind.Prefab => Sorted(_prefabs),
         NameKind.Scene => Sorted(_scenes),
         NameKind.Action => Sorted(_actions),
         NameKind.Layer => Sorted(_layers),
+        NameKind.Table => Sorted(_tables.Keys),
+        NameKind.Row => [.. RowsOf(TableOf(component, kind)).Select(r => new NameChoice(r, null))],
         _ => [.. _sent.Union(_heard).Order(StringComparer.OrdinalIgnoreCase).Select(m => new NameChoice(m,
             (_sent.Contains(m), _heard.Contains(m)) switch { (true, true) => "sent and heard", (true, false) => "sent", _ => "heard" }))],
     };
@@ -95,6 +120,18 @@ public sealed partial class KnownNames
         if (property.Names is not { } kind)
             return [];
         var value = property.GetValue(component);
+        if (kind.Kind == NameKind.Row)
+        {
+            // A row of a table that isn't there isn't flagged here: the table's field is.
+            if (TableOf(component, kind) is not { } table || !_tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names))
+                return [];
+            var rows = Split(value, kind);
+            // Table Values with no Row takes the row named like its entity.
+            if (rows.Count == 0 && component is TableValues { RowName: { Length: > 0 } own })
+                rows = [own];
+            return [.. rows.Where(r => !names.Has(r)).Distinct()];
+        }
+
         if (kind is { Kind: NameKind.Message, Hears: false } && Equals(value, DefaultOf(component.GetType(), property)))
             return [];
         return Unmatched(kind, value);
@@ -131,6 +168,9 @@ public sealed partial class KnownNames
         NameKind.Scene => _scenes.Contains(AssetName(name, Project.SceneExtension)),
         NameKind.Action => _actions.Contains(name),
         NameKind.Layer => _layers.Contains(name),
+        NameKind.Table => _tables.ContainsKey(AssetName(name, Data.TableFile.Extension)),
+        // A row is matched against its table, which takes the component (see Unmatched(Component, ...)).
+        NameKind.Row => true,
         _ when IsPattern(name) => true,
         _ when kind.Hears => _sent.Contains(name) || _sentPatterns.Any(p => p.IsMatch(name)),
         _ => _heard.Contains(name),
@@ -156,6 +196,8 @@ public sealed partial class KnownNames
             NameKind.Scene => $"There's no scene called {quoted} in the project",
             NameKind.Action => $"There's no input action called {quoted}: add one in Game > Controls",
             NameKind.Layer => $"Nothing is on the layer {quoted}: no collider or tilemap has it as its Layer",
+            NameKind.Table => $"There's no table called {quoted} in the project: make one with Data > New Table",
+            NameKind.Row => $"The table has no row called {quoted}: add it in the Tables panel",
             _ when kind.Hears => $"Nothing sends {quoted}: no component's message, dialogue's [send] or script's Game.Send",
             _ => $"Nothing listens for {quoted}: no Counter, Trigger, Sound Player or script's On",
         };
@@ -168,8 +210,18 @@ public sealed partial class KnownNames
         NameKind.Scene => "a scene",
         NameKind.Action => "an input action",
         NameKind.Layer => "a collision layer",
+        NameKind.Table => "a table",
+        NameKind.Row => "a row of a table",
         _ => "a message",
     };
+
+    // The table a row field's component names in its other field (see NamesAttribute.Table).
+    private static string? TableOf(Component? component, NamesAttribute kind)
+    {
+        if (component is null || kind.Table is not { } property)
+            return null;
+        return component.GetType().GetProperty(property)?.GetValue(component) is string table && table.Trim().Length > 0 ? table.Trim() : null;
+    }
 
     private static bool IsPattern(string message) => message.Contains('{');
 
@@ -234,7 +286,7 @@ public sealed partial class KnownNames
     private static partial Regex ScriptLayer();
 
     /// <summary>Everything a project's names come from put together: its files, and what was found in them.</summary>
-    public static KnownNames From(Project project, IEnumerable<Found> found)
+    public static KnownNames From(Project project, IEnumerable<Found> found, IEnumerable<TableNames>? tables = null)
     {
         var all = found.ToList();
         var actions = InputState.BuiltInActions.Keys.Concat(project.Manifest.Controls?.Keys ?? Enumerable.Empty<string>());
@@ -244,20 +296,46 @@ public sealed partial class KnownNames
             actions,
             all.SelectMany(f => f.Layers),
             all.SelectMany(f => f.Sent),
-            all.SelectMany(f => f.Heard));
+            all.SelectMany(f => f.Heard),
+            tables);
     }
+}
+
+/// <summary>
+/// A table's name, its rows' names (with the names its rows had before they were renamed, which still find them) and its
+/// columns' names.
+/// </summary>
+public sealed class TableNames(string name, IReadOnlyList<string> rows, IEnumerable<string>? formerRows = null, IReadOnlyList<string>? columns = null)
+{
+    private readonly HashSet<string> _all = new(rows.Concat(formerRows ?? []), StringComparer.OrdinalIgnoreCase);
+
+    public string Name { get; } = name;
+
+    /// <summary>Its rows' names, top to bottom.</summary>
+    public IReadOnlyList<string> Rows { get; } = rows;
+
+    /// <summary>Its columns' names, left to right.</summary>
+    public IReadOnlyList<string> Columns { get; } = columns ?? [];
+
+    /// <summary>True if a row is (or was) called <paramref name="row"/>.</summary>
+    public bool Has(string row) => _all.Contains(row.Trim());
+
+    /// <summary>The names in <paramref name="table"/>.</summary>
+    public static TableNames Of(Data.Table table) =>
+        new(table.Name, [.. table.Rows.Select(r => r.Name)], table.RenamedRows.Keys, [.. table.Columns.Select(c => c.Name)]);
 }
 
 /// <summary>A name a field can pick, with a word on it ("sent" for a message only sent so far), or none.</summary>
 public sealed record NameChoice(string Name, string? Detail);
 
 /// <summary>
-/// Keeps a project's <see cref="KnownNames"/> up to date cheaply: each scene, prefab and script is read again only
+/// Keeps a project's <see cref="KnownNames"/> up to date cheaply: each scene, prefab, script and table is read again only
 /// once it's been saved since it was last read, and the open scene's live entities stand in for its file.
 /// </summary>
 public sealed class KnownNameIndex(ComponentRegistry registry)
 {
     private readonly Dictionary<string, (DateTime Written, KnownNames.Found Found)> _files = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (DateTime Written, TableNames Names)> _tables = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The project's names now. <paramref name="open"/> is the scene (or prefab) being edited, saved at
@@ -313,10 +391,48 @@ public sealed class KnownNameIndex(ComponentRegistry registry)
                 Read(script, KnownNames.Scan);
         }
 
+        var tables = new List<TableNames>();
+        if (Directory.Exists(project.AssetsPath))
+        {
+            foreach (var file in Directory.EnumerateFiles(project.AssetsPath, "*" + Data.TableFile.Extension, SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
+            {
+                seen.Add(file);
+                DateTime written;
+                try
+                {
+                    written = File.GetLastWriteTimeUtc(file);
+                }
+                catch (IOException)
+                {
+                    continue;
+                }
+
+                if (!_tables.TryGetValue(file, out var known) || known.Written != written)
+                {
+                    TableNames names;
+                    try
+                    {
+                        names = TableNames.Of(Data.TableFile.Load(file));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                    {
+                        // A table that doesn't read is there, with no rows to pick.
+                        names = new TableNames(Data.TableFile.NameOf(file), []);
+                    }
+
+                    _tables[file] = known = (written, names);
+                }
+
+                tables.Add(known.Names);
+            }
+        }
+
         foreach (var gone in _files.Keys.Where(k => !seen.Contains(k)).ToList())
             _files.Remove(gone);
+        foreach (var gone in _tables.Keys.Where(k => !seen.Contains(k)).ToList())
+            _tables.Remove(gone);
         if (open is not null)
             found.Add(KnownNames.Collect(open, registry));
-        return KnownNames.From(project, found);
+        return KnownNames.From(project, found, tables);
     }
 }

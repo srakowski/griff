@@ -56,6 +56,7 @@ export default defineConfig({
 						{ label: 'Puzzles and boards', slug: 'docs/puzzles' },
 						{ label: 'Roguelikes, turns and tactics', slug: 'docs/turns' },
 						{ label: 'Dialogue, switches and items', slug: 'docs/story' },
+						{ label: 'Tables of game data', slug: 'docs/data-tables' },
 						{ label: 'Audio', slug: 'docs/audio' },
 						{ label: 'Text and fonts', slug: 'docs/text-and-fonts' },
 						{ label: 'Strategy, shooters, worlds', slug: 'docs/genres' },

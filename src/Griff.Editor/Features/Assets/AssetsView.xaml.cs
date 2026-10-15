@@ -48,6 +48,8 @@ public partial class AssetsView : UserControl
             _audio.TogglePreview(node.AssetPath);
         else if (node.Kind == AssetKind.Image)
             _art.OpenPainter(editing: node.AssetPath);
+        else if (node.Kind == AssetKind.Table)
+            Choose("Data.OpenTable", node.AssetPath);
         else if (node.Kind != AssetKind.Folder)
             Choose("Asset.OpenExternally", node.AssetPath);
     }
@@ -93,6 +95,12 @@ public partial class AssetsView : UserControl
             Add(menu, "Open in Another Program", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
             menu.Items.Add(new Separator());
         }
+        else if (node is { Kind: AssetKind.Table })
+        {
+            Add(menu, "Open in Tables Panel", Icons.Table, () => Choose("Data.OpenTable", node.AssetPath));
+            Add(menu, "Open in Another Editor", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
+            menu.Items.Add(new Separator());
+        }
         else if (node is { Kind: not AssetKind.Folder })
         {
             Add(menu, "Open", Icons.Open, () => Choose("Asset.OpenExternally", node.AssetPath));
@@ -105,6 +113,8 @@ public partial class AssetsView : UserControl
         AddCommand(menu, "Audio.NewMusic");
         AddCommand(menu, "Art.NewSprite");
         AddCommand(menu, "Art.NewTileset");
+        AddCommand(menu, "Data.NewTable");
+        AddCommand(menu, "Data.ImportCsv");
         menu.Items.Add(new Separator());
         Add(menu, "New Folder...", Icons.Folder, () => Panel?.NewFolder(FolderOf(node)));
         Add(menu, "Show in Explorer", Icons.Folder, () => Choose("Asset.ShowInExplorer", node?.AssetPath ?? ""));

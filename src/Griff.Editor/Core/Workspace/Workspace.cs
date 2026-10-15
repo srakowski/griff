@@ -87,6 +87,19 @@ public interface IWorkspace : INotifyPropertyChanged
     /// <summary>Adds a check that runs before the project closes; it returns false to keep the project open.</summary>
     void AddCloseGuard(Func<Task<bool>> guard);
 
+    /// <summary>
+    /// Adds something that keeps a kind of file in Assets loaded (the tables), told by <see cref="AssetChanged"/> when one
+    /// is written or deleted from outside the editor's own windows (an agent's asset_write). It returns what it made of the
+    /// file, or null if the file isn't its kind.
+    /// </summary>
+    void AddAssetListener(Func<string, Griff.Agent.AssetFeedback?> listener);
+
+    /// <summary>
+    /// Says a file in Assets (its path there, with '/') was written or deleted, to whatever keeps it loaded (see
+    /// <see cref="AddAssetListener"/>), and returns what they made of it: a table that doesn't read, say.
+    /// </summary>
+    IReadOnlyList<Griff.Agent.AssetFeedback> AssetChanged(string assetPath);
+
     /// <summary>Opens another scene from the project. Returns false if the user cancelled.</summary>
     Task<bool> OpenSceneAsync(string path);
 
@@ -513,6 +526,13 @@ public sealed class Workspace(
     }
 
     public void AddCloseGuard(Func<Task<bool>> guard) => _closeGuards.Add(guard);
+
+    private readonly List<Func<string, Griff.Agent.AssetFeedback?>> _assetListeners = [];
+
+    public void AddAssetListener(Func<string, Griff.Agent.AssetFeedback?> listener) => _assetListeners.Add(listener);
+
+    public IReadOnlyList<Griff.Agent.AssetFeedback> AssetChanged(string assetPath) =>
+        [.. _assetListeners.Select(listener => listener(assetPath)).OfType<Griff.Agent.AssetFeedback>()];
 
     public async Task<bool> ConfirmCloseAsync()
     {

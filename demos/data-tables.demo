@@ -1,0 +1,70 @@
+title: Data tables
+intro: A game's items, spells and enemies in tables, edited like a spreadsheet, pasted from Excel and Google Sheets, and set on enemies with no code.
+project: Platformer | Balance
+
+chapter: A table of enemies | Data > New Table
+menu: Data > New Table...
+prompt: Enemies
+explain: panel:Tables | The Tables panel | Data, New Table makes a table of game data and shows it in the Tables panel, a spreadsheet. It starts with one column and one row.
+click: tables:header:Value
+explain: tables:column | The picked column | Clicking a column's heading picks it. The bar above the grid names it and says what it holds.
+click: tables:column:name
+key: Ctrl+A
+type: Health\n
+columntype: Health = whole number
+click: tables:addcolumn
+prompt: Damage
+columntype: Damage = dice
+explain: tables:header:Damage | Dice | A column holds one kind of thing: numbers, whole numbers, text, yes or no, a choice from a list, dice, a sprite, sound or prefab, or a row of another table.
+cell: Row 1 > Name = Slime
+cell: Slime > Health = 6
+cell: Slime > Damage = 1d4
+expectcell: Slime > Health = 6
+expectcell: Slime > Damage = 1d4
+click: tables:addrow
+cell: Row 2 > Name = Bat
+cell: Bat > Health = 2
+cell: Bat > Damage = 1
+expecttable: 2 rows, 2 columns
+cell: Bat > Health = lots
+expectcell: Bat > Health = 2
+explain: tables:message | What fits | Typing a word into a number column is refused, and the panel says what the column takes.
+expectfile: Tables/Enemies.table
+code: Assets/Tables/Enemies.table | Enemies.table
+say: Every change is saved straight away, to a file with a line for each row, so changing a cell changes one line in git, and undo takes any change back.
+hidecode
+
+chapter: Spreadsheets | Copy and paste, both ways
+say: Rows can come straight from a spreadsheet. Here are two more enemies, copied from Google Sheets.
+clipboard: Ogre\t20\t2d6\nWisp\t3\t1d2
+click: tables:addrow
+click: tables:cell:Row 3 > Name
+key: Ctrl+V
+expecttable: 4 rows, 2 columns
+expectcell: Ogre > Health = 20
+expectcell: Wisp > Damage = 1d2
+explain: tables:grid | Pasted | Control V pastes the block at the picked cell, adding rows past the bottom, named by what was pasted into the names.
+click: tables:header:Health
+click: tables:sortdown
+explain: tables:grid | Sorted | Sorting by a column puts the strongest first. Rows and columns move, fill down and filter too.
+click: tables:cell:Ogre > Name
+key: Ctrl+A
+key: Ctrl+C
+expectclipboard: Name\tHealth\tDamage\nOgre\t20\t2d6
+say: Copying every row takes the headings along, ready to paste back into a sheet. Import and export CSV, in the Data menu, do the same with files.
+
+chapter: No code | Table Values
+select: Slime
+add: TableValues
+pick: TableValues.Table = Enemies
+set: TableValues.Sets = Health.Max = Health\nDamageOnTouch.Amount = Damage
+explain: component:TableValues | Table Values | Table Values gives the slime's other components their values from a row. Each line of Sets names a property and the column it takes. With Row empty, it takes the row named like the entity.
+explain: field:Health.Max | From the table | The fields it sets carry a table mark, and their tooltip says where the value comes from.
+play
+wait: 1
+expectvalue: Slime.Health.Max = 6
+cell: Slime > Health = 12
+expectvalue: Slime.Health.Max = 12
+explain: panel:Tables | While it plays | A change made while the game runs reaches it as its next step begins, so balancing is quick to try. Renaming a row keeps its old name working.
+stop
+say: Scripts read the same tables, by row and column or into a class of their own, and agents edit them through the same panel and files.

@@ -233,11 +233,20 @@ public enum NameKind
 
     /// <summary>A message sent with <c>Game.Send</c> and heard with <c>On</c>, e.g. "Score".</summary>
     Message,
+
+    /// <summary>A table in the project, by name, e.g. "Enemies" (Assets/Tables/Enemies.table).</summary>
+    Table,
+
+    /// <summary>
+    /// A row of a table, by name, e.g. "Slime": of the table another property of the component names (see
+    /// <see cref="NamesAttribute.Table"/>).
+    /// </summary>
+    Row,
 }
 
 /// <summary>
-/// Marks a string property as naming a prefab, scene, input action, collision layer or message: the editor's Inspector
-/// lets you pick one from a list of those the project has, and flags a name that matches none of them.
+/// Marks a string property as naming a prefab, scene, input action, collision layer, message, table or table row: the
+/// editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of them.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class NamesAttribute(NameKind kind) : Attribute
@@ -255,6 +264,12 @@ public sealed class NamesAttribute(NameKind kind) : Attribute
 
     /// <summary>For a message: it's heard (a counter adds up the message), so it's flagged when nothing sends it, not when nothing hears it.</summary>
     public bool Hears { get; init; }
+
+    /// <summary>
+    /// For a <see cref="NameKind.Row"/>: the property of the same component that names the table the row is in, e.g.
+    /// <c>[Names(NameKind.Row, Table = nameof(Table))]</c>.
+    /// </summary>
+    public string? Table { get; init; }
 }
 
 /// <summary>

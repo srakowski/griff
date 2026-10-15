@@ -112,6 +112,7 @@ public partial class App : Application, IDisposable
         _runner.Game.Title = game.Project.Name;
         _runner.Game.Components = game.Components;
         _runner.Game.UseProjectSettings(game.Project);
+        _runner.Game.Warning += (_, message) => Trace.TraceWarning(message);
         _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
         _runner.Game.FullscreenChanged += (_, _) => SetFullscreen(window, _runner.Game.Fullscreen);
         if (smokeOutput is null)
@@ -203,6 +204,7 @@ public partial class App : Application, IDisposable
             SaveData = new SaveData(SaveData.PlayerPath(loaded.Project.Name + " Server")),
         };
         game.UseProjectSettings(loaded.Project);
+        game.Warning += (_, message) => Console.Error.WriteLine(message);
         if (!game.Net.HostServer(port))
         {
             Console.Error.WriteLine(game.Net.Status);

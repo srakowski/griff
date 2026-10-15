@@ -19,6 +19,7 @@ public enum AssetKind
     Script,
     Scene,
     Prefab,
+    Table,
     File,
 }
 
@@ -47,6 +48,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
         AssetKind.Script => Icons.Code,
         AssetKind.Scene => Icons.SceneFile,
         AssetKind.Prefab => Icons.Package,
+        AssetKind.Table => Icons.Table,
         _ => Icons.New,
     };
 
@@ -76,6 +78,7 @@ public sealed class AssetNode(string fullPath, string assetsRoot, AssetKind kind
             ".cs" => AssetKind.Script,
             Project.SceneExtension => AssetKind.Scene,
             Project.PrefabExtension => AssetKind.Prefab,
+            Griff.Data.TableFile.Extension => AssetKind.Table,
             _ => AssetKind.File,
         };
     }

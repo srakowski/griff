@@ -1322,7 +1322,7 @@ public sealed class PropertyField : ObservableObject
     {
         get
         {
-            var tip = string.Join("\n\n", new[] { OverrideTip, FadeTip, Summary, Kind == FieldKind.Number ? DragTip : null }.OfType<string>());
+            var tip = string.Join("\n\n", new[] { OverrideTip, IsFromTable ? TableSource : null, FadeTip, Summary, Kind == FieldKind.Number ? DragTip : null }.OfType<string>());
             return tip.Length > 0 ? tip : null;
         }
     }
@@ -1341,6 +1341,32 @@ public sealed class PropertyField : ObservableObject
     /// isn't used: it's drawn faded, and can still be set ahead of time.
     /// </summary>
     public bool IsFaded => _components.All(c => !_property.IsShown(c));
+
+    /// <summary>
+    /// For a field a <see cref="TableValues"/> on the entity sets from a table's row as the game runs: where from, e.g.
+    /// "Set from the Enemies table (Slime's Health) when the game runs: change it there, in the Tables panel."; otherwise "".
+    /// </summary>
+    public string TableSource => _tableSource ??= FindTableSource() ?? "";
+
+    private string? _tableSource;
+
+    /// <summary>True when a Table Values on the entity sets this field from a table (see <see cref="TableSource"/>).</summary>
+    public bool IsFromTable => TableSource.Length > 0;
+
+    private string? FindTableSource()
+    {
+        var component = _components[0];
+        if (component is TableValues || component.Entity is not { } entity)
+            return null;
+        foreach (var values in entity.GetComponents<TableValues>())
+        {
+            var columns = _owner.Names?.ColumnsOf(values.Table);
+            if (values.Targets(columns).FirstOrDefault(t => t.Component == component && t.Property.Name == _property.Name) is { } target)
+                return $"Set from the {values.Table} table ({values.RowName}'s {target.Column}) when the game runs: change it there, in the Tables panel.";
+        }
+
+        return null;
+    }
 
     /// <summary>For a faded field: "Only used when Dash is on."; otherwise null.</summary>
     public string? FadeTip => IsFaded ? $"Only used when {_property.ShownWhenText(InspectorPanel.Humanize, InspectorPanel.Humanize)}." : null;
@@ -1578,6 +1604,8 @@ public sealed class PropertyField : ObservableObject
             NameKind.Layer => "Choose a collision layer something is on, or type a new one",
             NameKind.Action => "Choose an input action: every game's own, or one from Game > Controls",
             NameKind.Prefab => "Choose a prefab from the project, or drag one here from the Assets panel",
+            NameKind.Table => "Choose a table from the project, or drag one here from the Assets panel",
+            NameKind.Row => "Choose a row of the table",
             _ => "Choose a scene from the project, or drag one here from the Assets panel",
         },
     };
@@ -1652,11 +1680,13 @@ public sealed class PropertyField : ObservableObject
                 break;
             default:
                 var kind = _property.Names!;
-                choices = [.. (_owner.Names?.Choices(kind) ?? []).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                choices = [.. (_owner.Names?.Choices(kind, _components[0]) ?? []).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
                 setup = new($"Type to find {NameNoun}", kind.Kind switch
                 {
                     NameKind.Prefab => "No prefabs in the project yet",
                     NameKind.Scene => "No scenes in the project yet",
+                    NameKind.Table => "No tables in the project yet: Data > New Table makes one",
+                    NameKind.Row => "Pick a table first, or give it rows in the Tables panel",
                     NameKind.Message => "No messages sent or heard yet: type one to use it",
                     _ => "None in the project yet: type one to use it",
                 }, NamesMany, true, none);
@@ -1680,6 +1710,7 @@ public sealed class PropertyField : ObservableObject
         {
             NameKind.Prefab => path.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase),
             NameKind.Scene => path.EndsWith(Griff.Projects.Project.SceneExtension, StringComparison.OrdinalIgnoreCase),
+            NameKind.Table => path.EndsWith(Griff.Data.TableFile.Extension, StringComparison.OrdinalIgnoreCase),
             _ => false,
         },
         _ => false,

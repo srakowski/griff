@@ -64,6 +64,21 @@ public static class Icons
     public const string Console = "\uE756";
     public const string Gamepad = "\uE7FC";
     public const string Profiler = "\uE9D9";
+    public const string Table = "\uF0E2";
+
+    // Tables
+    public const string Cut = "\uE8C6";
+    public const string Paste = "\uE77F";
+    public const string SortUp = "\uE74A";
+    public const string SortDown = "\uE74B";
+    public const string Filter = "\uE71C";
+    public const string Import = "\uE896";
+    public const string Export = "\uE898";
+    public const string MoveUp = "\uE74A";
+    public const string MoveDown = "\uE74B";
+    public const string MoveLeft = "\uE72B";
+    public const string MoveRight = "\uE72A";
+    public const string FillDown = "\uE7C3";
 
     // Status
     public const string Error = "\uEA39";

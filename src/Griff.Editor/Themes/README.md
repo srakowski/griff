@@ -67,6 +67,7 @@ Each control dictionary merges `Foundation.xaml` itself, so `StaticResource` loo
 | `Style.Separator.Vertical` | Divider between toolbar button groups |
 | `Style.Icon` | `TextBlock` that renders an `Icons` glyph |
 | `Style.Text.*` | `Display`, `Title`, `Subtitle`, `Body`, `Secondary`, `Caption`, `Overline`, `Mono` |
+| `Style.TextBlock.Cell` / `Style.TextBox.Cell` | A `DataGrid` cell's text, shown and typed into (no box of its own: the cell is the box) |
 
 ## Editor controls
 
@@ -79,4 +80,4 @@ Each control dictionary merges `Foundation.xaml` itself, so `StaticResource` loo
 ## Not yet styled
 
 These still use the default WPF look and need styles before use: `Expander`, `ProgressBar`,
-`RadioButton`, `DataGrid`, `ListView`/`GridView`, and editable `ComboBox`.
+`RadioButton`, `ListView`/`GridView`, and editable `ComboBox`.

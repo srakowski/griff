@@ -605,6 +605,52 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // one that makes no garbage).
                 await ExpectProfiler(a);
                 break;
+            case "cell":
+                // "cell: Slime > Health = 12": type into a cell of the table showing in the Tables panel ("Name" for the row's name).
+                var (cellAt, cellValue) = Split2(a, '=');
+                var (cellRow, cellColumn) = DemoUi.CellName(cellAt);
+                await ui.TypeIntoCell(cellRow, cellColumn, cellValue);
+                break;
+            case "expectcell":
+                // "expectcell: Slime > Health = 12": the cell of the table showing reads that ("Name" for the row's name).
+                var (expectAt, expectValue) = Split2(a, '=');
+                var (expectRow, expectColumn) = DemoUi.CellName(expectAt);
+                string CellNow()
+                {
+                    try
+                    {
+                        return DemoUi.Tables.Cell(expectRow, expectColumn);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ex.Message;
+                    }
+                }
+
+                if (!await Until(() => CellNow() == expectValue, 3000))
+                    throw new InvalidOperationException($"Expected {expectRow} > {expectColumn} to read \"{expectValue}\", but it reads \"{CellNow()}\".");
+                break;
+            case "expecttable":
+                // "expecttable: 4 rows, 3 columns": what the Tables panel says the table showing has.
+                if (!await Until(() => DemoUi.Tables.Summary == a, 3000))
+                    throw new InvalidOperationException($"Expected the table to have {a}, but it has {DemoUi.Tables.Summary}.");
+                break;
+            case "columntype":
+                // "columntype: Health = whole number": pick a column's type in the Tables panel's column bar.
+                var (typeColumn, typeName) = Split2(a, '=');
+                await ui.ColumnType(typeColumn, typeName);
+                break;
+            case "clipboard":
+                // "clipboard: Ogre\t20\nWisp\t3": put text on the clipboard, as copying cells in a spreadsheet does (\t
+                // between cells, \n between rows).
+                Clipboard.SetText(ClipText(a));
+                break;
+            case "expectclipboard":
+                // "expectclipboard: Name\tHealth": the clipboard has this text in it (\t and \n as in clipboard:).
+                var wantClip = ClipText(a);
+                if (!await Until(() => Clipboard.ContainsText() && Clipboard.GetText().Contains(wantClip, StringComparison.Ordinal), 3000))
+                    throw new InvalidOperationException($"Expected the clipboard to have \"{a}\" in it, but it has \"{(Clipboard.ContainsText() ? Clipboard.GetText() : "")}\".");
+                break;
             case "expectlayout":
                 // "expectlayout: Hierarchy | (Documents / Assets, Output) | Inspector": where the panels are, as PanelLayout.Summary says.
                 if (!await Until(() => ui.Panels!.Layout.Summary == a, 3000))
@@ -1557,6 +1603,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "transform" => DemoUi.TransformPart(name),
             "filter" => DemoUi.FilterBox(name),
             "profiler" => DemoUi.ProfilerPart(name),
+            "tables" => DemoUi.TablesPart(name),
             "pick" when name.Split('.', 2) is [var component, var field] =>
                 DemoUi.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
@@ -1565,7 +1612,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, sound:, image:, pick:, color:, transform:, filter:, profiler:, tables:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 
@@ -1650,6 +1697,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     }
 
     // ----- Parsing helpers -----
+
+    // A demo line's \t and \n as a spreadsheet puts them on the clipboard: tabs between cells, a line break after each row.
+    private static string ClipText(string text) => text.Replace("\\t", "\t", StringComparison.Ordinal).Replace("\\n", "\r\n", StringComparison.Ordinal);
 
     private static (string First, string Second) Split2(string text, char separator = '|')
     {

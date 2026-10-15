@@ -1,0 +1,186 @@
+<UserControl x:Class="Griff.Editor.Features.Data.TablesPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:data="clr-namespace:Griff.Editor.Features.Data"
+             xmlns:theme="clr-namespace:Griff.Editor.Themes"
+             xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+             xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=data:TablesPanel}"
+             d:DesignHeight="260" d:DesignWidth="900">
+    <UserControl.Resources>
+        <!-- A toolbar button with a word beside its icon, as wide as it needs -->
+        <Style x:Key="Worded" TargetType="Button" BasedOn="{StaticResource Style.Button.Toolbar}">
+            <Setter Property="Width" Value="Auto" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Secondary}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="8,0,4,0" />
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- Toolbar: which table, then what to do to it -->
+        <Border DockPanel.Dock="Top"
+                Padding="4,2"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1">
+            <WrapPanel Orientation="Horizontal">
+                <ComboBox x:Name="TablePicker"
+                          Width="150"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding TableNames}"
+                          SelectedItem="{Binding TableName, Mode=TwoWay}"
+                          Tag="tables:table"
+                          ToolTip="The table to edit" />
+                <Button x:Name="NewTableButton" Margin="2,0,0,0" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:new" ToolTip="New Table...">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Table}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="AddRowButton" Style="{StaticResource Worded}" Tag="tables:addrow" ToolTip="Add a row after the picked one (Ctrl+Enter)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                        <TextBlock Margin="4,0,2,0" VerticalAlignment="Center" Text="Row" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="AddColumnButton" Style="{StaticResource Worded}" Tag="tables:addcolumn" ToolTip="Add a column after the picked one">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                        <TextBlock Margin="4,0,2,0" VerticalAlignment="Center" Text="Column" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="DeleteRowsButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:deleterows" ToolTip="Delete the picked rows">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="MoveUpButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:moveup" ToolTip="Move the picked rows up (Alt+Up)">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveUp}" />
+                </Button>
+                <Button x:Name="MoveDownButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:movedown" ToolTip="Move the picked rows down (Alt+Down)">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveDown}" />
+                </Button>
+                <Button x:Name="SortUpButton" Style="{StaticResource Worded}" Tag="tables:sortup" ToolTip="Sort by the picked column, lowest first">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.SortUp}" />
+                        <TextBlock Margin="2,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSize.Caption}" Text="A-Z" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="SortDownButton" Style="{StaticResource Worded}" Tag="tables:sortdown" ToolTip="Sort by the picked column, highest first">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.SortDown}" />
+                        <TextBlock Margin="2,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSize.Caption}" Text="Z-A" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="FillDownButton" Style="{StaticResource Worded}" Tag="tables:filldown" ToolTip="Fill down: copy the top picked cell into the cells under it (Ctrl+D)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveDown}" />
+                        <TextBlock Margin="2,0,2,0" VerticalAlignment="Center" Text="Fill" />
+                    </StackPanel>
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Undo}" />
+                </Button>
+                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Redo}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="ImportButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:import" ToolTip="Import CSV...">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Import}" />
+                </Button>
+                <Button x:Name="ExportButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:export" ToolTip="Export CSV...">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Export}" />
+                </Button>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <controls:FilterBox Width="160"
+                                    VerticalAlignment="Center"
+                                    Placeholder="Filter rows"
+                                    Tag="tables:filter"
+                                    Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="Show only the rows with this in their name or a cell" />
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Tag="tables:summary" Text="{Binding Summary}" />
+            </WrapPanel>
+        </Border>
+
+        <!-- The picked column: its name and what it holds (always there, greyed with no column picked, so the grid stays put) -->
+        <Border DockPanel.Dock="Top"
+                Padding="4,3"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1"
+                IsEnabled="{Binding HasSelectedColumn}"
+                Tag="tables:column">
+            <WrapPanel Orientation="Horizontal" DataContext="{Binding SelectedColumn}">
+                <TextBlock Style="{StaticResource Label}" Margin="2,0,4,0" Text="Column" />
+                <controls:CommitTextBox Width="140" Tag="tables:column:name" Text="{Binding Name}" ToolTip="Rename the column: what names it by its old name still finds it" />
+                <TextBlock Style="{StaticResource Label}" Text="Type" />
+                <ComboBox Width="120"
+                          ItemsSource="{Binding DataContext.Types, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Type, Mode=TwoWay}"
+                          Tag="tables:column:type"
+                          ToolTip="What the column holds: its cells are converted, or the change is refused if some don't fit" />
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsChoice, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <TextBlock Style="{StaticResource Label}" Text="Choices" />
+                    <controls:CommitTextBox Width="260" Tag="tables:column:choices" Text="{Binding Choices}" ToolTip="What its cells can be, separated by commas" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsRow, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <TextBlock Style="{StaticResource Label}" Text="Rows of" />
+                    <ComboBox Width="140" ItemsSource="{Binding Tables}" SelectedItem="{Binding Table, Mode=TwoWay}" Tag="tables:column:table" ToolTip="The table its cells name rows of" />
+                </StackPanel>
+                <Separator Style="{StaticResource Style.Separator.Vertical}" />
+                <Button x:Name="MoveLeftButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:moveleft" ToolTip="Move the column left (Alt+Left)">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveLeft}" />
+                </Button>
+                <Button x:Name="MoveRightButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:moveright" ToolTip="Move the column right (Alt+Right)">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveRight}" />
+                </Button>
+                <Button x:Name="DeleteColumnButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:deletecolumn" ToolTip="Delete the column">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                </Button>
+            </WrapPanel>
+        </Border>
+
+        <!-- What the last change said: always room for it, so the grid doesn't move when it comes and goes -->
+        <TextBlock DockPanel.Dock="Bottom"
+                   Margin="8,3"
+                   Style="{StaticResource Style.Text.Secondary}"
+                   Tag="tables:message"
+                   Text="{Binding Message}"
+                   TextTrimming="CharacterEllipsis"
+                   MinHeight="16"
+                   ToolTip="{Binding Message}" />
+
+        <Grid>
+            <DataGrid x:Name="Grid"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      CanUserSortColumns="False"
+                      CanUserResizeRows="False"
+                      SelectionMode="Extended"
+                      SelectionUnit="Cell"
+                      ItemsSource="{Binding Rows}"
+                      Tag="tables:grid"
+                      Visibility="{Binding HasTable, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+            <TextBlock Margin="16"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Style.Text.Secondary}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsEmpty, Converter={x:Static converters:BoolToVisibilityConverter.Default}}"
+                       Text="No tables yet. Data &gt; New Table makes one: items, spells, enemies or level curves, edited here like a spreadsheet, read by scripts and by Table Values components." />
+            <TextBlock Margin="16"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource Brush.Status.Warning}"
+                       Tag="tables:problem"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="{Binding Problem}"
+                       Visibility="{Binding HasProblem, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

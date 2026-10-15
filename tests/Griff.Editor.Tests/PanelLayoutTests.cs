@@ -12,7 +12,7 @@ namespace Griff.Editor.Tests;
 /// <summary>Docking the tool panels: on the window's sides, beside each other, tabbed together and floating.</summary>
 public class PanelLayoutTests
 {
-    private const string Start = "Hierarchy | (Documents / Assets, Output, Profiler) | Inspector";
+    private const string Start = "Hierarchy | (Documents / Assets, Output, Profiler, Tables) | Inspector";
 
     private static void WithLayout(Action<PanelLayout> test) => EditorHost.Run(services => test(services.GetRequiredService<PanelLayout>()));
 
@@ -43,27 +43,27 @@ public class PanelLayoutTests
     public void DocksOnTheWindowsSides() => WithLayout(layout =>
     {
         layout.Dock("Inspector", DockSide.Left);
-        Assert.Equal("Inspector | Hierarchy | (Documents / Assets, Output, Profiler)", layout.Summary);
+        Assert.Equal("Inspector | Hierarchy | (Documents / Assets, Output, Profiler, Tables)", layout.Summary);
 
         layout.Dock("Hierarchy", DockSide.Bottom);
-        Assert.Equal("(Inspector | (Documents / Assets, Output, Profiler)) / Hierarchy", layout.Summary);
+        Assert.Equal("(Inspector | (Documents / Assets, Output, Profiler, Tables)) / Hierarchy", layout.Summary);
     });
 
     [Fact]
     public void DocksBesideAPanelOrTheDocuments() => WithLayout(layout =>
     {
         layout.Dock("Output", DockSide.Right, "Documents");
-        Assert.Equal("Hierarchy | ((Documents | Output) / Assets, Profiler) | Inspector", layout.Summary);
+        Assert.Equal("Hierarchy | ((Documents | Output) / Assets, Profiler, Tables) | Inspector", layout.Summary);
 
         layout.Dock("Assets", DockSide.Bottom, "hierarchy");
-        Assert.Equal("(Hierarchy / Assets) | ((Documents | Output) / Profiler) | Inspector", layout.Summary);
+        Assert.Equal("(Hierarchy / Assets) | ((Documents | Output) / Profiler, Tables) | Inspector", layout.Summary);
     });
 
     [Fact]
     public void TabsPanelsTogether() => WithLayout(layout =>
     {
         layout.Tab("Inspector", "Hierarchy");
-        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler)", layout.Summary);
+        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler, Tables)", layout.Summary);
         Assert.Equal("Inspector", layout.GroupOf("Hierarchy").Selected);
     });
 
@@ -71,23 +71,24 @@ public class PanelLayoutTests
     public void EmptySplitsFoldAway() => WithLayout(layout =>
     {
         layout.Dock("Assets", DockSide.Left, "Documents");
-        Assert.Equal("Hierarchy | ((Assets | Documents) / Output, Profiler) | Inspector", layout.Summary);
+        Assert.Equal("Hierarchy | ((Assets | Documents) / Output, Profiler, Tables) | Inspector", layout.Summary);
 
-        // Output and Profiler were all that was under the documents, so that split goes, and what's left joins the row it's in.
+        // Output, Profiler and Tables were all that was under the documents, so that split goes, and what's left joins the row it's in.
         layout.Tab("Profiler", "Inspector");
+        layout.Tab("Tables", "Inspector");
         layout.Tab("Output", "Inspector");
-        Assert.Equal("Hierarchy | Assets | Documents | Inspector, Profiler, Output", layout.Summary);
+        Assert.Equal("Hierarchy | Assets | Documents | Inspector, Profiler, Tables, Output", layout.Summary);
     });
 
     [Fact]
     public void FloatsAndComesBack() => WithLayout(layout =>
     {
         layout.Float("Output", 100, 120, 300, 200);
-        Assert.Equal("Hierarchy | (Documents / Assets, Profiler) | Inspector; floating: Output", layout.Summary);
+        Assert.Equal("Hierarchy | (Documents / Assets, Profiler, Tables) | Inspector; floating: Output", layout.Summary);
         Assert.Equal(new Rect(100, 120, 300, 200), layout.Floats[0].Bounds);
 
         layout.Tab("Inspector", "Output");
-        Assert.Equal("Hierarchy | (Documents / Assets, Profiler); floating: Output, Inspector", layout.Summary);
+        Assert.Equal("Hierarchy | (Documents / Assets, Profiler, Tables); floating: Output, Inspector", layout.Summary);
 
         // Closing the floating window returns each panel, all at once: Output to Assets, Inspector to the right.
         var changes = 0;
@@ -151,7 +152,7 @@ public class PanelLayoutTests
         Assert.Null(layout.EditorWindow);
         layout.Remember(new EditorWindowData { Left = 40, Top = 50, Width = 1200, Height = 800, Maximized = true });
         var next = NextSession(layout, settings);
-        Assert.Equal("Inspector | Hierarchy, Assets | (Documents / Profiler); floating: Output", next.Summary);
+        Assert.Equal("Inspector | Hierarchy, Assets | (Documents / Profiler, Tables); floating: Output", next.Summary);
         Assert.Equal((40.0, 1200.0, true), (next.EditorWindow!.Left, next.EditorWindow.Width, next.EditorWindow.Maximized));
         Assert.Equal("Assets", next.GroupOf("Hierarchy").Selected);
         Assert.Equal(345, next.GroupOf("Hierarchy").Width);
@@ -188,19 +189,19 @@ public class PanelLayoutTests
         var changes = 0;
         layout.Changed += (_, _) => changes++;
         layout.Load(" narrow ");
-        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler)", layout.Summary);
+        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler, Tables)", layout.Summary);
         Assert.Empty(layout.Floats);
         Assert.Equal(1, changes);
 
         layout.Load("Floaty");
-        Assert.Equal("Hierarchy | (Documents / Output, Profiler) | Inspector; floating: Assets", layout.Summary);
+        Assert.Equal("Hierarchy | (Documents / Output, Profiler, Tables) | Inspector; floating: Assets", layout.Summary);
 
         // Saving under a name that's taken saves over it, keeping its place in the list.
         layout.Save("NARROW");
         Assert.Equal(["NARROW", "Floaty"], layout.SavedLayouts);
         layout.Reset();
         layout.Load("Narrow");
-        Assert.Equal("Hierarchy | (Documents / Output, Profiler) | Inspector; floating: Assets", layout.Summary);
+        Assert.Equal("Hierarchy | (Documents / Output, Profiler, Tables) | Inspector; floating: Assets", layout.Summary);
 
         layout.Delete("floaty");
         Assert.Equal(["NARROW"], layout.SavedLayouts);
@@ -224,7 +225,7 @@ public class PanelLayoutTests
         demo.Float("Output");
         demo.Save("Demo");
         demo.Remember();
-        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler)", NextSession(layout, settings).Summary);
+        Assert.Equal("Hierarchy, Inspector | (Documents / Assets, Output, Profiler, Tables)", NextSession(layout, settings).Summary);
         Assert.Equal(["Mine"], settings.Settings.Layouts.Select(l => l.Name));
     });
 
@@ -250,7 +251,7 @@ public class PanelLayoutTests
                 Part.Split(false, new PanelLayoutPart { Kind = PanelLayoutPart.DocumentsKind }, Part.Tabs("Console")),
                 Part.Tabs("Assets")),
         };
-        Assert.Equal("Inspector, Hierarchy | Documents | Assets, Output, Profiler", NextSession(layout, settings).Summary);
+        Assert.Equal("Inspector, Hierarchy | Documents | Assets, Output, Profiler, Tables", NextSession(layout, settings).Summary);
 
         // Without the document area it isn't used.
         settings.Settings.PanelLayout = new PanelLayoutData { Root = Part.Tabs("Hierarchy") };
@@ -284,7 +285,7 @@ public class PanelLayoutTests
 
         Assert.Equal(["Wide"], load.Choices!);
         load.ChooseAsync("Wide").GetAwaiter().GetResult();
-        Assert.Equal("Hierarchy | (Documents / Assets, Profiler) | Inspector, Output", layout.Summary);
+        Assert.Equal("Hierarchy | (Documents / Assets, Profiler, Tables) | Inspector, Output", layout.Summary);
 
         delete.ChooseAsync("Wide").GetAwaiter().GetResult();
         Assert.Empty(layout.SavedLayouts);

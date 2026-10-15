@@ -67,6 +67,8 @@ public static partial class WebPlayer
             Components = loaded.Components,
         };
         s_game.UseProjectSettings(loaded.Project);
+        // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
+        s_game.Warning += (_, message) => Console.WriteLine(message);
         foreach (var warning in loaded.Warnings)
             Console.WriteLine(warning);
         Browser.Start(loaded.Project.Name);

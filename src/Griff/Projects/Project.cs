@@ -107,6 +107,15 @@ public sealed class Project
     /// <summary>Finds a prefab by name ("Bullet") or Assets-relative path ("Prefabs/Bullet.prefab").</summary>
     public string? FindPrefab(string nameOrPath) => FindAsset(nameOrPath, PrefabExtension, FindPrefabs());
 
+    /// <summary>Finds a table by name ("Enemies") or Assets-relative path ("Tables/Enemies.table").</summary>
+    public string? FindTable(string nameOrPath) => FindAsset(nameOrPath, Data.TableFile.Extension, FindTables());
+
+    /// <summary>All table files in the project, sorted by path.</summary>
+    public IEnumerable<string> FindTables() => FindFiles(Data.TableFile.Extension);
+
+    /// <summary>Where New Table puts a table called <paramref name="name"/>.</summary>
+    public string DefaultTablePath(string name) => Path.Combine(AssetsPath, Data.TableFile.Folder, name + Data.TableFile.Extension);
+
     /// <summary>Where Save as Prefab puts a prefab called <paramref name="name"/>.</summary>
     public string DefaultPrefabPath(string name) => Path.Combine(AssetsPath, PrefabsFolderName, name + PrefabExtension);
 
@@ -214,7 +223,7 @@ public sealed class Project
         return candidates.FirstOrDefault(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    // A new project opens to something: the template's scene, scripts and prefabs.
+    // A new project opens to something: the template's scene, scripts, tables and prefabs.
     private static async Task WriteTemplateAsync(Project project, ProjectTemplate template, string startScene, CancellationToken cancellationToken)
     {
         foreach (var (relative, source) in template.Scripts())
@@ -229,6 +238,13 @@ public sealed class Project
             var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, bytes, cancellationToken);
+        }
+
+        foreach (var (relative, table) in template.Tables())
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, Data.TableFile.Write(table), cancellationToken);
         }
 
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());

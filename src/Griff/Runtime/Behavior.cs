@@ -33,6 +33,12 @@ public abstract class Behavior : Component, IHealthListener
     protected Time Time => Game.Time;
 
     /// <summary>
+    /// The game's tables (<see cref="Runtime.Game.Tables"/>): <c>float damage = Tables.Get("Spells", "Fireball")["Damage"];</c>,
+    /// or a class of your own filled from a row, <c>Tables.Get&lt;Spell&gt;("Spells", "Fireball")</c>.
+    /// </summary>
+    protected Griff.Data.TableSet Tables => Game.Tables;
+
+    /// <summary>
     /// The controls of whoever plays this entity: this machine's, or in a network game, those of the player it belongs
     /// to (see <see cref="Runtime.Game.InputOf"/>).
     /// </summary>

@@ -422,10 +422,14 @@ public sealed partial class Game : IGameContext
     /// <summary>Stops every message listener <paramref name="owner"/> started.</summary>
     internal void StopListening(Behavior owner) => _messages.StopAll(owner);
 
-    /// <summary>Adds <paramref name="entity"/> to the scene. Its behaviors start on the next frame.</summary>
+    /// <summary>
+    /// Adds <paramref name="entity"/> to the scene. Its behaviors start on the next frame; its <see cref="TableValues"/>
+    /// set their values straight away.
+    /// </summary>
     public Entity Spawn(Entity entity, Entity? parent = null)
     {
         Scene.Add(entity, parent);
+        ApplyTables(entity);
         return entity;
     }
 

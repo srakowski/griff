@@ -77,6 +77,9 @@ public abstract class GameSystem
 
     protected Time Time => Game.Time;
 
+    /// <summary>The game's tables (see <see cref="Runtime.Game.Tables"/>).</summary>
+    protected Griff.Data.TableSet Tables => Game.Tables;
+
     /// <summary>
     /// Called every step of the game (60 a second, see <see cref="Runtime.Time.StepRate"/>) in <see cref="Phase"/>. A
     /// system that pushes bodies runs in <see cref="FramePhase.Simulate"/>, just before they move.

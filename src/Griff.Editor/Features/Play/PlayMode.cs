@@ -35,6 +35,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private readonly List<PlayerWindow> _players = [];
     private bool _slowConnection;
     private long _refreshedAt;
+    // The Game tab's game's tables: kept through rewinds, which start a new game from a snapshot, so what Table Values set
+    // isn't set again (with new dice) unless its row has changed, and a change waiting for the next step still reaches it.
+    private Griff.Data.TableSet? _tables;
 
     /// <summary>How often the panels that show what the game changes (the Hierarchy, the Inspector) catch up while it plays.</summary>
     public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(0.1);
@@ -150,6 +153,34 @@ public sealed class PlayMode : ObservableObject, IDisposable
             game.Time.StepRate = rate;
     }
 
+    /// <summary>
+    /// Has every running game (the Game tab's and other players') take <paramref name="table"/> in place of the table of
+    /// its name, as its next step begins (see <see cref="Griff.Data.TableSet.Stage"/>): a table edited while playing
+    /// shows at once, and Table Values set from its rows set their values again.
+    /// </summary>
+    public void StageTable(Griff.Data.Table table)
+    {
+        foreach (var game in AllGames())
+            game.Tables.Stage(table);
+    }
+
+    /// <summary>Has every running game treat the table called <paramref name="name"/> as not reading, saying <paramref name="problem"/>.</summary>
+    public void StageTableProblem(string name, string problem)
+    {
+        foreach (var game in AllGames())
+            game.Tables.StageProblem(name, problem);
+    }
+
+    /// <summary>Has every running game do without the table called <paramref name="name"/> (its file was deleted).</summary>
+    public void StageTableRemoval(string name)
+    {
+        foreach (var game in AllGames())
+            game.Tables.StageRemoval(name);
+    }
+
+    // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to Output.
+    private void OnGameWarning(object? sender, string message) => _logger.LogWarning("{Warning}", message);
+
     private IEnumerable<Game> AllGames()
     {
         if (_runner?.Game is { } host)
@@ -208,6 +239,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _timeOffset = 0;
         (_exceptionSnapshot, _reported) = (null, null);
         _sceneName = edit.Name;
+        _tables = null;
         StartRunner(copy, paused: false);
 
         // Keys should drive the game, not whichever field had focus.
@@ -243,6 +275,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _workspace.ExitPlayMode();
         _runtime = null;
         _timeline = null;
+        _tables = null;
         _position = 0;
         (_exceptionSnapshot, _reported) = (null, null);
         _nextFrame.TrySetResult();
@@ -367,7 +400,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _runner.Game.Components = _workspace.Components;
             _runner.Game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
             _runner.Game.UseProjectSettings(project);
+            if (_tables is null)
+                _tables = _runner.Game.Tables;
+            else
+                _runner.Game.Tables = _tables;
         }
+
+        _runner.Game.Warning += OnGameWarning;
         _runner.Game.SceneName = _sceneName;
         _runner.Game.Profiler = _profiler;
         _runner.Game.SceneChanged += OnGameSceneChanged;
@@ -585,6 +624,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Net.PlayerName = $"Player {number}";
         game.UseProjectSettings(project);
+        game.Warning += OnGameWarning;
         game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Faulted += OnFaulted;
         runner.Start();

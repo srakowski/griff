@@ -67,6 +67,10 @@ public sealed class EditorAgentProject(IWorkspace workspace) : IAgentProject
 
     public Task<AssetFeedback?> AssetChangedAsync(string assetPath, string? previousText = null)
     {
+        // Whatever keeps the file loaded takes it in first (a table reaches the Tables panel and the running game).
+        if (workspace.AssetChanged(assetPath) is { Count: > 0 } said)
+            return Task.FromResult<AssetFeedback?>(new AssetFeedback(string.Join("\n", said.Select(f => f.Message)), said.Any(f => f.IsError)));
+
         if (assetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
             var result = workspace.ReloadScripts();

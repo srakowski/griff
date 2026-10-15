@@ -52,6 +52,9 @@ public abstract class ProjectTemplate
     /// <summary>Image files, keyed by path relative to Assets, as PNG bytes.</summary>
     public virtual IReadOnlyDictionary<string, byte[]> Images() => new Dictionary<string, byte[]>();
 
+    /// <summary>Its tables of game data, keyed by path relative to Assets ("Tables/Enemies.table"); see <see cref="Data.Table"/>.</summary>
+    public virtual IReadOnlyDictionary<string, Data.Table> Tables() => new Dictionary<string, Data.Table>();
+
     /// <summary>The start scene. Script components are added as missing components until compiled.</summary>
     public Scene StartScene() => WithSounds(BuildStartScene());
 

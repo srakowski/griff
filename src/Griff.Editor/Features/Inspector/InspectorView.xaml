@@ -313,6 +313,18 @@
                                                             Visibility="Hidden">
                                                         <Border Width="3" Height="14" Background="{DynamicResource Brush.Accent}" CornerRadius="1.5" />
                                                     </Button>
+                                                    <!-- Set from a table's row as the game runs (a Table Values on the entity) -->
+                                                    <TextBlock x:Name="TableMark"
+                                                               Margin="0,0,4,0"
+                                                               VerticalAlignment="Center"
+                                                               DockPanel.Dock="Left"
+                                                               FontSize="{StaticResource IconSize.Small}"
+                                                               Foreground="{DynamicResource Brush.Status.Info}"
+                                                               Style="{StaticResource Style.Icon}"
+                                                               Tag="fromtable"
+                                                               Text="{x:Static theme:Icons.Table}"
+                                                               ToolTip="{Binding TableSource}"
+                                                               Visibility="Collapsed" />
                                                     <!-- The name explains the field, and drags a number -->
                                                     <TextBlock x:Name="FieldLabel"
                                                                Margin="0,0,12,0"
@@ -340,6 +352,9 @@
                                                     <Setter TargetName="OverrideMark" Property="Visibility" Value="Visible" />
                                                     <Setter TargetName="FieldLabel" Property="FontWeight" Value="SemiBold" />
                                                     <Setter TargetName="FieldLabel" Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsFromTable}" Value="True">
+                                                    <Setter TargetName="TableMark" Property="Visibility" Value="Visible" />
                                                 </DataTrigger>
                                                 <!-- Only used with something that's off ([ShownWhen]): faded, still editable -->
                                                 <DataTrigger Binding="{Binding IsFaded}" Value="True">

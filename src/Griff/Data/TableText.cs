@@ -162,7 +162,8 @@ public static class TableText
             var cells = new TableValue[columns.Count];
             for (var c = 0; c < columns.Count; c++)
             {
-                if (!columns[c].TryRead(Cell(line, c), out cells[c], out var problem))
+                // A formula column keeps its formula: its values are worked out, not read.
+                if (columns[c].Formula is null && !columns[c].TryRead(Cell(line, c), out cells[c], out var problem))
                     throw new InvalidDataException($"Row {unique}: {problem} (it has \"{Cell(line, c)}\").");
             }
 

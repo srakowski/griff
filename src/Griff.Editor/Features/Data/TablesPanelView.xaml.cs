@@ -41,6 +41,7 @@ public partial class TablesPanelView : UserControl
         RedoButton.Command = commands.Get("Data.Redo");
         ImportButton.Command = commands.Get("Data.ImportCsv");
         ExportButton.Command = commands.Get("Data.ExportCsv");
+        GenerateButton.Command = commands.Get("Data.GenerateCurve");
 
         DataContextChanged += (_, _) => Attach(DataContext as TablesPanel);
         Grid.SelectedCellsChanged += (_, _) => ReportSelection();
@@ -97,7 +98,17 @@ public partial class TablesPanelView : UserControl
             {
                 var path = $"{nameof(TableRowView.Cells)}[{column.Index}]";
                 DataGridColumn built;
-                if (column.IsYesNo)
+                if (column.HasFormula)
+                {
+                    // Worked out: shown, not typed into (the formula is changed in the column bar).
+                    built = new DataGridTextColumn
+                    {
+                        Binding = new Binding(path + "." + nameof(TableCellView.Text)) { Mode = BindingMode.OneWay },
+                        ElementStyle = CellText(numeric: column.IsNumeric || column.IsYesNo, bold: false, cell: path, workedOut: true),
+                        IsReadOnly = true,
+                    };
+                }
+                else if (column.IsYesNo)
                 {
                     built = new DataGridCheckBoxColumn { Binding = new Binding(path + "." + nameof(TableCellView.Checked)) };
                 }
@@ -195,9 +206,12 @@ public partial class TablesPanelView : UserControl
         return menu;
     }
 
-    private Style CellText(bool numeric, bool bold, string? cell)
+    private Style CellText(bool numeric, bool bold, string? cell, bool workedOut = false)
     {
         var style = new Style(typeof(TextBlock), (Style)FindResource("Style.TextBlock.Cell"));
+        // A formula's cells read a shade quieter than the values typed in, as worked out.
+        if (workedOut)
+            style.Setters.Add(new Setter(TextBlock.ForegroundProperty, FindResource("Brush.Text.Secondary")));
         if (numeric)
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
         if (bold)

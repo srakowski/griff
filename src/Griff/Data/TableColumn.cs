@@ -51,6 +51,26 @@ public sealed record TableColumn(string Name, ColumnType Type = ColumnType.Numbe
     public string? Table { get; init; }
 
     /// <summary>
+    /// A formula that works out the column's cells from the row's other columns and from other tables
+    /// (<c>Base * 1.15 ^ (Level - 1)</c>, without its "="; see <see cref="Data.Formula"/>), or null for a column of values.
+    /// A formula column has no values of its own: they're worked out as the tables load and change, as <see cref="Type"/>
+    /// says (a whole number column rounds them). Its file keeps the formula, not the values.
+    /// </summary>
+    public string? Formula { get; init; }
+
+    /// <summary>
+    /// The curve the column's values were last generated from (XP to the next level, a stat or a price, a row a level),
+    /// kept so it can be changed and generated again; null if they weren't.
+    /// </summary>
+    public Curve? Curve { get; init; }
+
+    /// <summary>True when its cells are worked out by a <see cref="Formula"/>.</summary>
+    public bool IsFormula => Formula is not null;
+
+    /// <summary>True for a column of numbers, whole numbers, dice or yes/no, which can be charted.</summary>
+    public bool IsNumeric => Type is ColumnType.Number or ColumnType.WholeNumber or ColumnType.Dice or ColumnType.YesNo;
+
+    /// <summary>
     /// What the file says about the column that this version of Griff doesn't know (a newer one's settings), kept so
     /// saving the table loses nothing.
     /// </summary>

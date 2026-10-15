@@ -640,6 +640,30 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 var (typeColumn, typeName) = Split2(a, '=');
                 await ui.ColumnType(typeColumn, typeName);
                 break;
+            case "curve":
+                // "curve: last = 50000", "curve: kind = s-curve": set one of the Tables panel's curve editor's settings.
+                var (curveSetting, curveValue) = Split2(a, '=');
+                await ui.CurveSetting(curveSetting, curveValue);
+                break;
+            case "curvepoint":
+                // "curvepoint: 15, 30000": click the chart at a level and value, adding a point to a hand-drawn curve.
+                var curveAt = ChartAt(a);
+                await ui.CurvePoint(curveAt.Level, curveAt.Value);
+                break;
+            case "curvedrag":
+                // "curvedrag: 15, 30000 > 12, 20000": drag a hand-drawn curve's point on the chart.
+                var (curveFrom, curveTo) = Split2(a, '>');
+                await ui.CurveDrag(ChartAt(curveFrom), ChartAt(curveTo));
+                break;
+            case "charthover":
+                // "charthover: 12": rest the mouse on a row (or level) of the chart, so it says what's there.
+                await ui.ChartHover(a);
+                break;
+            case "expectchart":
+                // "expectchart: 100 (1) to 50,000 (30), 9,870 on average.": the chart's summary of the column it shows.
+                if (!await Until(() => DemoUi.Tables.Chart.Summary == a, 3000))
+                    throw new InvalidOperationException($"Expected the chart to say \"{a}\", but it says \"{DemoUi.Tables.Chart.Summary}\".");
+                break;
             case "clipboard":
                 // "clipboard: Ogre\t20\nWisp\t3": put text on the clipboard, as copying cells in a spreadsheet does (\t
                 // between cells, \n between rows).
@@ -1701,6 +1725,17 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     // A demo line's \t and \n as a spreadsheet puts them on the clipboard: tabs between cells, a line break after each row.
     private static string ClipText(string text) => text.Replace("\\t", "\t", StringComparison.Ordinal).Replace("\\n", "\r\n", StringComparison.Ordinal);
+
+    // "15, 30000" as a level and a value on the Tables panel's chart.
+    private static (double Level, double Value) ChartAt(string text)
+    {
+        var parts = text.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 2
+            && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var level)
+            && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? (level, value)
+            : throw new FormatException($"Write a point on the chart as <level>, <value>, not \"{text}\".");
+    }
 
     private static (string First, string Second) Split2(string text, char separator = '|')
     {

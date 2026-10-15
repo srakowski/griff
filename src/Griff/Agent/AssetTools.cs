@@ -70,8 +70,11 @@ public sealed class AssetTools(IAgentProject project) : IAgentToolSource
                 "scripts and other text, or \"base64\" for binary files like PNG pictures or WAV sounds. A C# script is compiled " +
                 "straight away and swapped into the scene (and the running game); the answer says whether it built and lists any errors. " +
                 "A table (.table: JSON with \"columns\", each { \"name\", \"type\" } with a type of " + string.Join(", ", Data.TableColumn.TypeNames) +
-                " (a choice lists its \"choices\", a row names its \"table\"), and \"rows\", an object of rows by name, each an object of its " +
-                "cells by column) is read straight away and reaches the running game; the answer says if it doesn't read.",
+                " (a choice lists its \"choices\", a row names its \"table\"; a column worked out from the row and other tables has a " +
+                "\"formula\", like \"=Base * 1.15 ^ (Level - 1)\", and no cells; one generated a row a level keeps its \"curve\", like " +
+                "{ \"kind\": \"exponential\", \"first\": 100, \"last\": 50000, \"levels\": 50 }), and \"rows\", an object of rows by name, each an " +
+                "object of its cells by column) is read straight away and reaches the running game; the answer says if it doesn't read, and " +
+                "what's wrong with its formulas.",
             InputSchema = Schema.Object([
                 ("path", Schema.String("The path under Assets, e.g. \"Scripts/Spinner.cs\" or \"Sprites/hero.png\".")),
                 ("text", Schema.String("The file's text.")),

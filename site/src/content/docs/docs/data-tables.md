@@ -1,6 +1,6 @@
 ---
 title: "Tables of game data"
-description: "Items, spells, enemies and level curves in tables edited like a spreadsheet, pasted from Excel and Google Sheets, read by scripts and set on components with no code."
+description: "Items, spells, enemies and level curves in tables edited like a spreadsheet, with formulas, curves and charts, pasted from Excel and Google Sheets, read by scripts and set on components with no code."
 ---
 
 ## Tables
@@ -10,6 +10,44 @@ A game's items, spells, enemies, races, classes, loot and level curves are table
 ## Copy and paste with spreadsheets
 
 Copy and paste go both ways with Excel, Google Sheets and LibreOffice, as tab-separated text: select cells (drag, Shift-click, Ctrl+A), Ctrl+C, and paste them into a sheet; copy a block in a sheet and Ctrl+V pastes it at the picked cell, adding rows past the bottom (named by what's pasted into the names, or `Row 5`), with one value pasted into several picked cells filling them all. Copying every row copies the column headings too, and pasting a sheet with its headings into a table with no rows yet brings its columns, each getting the type its values all fit. **Data → Import CSV...** (also on the Assets panel's right-click menu) does the same with a CSV file (or tab- or semicolon-separated, as spreadsheets save them): a new table named after the file, or the rows of the table of that name replaced, its columns keeping their types (undo puts them back). **Data → Export CSV...** writes the table showing for a spreadsheet to open.
+
+## Formulas
+
+A column can be worked out instead of typed in, as a spreadsheet's is: pick it and type a formula in **Formula** in the column bar, or type one starting with `=` into any of its cells (it becomes the whole column's, as in a spreadsheet's table; undo puts the values back). Its cells then show what it works out to, a shade quieter than typed ones, and change as soon as anything it reads does, in this table or another, while editing and while the game runs. Its type still says what it gives: a **whole number** column rounds, a **dice** column takes dice. Emptying the formula makes it a column of values again, keeping what it worked out.
+
+```text
+=Base * 1.15 ^ (Level - 1)              the row's Base and Level columns
+=[Max Health] * 2                       a name with spaces or dots goes in brackets
+=Class.Health + Level * 5               through a row column, a column of the row it names
+=Classes.Warrior.Health                 a row of any table, by name (Levels.[10].XP for a row called 10)
+=Lookup("Classes", Class, "Speed")      the same, the names worked out
+=Prev(Total) + XP                       the row above's (0 in the first row): a running total
+=Sum(Items.Price) / Count(Items)         a whole column added up, and a table's rows counted
+=SumIf(Items.Weight, Items.Slot, "Armor")
+=If(Level >= 10, "Veteran", "Rookie")
+=Dice(Level, 6, 2)                      dice, for a dice column: Level d6 + 2
+=Base Damage + Level                    dice plus a whole number stay dice: 1d8 + 3 is 1d8+3
+```
+
+A formula has numbers, text in quotes, `yes` and `no`, `+ - * / ^ %`, `&` to join text, `= <> < <= > >=`, `and`, `or` and `not`, and the functions If, Round, Floor, Ceiling, Abs, Sqrt, Pow, Exp, Ln, Log, Min, Max, Clamp, Lerp, Sum, Average, Count, SumIf, CountIf, AverageIf, Lookup, Prev, Row (the row's place, its level in a table of levels), Rows, Dice and Text. `Name` is the row's name. Renaming a column renames it in the table's formulas; a renamed row or column is still found by its old name elsewhere.
+
+Formulas can't run code: Griff reads one into a small tree of these and works it out itself. Every host works the formulas out as it loads the tables, in the same order (the tables a formula reads first, then each table top to bottom and left to right), with its own powers and logarithms rather than the machine's maths library, so the editor, an exported game, every player of a network game and the web player get the same values to the last bit. A formula that doesn't read is refused as it's typed, saying what's wrong. One naming a column, row or table that isn't there (`#ref`), working itself out in a loop through other formulas (`#loop`), or with a sum that can't be done, like a division by 0 (`#error`), is kept: its cells are flagged in yellow (the tooltip says why), the line under the grid says how many problems there are (resting on it lists them), and a running game says each once in Output (or the exported game's log, or the browser's console) and plays on, the cells empty (0) until it's put right. The file keeps the formula, not its values:
+
+```json
+{ "name": "XP", "type": "whole number", "formula": "=Base * 1.15 ^ (Level - 1)" }
+```
+
+## Curves: levels, stats and prices
+
+A table of levels (XP to the next level, a stat that grows, what things cost) can be generated from a curve rather than typed. Pick a number or whole number column and click **Curve** in the column bar: the curve editor opens beside the chart, with the curve drawn dashed over the column's values. Pick its kind, **linear** (the same step every level), **power** (slow, then fast; **Shape** is the power), **exponential** (the same share more every level, as XP usually is), **s-curve** (slow, quick through the middle, slow near the top; **Shape** is how sharp) or **points**, drawn by hand (click the chart to add one, drag one to move it, right-click to take it away; the curve goes smoothly through them without overshooting); its value at level 1 and at the last level; how many levels; and what to round to (10 gives 1,250 rather than 1,247). **Generate** (also **Data → Generate from Curve**) fills the column, a row a level: rows are added past the last (named by their level, `12`), rows still called `Row 3` take their level's name, and it's one step undo takes back. The column keeps its curve, in the file, so picking it later opens the curve as it was to change and generate again:
+
+```json
+{ "name": "XP", "type": "whole number", "curve": { "kind": "exponential", "first": 100, "last": 50000, "levels": 50, "roundTo": 10 } }
+```
+
+## Charts
+
+The chart beside the grid (the chart button on the toolbar shows or hides it) draws the picked column: a number, whole number, yes/no or formula column as bars over the rows, or a line over the levels when the rows are levels (named 1, 2, 3, or generated from a curve). A dice column shows each row's average (a dot), range (a line from the least it rolls to the most) and spread (a box either side of the average, how far a roll usually lands from it). Resting the mouse on the chart says the row under it (`Ogre: 2d6+3 rolls 5 to 15, 10 on average, spread 2.42`), and the line under it sums the column up (`100 (1) to 50,000 (50), 9,870 on average`). It's drawn in the editor's theme.
 
 ## Table files
 
@@ -51,4 +89,4 @@ foreach (var spell in Tables.All<Spell>("Spells")) { ... }
 var upgrade = Tables.Linked(Tables.Get("Spells", "Fireball"), "Upgrade");   // the row a row column names
 ```
 
-An empty cell is 0, "" or no. A table, row or column that isn't there throws, saying which there are (`The Spells table has no row "Firebal". Its rows: Fireball, Frost Bolt.`), so the game stops at the line in the editor; `Tables.Find("Spells", "Fireball")` gives null instead. A table changed while the game runs reaches scripts as the next step begins, and crowd scripts can read tables from any core. `Dice.Parse("2d6+3")` reads dice written anywhere.
+An empty cell is 0, "" or no. A table, row or column that isn't there throws, saying which there are (`The Spells table has no row "Firebal". Its rows: Fireball, Frost Bolt.`), so the game stops at the line in the editor; `Tables.Find("Spells", "Fireball")` gives null instead. A table changed while the game runs reaches scripts as the next step begins, and crowd scripts can read tables from any core. Formula columns read as what they work out to (and the formulas reading a changed table are worked out again with it); `Tables.Problems` lists what's wrong with them. `Dice.Parse("2d6+3")` reads dice written anywhere, and `Dice.Of(2, 6, 3)` makes 2d6+3.

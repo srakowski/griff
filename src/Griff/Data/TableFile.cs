@@ -23,7 +23,10 @@ namespace Griff.Data;
 ///   "renamedRows": { "Fire Ball": "Fireball" }
 /// }
 /// </code>
-/// Column types are written as <see cref="TableColumn.TypeName"/> writes them. Rows and columns renamed in the Tables
+/// Column types are written as <see cref="TableColumn.TypeName"/> writes them. A column worked out by a formula has its
+/// <c>"formula"</c> (<c>"=Base * 1.15 ^ (Level - 1)"</c>) and no cells in the rows; a column generated from a curve has
+/// its <c>"curve"</c> (<c>{ "kind": "exponential", "first": 100, "last": 50000, "levels": 50 }</c>, see
+/// <see cref="Curve"/>) as well as its cells. Rows and columns renamed in the Tables
 /// panel are listed under <c>renamedRows</c> and <c>renamedColumns</c> (old name: new name), so what names them by an old
 /// name still finds them. What the file holds that this version of Griff doesn't know is kept.
 /// </summary>
@@ -39,7 +42,7 @@ public static class TableFile
     private static readonly JavaScriptEncoder Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
     private static readonly JsonSerializerOptions StringOptions = new() { Encoder = Encoder };
     private static readonly string[] Known = ["columns", "rows", "renamedRows", "renamedColumns"];
-    private static readonly string[] KnownColumn = ["name", "type", "choices", "table"];
+    private static readonly string[] KnownColumn = ["name", "type", "choices", "table", "formula", "curve"];
 
     /// <summary>The name of the table in the file at <paramref name="path"/>: its file name without <see cref="Extension"/>.</summary>
     public static string NameOf(string path) => Path.GetFileNameWithoutExtension(path);
@@ -116,7 +119,9 @@ public static class TableFile
                         var index = byName.TryGetValue(cell.Name, out var found) ? found
                             : renamedColumns.TryGetValue(cell.Name, out var now) && byName.TryGetValue(now, out found) ? found
                             : throw new InvalidDataException($"The {name} table's row \"{rowName}\" has a value for \"{cell.Name}\", which isn't one of its columns ({string.Join(", ", columns.Select(c => c.Name))}).");
-                        cells[index] = ReadCell(cell.Value, columns[index], name, rowName);
+                        // A formula column's cells are worked out, whatever the file says.
+                        if (columns[index].Formula is null)
+                            cells[index] = ReadCell(cell.Value, columns[index], name, rowName);
                     }
 
                     rows.Add((rowName, cells));
@@ -149,8 +154,44 @@ public static class TableFile
             _ => throw new InvalidDataException($"The {table} table's column {name} should list its \"choices\"."),
         } : [];
         var of = element.TryGetProperty("table", out var o) && o.ValueKind == JsonValueKind.String ? o.GetString()!.Trim() : null;
+        var formula = element.TryGetProperty("formula", out var f) && f.ValueKind == JsonValueKind.String && Formula.Clean(f.GetString()!) is { Length: > 0 } clean ? clean : null;
+        var curve = element.TryGetProperty("curve", out var cv) && cv.ValueKind == JsonValueKind.Object ? ReadCurve(cv, table, name) : null;
         var kept = element.EnumerateObject().Where(p => !KnownColumn.Contains(p.Name)).Select(p => KeyValuePair.Create(p.Name, p.Value.Clone())).ToList();
-        return new TableColumn(name, type) { Choices = choices, Table = string.IsNullOrEmpty(of) ? null : of, Kept = kept };
+        return new TableColumn(name, type) { Choices = choices, Table = string.IsNullOrEmpty(of) ? null : of, Formula = formula, Curve = curve, Kept = kept };
+    }
+
+    // "curve": { "kind": "exponential", "first": 100, "last": 50000, "levels": 50, "shape": 2, "roundTo": 10, "points": [[1, 100], [50, 50000]] }
+    private static Curve ReadCurve(JsonElement element, string table, string column)
+    {
+        var curve = new Curve();
+        if (element.TryGetProperty("kind", out var k))
+        {
+            if (k.ValueKind != JsonValueKind.String || !Curve.TryParseKind(k.GetString(), out var kind))
+                throw new InvalidDataException($"The {table} table's column {column} has a curve of kind {k.GetRawText()}; the kinds are {string.Join(", ", Curve.KindNames)}.");
+            curve = curve with { Kind = kind };
+        }
+
+        double Number(string key, double fallback) => element.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) ? d : fallback;
+        var points = new List<CurvePoint>();
+        if (element.TryGetProperty("points", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var point in list.EnumerateArray())
+            {
+                if (point.ValueKind != JsonValueKind.Array || point.GetArrayLength() != 2 || point[0].ValueKind != JsonValueKind.Number || point[1].ValueKind != JsonValueKind.Number)
+                    throw new InvalidDataException($"The {table} table's column {column} has a curve point {point.GetRawText()}; write each as [level, value].");
+                points.Add(new CurvePoint(point[0].GetDouble(), point[1].GetDouble()));
+            }
+        }
+
+        return curve with
+        {
+            First = Number("first", curve.First),
+            Last = Number("last", curve.Last),
+            Levels = (int)Math.Clamp(Number("levels", curve.Levels), 0, 100_000),
+            Shape = Number("shape", curve.Shape),
+            RoundTo = Number("roundTo", curve.RoundTo),
+            Points = points,
+        };
     }
 
     private static TableValue ReadCell(JsonElement element, TableColumn column, string table, string row)
@@ -210,7 +251,8 @@ public static class TableFile
             var first = true;
             for (var c = 0; c < table.Columns.Count; c++)
             {
-                if (row.Cells[c].IsEmpty)
+                // A formula's cells are worked out as the table loads, not kept.
+                if (row.Cells[c].IsEmpty || table.Columns[c].Formula is not null)
                     continue;
                 rows.Append(first ? " " : ", ").Append(Quote(table.Columns[c].Name)).Append(": ").Append(WriteCell(row.Cells[c]));
                 first = false;
@@ -240,8 +282,27 @@ public static class TableFile
             text.Append(", \"choices\": [").Append(string.Join(", ", column.Choices.Select(Quote))).Append(']');
         if (column.Table is { } of)
             text.Append(", \"table\": ").Append(Quote(of));
+        if (column.Formula is { } formula)
+            text.Append(", \"formula\": ").Append(Quote("=" + formula));
+        if (column.Curve is { } curve)
+            text.Append(", \"curve\": ").Append(WriteCurve(curve));
         foreach (var (key, value) in column.Kept)
             text.Append(", ").Append(Quote(key)).Append(": ").Append(Compact(value));
+        return text.Append(" }").ToString();
+    }
+
+    private static string WriteCurve(Curve curve)
+    {
+        var text = new StringBuilder("{ \"kind\": ").Append(Quote(Curve.KindName(curve.Kind)));
+        if (curve.Kind != CurveKind.Points)
+            text.Append(", \"first\": ").Append(Number(curve.First)).Append(", \"last\": ").Append(Number(curve.Last));
+        text.Append(", \"levels\": ").Append(curve.Levels.ToString(CultureInfo.InvariantCulture));
+        if (curve.Kind is CurveKind.Power or CurveKind.SCurve)
+            text.Append(", \"shape\": ").Append(Number(curve.Shape));
+        if (curve.RoundTo > 0)
+            text.Append(", \"roundTo\": ").Append(Number(curve.RoundTo));
+        if (curve.Kind == CurveKind.Points)
+            text.Append(", \"points\": [").Append(string.Join(", ", curve.Points.Select(p => $"[{Number(p.Level)}, {Number(p.Value)}]"))).Append(']');
         return text.Append(" }").ToString();
     }
 

@@ -26,6 +26,33 @@ public readonly struct Dice : IEquatable<Dice>
     /// <summary>A plain number: no dice, always <paramref name="value"/>.</summary>
     public static Dice Constant(int value) => new([], value);
 
+    /// <summary><paramref name="count"/> dice of <paramref name="sides"/> sides, plus <paramref name="plus"/>: <c>Dice.Of(2, 6, 3)</c> is 2d6+3.</summary>
+    public static Dice Of(int count, int sides, int plus = 0)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        ArgumentOutOfRangeException.ThrowIfLessThan(sides, 1);
+        return new(count == 0 ? [] : [(count, sides)], plus);
+    }
+
+    /// <summary>The same dice with <paramref name="amount"/> more added (less, if it's negative): 1d6 plus 2 is 1d6+2.</summary>
+    public Dice Plus(int amount) => new([.. Groups], Modifier + amount);
+
+    /// <summary>These dice and <paramref name="other"/> thrown together: 1d6+1 plus 1d4 is 1d6+1d4+1 (and 1d6 plus 1d6 is 2d6).</summary>
+    public Dice Plus(Dice other)
+    {
+        var groups = Groups.ToList();
+        foreach (var (count, sides) in other.Groups)
+        {
+            var at = groups.FindIndex(g => g.Sides == sides);
+            if (at >= 0)
+                groups[at] = (groups[at].Count + count, sides);
+            else
+                groups.Add((count, sides));
+        }
+
+        return new([.. groups], Modifier + other.Modifier);
+    }
+
     /// <summary>The groups of dice, e.g. (2, 6) for 2d6, in the order they're written.</summary>
     public IReadOnlyList<(int Count, int Sides)> Groups => _groups ?? [];
 

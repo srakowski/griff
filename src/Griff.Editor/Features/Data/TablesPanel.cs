@@ -16,8 +16,12 @@ namespace Griff.Editor.Features.Data;
 /// columns, sort, filter, fill down, and copy and paste with Excel and Google Sheets (tab-separated text, both ways). Each
 /// change is saved to the table's file straight away, reaches the running game as its next step begins, and can be
 /// undone. Rows are named by <c>row</c> and columns by <c>column</c>; "" (or "Name") as a column is the rows' names.
+/// A column can be worked out by a formula (<see cref="SetFormula"/>; cells show what it works out, <see cref="Values"/>
+/// and <see cref="Cell"/> read it, <see cref="FormulaProblems"/> says what's wrong), or generated from a curve, a row a
+/// level (<see cref="GenerateCurve"/>, or <see cref="Curve"/>'s settings and Generate). <see cref="Chart"/> charts the
+/// picked column over the rows or levels.
 /// </summary>
-public sealed class TablesPanel : ToolPanel
+public sealed partial class TablesPanel : ToolPanel
 {
     private readonly TableStore _store;
     private readonly IWorkspace _workspace;
@@ -53,6 +57,8 @@ public sealed class TablesPanel : ToolPanel
                     Refresh();
             }
         };
+        Curve = new TableCurveModel(this);
+        Curve.PropertyChanged += (_, _) => UpdateChart();
         _name = store.FirstName;
         Refresh();
     }
@@ -213,8 +219,15 @@ public sealed class TablesPanel : ToolPanel
         OnPropertyChanged(nameof(UndoDescription));
         OnPropertyChanged(nameof(RedoDescription));
 
-        var table = Table;
-        var signature = table is null ? "" : string.Join("|", table.Columns.Select(c => $"{c.Name}:{c.Type}:{string.Join(",", c.Choices)}:{c.Table}"));
+        OnPropertyChanged(nameof(Computed));
+        OnPropertyChanged(nameof(FormulaProblems));
+        OnPropertyChanged(nameof(HasFormulaProblems));
+        OnPropertyChanged(nameof(FormulaProblemSummary));
+
+        // The rows show what formulas work out to.
+        var table = Computed;
+        var signature = table is null ? "" : string.Join("|", table.Columns.Select(c =>
+            $"{c.Name}:{c.Type}:{string.Join(",", c.Choices)}:{c.Table}:{c.Formula}:{(c.Curve is null ? "" : TableFile.Write(new Table("", [c], [])))}"));
         var columnsChanged = signature != _columnsSignature || Columns.Count != (table?.Columns.Count ?? 0);
         if (columnsChanged)
         {
@@ -247,6 +260,7 @@ public sealed class TablesPanel : ToolPanel
         OnPropertyChanged(nameof(Summary));
         if (columnsChanged)
             ColumnsChanged?.Invoke(this, EventArgs.Empty);
+        UpdateChart();
     }
 
     private bool Passes(TableRow row)
@@ -260,6 +274,8 @@ public sealed class TablesPanel : ToolPanel
     {
         var column = CurrentColumnIndex;
         SelectedColumn = column >= 0 && column < Columns.Count ? Columns[column] : null;
+        Curve.Load(SelectedColumn?.Column, Table);
+        UpdateChart();
     }
 
     // ----- Picking cells
@@ -405,13 +421,18 @@ public sealed class TablesPanel : ToolPanel
         return SetCellAt(index, ColumnOf(table, column), value);
     }
 
-    /// <summary>The text of a cell, as it shows: <c>Cell("Fireball", "Damage")</c>; a column of "" gives the row's name.</summary>
+    /// <summary>
+    /// The text of a cell, as it shows: <c>Cell("Fireball", "Damage")</c>; a column of "" gives the row's name. A formula's
+    /// cell gives what it works out to, or #loop, #ref or #error if it can't (<see cref="FormulaProblems"/> says why).
+    /// </summary>
     public string Cell(string row, string column)
     {
-        var table = Current;
+        var table = Computed ?? Current;
         var found = table.Find(row) ?? throw new ArgumentException(table.NoRow(row));
         var index = ColumnOf(table, column);
-        return index < 0 ? found.Name : found[index].ToString();
+        if (index < 0)
+            return found.Name;
+        return _store.Evaluation.ProblemAt(table.Name, found.Index, index)?.Mark ?? found[index].ToString();
     }
 
     // What the grid types in is shown once the grid has finished committing it.
@@ -434,6 +455,18 @@ public sealed class TablesPanel : ToolPanel
         if (column < 0)
             return RenameRow(table.Rows[row].Name, text ?? "");
         var definition = table.Columns[column];
+        // "=..." makes the column a formula, as in a spreadsheet's table; a formula's own cells aren't typed into.
+        if (text?.TrimStart().StartsWith('=') == true)
+            return SetFormula(definition.Name, text);
+        if (definition.Formula is not null)
+        {
+            if (string.Equals(text?.Trim(), Computed?.Rows[row].Cells[column].ToString(), StringComparison.Ordinal))
+                return true;
+            Message = $"{definition.Name} is worked out by its formula (={definition.Formula}): change the formula above the grid, or clear it to type values.";
+            _status.Show(Message);
+            return false;
+        }
+
         if (!definition.TryRead(text, out var value, out var problem))
         {
             Message = problem + ".";
@@ -695,7 +728,9 @@ public sealed class TablesPanel : ToolPanel
         var table = Current;
         var index = column is null ? Math.Max(CurrentColumnIndex, -1) : ColumnOf(table, column);
         var by = index < 0 ? "name" : table.Columns[index].Name;
-        Commit(table.SortBy(index, descending), $"Sort by {by}", $"Sorted by {by}{(descending ? ", highest first" : "")}.");
+        // By what formulas work out to.
+        var order = (Computed ?? table).SortOrder(index, descending);
+        Commit(table.ReorderRows(order), $"Sort by {by}", $"Sorted by {by}{(descending ? ", highest first" : "")}.");
     }
 
     /// <summary>
@@ -706,7 +741,8 @@ public sealed class TablesPanel : ToolPanel
     {
         var table = Current;
         var (rows, columns) = Block();
-        columns.RemoveAll(c => c < 0);
+        // A formula's cells are worked out, not filled.
+        columns.RemoveAll(c => c < 0 || table.Columns[c].Formula is not null);
         if (rows.Count == 0 || columns.Count == 0)
             return;
         var cells = new List<(int, int, TableValue)>();
@@ -730,7 +766,8 @@ public sealed class TablesPanel : ToolPanel
     public void ClearCells()
     {
         var table = Current;
-        var cells = _selection.Where(c => c.Column >= 0).Select(c => (table.RowIndex(c.Row), c.Column, TableValue.Empty)).Where(c => c.Item1 >= 0).ToList();
+        var cells = _selection.Where(c => c.Column >= 0 && table.Columns[c.Column].Formula is null)
+            .Select(c => (table.RowIndex(c.Row), c.Column, TableValue.Empty)).Where(c => c.Item1 >= 0).ToList();
         if (cells.Count > 0)
             Commit(table.SetCells(cells), cells.Count == 1 ? "Clear a cell" : $"Clear {cells.Count} cells");
     }
@@ -743,7 +780,8 @@ public sealed class TablesPanel : ToolPanel
     /// </summary>
     public string Copy()
     {
-        var table = Current;
+        // What formulas work out to, as a spreadsheet pastes values into another program.
+        var table = Computed ?? Current;
         var (rows, columns) = Block();
         if (rows.Count == 0)
             return "";
@@ -848,6 +886,14 @@ public sealed class TablesPanel : ToolPanel
                 continue;
             }
 
+            if (data.Columns[target.Column].Formula is not null)
+            {
+                // Pasting what it works out to back over it changes nothing; anything else is said.
+                if (target.ShownRow >= shownIndexes.Count || Computed?.Rows[row].Cells[target.Column].ToString() != target.Text.Trim())
+                    problems.Add($"{data.Rows[row].Name}: {data.Columns[target.Column].Name} is worked out by its formula");
+                continue;
+            }
+
             if (data.Columns[target.Column].TryRead(target.Text, out var value, out var problem))
                 cells.Add((row, target.Column, value));
             else
@@ -939,7 +985,8 @@ public sealed class TablesPanel : ToolPanel
     /// <summary>Writes the table showing to a CSV file at <paramref name="path"/>, its rows' names first, for a spreadsheet.</summary>
     public string ExportCsv(string path)
     {
-        var table = Current;
+        // With what its formulas work out to.
+        var table = Computed ?? Current;
         File.WriteAllText(path, TableText.ToCsv(table));
         return Message = $"Wrote {table.Name} to {Path.GetFileName(path)}.";
     }
@@ -972,8 +1019,21 @@ public sealed class TablesPanel : ToolPanel
             .Order(StringComparer.OrdinalIgnoreCase)];
     }
 
-    /// <summary>Why a cell is flagged (a picture, sound, prefab or row that isn't there), or null; and what dice roll.</summary>
-    internal (bool Flagged, string? Tip) Check(TableColumn column, TableValue value)
+    /// <summary>
+    /// Why a cell is flagged (a picture, sound, prefab or row that isn't there, a formula that can't be worked out), or
+    /// null; what dice roll; and for a formula's cell that can't be worked out, the mark it shows (#loop, #ref, #error).
+    /// </summary>
+    internal (bool Flagged, string? Tip, string? Mark) Check(int row, int columnIndex, TableColumn column, TableValue value)
+    {
+        if (column.Formula is not null && _name is not null && _store.Evaluation.ProblemAt(_name, row, columnIndex) is { } problem)
+            return (true, problem.Message, problem.Mark);
+        var (flagged, tip) = Check(column, value);
+        if (column.Formula is not null)
+            tip = (tip is null ? "" : tip + ". ") + $"Worked out by ={column.Formula}";
+        return (flagged, tip, null);
+    }
+
+    private (bool Flagged, string? Tip) Check(TableColumn column, TableValue value)
     {
         if (value.IsEmpty)
             return (false, null);
@@ -1062,8 +1122,36 @@ public sealed class TableColumnView(TablesPanel owner, int index, TableColumn co
     /// <summary>What its cells can pick from.</summary>
     public IReadOnlyList<string> Options => owner.OptionsFor(Column);
 
-    /// <summary>The header's second line: its type, e.g. "number" or "row of Spells".</summary>
-    public string Caption => Column.Type == ColumnType.Row ? $"row of {Column.Table ?? owner.TableName}" : TableColumn.TypeName(Column.Type);
+    /// <summary>The header's second line: its type, e.g. "number", "row of Spells", "whole number formula" or "number from a curve".</summary>
+    public string Caption => (Column.Type == ColumnType.Row ? $"row of {Column.Table ?? owner.TableName}" : TableColumn.TypeName(Column.Type))
+        + (Column.Formula is not null ? " formula" : Column.Curve is not null ? " from a curve" : "");
+
+    /// <summary>
+    /// The formula that works its cells out, as "=Base * 1.15 ^ (Level - 1)", or "" for a column of values. Setting it
+    /// makes it a formula column (its values go; undo brings them back), or "" a column of values again (keeping what
+    /// the formula worked out). A formula that doesn't read is refused, saying why.
+    /// </summary>
+    public string Formula
+    {
+        get => Column.Formula is { } formula ? "=" + formula : "";
+        set
+        {
+            owner.SetFormula(Column.Name, value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>True when a formula works its cells out.</summary>
+    public bool HasFormula => Column.Formula is not null;
+
+    /// <summary>True when its values were generated from a curve, which it keeps.</summary>
+    public bool HasCurve => Column.Curve is not null;
+
+    /// <summary>True when it can be charted: numbers, whole numbers, dice or yes/no.</summary>
+    public bool IsChartable => Column.IsNumeric;
+
+    /// <summary>True when a curve can fill it: numbers or whole numbers.</summary>
+    public bool TakesCurve => Column.Type is ColumnType.Number or ColumnType.WholeNumber;
 
     /// <summary>The tables a row column can name rows of.</summary>
     public IReadOnlyList<string> Tables => owner.TableNames;
@@ -1130,8 +1218,13 @@ public sealed class TableCellView : ObservableObject
         Column = index;
         _column = column;
         _value = value;
-        (IsFlagged, Tip) = owner.Check(column, value);
+        (IsFlagged, Tip, _mark) = owner.Check(row.Index, index, column, value);
     }
+
+    private string? _mark;
+
+    /// <summary>True when its column is worked out by a formula: it can't be typed into.</summary>
+    public bool IsWorkedOut => _column.Formula is not null;
 
     /// <summary>The column it's in, from 0 at the left.</summary>
     public int Column { get; }
@@ -1139,10 +1232,13 @@ public sealed class TableCellView : ObservableObject
     /// <summary>Its column's name, which a cell is found by.</summary>
     public string Label => _column.Name;
 
-    /// <summary>Its value as it shows; setting it sets the cell, as typing into it does (refused if it doesn't fit).</summary>
+    /// <summary>
+    /// Its value as it shows (for a formula's cell, what it works out to, or #loop, #ref or #error); setting it sets the
+    /// cell, as typing into it does (refused if it doesn't fit; "=..." makes the column a formula).
+    /// </summary>
     public string Text
     {
-        get => _value.ToString();
+        get => _mark ?? _value.ToString();
         set
         {
             // A list cell's picker gives null for a value that isn't on its list (a prefab since deleted): that leaves it be.
@@ -1163,20 +1259,20 @@ public sealed class TableCellView : ObservableObject
         }
     }
 
-    /// <summary>True when it names a picture, sound, prefab or row that isn't there.</summary>
+    /// <summary>True when it names a picture, sound, prefab or row that isn't there, or its formula can't be worked out.</summary>
     public bool IsFlagged { get; private set; }
 
-    /// <summary>Why it's flagged, or what its dice roll; null for nothing to say.</summary>
+    /// <summary>Why it's flagged, what its dice roll, or the formula that works it out; null for nothing to say.</summary>
     public string? Tip { get; private set; }
 
     internal void Update(TableColumn column, TableValue value)
     {
         _column = column;
-        var (flagged, tip) = _owner.Check(column, value);
-        if (value == _value && flagged == IsFlagged && tip == Tip)
+        var (flagged, tip, mark) = _owner.Check(_row.Index, Column, column, value);
+        if (value == _value && flagged == IsFlagged && tip == Tip && mark == _mark)
             return;
         _value = value;
-        (IsFlagged, Tip) = (flagged, tip);
+        (IsFlagged, Tip, _mark) = (flagged, tip, mark);
         OnPropertyChanged(nameof(Text));
         OnPropertyChanged(nameof(Checked));
         OnPropertyChanged(nameof(IsFlagged));

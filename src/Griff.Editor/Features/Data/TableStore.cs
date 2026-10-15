@@ -75,8 +75,66 @@ public sealed class TableStore : ObservableObject, IDisposable
     public TableEntry? Entry(string? name) =>
         string.IsNullOrWhiteSpace(name) ? null : _tables.GetValueOrDefault(TableFile.NameOf(name.Trim().Replace('\\', '/')));
 
-    /// <summary>The table called <paramref name="name"/>, or null if there's none (or it doesn't read).</summary>
+    /// <summary>The table called <paramref name="name"/> as its file has it (formula columns empty), or null if there's none (or it doesn't read).</summary>
     public Table? Find(string? name) => Entry(name)?.Table;
+
+    /// <summary>
+    /// The table called <paramref name="name"/> with its formula columns worked out, as the game has it and the Tables
+    /// panel shows it, or null if there's none (or it doesn't read).
+    /// </summary>
+    public Table? Computed(string? name) => Entry(name) is { Table: { } table } entry ? _evaluation.Find(entry.Name) ?? table : null;
+
+    /// <summary>The project's tables with their formulas worked out, and what's wrong with any of them.</summary>
+    public TableEvaluation Evaluation => _evaluation;
+
+    /// <summary>What's wrong with the formulas of the table called <paramref name="name"/>.</summary>
+    public IReadOnlyList<FormulaProblem> ProblemsOf(string? name) => Entry(name) is { } entry ? _evaluation.ProblemsOf(entry.Name) : [];
+
+    private TableEvaluation _evaluation = TableEvaluation.Evaluate([]);
+
+    // What each table's formulas last worked out to, so a change to one table tells the tables whose formulas read it.
+    private readonly Dictionary<string, string> _worked = new(StringComparer.OrdinalIgnoreCase);
+
+    // Works the formulas out again; the tables (other than those changed) whose formulas came out differently.
+    private List<string> Reevaluate()
+    {
+        _evaluation = TableEvaluation.Evaluate(
+            _tables.Values.Select(e => e.Table).OfType<Table>(),
+            _tables.Values.Where(e => e.Table is null).ToDictionary(e => e.Name, e => e.Problem ?? "", StringComparer.OrdinalIgnoreCase));
+        var changed = new List<string>();
+        var names = _worked.Keys.Concat(_evaluation.Tables.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var name in names)
+        {
+            var now = Worked(name);
+            if (_worked.TryGetValue(name, out var before) && before == now)
+                continue;
+            if (now.Length == 0)
+                _worked.Remove(name);
+            else
+                _worked[name] = now;
+            changed.Add(name);
+        }
+
+        return changed;
+    }
+
+    // A table's formula cells and problems, as text to compare; "" for a table without formulas.
+    private string Worked(string name)
+    {
+        if (_evaluation.Find(name) is not { HasFormulas: true } table)
+            return "";
+        var text = new System.Text.StringBuilder();
+        var formulas = Enumerable.Range(0, table.Columns.Count).Where(c => table.Columns[c].Formula is not null).ToList();
+        foreach (var row in table.Rows)
+        {
+            foreach (var c in formulas)
+                text.Append(row.Cells[c].Kind).Append(':').Append(row.Cells[c].ToString()).Append('|');
+        }
+
+        foreach (var problem in _evaluation.ProblemsOf(name))
+            text.Append(problem).Append('\n');
+        return text.ToString();
+    }
 
     /// <summary>Whether the table called <paramref name="name"/> has an edit to undo.</summary>
     public bool CanUndo(string? name) => Entry(name) is { } entry &&
@@ -195,11 +253,15 @@ public sealed class TableStore : ObservableObject, IDisposable
         File.Move(temp, path, overwrite: true);
     }
 
+    // Says a table changed, and each table whose formulas read it and came out differently.
     private void Raise(string name)
     {
+        var others = Reevaluate();
         OnPropertyChanged(nameof(Tables));
         OnPropertyChanged(nameof(Names));
         Changed?.Invoke(this, name);
+        foreach (var other in others.Where(o => !string.Equals(o, name, StringComparison.OrdinalIgnoreCase)))
+            Changed?.Invoke(this, other);
     }
 
     // ----- Files
@@ -222,6 +284,8 @@ public sealed class TableStore : ObservableObject, IDisposable
             Watch(project.AssetsPath);
         }
 
+        _worked.Clear();
+        Reevaluate();
         OnPropertyChanged(nameof(Tables));
         OnPropertyChanged(nameof(Names));
         Changed?.Invoke(this, "");
@@ -293,9 +357,18 @@ public sealed class TableStore : ObservableObject, IDisposable
             null => new AssetFeedback($"The {TableFile.NameOf(assetPath)} table is gone."),
             { Problem: { } problem } => new AssetFeedback($"The table doesn't read, so the game goes without it until it's fixed: {problem}", IsError: true),
             { Table: { } table } => new AssetFeedback($"The {table.Name} table: {Count(table.Columns.Count, "column")}, {Count(table.Rows.Count, "row")}" +
-                $"{(_play.IsPlaying ? " (and in the running game)" : "")}."),
+                $"{(_play.IsPlaying ? " (and in the running game)" : "")}.{FormulaFeedback(table.Name)}"),
             _ => null,
         };
+    }
+
+    // What its formulas work out to be wrong, for an agent that just wrote it.
+    private string FormulaFeedback(string name)
+    {
+        var problems = _evaluation.Warnings.Where(w => w.StartsWith($"The {name} table's ", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (problems.Count > 0)
+            return $" Its formulas have {Count(problems.Count, "problem")} (their cells are empty until they're put right): {string.Join(" ", problems.Take(5))}";
+        return _evaluation.Find(name)?.HasFormulas == true ? " Its formulas all work out (read their values with ui_invoke Tables Values or Cell)." : "";
     }
 
     private static string Count(int n, string what) => $"{n} {what}{(n == 1 ? "" : "s")}";

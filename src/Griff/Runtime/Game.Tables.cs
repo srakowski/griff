@@ -27,7 +27,8 @@ public sealed partial class Game
 
     /// <summary>
     /// Raised when something set up without code can't do its job as the game runs: a Table Values component naming a
-    /// table, row or column that isn't there. The editor shows it in Output; it doesn't stop the game.
+    /// table, row or column that isn't there, or a table's formula naming one, or working itself out in a loop (see
+    /// <see cref="TableSet.Problems"/>). The editor shows it in Output; it doesn't stop the game.
     /// </summary>
     public event EventHandler<string>? Warning;
 
@@ -40,12 +41,18 @@ public sealed partial class Game
             Warning?.Invoke(this, message);
     }
 
-    // The tables changed since the last step come in, then each Table Values component that's new to the game, or whose
-    // table changed, sets its values (if its row's values aren't the ones it set already). Before scripts start, so their
-    // Start sees the values.
+    // The tables changed since the last step come in (what's wrong with their formulas said), then each Table Values
+    // component that's new to the game, or whose table changed, sets its values (if its row's values aren't the ones it
+    // set already). Before scripts start, so their Start sees the values.
     private void ApplyTables()
     {
         var changed = _tables.ApplyStaged() || _tables.Version != _tablesSeen;
+        if (changed)
+        {
+            foreach (var problem in _tables.Problems)
+                Warn(problem);
+        }
+
         var all = Scene.All<TableValues>().Items;
         if (!changed && all == _tableValuesSeen)
             return;

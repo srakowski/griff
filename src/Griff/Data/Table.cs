@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace Griff.Data;
@@ -18,9 +19,20 @@ public sealed class Table
     private readonly Dictionary<string, int> _rowIndex;
     private readonly Dictionary<string, int> _columnIndex;
 
+    /// <summary>
+    /// A table called <paramref name="name"/> with these columns and rows (each row's cells in the columns' order). A
+    /// formula column's cells are left empty: they're worked out (see <see cref="TableEvaluation"/>).
+    /// </summary>
     public Table(string name, IEnumerable<TableColumn> columns, IEnumerable<(string Name, IReadOnlyList<TableValue> Cells)> rows,
         IReadOnlyDictionary<string, string>? renamedRows = null, IReadOnlyDictionary<string, string>? renamedColumns = null,
         IReadOnlyList<KeyValuePair<string, JsonElement>>? kept = null)
+        : this(name, columns, rows, renamedRows, renamedColumns, kept, computed: false)
+    {
+    }
+
+    private Table(string name, IEnumerable<TableColumn> columns, IEnumerable<(string Name, IReadOnlyList<TableValue> Cells)> rows,
+        IReadOnlyDictionary<string, string>? renamedRows, IReadOnlyDictionary<string, string>? renamedColumns,
+        IReadOnlyList<KeyValuePair<string, JsonElement>>? kept, bool computed)
     {
         Name = name;
         Columns = [.. columns];
@@ -43,7 +55,11 @@ public sealed class Table
                 throw new InvalidDataException($"The {name} table has two rows called \"{rowName}\".");
             var aligned = new TableValue[Columns.Count];
             for (var i = 0; i < aligned.Length && i < cells.Count; i++)
-                aligned[i] = cells[i];
+            {
+                if (computed || Columns[i].Formula is null)
+                    aligned[i] = cells[i];
+            }
+
             list.Add(new TableRow(this, rowName, list.Count, aligned));
         }
 
@@ -52,7 +68,21 @@ public sealed class Table
         RenamedRows = Clean(renamedRows, _rowIndex);
         RenamedColumns = Clean(renamedColumns, _columnIndex);
         Kept = kept ?? [];
+        IsComputed = computed;
     }
+
+    /// <summary>The same table with every cell as <paramref name="cells"/> has it, formula cells worked out (see <see cref="TableEvaluation"/>).</summary>
+    internal Table WithComputed(IReadOnlyList<TableValue[]> cells) =>
+        new(Name, Columns, Rows.Select((r, i) => (r.Name, (IReadOnlyList<TableValue>)cells[i])), RenamedRows, RenamedColumns, Kept, computed: true);
+
+    /// <summary>
+    /// True when its formula columns' cells are worked out (as a game's tables are, and the Tables panel shows them);
+    /// false for a table as its file has it, with those cells empty. Any edit gives a table as its file would have it.
+    /// </summary>
+    public bool IsComputed { get; }
+
+    /// <summary>True when one of its columns has a <see cref="TableColumn.Formula"/>.</summary>
+    public bool HasFormulas => Columns.Any(c => c.Formula is not null);
 
     private static Dictionary<string, string> Clean(IReadOnlyDictionary<string, string>? renamed, Dictionary<string, int> names)
     {
@@ -223,14 +253,20 @@ public sealed class Table
     /// no, dice by their average, text and names alphabetically, choices in the order of the column's choices; empty
     /// cells last. Rows that tie keep their order.
     /// </summary>
-    public Table SortBy(int column, bool descending = false)
+    public Table SortBy(int column, bool descending = false) => ReorderRows(SortOrder(column, descending));
+
+    /// <summary>
+    /// The rows' indexes in the order <see cref="SortBy"/> puts them. Of a table with its formulas worked out, it sorts by
+    /// what they work out to; give it to the file's table's <see cref="ReorderRows"/>.
+    /// </summary>
+    public IReadOnlyList<int> SortOrder(int column, bool descending = false)
     {
         var keyed = Rows.Select(r => (Row: r, Empty: column >= 0 && r.Cells[column].IsEmpty)).ToList();
         var filled = keyed.Where(k => !k.Empty).Select(k => k.Row).ToList();
         var comparer = Comparer<TableRow>.Create((a, b) => CompareCells(column, a, b));
         var sorted = descending ? filled.OrderByDescending(r => r, comparer).ToList() : filled.OrderBy(r => r, comparer).ToList();
         sorted.AddRange(keyed.Where(k => k.Empty).Select(k => k.Row));
-        return ReorderRows([.. sorted.Select(r => r.Index)]);
+        return [.. sorted.Select(r => r.Index)];
     }
 
     private int CompareCells(int column, TableRow a, TableRow b)
@@ -296,7 +332,8 @@ public sealed class Table
         column = column with { Name = column.Name.Trim() };
         var old = Columns[index];
         var data = Rows.Select(r => r.Cells.ToArray()).ToList();
-        if (old.Type != column.Type || !old.Choices.SequenceEqual(column.Choices))
+        // A formula column's cells are worked out, so there's nothing of its own to convert.
+        if (column.Formula is null && (old.Type != column.Type || !old.Choices.SequenceEqual(column.Choices)))
         {
             var problems = new List<string>();
             for (var row = 0; row < data.Count; row++)
@@ -317,8 +354,60 @@ public sealed class Table
 
         var columns = Columns.ToList();
         columns[index] = column;
-        var renamed = string.Equals(old.Name, column.Name, StringComparison.Ordinal) ? RenamedColumns : Rename(RenamedColumns, old.Name, column.Name);
+        var renaming = !string.Equals(old.Name, column.Name, StringComparison.Ordinal);
+        var renamed = renaming ? Rename(RenamedColumns, old.Name, column.Name) : RenamedColumns;
+        // The table's formulas name it by its new name.
+        if (renaming && !string.Equals(old.Name, column.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            for (var i = 0; i < columns.Count; i++)
+            {
+                if (columns[i].Formula is { } formula)
+                    columns[i] = columns[i] with { Formula = Data.Formula.RenameColumn(formula, old.Name, column.Name) };
+            }
+        }
+
         return With(columns, Rows.Select((r, i) => (r.Name, (IReadOnlyList<TableValue>)data[i])).ToList(), renamedColumns: renamed);
+    }
+
+    /// <summary>
+    /// With the column at <paramref name="index"/> filled from <paramref name="curve"/>, a row a level: the first row is
+    /// level 1. Rows are added for levels past the last (named by their level, "12"), and rows still called "Row 3" and so
+    /// on are named by their level. The column keeps the curve (see <see cref="TableColumn.Curve"/>) and stops being a
+    /// formula. Throws <see cref="InvalidDataException"/>, saying why, if the column doesn't hold numbers or the curve
+    /// can't be generated.
+    /// </summary>
+    public Table Generate(int index, Curve curve)
+    {
+        var column = Columns[index];
+        if (column.Type is not (ColumnType.Number or ColumnType.WholeNumber))
+            throw new InvalidDataException($"A curve fills numbers, and {column.Name} holds {TableColumn.TypeName(column.Type)}: make it a number or whole number column first.");
+        var values = curve.Values();
+
+        var columns = Columns.ToList();
+        columns[index] = column with { Formula = null, Curve = curve };
+        var table = With(columns);
+        for (var level = 1; level <= values.Count; level++)
+        {
+            var name = level.ToString(CultureInfo.InvariantCulture);
+            if (level <= table.Rows.Count)
+            {
+                var row = table.Rows[level - 1];
+                if (string.Equals(row.Name, $"Row {level}", StringComparison.OrdinalIgnoreCase) && !table.HasRow(name))
+                    table = table.RenameRow(level - 1, name);
+                continue;
+            }
+
+            if (table.HasRow(name))
+                name = $"Level {level}";
+            for (var n = 2; table.HasRow(name); n++)
+                name = $"Level {level} ({n})";
+            table = table.InsertRow(-1, name);
+        }
+
+        var cells = values.Select((value, i) => (i, index, column.Type == ColumnType.WholeNumber
+            ? TableValue.Of((long)Math.Round(value, MidpointRounding.AwayFromZero))
+            : TableValue.Of(value)));
+        return table.SetCells(cells);
     }
 
     private static string Article(TableColumn column) => column.Type switch

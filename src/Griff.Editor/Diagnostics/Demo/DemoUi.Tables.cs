@@ -19,7 +19,11 @@ internal sealed partial class DemoUi
     /// <c>deleterows</c>, <c>moveup</c>, <c>movedown</c>, <c>sortup</c>, <c>sortdown</c>, <c>filldown</c>, <c>undo</c>,
     /// <c>redo</c>, <c>import</c>, <c>export</c>, <c>filter</c>, <c>summary</c>, <c>column</c> (the column bar) and its
     /// <c>column:name</c>, <c>column:type</c>, <c>column:choices</c>, <c>column:table</c>, <c>moveleft</c>,
-    /// <c>moveright</c>, <c>deletecolumn</c>, <c>message</c>, <c>grid</c>, <c>names</c> (the names' heading),
+    /// <c>moveright</c>, <c>deletecolumn</c>, <c>column:formula</c>, <c>curve</c> (its Curve button), <c>chart</c> (the
+    /// toolbar's chart button), <c>chartpane</c>, <c>charttitle</c>, <c>chartarea</c>, <c>chartsummary</c>,
+    /// <c>curveeditor</c> and its <c>curve:kind</c>, <c>curve:first</c>, <c>curve:last</c>, <c>curve:levels</c>,
+    /// <c>curve:roundto</c>, <c>curve:shape</c>, <c>curve:points</c> and <c>generate</c>,
+    /// <c>problems</c> (what's wrong with the formulas), <c>message</c>, <c>grid</c>, <c>names</c> (the names' heading),
     /// <c>header:Damage</c> (a column's heading), or <c>cell:Fireball &gt; Damage</c> (a cell; "Name" for the row's name).
     /// </summary>
     public static FrameworkElement TablesPart(string part)
@@ -121,6 +125,124 @@ internal sealed partial class DemoUi
             Tables.SetCell(row, index == 0 ? "" : definition!.Name, value);
             await Settle();
         }
+    }
+
+    // ----- The curve editor and the chart
+
+    private static TableChart TableChartControl => (TableChart)PanelContent("Tables").FindName("Chart");
+
+    /// <summary>
+    /// Sets one of the curve editor's settings as someone would: its kind from the list, or a number (first, last, levels,
+    /// shape, roundto) or the points typed into its field and Enter pressed.
+    /// </summary>
+    public async Task CurveSetting(string setting, string value)
+    {
+        var key = setting.Trim().ToLowerInvariant().Replace(" ", "", StringComparison.Ordinal);
+        var curve = Tables.Curve;
+        if (key == "kind")
+        {
+            var box = (ComboBox)TablesPart("curve:kind");
+            await Click(box);
+            var item = await WaitFor(() => Find<ComboBoxItem>(i => (i.Content as string ?? i.DataContext as string) == value), $"the curve kind {value}", 3000);
+            await Settle(80);
+            await Click(item);
+            await Settle(150);
+            if (curve.Kind != value)
+            {
+                box.IsDropDownOpen = false;
+                Log?.Invoke($"FORCED curve kind = {value}");
+                curve.Kind = value;
+                await Settle();
+            }
+
+            return;
+        }
+
+        var field = TablesPart("curve:" + key);
+        var text = field as TextBox ?? Descendants<TextBox>(field).First(t => t.IsVisible);
+        await Click(text);
+        await input.Press(Key.A, ModifierKeys.Control, showBadge: false);
+        await input.Type(value);
+        await input.Press(Key.Enter, showBadge: false);
+        await Settle(150);
+        string Now() => key switch
+        {
+            "first" => TablesPanel.Format(curve.First),
+            "last" => TablesPanel.Format(curve.Last),
+            "levels" => TablesPanel.Format(curve.Levels),
+            "shape" => TablesPanel.Format(curve.Shape),
+            "roundto" => TablesPanel.Format(curve.RoundTo),
+            "points" => curve.Points,
+            _ => throw new InvalidOperationException($"The curve editor has no {setting}: first, last, levels, shape, roundto, points or kind."),
+        };
+
+        var number = double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN;
+        var wanted = key == "points" || double.IsNaN(number) ? value : TablesPanel.Format(number);
+        if (Now() != wanted)
+        {
+            Log?.Invoke($"FORCED curve {key} = {value} (it read {Now()})");
+            switch (key)
+            {
+                case "first": curve.First = number; break;
+                case "last": curve.Last = number; break;
+                case "levels": curve.Levels = number; break;
+                case "shape": curve.Shape = number; break;
+                case "roundto": curve.RoundTo = number; break;
+                default: curve.Points = value; break;
+            }
+
+            await Settle();
+        }
+    }
+
+    /// <summary>Where a level and value are on the Tables panel's chart, on screen.</summary>
+    public static Point ChartPoint(double level, double value)
+    {
+        var chart = TableChartControl;
+        return chart.PointToScreen(new Point(chart.X(level - 1), chart.Y(value)));
+    }
+
+    /// <summary>Clicks the chart at a level and value, adding a point to a hand-drawn curve there.</summary>
+    public async Task CurvePoint(double level, double value)
+    {
+        await input.Click(ChartPoint(level, value));
+        await Settle(150);
+        if (!Tables.Curve.PointList.Any(p => p.Level == Math.Round(level)))
+        {
+            var chart = TableChartControl;
+            var hit = chart.InputHitTest(chart.PointFromScreen(ChartPoint(level, value)));
+            Log?.Invoke($"FORCED curvepoint {level}, {value} (the chart is {chart.ActualWidth:0}x{chart.ActualHeight:0}, the point hits {hit?.GetType().Name ?? "nothing"}, drawing {Tables.Curve.IsOpen && Tables.Curve.UsesPoints})");
+            Tables.Curve.AddPoint(level, value);
+            await Settle();
+        }
+    }
+
+    /// <summary>Drags a hand-drawn curve's point on the chart from one level and value to another.</summary>
+    public async Task CurveDrag((double Level, double Value) from, (double Level, double Value) to)
+    {
+        await input.Drag(ChartPoint(from.Level, from.Value), [ChartPoint(to.Level, to.Value)], msPerSegment: 600);
+        await Settle(150);
+        if (!Tables.Curve.PointList.Any(p => p.Level == Math.Round(to.Level) && Math.Abs(p.Value - to.Value) <= Math.Max(1, Math.Abs(to.Value) * 0.05)))
+        {
+            var index = Tables.Curve.PointList.ToList().FindIndex(p => p.Level == Math.Round(from.Level));
+            Log?.Invoke($"FORCED curvedrag {from} > {to}");
+            if (index >= 0)
+                Tables.Curve.MovePoint(index, to.Level, to.Value);
+            await Settle();
+        }
+    }
+
+    /// <summary>Rests the mouse on a row (or level) of the chart, by its name, so the chart says what's there. Returns what it says.</summary>
+    public async Task<string?> ChartHover(string label)
+    {
+        var chart = TableChartControl;
+        var index = Tables.Chart.Points.ToList().FindIndex(p => string.Equals(p.Label, label, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            throw new InvalidOperationException($"The chart has no row {label}.");
+        var at = chart.PointToScreen(new Point(chart.X(index), chart.ActualHeight / 2));
+        await input.MoveTo(at);
+        await Settle(200);
+        return chart.HoverText;
     }
 
     /// <summary>Picks a column's type in the column bar: clicks its heading, opens Type and picks the type.</summary>

@@ -238,7 +238,7 @@ public sealed class TableTests
     {
         var text = """
             {
-              "columns": [ { "name": "HP", "type": "int", "formula": "=Level * 10" }, "Speed", { "name": "Boss", "type": "bool" } ],
+              "columns": [ { "name": "HP", "type": "int", "width": 120 }, "Speed", { "name": "Boss", "type": "bool" } ],
               "rows": [ { "name": "Slime", "HP": "12", "Speed": 1.5, "Boss": "no" }, { "name": "Dragon", "HP": 300, "Boss": true } ],
               "curves": { "xp": [1, 2, 3] },
             }
@@ -251,7 +251,7 @@ public sealed class TableTests
         Assert.Equal(12, (int)table["Slime"]["HP"]);
         Assert.True(table["Dragon"]["Boss"]);
         var written = TableFile.Write(table);
-        Assert.Contains("{ \"name\": \"HP\", \"type\": \"whole number\", \"formula\": \"=Level * 10\" }", written);
+        Assert.Contains("{ \"name\": \"HP\", \"type\": \"whole number\", \"width\": 120 }", written);
         Assert.Contains("\"curves\": {\"xp\":[1,2,3]}", written);
         Assert.Equal(written, TableFile.Write(TableFile.Read(written, "Enemies")));
     }

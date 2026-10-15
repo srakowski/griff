@@ -39,6 +39,7 @@ public sealed class DataModule : IEditorModule
             .AddCommand<SortAscendingCommand>()
             .AddCommand<SortDescendingCommand>()
             .AddCommand<FillDownCommand>()
+            .AddCommand<GenerateCurveCommand>()
             .AddCommand<CopyCellsCommand>()
             .AddCommand<CutCellsCommand>()
             .AddCommand<PasteCellsCommand>()
@@ -119,8 +120,10 @@ public sealed class OpenTableCommand(TableStore store, TablesPanel panel, PanelL
 
 /// <summary>
 /// Shows the Tables panel: a spreadsheet for the project's tables of game data, where cells are typed into, rows and
-/// columns added, sorted, filtered and moved, and blocks of cells copied and pasted with Excel and Google Sheets. Read and
-/// change it with ui_inspect and ui_invoke on the Tables panel (TableName, Rows, SetCell, AddRow, AddColumn, Paste...).
+/// columns added, sorted, filtered and moved, blocks of cells copied and pasted with Excel and Google Sheets, columns
+/// worked out by formulas or generated from curves, and the picked column charted. Read and change it with ui_inspect and
+/// ui_invoke on the Tables panel (TableName, Rows, SetCell, AddRow, AddColumn, Paste, SetFormula, Values, FormulaProblems,
+/// GenerateCurve, Chart...).
 /// </summary>
 public sealed class ShowTablesCommand(PanelLayout layout) : EditorCommand
 {
@@ -356,6 +359,33 @@ public sealed class FillDownCommand(TablesPanel panel) : TableEditCommand(panel)
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 4, Order: 2);
 
     protected override void Run() => Panel.FillDown();
+}
+
+/// <summary>
+/// Generates the picked column of the table showing in the Tables panel from the curve set in its curve editor (the
+/// Curve button in the column bar), a row a level: XP to the next level, a stat or a price, from its first value to its
+/// last along a linear, power, exponential or S-shaped curve, or through points drawn on the chart. Rows are added for
+/// levels past the last. One undoable step; the column keeps the curve, so it can be changed and generated again. Set the
+/// curve with ui_set on the Tables panel's Curve (Kind, First, Last, Levels, Shape, RoundTo, Points), or do it all with
+/// ui_invoke Tables GenerateCurve.
+/// </summary>
+public sealed class GenerateCurveCommand(TablesPanel panel, PanelLayout layout) : TableEditCommand(panel)
+{
+    public override string Id => "Data.GenerateCurve";
+    public override string Text => "_Generate from Curve";
+    public override string? Icon => Icons.Draw;
+    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 4, Order: 3);
+
+    protected override bool CanExecuteCore() => Panel.HasTable && Panel.Curve.CanGenerate;
+
+    protected override void Run()
+    {
+        // Shows what it made, with the curve it came from.
+        Panel.ShowChart = true;
+        layout.Show(Panel.Id);
+        if (Panel.Curve.Generate())
+            Panel.Curve.IsOpen = true;
+    }
 }
 
 /// <summary>

@@ -1,0 +1,75 @@
+title: Formulas, curves and charts
+intro: Level tables generated from curves, columns worked out by formulas, and a chart of any column, dice and all.
+project: Platformer | Balance
+
+chapter: Levels from a curve | Curve, then Generate
+menu: Data > New Table...
+prompt: Levels
+click: tables:header:Value
+click: tables:column:name
+key: Ctrl+A
+type: XP\n
+columntype: XP = whole number
+click: tables:curve
+explain: tables:curveeditor | The curve editor | Curve opens the curve editor beside the chart. XP to the next level usually grows by the same share every level, so the curve starts out exponential.
+curve: last = 50000
+curve: levels = 30
+curve: roundto = 10
+explain: tables:chartarea | The curve | The chart draws the curve it would make: 100 at level 1 to 50,000 at level 30, each rounded to tens.
+click: tables:generate
+expecttable: 30 rows, 1 column
+expectcell: 1 > XP = 100
+expectcell: 15 > XP = 2010
+expectcell: 30 > XP = 50000
+expectchart: 100 (1) to 50,000 (30), 8,626.67 on average.
+charthover: 20
+explain: tables:grid | Generated | Generate fills the column, a row a level, adding the rows it needs. It's one step undo takes back, and the column keeps its curve, to change and generate again.
+
+chapter: Drawn by hand | Points on the chart
+curve: kind = points
+curvepoint: 15, 25000
+curvedrag: 15, 25000 > 15, 12000
+explain: tables:chartarea | Points | A curve can be drawn by hand too: click the chart to add a point, drag one to move it, and right-click to take it away. The curve passes smoothly through each, never overshooting.
+curve: points = 1: 100, 15: 10000, 30: 50000
+click: tables:generate
+expectcell: 15 > XP = 10000
+click: tables:undo
+expectcell: 15 > XP = 2010
+say: Undo puts the exponential curve's values back.
+
+chapter: Formulas | Worked out from the row and other tables
+click: tables:addcolumn
+prompt: Total
+columntype: Total = whole number
+cell: 1 > Total = =Prev(Total) + XP
+expectcell: 1 > Total = 100
+expectcell: 2 > Total = 220
+expectcell: 30 > Total = 258800
+explain: tables:column:formula | A formula | Typing a formula into a cell makes it the whole column's. Total adds each level's XP to the total above it, and every host works it out the same way, to the last digit.
+cell: 1 > XP = 200
+expectcell: 2 > Total = 320
+say: Change what a formula reads, and it follows at once, here and in a running game.
+click: tables:header:Total
+click: tables:column:formula
+key: Ctrl+A
+type: =Prev(Total) + Bonus\n
+expectcell: 1 > Total = #ref
+explain: tables:problems | Problems | A name that isn't there, or formulas working each other out in a loop, are flagged in the grid and here, and said in Output while the game runs. Nothing crashes.
+click: tables:column:formula
+key: Ctrl+A
+type: =Prev(Total) + XP\n
+expectcell: 2 > Total = 320
+
+chapter: Dice on the chart | Average, range and spread
+click: tables:addcolumn
+prompt: Hit
+columntype: Hit = dice
+click: tables:column:formula
+key: Ctrl+A
+type: =Dice(Floor(Row() / 5) + 1, 6, Row())\n
+expectcell: 1 > Hit = 1d6+1
+expectcell: 12 > Hit = 3d6+12
+expectchart: Rolls 2 (1) to 72 (30); 4.5 to 54.5 on average; spread up to 4.52 (30).
+charthover: 12
+explain: tables:chartarea | Dice | A dice column charts each level's average as a dot, its range as a line from the least it rolls to the most, and its spread as a box: how far a roll usually lands from the average.
+say: Agents set formulas and curves, and read what they work out, through the same panel and files.

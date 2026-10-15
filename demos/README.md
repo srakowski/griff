@@ -78,6 +78,11 @@ build: standalone
 | `expectcell: <row> > <column> = <value>` | Fail unless the cell of the table showing reads that, e.g. `expectcell: Wisp > Damage = 1d2`. |
 | `expecttable: <summary>` | Fail unless the Tables panel says the table showing has that, e.g. `expecttable: 4 rows, 2 columns`. |
 | `columntype: <column> = <type>` | Click a column's heading in the Tables panel, then pick its type from the column bar's Type list, e.g. `columntype: Damage = dice`. |
+| `curve: <setting> = <value>` | Set one of the Tables panel's curve editor's settings (open it with `click: tables:curve`) with the real mouse and keyboard: `curve: kind = s-curve` picks from its list; `first`, `last`, `levels`, `shape` and `roundto` are typed into their number fields (`curve: last = 50000`), and `points` into its box (`curve: points = 1: 100, 30: 50000`). Then `click: tables:generate`. |
+| `curvepoint: <level>, <value>` | Click the Tables panel's chart at a level and value, adding a point to a hand-drawn curve (`curve: kind = points`), e.g. `curvepoint: 15, 30000`. |
+| `curvedrag: <level>, <value> > <level>, <value>` | Drag a hand-drawn curve's point on the chart with the real mouse, e.g. `curvedrag: 15, 30000 > 15, 12000`. |
+| `charthover: <row>` | Rest the mouse on a row (or level, `12`) of the Tables panel's chart, so it says what's there. |
+| `expectchart: <summary>` | Fail unless the chart sums up the column it shows as that, e.g. `expectchart: 100 (1) to 50,000 (30), 9,870 on average.` |
 | `clipboard: <text>` | Put text on the clipboard as a spreadsheet copies cells: `\t` between cells, `\n` between rows, e.g. `clipboard: Ogre\t20\nWisp\t3`, then `key: Ctrl+V` in the Tables panel pastes it. |
 | `expectclipboard: <text>` | Fail unless the clipboard has that text in it (`\t` and `\n` as in `clipboard:`), e.g. after `key: Ctrl+C` in the Tables panel. |
 | `rename: <name>` | Rename the selected entity. |

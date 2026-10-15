@@ -93,6 +93,12 @@
                 <Button x:Name="ExportButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:export" ToolTip="Export CSV...">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Export}" />
                 </Button>
+                <ToggleButton Style="{StaticResource Style.ToggleButton.Toolbar}"
+                              IsChecked="{Binding ShowChart}"
+                              Tag="tables:chart"
+                              ToolTip="Chart the picked column beside the grid, over the rows or levels">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Chart}" />
+                </ToggleButton>
                 <Separator Style="{StaticResource Style.Separator.Vertical}" />
                 <controls:FilterBox Width="160"
                                     VerticalAlignment="Center"
@@ -128,6 +134,23 @@
                     <TextBlock Style="{StaticResource Label}" Text="Rows of" />
                     <ComboBox Width="140" ItemsSource="{Binding Tables}" SelectedItem="{Binding Table, Mode=TwoWay}" Tag="tables:column:table" ToolTip="The table its cells name rows of" />
                 </StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="Formula" />
+                <controls:CommitTextBox Width="240"
+                                        FontFamily="{StaticResource Font.Mono}"
+                                        Tag="tables:column:formula"
+                                        Text="{Binding Formula}"
+                                        ToolTip="Work the column out from the row's other columns and other tables, as a spreadsheet does: =Base * 1.15 ^ (Level - 1), =Class.Health + Level * 5, =Lookup(&quot;Classes&quot;, Class, &quot;Speed&quot;), =Prev(Total) + XP, =Sum(Items.Price). Empty it to type values again (it keeps what it worked out)." />
+                <ToggleButton Margin="4,0,0,0"
+                              Padding="6,0"
+                              Style="{StaticResource Style.ToggleButton.Toolbar}"
+                              IsChecked="{Binding DataContext.Curve.IsOpen, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              Tag="tables:curve"
+                              ToolTip="Generate the column from a curve, a row a level: XP to the next level, a stat or a price">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Draw}" />
+                        <TextBlock Margin="4,0,2,0" VerticalAlignment="Center" Text="Curve" />
+                    </StackPanel>
+                </ToggleButton>
                 <Separator Style="{StaticResource Style.Separator.Vertical}" />
                 <Button x:Name="MoveLeftButton" Style="{StaticResource Style.Button.Toolbar}" Tag="tables:moveleft" ToolTip="Move the column left (Alt+Left)">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveLeft}" />
@@ -141,15 +164,135 @@
             </WrapPanel>
         </Border>
 
-        <!-- What the last change said: always room for it, so the grid doesn't move when it comes and goes -->
-        <TextBlock DockPanel.Dock="Bottom"
-                   Margin="8,3"
-                   Style="{StaticResource Style.Text.Secondary}"
-                   Tag="tables:message"
-                   Text="{Binding Message}"
-                   TextTrimming="CharacterEllipsis"
-                   MinHeight="16"
-                   ToolTip="{Binding Message}" />
+        <!-- What the last change said, and what's wrong with the formulas: always room for them, so the grid doesn't move when they come and go -->
+        <Grid DockPanel.Dock="Bottom" Margin="8,3" MinHeight="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource Style.Text.Secondary}"
+                       Tag="tables:message"
+                       Text="{Binding Message}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Message}" />
+            <StackPanel Grid.Column="1"
+                        MaxWidth="520"
+                        Margin="12,0,0,0"
+                        Orientation="Horizontal"
+                        Background="Transparent"
+                        Tag="tables:problems"
+                        Visibility="{Binding HasFormulaProblems, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                <StackPanel.ToolTip>
+                    <ItemsControl ItemsSource="{Binding FormulaProblems}" MaxWidth="600">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,1" Text="{Binding}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel.ToolTip>
+                <TextBlock Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Warning}" />
+                <TextBlock Foreground="{DynamicResource Brush.Status.Warning}" Text="{Binding FormulaProblemSummary}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Grid>
+
+        <!-- The picked column's chart, and the curve editor beside it: beside the grid, the chart getting the panel's whole height -->
+        <Border DockPanel.Dock="Right"
+                Width="480"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="1,0,0,0"
+                Tag="tables:chartpane"
+                Visibility="{Binding ShowChart, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+            <DockPanel>
+                <!-- The curve editor, for the picked column: Generate first, so it's there however short the panel -->
+                <Border DockPanel.Dock="Left"
+                        Width="176"
+                        BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                        BorderThickness="0,0,1,0"
+                        DataContext="{Binding Curve}"
+                        Tag="tables:curveeditor"
+                        Visibility="{Binding IsOpen, Converter={x:Static converters:BoolToVisibilityConverter.Default}}">
+                    <ScrollViewer Padding="6,3" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,2"
+                                       Foreground="{DynamicResource Brush.Status.Warning}"
+                                       Text="{Binding Unfit}"
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding IsFit, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
+                            <Grid Margin="0,0,0,3" IsEnabled="{Binding IsFit}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Margin="0,0,4,0" ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind, Mode=TwoWay}" Tag="tables:curve:kind" ToolTip="Its shape: linear (the same step every level), power (slow, then fast), exponential (the same share more every level), s-curve (slow, quick, slow), or points drawn on the chart" />
+                                <Button x:Name="GenerateButton"
+                                        Grid.Column="1"
+                                        Padding="8,0"
+                                        Style="{StaticResource Style.Button.Primary}"
+                                        Tag="tables:generate"
+                                        Content="Generate"
+                                        ToolTip="{Binding Description}" />
+                            </Grid>
+                            <UniformGrid Columns="2" IsEnabled="{Binding IsFit}">
+                                <controls:NumberField Margin="0,0,2,3" Label="1st" Step="1" Tag="tables:curve:first" Value="{Binding First}" ToolTip="The value at level 1" Visibility="{Binding UsesEnds, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                                <controls:NumberField Margin="2,0,0,3" Label="Last" Step="1" Tag="tables:curve:last" Value="{Binding Last}" ToolTip="The value at the last level" Visibility="{Binding UsesEnds, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                                <controls:NumberField Margin="0,0,2,3" IsInteger="True" Label="Lvls" Step="0.2" Tag="tables:curve:levels" Value="{Binding Levels}" ToolTip="How many levels: the rows it fills, a row a level, adding rows past the last" />
+                                <controls:NumberField Margin="2,0,0,3" Label="Rnd" Step="0.2" Tag="tables:curve:roundto" Value="{Binding RoundTo}" ToolTip="Round each value to the nearest multiple of this (10 gives 1,250 rather than 1,247); 0 for none" />
+                            </UniformGrid>
+                            <controls:NumberField Margin="0,0,0,3"
+                                                  IsEnabled="{Binding IsFit}"
+                                                  Label="Shape"
+                                                  Step="0.01"
+                                                  Tag="tables:curve:shape"
+                                                  Value="{Binding Shape}"
+                                                  ToolTip="For a power curve, the power (2 is a square: slow, then fast); for an S-curve, how sharp the middle is (1 is a straight line, 3 a steep S)"
+                                                  Visibility="{Binding UsesShape, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                            <controls:CommitTextBox Margin="0,0,0,3"
+                                                    IsEnabled="{Binding IsFit}"
+                                                    Tag="tables:curve:points"
+                                                    Text="{Binding Points}"
+                                                    TextWrapping="Wrap"
+                                                    ToolTip="The points it passes through, a level and its value each (1: 100, 25: 5000, 50: 50000). Or click the chart to add a point, drag one to move it, and right-click one to take it away."
+                                                    Visibility="{Binding UsesPoints, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- The chart: what it charts, the chart, what the values come to -->
+                <DockPanel Margin="6,3">
+                    <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Style="{StaticResource Style.Text.Secondary}" Tag="tables:charttitle" Text="{Binding Chart.Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Chart.Title}" />
+                    <TextBlock DockPanel.Dock="Bottom"
+                               Style="{StaticResource Style.Text.Caption}"
+                               Foreground="{DynamicResource Brush.Text.Tertiary}"
+                               Tag="tables:chartsummary"
+                               Text="{Binding Chart.Summary}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Chart.Summary}" />
+                    <Grid>
+                        <data:TableChart x:Name="Chart"
+                                         Model="{Binding Chart}"
+                                         Version="{Binding Chart.Version}"
+                                         Curve="{Binding Curve}"
+                                         Tag="tables:chartarea"
+                                         ValueBrush="{DynamicResource Brush.Accent}"
+                                         SpreadBrush="{DynamicResource Brush.Selection}"
+                                         RangeBrush="{DynamicResource Brush.Text.Secondary}"
+                                         CurveBrush="{DynamicResource Brush.Status.Info}"
+                                         GridBrush="{DynamicResource Brush.Border.Subtle}"
+                                         TextBrush="{DynamicResource Brush.Text.Tertiary}"
+                                         HoverBrush="{DynamicResource Brush.Text.Primary}" />
+                        <TextBlock Margin="8"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource Style.Text.Secondary}"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding Chart.Note}"
+                                   Visibility="{Binding Chart.HasChart, Converter={x:Static converters:BoolToVisibilityConverter.Inverted}}" />
+                    </Grid>
+                </DockPanel>
+            </DockPanel>
+        </Border>
 
         <Grid>
             <DataGrid x:Name="Grid"

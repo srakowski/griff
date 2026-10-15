@@ -6,6 +6,10 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Editor fixes
+
+- [ ] Lay out the Entity menu in one go: the long flat list of things to add becomes categories (Basics, Characters, Level, Physics, UI, Story, Audio, Lights and Effects, and one per genre module) found the way components are, by an attribute on each create command (no hand-kept list), each entry with an icon and a one-line description of what it makes; a searchable Add Entity palette (like Add Component) with recently used at the top; the Hierarchy's right-click menu uses the same categories; command ids stay the same so agents' tools don't change, and the demos and tour that open the menu are updated.
+
 ### Physics
 
 - [ ] Make ropes swing and sag.

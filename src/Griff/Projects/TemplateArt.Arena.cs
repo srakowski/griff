@@ -44,7 +44,7 @@ internal static partial class TemplateArt
         return c;
     }
 
-    private static Canvas SlimeArt()
+    internal static Canvas SlimeArt()
     {
         var c = new Canvas(32, 32, 61);
         var green = Rgb(0x6C, 0xC9, 0x4E);

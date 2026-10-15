@@ -194,8 +194,10 @@ public sealed class SimulationResults
     private List<string> Find()
     {
         var found = new List<(double Weight, string Text)>();
-        foreach (var step in Steps)
+        var outliers = new List<Outlier>();
+        for (var index = 0; index < Steps.Count; index++)
         {
+            var step = Steps[index];
             var at = SweepLabel is not null && step.Value is { } v ? $"At {SweepLabel} {Number(v)}, " : "";
             var pairs = step.Pairs.Where(p => p.Runs > 0).ToList();
             if (pairs.Count == 0)
@@ -211,17 +213,14 @@ public sealed class SimulationResults
                 found.Add((50 + sided.Count, $"{at}{sided.Count} of {pairs.Count} pairs are one-sided (95% or more either way): {examples}."));
             }
 
-            // Rows far from the rest: a class that wins everywhere, an enemy nobody beats.
+            // Rows far from the rest: a class that wins everywhere, an enemy nobody beats. Said once for each run of steps
+            // they stand out at, below.
             if (step.FirstRows.Count >= 3)
             {
                 var averages = step.FirstRows.Select((r, f) => (Row: r, Rate: step.AverageOf(f, WinRate))).ToList();
                 var middle = Median(averages.Select(a => a.Rate));
                 foreach (var (row, rate) in averages.Where(a => Math.Abs(a.Rate - middle) >= 20))
-                {
-                    found.Add((Math.Abs(rate - middle), rate > middle
-                        ? $"{at}{row} wins {Percent(rate)} of its fights, {Number(rate - middle)} points over the middle {FirstLabel} row ({Percent(middle)}): too strong?"
-                        : $"{at}{row} wins {Percent(rate)} of its fights, {Number(middle - rate)} points under the middle {FirstLabel} row ({Percent(middle)}): too weak?"));
-                }
+                    outliers.Add(new Outlier(true, row, rate > middle, index, step.Value, rate, middle));
             }
 
             if (step.SecondRows.Count >= 3)
@@ -229,17 +228,15 @@ public sealed class SimulationResults
                 var averages = step.SecondRows.Select((r, s) => (Row: r, Rate: step.AverageAgainst(s, WinRate))).ToList();
                 var middle = Median(averages.Select(a => a.Rate));
                 foreach (var (row, rate) in averages.Where(a => Math.Abs(a.Rate - middle) >= 20))
-                {
-                    found.Add((Math.Abs(rate - middle), rate < middle
-                        ? $"{at}{row} is beaten in {Percent(rate)} of fights, {Number(middle - rate)} points under the middle {SecondLabel} row ({Percent(middle)}): too strong?"
-                        : $"{at}{row} is beaten in {Percent(rate)} of fights, {Number(rate - middle)} points over the middle {SecondLabel} row ({Percent(middle)}): too weak?"));
-                }
+                    outliers.Add(new Outlier(false, row, rate < middle, index, step.Value, rate, middle));
             }
 
             // Fights the time limit ends.
             foreach (var pair in pairs.Where(p => p.DrawRate >= 0.25).OrderByDescending(p => p.DrawRate).Take(3))
                 found.Add((pair.DrawRate * 40, $"{at}{pair.First} against {pair.Second} is a draw {Percent(100 * pair.DrawRate)} of the time: the time limit ({Number(Simulation.TimeLimit)} s) or both falling ends it."));
         }
+
+        found.AddRange(OutlierFindings(outliers));
 
         if (SweepLabel is { } label && Steps.Count >= 2)
         {
@@ -257,6 +254,57 @@ public sealed class SimulationResults
         }
 
         return [.. found.OrderByDescending(f => f.Weight).Select(f => f.Text).Distinct().Take(12)];
+    }
+
+    // A row far from the middle of its side at a step: its win rate (or how often it's beaten), and whether that makes it
+    // too strong.
+    private sealed record Outlier(bool First, string Row, bool Strong, int Step, double? Value, double Rate, double Middle);
+
+    // Each row said once for each run of steps in a row it stands out at the same way, e.g. "At Level 5 to 8, Mage wins
+    // 96% to 100% of its fights, 31 to 45 points over the middle Classes row: too strong?"; at one step, as it was there.
+    private IEnumerable<(double Weight, string Text)> OutlierFindings(List<Outlier> outliers)
+    {
+        foreach (var group in outliers.GroupBy(o => (o.First, o.Row, o.Strong)))
+        {
+            var run = new List<Outlier>();
+            foreach (var outlier in group.OrderBy(o => o.Step).Append(null))
+            {
+                if (outlier is not null && (run.Count == 0 || outlier.Step == run[^1].Step + 1))
+                {
+                    run.Add(outlier);
+                    continue;
+                }
+
+                if (run.Count > 0)
+                    yield return Say(run);
+                run = outlier is null ? [] : [outlier];
+            }
+        }
+
+        (double, string) Say(List<Outlier> run)
+        {
+            var (first, last) = (run[0], run[^1]);
+            var at = SweepLabel is null || first.Value is not { } from ? ""
+                : run.Count == 1 ? $"At {SweepLabel} {Number(from)}, " : $"At {SweepLabel} {Number(from)} to {Number(last.Value ?? from)}, ";
+            var rates = Range(run.Select(o => o.Rate), Percent);
+            var gaps = Range(run.Select(o => Math.Abs(o.Rate - o.Middle)), Number);
+            var middle = run.Count == 1 ? $" ({Percent(first.Middle)})" : "";
+            // The first side's rows (whose wins are counted: the classes) before any of the second's, then by how far out and for
+            // how long.
+            var weight = run.Max(o => Math.Abs(o.Rate - o.Middle)) + run.Count - 1 + (first.First ? 100 : 0);
+            var side = first.First ? FirstLabel : SecondLabel;
+            var over = first.First == first.Strong ? "over" : "under";
+            var verdict = first.Strong ? "too strong?" : "too weak?";
+            return (weight, first.First
+                ? $"{at}{first.Row} wins {rates} of its fights, {gaps} points {over} the middle {side} row{middle}: {verdict}"
+                : $"{at}{first.Row} is beaten in {rates} of fights, {gaps} points {over} the middle {side} row{middle}: {verdict}");
+        }
+
+        static string Range(IEnumerable<double> values, Func<double, string> say)
+        {
+            var (low, high) = (say(values.Min()), say(values.Max()));
+            return low == high ? low : $"{low} to {high}";
+        }
     }
 
     // Levels that change nothing (their win rate within a point of the last), and levels that jump.

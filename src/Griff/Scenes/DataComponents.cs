@@ -27,6 +27,17 @@ public sealed class TableValues : Component
     public string? Row { get; set; }
 
     /// <summary>
+    /// A name in the game's save data (<c>Game.SaveData</c>) holding the row to read instead, e.g. "hero": a menu's
+    /// <see cref="Choice"/> with Save As "hero" picks the class the hero plays. With nothing saved under it, <see cref="Row"/>
+    /// is read.
+    /// </summary>
+    public string? SavedRow { get; set; }
+
+    /// <summary>The row <see cref="SavedRow"/> picked as the game last set the values; null for none. Set by the game.</summary>
+    [DoNotSerialize]
+    public string? PickedRow { get; internal set; }
+
+    /// <summary>
     /// Which property takes which column, one a line: <c>Health.Max = Health</c> (a component's property, then the column),
     /// <c>Speed</c> (every Speed on the entity, from the Speed column) or <c>Patrol.Speed = Walk Speed</c>. A number
     /// property given dice rolls them once, as the entity starts. Empty sets every property named like a column.
@@ -53,8 +64,8 @@ public sealed class TableValues : Component
         return problems.Count == 0 ? null : "Sets: " + string.Join("; ", problems) + ".";
     }
 
-    /// <summary>The row it reads: <see cref="Row"/>, or the entity's name when that's empty.</summary>
-    public string? RowName => string.IsNullOrWhiteSpace(Row) ? Entity?.Name : Row.Trim();
+    /// <summary>The row it reads: the one <see cref="SavedRow"/> picked, else <see cref="Row"/>, or the entity's name when that's empty.</summary>
+    public string? RowName => !string.IsNullOrWhiteSpace(PickedRow) ? PickedRow.Trim() : string.IsNullOrWhiteSpace(Row) ? Entity?.Name : Row.Trim();
 
     /// <summary>A property of a component on the entity and the column it takes, as <see cref="Sets"/> says.</summary>
     public sealed record Target(Component Component, PropertyInfo Property, string Column)

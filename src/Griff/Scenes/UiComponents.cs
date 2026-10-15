@@ -102,6 +102,13 @@ public enum ButtonAction
     /// does. It's faded while this player can't: the computer's turn, between turns, another player's turn.
     /// </summary>
     EndTurn,
+
+    /// <summary>
+    /// Does an action on entities, as a <see cref="Trigger"/> does when its message arrives: <see cref="Button.Do"/> on
+    /// <see cref="Button.Targets"/> (an RPG's Attack, Cast Spell and Use Item on the hero, a door's Open). It's faded while
+    /// none of them can do it now (a fighter off its turn, a spell without the mana).
+    /// </summary>
+    Do,
 }
 
 /// <summary>
@@ -141,6 +148,23 @@ public sealed class Button : Component, IDrawEffect
     [EntityName]
     [ShownWhen(nameof(Action), Is = [ButtonAction.OpenPanel])]
     public string? Panel { get; set; }
+
+    /// <summary>
+    /// For <see cref="ButtonAction.Do"/>: what to do, e.g. "Attack", "Cast Spell" or "Open": an action of the
+    /// <see cref="Targets"/>' components (or this entity's). "Battler.Attack" names one component's.
+    /// </summary>
+    [ActionName(On = nameof(Targets))]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.Do])]
+    public string? Do { get; set; }
+
+    /// <summary>For <see cref="ButtonAction.Do"/>: the entities to do it on, by name, separated by commas. Empty does it on this entity.</summary>
+    [EntityName(Many = true)]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.Do])]
+    public string? Targets { get; set; }
+
+    /// <summary>For <see cref="ButtonAction.Do"/>: what to do it with, for an action that takes a value (Damage 2). Empty uses the action's own default.</summary>
+    [ShownWhen(nameof(Action), Is = [ButtonAction.Do])]
+    public string? With { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
     [Names(NameKind.Action)]

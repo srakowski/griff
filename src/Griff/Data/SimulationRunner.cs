@@ -664,6 +664,7 @@ public static class SimulationRunner
 
         values.Table = table;
         values.Row = row.Name;
+        values.SavedRow = null;
         values.Applied = null;
     }
 

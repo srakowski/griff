@@ -1,0 +1,63 @@
+title: The RPG Stats template
+intro: Races, classes, items, spells and levels in tables, a turn-based fight that reads them with no code, and a balance simulation that finds the class that's too strong.
+project: RpgStats | Quest
+
+chapter: Every number in a table | Classes, spells and levels
+say: The RPG Stats template keeps its game in tables: races, classes, items, spells, levels and enemies.
+menu: Data > Open Table > Classes
+expectcell: Mage > Title = Elf Mage
+explain: tables:cell:Mage > Race | Rows of other tables | Each class names its race, its weapon, its spell and its item: rows of the other tables.
+expectcell: Mage > Spell Damage = 5d6
+explain: tables:cell:Mage > Spell Damage | Worked out | The rest are formulas of those rows and its level. At level three, the mage's Fireball rolls five six-sided dice.
+menu: Data > Open Table > Levels
+expectcell: 1 > XP = 100
+explain: tables:grid | Levels from curves | Each level's XP and what it adds to health, power and mana are generated from curves.
+
+chapter: The fight | Spells, items and turns
+scene: Battle
+select: Hero
+explain: field:TableValues.Sets | Table Values | The hero takes every number from its class's row, a line each: its health, its damage, its spell and its item.
+explain: field:TableValues.SavedRow | Saved Row | The class is the one picked in the menu.
+explain: component:Battler | Battler | A Battler attacks, casts its spell or uses its item on its turn. The computer plays the enemy.
+deselect
+play
+wait: 0.6
+expectvalue: Hero.Battler.Title = Dwarf Knight
+expectvalue: Enemy.Battler.Title = Goblin
+explain: game | A dwarf knight and a goblin | One attacks, two casts the knight's spell, three uses its item, or click the buttons. They fade on the goblin's turn.
+tap: D1
+wait: 2.0
+tap: D3
+wait: 2.0
+expectvalue: Hero.Battler.Items = 1
+tap: D1
+wait: 2.0
+spot: game | Turn by turn
+tap: D1
+wait: 2.0
+tap: D1
+wait: 2.0
+stop
+
+chapter: Which class is too strong | The Balance simulation
+say: Is it fair? The template comes with a balance simulation, ready to run.
+menu: Data > Open Simulation > Balance
+expectsim: first:table = Classes
+expectsim: second:table = Enemies
+expectsim: sweep:column = Level
+explain: sims:settings | Each class at each level | Each class at each level from one to ten against each enemy, a hundred fights a pair, in an arena by the game's own rules.
+simrun
+expectfinding: At Level 5 to 8, Mage wins
+explain: sims:findings | Too strong | The first thing it says: from level five on, the mage wins nearly every fight.
+simtab: Sweep
+explain: sims:chart | Win rate over the levels | The mage starts weakest and climbs past every other class by level six.
+
+chapter: The slip | Fix it in the data
+menu: Data > Open Table > Spells
+explain: tables:cell:Fireball > Dice Per Level | Two dice a level | Fireball gains two dice every level, where every other spell gains a quarter or a half.
+cell: Fireball > Dice Per Level = 1
+expectcell: Fireball > Dice Per Level = 1
+menu: Data > Simulations
+simrun
+expectfinding: Wyvern is beaten
+explain: sims:findings | Back in line | Run it again, and the mage is no longer too strong. The tables were the problem, and the simulation found it.

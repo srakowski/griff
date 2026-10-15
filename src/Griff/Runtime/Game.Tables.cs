@@ -64,6 +64,21 @@ public sealed partial class Game
 
     private void Apply(TableValues values)
     {
+        // A row picked in a menu and saved (a Choice's Save As), if the table has it; Row otherwise.
+        values.PickedRow = null;
+        if (!string.IsNullOrWhiteSpace(values.SavedRow) && SaveData.GetString(values.SavedRow.Trim()) is { Length: > 0 } saved)
+        {
+            try
+            {
+                if (_tables.Find(values.Table)?.Find(saved) is not null)
+                    values.PickedRow = saved;
+            }
+            catch (InvalidDataException)
+            {
+                // A table that doesn't read is said as the values are set.
+            }
+        }
+
         foreach (var problem in values.Apply(_tables, _tables.Session))
             Warn(problem);
     }

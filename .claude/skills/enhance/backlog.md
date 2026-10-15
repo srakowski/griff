@@ -21,8 +21,6 @@ enemies, races, classes, loot and level curves live in tables edited like a spre
 by simulating thousands of plays, not by guessing. Tables are game data like components: found and edited by agents
 through the scene and asset tools, read by scripts, and usable by no-code components.
 
-- [ ] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level.
-
 ### Website (griff.games)
 
 At the user's request (2026-10-14), before Platforms: an open-source project site at https://griff.games
@@ -144,6 +142,11 @@ so a jam team's design, plan and game live in one project and agents can read th
 - [ ] Add design diagrams in one go: a game-flow map drawn from the project itself (scenes and the doors, buttons and triggers between them, menus and endings), a core-loop diagram drawn by hand on a canvas, and a mood board of reference images and notes, all kept in the project.
 
 ## Done
+
+- [x] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level. (2026-10-15)
+  - `Griff.Modules.Battles`: a `Battler` (attack through Armor, a Spell paid in Mana with Mana Per Turn, an Item that heals, restores mana or hurts; dice for each via [RollsFor]; one move per TurnTaker action; the computer heals when under Heal Below, casts when the spell hits at least as hard, throws a harder item, else attacks; [Focus] Controllable with Attack/Spell/Item actions; outputs Title, Mana, Spell, Spell Cost, Item, Items, Said; actions Attack, Cast Spell, Use Item), `BattlesSystem` after Turns, `IActionReady` so a new `ButtonAction.Do` (Do, Targets, With, sent to the host as `griff.do`) fades while its targets can't; `TableValues.SavedRow` reads a row a menu's Choice saved.
+  - The template (`RpgStatsTemplate`, `RpgStatsTables`, `RpgStatsArt`): Races, Items, Spells, Levels (XP, Health, Power, Mana from curves), Classes (row links + formulas) and Enemies tables; Main (class and foe Choices), Battle (Do buttons 1/2/3, bars, Said lines, Victory with the foe's Reward formula, Defeat, pause menu) and Arena scenes; `ProjectTemplate.Simulations()` writes `Simulations/Balance.sim` (Classes x Enemies, Level 1-10, 100 runs). Fireball's Dice Per Level 2 makes the mage win 81-100% at levels 5-8 (findings' first line); at 1 it's in line.
+  - Simulation findings now say a row once per run of steps it stands out at ("At Level 5 to 8, ..."), the first side's rows first.
 
 - [x] Add a web export of whole games, with sound and saves, from the Build menu. (2026-10-15)
   - A **Build** menu holds every export: Build Game, Build Small Game (moved from Game; ids `Game.Build`, `Game.BuildSmall` kept) and **Build for Web...** (`Game.BuildWeb`): it asks for a folder through `IDialogService` (the project's Build folder to start with; `WebExporter.OutputIn` puts it in "<Name> (Web)" there, or straight into an empty folder or an earlier web build), writes the export and `WebExporter.Zip` (index.html at the top, for itch.io) beside it, logs the warnings, and asks "Play in browser", which serves it with `WebPreview` (a DI singleton on `WebServer`, a static file server on 127.0.0.1:7680 or any free port, so saves persist per address) and opens it through `IExternalPrograms.OpenInBrowser`. The editor publishes the web player with itself (Player\Web, Release, no .br/.gz); exports leave out the .br/.gz copies; `index.html` is titled with the game's name. `tools\web.ps1 -Export -Out <folder> [-Zip]` (with `-Project` or `-Template`) is the command line's Build for Web, for the site's playable games.

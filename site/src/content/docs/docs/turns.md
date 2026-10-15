@@ -1,6 +1,6 @@
 ---
 title: "Roguelikes, turns and tactics"
-description: "Roguelike play on a grid, turns, tactics on a grid, and dungeons made from a seed."
+description: "Roguelike play on a grid, turns, tactics on a grid, turn-based RPG battles, and dungeons made from a seed."
 ---
 
 ## The Roguelike template
@@ -26,6 +26,16 @@ On a side the turn order's **Computer Sides** names (Red, from Create Tactics Un
 ## The Tactics template
 
 The **Tactics** template is a menu (Play and Quit) and a `Battle` on a field of grass with trees and rocks in the way, painted on a tilemap: your two knights (Move 4, 6 hit points, 2 damage up close) and two archers (Move 3, shooting two or three cells off) start on the left, and the computer's three orcs (charging), a goblin archer guarding the far side and another holding the rocks start on the right. It's played as the Tactics section above says, Blue first; the turn text counts the rounds (`{0}'s turn · Round {1}`), health bars show who's hurt, and hits throw sparks with swings and shots to hear. Beat every orc and goblin and **Victory** opens (on `RedDefeated`, the turn order's Defeat Message); lose all four of yours and it's **Defeat** (`BlueDefeated`). Both offer Again and Menu, and the pause menu is there too, with no scripts.
+
+## RPG battles
+
+A **Battler** is a fighter in a turn-based battle, as in an RPG, with no code. Give an entity a Health, a Battler and a Turn Taker (1 action), set its **Foe** (`Enemy`, or `Knight, Mage` for a party: it goes for the first still standing), and on its turn it makes one move: an **Attack** (its **Damage**, or **Damage Roll** dice rolled each hit, less the foe's **Armor**, never below 1), its **Spell** (**Spell Cost** paid from its **Mana**, which **Mana Per Turn** tops up as each turn starts; **Spell Damage** to the foe through armor, **Spell Heal** to itself, each with dice of its own) or one of its **Items** (the **Item**'s **Item Heal**, **Item Mana** or **Item Damage**: a potion, an ether, a bomb). Each move uses its turn taker's action, so the turn passes by itself; a move it can't make (no mana, nothing left) is said and uses nothing.
+
+The player's fighter moves when its actions are done: **Attack**, **Cast Spell** and **Use Item**, by buttons whose Action is **Do** (faded while it can't), triggers, wires or `Game.Do`, or by its own **Attack Action**, **Spell Action** and **Item Action** keys while it's **Controllable** (it has focus, like any piece that takes the player's input). On a side its Turn Order's **Computer Sides** names, it picks for itself after **Think Time**: it heals when its health is under **Heal Below** (an item, or a spell that heals), casts while it has the mana and the spell hits at least as hard as an attack, throws an item that hits harder still, and otherwise attacks. What it last did is its **Said** output (`Elf Mage casts Fireball on Orc: 24 damage.`), with **Title** (what it's called), **Mana**, **Spell**, **Spell Cost**, **Item** and **Items** to show on texts and bars beside it. Its numbers are made to come from tables: a Table Values beside it sets them from a class's or an enemy's row, and a balance simulation plays the same fight thousands of times (see [Tables of game data](/docs/data-tables/)). In a network game the host carries out the moves.
+
+## The RPG Stats template
+
+The **RPG Stats** template is a menu where left and right pick a **Class** (Knight, Mage, Rogue or Cleric) and a **Foe** (Slime, Goblin, Skeleton, Orc or Wyvern), and a `Battle` on a meadow at dusk between them: the hero on the left, the foe on the right with its name, health bar and the line it last said. You go first: **1** attacks, **2** casts your class's spell, **3** uses its item (or click the buttons, which fade on the foe's turn and when you haven't the mana or the item), and the computer plays the foe. Win and **Victory** opens with what the foe was worth, read from its row; fall and it's **Defeat**; both offer Again and Menu, and the pause menu is there too. Every number in the fight comes from the game's tables through Table Values, and a `Balance` simulation is ready to run on them: [Tables of game data](/docs/data-tables/#a-walkthrough-the-rpg-stats-template) walks through both.
 
 ## Dungeons
 

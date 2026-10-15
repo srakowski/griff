@@ -122,6 +122,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Arcade")]
     [InlineData("Strategy")]
     [InlineData("Shooter")]
+    [InlineData("RpgStats")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -808,6 +809,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("FallingBlocks")]
     [InlineData("Roguelike")]
     [InlineData("Tactics")]
+    [InlineData("RpgStats")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -819,7 +821,7 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Game");
         if (template == "Roguelike")
             scene = GameLoader.LoadScene(project, registry, "Crypt");
-        if (template == "Tactics")
+        if (template is "Tactics" or "RpgStats")
             scene = GameLoader.LoadScene(project, registry, "Battle");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
@@ -838,13 +840,16 @@ public sealed class ProjectTemplateTests : IDisposable
         // Nothing moves while it's up, however hard the player pushes: not the player, nor a board's piece or cursor, nor
         // the tactics cursor.
         string Moving() => game.Find("Player") is { } player ? player.Transform.Position.ToString()
+            : game.Find("Hero")?.GetComponent<Griff.Modules.Battles.Battler>() is { } hero ? $"{hero.Said} {hero.Mana} {hero.Items}"
             : game.Find("Tactics")?.GetComponent<TacticsControls>() is { } tactics ? $"{tactics.Cursor}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();
         input.SetKey(Key.D, true);
+        input.SetKey(Key.D1, true); // an RPG hero's attack
         Run(game, input, 0.5);
         input.SetKey(Key.D, false);
+        input.SetKey(Key.D1, false);
         Assert.Equal(before, Moving());
 
         // Enter clicks Resume.

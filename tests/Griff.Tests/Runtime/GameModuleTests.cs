@@ -40,9 +40,9 @@ public class GameModuleTests
     [Fact]
     public void Modules_AreFound_ByName()
     {
-        Assert.Equal(["Block Worlds", "Contraptions", "Dungeons", "Falling Blocks", "First Person", "Match-3", "Puzzles", "Strategy", "Tactics"],
+        Assert.Equal(["Battles", "Block Worlds", "Contraptions", "Dungeons", "Falling Blocks", "First Person", "Match-3", "Puzzles", "Strategy", "Tactics"],
             GameModule.All.Select(m => m.Name));
-        Assert.Equal(["Griff.Modules.BlockWorlds", "Griff.Modules.Contraptions", "Griff.Modules.Dungeons", "Griff.Modules.FallingBlocks",
+        Assert.Equal(["Griff.Modules.Battles", "Griff.Modules.BlockWorlds", "Griff.Modules.Contraptions", "Griff.Modules.Dungeons", "Griff.Modules.FallingBlocks",
             "Griff.Modules.FirstPerson", "Griff.Modules.Match3", "Griff.Modules.Puzzles", "Griff.Modules.Strategy", "Griff.Modules.Tactics"],
             GameModule.All.Select(m => m.Namespace));
     }

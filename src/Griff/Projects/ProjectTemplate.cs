@@ -55,6 +55,9 @@ public abstract class ProjectTemplate
     /// <summary>Its tables of game data, keyed by path relative to Assets ("Tables/Enemies.table"); see <see cref="Data.Table"/>.</summary>
     public virtual IReadOnlyDictionary<string, Data.Table> Tables() => new Dictionary<string, Data.Table>();
 
+    /// <summary>Its balance simulations, keyed by path relative to Assets ("Simulations/Balance.sim"); see <see cref="Data.Simulation"/>.</summary>
+    public virtual IReadOnlyDictionary<string, Data.Simulation> Simulations() => new Dictionary<string, Data.Simulation>();
+
     /// <summary>The start scene. Script components are added as missing components until compiled.</summary>
     public Scene StartScene() => WithSounds(BuildStartScene());
 

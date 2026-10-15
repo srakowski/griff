@@ -352,5 +352,6 @@ public sealed partial class Game
         OnNetCommand(GridStepCommand, RunGridStep);
         OnNetCommand(GridPushCommand, RunGridPush);
         OnNetCommand(BumpCommand, RunBump);
+        OnNetCommand(ButtonDoCommand, RunButtonDo);
     }
 }

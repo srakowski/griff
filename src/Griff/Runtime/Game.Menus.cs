@@ -55,7 +55,12 @@ public sealed partial class Game
         var top = TopPanel;
         var allButtons = OnTop(_menus.AllButtons, Scene.Active<Button>(), top);
         foreach (var button in allButtons)
+        {
             button.IsMissingSave = !HasWhatItNeeds(button);
+            if (button.Action == ButtonAction.Do)
+                UpdateDoButton(button);
+        }
+
         var buttons = _menus.Buttons;
         buttons.Clear();
         foreach (var button in allButtons)
@@ -258,6 +263,9 @@ public sealed partial class Game
                 break;
             case ButtonAction.EndTurn:
                 Net.SendCommand(EndTurnCommand, OrderForButton(button)?.Entity);
+                break;
+            case ButtonAction.Do:
+                ClickDo(button);
                 break;
         }
 
@@ -530,5 +538,63 @@ public sealed partial class Game
                 Fullscreen = value >= 0.5f;
                 break;
         }
+    }
+
+    // ----- Buttons that do an action (ButtonAction.Do)
+
+    private const string ButtonDoCommand = "griff.do";
+
+    // Their targets, kept to look through without garbage.
+    private readonly List<Entity> _doTargets = [];
+
+    // Clicked here: done where the game is run, on the targets found here (a button is this screen's own).
+    private void ClickDo(Button button)
+    {
+        if (string.IsNullOrWhiteSpace(button.Do))
+            throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" does an action, but its Do isn't set.");
+        _doTargets.Clear();
+        TargetsOf(button.Entity!, button.Targets, _doTargets);
+        var args = new object?[2 + _doTargets.Count];
+        (args[0], args[1]) = (button.Do.Trim(), button.With);
+        for (var i = 0; i < _doTargets.Count; i++)
+            args[2 + i] = _doTargets[i];
+        _doTargets.Clear();
+        Net.SendCommand(ButtonDoCommand, args);
+    }
+
+    // Where the game is run: the action on each target that's still here.
+    private void RunButtonDo(NetPlayer? player, object? args)
+    {
+        if (args is not object?[] { Length: >= 2 } a || a[0] is not string action)
+            return;
+        for (var i = 2; i < a.Length; i++)
+        {
+            if (a[i] is Entity target && target.Scene == Scene && target.IsActive && Runs(target))
+                DoOn(target, action, a[1] as string, number: null);
+        }
+    }
+
+    // A Do button is faded while none of its targets can do its action now, if they say (see IActionReady).
+    private void UpdateDoButton(Button button)
+    {
+        if (string.IsNullOrWhiteSpace(button.Do))
+            return;
+        _doTargets.Clear();
+        TargetsOf(button.Entity!, button.Targets, _doTargets);
+        bool? ready = null;
+        foreach (var target in _doTargets)
+        {
+            var components = target.Components;
+            for (var i = 0; i < components.Count; i++)
+            {
+                if (components[i] is not IActionReady says || ComponentActions.Find(components[i], button.Do) is not { } found)
+                    continue;
+                ready = ready == true || says.IsReady(found.Name);
+            }
+        }
+
+        _doTargets.Clear();
+        if (ready is { } now && button.Interactable != now)
+            button.Interactable = now;
     }
 }

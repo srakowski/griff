@@ -247,6 +247,13 @@ public sealed class Project
             await File.WriteAllTextAsync(path, Data.TableFile.Write(table), cancellationToken);
         }
 
+        foreach (var (relative, simulation) in template.Simulations())
+        {
+            var path = Path.Combine(project.AssetsPath, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, Data.SimulationFile.Write(simulation), cancellationToken);
+        }
+
         var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
         foreach (var (relative, prefab) in template.Prefabs())
         {

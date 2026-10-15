@@ -18,7 +18,7 @@ public class FrameTests
             "Begin: Panels", "Begin: Pauses", "Begin: Time", "Begin: Input", "Begin: Debug Drawing", "Begin: Network", "Begin: Tables",
             "Begin: Dungeons",
             "Begin: Script Start",
-            "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Tactics",
+            "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
             "Logic: Beat Clocks", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",
@@ -57,10 +57,10 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        // Griff's core systems, then each module's in module order (Block Worlds, Contraptions, Dungeons, Falling Blocks,
+        // Griff's core systems, then each module's in module order (Battles, Block Worlds, Contraptions, Dungeons, Falling Blocks,
         // First Person, Match-3, Puzzles, Strategy, Tactics): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Block Worlds", "Contraptions", "Dungeons", "Falling Boards", "First Person",
+        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Battles", "Block Worlds", "Contraptions", "Dungeons", "Falling Boards", "First Person",
             "Match Boards", "Puzzles", "Strategy", "Tactics"], game.Systems.Select(s => s.Name));
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
         Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
@@ -141,7 +141,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(13, game.Systems.Count);
+        Assert.Equal(14, game.Systems.Count);
     }
 
     [Fact]

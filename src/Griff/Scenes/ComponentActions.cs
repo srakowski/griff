@@ -29,6 +29,17 @@ public sealed class ActionAttribute(string? name = null) : Attribute
 }
 
 /// <summary>
+/// A component whose actions (see <see cref="ActionAttribute"/>) can't always be done: a fighter's spell without the mana,
+/// any move off its turn. A <see cref="Button"/> whose Action is Do is faded while none of its targets can do it. A script
+/// component can implement it too.
+/// </summary>
+public interface IActionReady
+{
+    /// <summary>True if its action called <paramref name="action"/> (the action's name without spaces, e.g. "CastSpell") can be done now.</summary>
+    bool IsReady(string action);
+}
+
+/// <summary>
 /// Marks a component's true-or-false property as what a <see cref="Switch"/> (or a wire into Power) turns on and off,
 /// e.g. a mover's Running or a particle emitter's Emitting. With <see cref="Inverted"/>, on sets it false: a door's
 /// Locked. An entity with none of these appears and disappears instead. A script component's property counts too.

@@ -177,16 +177,17 @@ public sealed partial class Game
 
     // The entities a trigger's Targets name, as a switch finds its own (those inside it first, otherwise every one in the
     // scene called that); its own entity without any.
-    private static void TargetsOf(Trigger trigger, List<Entity> into)
+    private static void TargetsOf(Trigger trigger, List<Entity> into) => TargetsOf(trigger.Entity!, trigger.Targets, into);
+
+    private static void TargetsOf(Entity owner, string? targets, List<Entity> into)
     {
-        var owner = trigger.Entity!;
-        if (string.IsNullOrWhiteSpace(trigger.Targets))
+        if (string.IsNullOrWhiteSpace(targets))
         {
             into.Add(owner);
             return;
         }
 
-        var names = trigger.Targets.AsSpan();
+        var names = targets.AsSpan();
         while (names.Length > 0)
         {
             var comma = names.IndexOf(',');

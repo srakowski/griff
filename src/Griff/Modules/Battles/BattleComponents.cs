@@ -43,6 +43,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>Dice rolled for each attack in place of <see cref="Damage"/>, e.g. "1d8+2"; empty hits for Damage every time.</summary>
     [RollsFor(nameof(Damage))]
+    [Dice]
     public string? DamageRoll
     {
         get => _damage.Text;
@@ -88,6 +89,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>Dice rolled for each cast's damage in place of <see cref="SpellDamage"/>, e.g. "3d6".</summary>
     [RollsFor(nameof(SpellDamage))]
+    [Dice]
     public string? SpellDamageRoll
     {
         get => _spellDamage.Text;
@@ -99,6 +101,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>Dice rolled for each cast's healing in place of <see cref="SpellHeal"/>, e.g. "2d6+2".</summary>
     [RollsFor(nameof(SpellHeal))]
+    [Dice]
     public string? SpellHealRoll
     {
         get => _spellHeal.Text;
@@ -119,6 +122,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>Dice rolled for each use's healing in place of <see cref="ItemHeal"/>, e.g. "2d4+4".</summary>
     [RollsFor(nameof(ItemHeal))]
+    [Dice]
     public string? ItemHealRoll
     {
         get => _itemHeal.Text;
@@ -133,6 +137,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>Dice rolled for each use's damage in place of <see cref="ItemDamage"/>, e.g. "3d6".</summary>
     [RollsFor(nameof(ItemDamage))]
+    [Dice]
     public string? ItemDamageRoll
     {
         get => _itemDamage.Text;

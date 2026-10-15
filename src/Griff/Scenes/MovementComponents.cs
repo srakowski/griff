@@ -555,6 +555,7 @@ public sealed class GridPatrol : Component, IGridDriver
     /// "4 0; 4 -3; 0 -3". The start (0 0) is always the first point. On a hex map they're columns and rows, so "0 2" is
     /// straight up the screen and "0 1" the row above, half a hexagon to one side.
     /// </summary>
+    [Points(FromStart = true, Cells = true, Least = 1)]
     public string? Points
     {
         get => _points;

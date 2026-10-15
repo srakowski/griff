@@ -40,9 +40,9 @@ public sealed class KnownNamesTests : IDisposable
         Assert.Equal(NameKind.Message, Property<Pickup>("Message").Names!.Kind);
         Assert.True(Property<Counter>("Message").Names!.Hears);
         Assert.False(Property<Health>("DeathMessage").Names!.Hears);
-        // Entity names, items and plain text aren't.
+        // Entity names and plain text aren't; items are.
         Assert.Null(Property<Door>("Target").Names);
-        Assert.Null(Property<Door>("Key").Names);
+        Assert.Equal(NameKind.Item, Property<Door>("Key").Names!.Kind);
     }
 
     [Fact]
@@ -187,6 +187,51 @@ public sealed class KnownNamesTests : IDisposable
         names = index.Get(project, open.Entities, scenePath);
         Assert.Contains("Tallied", names.Sent);
         Assert.DoesNotContain("Scored", names.Sent);
+    }
+
+    [Fact]
+    public void ItemsFlagsAndKinds_ComeFromWhatGivesSetsAndSaysThem()
+    {
+        var gem = new Entity("Gem");
+        gem.AddComponent(new Pickup { Item = "Key" });
+        var lever = new Entity("Lever");
+        lever.AddComponent(new Trigger { Do = "Set Flag", With = "PowerOn" });
+        var talk = new Entity("Talk");
+        talk.AddComponent(new Dialogue { Lines = ["[set MetKing] Hello.", "[clear Angry] Fine."] });
+        var crate = new Entity("Crate");
+        crate.AddComponent(new Pushable { Kind = "Red" });
+        var door = new Entity("Door");
+        door.AddComponent(new Door { Key = "Key", NeedsFlag = "not Lost" });
+        var found = KnownNames.Collect([gem, lever, talk, crate, door], _registry);
+        var script = KnownNames.Scan("""inventory.Add("Map"); inventory.Add("Coin", 3); Game.SetFlag("Opened", true);""");
+
+        Assert.Equal(["Key"], found.Items);
+        Assert.Equal(["Map", "Coin"], script.Items);
+        Assert.Equal(["Angry", "MetKing", "PowerOn"], found.Flags.Order());
+        Assert.Equal(["Opened"], script.Flags);
+        Assert.Equal([("Crate", "Red")], found.Kinds);
+
+        var names = new KnownNames([], [], [], [], [], [], items: found.Items.Concat(script.Items), flags: found.Flags.Concat(script.Flags), kinds: found.Kinds);
+        var key = Property<Door>("Key").Names!;
+        Assert.Equal(["Coin", "Key", "Map"], names.Choices(key).Select(c => c.Name));
+        Assert.Empty(names.Unmatched(key, "key"));
+        Assert.Equal(["Gold"], names.Unmatched(key, "Gold"));
+
+        // A condition names its flag, or "not" it.
+        var needs = Property<Door>("NeedsFlag").Names!;
+        Assert.True(needs.Condition);
+        Assert.Equal(["Angry", "not Angry", "MetKing", "not MetKing"], names.Choices(needs).Take(4).Select(c => c.Name));
+        Assert.Empty(names.Unmatched(needs, "not PowerOn"));
+        Assert.Empty(names.Unmatched(needs, "!opened"));
+        Assert.Equal(["not Lost"], names.Unmatched(needs, "not Lost"));
+        Assert.Equal("Nothing sets the flag \"Lost\": no trigger's Set Flag, dialogue's [set] or script's SetFlag", KnownNames.Problem(needs, ["not Lost"]));
+
+        // Kinds go with kinds of their own scope.
+        var accepts = Property<Griff.Modules.Puzzles.Goal>("Accepts").Names!;
+        Assert.Equal(["Red"], names.Choices(accepts).Select(c => c.Name));
+        Assert.Equal(["Blue"], names.Unmatched(accepts, "Red, Blue"));
+        Assert.Equal("a crate kind", KnownNames.Noun(accepts));
+        Assert.Empty(names.Unmatched(Property<Pushable>("Kind").Names!, "Green"));
     }
 
     [Fact]

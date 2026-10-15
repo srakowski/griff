@@ -131,6 +131,7 @@ public sealed class BumpAttack : Component
     /// Table Values sets it from a dice column given for Damage.
     /// </summary>
     [RollsFor(nameof(Damage))]
+    [Dice]
     public string? DamageRoll
     {
         get => _roll.Text;

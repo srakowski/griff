@@ -145,6 +145,13 @@ public sealed class ComponentDescriptor
                     $"{type.Name}.{property.Name} has type {property.PropertyType.Name}, which can't be saved yet. " +
                     $"Mark it [DoNotSerialize] or use a supported type.");
             }
+
+            if (property.GetCustomAttribute<FieldEditorAttribute>() is { } editor && !editor.Fits(property.PropertyType))
+            {
+                throw new NotSupportedException(
+                    $"{type.Name}.{property.Name} is marked [{editor.GetType().Name[..^"Attribute".Length]}], which goes on {editor.FitsText}, " +
+                    $"but it's {property.PropertyType.Name}.");
+            }
         }
 
         // A group runs on from its [Group] to the next one in the same class.
@@ -215,6 +222,8 @@ public sealed class PropertyDescriptor
             : property.GetCustomAttribute<NamesAttribute>() ?? (EntityName is null && IsFontName(property.Name) ? FontNames : null);
         ActionName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<ActionNameAttribute>() : null;
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
+        Editor = property.GetCustomAttribute<FieldEditorAttribute>();
+        Offset = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<OffsetAttribute>() : null;
     }
 
     // A string called Font, or ending in Font ("TitleFont"), names a font without being marked.
@@ -261,6 +270,15 @@ public sealed class PropertyDescriptor
     /// its own entity), which the Inspector picks from a list of theirs.
     /// </summary>
     public OutputNameAttribute? OutputName { get; }
+
+    /// <summary>
+    /// The editor of its own the Inspector gives it (see <see cref="FieldEditorAttribute"/>): dice, points, tile numbers,
+    /// clips and the like; null for the plain one its type gets.
+    /// </summary>
+    public FieldEditorAttribute? Editor { get; }
+
+    /// <summary>For a <see cref="System.Numerics.Vector2"/> marked <see cref="OffsetAttribute"/>: a point offset from the entity, which the Scene view puts a knob on.</summary>
+    public OffsetAttribute? Offset { get; }
 
     /// <summary>The subheading the Inspector shows it under, from the <see cref="GroupAttribute"/> on it or before it; null for none.</summary>
     public string? Group { get; }

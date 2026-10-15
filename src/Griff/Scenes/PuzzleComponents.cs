@@ -60,6 +60,7 @@ public sealed class Switch : Component
     /// An item it needs to turn on, e.g. "Key": whoever works it must have one in their <see cref="Inventory"/>, and it's
     /// used up. It only takes it once; after that this is cleared and it works like any other switch.
     /// </summary>
+    [Names(NameKind.Item)]
     public string? Key { get; set; }
 
     /// <summary>
@@ -67,6 +68,7 @@ public sealed class Switch : Component
     /// "[set PowerOn]" or a script's <c>Game.SetFlag</c>), or "not PowerOn" for while it isn't. Until then levers, plates
     /// and buttons do nothing and its prompt stays hidden; a trigger's or script's On still turns it on.
     /// </summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>Seconds it stays on before turning itself off again: a timed button. 0 stays on.</summary>

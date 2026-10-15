@@ -78,8 +78,22 @@ public class Creeper : Behavior
     /// <summary>Flashes a second.</summary>
     [ShownWhen(nameof(Flash))]                         // faded in the Inspector while Flash is off
     public float FlashRate { get; set; } = 4;
+
+    /// <summary>The blast's damage, e.g. "3d6".</summary>
+    [Dice]                                             // built in the Inspector: how many dice, their sides, what's added
+    public string? Blast { get; set; } = "3d6";
+
+    /// <summary>Which way it runs from the light.</summary>
+    [Direction]                                        // a compass in the Inspector, an arrow to turn in the Scene view
+    public Vector2 Flee { get; set; } = -Vector2.UnitX;
+
+    /// <summary>An item that defuses it, e.g. "Wire Cutters".</summary>
+    [Names(NameKind.Item)]                             // picked from the items the game gives (NameKind.Flag, Prefab, Message...)
+    public string? DefusedBy { get; set; }
 }
 ```
+
+Other fields with editors of their own are marked the same way: `[Points]` (a list of "x y" points), `[TileNumbers]`, `[TileAnimations]`, `[AutoTiles]` and `[Tilesets]` (tiles picked off the tilemap's tilesets), `[Clips]`, `[ChoiceOf(nameof(Choices))]` (one of what another property of it lists), `[PrefabCounts]` (prefabs and how many), `[OutputFormat(nameof(Output))]` (text showing an output) and `[Offset]` (a point from the entity, with a knob in the Scene view). The editor's guide says what each looks like.
 
 Scenes keep what was set in them when a script changes shape. Rename a class or a property and say what it was called with `[FormerName]`: scenes saved under the old name still load, and save under the new one. When what a value means changes, raise the component's `[ComponentVersion]` and add an upgrade step from the version before, which older scenes run through as they load (steps see properties under their current names). Values a component has no property for (one you removed, or from a newer version of it) are kept and written back, so loading and saving loses nothing. Griff's own components follow the same rules.
 

@@ -248,7 +248,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
         if (unknown.Count > 0)
         {
-            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, outputs, tables or their rows, or fonts, flagged in the Inspector):");
+            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, outputs, tables or their rows, fonts, items, flags or kinds, and values that don't read, such as dice or points; flagged in the Inspector):");
             foreach (var (component, label, problem) in unknown)
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
         }
@@ -271,6 +271,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     yield return (component, $"{component.GetType().Name}.{property.Name}", ActionNames.Problem(actions) + ".");
                 if (property.OutputName is not null && OutputNames.Unmatched(component, property) is { Count: > 0 } outputs)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", OutputNames.Problem(outputs) + ".");
+                if (property.Editor?.Problem(component, property.GetValue(component)) is { } problem)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", problem + ".");
             }
         }
     }

@@ -11,6 +11,39 @@ namespace Griff.Editor.Diagnostics.Demo;
 // and sections folded shut.
 internal sealed partial class DemoUi
 {
+    /// <summary>
+    /// A part of a field's own editor (a FieldEditor) in the Inspector by its tag after "editor:": "add", "count",
+    /// "way:Up", "remove:2", "tile:12".
+    /// </summary>
+    public static FrameworkElement? EditorPart(string component, string label, string part) =>
+        InspectorRow(component, label) is { } row
+            ? Descendants<FrameworkElement>(row).FirstOrDefault(e => e.IsVisible && string.Equals(e.Tag as string, $"editor:{part}", StringComparison.OrdinalIgnoreCase))
+            : null;
+
+    /// <summary>Opens a list in a field's own editor (by its part, "add" or "prefab:1") and picks <paramref name="item"/> in it.</summary>
+    public async Task Choose(string component, string label, string part, string item)
+    {
+        var combo = await WaitFor(() => EditorPart(component, label, part) as ComboBox, $"the {part} list of {component}.{label}");
+        combo.BringIntoView();
+        await Settle(30);
+        await Click(combo);
+        var option = await WaitFor(() => Find<ComboBoxItem>(i => i.IsVisible && i.Content?.ToString() == item), $"option {item}");
+        await Settle(80);
+        await Click(option);
+        if (combo.IsDropDownOpen)
+            combo.IsDropDownOpen = false;
+        await Settle();
+    }
+
+    /// <summary>Types into a box of a field's own editor (by its part, "count" or "most:1") and commits with Enter.</summary>
+    public async Task SetEditorText(string component, string label, string part, string text)
+    {
+        var element = await WaitFor(() => EditorPart(component, label, part), $"the {part} of {component}.{label}");
+        var box = element as TextBox ?? Descendants<TextBox>(element).First();
+        await EditBox(box, text);
+        await Settle();
+    }
+
     /// <summary>A field's name in the Inspector, which explains it and drags a number.</summary>
     public static TextBlock? FieldLabel(string component, string label) =>
         InspectorRow(component, label) is { } row ? Descendants<TextBlock>(row).FirstOrDefault(t => t.Name == "FieldLabel") : null;

@@ -40,8 +40,11 @@ select: Dungeon
 explain: field:DungeonGenerator.Players | Players | The entity called Player goes in the middle of the first room.
 pick: DungeonGenerator.Exit = Stairs
 explain: field:DungeonGenerator.Exit | Exit | The stairs go in the room the longest walk away. Stepping onto them goes down to the next floor.
-set: DungeonGenerator.Spawns = Slime 6
-explain: field:DungeonGenerator.Spawns | Spawns | Six slimes, scattered through the other rooms. A line can say a range too, like one to three potions.
+choose: DungeonGenerator.Spawns:add = Slime
+editorset: DungeonGenerator.Spawns:most:1 = 6
+editorset: DungeonGenerator.Spawns:least:1 = 6
+expectvalue: Dungeon.DungeonGenerator.Spawns = Slime 6
+explain: field:DungeonGenerator.Spawns | Spawns | Pick a prefab to add it, then how many: six slimes, scattered through the other rooms. A row can be a range too, like one to three potions.
 menu: Entity > Generate Dungeon
 expectat: Player = 4.5, 1.5
 expectat: Stairs = -20.5, -7.5

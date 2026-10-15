@@ -1,0 +1,70 @@
+title: Field editors
+intro: Fields that used to take something typed from memory now have editors of their own: items, flags and kinds picked from what the game has, dice built, points listed, tiles clicked off the tileset, clips and directions.
+project: TopDown | Field Kit
+write: Tiles/hex.png | hex-tilemaps/hex.png
+
+chapter: Names it knows | Items, flags and kinds
+select: Vault Door
+explain: field:Switch.Key | Key | The vault's lock takes an item. It used to be a name typed from memory; now it's picked from the items the game gives, here the key a pickup puts in the player's inventory.
+pick: Switch.Key = Key
+expectvalue: Vault Door.Switch.Key = Key
+expectflagged: Switch.Key = none
+explain: field:Switch.Needs Flag | Needs Flag | Flags work the same way: the list has every flag a trigger, a dialogue or a script sets, and the word not in front of each, for while it isn't set.
+
+chapter: Dice | A roll built, not typed
+select: Bat
+explain: field:DamageOnTouch.Amount Roll | Amount Roll | The bat's bite can roll dice. Type them if you like, or build them: how many, how many sides, and what's added.
+editorset: DamageOnTouch.Amount Roll:count = 2
+choose: DamageOnTouch.Amount Roll:sides = 4
+editorset: DamageOnTouch.Amount Roll:plus = 1
+expectvalue: Bat.DamageOnTouch.AmountRoll = 2d4+1
+explain: editor:DamageOnTouch.Amount Roll:summary | What it rolls | Underneath, what it rolls: three to nine, six on average.
+
+chapter: Points and directions | Rows, a compass and knobs
+create: Empty
+rename: Lift
+add: Mover
+explain: field:Mover.Points | Points | A mover's points were x and y pairs typed with semicolons between them. Now each is a row, with Add to put one on the end.
+click: editor:Mover.Points:add
+editorset: Mover.Points:y:2 = 3
+expectvalue: Lift.Mover.Points = 4 0; 8 3
+add: Shooter
+explain: field:Shooter.Direction | Direction | Which way a shooter fires has a compass of the eight ways beside its numbers.
+click: editor:Shooter.Direction:way:Up
+expectvalue: Lift.Shooter.Direction.X = 0
+expectvalue: Lift.Shooter.Direction.Y = 1
+menu: View > Distance Handles
+explain: handle:Shooter.Direction | In the Scene view | With distance handles out, the direction is an arrow to drag round, and offsets get knobs too, like where its shots appear.
+vector: Ctrl+Shooter.Direction = -1, 0
+expectvalue: Lift.Shooter.Direction.X = -1
+expectvalue: Lift.Shooter.Direction.Y = 0
+
+chapter: Tiles | Picked off the tileset
+create: Tilemap
+pickimage: Tilemap.Image = Tiles/hex.png
+set: Tilemap.Columns = 4
+explain: field:Tilemap.Background Tiles | Background Tiles | Tile numbers were the hardest thing to type from memory. Open the tileset beside them and click the tiles instead.
+click: editor:Tilemap.Background Tiles:tiles
+click: editor:Tilemap.Background Tiles:tile:1
+click: editor:Tilemap.Background Tiles:tile:2
+expectvalue: Tilemap.Tilemap.BackgroundTiles = 1, 2
+click: editor:Tilemap.Animated Tiles:add
+expectvalue: Tilemap.Tilemap.AnimatedTiles = 0-3 @4
+explain: field:Tilemap.Animated Tiles | Animated Tiles | A run of animated tiles is a row too, from one tile to another at so many frames a second, with its frames shown.
+click: editor:Tilemap.Auto Tiles:add
+expectvalue: Tilemap.Tilemap.AutoTiles = 0-15
+choose: Tilemap.More Tilesets:add = Tiles/hex.png
+expectvalue: Tilemap.Tilemap.MoreTilesets = Tiles/hex.png 4x1
+
+chapter: Clips | Rows, and the one it starts with
+create: Sprite
+rename: Hero
+add: Animation
+explain: field:Animation.Clips | Clips | An animation's clips were a line of names, frame ranges, speeds and the word once. Each is a row now, and the Clip Editor button shows them playing.
+click: editor:Animation.Clips:add
+editorset: Animation.Clips:name:1 = Run
+expectvalue: Hero.Animation.Clips = Run 0-3
+choose: Animation.Clip:choice = Run
+expectvalue: Hero.Animation.Clip = Run
+explain: field:Animation.Clip | Clip | The clip it starts with is picked from its own clips, so a typo can't slip in.
+say: Every one of these is an undo step, and agents get the same choices through the editor's tools.

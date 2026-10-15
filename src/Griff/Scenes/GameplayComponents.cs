@@ -258,6 +258,7 @@ public sealed class DamageOnTouch : Component
     /// Table Values sets it from a dice column given for Amount.
     /// </summary>
     [RollsFor(nameof(Amount))]
+    [Dice]
     public string? AmountRoll
     {
         get => _roll.Text;
@@ -323,6 +324,7 @@ public sealed class Pickup : Component
     /// An item it puts in the collector's <see cref="Inventory"/> (one is added if it has none), e.g. "Key". Empty puts
     /// nothing there.
     /// </summary>
+    [Names(NameKind.Item, Defines = true)]
     public string? Item { get; set; }
 
     /// <summary>A sound played when it's collected, e.g. "Sounds/coin.wav".</summary>
@@ -441,6 +443,7 @@ public sealed class Counter : Component
     /// An item to count instead of a message, e.g. "Key": it shows how many the first <see cref="Inventory"/> in the scene
     /// (usually the player's) holds.
     /// </summary>
+    [Names(NameKind.Item)]
     public string? Item { get; set; }
 
     /// <summary>

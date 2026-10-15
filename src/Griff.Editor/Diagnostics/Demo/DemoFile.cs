@@ -891,6 +891,35 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await Input.DragWith(distanceFrom, middle + outward * reach, distanceModifiers);
                 await DemoUi.Settle();
                 break;
+            case "choose":
+            case "editorset":
+                // "choose: DungeonGenerator.Spawns:add = Slime" picks from a list in a field's own editor;
+                // "editorset: Battler.DamageRoll:count = 2" types into one of its boxes.
+                var (editorTarget, editorValue) = Split2(a, '=');
+                var editorAt = editorTarget.IndexOf(':');
+                if (editorAt <= 0 || editorTarget[..editorAt].Split('.', 2) is not [var editorComponent, var editorField])
+                    throw new FormatException($"{line.Command} needs Component.Field:part = value");
+                if (line.Command == "choose")
+                    await ui.Choose(editorComponent.Trim(), Label(editorField.Trim()), editorTarget[(editorAt + 1)..].Trim(), editorValue);
+                else
+                    await ui.SetEditorText(editorComponent.Trim(), Label(editorField.Trim()), editorTarget[(editorAt + 1)..].Trim(), editorValue);
+                break;
+            case "vector":
+                // "vector: Shooter.Direction = 0, 1" (or "Ctrl+..." to snap): drags an offset's knob to where it's that
+                // offset, or a direction's round to point that way.
+                var (vectorText, vectorModifiers) = ParseModifiedName(a);
+                var (vectorName, vectorValue) = Split2(vectorText, '=');
+                var (vectorKnob, vectorFrom) = ui.VectorKnob(vectorName)
+                    ?? throw new InvalidOperationException($"The {vectorName} knob isn't showing: pick Distance handles and select something with that offset or direction.");
+                var vectorEntity = vectorKnob.Component.Entity!;
+                var vectorHere = new System.Numerics.Vector2(vectorEntity.Transform.WorldPosition.X, vectorEntity.Transform.WorldPosition.Y);
+                var vectorWanted = Vector(vectorValue);
+                var vectorTo = vectorKnob.IsDirection
+                    ? vectorHere + System.Numerics.Vector2.Normalize(vectorWanted) * SceneViewModel.DirectionReach
+                    : vectorKnob.Property.Offset!.World ? vectorHere + vectorWanted : System.Numerics.Vector2.Transform(vectorWanted, vectorEntity.Transform.WorldMatrix);
+                await Input.DragWith(vectorFrom, ui.World(vectorTo.X, vectorTo.Y), vectorModifiers);
+                await DemoUi.Settle();
+                break;
             case "path":
                 // "path: Mover.2 = 4, 3" (or "Ctrl+Mover.+3 = 6, 3" for the plus that adds point 3): drags that knob on the
                 // selection's path to where the point is that far from the mover's start. "path: Patrol.Left = 3" drags a
@@ -1348,10 +1377,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case FieldKind.Number:
                 await ui.SetNumber(component, label, double.Parse(value, CultureInfo.InvariantCulture));
                 break;
-            case FieldKind.Vector when axis is not null:
+            case FieldKind.Vector or FieldKind.Custom when axis is not null && field.Axes.Count > 0:
                 await SetAxis(component, label, field.Axes.First(x => x.Label == axis), double.Parse(value, CultureInfo.InvariantCulture));
                 break;
-            case FieldKind.Vector:
+            case FieldKind.Vector or FieldKind.Custom when field.Axes.Count > 0:
                 var numbers = Numbers(value, field.Axes.Count);
                 for (var i = 0; i < numbers.Length; i++)
                     await SetAxis(component, label, field.Axes[i], numbers[i]);
@@ -1930,6 +1959,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "tables" => DemoUi.TablesPart(name),
             "sims" => DemoUi.SimsPart(name),
             "picker" => DemoUi.PickerPart(name) ?? throw new InvalidOperationException($"No {name} in an open field list."),
+            "editor" when name.IndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
+                DemoUi.EditorPart(component, Label(field), name[(at + 1)..]) ?? throw new InvalidOperationException($"No {name[(at + 1)..]} in the editor of {name[..at]} in the Inspector."),
             "pick" when name.Split('.', 2) is [var component, var field] =>
                 DemoUi.PickerButton(component, Label(field)) ?? throw new InvalidOperationException($"No field with a list {name} in the Inspector."),
             "sound" when name.LastIndexOf(':') is var at and > 0 && name[..at].Split('.', 2) is [var component, var field] =>
@@ -1938,7 +1969,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             "edit" => DemoUi.EditScriptButton(name) ?? throw new InvalidOperationException($"No Edit Script button on {name} in the Inspector."),
             "tab" => DemoUi.Descendants<TabItem>(ui.Main.DocumentTabs).FirstOrDefault(t => TabText(t).Contains(name, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"No {name} tab."),
             "asset" => (FrameworkElement?)DemoUi.RevealAsset(name) ?? throw new InvalidOperationException($"No {name} showing in Assets."),
-            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
+            _ => throw new FormatException($"Unknown target \"{target}\" (panel:, float:, logo, scene, game, player:, toolbar:, field:, editor:, component:, addall:, remove:, need:, needadd:, addlist:, entitylist:, entity:, lock:, eye:, menu:, catalog:, maker:, controls:, newproject:, painter:, clips:, dialogue:, moves:, chart:, sound:, image:, pick:, picker:, color:, transform:, filter:, profiler:, tables:, sims:, asset:, world:, gameworld:, hud:, tiles:)."),
         };
     }
 
@@ -1969,7 +2000,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             var handle = name.Equals("rotate", StringComparison.OrdinalIgnoreCase)
                 ? ui.RotateKnob() ?? throw new InvalidOperationException("The rotate handle isn't showing.")
-                : ui.DistanceKnob(name)?.Screen ?? ui.PathKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
+                : ui.DistanceKnob(name)?.Screen ?? ui.VectorKnob(name)?.Screen ?? ui.PathKnob(name)?.Screen ?? ui.ScaleHandle(name) ?? ui.ResizeHandle(name)?.Screen
                     ?? throw new InvalidOperationException($"The {name} handle isn't showing.");
             return new Rect(handle.X - 18, handle.Y - 18, 36, 36);
         }

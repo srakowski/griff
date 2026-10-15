@@ -52,8 +52,10 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private int[] _componentCounts = [];
 
     public InspectorPanel(IWorkspace workspace, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
-        Audio.EditorAudio audio, Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings)
+        Audio.EditorAudio audio, Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings,
+        IServiceProvider? services = null)
     {
+        _services = services;
         _settings = settings;
         _art = art;
         _audio = audio;
@@ -239,6 +241,15 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     Audio.EditorAudio IPropertyHost.Audio => _audio;
 
     internal void Execute(IEdit edit) => _document?.Execute(edit);
+
+    private readonly IServiceProvider? _services;
+
+    /// <summary>Runs one of the editor's commands by its id, as a field's editor does ("Art.Clips" opens the Clip Editor).</summary>
+    public void RunCommand(string id)
+    {
+        if (_services?.GetService(typeof(Core.Commands.CommandRegistry)) is Core.Commands.CommandRegistry commands)
+            _ = commands.Get(id).ExecuteAsync();
+    }
 
     /// <summary>Renames an entity, and the fields in the scene that name it, as one undo step.</summary>
     internal void Rename(Entity entity, string name) => Execute(EntityReferences.Rename(entity, name, _workspace.Components));
@@ -851,6 +862,9 @@ public sealed class ComponentSection : ObservableObject
     /// <summary>What the component does (its documentation), shown over its name.</summary>
     public string? Tip { get; }
 
+    /// <summary>Its type's name ("DamageOnTouch"): agents find it by that as well as by its <see cref="Title"/>.</summary>
+    public override string ToString() => TypeName;
+
     /// <summary>True when <paramref name="name"/> is the component's name, as shown or as its type's.</summary>
     public bool IsNamed(string name) =>
         Title.Equals(name, StringComparison.OrdinalIgnoreCase) || TypeName.Equals(name, StringComparison.OrdinalIgnoreCase);
@@ -1260,6 +1274,12 @@ public enum FieldKind
     /// entity it reads knows, flagged when it knows nothing called that.
     /// </summary>
     Output,
+
+    /// <summary>
+    /// A field with an editor of its own (see <see cref="FieldEditorAttribute"/>): dice, points, tile numbers, clips and the
+    /// like, edited through <see cref="PropertyField.Editor"/>.
+    /// </summary>
+    Custom,
 }
 
 /// <summary>
@@ -1314,13 +1334,44 @@ public sealed class PropertyField : ObservableObject
             EnumChoices = [.. EnumValues.Cast<Enum>().Select(v => new EnumChoice(v))];
         }
 
-        if (Kind == FieldKind.Vector)
+        if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion))
         {
             Axes = Enumerable.Range(0, ToFloats(Value).Length)
                 .Select(i => new AxisField(this, i, AxisNames[i]))
                 .ToList();
         }
+
+        // A field marked for an editor of its own gets it, when the editor has one for it.
+        if (property.Editor is { } attribute && FieldEditor.Create(this, attribute) is { } editor)
+        {
+            Editor = editor;
+            Kind = FieldKind.Custom;
+        }
     }
+
+    /// <summary>
+    /// For a field with an editor of its own (<see cref="FieldKind.Custom"/>): that editor, e.g. a dice builder or a list of
+    /// points; null otherwise.
+    /// </summary>
+    public FieldEditor? Editor { get; }
+
+    /// <summary>The components it edits, one per selected entity, the primary one's first.</summary>
+    internal IReadOnlyList<Component> Components => _components;
+
+    /// <summary>What it edits through.</summary>
+    internal IPropertyHost Host => _owner;
+
+    /// <summary>The property it edits.</summary>
+    internal PropertyDescriptor Property => _property;
+
+    /// <summary>
+    /// What's wrong with the value, for a field whose editor reads it (dice that aren't dice, a clip that isn't one of the
+    /// animation's), shown in yellow; null when it reads, or the selected entities' values differ.
+    /// </summary>
+    public string? ValueProblem => IsMixed ? null : _property.Editor?.Problem(_components[0], Value);
+
+    /// <summary>True while <see cref="ValueProblem"/> says something.</summary>
+    public bool HasValueProblem => ValueProblem is not null;
 
     public string Label { get; }
 
@@ -1388,6 +1439,9 @@ public sealed class PropertyField : ObservableObject
 
     /// <summary>The property's name in code ("TileSize").</summary>
     public string PropertyName => _property.Name;
+
+    /// <summary>Its name in code ("AmountRoll"): agents find it by that as well as by its <see cref="Label"/>.</summary>
+    public override string ToString() => PropertyName;
 
     public FieldKind Kind { get; }
 
@@ -1661,6 +1715,9 @@ public sealed class PropertyField : ObservableObject
             NameKind.Table => "Choose a table from the project, or drag one here from the Assets panel",
             NameKind.Row => "Choose a row of the table",
             NameKind.Font => "Choose a font, each shown in its own face: the ones safe to ship first (Griff's free fonts are copied into Assets), or drag a font file here from the Assets panel",
+            NameKind.Item => "Choose an item something gives (a pickup's Item), or type a new one",
+            NameKind.Flag => "Choose a flag something sets (a trigger's Set Flag, a dialogue's [set]), or \"not\" one for while it isn't set",
+            NameKind.Kind => $"Choose {KnownNames.Noun(_property.Names!)} something is, or type a new one",
             _ => "Choose a scene from the project, or drag one here from the Assets panel",
         },
     };
@@ -1751,6 +1808,9 @@ public sealed class PropertyField : ObservableObject
                     NameKind.Table => "No tables in the project yet: Data > New Table makes one",
                     NameKind.Row => "Pick a table first, or give it rows in the Tables panel",
                     NameKind.Message => "No messages sent or heard yet: type one to use it",
+                    NameKind.Item => "Nothing gives an item yet: give a pickup an Item, or type one",
+                    NameKind.Flag => "Nothing sets a flag yet: a trigger's Set Flag or a dialogue's [set] does, or type one",
+                    NameKind.Kind => $"Nothing says it's {KnownNames.Noun(kind)} yet: type one to use it",
                     _ => "None in the project yet: type one to use it",
                 }, NamesMany, true, none);
                 break;
@@ -2024,6 +2084,7 @@ public sealed class PropertyField : ObservableObject
         foreach (var axis in Axes)
             axis.Refresh();
         ColorPicker?.Sync();
+        Editor?.Refresh();
     }
 
     // ----- Filtering
@@ -2225,6 +2286,11 @@ public interface IPropertyHost
 
     /// <summary>Whether Transforms show in 3D (X, Y and Z) rather than 2D (X and Y, and one rotation angle).</summary>
     bool Transform3D => true;
+
+    /// <summary>Runs one of the editor's commands by its id, as a field's editor does to open what edits it more fully ("Art.Clips").</summary>
+    void RunCommand(string id)
+    {
+    }
 
     /// <summary>True while a filter narrows the fields shown: folded ones that match show anyway.</summary>
     bool IsFiltering => false;

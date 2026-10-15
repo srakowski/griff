@@ -54,7 +54,9 @@ public sealed class ColliderHandlesCommand(SceneViewModel model) : HandlesComman
 
 /// <summary>
 /// Puts round handles on the circles of the selected entity's distances, such as a light's radius, how far an enemy
-/// notices the player, or a unit's sight: drag one to change how far it reaches.
+/// notices the player, or a unit's sight: drag one to change how far it reaches. Its offsets (where a light shines from,
+/// where a shooter's shots appear) and directions (which way a shooter fires or a bouncer launches) get knobs too, a
+/// direction's at the tip of an arrow: drag one to move or turn it.
 /// </summary>
 public sealed class DistanceHandlesCommand(SceneViewModel model) : HandlesCommand(model, SceneHandles.Distance)
 {

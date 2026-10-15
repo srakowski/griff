@@ -82,6 +82,10 @@ public static class ComponentDescription
                 text.Append(CultureInfo.InvariantCulture, $" (Only used when {shownWhen}.)");
             if (property.Distance is not null)
                 text.Append(" (A distance: the Scene view draws it as a circle around the entity, with a handle to drag.)");
+            if (property.Offset is { } offset)
+                text.Append(CultureInfo.InvariantCulture, $" (A point offset from the entity, in {(offset.World ? "world units" : "its own units, before its scale and turned with it")}: with Distance Handles the Scene view puts a knob on it to drag.)");
+            if (property.Editor is { } editor)
+                text.Append(" (").Append(editor.Describe()).Append(')');
             if (property.Info.IsDefined(typeof(NotSentAttribute), true))
                 text.Append(" (Not sent in a network game: each machine has its own.)");
             if (property.EntityName is { } entityName)
@@ -99,6 +103,7 @@ public static class ComponentDescription
                 text.Append(names switch
                 {
                     { Defines: true } => $" (Names {KnownNames.Noun(names)}: this entity's own, which other fields can name.)",
+                    { Kind: NameKind.Flag, Condition: true } => " (Names a flag: \"Name\" holds while it's set, \"not Name\" while it isn't.)",
                     { Many: true } => $" (Names {KnownNames.Noun(names)[(KnownNames.Noun(names).IndexOf(' ') + 1)..]}s: their names, separated by commas.)",
                     _ => $" (Names {KnownNames.Noun(names)}.)",
                 });

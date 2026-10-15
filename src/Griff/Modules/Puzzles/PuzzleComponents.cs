@@ -30,6 +30,7 @@ public sealed class Goal : Component, ICounterSource
     }
 
     /// <summary>The kinds of crate that cover it (each a pushable's Kind), separated by commas, e.g. "Red, Blue". Empty takes any crate.</summary>
+    [Names(NameKind.Kind, Scope = "Crate", Many = true)]
     public string? Accepts { get; set; }
 
     /// <summary>The color a crate turns while it rests on it, so the player sees it's in place. Transparent leaves crates alone.</summary>

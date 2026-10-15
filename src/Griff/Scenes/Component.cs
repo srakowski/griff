@@ -261,11 +261,29 @@ public enum NameKind
     /// without being marked.
     /// </summary>
     Font,
+
+    /// <summary>
+    /// An item a player carries in their <see cref="Inventory"/>, e.g. "Key": one a pickup gives (its Item) or a script
+    /// adds (<c>inventory.Add("Key")</c>).
+    /// </summary>
+    Item,
+
+    /// <summary>
+    /// A flag in the game's save data, e.g. "MetKing": set by a trigger's Set Flag, a dialogue's "[set MetKing]" or a
+    /// script's <c>Game.SetFlag</c>. Where it's a condition, "not MetKing" holds while it isn't set.
+    /// </summary>
+    Flag,
+
+    /// <summary>
+    /// A kind of thing that one component says it is and another takes, e.g. a crate's Kind "Red" and a goal's Accepts:
+    /// kinds of the same <see cref="NamesAttribute.Scope"/> ("Crate") go together.
+    /// </summary>
+    Kind,
 }
 
 /// <summary>
-/// Marks a string property as naming a prefab, scene, input action, collision layer, message, table, table row or font:
-/// the editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of
+/// Marks a string property as naming a prefab, scene, input action, collision layer, message, table, table row, font,
+/// item, flag or kind: the editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of
 /// them.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
@@ -290,6 +308,18 @@ public sealed class NamesAttribute(NameKind kind) : Attribute
     /// <c>[Names(NameKind.Row, Table = nameof(Table))]</c>.
     /// </summary>
     public string? Table { get; init; }
+
+    /// <summary>
+    /// For a <see cref="NameKind.Kind"/>: what it's a kind of, e.g. "Crate": only kinds of the same scope are offered and
+    /// matched, so a crate's kinds and a card's don't mix.
+    /// </summary>
+    public string? Scope { get; init; }
+
+    /// <summary>
+    /// For a <see cref="NameKind.Flag"/> that's a condition (a door's Needs Flag): "not Name" names the flag too, holding
+    /// while it isn't set, and the picker offers both.
+    /// </summary>
+    public bool Condition { get; init; }
 }
 
 /// <summary>

@@ -167,6 +167,16 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     }
 
     /// <summary>
+    /// The knob of one of the selection's offsets or directions (with Distance handles out), by its name
+    /// ("Shooter.Direction", "Light.Offset"): what it is and where its knob is on screen. Null when it isn't showing.
+    /// </summary>
+    public (SceneVector Vector, Point Screen)? VectorKnob(string name) =>
+        sceneView.Handles.VectorHandles()
+            .Where(h => h.Vector.Key.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(h => ((SceneVector, Point)?)(h.Vector, sceneView.PointToScreen(h.Screen)))
+            .FirstOrDefault();
+
+    /// <summary>
     /// A knob on the selection's path, by its name: a mover's or grid patrol's point ("Mover.2", "GridPatrol.1"), the
     /// plus that adds one ("Mover.+3"), or a patrol's turn ("Patrol.Left"). The handle and where it is on screen; null
     /// when it isn't showing.
@@ -547,7 +557,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
             await Settle(40);
             if (InspectorRow(component, label) is { } fresh && TextMatches(fresh, text))
                 return;
-            Log?.Invoke($"retry {component}.{label} = {text}");
+            Log?.Invoke($"retry {component}.{label} = {text} (the box says \"{box.Text}\", {box.Tag ?? box.GetType().Name}; the field {(InspectorRow(component, label)?.DataContext as PropertyField)?.TextValue})");
         }
 
         // Last resort: set it the way the field would have.
@@ -556,6 +566,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         {
             case FieldKind.Color: field.ColorHex = text; break;
             case FieldKind.Lines: field.LinesValue = text; break;
+            case FieldKind.Custom when field.Property.Type == typeof(IReadOnlyList<string>): field.LinesValue = text; break;
             default: field.TextValue = text; break;
         }
 
@@ -571,6 +582,7 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
         {
             FieldKind.Color => Griff.Color.TryParse(text, out var want) && field.Value is Griff.Color have && have.ToHex() == want.ToHex(),
             FieldKind.Lines => field.LinesValue.ReplaceLineEndings("\n") == text.ReplaceLineEndings("\n"),
+            FieldKind.Custom when field.Property.Type == typeof(IReadOnlyList<string>) => field.LinesValue.ReplaceLineEndings("\n") == text.ReplaceLineEndings("\n"),
             _ => (field.TextValue ?? "") == text,
         };
     }

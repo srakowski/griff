@@ -25,6 +25,7 @@ internal enum SceneDrag
     Resize,
     Distance,
     Path,
+    Vector,
 }
 
 /// <summary>
@@ -52,6 +53,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     private float _distanceGrab;
     private SceneViewModel.PathPointDrag? _path;
     private Vector2 _pathGrab;
+    private Vector2 _vectorGrab;
 
     public SceneDrag Drag { get; private set; }
 
@@ -72,6 +74,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
 
     public string? OverPath { get; private set; }
 
+    public string? OverVector { get; private set; }
+
     // The handle being dragged.
     public SceneViewModel.SelectionRotate? Rotate { get; private set; }
 
@@ -82,6 +86,8 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     public Vector2 ResizeSpot { get; private set; }
 
     public SceneViewModel.DistanceDrag? Distance { get; private set; }
+
+    public SceneViewModel.VectorDrag? VectorKnob { get; private set; }
 
     public string? PathKey { get; private set; }
 
@@ -102,7 +108,7 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
     private TilePaletteLayout Layout(Tilemap tilemap) => TilePaletteLayout.Of(palette, tilemap, style.Measure);
 
     /// <summary>Forgets the handle under the mouse (the selection or what the handles do changed).</summary>
-    public void ForgetHover() => (OverScale, OverResize, OverDistance, OverPath) = (null, null, null, null);
+    public void ForgetHover() => (OverScale, OverResize, OverDistance, OverPath, OverVector) = (null, null, null, null, null);
 
     // ----- Mouse -----
 
@@ -148,6 +154,14 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         else if (e.ChangedButton == MouseButton.Left && handles.PathHandleAt(position) is { } pathHandle)
         {
             BeginPathDrag(pathHandle, position, e.ClickCount);
+        }
+        else if (e.ChangedButton == MouseButton.Left && handles.VectorHandleAt(position) is { } vectorKnob && model.BeginVector(vectorKnob) is { } vector)
+        {
+            // Grabbing the knob a little off it doesn't make the value jump.
+            VectorKnob = vector;
+            _vectorGrab = vectorKnob.World - viewport.ToWorld(position);
+            BeginDrag(SceneDrag.Vector, position);
+            view.Cursor = Cursors.SizeAll;
         }
         else if (e.ChangedButton == MouseButton.Left && handles.DistanceHandleAt(position) is { } knob && model.BeginDistance(knob) is { } distance)
         {
@@ -232,6 +246,9 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
             case SceneDrag.Distance:
                 Distance?.To(Vector2.Distance(Distance.Distance.Center, viewport.ToWorld(position)) + _distanceGrab, snap);
                 return;
+            case SceneDrag.Vector:
+                VectorKnob?.To(viewport.ToWorld(position) + _vectorGrab, snap);
+                return;
             case SceneDrag.Resize:
                 // The handle follows the cursor from where it was pressed, so grabbing it a little off doesn't jump.
                 if (Resize?.Frame is { } frame)
@@ -271,9 +288,10 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         var overScale = over ? null : handles.ScaleHandleAt(position);
         var overResize = over ? null : handles.ResizeHandleAt(position);
         var overPath = over ? null : handles.PathHandleAt(position);
-        var overDistance = over || overPath is not null ? null : handles.DistanceHandleAt(position);
+        var overVector = over || overPath is not null ? null : handles.VectorHandleAt(position);
+        var overDistance = over || overPath is not null || overVector is not null ? null : handles.DistanceHandleAt(position);
         if (over == OverRotate && overScale == OverScale && overResize == OverResize && overDistance?.Key == OverDistance &&
-            overPath?.Key == OverPath)
+            overPath?.Key == OverPath && overVector?.Key == OverVector)
             return;
 
         OverRotate = over;
@@ -281,8 +299,10 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
         OverResize = overResize;
         OverDistance = overDistance?.Key;
         OverPath = overPath?.Key;
+        OverVector = overVector?.Key;
         view.Cursor = over ? Cursors.Hand
             : overPath is not null ? PathCursor(overPath)
+            : overVector is not null ? Cursors.SizeAll
             : overDistance is not null ? DistanceCursor(overDistance, position)
             : overScale is { } spot ? ScaleCursor(spot)
             : overResize is var (shape, resizeSpot) ? ResizeCursor(shape, resizeSpot)
@@ -658,6 +678,11 @@ internal sealed class SceneViewInput(FrameworkElement view, SceneViewport viewpo
                 Distance?.End();
                 Distance = null;
                 OverDistance = null;
+                break;
+            case SceneDrag.Vector:
+                VectorKnob?.End();
+                VectorKnob = null;
+                OverVector = null;
                 break;
             case SceneDrag.Paint:
                 Stroke?.End();

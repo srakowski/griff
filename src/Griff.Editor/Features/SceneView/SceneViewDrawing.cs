@@ -929,7 +929,57 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         DrawScaleHandles(dc);
         DrawResizeHandles(dc);
         DrawDistanceHandles(dc);
+        DrawVectorHandles(dc);
         DrawPathHandles(dc);
+    }
+
+    // With Distance handles out, each offset as a dashed line out to its knob and each direction as an arrow, in the
+    // guides' color, named by the knob; while dragging, what it's set to.
+    private void DrawVectorHandles(DrawingContext dc)
+    {
+        var color = style.Brush("Brush.Status.Warning");
+        var chrome = style.Brush("Brush.Surface.Chrome");
+        var halo = new Pen(chrome, 4);
+        foreach (var (vector, point, origin) in handles.VectorHandles())
+        {
+            var dragging = input.Drag == SceneDrag.Vector && input.VectorKnob?.Vector.Key == vector.Key;
+            var active = dragging || input.Drag == SceneDrag.None && input.OverVector == vector.Key;
+            var line = new Pen(color, 1.5);
+            if (!vector.IsDirection)
+                line.DashStyle = new DashStyle([3, 3], 0);
+            dc.DrawLine(halo, origin, point);
+            dc.DrawLine(line, origin, point);
+            if (vector.IsDirection && (point - origin).Length > 1)
+            {
+                // An arrowhead just short of the knob.
+                var way = point - origin;
+                way.Normalize();
+                var tip = point - way * (SceneHandleGeometry.HandleRadius + 2);
+                var side = new System.Windows.Vector(-way.Y, way.X);
+                var head = new StreamGeometry();
+                using (var g = head.Open())
+                {
+                    g.BeginFigure(tip, true, true);
+                    g.LineTo(tip - way * 8 + side * 4, true, false);
+                    g.LineTo(tip - way * 8 - side * 4, true, false);
+                }
+
+                head.Freeze();
+                dc.DrawGeometry(color, null, head);
+            }
+
+            var radius = SceneHandleGeometry.HandleRadius + (active ? 1.5 : 0);
+            dc.DrawEllipse(chrome, halo, point, radius, radius);
+            dc.DrawEllipse(active ? color : chrome, new Pen(color, 2), point, radius, radius);
+
+            var name = $"{vector.Component.GetType().Name} {vector.Property.Name}";
+            var label = style.Text(dragging && vector.Property.GetValue(vector.Component) is System.Numerics.Vector2 v
+                ? $"{name} {v.X.ToString("0.##", CultureInfo.CurrentCulture)}, {v.Y.ToString("0.##", CultureInfo.CurrentCulture)}"
+                : name, active ? "Brush.Text.Primary" : "Brush.Text.Secondary");
+            var place = new Point(point.X + 12, point.Y - label.Height / 2);
+            dc.DrawRoundedRectangle(chrome, null, new Rect(place.X - 4, place.Y - 1, label.Width + 8, label.Height + 2), 3, 3);
+            dc.DrawText(label, place);
+        }
     }
 
     // A knob on each of the primary selection's mover and grid patrol points (numbered) and patrol turns (hollow while it walks on to a

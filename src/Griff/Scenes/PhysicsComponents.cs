@@ -286,6 +286,7 @@ public sealed class PolygonCollider : Collider, IPointOutline
     /// round the entity (plus <see cref="Offset"/>): "-1 0; 1 0; 0 1" is a triangle 2 wide and 1 tall. They can go round
     /// either way.
     /// </summary>
+    [Points(Least = 3)]
     public string? Points
     {
         get => _points;

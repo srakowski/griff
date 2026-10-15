@@ -509,7 +509,7 @@ public class SceneToolsTests
 
         Assert.Contains("(Names entities: their names, separated by commas.)", text.Single(l => l.StartsWith("- targets:", StringComparison.Ordinal)));
         Assert.Contains("(Names an entity.)", text.Single(l => l.StartsWith("- prompt:", StringComparison.Ordinal)));
-        Assert.DoesNotContain("(Names", text.Single(l => l.StartsWith("- key:", StringComparison.Ordinal)));
+        Assert.Contains("(Names an item.)", text.Single(l => l.StartsWith("- key:", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -530,6 +530,23 @@ public class SceneToolsTests
         _host.History.Undo();
         Assert.Equal("Player", Named("Camera").GetComponent<Follow>()!.Target);
         Assert.NotNull(Named("Player"));
+    }
+
+    [Fact]
+    public void ValuesThatDontRead_ShowInTheTreeAndOnTheEntity_AsTheInspectorFlagsThem()
+    {
+        Run("entity_create", """
+            {"entities": [{"name": "Spikes", "components": {"DamageOnTouch": {"amountRoll": "2d"}}},
+              {"name": "Lift", "components": {"Mover": {"points": "4 0; 3"}}}]}
+            """);
+
+        var tree = Run("scene_tree", "{}").Text;
+        Assert.Contains("DamageOnTouch.AmountRoll: \"2d\" isn't dice: write them like 2d6+3, d20 or 5.", tree);
+        Assert.Contains("Mover.Points: \"3\" isn't a point", tree);
+
+        Run("entity_update", """{"entity": "Spikes", "changes": {"components": {"DamageOnTouch": {"amountRoll": "2d6"}}}}""");
+        Assert.DoesNotContain("unmatched", Run("entity_get", """{"entity": "Spikes"}""").Text);
+        Assert.Contains("isn't a point", Run("entity_get", """{"entity": "Lift"}""").Text);
     }
 
     [Fact]

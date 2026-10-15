@@ -67,12 +67,14 @@ public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
 
     /// <summary>The tile the walls are made of.</summary>
     [Group("Tiles")]
+    [TileNumbers]
     public int WallTile { get; set; }
 
     /// <summary>
     /// The tile for the floors of rooms and corridors; -1 leaves them empty. List it in the tilemap's Background Tiles
     /// so nothing collides with it.
     /// </summary>
+    [TileNumbers]
     public int FloorTile { get; set; } = -1;
 
     /// <summary>Fill everything outside the rooms and corridors with wall. Untick it to wall them in with a single row and leave the rest empty.</summary>
@@ -94,6 +96,7 @@ public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
     /// Prefabs scattered through the rooms (never the first) as each floor is made, one per line: its name and how many,
     /// e.g. "Enemy 4", "Potion 1-2" (a number picked between them), "Gold" (one).
     /// </summary>
+    [PrefabCounts]
     public IReadOnlyList<string> Spawns { get; set; } = [];
 
     /// <summary>The floor the players are on, from 1 once the game has started; 0 before. Saved with the scene, so a rewind takes it back.</summary>

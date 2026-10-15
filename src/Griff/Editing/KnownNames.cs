@@ -14,17 +14,31 @@ namespace Griff.Editing;
 /// </summary>
 public sealed partial class KnownNames
 {
-    private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard;
+    private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard, _items, _flags;
+    private readonly Dictionary<string, HashSet<string>> _kinds = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Regex> _sentPatterns;
     private readonly Dictionary<string, TableNames> _tables;
     private readonly Lazy<FontNames?> _fonts;
 
     /// <param name="tables">The project's tables by name, each with its rows' names (and the names its rows had before they were renamed).</param>
     /// <param name="fonts">The fonts it can name, worked out the first time they're asked for; null when they can't be known (font names then match).</param>
+    /// <param name="items">The items something gives (a pickup's Item, a script's <c>Add("Key")</c>).</param>
+    /// <param name="flags">The flags something sets or clears (a trigger's Set Flag, a dialogue's [set], a script's <c>SetFlag</c>).</param>
+    /// <param name="kinds">The kinds things say they are, each with its scope ("Crate", "Red").</param>
     public KnownNames(IEnumerable<string> prefabs, IEnumerable<string> scenes, IEnumerable<string> actions,
         IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null,
-        Func<FontNames>? fonts = null)
+        Func<FontNames>? fonts = null, IEnumerable<string>? items = null, IEnumerable<string>? flags = null,
+        IEnumerable<(string Scope, string Name)>? kinds = null)
     {
+        _items = new(items ?? [], StringComparer.OrdinalIgnoreCase);
+        _flags = new(flags ?? [], StringComparer.OrdinalIgnoreCase);
+        foreach (var (scope, name) in kinds ?? [])
+        {
+            if (!_kinds.TryGetValue(scope, out var names))
+                _kinds[scope] = names = new(StringComparer.OrdinalIgnoreCase);
+            names.Add(name);
+        }
+
         _fonts = new(() => fonts?.Invoke());
         _tables = new(StringComparer.OrdinalIgnoreCase);
         foreach (var table in tables ?? [])
@@ -61,6 +75,15 @@ public sealed partial class KnownNames
     /// <summary>The tables' names, e.g. "Enemies".</summary>
     public IReadOnlyCollection<string> Tables => _tables.Keys;
 
+    /// <summary>The items something gives: a pickup's Item, a script's <c>Add("Key")</c>.</summary>
+    public IReadOnlyCollection<string> Items => _items;
+
+    /// <summary>The flags something sets or clears: a trigger's Set Flag, a dialogue's [set], a script's <c>SetFlag</c>.</summary>
+    public IReadOnlyCollection<string> Flags => _flags;
+
+    /// <summary>The kinds things of <paramref name="scope"/> say they are ("Red" for a crate), or none.</summary>
+    public IReadOnlyCollection<string> KindsOf(string? scope) => _kinds.TryGetValue(scope ?? "", out var names) ? names : [];
+
     /// <summary>The columns of the table called <paramref name="table"/>, or null if there's no such table.</summary>
     public IReadOnlyList<string>? ColumnsOf(string? table) =>
         table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) ? names.Columns : null;
@@ -91,6 +114,11 @@ public sealed partial class KnownNames
         NameKind.Layer => Sorted(_layers),
         NameKind.Table => Sorted(_tables.Keys),
         NameKind.Row => [.. RowsOf(TableOf(component, kind)).Select(r => new NameChoice(r, null))],
+        NameKind.Item => Sorted(_items),
+        NameKind.Kind => Sorted(KindsOf(kind.Scope)),
+        NameKind.Flag when kind.Condition => [.. _flags.Order(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(f => new[] { new NameChoice(f, "while it's set"), new NameChoice($"not {f}", "while it isn't set") })],
+        NameKind.Flag => Sorted(_flags),
         _ => [.. _sent.Union(_heard).Order(StringComparer.OrdinalIgnoreCase).Select(m => new NameChoice(m,
             (_sent.Contains(m), _heard.Contains(m)) switch { (true, true) => "sent and heard", (true, false) => "sent", _ => "heard" }))],
     };
@@ -180,10 +208,22 @@ public sealed partial class KnownNames
         // A row is matched against its table, which takes the component (see Unmatched(Component, ...)).
         NameKind.Row => true,
         NameKind.Font => Fonts is not { } fonts || fonts.Draws(name),
+        NameKind.Item => _items.Contains(name),
+        NameKind.Flag => _flags.Contains(FlagOf(name)),
+        NameKind.Kind => KindsOf(kind.Scope).Contains(name),
         _ when IsPattern(name) => true,
         _ when kind.Hears => _sent.Contains(name) || _sentPatterns.Any(p => p.IsMatch(name)),
         _ => _heard.Contains(name),
     };
+
+    /// <summary>The flag a condition names: "MetKing" for "not MetKing" or "!MetKing", as <c>Game.FlagHolds</c> reads it.</summary>
+    public static string FlagOf(string condition)
+    {
+        var name = condition.Trim();
+        if (name.StartsWith('!'))
+            return name[1..].Trim();
+        return name.Length > 4 && name.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? name[4..].Trim() : name;
+    }
 
     // "Prefabs/Bullet.prefab" and "Bullet" both name Bullet, as Project.FindPrefab finds them.
     private static string AssetName(string name, string extension)
@@ -209,6 +249,9 @@ public sealed partial class KnownNames
             NameKind.Row => $"The table has no row called {quoted}: add it in the Tables panel",
             NameKind.Font => $"There's no font file in Assets or font installed on this PC called {quoted}, so the built-in font draws " +
                              "instead (Griff's free fonts go into Assets when picked, or with Art > Add Free Font)",
+            NameKind.Item => $"Nothing gives the item {quoted}: no pickup's Item or script's Add",
+            NameKind.Flag => $"Nothing sets the flag {string.Join(" or ", names.Select(n => $"\"{FlagOf(n)}\""))}: no trigger's Set Flag, dialogue's [set] or script's SetFlag",
+            NameKind.Kind => $"No {ScopeWord(kind)} is of the kind {quoted}: give one that Kind",
             _ when kind.Hears => $"Nothing sends {quoted}: no component's message, dialogue's [send] or script's Game.Send",
             _ => $"Nothing listens for {quoted}: no Counter, Trigger, Sound Player or script's On",
         };
@@ -224,8 +267,14 @@ public sealed partial class KnownNames
         NameKind.Layer => "a collision layer",
         NameKind.Table => "a table",
         NameKind.Row => "a row of a table",
+        NameKind.Item => "an item",
+        NameKind.Flag => "a flag",
+        NameKind.Kind => $"a {ScopeWord(kind)} kind",
         _ => "a message",
     };
+
+    // "crate" for a Crate kind, "thing" without a scope.
+    private static string ScopeWord(NamesAttribute kind) => string.IsNullOrWhiteSpace(kind.Scope) ? "thing" : kind.Scope.Trim().ToLowerInvariant();
 
     // The table a row field's component names in its other field (see NamesAttribute.Table).
     private static string? TableOf(Component? component, NamesAttribute kind)
@@ -246,9 +295,21 @@ public sealed partial class KnownNames
 
     // ----- Gathering
 
-    /// <summary>The layers, messages sent and messages heard that some entities' components name.</summary>
+    /// <summary>
+    /// The layers, messages sent and messages heard that some entities' components name, and the items they give, the
+    /// flags they set and the kinds they say they are.
+    /// </summary>
     public sealed record Found(IReadOnlyCollection<string> Layers, IReadOnlyCollection<string> Sent, IReadOnlyCollection<string> Heard)
     {
+        /// <summary>Items given: a pickup's Item, a script's <c>Add("Key")</c>.</summary>
+        public IReadOnlyCollection<string> Items { get; init; } = [];
+
+        /// <summary>Flags set or cleared: a trigger's Set Flag, a dialogue's [set] and [clear], a script's <c>SetFlag</c>.</summary>
+        public IReadOnlyCollection<string> Flags { get; init; } = [];
+
+        /// <summary>Kinds things say they are, with their scope: ("Crate", "Red").</summary>
+        public IReadOnlyCollection<(string Scope, string Name)> Kinds { get; init; } = [];
+
         public static Found Empty { get; } = new([], [], []);
     }
 
@@ -259,6 +320,7 @@ public sealed partial class KnownNames
     public static Found Collect(IEnumerable<Entity> entities, ComponentRegistry registry)
     {
         var (layers, sent, heard) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(), new HashSet<string>());
+        var (items, flags, kinds) = (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<(string, string)>());
         foreach (var component in entities.SelectMany(e => e.Components).Where(c => registry.IsRegistered(c.GetType())))
         {
             foreach (var property in registry.Get(component.GetType()).Properties)
@@ -270,23 +332,62 @@ public sealed partial class KnownNames
                     layers.UnionWith(names);
                 else if (kind.Kind == NameKind.Message)
                     (kind.Hears ? heard : sent).UnionWith(names);
+                else if (kind.Kind == NameKind.Item && kind.Defines)
+                    items.UnionWith(names);
+                else if (kind.Kind == NameKind.Flag && kind.Defines)
+                    flags.UnionWith(names.Select(FlagOf));
+                else if (kind.Kind == NameKind.Kind && kind.Defines)
+                    kinds.UnionWith(names.Select(n => (kind.Scope ?? "", n)));
             }
 
             if (component is Dialogue dialogue)
             {
                 for (var row = 0; row < dialogue.Lines.Count; row++)
-                    sent.UnionWith(dialogue.Row(row).Tags.Where(t => t.Kind == Dialogue.TagKind.Send).Select(t => t.Name));
+                {
+                    foreach (var tag in dialogue.Row(row).Tags)
+                    {
+                        if (tag.Kind == Dialogue.TagKind.Send)
+                            sent.Add(tag.Name);
+                        else if (tag.Kind is Dialogue.TagKind.Set or Dialogue.TagKind.Clear)
+                            flags.Add(tag.Name);
+                    }
+                }
             }
+
+            // A trigger whose Do is Set Flag or Clear Flag names its flag in With.
+            if (component is Trigger { With: { Length: > 0 } with } trigger && IsFlagAction(trigger.Do))
+                flags.Add(with.Trim().Trim('"'));
         }
 
-        return new(layers, sent, heard);
+        return new(layers, sent, heard) { Items = items, Flags = flags, Kinds = kinds };
     }
 
-    /// <summary>What a script's code sends (<c>Send("Score")</c>), listens for (<c>On("Score", ...)</c>) and puts things on (<c>Layer = "Bullet"</c>).</summary>
+    // "SetFlag", "Set Flag", "Trigger.SetFlag" and the same for Clear.
+    private static bool IsFlagAction(string? action)
+    {
+        var name = (action ?? "").Replace(" ", "", StringComparison.Ordinal);
+        name = name[(name.LastIndexOf('.') + 1)..];
+        return name.Equals("SetFlag", StringComparison.OrdinalIgnoreCase) || name.Equals("ClearFlag", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// What a script's code sends (<c>Send("Score")</c>), listens for (<c>On("Score", ...)</c>), puts things on
+    /// (<c>Layer = "Bullet"</c>), gives (<c>Add("Key")</c>) and sets (<c>SetFlag("MetKing")</c>).
+    /// </summary>
     public static Found Scan(string code) => new(
         [.. ScriptLayer().Matches(code).Select(m => m.Groups[1].Value)],
         [.. ScriptSend().Matches(code).Select(m => m.Groups[1].Value)],
-        [.. ScriptOn().Matches(code).Select(m => m.Groups[1].Value)]);
+        [.. ScriptOn().Matches(code).Select(m => m.Groups[1].Value)])
+    {
+        Items = [.. ScriptItem().Matches(code).Select(m => m.Groups[1].Value)],
+        Flags = [.. ScriptFlag().Matches(code).Select(m => m.Groups[1].Value)],
+    };
+
+    [GeneratedRegex("""\bAdd\s*\(\s*"([^"\\]+)"\s*(?:,\s*\d+\s*)?\)""")]
+    private static partial Regex ScriptItem();
+
+    [GeneratedRegex("""\bSetFlag\s*\(\s*"([^"\\]+)"\s*[,)]""")]
+    private static partial Regex ScriptFlag();
 
     [GeneratedRegex("""\bSend\s*\(\s*"([^"\\]+)"\s*[,)]""")]
     private static partial Regex ScriptSend();
@@ -313,7 +414,10 @@ public sealed partial class KnownNames
             all.SelectMany(f => f.Sent),
             all.SelectMany(f => f.Heard),
             tables,
-            fonts is null ? null : () => fonts(project));
+            fonts is null ? null : () => fonts(project),
+            all.SelectMany(f => f.Items),
+            all.SelectMany(f => f.Flags),
+            all.SelectMany(f => f.Kinds));
     }
 }
 

@@ -6,7 +6,17 @@
                     xmlns:theme="clr-namespace:Griff.Editor.Themes"
                     xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters">
 
+    <!-- Fields with editors of their own (FieldEditor): each editor's template, by its type -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="FieldEditors/FieldEditorTemplates.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
     <converters:BoolToVisibilityConverter x:Key="Field.Visible" />
+
+    <!-- A field with an editor of its own: the editor, shown by its own template -->
+    <DataTemplate x:Key="Field.Custom" DataType="inspector:PropertyField">
+        <ContentControl Content="{Binding Editor, Mode=OneTime}" Focusable="False" />
+    </DataTemplate>
 
     <DataTemplate x:Key="Field.Bool" DataType="inspector:PropertyField">
         <CheckBox HorizontalAlignment="Left" IsChecked="{Binding BoolValue}" />
@@ -273,6 +283,7 @@
     <inspector:FieldTemplateSelector x:Key="FieldSelector"
                                      Bool="{StaticResource Field.Bool}"
                                      Color="{StaticResource Field.Color}"
+                                     Custom="{StaticResource Field.Custom}"
                                      Entity="{StaticResource Field.Entity}"
                                      Named="{StaticResource Field.Name}"
                                      Enum="{StaticResource Field.Enum}"

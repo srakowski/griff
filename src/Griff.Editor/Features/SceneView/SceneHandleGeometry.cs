@@ -183,6 +183,24 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
             .FirstOrDefault();
 
     /// <summary>
+    /// The knobs on the primary selection's offsets and directions (see <see cref="SceneViewModel.Vectors"/>), in Distance
+    /// mode, in screen space, each with where it's drawn from.
+    /// </summary>
+    public List<(SceneVector Vector, Point Screen, Point Origin)> VectorHandles()
+    {
+        if (model.Handles != SceneHandles.Distance || HandleFrame() is null)
+            return [];
+        return [.. model.Vectors().Select(v => (v, viewport.ToScreen(v.World), viewport.ToScreen(v.Origin)))];
+    }
+
+    /// <summary>The offset or direction knob under a point (the nearest, where they crowd), if any.</summary>
+    public SceneVector? VectorHandleAt(Point screen) =>
+        VectorHandles().Where(h => (screen - h.Screen).Length <= HandleRadius + 4)
+            .OrderBy(h => (screen - h.Screen).Length)
+            .Select(h => h.Vector)
+            .FirstOrDefault();
+
+    /// <summary>
     /// The handles on the primary selection's path, in screen space: one on each of its points (see
     /// <see cref="SceneViewModel.PathPoints"/>), and for a mover or grid patrol a plus between each two points far enough
     /// apart (and on the way back to the start of a loop) and one past its last point, to drag out a new point; for a

@@ -161,6 +161,7 @@ public enum TextAlign
 public sealed class Text : Component, IDrawable
 {
     /// <summary>What it says. Several lines are fine.</summary>
+    [OutputFormat(nameof(Output))]
     public string? Value { get; set; } = "Text";
 
     /// <summary>Height of one line in world units, before the transform's scale.</summary>
@@ -565,6 +566,7 @@ public sealed class Animation : Component
     /// Named animations on the sprite sheet, separated by commas: a name, a frame or range of frames, and optionally
     /// a speed and whether it plays once, e.g. <c>Idle 0-3, Run 4-9 @12, Jump 10, Die 11-15 @8 once</c>.
     /// </summary>
+    [Clips]
     public string? Clips
     {
         get => _clips;
@@ -580,6 +582,7 @@ public sealed class Animation : Component
     /// <see cref="FirstFrame"/> and <see cref="FrameCount"/>. Set it in the Inspector to pick the clip the game starts with.
     /// </summary>
     [Sent(ByMover = true)]
+    [ChoiceOf(nameof(ClipNames), Noun = "one of its clips (Clips)")]
     public string? Clip { get; set; }
 
     /// <summary>
@@ -593,6 +596,10 @@ public sealed class Animation : Component
     /// <summary>The parsed <see cref="Clips"/>.</summary>
     [DoNotSerialize]
     public IReadOnlyList<AnimationClip> ClipList => _parsed;
+
+    /// <summary>The names of its <see cref="Clips"/>, in order: what <see cref="Clip"/> can name.</summary>
+    [DoNotSerialize]
+    public IReadOnlyList<string> ClipNames => [.. _parsed.Select(c => c.Name)];
 
     /// <summary>True once a non-looping animation has shown its last frame.</summary>
     [DoNotSerialize]

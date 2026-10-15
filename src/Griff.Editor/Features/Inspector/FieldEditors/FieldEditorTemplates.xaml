@@ -1,0 +1,427 @@
+<!-- The Inspector's fields' own editors (FieldEditor), one template per editor's type, found by its type. Each part a
+     demo can click is tagged "editor:<part>" (a row's parts "editor:<part>:<row>"). -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:inspector="clr-namespace:Griff.Editor.Features.Inspector"
+                    xmlns:controls="clr-namespace:Griff.Editor.Themes.Controls"
+                    xmlns:theme="clr-namespace:Griff.Editor.Themes"
+                    xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters">
+
+    <converters:BoolToVisibilityConverter x:Key="Editor.Visible" />
+    <inspector:EditorTagConverter x:Key="Editor.Tag" />
+
+    <Style x:Key="Editor.Note" TargetType="TextBlock" BasedOn="{StaticResource Style.Text.Secondary}">
+        <Setter Property="Margin" Value="0,2,0,0" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Editor.SmallButton" TargetType="Button" BasedOn="{StaticResource Style.Button.Toolbar}">
+        <Setter Property="Width" Value="22" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Margin" Value="2,0,0,0" />
+    </Style>
+
+    <Style x:Key="Editor.AddButton" TargetType="Button">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Margin" Value="0,3,0,0" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="Tag" Value="editor:add" />
+    </Style>
+
+    <!-- A tile: its picture (or the map's tint), ringed when picked; clicking it picks it -->
+    <DataTemplate x:Key="Editor.Tile" DataType="inspector:TileChoice">
+        <Button x:Name="Tile"
+                Width="22" Height="22"
+                Margin="0,0,2,2"
+                Padding="0"
+                Command="{Binding PickCommand}"
+                Cursor="Hand"
+                Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:tile:}"
+                ToolTip="{Binding Tip}">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Frame" Background="{Binding Fill}" BorderBrush="{DynamicResource Brush.Border.Subtle}" BorderThickness="1" CornerRadius="2">
+                        <Image Source="{Binding Picture}" RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Uniform" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="Frame" Property="BorderThickness" Value="2" />
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Brush.Border.Strong}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </DataTemplate>
+
+    <!-- Tiles in a row, shown only (a run's frames, an auto-tile's pieces) -->
+    <ItemsPanelTemplate x:Key="Editor.TileStrip">
+        <WrapPanel />
+    </ItemsPanelTemplate>
+
+    <!-- Dice: as typed, then built from how many, their sides and what's added, with what they roll -->
+    <DataTemplate DataType="{x:Type inspector:DiceEditor}">
+        <StackPanel>
+            <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Dice, like 2d6+3, d20 or 1d8+1d6-1" />
+            <DockPanel Margin="0,3,0,0" LastChildFill="False" Visibility="{Binding IsBuildable, Converter={StaticResource Editor.Visible}}">
+                <controls:NumberField Width="56" IsInteger="True" Label="#" Step="0.1" Tag="editor:count" ToolTip="How many dice" Value="{Binding Count}" />
+                <TextBlock Margin="4,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="d" />
+                <ComboBox Width="62" ItemsSource="{Binding SidesChoices, Mode=OneTime}" SelectedItem="{Binding Sides, Delay=1}" Tag="editor:sides" ToolTip="How many sides each die has" />
+                <TextBlock Margin="4,0" VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="+" />
+                <controls:NumberField Width="56" IsInteger="True" Step="0.1" Tag="editor:plus" ToolTip="Added to the roll (negative takes away)" Value="{Binding Plus}" />
+                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding ClearCommand}" Tag="editor:clear" ToolTip="No dice: use the plain number">
+                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Clear}" />
+                </Button>
+            </DockPanel>
+            <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:summary" Text="{Binding Summary}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Points: the start of a path, then a row each with X and Y, up and out buttons, and Add -->
+    <DataTemplate DataType="{x:Type inspector:PointsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Margin="0,0,0,3" FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Points as x y pairs separated by semicolons, like 4 0; 4 3" />
+            <TextBlock Style="{StaticResource Editor.Note}" Margin="0,0,0,2" Text="Start: where it's placed (0, 0)"
+                       Visibility="{Binding FromStart, Mode=OneTime, Converter={StaticResource Editor.Visible}}" />
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:PointRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <TextBlock Width="18" VerticalAlignment="Center" DockPanel.Dock="Left" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Number}" />
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right" IsEnabled="{Binding CanRemove}"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this point out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding MoveUpCommand}" DockPanel.Dock="Right" IsEnabled="{Binding CanMoveUp}"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:up:}" ToolTip="Move it up the list: it comes a point sooner">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.MoveUp}" />
+                            </Button>
+                            <UniformGrid Rows="1">
+                                <controls:NumberField Margin="0,0,3,0" IsInteger="{Binding IsInteger, Mode=OneTime}" Label="X" LabelBrush="{DynamicResource Brush.Axis.X}"
+                                                      Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:x:}" Value="{Binding X}" />
+                                <controls:NumberField IsInteger="{Binding IsInteger, Mode=OneTime}" Label="Y" LabelBrush="{DynamicResource Brush.Axis.Y}"
+                                                      Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:y:}" Value="{Binding Y}" />
+                            </UniformGrid>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Style="{StaticResource Editor.AddButton}" Command="{Binding AddCommand}" ToolTip="Add a point after the last, a step on from it">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                    <TextBlock Margin="6,0,0,0" Text="Add Point" />
+                </StackPanel>
+            </Button>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Tile numbers: as typed, and the tilesets' tiles to click, each picked one ringed -->
+    <DataTemplate DataType="{x:Type inspector:TileNumbersEditor}">
+        <StackPanel>
+            <DockPanel>
+                <ToggleButton Width="24" Margin="2,0,0,0" DockPanel.Dock="Right" IsChecked="{Binding IsOpen}" IsEnabled="{Binding HasMap}"
+                              Style="{StaticResource Style.ToggleButton.Toolbar}" Tag="editor:tiles" ToolTip="Pick the tiles off the tilemap's tilesets">
+                    <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Tiles}" />
+                </ToggleButton>
+                <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Tile numbers and ranges, like 10-15, 20" />
+            </DockPanel>
+            <ItemsControl Margin="0,4,0,0" ItemsSource="{Binding Tilesets}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:TilesetChoices">
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Style="{StaticResource Style.Text.Secondary}" Text="{Binding Name}" />
+                            <ItemsControl ItemTemplate="{StaticResource Editor.Tile}" ItemsPanel="{StaticResource Editor.TileStrip}" ItemsSource="{Binding Tiles}" Focusable="False" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Animated tiles: a row a run, from which tile to which and how fast, with its frames -->
+    <DataTemplate DataType="{x:Type inspector:TileAnimationsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Runs like 16-19 @6, separated by commas" />
+            <ItemsControl Margin="0,3,0,0" ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:TileRunRow">
+                        <StackPanel Margin="0,0,0,3">
+                            <DockPanel>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this run out">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <UniformGrid Rows="1">
+                                    <controls:NumberField Margin="0,0,3,0" IsInteger="True" Label="From" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:first:}" Value="{Binding First}" ToolTip="Its first tile" />
+                                    <controls:NumberField Margin="0,0,3,0" IsInteger="True" Label="To" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:last:}" Value="{Binding Last}" ToolTip="Its last tile" />
+                                    <controls:NumberField Label="fps" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:speed:}" Value="{Binding Speed}" ToolTip="Frames a second" />
+                                </UniformGrid>
+                            </DockPanel>
+                            <ItemsControl Margin="0,2,0,0" IsHitTestVisible="False" ItemTemplate="{StaticResource Editor.Tile}" ItemsPanel="{StaticResource Editor.TileStrip}" ItemsSource="{Binding Frames}" Focusable="False" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Style="{StaticResource Editor.AddButton}" Command="{Binding AddCommand}" ToolTip="Add a run of four tiles after the last run's">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                    <TextBlock Margin="6,0,0,0" Text="Add Run" />
+                </StackPanel>
+            </Button>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Auto tiles: a row a run of 16, its first tile and its pieces -->
+    <DataTemplate DataType="{x:Type inspector:AutoTilesEditor}">
+        <StackPanel>
+            <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Runs of 16 by their first tile, like 16-31, 48" />
+            <ItemsControl Margin="0,3,0,0" ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:AutoRunRow">
+                        <StackPanel Margin="0,0,0,3">
+                            <DockPanel>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this run out">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" DockPanel.Dock="Right" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Range}" />
+                                <controls:NumberField IsInteger="True" Label="From" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:first:}" Value="{Binding First}" ToolTip="Its first tile: it and the 15 after it are its pieces" />
+                            </DockPanel>
+                            <ItemsControl Margin="0,2,0,0" IsHitTestVisible="False" ItemTemplate="{StaticResource Editor.Tile}" ItemsPanel="{StaticResource Editor.TileStrip}" ItemsSource="{Binding Pieces}" Focusable="False" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Style="{StaticResource Editor.AddButton}" Command="{Binding AddCommand}" ToolTip="Add a run of 16 after the last">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                    <TextBlock Margin="6,0,0,0" Text="Add Run" />
+                </StackPanel>
+            </Button>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- More tilesets: a row each, its image picked from the project's, its tiles across and down, and their numbers -->
+    <DataTemplate DataType="{x:Type inspector:TilesetsEditor}">
+        <StackPanel>
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:TilesetRow">
+                        <StackPanel Margin="0,0,0,4">
+                            <DockPanel>
+                                <Border Width="22" Height="22" Margin="0,0,4,0" DockPanel.Dock="Left" Background="{DynamicResource Brush.Surface.Document}"
+                                        BorderBrush="{DynamicResource Brush.Border.Default}" BorderThickness="1" CornerRadius="{StaticResource Radius.Small}">
+                                    <Image Margin="1" RenderOptions.BitmapScalingMode="NearestNeighbor" Source="{Binding Preview}" Stretch="Uniform" />
+                                </Border>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this tileset out">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <ComboBox ItemsSource="{Binding Images}" SelectedItem="{Binding Image, Delay=1}" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:image:}" ToolTip="Its image, from the project's" />
+                            </DockPanel>
+                            <DockPanel Margin="26,2,0,0">
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" DockPanel.Dock="Right" Style="{StaticResource Style.Text.Secondary}" Text="{Binding Numbers}" />
+                                <UniformGrid Rows="1">
+                                    <controls:NumberField Margin="0,0,3,0" IsInteger="True" Label="&#x2194;" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:columns:}" Value="{Binding Columns}" ToolTip="Tiles across its image" />
+                                    <controls:NumberField IsInteger="True" Label="&#x2195;" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:rows:}" Value="{Binding Rows}" ToolTip="Tiles down its image" />
+                                </UniformGrid>
+                            </DockPanel>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!-- Picking an image here adds it on the end -->
+            <ComboBox Margin="0,2,0,0" ItemsSource="{Binding Images}" SelectedItem="{Binding AddImage, Delay=1}" Tag="editor:add"
+                      ToolTip="Add one of the project's images as another tileset, cut up as it was painted">
+            </ComboBox>
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Add a tileset: pick an image above." />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Clips: as typed, then a row each with its name, frames, speed and whether it plays once; Add, and the Clip Editor -->
+    <DataTemplate DataType="{x:Type inspector:ClipsEditor}">
+        <StackPanel>
+            <controls:CommitTextBox FontFamily="{StaticResource Font.Mono}" Tag="editor:text" Text="{Binding Field.TextValue}" ToolTip="Clips like Idle 0-3, Run 4-9 @12, Die 11-15 once" />
+            <ItemsControl Margin="0,3,0,0" ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:ClipsRow">
+                        <StackPanel Margin="0,0,0,4">
+                            <DockPanel>
+                                <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                        Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this clip out">
+                                    <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                                </Button>
+                                <CheckBox Margin="6,0,0,0" VerticalAlignment="Center" Content="Once" DockPanel.Dock="Right" IsChecked="{Binding Once}"
+                                          Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:once:}" ToolTip="Plays once and stops on its last frame, rather than looping" />
+                                <controls:CommitTextBox Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:name:}" Text="{Binding Name}" ToolTip="Its name: what the animation's Clip and a script's Play name" />
+                            </DockPanel>
+                            <UniformGrid Margin="0,2,0,0" Rows="1">
+                                <controls:NumberField Margin="0,0,3,0" IsInteger="True" Label="From" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:first:}" Value="{Binding First}" ToolTip="Its first frame on the sheet, from 0" />
+                                <controls:NumberField Margin="0,0,3,0" IsInteger="True" Label="To" Step="0.1" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:last:}" Value="{Binding Last}" ToolTip="Its last frame on the sheet" />
+                                <controls:NumberField Label="fps" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:speed:}" Value="{Binding Speed}" ToolTip="Frames a second; 0 plays at the animation's own speed" />
+                            </UniformGrid>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource Editor.AddButton}" Command="{Binding AddCommand}" ToolTip="Add a clip of four frames after the last clip's">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Add}" />
+                        <TextBlock Margin="6,0,0,0" Text="Add Clip" />
+                    </StackPanel>
+                </Button>
+                <Button Margin="6,3,0,0" Padding="8,2" Command="{Binding OpenClipEditorCommand}" Tag="editor:clipeditor" ToolTip="See the clips play, and pick their frames off the sheet (Art > Animation Clips)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Play}" />
+                        <TextBlock Margin="6,0,0,0" Text="Clip Editor" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- A name picked from what the component lists (an animation's clips) -->
+    <DataTemplate DataType="{x:Type inspector:ChoiceEditor}">
+        <StackPanel>
+            <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Value, Delay=1}" Tag="editor:choice" ToolTip="{Binding Attribute.Noun}" />
+            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource Brush.Status.Warning}" Style="{StaticResource Style.Text.Secondary}" Tag="editor:problem" Text="{Binding Field.ValueProblem}" TextWrapping="Wrap" Visibility="{Binding Field.HasValueProblem, Converter={StaticResource Editor.Visible}}" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Prefabs and how many: a row each, the prefab picked from the project's, the fewest and the most -->
+    <DataTemplate DataType="{x:Type inspector:PrefabCountsEditor}">
+        <StackPanel>
+            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:PrefabCountRow">
+                        <DockPanel Margin="0,0,0,2">
+                            <Button Style="{StaticResource Editor.SmallButton}" Command="{Binding RemoveCommand}" DockPanel.Dock="Right"
+                                    Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:remove:}" ToolTip="Take this one out">
+                                <TextBlock FontSize="{StaticResource IconSize.Small}" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Delete}" />
+                            </Button>
+                            <controls:NumberField Width="54" Margin="3,0,0,0" DockPanel.Dock="Right" IsInteger="True" Label="to" Step="0.1"
+                                                  Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:most:}" Value="{Binding Most}" ToolTip="The most of it: a number between the fewest and this is picked each time" />
+                            <controls:NumberField Width="48" Margin="3,0,0,0" DockPanel.Dock="Right" IsInteger="True" Step="0.1"
+                                                  Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:least:}" Value="{Binding Least}" ToolTip="The fewest of it" />
+                            <ComboBox x:Name="Prefab" ItemsSource="{Binding Choices}" SelectedItem="{Binding Prefab, Delay=1}" Tag="{Binding Number, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:prefab:}" ToolTip="The prefab, from the project's" />
+                        </DockPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter TargetName="Prefab" Property="Foreground" Value="{DynamicResource Brush.Status.Warning}" />
+                                <Setter TargetName="Prefab" Property="ToolTip" Value="There's no prefab called that in the project" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ComboBox Margin="0,2,0,0" ItemsSource="{Binding Prefabs}" SelectedItem="{Binding AddPrefab, Delay=1}" Tag="editor:add" ToolTip="Add one of the project's prefabs" />
+            <TextBlock Style="{StaticResource Editor.Note}" Text="Add one: pick a prefab above." />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- A direction: its X and Y, and a compass of the eight ways -->
+    <DataTemplate DataType="{x:Type inspector:DirectionEditor}">
+        <DockPanel>
+            <ItemsControl Margin="6,0,0,0" DockPanel.Dock="Right" ItemsSource="{Binding Ways, Mode=OneTime}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="16" />
+                                <RowDefinition Height="16" />
+                                <RowDefinition Height="16" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="16" />
+                            </Grid.ColumnDefinitions>
+                        </Grid>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="Grid.Row" Value="{Binding Row}" />
+                        <Setter Property="Grid.Column" Value="{Binding Column}" />
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:WayChoice">
+                        <Button x:Name="Way" Padding="0" Command="{Binding PointCommand}" Cursor="Hand" Tag="{Binding Name, Converter={StaticResource Editor.Tag}, ConverterParameter=editor:way:}" ToolTip="{Binding Name}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Frame" Background="Transparent" CornerRadius="2">
+                                        <TextBlock x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Arrow}" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Frame" Property="Background" Value="{DynamicResource Brush.Item.Hover}" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                                            <Setter TargetName="Frame" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                                            <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl VerticalAlignment="Center" ItemsSource="{Binding Field.Axes, Mode=OneTime}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="inspector:AxisField">
+                        <controls:NumberField x:Name="Axis" Margin="0,0,3,0" IsMixed="{Binding IsMixed, Mode=OneWay}" Label="{Binding Label, Mode=OneTime}" Value="{Binding Value}" />
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Label}" Value="X">
+                                <Setter TargetName="Axis" Property="LabelBrush" Value="{DynamicResource Brush.Axis.X}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Label}" Value="Y">
+                                <Setter TargetName="Axis" Property="LabelBrush" Value="{DynamicResource Brush.Axis.Y}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DockPanel>
+    </DataTemplate>
+
+    <!-- Text showing an output: as typed, and while it shows one, what to put in and how it reads now -->
+    <DataTemplate DataType="{x:Type inspector:OutputFormatEditor}">
+        <StackPanel>
+            <controls:CommitTextBox Tag="editor:text" Text="{Binding Field.TextValue}" />
+            <StackPanel Visibility="{Binding ShowsOutput, Converter={StaticResource Editor.Visible}}">
+                <WrapPanel Margin="0,3,0,0">
+                    <Button Margin="0,0,3,0" Padding="6,1" Command="{Binding InsertCommand}" CommandParameter="output" Tag="editor:insert:output" ToolTip="Put in the output, {0}">
+                        <TextBlock Text="+ Output" />
+                    </Button>
+                    <Button Margin="0,0,3,0" Padding="6,1" Command="{Binding InsertCommand}" CommandParameter="outof" Tag="editor:insert:outof" ToolTip="Put in what it's out of, {1}">
+                        <TextBlock Text="+ Out of" />
+                    </Button>
+                    <Button Margin="0,0,3,0" Padding="6,1" Command="{Binding InsertCommand}" CommandParameter="decimal" Tag="editor:insert:decimal" ToolTip="Put in the output with one decimal, {0:0.0}">
+                        <TextBlock Text="+ 0.0" />
+                    </Button>
+                    <Button Padding="6,1" Command="{Binding InsertCommand}" CommandParameter="padded" Tag="editor:insert:padded" ToolTip="Put in the output with three digits, {0:000}">
+                        <TextBlock Text="+ 000" />
+                    </Button>
+                </WrapPanel>
+                <TextBlock Style="{StaticResource Editor.Note}" Tag="editor:preview" Text="{Binding Preview}" />
+            </StackPanel>
+        </StackPanel>
+    </DataTemplate>
+
+</ResourceDictionary>

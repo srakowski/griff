@@ -202,9 +202,13 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     /// <summary>For <see cref="FieldKind.Name"/>, <see cref="FieldKind.Action"/> and <see cref="FieldKind.Output"/>: a prefab, scene, input action, layer, message, action or output.</summary>
     public DataTemplate? Named { get; set; }
 
+    /// <summary>For <see cref="FieldKind.Custom"/>: the field's own editor, shown by its template.</summary>
+    public DataTemplate? Custom { get; set; }
+
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
         (item as PropertyField)?.Kind switch
         {
+            FieldKind.Custom => Custom,
             FieldKind.Bool => Bool,
             FieldKind.Number => Number,
             FieldKind.Text => Text,

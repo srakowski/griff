@@ -54,6 +54,7 @@ public sealed class Pushable : Component, IDrawEffect, IGridDriver
     public bool PushesRow { get; set; }
 
     /// <summary>What kind of crate it is, e.g. "Red": a Goal's Accepts names the kinds that cover it.</summary>
+    [Names(NameKind.Kind, Scope = "Crate", Defines = true)]
     public string? Kind { get; set; }
 
     /// <summary>The goal it rests on, or null. Kept up to date while the game runs.</summary>
@@ -90,6 +91,7 @@ public sealed class Bouncer : Component
     public float Strength { get; set; } = 20;
 
     /// <summary>Which way it sends them: (0, 1) is up, (1, 0) right, (1, 1) up and to the right.</summary>
+    [Direction]
     public Vector2 Direction { get; set; } = Vector2.UnitY;
 
     /// <summary>The collision layers it launches, e.g. "Player". Empty launches any body.</summary>

@@ -60,6 +60,7 @@ public sealed class Light : Component
     public float Flicker { get; set; }
 
     /// <summary>Where the light is, relative to the entity, e.g. (0, 0.5) for a lantern held up.</summary>
+    [Offset]
     public Vector2 Offset
     {
         get => _offset.Value;

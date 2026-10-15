@@ -36,6 +36,7 @@ public sealed class Mover : Component
     /// Where to go, as offsets from where it's placed: "x y" pairs separated by semicolons, e.g. "0 3" for a lift or
     /// "4 0; 4 3; 0 3" for a square. The start (0 0) is always the first point.
     /// </summary>
+    [Points(FromStart = true, Least = 1)]
     public string? Points
     {
         get => _points;
@@ -431,6 +432,7 @@ public sealed class Shooter : Component
     public string? Target { get; set; }
 
     /// <summary>Which way to fire without a target (or an aim, for the player).</summary>
+    [Direction]
     public Vector2 Direction { get; set; } = Vector2.UnitX;
 
     /// <summary>With a <see cref="Target"/>, only fire when it's this close. 0 fires at any distance.</summary>
@@ -450,6 +452,7 @@ public sealed class Shooter : Component
     public float Spread { get; set; }
 
     /// <summary>Where shots appear relative to the entity, in world units.</summary>
+    [Offset(World = true)]
     public Vector2 Offset { get; set; }
 
     /// <summary>A sound played with each volley, e.g. "Sounds/shoot.wav".</summary>
@@ -630,6 +633,7 @@ public sealed class Door : Component
     /// An item it needs, e.g. "Key": it's locked to anyone without one in their <see cref="Inventory"/>. The first trip
     /// through uses one up and clears this, so it stays open after that.
     /// </summary>
+    [Names(NameKind.Item)]
     public string? Key { get; set; }
 
     /// <summary>
@@ -637,6 +641,7 @@ public sealed class Door : Component
     /// "[set MetKing]" or a script's <c>Game.SetFlag</c>), or "not MetKing" for while it isn't: it stays shut until then,
     /// and its prompt hidden.
     /// </summary>
+    [Names(NameKind.Flag, Condition = true)]
     public string? NeedsFlag { get; set; }
 
     /// <summary>Raised when it's used, with whatever used it.</summary>

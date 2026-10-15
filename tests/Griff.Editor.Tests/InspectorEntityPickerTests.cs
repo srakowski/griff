@@ -52,8 +52,8 @@ public class InspectorEntityPickerTests
         Assert.True(Field(inspector, "Switch", "Targets").NamesMany);
         Assert.Equal(FieldKind.Entity, Field(inspector, "Switch", "Prompt").Kind);
         Assert.False(Field(inspector, "Switch", "Prompt").NamesMany);
-        // Other names (an item, a sound) stay as they were.
-        Assert.Equal(FieldKind.Text, Field(inspector, "Switch", "Key").Kind);
+        // Other names (an item, a sound) get pickers of their own.
+        Assert.Equal(FieldKind.Name, Field(inspector, "Switch", "Key").Kind);
         Assert.Equal(FieldKind.Sound, Field(inspector, "Switch", "Sound").Kind);
     });
 

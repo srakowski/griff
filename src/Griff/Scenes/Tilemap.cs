@@ -148,6 +148,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// hundred) doesn't renumber the ones after it. Tile number fields (Background Tiles, Auto Tiles and the rest) and
     /// <see cref="GetTile"/> use these numbers. Art > Add Tileset to Tilemap adds one.
     /// </summary>
+    [Tilesets]
     public IReadOnlyList<string> MoreTilesets
     {
         get => _moreTilesets;
@@ -226,6 +227,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// <summary>
     /// Tiles that never collide, for decoration like grass, windows or signs: tile numbers and ranges, e.g. "10-15, 20".
     /// </summary>
+    [TileNumbers]
     public string? BackgroundTiles
     {
         get => _backgroundTiles;
@@ -241,6 +243,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// Tiles that only block bodies landing on top, like <see cref="BoxCollider.OneWay"/>: tile numbers and ranges,
     /// e.g. "4, 5".
     /// </summary>
+    [TileNumbers]
     public string? OneWayTiles
     {
         get => _oneWayTiles;
@@ -258,6 +261,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// with commas: "16-19 @6, 30-31 @2". A cell painted with a later frame starts the run from there, so neighbors
     /// needn't move in step.
     /// </summary>
+    [TileAnimations]
     public string? AnimatedTiles
     {
         get => _animatedTiles;
@@ -272,6 +276,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// Tiles that are ladders: they never collide, and a <see cref="PlatformerMovement"/> climbs them with up and down.
     /// Tile numbers and ranges, e.g. "12, 13".
     /// </summary>
+    [TileNumbers]
     public string? LadderTiles
     {
         get => _ladderTiles;
@@ -287,6 +292,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// Tiles that are slopes rising to the right, like "/": solid below the line from their bottom-left corner to their
     /// top-right one, so bodies walk up and down them. Tile numbers and ranges, e.g. "20".
     /// </summary>
+    [TileNumbers]
     public string? SlopeUpTiles
     {
         get => _slopeUpTiles;
@@ -299,6 +305,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     }
 
     /// <summary>Tiles that are slopes falling to the right, like "\": solid below the line from their top-left corner to their bottom-right one.</summary>
+    [TileNumbers]
     public string? SlopeDownTiles
     {
         get => _slopeDownTiles;
@@ -341,6 +348,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     /// separated by commas. A run's tiles go in order of which sides join, counting up 1, right 2, down 4 and left 8: the
     /// first is a lone block, the second joins only above, the last joins on every side.
     /// </summary>
+    [AutoTiles]
     public string? AutoTiles
     {
         get => _autoTiles;

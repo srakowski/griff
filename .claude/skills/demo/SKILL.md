@@ -38,7 +38,8 @@ is in `src/Griff.Editor/Diagnostics/Demo/` (Debug builds only); `DemoFile.cs` pl
 
 ## 4. Check, then play
 
-Never launch anything while League of Legends is running (`Get-Process "League of Legends"`); wait until it's
+Never launch anything while the user is busy: `CLAUDE.local.md` (local, not in git) may name programs that mean so;
+while any of them is running, wait until it's
 closed. Building is fine.
 
 1. Check it silently: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\demo.ps1 demos\<topic>.demo -Check`

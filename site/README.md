@@ -82,9 +82,9 @@ pixel art and the editor's text stay sharp at a fraction of a PNG's size. To tak
 Which shots there are, and what each does first (the entity it selects, the keys it presses), is the `shots` list at
 the top of the script. A new shot needs a line there and a place on the landing page (`src/content/docs/index.mdx`).
 
-## Setting up griff.games (for Shawn)
+## Setting up griff.games (maintainer)
 
-Nothing below can be done from the repository: these are the steps on GitHub and GoDaddy, once. Until the first two
+Nothing below can be done from the repository: these are the steps on GitHub and at the domain's DNS provider, once. Until the first two
 are done, the Site workflow's deploy job fails (its build and link check still run).
 
 1. **Push** main to GitHub: `git push origin main`.
@@ -92,7 +92,7 @@ are done, the Site workflow's deploy job fails (its build and link check still r
    open-source site, and GitHub Pages only publishes from a private repository on a paid plan.
 3. **Verify the domain** (recommended before pointing DNS at GitHub, so no one else can claim it): your profile
    picture → **Settings** → **Pages** → **Add a domain** → `griff.games`. GitHub shows a TXT record: add it in
-   GoDaddy (step 6) with the host `_github-pages-challenge-srakowski` and the value GitHub gives, then click
+   your DNS provider (step 6) with the host `_github-pages-challenge-srakowski` and the value GitHub gives, then click
    **Verify**. Keep the TXT record afterwards.
 4. **Pages from GitHub Actions**: the repository's **Settings** → **Pages** → **Build and deployment** → **Source**:
    **GitHub Actions**. Then run the Site workflow (**Actions** → **Site** → **Run workflow**, or push again) and check
@@ -100,7 +100,7 @@ are done, the Site workflow's deploy job fails (its build and link check still r
 5. **Custom domain**: the same Pages settings → **Custom domain**: `griff.games` → **Save**. (`public/CNAME` holds the
    domain too, but with Actions it's this setting that counts.) GitHub checks the DNS from step 6; it may say it's
    unchecked until the records are in.
-6. **GoDaddy DNS** (My Products → griff.games → **DNS** → **DNS Records**). First delete GoDaddy's own `A` record for
+6. **DNS records** (in the DNS settings wherever griff.games is managed). First delete any existing `A` record for
    `@` (the "Parked" one) and any `CNAME` for `www`, and turn off domain forwarding if it's on. Then add:
 
    | Type  | Name                               | Value                         | TTL    |
@@ -129,7 +129,7 @@ are done, the Site workflow's deploy job fails (its build and link check still r
    ```
 
    or with `dig` (Git Bash, macOS, Linux): `dig griff.games +noall +answer -t A`, the same with `-t AAAA`, and
-   `dig www.griff.games +nostats +nocomments +nocmd`. Nothing else (a GoDaddy parking address) should answer.
+   `dig www.griff.games +nostats +nocomments +nocmd`. Nothing else (such as a parking page's address) should answer.
 8. **HTTPS**: in the repository's Pages settings, once the DNS check passes, tick **Enforce HTTPS**. GitHub needs a
    certificate first, which can take up to 24 hours after the domain is set.
 9. Open https://griff.games and https://www.griff.games (which should land on the first), and try the search, the

@@ -52,7 +52,8 @@ Other agents may be working in the main checkout at the same time, so never swit
 
 ## 3. Test it through the Griff MCP
 
-Never launch anything while League of Legends is running (`Get-Process "League of Legends"`); wait until it's closed.
+Never launch anything while the user is busy: `CLAUDE.local.md` (local, not in git) may name programs that mean so;
+while any of them is running, wait until it's closed.
 
 1. Start the editor from the worktree's build with the MCP server on, the way `src/Griff/Agent/` and `docs/agents.md` say
    to. Use the Griff MCP tools if this session has them connected; otherwise talk to it over HTTP with JSON-RPC

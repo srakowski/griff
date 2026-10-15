@@ -40,4 +40,7 @@ internal interface IGameContext
 
     /// <summary>Gives an entity the player's input, taking it from everything else the same player plays (see <see cref="FocusAttribute"/>).</summary>
     void Focus(Entity entity);
+
+    /// <summary>Goes to another scene at the end of the frame, fading out and in over <paramref name="fade"/> seconds.</summary>
+    void LoadScene(string scene, float fade);
 }

@@ -664,6 +664,16 @@ public sealed class Door : Component
     public void Lock() => Locked = true;
 }
 
+/// <summary>
+/// A component that starts the <see cref="Dialogue"/> on its entity itself (an adventure's hotspot, when it's used), so the
+/// dialogue needs no collider for the player to touch.
+/// </summary>
+internal interface IDialogueStarter
+{
+    /// <summary>True while it's set up to start the dialogue.</summary>
+    bool StartsDialogue { get; }
+}
+
 /// <summary>When a <see cref="Dialogue"/> starts.</summary>
 public enum DialogueStart
 {
@@ -692,7 +702,7 @@ public enum DialogueStart
 /// saved with the scene, so a rewind goes back into the middle of a talk.
 /// </summary>
 [Category("Story")]
-[Requires(typeof(Collider), Note = "usually a trigger; none when it starts with the scene", Unless = nameof(StartsWithScene))]
+[Requires(typeof(Collider), Note = "usually a trigger; none when it starts with the scene, or a hotspot starts it", Unless = nameof(NeedsNoCollider))]
 [WorksWith(typeof(Speaker), Note = "for a name and portrait over its lines")]
 [ComponentName("Griff.Dialogue")]
 public sealed class Dialogue : Component
@@ -792,6 +802,13 @@ public sealed class Dialogue : Component
 
     /// <summary>True for one that starts by itself as the scene starts, which needs no collider.</summary>
     public bool StartsWithScene => Start == DialogueStart.SceneStart;
+
+    /// <summary>
+    /// True for one that needs no collider: it starts with the scene, or something else on its entity starts it (an
+    /// adventure's hotspot that talks when it's used).
+    /// </summary>
+    public bool NeedsNoCollider =>
+        StartsWithScene || Entity is { } entity && entity.Components.Any(c => c is IDialogueStarter { StartsDialogue: true });
 
     /// <summary>Raised as each line is shown, with its number.</summary>
     public event Action<int>? LineShown;

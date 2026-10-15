@@ -1,0 +1,70 @@
+title: The Adventure template
+intro: Where's Pip? A short point-and-click adventure across three rooms, with someone to talk to, things to find, use and put together, and an ending, all with no code.
+project: Adventure | Wheres Pip
+
+chapter: The kitchen | Hotspots, items and a door to the garden
+scene: Kitchen
+say: Pip the cat has been out all night. The Adventure template is a short adventure to find him, made of hotspots, items and rooms.
+select: Kettle
+explain: component:UseWith | Use With | The kettle fills a mug with tea: a Use With for the cup, which gives tea back.
+select: Back Door
+explain: field:Hotspot.GoesTo | Goes To | The back door is a hotspot that goes to the garden. Using it fades out, and the hero arrives at the garden's own back door, its Arrive At.
+deselect
+play
+wait: 1.0
+expectvalue: Player.Dialogue.IsTalking = true
+explain: game | The first words | The first time, the hero says why we're here. A click moves it on.
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.6
+expectvalue: Player.Dialogue.IsTalking = false
+gameclick: Cup
+wait: 3.0
+expectvalue: Player.Walker.Said = I'll take my mug.
+gamebutton: item:Cup
+wait: 0.3
+expectvalue: Player.InventoryBar.Holding = Cup
+gameclick: Kettle
+wait: 3.0
+expectvalue: Player.Walker.Said = One nice hot cup of tea, coming up.
+explain: game | Tea | Picked from the bar and used on the kettle, the mug comes back full of tea.
+gameclick: Back Door
+wait: 4.0
+expectvalue: Mabel.Hotspot.UseTalks = true
+explain: game | The garden | Out in the garden: Pip up the apple tree, Mabel over the fence, and Grandad's shed, locked.
+stop
+
+chapter: Mabel and the ending | A talk with choices, and a trigger that ends it
+scene: Garden
+select: Mabel
+explain: field:Dialogue.Lines | Choices | Mabel's lines offer choices and remember what was said with flags. Her Use With for the tea starts her talk again, and gives back the shed key.
+select: The End
+explain: component:Trigger | Load Scene | When Pip's talk is over, its message sets off this trigger, and its Load Scene goes to the ending.
+deselect
+play
+wait: 1.0
+gamebutton: item:Tea
+wait: 0.3
+gameclick: Mabel
+wait: 3.0
+expectvalue: Mabel.UseWith.TimesUsed = 1
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.4
+gameclick: 0, -0.5
+wait: 0.6
+expectvalue: Mabel.Dialogue.IsTalking = false
+explain: game | The shed key | The key's in the bar now. The shed, the fishing rod and a sardine on its line bring Pip down, and the game remembers it all between runs.
+stop

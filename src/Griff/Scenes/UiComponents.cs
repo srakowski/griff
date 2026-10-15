@@ -127,6 +127,13 @@ public enum ButtonAction
 
     /// <summary>Loads the game saved with Quick Save. It's faded while there's none.</summary>
     QuickLoad,
+
+    /// <summary>
+    /// Starts the game over: forgets the progress kept in the save data (flags, saved inventories, what menus saved, best
+    /// scores; not the player's settings and controls, saved games or lines read) and goes to <see cref="Button.Scene"/>: a
+    /// menu's "New Game".
+    /// </summary>
+    NewGame,
 }
 
 /// <summary>
@@ -151,15 +158,23 @@ public sealed class Button : Component, IDrawEffect
     public ButtonAction Action { get; set; }
 
     /// <summary>
-    /// For <see cref="ButtonAction.LoadScene"/>: the scene's name, e.g. "Level1". For Host Game and Leave Game, the scene
+    /// For <see cref="ButtonAction.LoadScene"/> and New Game: the scene's name, e.g. "Level1". For Host Game and Leave Game, the scene
     /// to go to afterwards (empty stays).
     /// </summary>
     [Names(NameKind.Scene)]
-    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.HostGame, ButtonAction.LeaveGame])]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.NewGame, ButtonAction.HostGame, ButtonAction.LeaveGame])]
     public string? Scene { get; set; }
 
+    /// <summary>
+    /// For <see cref="ButtonAction.LoadScene"/>: a name in <c>Game.SaveData</c> holding a scene to go to instead of
+    /// <see cref="Scene"/>, e.g. "Room" (where an adventure's walker keeps the room it's in): a Play button that carries on
+    /// where the player left off, and goes to <see cref="Scene"/> while nothing's saved there.
+    /// </summary>
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene])]
+    public string? SavedScene { get; set; }
+
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
-    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame, ButtonAction.LoadGame, ButtonAction.QuickLoad])]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.NewGame, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame, ButtonAction.LoadGame, ButtonAction.QuickLoad])]
     public float Fade { get; set; }
 
     /// <summary>For <see cref="ButtonAction.OpenPanel"/>: the name of the panel's entity, e.g. "Options".</summary>

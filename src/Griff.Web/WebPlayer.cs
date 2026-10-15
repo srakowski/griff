@@ -256,7 +256,8 @@ public static partial class WebPlayer
     /// that entity is ("x,y,z", or "" for none); <c>count</c> how many entities there are; <c>save:<i>key</i></c> a saved
     /// value, and <c>save:<i>key</i>=<i>value</i></c> saves one; <c>flag:<i>name</i></c> whether a flag is set (1 or 0);
     /// <c>button:<i>label</i></c> where the middle of a button a system shows on the screen is (an inventory bar's item), "x,y";
-    /// <c>music</c> the music playing and how much of it has been
+    /// <c>talking</c> the name of the entity whose dialogue is being said ("" for none); <c>output:<i>entity</i>.<i>output</i></c>
+    /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
     /// </summary>
@@ -288,6 +289,12 @@ public static partial class WebPlayer
                     : "";
             case "flag":
                 return game.HasFlag(argument) ? "1" : "0";
+            case "talking":
+                return game.Talking?.Entity?.Name ?? "";
+            case "output" when argument.LastIndexOf('.') is var dot and > 0 && game.Find(argument[..dot]) is { } owner &&
+                               ComponentOutputs.Find(owner, argument.AsSpan(dot + 1)) is { } read:
+                return !read.Output.IsNumber ? read.Output.ReadText(read.Component) ?? "" :
+                       read.Output.ReadNumber(read.Component).ToString(CultureInfo.InvariantCulture);
             case "music":
                 return string.Create(CultureInfo.InvariantCulture, $"{game.Audio.Music}|{game.Audio.MusicTime:0.###}");
             case "status":

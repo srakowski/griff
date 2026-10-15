@@ -77,6 +77,20 @@ public sealed class Trigger : Component
         if (!string.IsNullOrWhiteSpace(flag))
             game.SetFlag(flag, on: false);
     }
+
+    /// <summary>
+    /// Goes to the scene named <paramref name="scene"/> (e.g. "Ending"), fading out and in, as a button that loads one
+    /// does: the end of a story, the next level once a boss is beaten.
+    /// </summary>
+    [Action]
+    private void LoadScene(IGameContext game, string? scene)
+    {
+        if (!string.IsNullOrWhiteSpace(scene))
+            game.LoadScene(scene.Trim(), SceneFade);
+    }
+
+    // Seconds the screen fades out (and back in) as its Load Scene goes to another scene.
+    private const float SceneFade = 0.4f;
 #pragma warning restore CA1822
 
     // Only show With for an action that takes a value (or one that can't be found yet, to fill in ahead of time).

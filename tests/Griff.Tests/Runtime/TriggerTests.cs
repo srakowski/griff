@@ -62,7 +62,7 @@ public sealed class TriggerTests
         { typeof(TurnOrder), "EndTurn" }, { typeof(Panel), "Open" }, { typeof(Panel), "Close" },
         { typeof(MatchBoard), "Pause" }, { typeof(MatchBoard), "Restart" }, { typeof(MatchBoard), "Shuffle" },
         { typeof(FallingBoard), "Pause" }, { typeof(FallingBoard), "Restart" },
-        { typeof(Dialogue), "Start" }, { typeof(SoundPlayer), "Play" }, { typeof(Trigger), "SetFlag" },
+        { typeof(Dialogue), "Start" }, { typeof(SoundPlayer), "Play" }, { typeof(Trigger), "SetFlag" }, { typeof(Trigger), "LoadScene" },
         { typeof(Counter), "Add" },
     };
 
@@ -233,6 +233,24 @@ public sealed class TriggerTests
         Assert.False(panel.Entity.IsEnabled);
         _game.Send("Talk");
         Assert.True(dialogue.IsTalking);
+    }
+
+    [Fact]
+    public void ATriggersLoadScene_GoesToTheSceneItsDoneWith_FadingOutAndIn()
+    {
+        var level = new Scene();
+        _game.SceneLoader = name => name == "Ending" ? level : throw new FileNotFoundException(name);
+        var ending = Add("The End");
+        AddTrigger(ending, "Won", "Load Scene", with: "Ending");
+        Run();
+
+        _game.Send("Won");
+        Run();
+        Assert.Equal("Level", _game.SceneName);
+        Assert.True(_game.IsChangingScene);
+        Run(40);
+        Assert.Same(level, _game.Scene);
+        Assert.Equal("Ending", _game.SceneName);
     }
 
     [Fact]

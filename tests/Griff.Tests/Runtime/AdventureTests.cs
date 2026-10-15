@@ -483,6 +483,87 @@ public sealed class AdventureTests
         Assert.Empty(preset.EditScene(_scene));
     }
 
+    // ----- Rooms -----
+
+    // A room: a floor, the player in the middle (keeping the room it's in under "Room"), and a door at
+    // `doorX` to `other`, where it arrives at that room's door.
+    private static Scene RoomTo(string other, float doorX)
+    {
+        var scene = new Scene();
+        var floor = new Entity("Floor");
+        floor.AddComponent<WalkArea>().Points = "-8 -3; 8 -3; 8 1; -8 1";
+        scene.Add(floor);
+        var player = new Entity("Player");
+        player.Transform.Position = new Vector3(0, -1, 0);
+        var walker = player.AddComponent<Walker>();
+        (walker.Speed, walker.SaveRoomAs) = (8, "Room");
+        scene.Add(player);
+        var door = new Entity("Door");
+        door.Transform.Position = new Vector3(doorX, 2, 0);
+        var hotspot = door.AddComponent<Hotspot>();
+        (hotspot.Points, hotspot.StandAt, hotspot.LookLine) = ("-0.5 -1; 0.5 -1; 0.5 1; -0.5 1", new Vector2(0, -2.5f), "A door.");
+        (hotspot.GoesTo, hotspot.ArriveAt) = (other, "Door");
+        scene.Add(door);
+        return scene;
+    }
+
+    [Fact]
+    public void AHotspotThatGoesToAnotherScene_WalksThereAndGoesThrough_ArrivingAtTheDoorBack_AndTheRoomIsSaved()
+    {
+        var game = new Game(RoomTo("Yard", 5), _input) { SceneName = "Hall" };
+        game.SceneLoader = name => name == "Yard" ? RoomTo("Hall", -5) : RoomTo("Yard", 5);
+        Assert.True(game.Find("Door")!.GetComponent<Hotspot>()!.CanUse);
+        void Step(double seconds)
+        {
+            for (var t = 0.0; t < seconds - 1e-6; t += Frame)
+            {
+                game.Tick(Frame);
+                _input.EndFrame();
+            }
+        }
+
+        Step(Frame);
+        Assert.Equal("Hall", game.SaveData.GetString("Room"));
+
+        // Looking at it doesn't go through.
+        _input.MouseWorld = new Vector2(5, 2);
+        _input.SetMouseButton(MouseButton.Right, true);
+        Step(Frame);
+        _input.SetMouseButton(MouseButton.Right, false);
+        Step(1.5);
+        Assert.Equal("Hall", game.SceneName);
+        Assert.Equal("A door.", game.Find("Player")!.GetComponent<Walker>()!.Said);
+
+        // Using it does: through to the yard, by the yard's door, facing into the room.
+        _input.SetMouseButton(MouseButton.Left, true);
+        Step(Frame);
+        _input.SetMouseButton(MouseButton.Left, false);
+        Step(1.5);
+        Assert.Equal("Yard", game.SceneName);
+        var walker = game.Find("Player")!.GetComponent<Walker>()!;
+        Assert.Equal(new Vector2(-5, -0.5f), walker.Feet);
+        Assert.Equal(Vector2.UnitX, walker.Facing);
+        Assert.False(walker.IsWalking);
+        Step(Frame);
+        Assert.Equal("Yard", game.SaveData.GetString("Room"));
+    }
+
+    [Fact]
+    public void ADialogueAHotspotStarts_NeedsNoCollider()
+    {
+        var entity = new Entity("Mabel");
+        var dialogue = entity.AddComponent<Dialogue>();
+        Assert.False(dialogue.NeedsNoCollider);
+        var hotspot = entity.AddComponent<Hotspot>();
+        Assert.False(dialogue.NeedsNoCollider);
+        hotspot.UseTalks = true;
+        Assert.True(dialogue.NeedsNoCollider);
+        hotspot.UseTalks = false;
+        entity.AddComponent<UseWith>().Talks = true;
+        Assert.True(dialogue.NeedsNoCollider);
+        Assert.True(ComponentRegistry.CreateDefault().Get(typeof(Dialogue)).Requires.Single(r => r.Type == typeof(Collider)).IsMetBy(entity, dialogue));
+    }
+
     // ----- Rewinding, saving and playing the same -----
 
     [Fact]

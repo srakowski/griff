@@ -174,14 +174,15 @@ public sealed class WalkArea : Component, IPointOutline, IDrawable
 /// put items in the walker's inventory (<see cref="UseGives"/>), and items from the <see cref="InventoryBar"/> are used on
 /// it by its <see cref="UseWith"/>s (anything else gets its <see cref="WrongItemLine"/>). Looking and using are counted
 /// (<see cref="TimesLooked"/>, <see cref="TimesUsed"/>), for a <see cref="Counter"/> or a trigger. Its Look and Use actions
-/// do the same as a click, for a trigger or a script, and Use Item uses an item on it.
+/// do the same as a click, for a trigger or a script, and Use Item uses an item on it. With <see cref="GoesTo"/> it's a way
+/// to another room: using it goes to that scene, where the walker arrives at <see cref="ArriveAt"/>.
 /// </remarks>
 [Category("Adventure")]
 [WorksWith(typeof(Walker), Note = "the character that walks over and looks at it or uses it")]
 [WorksWith(typeof(Dialogue), Note = "started when it's used, with Use Talks")]
 [WorksWith(typeof(UseWith), Note = "what each item used on it does")]
 [ComponentName("Griff.Hotspot")]
-public sealed class Hotspot : Component, IPointOutline, IDrawable
+public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStarter
 {
     private string? _points;
     private List<Vector2> _given = [];
@@ -298,6 +299,21 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
     internal List<(string Item, int Count)> Gives { get; private set; } = [];
 
     /// <summary>
+    /// A scene using it goes to, once the walker is there, e.g. "Garden": a door or a path to the next room. The screen
+    /// fades out and in, and the walker there arrives at <see cref="ArriveAt"/>.
+    /// </summary>
+    [Group("Exit")]
+    [Names(NameKind.Scene)]
+    public string? GoesTo { get; set; }
+
+    /// <summary>
+    /// Where the walker arrives in the <see cref="GoesTo"/> scene: the name of a hotspot there (it stands at that one's
+    /// Stand At: the door back), or of anything else (it stands where that is). Empty leaves it where that scene has it.
+    /// </summary>
+    [ShownWhen(nameof(GoesTo))]
+    public string? ArriveAt { get; set; }
+
+    /// <summary>
     /// What the walker says when an item it has no <see cref="UseWith"/> for is used on it, e.g. "The dog sniffs it and
     /// looks away." Empty uses the inventory bar's Wrong Line.
     /// </summary>
@@ -321,7 +337,12 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 
     /// <summary>True if using it does anything; with nothing to use, a click to use it looks at it instead.</summary>
     public bool CanUse => !string.IsNullOrWhiteSpace(UseLine) || UseTalks || !string.IsNullOrWhiteSpace(UseDo) ||
-                          !string.IsNullOrWhiteSpace(UseFlag) || !string.IsNullOrWhiteSpace(UseMessage) || !string.IsNullOrWhiteSpace(UseGives);
+                          !string.IsNullOrWhiteSpace(UseFlag) || !string.IsNullOrWhiteSpace(UseMessage) || !string.IsNullOrWhiteSpace(UseGives) ||
+                          !string.IsNullOrWhiteSpace(GoesTo);
+
+    // A character to talk to: using it, or an item on it, starts the dialogue on its entity (which needs no collider then).
+    bool IDialogueStarter.StartsDialogue =>
+        UseTalks || Entity is { } entity && entity.GetComponents<UseWith>().Any(u => u.Talks);
 
     /// <inheritdoc/>
     public IReadOnlyList<Vector2> GivenPoints => _given;
@@ -406,7 +427,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable
 
         // Its name just over it, clear of its sprite.
         var size = drawing.LineWidth * 9;
-        drawing.Text(Called, new Vector2(middle.X, top + size), size, color);
+        drawing.Text(string.IsNullOrWhiteSpace(GoesTo) ? Called : $"{Called} (to {GoesTo.Trim()})", new Vector2(middle.X, top + size), size, color);
         if (!WalkThere)
             return;
         var stand = StandPoint;
@@ -507,6 +528,13 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     /// <summary>The color of the name shown by the pointer.</summary>
     [ShownWhen(nameof(ShowNames))]
     public Color NameColor { get; set; } = Color.FromBytes(0xFF, 0xE1, 0x6A);
+
+    /// <summary>
+    /// Keeps the scene it's in in the game's save data under this name, e.g. "Room", as it gets there, so the menu's Play
+    /// button (a Load Scene button whose Saved Scene is this name) carries on in the room the player left. Empty keeps nothing.
+    /// </summary>
+    [Group("Saving")]
+    public string? SaveRoomAs { get; set; }
 
     /// <summary>
     /// Where it's still to walk, in the world: "x y" points separated by semicolons, the last where it stops. Empty while it

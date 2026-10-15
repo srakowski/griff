@@ -71,6 +71,20 @@ public sealed class SaveDataTests : IDisposable
     }
 
     [Fact]
+    public void ClearProgress_ForgetsTheGamesValues_ButKeepsThePlayersSettingsAndControls()
+    {
+        var save = new SaveData(SavePath);
+        save.Set("TookKey", true);
+        save.Set("best", 12);
+        save.Set(Game.VolumeSaveKey, 0.5f);
+        save.Set(InputState.BindingsSaveKey, "{}");
+
+        save.ClearProgress();
+
+        Assert.Equal([InputState.BindingsSaveKey, Game.VolumeSaveKey], new SaveData(SavePath).Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void DamagedFile_StartsEmpty()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);

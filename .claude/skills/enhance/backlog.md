@@ -51,7 +51,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 
 ### Genres: cards, adventures and stories
 
-- [ ] Add an Adventure template: a point-and-click adventure.
 - [ ] Add a Visual Novel template.
 
 ### Genres: rhythm and fighting
@@ -123,6 +122,11 @@ so a jam team's design, plan and game live in one project and agents can read th
 - [ ] Add design diagrams in one go: a game-flow map drawn from the project itself (scenes and the doors, buttons and triggers between them, menus and endings), a core-loop diagram drawn by hand on a canvas, and a mood board of reference images and notes, all kept in the project.
 
 ## Done
+
+- [x] Add an Adventure template: a point-and-click adventure. (2026-10-15)
+  - `AdventureTemplate` ("Where's Pip?", `Griff.Modules.Adventures`): a menu (Play carries on in the room left, Start Over, Quit), `Kitchen`, `Garden` and `Shed` joined by hotspots that go from one to the next, and an `Ending`; the chain is a mug from the counter filled at the kettle (Use With giving Tea), the tea for Mabel's shed key (her dialogue with choices and flags, started by the Use With's Talks), the shed unlocked (a padlocked door while `ShedOpen` isn't set beside the open one that's there once it is), the fishing rod, a sardine hooked on it (a Combination) and the rod up to Pip, whose talk's Message sets `PipHome` and Load Scene's the ending through two triggers. Every room has a dialogue box along the top, the walker (Inventory and Save Room As kept in the save data, icons and descriptions for six items), Look and Use buttons for touch, help and a pause menu; pixel art painted in code (`AdventureArt`, 16 pixels to a unit: three rooms, the hero walking, Mabel, Pip, portraits, items, a table walked round, the shed's doorway, the rod, a gnome) and sounds for items got, picked, put together and used.
+  - Engine: a hotspot's **Goes To** and **Arrive At** (a way to another scene, the walker arriving at the hotspot named there, facing into the room); a walker's **Save Room As**; a Load Scene button's **Saved Scene**; a **New Game** button action (`SaveData.ClearProgress`: everything but what Griff keeps under "griff.": settings, controls, saved games, lines read); a trigger's **Load Scene** action; a dialogue a hotspot starts needs no collider (`Dialogue.NeedsNoCollider`, `IDialogueStarter`). The web player's probe has `talking` and `output:<entity>.<output>`, and `tools\web.ps1 -Check`'s Adventure is now the template (Enter, taps through its talk, a walk round the table, the pointer, a right click looking, the mug taken, picked and filled, the keys on the bar, the items kept over a reload).
+  - Tests: AdventureTemplateTests (played start to finish with clicks and dialogue choices, the intro once, saves from run to run and Start Over keeping the settings, the keys and a controller, every room's setup, desktop and web exports), rooms, Load Scene, New Game, Saved Scene and ClearProgress tests; the sound and pause-menu template lists. `-Compare -Template Adventure`: all five scenes the same.
 
 - [x] Add visual novel save slots, a log of lines already read, skip and auto-advance. (2026-10-15)
 - [x] Add a Cards template. (2026-10-15)

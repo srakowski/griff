@@ -290,6 +290,42 @@ public class UiTests
     }
 
     [Fact]
+    public void Button_LoadSceneAction_GoesToTheSceneSavedUnderItsSavedScene_OnceThereIsOne()
+    {
+        var button = AddButton(Vector2.Zero, ButtonAction.LoadScene, "Hall").GetComponent<Button>()!;
+        button.SavedScene = "Room";
+        var game = CreateGame();
+        game.SceneLoader = _ => new Scene();
+        Tick(game);
+        Click(game, Vector2.Zero);
+        Assert.Equal("Hall", game.SceneName);
+
+        game = new Game(_scene, _input) { ViewAspect = 2, SceneLoader = _ => new Scene() };
+        game.SaveData.Set("Room", "Cellar");
+        Tick(game);
+        Click(game, Vector2.Zero);
+        Assert.Equal("Cellar", game.SceneName);
+    }
+
+    [Fact]
+    public void Button_NewGameAction_ForgetsTheProgressSaved_ButNotTheSettings_AndGoesToItsScene()
+    {
+        AddButton(Vector2.Zero, ButtonAction.NewGame, "Hall");
+        var game = CreateGame();
+        game.SceneLoader = _ => new Scene();
+        game.SaveData.Set("TookKey", true);
+        game.SaveData.Set("Items", "Key");
+        game.SaveData.Set(Game.VolumeSaveKey, 0.5f);
+        Tick(game);
+        Click(game, Vector2.Zero);
+
+        Assert.Equal("Hall", game.SceneName);
+        Assert.False(game.HasFlag("TookKey"));
+        Assert.False(game.SaveData.Has("Items"));
+        Assert.Equal(0.5f, game.SaveData.GetFloat(Game.VolumeSaveKey));
+    }
+
+    [Fact]
     public void Button_QuitAction_AsksTheHostToQuit()
     {
         AddButton(Vector2.Zero, ButtonAction.Quit);

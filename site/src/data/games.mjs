@@ -195,4 +195,16 @@ export const games = {
 			['Tab', 'end your turn'],
 		],
 	},
+	Adventure: {
+		tagline: "Where's Pip? A short point-and-click adventure: three rooms, a neighbour to talk to, and a cat up a tree.",
+		about:
+			"Pip the cat has been out all night, and he's stuck up the apple tree next door. Look at and use everything in the kitchen, the garden and the shed, talk to Mabel over the fence, and find, use and put together the things that will bring him down. Your progress is saved as you go.",
+		controls: [
+			['Click or tap', 'walk there, or use what you clicked'],
+			['Right-click', 'look at it'],
+			['Click an item, then something', 'use the item on it, or put two together'],
+			['Arrow keys, Space, X', 'go from thing to thing, use, look'],
+			['E', 'your items'],
+		],
+	},
 };

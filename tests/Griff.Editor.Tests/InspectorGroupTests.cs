@@ -134,7 +134,7 @@ public class InspectorGroupTests
         selection.Select(Named(document, "Play"));
 
         Assert.True(Field(inspector, "Button", "Scene").IsFaded);
-        Assert.Equal("Only used when Action is Load Scene, Host Game or Leave Game.", Field(inspector, "Button", "Scene").FadeTip);
+        Assert.Equal("Only used when Action is Load Scene, New Game, Host Game or Leave Game.", Field(inspector, "Button", "Scene").FadeTip);
         // A faded field's name isn't flagged as matching nothing.
         Field(inspector, "Button", "Panel").TextValue = "Nowhere";
         Assert.False(Field(inspector, "Button", "Panel").IsUnmatched);

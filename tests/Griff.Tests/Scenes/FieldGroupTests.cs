@@ -131,7 +131,10 @@ public class FieldGroupTests
         Assert.True(Shown(nameof(Button.Panel), ButtonAction.OpenPanel));
         Assert.False(Shown(nameof(Button.Panel), ButtonAction.ClosePanel));
         Assert.True(Shown(nameof(Button.InputAction), ButtonAction.Rebind));
-        Assert.Equal("Action is LoadScene, HostGame or LeaveGame",
+        Assert.True(Shown(nameof(Button.Scene), ButtonAction.NewGame));
+        Assert.True(Shown(nameof(Button.SavedScene), ButtonAction.LoadScene));
+        Assert.False(Shown(nameof(Button.SavedScene), ButtonAction.NewGame));
+        Assert.Equal("Action is LoadScene, NewGame, HostGame or LeaveGame",
             descriptor.Properties.Single(p => p.Name == nameof(Button.Scene)).ShownWhenText());
     }
 

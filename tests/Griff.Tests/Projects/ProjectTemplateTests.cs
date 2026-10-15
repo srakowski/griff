@@ -124,6 +124,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Shooter")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
+    [InlineData("Adventure")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -141,7 +142,11 @@ public sealed class ProjectTemplateTests : IDisposable
             .ToList();
 
         Assert.Contains(sounds, s => s.Component == nameof(BackgroundMusic) && s.Path == "Music/theme.wav");
-        Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
+        // Something gets hurt in all but the adventure, whose items, uses and combinations make sounds instead.
+        if (template == "Adventure")
+            Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.Adventures.InventoryBar) && s.Path is not null);
+        else
+            Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
         Assert.All(sounds.Where(s => s.Path is not null), s =>
             Assert.True(Griff.Audio.Wav.Decode(Asset(project, s.Path!)) is { Seconds: > 0 }, $"{s.Component}.{s.Field}: {s.Path}"));
         Assert.NotNull(Griff.Audio.Wav.ReadSoundRecipe(Asset(project, "Sounds/jump.wav")));
@@ -812,6 +817,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Tactics")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
+    [InlineData("Adventure")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -827,6 +833,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Battle");
         if (template == "Cards")
             scene = GameLoader.LoadScene(project, registry, "Duel");
+        if (template == "Adventure")
+            scene = GameLoader.LoadScene(project, registry, "Garden");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);

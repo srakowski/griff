@@ -26,6 +26,12 @@ internal sealed partial class AdventuresSystem : GameSystem
         _setCursor = false;
         _named = default;
         ItemsSceneChanged();
+        _roomSaved = false;
+        if (_arriving is { } place)
+        {
+            _arriving = null;
+            ArriveIn(place);
+        }
     }
 
     // After the movements, so a click this frame sets off this frame; before the dialogues, so a talk a hotspot starts
@@ -35,6 +41,8 @@ internal sealed partial class AdventuresSystem : GameSystem
         ShowOrHide();
         var walkers = Game.Showing<Walker>();
         var hotspots = Game.Showing<Hotspot>();
+        if (!_roomSaved)
+            SaveRoom(walkers);
         Hover(walkers, hotspots);
         if (walkers.Count == 0)
         {
@@ -389,6 +397,61 @@ internal sealed partial class AdventuresSystem : GameSystem
             Game.StartDialogue(dialogue);
         walker.RaiseDid(hotspot, verb);
         hotspot.RaiseDone(walker, verb);
+        if (!look && !string.IsNullOrWhiteSpace(hotspot.GoesTo))
+            Leave(walker, hotspot.GoesTo.Trim(), hotspot.ArriveAt);
+    }
+
+    // ----- Rooms -----
+
+    // Seconds the screen fades out (and back in) going through a hotspot to another room.
+    private const float ExitFade = 0.4f;
+
+    // Where the walkers arrive in the scene a hotspot is going to, until it's there.
+    private string? _arriving;
+
+    // Off to another room: the screen fades out, and the walker there arrives where the hotspot says.
+    private void Leave(Walker walker, string scene, string? arriveAt)
+    {
+        walker.Stop();
+        _arriving = string.IsNullOrWhiteSpace(arriveAt) ? null : arriveAt.Trim();
+        Game.LoadScene(scene, ExitFade);
+    }
+
+    // Whether this scene's name has been kept for the walkers that save their room (once a scene, where the game is run).
+    private bool _roomSaved;
+
+    private void SaveRoom(ComponentList<Walker> walkers)
+    {
+        _roomSaved = true;
+        if (Game.SceneName is not { } scene)
+            return;
+        foreach (var walker in walkers)
+        {
+            if (!string.IsNullOrWhiteSpace(walker.SaveRoomAs) && Game.Runs(walker.Entity!) && Game.SaveData.GetString(walker.SaveRoomAs.Trim()) != scene)
+                Game.SaveData.Set(walker.SaveRoomAs.Trim(), scene);
+        }
+    }
+
+    // In the room gone to: the players' walkers stand at the hotspot they arrive at (or where the entity named is), facing
+    // into the room.
+    private void ArriveIn(string place)
+    {
+        if (Game.Find(place) is not { } target)
+            return;
+        var at = target.GetComponent<Hotspot>()?.StandPoint ?? Game.CenterOf(target);
+        foreach (var walker in Game.Scene.Active<Walker>())
+        {
+            if (!walker.Controllable)
+                continue;
+            PlaceFeet(walker.Entity!, at, walker.Feet);
+            walker.Stop();
+            if (MathF.Abs(at.X) > There)
+            {
+                walker.Facing = new Vector2(-MathF.Sign(at.X), 0);
+                if (walker.FlipSprite)
+                    Game.Face(walker.Entity!, -MathF.Sign(at.X));
+            }
+        }
     }
 
     // It turns to face what it looks at or uses.

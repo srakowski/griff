@@ -78,7 +78,25 @@ public sealed class SaveData
         return true;
     }
 
-    /// <summary>Forgets every value, e.g. for a "reset progress" button.</summary>
+    /// <summary>
+    /// Forgets the game's progress, for a "New Game" button: every value but those Griff keeps for the player under names
+    /// starting "griff.": the settings (volumes, fullscreen), rebound keys, network name, saved games and lines read.
+    /// </summary>
+    public void ClearProgress()
+    {
+        Crowds.ThrowIfRunning("save");
+        var progress = _values.Select(p => p.Key).Where(k => !k.StartsWith(SettingsPrefix, StringComparison.Ordinal)).ToList();
+        if (progress.Count == 0)
+            return;
+        foreach (var key in progress)
+            _values.Remove(key);
+        Write();
+    }
+
+    // What the names of the values Griff keeps for the player (settings, controls) start with.
+    private const string SettingsPrefix = "griff.";
+
+    /// <summary>Forgets every value, the player's settings and controls too (<see cref="ClearProgress"/> keeps those).</summary>
     public void Clear()
     {
         Crowds.ThrowIfRunning("save");

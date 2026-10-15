@@ -84,10 +84,10 @@ public sealed class InspectorTriggerTests
         doField.Picker.Pick("Open");
         Assert.False(Field(inspector, "Do").IsUnmatched);
 
-        // With no targets, it's done on its own entity: a trigger can always set a flag.
+        // With no targets, it's done on its own entity: a trigger can always set a flag or load a scene.
         Field(inspector, "Targets").TextValue = "";
         Field(inspector, "Do").IsPickerOpen = true;
-        Assert.Equal(["Set Flag", "Clear Flag"], Field(inspector, "Do").Picker!.Matches.Select(c => c.Name));
+        Assert.Equal(["Set Flag", "Clear Flag", "Load Scene"], Field(inspector, "Do").Picker!.Matches.Select(c => c.Name));
     });
 
     [Fact]

@@ -307,6 +307,8 @@ public sealed partial class Game
 
     void IGameContext.FireVolley(Shooter shooter) => FireVolley(shooter);
 
+    void IGameContext.LoadScene(string scene, float fade) => LoadScene(scene, fade);
+
     /// <summary>A shooter's Fire action: one volley now, at its target if it has one in the scene, otherwise its way.</summary>
     internal void FireVolley(Shooter shooter)
     {

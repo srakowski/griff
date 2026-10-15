@@ -31,6 +31,10 @@ A button whose **Action** is **Rebind** and whose **Input Action** is `Jump` wai
 
 Untick a button's **Interactable** and it's drawn faded, ignores the mouse and its shortcut, and is skipped by the arrow keys. **Needs Saved** keeps it that way until something is saved under that name, for a Continue button that waits for a saved game.
 
+## New game and carrying on
+
+A button whose **Action** is **NewGame** starts the game over: it forgets the progress kept in the save data (flags, saved inventories, what menus saved, best scores) but not the player's own settings and controls (volumes, fullscreen, rebound keys), saved games or the lines they've read, and goes to its **Scene**. Give it a **Needs Saved** and it waits until there's something to forget. A **LoadScene** button's **Saved Scene** names a value in the save data holding a scene to go to instead of its **Scene**: a Play button that carries on where the player left off, which goes to **Scene** until something's saved there (an adventure's walker keeps the room it's in with its **Save Room As**; see [Rooms](/docs/adventures/#rooms)). The Adventure template's menu has both.
+
 ## Nine-slice panels
 
 Set a sprite's **Slice** to how much of its image is border (say 0.25 for a quarter at each edge) and its **Slice Size** to how big the border is drawn: its corners then stay crisp however you stretch its **Size**, for menu panels, dialogue boxes and buttons from one small image.

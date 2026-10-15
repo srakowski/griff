@@ -218,6 +218,12 @@ public sealed partial class Game
         return clicked;
     }
 
+    // The scene a Load Scene button's Saved Scene names in the save data, or null while there's none saved there.
+    private string? SavedScene(Button button) =>
+        string.IsNullOrWhiteSpace(button.SavedScene) || SaveData.GetString(button.SavedScene.Trim()) is not { } saved || string.IsNullOrWhiteSpace(saved)
+            ? null
+            : saved.Trim();
+
     private void Click(Button button)
     {
         if (!string.IsNullOrWhiteSpace(button.Sound))
@@ -227,6 +233,12 @@ public sealed partial class Game
             case ButtonAction.LoadScene when string.IsNullOrWhiteSpace(button.Scene):
                 throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" loads a scene, but its Scene isn't set.");
             case ButtonAction.LoadScene:
+                LoadScene(SavedScene(button) ?? button.Scene!, button.Fade);
+                break;
+            case ButtonAction.NewGame when string.IsNullOrWhiteSpace(button.Scene):
+                throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" starts a new game, but its Scene isn't set.");
+            case ButtonAction.NewGame:
+                SaveData.ClearProgress();
                 LoadScene(button.Scene!, button.Fade);
                 break;
             case ButtonAction.RestartScene:

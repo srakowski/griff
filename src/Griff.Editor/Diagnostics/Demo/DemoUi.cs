@@ -427,13 +427,68 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
 
         // Last resort: run the item's command, or pick the choice in its submenu, as clicking it would.
         var first = header.Items.OfType<MenuItem>().First(m => HeaderText(m.Header) == steps[0]);
+        var what = $"menu {top} > {string.Join(" > ", steps)}";
         if (steps.Length > 1 && first.Tag is Core.Commands.EditorCommand chooser)
-            await chooser.ChooseAsync(item);
+            await RunFallback(() => chooser.ChooseAsync(item), what);
+        else if (first.Command is Core.Commands.EditorCommand command)
+            await RunFallback(command.ExecuteAsync, what);
         else
             first.Command?.Execute(null);
         Log?.Invoke($"FORCED menu {top} > {item}");
         await Settle(200);
     }
+
+    /// <summary>
+    /// Waits for a command the demo ran directly (its menu item couldn't be clicked) to finish. A command that opens a
+    /// prompt would wait for an answer the demo can't give, so the prompt is closed and the step fails saying so.
+    /// </summary>
+    public static async Task RunFallback(Func<Task> run, string what, int timeoutMs = 10000)
+    {
+        // Started from the dispatcher rather than here: a command that opens a prompt doesn't return until it's answered.
+        var command = Dispatcher.CurrentDispatcher.InvokeAsync(run, DispatcherPriority.Background).Task.Unwrap();
+        var before = OpenWindows().ToHashSet();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!command.IsCompleted)
+        {
+            if (System.Windows.Interop.ComponentDispatcher.IsThreadModal || MessageBoxWindow() is not null)
+            {
+                var title = DismissPrompts(before);
+                throw new InvalidOperationException($"{what} could not be clicked, and running its command instead opened a prompt ({title}) that a demo cannot answer. Fix why the click missed, or answer the prompt in the script.");
+            }
+
+            if (clock.ElapsedMilliseconds > timeoutMs)
+                throw new InvalidOperationException($"{what} could not be clicked, and its command was still running after {timeoutMs / 1000} s.");
+            await Task.Delay(50);
+        }
+
+        await command;
+    }
+
+    // Every WPF window on this thread, found through its presentation source so it needs no Application.
+    private static List<Window> OpenWindows() =>
+        PresentationSource.CurrentSources.OfType<HwndSource>().Select(source => source.RootVisual).OfType<Window>().ToList();
+
+    // Closes what a command left open, so the editor is usable again; says what it was.
+    private static string DismissPrompts(HashSet<Window> before)
+    {
+        var titles = new List<string>();
+        if (MessageBoxWindow() is { } box)
+        {
+            titles.Add(TextOf(box));
+            PostMessage(box, 0x0010, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        foreach (var window in OpenWindows().Where(w => !before.Contains(w) && w is not DemoOverlay and not DemoControlBar).ToList())
+        {
+            titles.Add(string.IsNullOrEmpty(window.Title) ? window.GetType().Name : window.Title);
+            window.Close();
+        }
+
+        return titles.Count == 0 ? "an unknown window" : string.Join(", ", titles);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     /// <summary>Picks an entity in the Hierarchy by clicking its row (Ctrl- or Shift-clicking it with those modifiers).</summary>
     public async Task Select(string name, int nth = 0, ModifierKeys modifiers = ModifierKeys.None)
     {

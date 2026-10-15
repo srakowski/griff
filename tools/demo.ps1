@@ -35,6 +35,8 @@ $editor = Join-Path $root 'src\Griff.Editor\bin\Debug\net10.0-windows\Griff.Edit
 $work = Join-Path ([IO.Path]::GetTempPath()) 'griff-demos'
 $log = Join-Path $work 'demo.log'
 New-Item -ItemType Directory -Force $work | Out-Null
+# A failed earlier run can leave its project here (half made, or locked), which would block the next one: start clean.
+Get-ChildItem $work -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
 if (-not $NoBuild) {
     Write-Host 'Building the editor...'

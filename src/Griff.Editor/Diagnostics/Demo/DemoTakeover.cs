@@ -17,11 +17,11 @@ internal sealed class DemoTakeover : IDisposable
     private (int X, int Y)? _anchor;
     private DateTime _ignoreUntil;
 
-    public DemoTakeover(DemoControl control)
+    public DemoTakeover(DemoControl control, bool enabled = true)
     {
         _control = control;
         _proc = OnMouse;
-        _hook = SetWindowsHookEx(MouseHook, _proc, GetModuleHandle(null), 0);
+        _hook = enabled ? SetWindowsHookEx(MouseHook, _proc, GetModuleHandle(null), 0) : IntPtr.Zero;
         // A resume (from the bar or a hotkey) gives the hand a moment to let go before movement counts again.
         control.PauseChanged += (_, paused) =>
         {

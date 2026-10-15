@@ -64,6 +64,9 @@ internal static class DemoRunner
         if (File.Exists(Path.Combine(ProjectFolder, ".griff-demo")))
             Directory.Delete(ProjectFolder, recursive: true);
 
+        // Starting over: so do the projects a failed demo left in the demos' folder, which would block this one.
+        DemoFile.ClearProjects(DemoFile.ProjectsRoot);
+
         var control = new DemoControl();
         DemoControl.Active = control;
         DemoPreferences.Attach(control, DemoPreferences.DefaultPath, DemoPreferences.MutedForRun);
@@ -75,7 +78,12 @@ internal static class DemoRunner
         var failed = false;
 
         // Reaching for the mouse pauses the demo, so the viewer can use the bar (or anything else).
-        var takeover = new DemoTakeover(control);
+        // A check (GRIFF_DEMO_EXIT=1) has nobody to resume it, so there the mouse doesn't pause it: a stray move would
+        // otherwise leave it waiting for good.
+        var checking = Environment.GetEnvironmentVariable("GRIFF_DEMO_EXIT") == "1";
+        var takeover = new DemoTakeover(control, enabled: !checking);
+        if (checking)
+            StartWatchdog(Log);
         takeover.TookOver += (_, _) => overlay.Badge("⏸  Paused: the mouse is yours · ▶ or Ctrl+Alt+Space to resume");
         control.PauseChanged += (_, paused) =>
         {
@@ -181,6 +189,24 @@ internal static class DemoRunner
             Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
             Environment.Exit(0);
         }
+    }
+
+    // A step that blocks the editor's own thread can't be stopped from inside it: a thread of its own ends the check.
+    private static void StartWatchdog(Action<string> log)
+    {
+        var timer = new Thread(() =>
+        {
+            while (true)
+            {
+                Thread.Sleep(2000);
+                if (DemoStepGuard.Heartbeat is { } beat && Stopwatch.GetElapsedTime(beat) > TimeSpan.FromSeconds(60))
+                {
+                    log("demo failed: the editor stopped responding for over 60 s during a step");
+                    Environment.Exit(1);
+                }
+            }
+        }) { IsBackground = true };
+        timer.Start();
     }
 
     // The window's whole frame on screen, title bar included, in device pixels.

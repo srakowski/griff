@@ -4,6 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
+    <!-- No background garbage collections: one starting mid-measure counts a thread's unused allocation context as garbage (see Griff.Tests.csproj). -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

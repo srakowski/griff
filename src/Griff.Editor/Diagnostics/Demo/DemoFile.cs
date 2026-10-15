@@ -23,7 +23,35 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// </summary>
 internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options)
 {
-    private static readonly string ProjectsRoot = Path.Combine(Path.GetTempPath(), "griff-demos");
+    /// <summary>Where demos make their projects: this folder is the demos' own.</summary>
+    internal static readonly string ProjectsRoot = Path.Combine(Path.GetTempPath(), "griff-demos");
+
+    /// <summary>
+    /// The longest one step may run, not counting time spent paused (<c>wait:</c> adds its seconds). A step that takes
+    /// longer fails the demo, saying which line, rather than leaving a check waiting for good.
+    /// </summary>
+    internal static TimeSpan StepLimit { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>Clears out what an earlier (failed) run left in <paramref name="root"/>: every project folder in it.</summary>
+    internal static void ClearProjects(string root)
+    {
+        if (!Directory.Exists(root))
+            return;
+        foreach (var folder in Directory.EnumerateDirectories(root))
+        {
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Something still holds it; the demo that wants this name says so.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
 
     private sealed record Line(int Number, string Command, string Argument);
 
@@ -95,7 +123,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         {
             try
             {
-                await RunLine(line);
+                await RunWithinLimit(line);
             }
             catch (OperationCanceledException)
             {
@@ -109,6 +137,23 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 throw new InvalidOperationException($"{Path.GetFileName(path)} line {line.Number} ({line.Command}: {line.Argument}): {ex.Message}", ex);
             }
         }
+    }
+
+    private Task RunWithinLimit(Line line)
+    {
+        var limit = StepLimit;
+        // The steps that wait on purpose say for how long: "wait: 30", "waitfor: Victory | 240", "hold: Right 1.5".
+        if (line.Command is "wait" or "hold" or "mouselook" or "gamehold" or "ready" or "afford" or "have" or "waitgone" or "waitfor")
+        {
+            var words = line.Argument.Split(['|', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var word in words)
+            {
+                if (double.TryParse(word, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds is > 0 and < 3600)
+                    limit += TimeSpan.FromSeconds(seconds);
+            }
+        }
+
+        return DemoStepGuard.Run(() => RunLine(line), limit, () => options.Control.Paused);
     }
 
     private async Task RunLine(Line line)
@@ -1096,12 +1141,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     private static string FreshFolder(string name)
     {
         var folder = Path.Combine(ProjectsRoot, name);
+        // ProjectsRoot belongs to the demos, so whatever is there (a failed run's half-made project too) goes.
         if (Directory.Exists(folder))
-        {
-            if (!File.Exists(Path.Combine(folder, ".griff-demo")))
-                throw new IOException($"{folder} exists and wasn't made by a demo.");
             Directory.Delete(folder, recursive: true);
-        }
 
         Directory.CreateDirectory(ProjectsRoot);
         return folder;

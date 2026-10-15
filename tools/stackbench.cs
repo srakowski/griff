@@ -12,10 +12,12 @@
 // pegs, every other one with a crate on its end, timed as they swing from the start and again ten seconds on. With
 // --breakable 150, that many Breakable posts and planks stacked into towers five storeys high, asleep, and a heavy ball
 // thrown through them, timed step by step as they crack, break into pieces and collapse (once untimed first, so nothing is
-// compiled while it's timed). It prints the median, mean and worst step and the bytes allocated meanwhile. The numbers are
-// this computer's: compare runs on the same one.
+// compiled while it's timed); with --sturdy too, too strong to break, so they only crack and fall (a big collapse, nothing
+// added to the scene). It prints the median, mean and worst step and the bytes allocated meanwhile (for a collapse, the
+// scene's first step, which sets everything up, apart from the rest). The numbers are this computer's: compare runs on the
+// same one.
 //   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60] [--hinges 60]
-//     [--welded 60] [--ropes 40] [--breakable 150]
+//     [--welded 60] [--ropes 40] [--breakable 150 [--sturdy]]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
@@ -79,6 +81,7 @@ if (ropes > 0)
 }
 
 var breakable = Arg("--breakable", 0);
+var sturdy = args.Contains("--sturdy");
 if (breakable > 0)
 {
     // Towers of posts and planks (three a storey, five storeys a tower) side by side, asleep, and a heavy ball thrown low
@@ -108,7 +111,7 @@ if (breakable > 0)
             var body = entity.AddComponent<Body>();
             (body.Rotates, body.Asleep, body.Mass) = (true, true, size.X * size.Y);
             var piece = entity.AddComponent<Breakable>();
-            (piece.Strength, piece.MinHit) = (6, 1.5f);
+            (piece.Strength, piece.MinHit) = (sturdy ? float.MaxValue : 6, 1.5f);
             towers.Add(entity);
             pieces.Add(piece);
         }
@@ -128,22 +131,26 @@ if (breakable > 0)
 
     var (timed, collapsing, all) = Towers();
     var times = new double[steps];
-    var before = GC.GetAllocatedBytesForCurrentThread();
-    var most = 0;
+    var (most, first, allocated) = (0, 0L, 0L);
     for (var i = 0; i < steps; i++)
     {
+        var before = GC.GetAllocatedBytesForCurrentThread();
         var start = Stopwatch.GetTimestamp();
         collapsing.Tick(Frame);
         times[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (i == 0)
+            first = bytes;
+        else
+            allocated += bytes;
         most = Math.Max(most, timed.All<Body>().Count);
     }
 
-    var allocated = (GC.GetAllocatedBytesForCurrentThread() - before) / steps;
     Array.Sort(times);
-    Console.WriteLine($"{breakable} breakable posts and planks in towers of five storeys, a heavy ball thrown through them: " +
+    Console.WriteLine($"{breakable} {(sturdy ? "sturdy" : "breakable")} posts and planks in towers of five storeys, a heavy ball thrown through them: " +
         $"{all.Count(b => b.Broken)} broke, {all.Count(b => !b.Broken && b.Damage > 0)} cracked, up to {most} bodies at once");
-    Console.WriteLine($"collapse: median {times[steps / 2]:0.000} ms, mean {times.Average():0.000} ms, worst {times[^1]:0.000} ms a step, " +
-        $"{allocated} bytes a step (the pieces things break into)");
+    Console.WriteLine($"collapse: median {times[steps / 2]:0.000} ms, mean {times.Average():0.000} ms, worst {times[^1]:0.000} ms a step; " +
+        $"the scene's first step {first} bytes, then {allocated / (steps - 1)} bytes a step{(sturdy ? "" : " (the pieces things break into)")}");
     return;
 }
 

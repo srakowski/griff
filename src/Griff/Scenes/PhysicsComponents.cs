@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Griff.Scenes;
 
@@ -78,12 +79,32 @@ public static class CollisionLayers
         ? []
         : list.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    // Lists already read, by the very string they were read from (a collider's Ignore Layers, as long as it isn't changed).
+    private static readonly ConditionalWeakTable<string, string[]> s_read = new();
+
+    // Parse, kept for the same string, for physics, which reads every collider's list each step: the array is shared, so
+    // it's never changed.
+    internal static string[] ParseKept(string? list) =>
+        string.IsNullOrWhiteSpace(list) ? [] : s_read.TryGetValue(list, out var layers) ? layers : s_read.GetValue(list, Parse);
+
     /// <summary>True if <paramref name="layer"/> is one of <paramref name="layers"/>.</summary>
     public static bool Contains(IEnumerable<string> layers, string? layer)
     {
+        // Physics asks of every pair of things near each other, each step: an array is gone through without garbage.
+        if (layers is not string[] array)
+            return AnyIs(layers, NameOf(layer));
         var name = NameOf(layer);
-        return layers.Any(l => string.Equals(l, name, StringComparison.OrdinalIgnoreCase));
+        foreach (var l in array)
+        {
+            if (string.Equals(l, name, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
+
+    private static bool AnyIs(IEnumerable<string> layers, string name) =>
+        layers.Any(l => string.Equals(l, name, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>

@@ -403,6 +403,77 @@ public sealed class BreakableTests
         Assert.True(perStep == 0, $"A step allocated {perStep:N0} bytes.");
     }
 
+    // Ten towers of posts and planks five storeys high (150 bodies that turn), asleep, too strong to break, and a heavy ball
+    // thrown low through them all.
+    private static (Scene Scene, Game Game) Towers()
+    {
+        var scene = new Scene();
+        Floor(scene);
+        for (var i = 0; i < 150; i++)
+        {
+            var (tower, storey, part) = (i / 15, i / 3 % 5, i % 3);
+            var (x, y) = ((tower - 4.5f) * 4, storey * 2.35f);
+            var (at, size, name) = part switch
+            {
+                0 => (new Vector2(x - 1.1f, y + 1), new Vector2(0.35f, 2), "Post"),
+                1 => (new Vector2(x + 1.1f, y + 1), new Vector2(0.35f, 2), "Post"),
+                _ => (new Vector2(x, y + 2.175f), new Vector2(3, 0.35f), "Plank"),
+            };
+            var body = Block(scene, name, at, size, strength: float.MaxValue, minHit: 1.5f, mass: size.X * size.Y).GetComponent<Body>()!;
+            body.Asleep = true;
+        }
+
+        var ball = new Entity("Ball");
+        ball.Transform.Position = new Vector3(-24, 3, 0);
+        ball.AddComponent<CircleCollider>().Radius = 0.6f;
+        var thrown = ball.AddComponent<Body>();
+        (thrown.Rotates, thrown.Mass, thrown.Velocity) = (true, 40, new Vector2(30, 2));
+        scene.Add(ball);
+        return (scene, new Game(scene, new InputState()));
+    }
+
+    [Fact]
+    public void A_big_collapse_where_nothing_breaks_makes_no_garbage_after_the_scenes_first_step()
+    {
+        // The whole collapse, from the first knock to the pieces settling: what it needs room for is made in the scene's
+        // first step (which sets the scene up), and no step after it allocates, however many bodies wake and touch. Only
+        // the steps are counted, on this thread (and the workers' for it), and only those no garbage collection ran during:
+        // another thread's collection (other tests running alongside) can add kilobytes to this thread's count that it
+        // never allocated. The collapse goes the same every time, so it's run again until every step has been counted
+        // (the least it allocated in any run: the runtime finishes compiling what the first ran meanwhile).
+        const int Steps = 300;
+        var least = new long[Steps];
+        Array.Fill(least, -1);
+        var (fell, cracked) = (0, 0);
+        for (var run = 0; run < 20 && least.Skip(1).Any(bytes => bytes != 0); run++)
+        {
+            if (run > 0)
+                Thread.Sleep(50);
+            var (scene, game) = Towers();
+            var starts = scene.Entities.Where(e => e.Name is "Post" or "Plank").Select(e => (Entity: e, e.Transform.Position)).ToArray();
+            game.Tick(Frame);
+            for (var i = 1; i < Steps; i++)
+            {
+                var (before, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
+                game.Tick(Frame);
+                var bytes = Workers.AllocatedBytes() - before;
+                if (GC.CollectionCount(0) == collections)
+                    least[i] = least[i] < 0 ? bytes : Math.Min(least[i], bytes);
+            }
+
+            fell = starts.Count(s => Vector3.Distance(s.Entity.Transform.Position, s.Position) > 0.5f);
+            cracked = starts.Count(s => s.Entity.GetComponent<Breakable>()!.Damage > 0);
+        }
+
+        Assert.True(fell >= 100, $"Only {fell} of the 150 pieces fell.");
+        Assert.True(cracked > 0);
+        var uncounted = least.Skip(1).Count(bytes => bytes < 0);
+        Assert.True(uncounted <= Steps / 10, $"{uncounted} of the steps always had a garbage collection run during them.");
+        var allocated = least.Where(bytes => bytes > 0).Sum();
+        Assert.True(allocated == 0, $"The collapse's steps allocated {allocated:N0} bytes, in steps such as " +
+            string.Join(", ", Enumerable.Range(1, Steps - 1).Where(i => least[i] > 0).Take(20)) + "...");
+    }
+
     private sealed class Vector2Comparer(float tolerance) : IEqualityComparer<Vector2>
     {
         public bool Equals(Vector2 a, Vector2 b) => Vector2.Distance(a, b) <= tolerance;

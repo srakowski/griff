@@ -575,4 +575,25 @@ public class RotatingBodyTests
 
         Assert.True(perStep == 0, $"A step allocated {perStep:N0} bytes.");
     }
+
+    [Fact]
+    public void Stepping_things_on_layers_that_pass_through_others_makes_no_garbage()
+    {
+        // Each step reads every collider's Ignore Layers: the same list isn't read into a new one each time.
+        var floor = AddWall("Floor", new Vector2(0, -0.5f), new Vector2(40, 1));
+        floor.GetComponent<BoxCollider>()!.IgnoreLayers = "Ghost";
+        for (var i = 0; i < 6; i++)
+        {
+            var (crate, body) = AddCrate($"Crate {i}", new Vector2(-4 + i * 1.3f, 1 + i * 0.4f), new Vector2(1, 0.7f), degrees: i * 11, rotates: i % 2 == 0);
+            var collider = crate.GetComponent<BoxCollider>()!;
+            (collider.Layer, collider.IgnoreLayers) = ("Crate", "Ghost, Shot");
+            body.Spin = i * 20;
+        }
+
+        Run(0.5f);
+
+        var perStep = Allocations.PerCall(() => _game.Tick(Frame), 20);
+
+        Assert.True(perStep == 0, $"A step allocated {perStep:N0} bytes.");
+    }
 }

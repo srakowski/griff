@@ -585,6 +585,9 @@ public sealed partial class Game
             return;
         Physics.Step(Scene, Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
 
+        // Room for what a heap of bodies that turn bump into, all awake at once, so a collapse doesn't grow it as it goes.
+        _touches.EnsureCapacity(Physics.TouchRoom);
+
         // Ropes that snapped say so.
         foreach (var rope in Physics.Snapped)
         {

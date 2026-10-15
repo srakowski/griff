@@ -93,6 +93,7 @@ public sealed partial class Physics
         movers.Clear();
         _moverOf.Clear();
         _memory = scene.Contacts;
+        MakeRoom(scene);
         _sleepers.Clear();
         _solving.Clear();
         _widestMargin = 0;
@@ -213,6 +214,47 @@ public sealed partial class Physics
         if (_ropes.Count > 0)
             FinishRopes(scene.Contacts, CollectionsMarshal.AsSpan(movers), solids, dt, onCollision);
     }
+
+    // How many bodies that turn the step's lists have room for, all awake and touching.
+    private int _roomFor;
+
+    // About how many points a body in a heap touches things at, and the touches the game hears of for each.
+    private const int ContactsPerBody = 4;
+    private const int TouchesPerBody = 2 * ContactsPerBody;
+
+    // And the points the scene remembers for each: its own, and those of what leans on it as it sleeps.
+    private const int MemoryPerBody = 2 * ContactsPerBody;
+
+    // The points one body gathers, touching many things at once.
+    private const int GatherRoom = 32;
+
+    // Room in the step's lists (and the scene's memory of its contacts) for every body that turns to be awake and touching
+    // what's round it, made as soon as there are that many (and twice as much as more come): a sleeping pile knocked down
+    // then wakes and collapses without them growing a step at a time, which made garbage as it went.
+    private void MakeRoom(Scene scene)
+    {
+        var bodies = _turning.Count;
+        foreach (var group in _turningGroups)
+            bodies += group.Bodies.Count;
+        if (bodies > _roomFor)
+        {
+            _roomFor = Math.Max(bodies, _roomFor * 2);
+            _movers.EnsureCapacity(_roomFor);
+            _moverOf.EnsureCapacity(_roomFor);
+            _islandStill.EnsureCapacity(_roomFor);
+            _sleepers.EnsureCapacity(_roomFor);
+            _sleeping.EnsureCapacity(_roomFor);
+            _solving.EnsureCapacity(_roomFor * ContactsPerBody);
+            _impacts.EnsureCapacity(_roomFor * 2);
+            _contacts.EnsureCapacity(GatherRoom);
+        }
+
+        // The scene's own, made again for a scene this hasn't stepped before.
+        scene.Contacts.EnsureCapacity(_roomFor * MemoryPerBody);
+    }
+
+    /// <summary>How many touches between things a step can report without the game's set of them having to grow.</summary>
+    internal int TouchRoom => _roomFor * TouchesPerBody;
 
     // Whether a solid has gone (taken out, turned off, tiles cleared) from beside a sleeping body since the last step: what
     // held it up may have gone with it.

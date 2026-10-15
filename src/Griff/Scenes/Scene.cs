@@ -257,7 +257,7 @@ public sealed class Scene
             return;
         foreach (var entity in Entities)
         {
-            foreach (var component in entity.Components)
+            foreach (var component in entity.ComponentList)
             {
                 foreach (var index in IndexesFor(component))
                 {
@@ -278,10 +278,12 @@ public sealed class Scene
     private ComponentIndex[] IndexesFor(Component component)
     {
         var type = component.GetType();
-        if (!_indexesFor.TryGetValue(type, out var indexes))
-            _indexesFor[type] = indexes = [.. _indexes.Values.Where(i => i.Type.IsAssignableFrom(type))];
-        return indexes;
+        return _indexesFor.TryGetValue(type, out var indexes) ? indexes : _indexesFor[type] = IndexesListing(type);
     }
+
+    // Worked out once a type, apart, so the lambda's closure isn't made on every call (every component, each time the
+    // lists are rebuilt or something is added) but only when it's needed.
+    private ComponentIndex[] IndexesListing(Type type) => [.. _indexes.Values.Where(i => i.Type.IsAssignableFrom(type))];
 
     // A component has joined an entity in the scene, or moved among its components: its lists are rebuilt.
     internal void ComponentMoved(Component component)
@@ -350,7 +352,7 @@ public sealed class Scene
             _byId.Add(e.Id, e);
             if (_ordered)
                 e.Order = _nextOrder++;
-            foreach (var component in e.Components)
+            foreach (var component in e.ComponentList)
             {
                 // A sprite flashed before it was added flashes here.
                 (component as Sprite)?.ListEffects();
@@ -386,7 +388,7 @@ public sealed class Scene
             if (e.NetFlags != NetFlags.None)
                 NetFlagged--;
             _byId.Remove(e.Id);
-            foreach (var component in e.Components)
+            foreach (var component in e.ComponentList)
                 ComponentLeft(component);
         }
 
@@ -408,7 +410,7 @@ public sealed class Scene
         {
             // Its position now means somewhere else (it's from the new parent): drawn where it is, not glided.
             e.Transform.Jumped();
-            foreach (var component in e.Components)
+            foreach (var component in e.ComponentList)
                 ComponentMoved(component);
         }
 

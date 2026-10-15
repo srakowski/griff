@@ -101,15 +101,9 @@ public sealed partial class Physics
         if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
             yield break;
 
-        var world = tilemap.Entity!.Transform.WorldMatrix;
-        var scale = ScaleOf(world);
-        var origin = new Vector2(world.M41, world.M42);
-        var size = tilemap.TileSize;
+        var placing = TilePlacing.Of(tilemap);
         foreach (var (x, y, length, oneWay) in tilemap.CollisionRuns())
-        {
-            var center = new Vector2((x + length / 2f) * size, -(y + 0.5f) * size);
-            yield return (new Box(origin + center * scale, new Vector2(length * size, size) * scale / 2), oneWay);
-        }
+            yield return (placing.Run(x, y, length), oneWay);
     }
 
     /// <summary>
@@ -121,14 +115,33 @@ public sealed partial class Physics
         if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
             yield break;
 
-        var world = tilemap.Entity!.Transform.WorldMatrix;
-        var scale = ScaleOf(world);
-        var origin = new Vector2(world.M41, world.M42);
-        var size = tilemap.TileSize;
+        var placing = TilePlacing.Of(tilemap);
         foreach (var (x, y, rising) in tilemap.SlopeCells())
+            yield return (placing.Cell(x, y), rising);
+    }
+
+    // Where a square tilemap's cells are in the world: its origin, its scale and the size of a tile. A step reads its tiles'
+    // boxes through it straight from the map's lists, with no enumerators.
+    private readonly record struct TilePlacing(Vector2 Origin, Vector2 Scale, float Size)
+    {
+        public static TilePlacing Of(Tilemap tilemap)
         {
-            var center = new Vector2((x + 0.5f) * size, -(y + 0.5f) * size);
-            yield return (new Box(origin + center * scale, new Vector2(size) * scale / 2), rising);
+            var world = tilemap.Entity!.Transform.WorldMatrix;
+            return new TilePlacing(new Vector2(world.M41, world.M42), ScaleOf(world), tilemap.TileSize);
+        }
+
+        /// <summary>The box round a run of <paramref name="length"/> tiles from cell (x, y) along the row.</summary>
+        public Box Run(int x, int y, int length)
+        {
+            var center = new Vector2((x + length / 2f) * Size, -(y + 0.5f) * Size);
+            return new Box(Origin + center * Scale, new Vector2(length * Size, Size) * Scale / 2);
+        }
+
+        /// <summary>Cell (x, y)'s box.</summary>
+        public Box Cell(int x, int y)
+        {
+            var center = new Vector2((x + 0.5f) * Size, -(y + 0.5f) * Size);
+            return new Box(Origin + center * Scale, new Vector2(Size) * Scale / 2);
         }
     }
 
@@ -236,7 +249,7 @@ public sealed partial class Physics
         _hex.Clear();
         if (scene.Active<Tilemap>().Count > 0)
         {
-            _slopes.AddRange(Slopes(scene));
+            CollectSlopes(scene, _slopes);
             CollectIsometric(scene, null, _isometric);
             CollectHex(scene, null, _hex);
         }
@@ -801,6 +814,22 @@ public sealed partial class Physics
         return false;
     }
 
+    // A step's slopes, into a list without enumerators: those of every solid square map.
+    private static void CollectSlopes(Scene scene, List<Slope> into)
+    {
+        foreach (var tilemap in scene.Active<Tilemap>())
+        {
+            if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
+                continue;
+            var cells = tilemap.SlopeCells();
+            if (cells.Count == 0)
+                continue;
+            var (placing, filter) = (TilePlacing.Of(tilemap), new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers)));
+            for (var i = 0; i < cells.Count; i++)
+                into.Add(new Slope(tilemap.Entity!, placing.Cell(cells[i].X, cells[i].Y), cells[i].Rising, filter));
+        }
+    }
+
     private static IEnumerable<Slope> Slopes(Scene scene, string? layers = null)
     {
         var only = layers is null ? null : CollisionLayers.Parse(layers);
@@ -808,7 +837,7 @@ public sealed partial class Physics
         {
             if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
-            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers));
             foreach (var (cell, rising) in SlopeShapes(tilemap))
                 yield return new Slope(tilemap.Entity!, cell, rising, filter);
         }
@@ -1017,11 +1046,13 @@ public sealed partial class Physics
             }
 
             var tilemap = tilemaps[t++];
-            if (!tilemap.Solid || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
+            if (!tilemap.Solid || tilemap.Shape != TileShape.Square || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
-            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
-            foreach (var (box, oneWay) in TileShapes(tilemap))
-                into.Add(new Shape(tilemap.Entity!, null, box, oneWay, filter));
+            var filter = new LayerFilter(tilemap.Layer, CollisionLayers.ParseKept(tilemap.IgnoreLayers));
+            var placing = TilePlacing.Of(tilemap);
+            var runs = tilemap.CollisionRuns();
+            for (var i = 0; i < runs.Count; i++)
+                into.Add(new Shape(tilemap.Entity!, null, placing.Run(runs[i].X, runs[i].Y, runs[i].Length), runs[i].OneWay, filter));
         }
     }
 
@@ -1030,7 +1061,7 @@ public sealed partial class Physics
     {
         if (a.Entity != b.Entity)
             return a.Entity!.Order < b.Entity!.Order;
-        foreach (var component in a.Entity!.Components)
+        foreach (var component in a.Entity!.ComponentList)
         {
             if (component == a)
                 return true;
@@ -1183,7 +1214,7 @@ public sealed partial class Physics
     // A shape's layer and the layers it passes through.
     private readonly record struct LayerFilter(string? Layer, string[] Ignores)
     {
-        public static LayerFilter Of(Collider collider) => new(collider.Layer, CollisionLayers.Parse(collider.IgnoreLayers));
+        public static LayerFilter Of(Collider collider) => new(collider.Layer, CollisionLayers.ParseKept(collider.IgnoreLayers));
 
         public bool IgnoresEachOther(LayerFilter other) =>
             (Ignores.Length > 0 && CollisionLayers.Contains(Ignores, other.Layer)) ||

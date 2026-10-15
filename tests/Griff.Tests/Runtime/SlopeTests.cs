@@ -259,6 +259,35 @@ public class SlopeTests
     }
 
     [Fact]
+    public void SteppingAmongASolidTilemapsWallsAndSlopes_MakesNoGarbage()
+    {
+        // Each step reads the maps' tiles and slopes into the world's shapes: straight from their lists, with nothing made.
+        AddLevel(
+            "0.........0",
+            "0...10....0",
+            "00010000200",
+            "00000000000");
+        var player = AddPlayer(new Vector2(2, -2));
+        var crate = new Entity("Crate");
+        crate.Transform.Position = new Vector3(7, -1, 0);
+        crate.AddComponent<BoxCollider>().IgnoreLayers = "Ghost";
+        crate.AddComponent<Body>().Rotates = true;
+        _scene.Add(crate);
+        Walk(player, 3, 1);
+
+        var speed = 3f;
+        var perStep = Allocations.PerCall(() =>
+        {
+            if (X(player) > 8 || X(player) < 2)
+                speed = X(player) > 8 ? -3 : 3;
+            player.Velocity = player.Velocity with { X = speed };
+            _game.Tick(Step);
+        }, 30);
+
+        Assert.True(perStep == 0, $"A step allocated {perStep:N0} bytes.");
+    }
+
+    [Fact]
     public void PaintingASlope_UpdatesTheSlopes()
     {
         var tilemap = AddLevel("....", "0000");

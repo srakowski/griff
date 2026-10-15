@@ -23,6 +23,13 @@ internal sealed class ContactMemory
 
     public void Clear() => _pushes.Clear();
 
+    /// <summary>Makes room to remember <paramref name="points"/> points without growing.</summary>
+    public void EnsureCapacity(int points)
+    {
+        if (_pushes.EnsureCapacity(0) < points)
+            _pushes.EnsureCapacity(points);
+    }
+
     /// <summary>Forgets every point but those of <paramref name="bodies"/> (entity ids).</summary>
     public void KeepOnly(HashSet<Guid> bodies)
     {

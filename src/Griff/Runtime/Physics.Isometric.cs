@@ -149,7 +149,7 @@ public sealed partial class Physics
             var toGrid = toLocal * new Matrix3x2(across.X, across.Y, down.X, down.Y, 0, 0);
             if (!Matrix3x2.Invert(toGrid, out var fromGrid))
                 return null;
-            return new IsometricWalls(map, toGrid, fromGrid, new LayerFilter(map.Layer, CollisionLayers.Parse(map.IgnoreLayers)));
+            return new IsometricWalls(map, toGrid, fromGrid, new LayerFilter(map.Layer, CollisionLayers.ParseKept(map.IgnoreLayers)));
         }
 
         // Half a footprint's side in cells, for a collider half a world width wide.

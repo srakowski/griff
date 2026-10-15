@@ -108,16 +108,17 @@ public sealed class Timeline
 
     /// <summary>
     /// Call once per step of the game. Takes a snapshot every <see cref="Spacing"/> steps (or now, with
-    /// <paramref name="force"/>) and drops the oldest past capacity.
+    /// <paramref name="force"/>) and drops the oldest past capacity. True if it took one (which is then also the moment
+    /// <see cref="Remember"/> keeps).
     /// </summary>
-    public void Record(Scene scene, double time, bool force = false)
+    public bool Record(Scene scene, double time, bool force = false)
     {
         var due = force || ++_stepsSinceSnapshot >= Spacing;
         // The last is kept once it's settled; the next isn't taken until it is.
         if (_settling is not null && (due || _settling.IsCompleted))
             Keep(trim: true);
         if (!due)
-            return;
+            return false;
 
         _stepsSinceSnapshot = 0;
         var start = Stopwatch.GetTimestamp();
@@ -126,10 +127,87 @@ public sealed class Timeline
         _pendingTimed = !force;
         if (_pendingTimed)
             _averageCapture = Average(_averageCapture, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        (_remembered, _rememberedCopy) = (_snapshots[^1], false);
         while (_snapshots.Count > _capacity)
             DropOldest();
         _settling = Task.Run(Settle);
+        return true;
     }
+
+    // ----- Remembering the moment before a step -----
+
+    // The moment the game's next step starts from: a snapshot, or (with _rememberedCopy) the scene copied out into _spare.
+    private Snapshot? _remembered;
+    private bool _rememberedCopy;
+    private Frame _spare = new();
+    private double _spareTime;
+
+    /// <summary>
+    /// The most a step may spend copying the scene out for <see cref="Remember"/>, on average (a quarter millisecond unless
+    /// set): a scene that takes longer isn't remembered between snapshots, and <see cref="KeepRemembered"/> falls back to
+    /// the newest snapshot.
+    /// </summary>
+    public TimeSpan RememberBudget { get; init; } = TimeSpan.FromMilliseconds(0.25);
+
+    /// <summary>
+    /// Remembers the scene as it is between two steps (after a step that took no snapshot), so that if the next step goes
+    /// wrong (a script throws), <see cref="KeepRemembered"/> can keep it as a snapshot: the moment just before that step.
+    /// It's copied out as a snapshot is, without settling it or keeping it unless asked; a scene too big to copy out every
+    /// step (see <see cref="RememberBudget"/>) isn't.
+    /// </summary>
+    public void Remember(Scene scene, double time)
+    {
+        (_remembered, _rememberedCopy) = (null, false);
+        if (RememberBudget <= TimeSpan.Zero || _averageCapture > RememberBudget.TotalMilliseconds)
+            return;
+        var start = Stopwatch.GetTimestamp();
+        _spare.Clear();
+        var roots = scene.Roots;
+        for (var i = 0; i < roots.Count; i++)
+            Write(_spare, roots[i]);
+        (_rememberedCopy, _spareTime) = (true, time);
+        _averageCapture = Average(_averageCapture, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+    }
+
+    /// <summary>The next step starts from snapshot <paramref name="index"/> (the game was just put back there).</summary>
+    public void RememberSnapshot(int index) => (_remembered, _rememberedCopy) = (_snapshots[index], false);
+
+    /// <summary>
+    /// The snapshot holding the moment the step under way started from (see <see cref="Remember"/>): one already kept, or
+    /// the remembered copy, kept now as the newest snapshot (anything after <paramref name="position"/>, the moment the game
+    /// went on from, goes first: it's another future). Its index, and whether it's exactly that moment; without one (a scene
+    /// too big to remember every step), the snapshot at <paramref name="position"/>, the last before it. Null if there's none.
+    /// </summary>
+    public (int Index, bool Exact)? KeepRemembered(int position)
+    {
+        if (_remembered is { } snapshot && _snapshots.IndexOf(snapshot) is var index and >= 0)
+            return (index, true);
+        if (!_rememberedCopy)
+            return _snapshots.Count == 0 ? null : (Math.Clamp(position, 0, _snapshots.Count - 1), false);
+
+        if (position < _snapshots.Count - 1)
+            TruncateAfter(position);
+        if (_settling is not null)
+            Keep(trim: true);
+        var basis = _baseSnapshot is { Chain: < KeyEvery - 1 } last ? last : null;
+        var kept = new Snapshot(_spareTime, ++_sequence, basis);
+        (_current, _spare) = (_spare, _current);
+        kept.Entities = _current.Count;
+        _snapshots.Add(kept);
+        _pending = kept;
+        _pendingTimed = false;
+        while (_snapshots.Count > _capacity)
+            DropOldest();
+        _settling = Task.Run(Settle);
+        (_remembered, _rememberedCopy) = (kept, false);
+        return (_snapshots.Count - 1, true);
+    }
+
+    /// <summary>A number that names snapshot <paramref name="index"/> for as long as it's kept (indices move as the oldest go).</summary>
+    public long SequenceAt(int index) => _snapshots[index].Sequence;
+
+    /// <summary>The index of the snapshot <see cref="SequenceAt"/> named <paramref name="sequence"/>, or -1 once it's gone.</summary>
+    public int IndexOfSequence(long sequence) => _snapshots.FindIndex(s => s.Sequence == sequence);
 
     /// <summary>Waits for the newest snapshot to be settled, and keeps it.</summary>
     public void Complete()
@@ -182,6 +260,7 @@ public sealed class Timeline
         _baseSnapshot = null;
         Bytes = 0;
         _stepsSinceSnapshot = 0;
+        (_remembered, _rememberedCopy) = (null, false);
     }
 
     // Copies every entity's record out, depth first, into the current frame, to be settled on another thread.
@@ -192,23 +271,23 @@ public sealed class Timeline
         _current.Clear();
         var roots = scene.Roots;
         for (var i = 0; i < roots.Count; i++)
-            Write(roots[i]);
+            Write(_current, roots[i]);
 
         snapshot.Entities = _current.Count;
         _snapshots.Add(snapshot);
         _pending = snapshot;
     }
 
-    private void Write(Entity entity)
+    private void Write(Frame frame, Entity entity)
     {
-        var buffer = _current.Buffer;
+        var buffer = frame.Buffer;
         var offset = buffer.Length;
         var refStart = buffer.RefCount;
         _codec.Write(entity, buffer);
         var children = entity.ChildList;
-        _current.Add(new Entry(entity.Id, offset, buffer.Length - offset, refStart, buffer.RefCount - refStart, children.Count));
+        frame.Add(new Entry(entity.Id, offset, buffer.Length - offset, refStart, buffer.RefCount - refStart, children.Count));
         for (var i = 0; i < children.Count; i++)
-            Write(children[i]);
+            Write(frame, children[i]);
     }
 
     // On another thread: works out how the pending snapshot keeps each record, into its chunks and strings.

@@ -78,11 +78,21 @@ public sealed class Coroutine
         {
             Advance(game);
         }
-        catch
+        catch (Exception ex) when (StopOnError(ex))
         {
-            Stop();
+            // Never caught here: the exception goes on up to the game's host with the routine's code still under it (so the
+            // editor's debugger can pause at the line that threw), and the routine stops.
             throw;
         }
+    }
+
+    private bool StopOnError(Exception exception)
+    {
+        // The routine running holds its variables (a routine's are fields of the object it is): the debugger shows them.
+        if (Debugging.ScriptProbes.WatchesThrows && _stack.Count > 0)
+            Debugging.ScriptProbes.ThrewInRoutine(exception, _stack.Peek());
+        Stop();
+        return false;
     }
 
     private bool IsOwnerAlive(Scene scene) =>

@@ -447,4 +447,77 @@ public class TimelineTests
         Assert.IsType<MissingComponent>(restored.Roots[0].Components[1]);
         Assert.Equal(serializer.SaveToString(serializer.LoadFromString(file)), serializer.SaveToString(restored));
     }
+
+    // The moment between two steps is remembered (as a snapshot is copied out, but neither settled nor kept), and kept as a
+    // snapshot only when asked: when the step after it went wrong, the timeline holds exactly the moment before that step.
+    [Fact]
+    public void Remembering_each_step_keeps_exactly_the_moment_before_the_step_that_went_wrong()
+    {
+        var scene = new Scene();
+        var ball = new Entity("Ball");
+        ball.AddComponent<BoxCollider>();
+        var body = ball.AddComponent<Body>();
+        body.GravityScale = 0;
+        body.Velocity = new Vector2(6, 0);
+        scene.Add(ball);
+        var game = new Game(scene, new InputState());
+        var timeline = new Timeline(_serializer, capacity: 100, framesPerSnapshot: 10);
+        timeline.Record(scene, 0, force: true);
+
+        // 13 steps: snapshots after steps 10 (and the first), the moment after step 13 remembered.
+        float before = 0;
+        for (var step = 1; step <= 13; step++)
+        {
+            game.Tick(1 / 60.0);
+            if (!timeline.Record(scene, game.Time.Total))
+                timeline.Remember(scene, game.Time.Total);
+            before = ball.Transform.Position.X;
+        }
+
+        Assert.Equal(2, timeline.Count);
+        // The next step goes wrong part way: the ball has moved on.
+        game.Tick(1 / 60.0);
+        Assert.NotEqual(before, ball.Transform.Position.X);
+        var (index, exact) = timeline.KeepRemembered(timeline.Count - 1)!.Value;
+        Assert.True(exact);
+        Assert.Equal(2, index);
+        Assert.Equal(3, timeline.Count);
+        Assert.Equal(before, timeline.Restore(index).Find(ball.Id)!.Transform.Position.X, 4);
+        // Asked again, it's the same snapshot.
+        Assert.Equal((2, true), timeline.KeepRemembered(timeline.Count - 1));
+        var sequence = timeline.SequenceAt(index);
+        Assert.Equal(index, timeline.IndexOfSequence(sequence));
+
+        // A step that took a snapshot is remembered as that snapshot.
+        for (var step = 0; step < 7; step++)
+        {
+            game.Tick(1 / 60.0);
+            if (!timeline.Record(scene, game.Time.Total))
+                timeline.Remember(scene, game.Time.Total);
+        }
+
+        Assert.Equal((3, true), timeline.KeepRemembered(timeline.Count - 1));
+        Assert.Equal(4, timeline.Count);
+
+        // From a rewound moment: the snapshot it went back to, and after a step there, that step's start (the old future goes).
+        timeline.RememberSnapshot(1);
+        Assert.Equal((1, true), timeline.KeepRemembered(1));
+        var restored = timeline.Restore(1);
+        var replay = new Game(restored, new InputState());
+        replay.Tick(1 / 60.0);
+        timeline.Remember(restored, 1);
+        var x = restored.Find(ball.Id)!.Transform.Position.X;
+        replay.Tick(1 / 60.0);
+        Assert.Equal((2, true), timeline.KeepRemembered(1));
+        Assert.Equal(3, timeline.Count);
+        Assert.Equal(x, timeline.Restore(2).Find(ball.Id)!.Transform.Position.X, 4);
+
+        // A scene too slow to copy out every step isn't remembered: the last snapshot before it stands in.
+        var slow = new Timeline(_serializer, framesPerSnapshot: 10) { RememberBudget = TimeSpan.Zero };
+        slow.Record(scene, 0, force: true);
+        slow.Record(scene, 0.1, force: true);
+        slow.Remember(scene, 0.2);
+        Assert.Equal((1, false), slow.KeepRemembered(1));
+        Assert.Equal(2, slow.Count);
+    }
 }

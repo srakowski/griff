@@ -193,13 +193,39 @@ public partial class ScriptEditorView : UserControl
         PausedPanel.Visibility = here || after ? Visibility.Visible : Visibility.Collapsed;
         ValuesTree.ItemsSource = here ? _debugger.Values : null;
         ValuesTree.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
-        StepOverButton.Visibility = StepOutButton.Visibility = here ? Visibility.Visible : Visibility.Collapsed;
-        if (here)
+        // Where a script threw, there's no stepping on through the line: Continue plays on, or rewind to before it.
+        var thrown = here && _debugger.StoppedByException;
+        StepIntoButton.Visibility = thrown ? Visibility.Collapsed : Visibility.Visible;
+        StepOverButton.Visibility = StepOutButton.Visibility = here && !thrown ? Visibility.Visible : Visibility.Collapsed;
+        RewindButton.Visibility = thrown ? Visibility.Visible : Visibility.Collapsed;
+        ExceptionText.Visibility = thrown ? Visibility.Visible : Visibility.Collapsed;
+        ExceptionText.Text = thrown ? _debugger.ExceptionMessage : null;
+        PausedPanel.BorderBrush = thrown ? ThrownEdge : PausedEdge;
+        PausedIcon.Foreground = thrown ? ThrownMark : PausedMark;
+        if (thrown)
+            PausedTitle.Text = $"Exception at line {_debugger.PausedLine}  ·  {_debugger.PausedIn}";
+        else if (here)
             PausedTitle.Text = (_debugger.StoppedByStep && _debugger.StoppedBy is { } step && step != "a breakpoint" ? $"{step} to line {_debugger.PausedLine}" : $"Paused at line {_debugger.PausedLine}")
                 + $"  ·  {_debugger.PausedIn}";
         else if (after)
-            PausedTitle.Text = "Paused after the frame  ·  no more script ran in it";
+            PausedTitle.Text = _debugger.StepEnded?.Contains("exception", StringComparison.Ordinal) == true
+                ? "Paused after the frame  ·  the exception ended it"
+                : "Paused after the frame  ·  no more script ran in it";
     }
+
+    private static readonly System.Windows.Media.Brush PausedEdge = Frozen(0xB0, 0xF5, 0xC5, 0x42);
+    private static readonly System.Windows.Media.Brush ThrownEdge = Frozen(0xC0, 0xE5, 0x48, 0x4D);
+    private static readonly System.Windows.Media.Brush PausedMark = Frozen(0xFF, 0xF5, 0xC5, 0x42);
+    private static readonly System.Windows.Media.Brush ThrownMark = Frozen(0xFF, 0xE5, 0x48, 0x4D);
+
+    private static System.Windows.Media.SolidColorBrush Frozen(byte a, byte r, byte g, byte b)
+    {
+        var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private void OnRewindClicked(object sender, RoutedEventArgs e) => _debugger.RewindBeforeException();
 
     private void OnResumeClicked(object sender, RoutedEventArgs e) => _debugger.Continue();
 

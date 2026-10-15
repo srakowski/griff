@@ -1,0 +1,31 @@
+title: Pausing where a script throws
+intro: A script that throws stops the game at the line that threw, with what was in scope there, and rewind goes back to just before it to watch it happen again.
+project: Arcade | Exceptions
+scene: Game
+
+chapter: A tracker on the ship | A script with a bug in it
+write: Scripts/Tracker.cs | exceptions/Tracker.cs
+select: Player
+add: Tracker
+edit: Tracker
+say: Here's a little tracker on the ship. Once a second it measures how far away the boss is. There's a bug in it. Let's play.
+play
+expectstopped: Gap = Vector3.Distance
+explain: code:paused | Stopped where it threw | A second in, the script throws, and the game stops right at the line that threw, in the middle of its frame, before anything unwinds.
+explain: code:exception | What it threw | A null reference: something on this line was null.
+explain: code:values | What was in scope | And here's which: boss is null. Nothing in this arena is called Boss.
+
+chapter: Back to just before it | Rewind, and watch it happen again
+explain: code:rewind | Rewind to Before | Rewind to Before goes back to the moment the step that threw began. It's in the Debug menu too.
+click: code:rewind
+expectstopped: none
+say: The game's paused just before that step. Put a breakpoint before the line that threw, and carry on.
+click: code:breakpoint:var boss = Game.Find(Target)
+pause
+expectstopped: var boss = Game.Find(Target)
+explain: code:values | The same step again | Sixty frames in, at the start of the step that threw.
+click: code:continue
+expectstopped: Gap = Vector3.Distance
+say: And it throws again, the same way. Continue would let the exception end that frame and the game play on, with the error in Output. Stop leaves it, so the bug can be fixed.
+click: code:breakpoint:var boss = Game.Find(Target)
+stop

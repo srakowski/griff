@@ -182,7 +182,7 @@ public sealed partial class CodeEditor
                     }
 
                     arrow.Freeze();
-                    drawingContext.DrawGeometry(Arrow, ArrowEdge, arrow);
+                    drawingContext.DrawGeometry(_debugger.StoppedByException ? Dot : Arrow, _debugger.StoppedByException ? null : ArrowEdge, arrow);
                 }
             }
         }
@@ -230,12 +230,14 @@ public sealed partial class CodeEditor
         }
     }
 
-    // A band across the line the game is stopped at, and a faint one across each line with a breakpoint.
+    // A band across the line the game is stopped at (red where a script threw), and a faint one across each line with a breakpoint.
     private sealed class DebugLineRenderer(CodeEditor editor, Debugger debugger) : IBackgroundRenderer
     {
         private static readonly Brush Stopped = Frozen(System.Windows.Media.Color.FromArgb(0x38, 0xF5, 0xC5, 0x42));
         private static readonly Pen StoppedEdge = FrozenPen(System.Windows.Media.Color.FromArgb(0x90, 0xF5, 0xC5, 0x42));
         private static readonly Brush Marked = Frozen(System.Windows.Media.Color.FromArgb(0x24, 0xE5, 0x48, 0x4D));
+        private static readonly Brush Thrown = Frozen(System.Windows.Media.Color.FromArgb(0x40, 0xE5, 0x48, 0x4D));
+        private static readonly Pen ThrownEdge = FrozenPen(System.Windows.Media.Color.FromArgb(0xA0, 0xE5, 0x48, 0x4D));
 
         // Over the current line's own band (which is opaque), under the text.
         public KnownLayer Layer => KnownLayer.Selection;
@@ -254,7 +256,7 @@ public sealed partial class CodeEditor
                 var top = visual.GetTextLineVisualYPosition(visual.TextLines[0], VisualYPosition.LineTop) - textView.VerticalOffset;
                 var band = new Rect(0, top, textView.ActualWidth + textView.HorizontalOffset, visual.Height);
                 if (number == stopped)
-                    drawingContext.DrawRectangle(Stopped, StoppedEdge, band);
+                    drawingContext.DrawRectangle(debugger.StoppedByException ? Thrown : Stopped, debugger.StoppedByException ? ThrownEdge : StoppedEdge, band);
                 else
                     drawingContext.DrawRectangle(Marked, null, band);
             }

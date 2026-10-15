@@ -315,6 +315,19 @@
                                 <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F10" />
                             </StackPanel>
                         </Button>
+                        <Button x:Name="RewindButton"
+                                Width="Auto"
+                                Padding="8,0"
+                                DockPanel.Dock="Right"
+                                Click="OnRewindClicked"
+                                Style="{StaticResource Style.Button.Toolbar}"
+                                ToolTip="Rewind to Before the Exception: back to the moment the step that threw began, paused, to watch it happen again"
+                                Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="11" Foreground="#E5484D" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Undo}" />
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Rewind to Before" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="ResumeButton"
                                 Width="Auto"
                                 Padding="8,0"
@@ -328,9 +341,18 @@
                                 <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Tertiary}" Text="F5" />
                             </StackPanel>
                         </Button>
-                        <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontSize="12" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Pause}" />
+                        <TextBlock x:Name="PausedIcon" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="12" Foreground="#F5C542" Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Pause}" />
                         <TextBlock x:Name="PausedTitle" VerticalAlignment="Center" Style="{StaticResource Style.Text.Overline}" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
+                    <!-- Stopped where a script threw: what it threw -->
+                    <TextBlock x:Name="ExceptionText"
+                               Margin="10,0,10,6"
+                               DockPanel.Dock="Top"
+                               FontFamily="{StaticResource Font.Mono}"
+                               FontSize="12.5"
+                               Foreground="#FF7A7D"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed" />
                     <TreeView x:Name="ValuesTree" Margin="4,0,4,6" Background="Transparent" BorderThickness="0">
                         <TreeView.ItemTemplate>
                             <HierarchicalDataTemplate DataType="{x:Type debugging:DebugValue}" ItemsSource="{Binding Members}">

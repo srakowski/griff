@@ -27,7 +27,13 @@ public partial class TimelineBar : UserControl
         {
             Scrubber.Maximum = Math.Max(0, _play.TimelineCount - 1);
             Scrubber.Value = _play.TimelinePosition;
+            // A tick where the moment just before the last exception is.
+            var exception = _play.ExceptionSnapshot;
+            Scrubber.Ticks = exception >= 0 ? new System.Windows.Media.DoubleCollection { exception } : null;
+            Scrubber.TickPlacement = exception >= 0 ? System.Windows.Controls.Primitives.TickPlacement.BottomRight : System.Windows.Controls.Primitives.TickPlacement.None;
             Label.Text = !_play.IsPlaying ? ""
+                : _play.IsAtBreakpoint && exception >= 0 && exception == _play.TimelinePosition ? "Stopped on an exception"
+                : exception >= 0 && exception == _play.TimelinePosition && _play.IsPaused ? "Just before the exception (paused)"
                 : _play.SecondsBehind > 0.05 ? $"{_play.SecondsBehind:0.0}s ago (paused)"
                 : _play.IsPaused ? "Paused at the latest moment"
                 : "Live. Drag to rewind";

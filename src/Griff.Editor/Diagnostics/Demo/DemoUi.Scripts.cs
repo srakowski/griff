@@ -162,9 +162,11 @@ internal sealed partial class DemoUi
             "stepover" => Named("StepOverButton"),
             "stepinto" => Named("StepIntoButton"),
             "stepout" => Named("StepOutButton"),
+            "rewind" => Named("RewindButton"),
+            "exception" => Named("ExceptionText"),
             "value" => ValueRow(name) is { } item ? (FrameworkElement?)Descendants<Border>(item).FirstOrDefault(b => b.Name == "Bd") ?? item : throw new InvalidOperationException($"No value {name} is showing."),
             "expand" => ValueRow(name) is { } toggle ? Descendants<System.Windows.Controls.Primitives.ToggleButton>(toggle).First(b => b.Name == "Expander") : throw new InvalidOperationException($"No value {name} is showing."),
-            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, breakpoint:, paused, values, value:, expand:, continue, stepover, stepinto, stepout, completion, quickinfo, signature)."),
+            _ => throw new FormatException($"Unknown code part \"{part}\" (editor, panel, property:, name:, problems, list, find, status, breadcrumb, toggle, format, notice, instances, tab, text:, line:, breakpoint:, paused, values, value:, expand:, continue, stepover, stepinto, stepout, rewind, exception, completion, quickinfo, signature)."),
         };
     }
 

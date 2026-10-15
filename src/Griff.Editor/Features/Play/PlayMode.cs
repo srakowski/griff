@@ -205,6 +205,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _timeline = new Timeline(_workspace.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5) };
         _timeline.Record(copy, 0, force: true);
         _position = 0;
+        _timeOffset = 0;
+        (_exceptionSnapshot, _reported) = (null, null);
         _sceneName = edit.Name;
         StartRunner(copy, paused: false);
 
@@ -242,6 +244,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runtime = null;
         _timeline = null;
         _position = 0;
+        (_exceptionSnapshot, _reported) = (null, null);
+        _nextFrame.TrySetResult();
         if (selectedId is { } id && _workspace.Scene?.Scene.Find(id) is { } original)
             _selection.Select(original);
 
@@ -309,13 +313,16 @@ public sealed class PlayMode : ObservableObject, IDisposable
     }
 
     /// <summary>Pauses and jumps the game to snapshot <paramref name="index"/>.</summary>
-    public void Seek(int index)
+    public void Seek(int index) => Seek(index, always: false);
+
+    // `always` restores the snapshot even if it's the one shown: the game may have gone on from it while paused.
+    private void Seek(int index, bool always)
     {
         if (_runner is null || _timeline is not { Count: > 0 } timeline || _workspace.Project is null)
             return;
 
         index = Math.Clamp(index, 0, timeline.Count - 1);
-        if (index == _position && _runner.IsPaused && _held is null)
+        if (index == _position && _runner.IsPaused && _held is null && !always)
             return;
         if (_players.Count > 0)
         {
@@ -337,6 +344,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _selection.Select(selectedId is { } id ? scene.Find(id) : null);
 
         _position = index;
+        // The game starts its clock again from there, and its next step from that snapshot.
+        _timeOffset = timeline.TimeAt(index);
+        timeline.RememberSnapshot(index);
         StartRunner(scene, paused: true);
         _status.Show($"Rewound {SecondsBehind:0.0}s. Resume to continue from here.");
         Raise();
@@ -374,18 +384,90 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// </summary>
     internal bool HoldAtBreakpoint(GameRunner runner, string where, string? stepped = null)
     {
-        if (_held is not null || _runner is null || (runner != _runner && _players.All(p => p.Runner != runner)))
+        if (!CanHold(runner))
             return false;
+        _logger.LogInformation("Paused at {Where} ({By})", where, stepped ?? "a breakpoint");
+        return Hold(stepped is null
+            ? $"Paused at a breakpoint: {where}. Continue (F5 or F6) carries on from there; F10, F11 and Shift+F11 step."
+            : $"{stepped}: {where}");
+    }
 
+    /// <summary>
+    /// Holds the game where a script threw <paramref name="exception"/> (on this thread, before anything unwound), as at a
+    /// breakpoint: the error goes to Output, and the timeline keeps the moment just before the step that threw (see
+    /// <see cref="RewindBeforeException"/>). Continue lets the exception end the frame and the game play on; stopping or
+    /// rewinding leaves it. Returns true if it was stopped or rewound. Null straight away if <paramref name="runner"/>
+    /// isn't one of the games playing, or one is held already.
+    /// </summary>
+    internal bool? HoldAtException(GameRunner runner, Exception exception, string where)
+    {
+        if (!CanHold(runner))
+            return null;
+
+        // Only the Game tab's game has a timeline (rewinding works with one player).
+        if (runner == _runner && _timeline is { } timeline && timeline.KeepRemembered(_position) is var (index, exact))
+        {
+            (_exceptionSnapshot, ExceptionSnapshotExact) = (timeline.SequenceAt(index), exact);
+            if (exact)
+                _position = timeline.Count - 1;
+        }
+        else
+        {
+            _exceptionSnapshot = null;
+        }
+
+        _reported = exception;
+        _logger.LogError(exception, "{Type} in the game at {Where}: {Message}", exception.GetType().Name, where, exception.Message);
+        return Hold($"Paused on {exception.GetType().Name} at {where}: {exception.Message} Continue (F5) plays on; Debug > Rewind to Before the Exception goes back to just before it.");
+    }
+
+    private bool CanHold(GameRunner runner) => _held is null && _runner is not null && (runner == _runner || _players.Any(p => p.Runner == runner));
+
+    // The snapshot (by its sequence number) holding the moment just before the step the last exception was thrown in, and
+    // the exception reported then (so it isn't reported again as the frame ends).
+    private long? _exceptionSnapshot;
+    private Exception? _reported;
+
+    /// <summary>Whether the moment <see cref="RewindBeforeException"/> goes back to is exactly the start of the step that threw.</summary>
+    internal bool ExceptionSnapshotExact { get; private set; }
+
+    /// <summary>
+    /// The snapshot the game goes back to with <see cref="RewindBeforeException"/>, or -1 if there's none (no exception yet
+    /// this time it played, or its moment has gone from the timeline).
+    /// </summary>
+    public int ExceptionSnapshot => _exceptionSnapshot is { } sequence && _timeline is { } timeline ? timeline.IndexOfSequence(sequence) : -1;
+
+    /// <summary>Whether <see cref="RewindBeforeException"/> can go back: there's a moment to, and one player.</summary>
+    public bool CanRewindBeforeException => _runner is not null && _players.Count == 0 && ExceptionSnapshot >= 0;
+
+    /// <summary>
+    /// Rewinds to just before the last exception a script threw: the game as it was when the step that threw began (or, in a
+    /// scene too big to remember every step, the last snapshot before it), paused there. From there a breakpoint and
+    /// Continue (or Step Frame) watch it happen again. Works while the game stands at the exception and after it played on,
+    /// as long as that moment is on the timeline. False if there's nothing to go back to.
+    /// </summary>
+    public bool RewindBeforeException()
+    {
+        if (!CanRewindBeforeException)
+            return false;
+        var exact = ExceptionSnapshotExact;
+        Seek(ExceptionSnapshot, always: true);
+        _status.Show(exact
+            ? "Rewound to just before the step that threw. Set a breakpoint and Continue, or Step Frame, to watch it again."
+            : "Rewound to the last snapshot before the exception (this scene is too big to remember every step).");
+        return true;
+    }
+
+    // Holds the game in the middle of its frame, on the editor's own loop, until it's let go.
+    private bool Hold(string status)
+    {
         SetPaused(true);
         var frame = _held = new DispatcherFrame();
         _abandonHeld = false;
         Refresh();
-        _status.Show(stepped is null
-            ? $"Paused at a breakpoint: {where}. Continue (F5 or F6) carries on from there; F10, F11 and Shift+F11 step."
-            : $"{stepped}: {where}");
-        _logger.LogInformation("Paused at {Where} ({By})", where, stepped ?? "a breakpoint");
+        _status.Show(status);
         Raise();
+        _nextFrame.TrySetResult();
         BreakpointReached?.Invoke(this, EventArgs.Empty);
         try
         {
@@ -401,7 +483,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         return _abandonHeld || frame.Dispatcher.HasShutdownStarted;
     }
 
-    /// <summary>Raised as the game stops at a breakpoint (see <see cref="HoldAtBreakpoint"/>).</summary>
+    /// <summary>Raised as the game stops at a breakpoint, or where a script threw (see <see cref="HoldAtBreakpoint"/> and <see cref="HoldAtException"/>).</summary>
     public event EventHandler? BreakpointReached;
 
     /// <summary>
@@ -597,7 +679,10 @@ public sealed class PlayMode : ObservableObject, IDisposable
     // Each step of the game counts towards the next rewind snapshot, however many the screen's frames take.
     private void OnStepped(object? sender, EventArgs e)
     {
-        if (_runtime is null || _runner is not { IsPaused: false } runner || runner.Game != sender || _timeline is not { } timeline)
+        if (_runtime is null || _runner is not { } runner || runner.Game != sender || _timeline is not { } timeline)
+            return;
+        // Paused, a step (Step Frame) takes no snapshot, but its moment is still remembered.
+        if (runner.IsPaused && !RemembersSteps)
             return;
         // A snapshot reads scripts' properties for itself: that doesn't stop at breakpoints.
         using var quiet = ScriptProbes.Quiet();
@@ -605,17 +690,43 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (runner.Game.Profiler is { } profiler)
         {
             var (started, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
+            Record(runner, timeline);
             profiler.AddCost("Rewind", FrameCostKind.Editor, Stopwatch.GetTimestamp() - started, Workers.AllocatedBytes() - allocated);
         }
         else
-            timeline.Record(_runtime.Scene, runner.Game.Time.Total);
-        _position = timeline.Count - 1;
+            Record(runner, timeline);
     }
+
+    private void Record(GameRunner runner, Timeline timeline)
+    {
+        var time = _timeOffset + runner.Game.Time.Total;
+        var took = false;
+        if (!runner.IsPaused)
+        {
+            took = timeline.Record(_runtime!.Scene, time);
+            _position = timeline.Count - 1;
+        }
+
+        // The moment the next step starts from, in case a script throws in it (see RewindBeforeException).
+        if (!took && RemembersSteps)
+            timeline.Remember(_runtime!.Scene, time);
+    }
+
+    // The game time of the snapshot the game was last rewound to: its clock starts again from naught there.
+    private double _timeOffset;
+
+    /// <summary>
+    /// Remember the moment between every two steps of the Game tab's game (not just the snapshots, which are several steps
+    /// apart), so that when a script throws, the timeline keeps the moment just before that step (see
+    /// <see cref="RewindBeforeException"/>). The debugger turns it on while it pauses on exceptions. It costs a step copying
+    /// the scene out, in a scene small enough for that to be quick (see <see cref="Timeline.RememberBudget"/>).
+    /// </summary>
+    public bool RemembersSteps { get; set; }
 
     // The profiler shows what the panels following the game cost its frames, as the editor's own work.
     private void OnTicked(object? sender, EventArgs e)
     {
+        _nextFrame.TrySetResult();
         if (_runtime is null)
             return;
         if (_runner?.Game.Profiler is not { } profiler)
@@ -658,12 +769,33 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runtime?.NotifyRuntimeRefresh();
     }
 
+    // An exception ended a frame: reported (unless it was when the game stopped where it was thrown), and the game paused
+    // on it, or, let go from there, playing on.
     private void OnFaulted(object? sender, Exception ex)
     {
-        _logger.LogError(ex, "Game error: {Message}", ex.Message);
-        _status.Show("Paused on error; see Output");
+        var reported = ex == _reported;
+        _reported = null;
+        if (!reported)
+            _logger.LogError(ex, "Game error: {Message}", ex.Message);
+        _status.Show((sender as GameRunner)?.IsPaused == false ? $"{ex.GetType().Name} ended a frame; the game plays on (see Output)" : "Paused on error; see Output");
+        _nextFrame.TrySetResult();
         Refresh();
         Raise();
+    }
+
+    // Completes as the game next plays a frame, stops at a line, ends a frame with an error, or stops.
+    private TaskCompletionSource _nextFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Finishes once the game next plays a frame (or stops at a line of script on the way, ends a frame with an error, or
+    /// stops): what an agent's Play, Continue or Resume waits for, since each returns before the game's next frame, so a
+    /// script that throws or a breakpoint reached straight away is reported by it.
+    /// </summary>
+    internal Task NextFrame()
+    {
+        if (_nextFrame.Task.IsCompleted)
+            _nextFrame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _nextFrame.Task;
     }
 
     private void Raise()
@@ -672,6 +804,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsPlaying));
         OnPropertyChanged(nameof(IsPaused));
         OnPropertyChanged(nameof(IsAtBreakpoint));
+        OnPropertyChanged(nameof(CanRewindBeforeException));
+        OnPropertyChanged(nameof(ExceptionSnapshot));
         OnPropertyChanged(nameof(TimelineCount));
         OnPropertyChanged(nameof(TimelinePosition));
         OnPropertyChanged(nameof(SecondsBehind));

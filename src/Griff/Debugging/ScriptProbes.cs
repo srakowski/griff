@@ -31,7 +31,36 @@ public interface IScriptBreakHandler
     /// reached while stepping, so it should be quick.
     /// </summary>
     bool Stops(in ScriptBreak hit) => true;
+
+    /// <summary>
+    /// A game's frame is ending with an exception (one a script threw, or one that came up through a script: see
+    /// <see cref="ScriptProbes.ThrownAt"/>) that nothing in the game catches: hold the game there, before anything unwinds,
+    /// for as long as it should stay, or not at all. Says whether it was held, and whether the game was stopped or rewound
+    /// meanwhile.
+    /// </summary>
+    ScriptFaultHold Fault(Exception exception) => ScriptFaultHold.NotHeld;
 }
+
+/// <summary>What became of a game whose frame was ending with an exception (see <see cref="IScriptBreakHandler.Fault"/>).</summary>
+public enum ScriptFaultHold
+{
+    /// <summary>It wasn't held: the game pauses on the error, as it does without a debugger.</summary>
+    NotHeld,
+
+    /// <summary>It was held, and let go: the exception ends the frame, and the game plays on or stays paused as it was left.</summary>
+    Resumed,
+
+    /// <summary>It was held, and stopped or rewound meanwhile: that game is gone.</summary>
+    Abandoned,
+}
+
+/// <summary>
+/// Where an exception came up through a script, in a build of the scripts with probes: the build (<paramref name="Probes"/>,
+/// its class of switches), the guard that saw it first (see <see cref="ScriptProbes.Threw"/>), the object the code runs on
+/// (null in a static method or a lambda), the values of the variables in scope there, in the order the build's guard names
+/// them, and the method the guard is in.
+/// </summary>
+public sealed record ScriptThrow(Type Probes, int Guard, object? This, object?[] Values, MethodBase? Method);
 
 /// <summary>
 /// What a game stopped or rewound at a breakpoint ends its frame with: the scripts running are left where they are,
@@ -43,7 +72,10 @@ public sealed class ScriptAbortedException() : Exception("The game stopped at a 
 /// Breakpoints in scripts. The editor builds scripts with a probe at the start of each line of code, a test of a flag of
 /// that line's own that is false until a breakpoint is put there, so a line without one costs a read of a flag that's
 /// false, and an exported game has no probes at all. A line whose flag is on calls <see cref="Hit"/> with the values in
-/// scope, which hands them to <see cref="Handler"/> to hold the game there. Not for scripts to call.
+/// scope, which hands them to <see cref="Handler"/> to hold the game there. The build's guards note an exception coming up
+/// through a script with the values in scope where it was thrown (<see cref="Threw"/>), and a game's host asks
+/// <see cref="Fault"/> before an exception ends its frame, so the editor can hold the game at the line that threw. Not for
+/// scripts to call.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class ScriptProbes
@@ -156,6 +188,95 @@ public static class ScriptProbes
     }
 
     private static readonly MethodInfo s_hit = typeof(ScriptProbes).GetMethod(nameof(Hit))!;
+
+    // ----- Exceptions -----
+
+    private static int s_watchers;
+    private static readonly ConditionalWeakTable<Exception, ScriptThrow> s_throws = [];
+
+    /// <summary>
+    /// Whether exceptions coming up through scripts are noted with the values in scope where they were thrown (see
+    /// <see cref="Threw"/>): while anything watches them (<see cref="WatchThrows"/>), on every thread, so a crowd's scripts
+    /// running across the cores are noted too.
+    /// </summary>
+    public static bool WatchesThrows => Volatile.Read(ref s_watchers) > 0;
+
+    /// <summary>
+    /// Starts watching exceptions (<see cref="WatchesThrows"/>), or with false stops, for one watcher (the editor's debugger
+    /// while it pauses on them): each start is matched by a stop.
+    /// </summary>
+    public static void WatchThrows(bool watch)
+    {
+        if (watch)
+            Interlocked.Increment(ref s_watchers);
+        else
+            Interlocked.Decrement(ref s_watchers);
+    }
+
+    /// <summary>
+    /// The test a build's guard makes first: whether <paramref name="exception"/>, coming up through it, is still to be noted
+    /// (exceptions are watched, it isn't noted yet, and it isn't a stopped game's).
+    /// </summary>
+    public static bool Watches(Exception exception) =>
+        WatchesThrows && t_quiet == 0 && exception is not ScriptAbortedException && !s_throws.TryGetValue(exception, out _);
+
+    /// <summary>
+    /// A guard of the scripts' build (a filter around a stretch of a method's code, which catches nothing) saw
+    /// <paramref name="exception"/> come up through it, before anything unwound: notes where, with the values in scope there,
+    /// for the editor to show if it ends the game's frame. The first guard to see it is the innermost, so it's the one kept.
+    /// Always false, so the exception goes on as if the guard weren't there.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool Threw(Exception exception, Type probes, int guard, object? self, object?[] values)
+    {
+        // The method the guard is in: its filter runs as part of it.
+        var method = new StackFrame(1, false).GetMethod();
+        s_throws.TryAdd(exception, new ScriptThrow(probes, guard, self, values, method));
+        return false;
+    }
+
+    /// <summary>Where a guard noted <paramref name="exception"/> coming up through a script (see <see cref="Threw"/>), or null.</summary>
+    public static ScriptThrow? ThrownAt(Exception exception) => s_throws.TryGetValue(exception, out var thrown) ? thrown : null;
+
+    private static readonly ConditionalWeakTable<Exception, object> s_routines = [];
+
+    // A coroutine's routine (an iterator's object, whose fields are its variables) was running when `exception` came up
+    // through it: a guard can't stand around a `yield return`, so its variables are read from there instead.
+    internal static void ThrewInRoutine(Exception exception, object routine) => s_routines.TryAdd(exception, routine);
+
+    /// <summary>
+    /// The coroutine routine (an iterator's object) that was running when <paramref name="exception"/> came up through it,
+    /// or null: its fields hold the routine's variables, and "this".
+    /// </summary>
+    public static object? RoutineOf(Exception exception) => s_routines.TryGetValue(exception, out var routine) ? routine : null;
+
+    /// <summary>
+    /// A game's frame (on this thread) is ending with <paramref name="exception"/>, which nothing in the game catches: called
+    /// by its host before anything unwinds, so <see cref="Handler"/> can hold the game there. While it's held, as at a
+    /// breakpoint, the editor's work on this thread draws on none of the game's random numbers, isn't a crowd's, and doesn't
+    /// stop at breakpoints.
+    /// </summary>
+    public static ScriptFaultHold Fault(Exception exception)
+    {
+        if (t_handler is not { } handler || t_quiet > 0 || exception is ScriptAbortedException)
+            return ScriptFaultHold.NotHeld;
+
+        var random = Rand.Use(null);
+        var crowd = Crowds.SetAside();
+        t_quiet++;
+        try
+        {
+            Interlocked.Increment(ref s_breaks);
+            return handler.Fault(exception);
+        }
+        finally
+        {
+            t_quiet--;
+            Crowds.Restore(crowd);
+            Rand.Use(random);
+            Interlocked.Increment(ref s_breaks);
+        }
+    }
 
     /// <summary>
     /// The methods running on this thread under the line of script that reached a probe, outermost first, ending with the

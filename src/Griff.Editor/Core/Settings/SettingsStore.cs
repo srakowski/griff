@@ -39,6 +39,9 @@ public sealed class EditorSettings
 
     /// <summary>The breakpoints in each project's scripts (see the Debugger), kept between sessions.</summary>
     public List<SavedBreakpoint> Breakpoints { get; set; } = [];
+
+    /// <summary>Whether a game playing in the editor pauses at the line where a script throws an exception (see the Debugger).</summary>
+    public bool PauseOnExceptions { get; set; } = true;
 }
 
 /// <summary>A breakpoint kept between sessions: the project's folder, the script's path in its Assets, and the line.</summary>

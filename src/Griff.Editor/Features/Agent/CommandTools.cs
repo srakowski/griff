@@ -103,11 +103,16 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         var stopped = new TaskCompletionSource();
         void OnStopped(object? sender, EventArgs e) => stopped.TrySetResult();
         play.BreakpointReached += OnStopped;
+        var nextFrame = play.NextFrame();
         var run = dispatcher.InvokeAsync(() => choice is null ? command.ExecuteAsync() : command.ChooseAsync(choice), DispatcherPriority.Normal).Task.Unwrap();
         Task first;
         try
         {
             first = await Task.WhenAny(run, Task.Delay(wait), stopped.Task);
+            // Play, Continue and Resume return before the game's next frame: they wait for it (a little), so a script that
+            // throws or a breakpoint reached straight away is said here.
+            if (first == run && run.IsCompletedSuccessfully && command is PlayCommand or PlayWithPlayersCommand or ContinueCommand or PauseCommand && play is { IsPlaying: true, IsPaused: false })
+                await Task.WhenAny(nextFrame, stopped.Task, Task.Delay(TimeSpan.FromSeconds(2)));
         }
         finally
         {
@@ -139,6 +144,11 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
         await run; // Rethrows what it threw, e.g. a question it needs answered.
         text.Append(CultureInfo.InvariantCulture, $"Done: {command.DisplayText.TrimEnd('.')}.");
+        // A game that paused on an error straight away (Pause on Exceptions off, or not in a script).
+        if (command is PlayCommand or PlayWithPlayersCommand && play.IsPlaying && play.IsPaused && !debugger.IsPaused)
+            text.Append(" The game paused on an error in its first frame: output_read shows it.");
+        if (command is RewindBeforeExceptionCommand)
+            text.Append(play.ExceptionSnapshotExact ? " The game is paused as it was when the step that threw began: set a breakpoint (ui_invoke Debugger SetBreakpoint) and Debug_Continue, or Game_Step, to watch it again." : " The game is paused at the last snapshot before the exception (the scene is too big to remember every step).");
         // A step that ran to the end of the frame.
         if (debugger.StepEnded is { } ended && command is StepOverCommand or StepIntoCommand or StepOutCommand)
             text.Append(' ').Append(ended).Append('.');
@@ -157,7 +167,9 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
     private string WhyNot(EditorCommand command) =>
         command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
+        : debugger.StoppedByException ? " (the game is stopped where a script threw, in the middle of a frame: Debug_Continue lets the exception end the frame and plays on, Debug_RewindBeforeException goes back to just before the step that threw, Game_Stop stops)"
         : play.IsAtBreakpoint ? " (the game is stopped at a line of script, in the middle of a frame: Debug_Continue or Game_Pause carries on, Debug_StepOver, Debug_StepInto and Debug_StepOut step)"
+        : command is RewindBeforeExceptionCommand ? " (no script has thrown since the game started, its moment has left the rewind timeline, or more than one player is playing)"
         : command is StepOverCommand or StepOutCommand ? " (the game isn't stopped at a line of script: set a breakpoint with ui_invoke Debugger SetBreakpoint and run the game to it; paused between frames, Debug_StepInto plays to the next line)"
         : command is StepIntoCommand or ContinueCommand ? " (the game isn't stopped at a line of script or paused)"
         : workspace.Project is null ? " (no project is open)"

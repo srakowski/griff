@@ -23,22 +23,44 @@ public sealed record ScriptProbe(int Id, string Path, int Line, string Where, IR
 }
 
 /// <summary>
+/// A stretch of a script's code that notes an exception coming up through it (a filter that catches nothing: see
+/// <see cref="Griff.Debugging.ScriptProbes.Threw"/>), in a build of the scripts with probes: its number in the build's
+/// <see cref="ProbeTable"/>, the script and the lines it covers (as compiled), the member it's in, and the variables in scope
+/// all through it, named in the order it passes their values (and whether it passes "this").
+/// </summary>
+public sealed record ScriptGuard(int Id, string Path, int Line, int EndLine, string Where, IReadOnlyList<string> Names, bool HasThis);
+
+/// <summary>
 /// The probes of one build of the scripts (see <see cref="ScriptInstrumenter"/>), and the switches that turn each on: a
-/// probe whose switch is on stops the game there (see <see cref="Griff.Debugging.ScriptProbes"/>).
+/// probe whose switch is on stops the game there (see <see cref="Griff.Debugging.ScriptProbes"/>). Also the build's guards,
+/// which note where an exception came up through the scripts.
 /// </summary>
 public sealed class ProbeTable
 {
     private readonly Dictionary<string, ScriptProbe[]> _byFile;
     private readonly Dictionary<int, ScriptProbe> _byId;
+    private readonly Dictionary<int, ScriptGuard> _guards;
     private readonly Dictionary<int, FieldInfo> _switches = [];
 
-    public ProbeTable(IReadOnlyList<ScriptProbe> probes)
+    public ProbeTable(IReadOnlyList<ScriptProbe> probes, IReadOnlyList<ScriptGuard>? guards = null)
     {
         Probes = probes;
+        Guards = guards ?? [];
         _byId = probes.ToDictionary(p => p.Id);
+        _guards = Guards.ToDictionary(g => g.Id);
         _byFile = probes.GroupBy(p => Normalize(p.Path), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Line).ToArray(), StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>The build's guards (see <see cref="ScriptInstrumenter"/>).</summary>
+    public IReadOnlyList<ScriptGuard> Guards { get; }
+
+    /// <summary>The guard numbered <paramref name="id"/>, or null.</summary>
+    public ScriptGuard? Guard(int id) => _guards.GetValueOrDefault(id);
+
+    /// <summary>The probe on <paramref name="line"/> of the script at <paramref name="path"/>, or else the last one before it.</summary>
+    public ScriptProbe? AtOrBefore(string path, int line) =>
+        _byFile.TryGetValue(Normalize(path), out var probes) ? probes.LastOrDefault(p => p.Line <= line) : null;
 
     /// <summary>No probes: a build without them.</summary>
     public static ProbeTable Empty { get; } = new([]);

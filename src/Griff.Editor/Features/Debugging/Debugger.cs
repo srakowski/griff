@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -72,7 +73,8 @@ public sealed partial class Breakpoint : ObservableObject
 /// at a time (see <see cref="StepOver"/>); Stop or rewinding leave the frame. The editor builds scripts with a probe on
 /// every line, so a breakpoint takes effect at once, even while the game runs, and costs nothing until the game reaches
 /// it: a line without one only reads a switch that's off, and an exported game has no probes at all. Breakpoints are kept
-/// with the project.
+/// with the project. A script that throws an exception the game doesn't catch stops the game the same way, at the line
+/// that threw (see <see cref="PauseOnExceptions"/>).
 /// </summary>
 public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposable
 {
@@ -98,9 +100,19 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // Where the game stands at a breakpoint (or the line a step ended at): the probe it stopped at, the script's text as
     // the build it's in has it (the scripts may be built again while it stands there), the line as the script reads now,
     // the values in scope, and for stepping on from there, where on the stack it ran, the methods under it and its game;
-    // `By` is what stopped it ("a breakpoint", "Step Over"), and `Stepped` whether a step brought it there.
-    private sealed record Paused(ScriptProbe Probe, string? Built, string Path, string Script, int Line, IReadOnlyList<DebugValue> Values,
-        nint Stack, MethodBase?[] Callers, GameRunner Runner, string By, bool Stepped);
+    // `By` is what stopped it ("a breakpoint", "Step Over", "an exception"), and `Stepped` whether a step brought it there.
+    // Stopped where a script threw, there's no probe (the line is where it threw), and `Exception` is what it threw.
+    private sealed record Paused(ScriptProbe? Probe, string Where, int BuiltLine, string? Built, string Path, string Script, int Line,
+        IReadOnlyList<DebugValue> Values, nint Stack, MethodBase?[] Callers, GameRunner Runner, string By, bool Stepped)
+    {
+        public Exception? Exception { get; init; }
+
+        // Whether the values in scope there are known (a line a guard covers, or a coroutine's).
+        public bool ValuesKnown { get; init; } = true;
+    }
+
+    // A step from where a script threw: the exception ends the frame, and the step is over once it has (see Step).
+    private (StepKind Kind, TaskCompletionSource Done, string Path, GameRunner Runner)? _endingFrame;
 
     public Debugger(IWorkspace workspace, PlayMode play, ScriptEditors editors, ISettingsStore settings, IStatusService status, ILogger<Debugger> logger)
     {
@@ -113,8 +125,13 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         Breakpoints = new ReadOnlyObservableCollection<Breakpoint>(_breakpoints);
 
         ScriptProbes.Handler = this;
+        PauseOnExceptions = settings.Settings.PauseOnExceptions;
         workspace.ScriptsReloaded += (_, _) => Arm();
-        play.Stopped += (_, _) => EndStep();
+        play.Stopped += (_, _) =>
+        {
+            EndStep();
+            EndFrameStep(null);
+        };
         // Once the game plays on after a step ran to the end of a frame, that's over too.
         play.PropertyChanged += (_, e) =>
         {
@@ -135,6 +152,10 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     {
         if (ScriptProbes.Handler == this)
             ScriptProbes.Handler = null;
+        if (_pauseOnExceptions)
+            ScriptProbes.WatchThrows(false);
+        _pauseOnExceptions = false;
+
         if (_saveSoon?.IsEnabled == true)
         {
             _saveSoon.Stop();
@@ -152,10 +173,50 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     public bool IsPaused => _paused is not null;
 
     /// <summary>
-    /// What stopped the game where it stands: "a breakpoint", or the step that ended there ("Step Over", "Step Into",
-    /// "Step Out"). Null unless <see cref="IsPaused"/>.
+    /// What stopped the game where it stands: "a breakpoint", the step that ended there ("Step Over", "Step Into",
+    /// "Step Out"), or "an exception" (see <see cref="ExceptionMessage"/>). Null unless <see cref="IsPaused"/>.
     /// </summary>
     public string? StoppedBy => _paused?.By;
+
+    /// <summary>
+    /// Pause where a script throws an exception the game doesn't catch, at the line that threw (in the middle of its frame,
+    /// before anything unwinds), with the values in scope there, as at a breakpoint; the timeline keeps the moment just
+    /// before the step that threw, to rewind to (Debug > Rewind to Before the Exception). On unless turned off (Debug >
+    /// Pause on Exceptions): off, an exception ends the frame and pauses the game, with the error in Output. Kept between
+    /// sessions.
+    /// </summary>
+    public bool PauseOnExceptions
+    {
+        get => _pauseOnExceptions;
+        set
+        {
+            // The guards in the scripts note where an exception was thrown, and play mode remembers each step's start.
+            if (value != _pauseOnExceptions)
+                ScriptProbes.WatchThrows(value);
+            _pauseOnExceptions = value;
+            _play.RemembersSteps = value;
+            if (_settings.Settings.PauseOnExceptions != value)
+            {
+                _settings.Settings.PauseOnExceptions = value;
+                _settings.Save();
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _pauseOnExceptions;
+
+    /// <summary>
+    /// What a script threw, where the game stands because of it: "NullReferenceException: Object reference not set to an
+    /// instance of an object." Null unless it stopped on an exception.
+    /// </summary>
+    public string? ExceptionMessage => _paused?.Exception is { } thrown ? $"{thrown.GetType().Name}: {thrown.Message}" : null;
+
+    /// <summary>True while the game stands where a script threw an exception (see <see cref="PauseOnExceptions"/>).</summary>
+    public bool StoppedByException => _paused?.Exception is not null;
+
+    internal Exception? Thrown => _paused?.Exception;
 
     /// <summary>True while it stands where a step took it (rather than where it first stopped).</summary>
     public bool StoppedByStep => _paused?.Stepped == true;
@@ -176,15 +237,25 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     internal const string WhatNext = "ui_inspect Debugger (Values[name].Members) looks deeper; Debug_StepOver, Debug_StepInto and Debug_StepOut " +
         "go on a line at a time, Debug_Continue (or Game_Pause) carries on.";
 
-    // "the game stopped at a breakpoint" or "Step Over stopped at": with where, and the values in scope.
+    // What an agent can do from where a script threw.
+    internal const string WhatNextFromException = "ui_inspect Debugger (Values[name].Members) looks deeper; Debug_Continue (or Game_Pause) lets the " +
+        "exception end the frame and the game play on; Debug_StepOver, Debug_StepInto or Debug_StepOut end the frame and pause after it; " +
+        "Debug_RewindBeforeException goes back to just before the step that threw (set a breakpoint, then Debug_Continue or Game_Step to watch it " +
+        "again); Game_Stop stops.";
+
+    // What an agent can do from where the game stands.
+    internal string WhatNextHere => StoppedByException ? WhatNextFromException : WhatNext;
+
+    // "the game stopped at a breakpoint", "Step Over stopped at" or "stopped on an exception": with where, and the values in scope.
     internal string StoppedText() =>
-        (StoppedBy is null or "a breakpoint" ? "Stopped at a breakpoint. " : $"{StoppedBy} stopped. ") + ValuesText + WhatNext;
+        (StoppedByException ? $"Stopped on an exception a script threw ({ExceptionMessage}). "
+            : StoppedBy is null or "a breakpoint" ? "Stopped at a breakpoint. " : $"{StoppedBy} stopped. ") + ValuesText + WhatNextHere;
 
     /// <summary>True while a step is under way (the game runs on to the line it ends at).</summary>
-    public bool IsStepping => _step is not null;
+    public bool IsStepping => _step is not null || _endingFrame is not null;
 
     /// <summary>Where the game stopped: "Scripts/Player.cs line 12, in Player.Update". Null unless <see cref="IsPaused"/>.</summary>
-    public string? Location => _paused is { } p ? $"{p.Script} line {p.Line}, in {p.Probe.Where}" : null;
+    public string? Location => _paused is { } p ? $"{p.Script} line {p.Line}, in {p.Where}" : null;
 
     /// <summary>The script the game stopped in (its path in Assets). Null unless <see cref="IsPaused"/>.</summary>
     public string? PausedScript => _paused?.Script;
@@ -193,7 +264,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     public int? PausedLine => _paused?.Line;
 
     /// <summary>The member it stopped in: "Player.Update". Null unless <see cref="IsPaused"/>.</summary>
-    public string? PausedIn => _paused?.Probe.Where;
+    public string? PausedIn => _paused?.Where;
 
     internal string? PausedPath => _paused?.Path;
 
@@ -214,9 +285,14 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
             if (_paused is not { } paused)
                 return "";
             var text = new StringBuilder();
-            text.Append("Paused at ").AppendLine(Location);
+            if (paused.Exception is { } thrown)
+                text.Append(CultureInfo.InvariantCulture, $"Paused on {thrown.GetType().Name} (\"{thrown.Message}\") at ").AppendLine(Location);
+            else
+                text.Append("Paused at ").AppendLine(Location);
             foreach (var value in paused.Values)
                 value.Write(text, depth: 2, "  ");
+            if (!paused.ValuesKnown)
+                text.AppendLine("  (the values in scope there aren't known)");
             return text.ToString();
         }
     }
@@ -335,6 +411,12 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     public Task StepOver() => Step(StepKind.Over);
 
     /// <summary>
+    /// Rewinds the game to just before the step in which a script last threw (Debug > Rewind to Before the Exception): as it
+    /// was when that step began, paused there. False if there's no such moment on the timeline.
+    /// </summary>
+    public bool RewindBeforeException() => _play.RewindBeforeException();
+
+    /// <summary>
     /// Stops at the next line of script that runs: into a method of a script the line calls (this script's or another's),
     /// and through what Griff does in between to a script it calls (a spawned thing's Start, say). A call into Griff that
     /// runs no script is stepped over. Paused between frames (after a step ran to the end of one, or with Pause), it plays
@@ -351,16 +433,27 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
     /// <summary>Whether a step can start: the game stands at a line (or, for Step Into, is paused between frames).</summary>
     public bool CanStep(StepKind kind) =>
-        _step is null && _play.IsPlaying && (_play.IsAtBreakpoint ? _paused is not null : kind == StepKind.Into && _play.IsPaused);
+        _step is null && _endingFrame is null && _play.IsPlaying && (_play.IsAtBreakpoint ? _paused is not null : kind == StepKind.Into && _play.IsPaused);
 
     private Task Step(StepKind kind)
     {
         if (!CanStep(kind))
             return Task.CompletedTask;
         var table = _workspace.ScriptProbes;
-        if (_play.IsAtBreakpoint && _paused is { } paused)
+        // Where a script threw, nothing more of its method runs: the exception ends the frame, and the game pauses after it.
+        if (_play.IsAtBreakpoint && _paused is { Exception: not null } thrown)
         {
-            var done = Begin(new ScriptStep(kind, paused.Probe, paused.Stack, paused.Callers), paused.Runner, table);
+            var ending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _endingFrame = (kind, ending, thrown.Path, thrown.Runner);
+            thrown.Runner.FrameEnded += OnThrownFrameEnded;
+            OnPropertyChanged(nameof(IsStepping));
+            _play.StepOn();
+            return ending.Task;
+        }
+
+        if (_play.IsAtBreakpoint && _paused is { Probe: { } probe } paused)
+        {
+            var done = Begin(new ScriptStep(kind, probe, paused.Stack, paused.Callers), paused.Runner, table);
             _play.StepOn();
             return done;
         }
@@ -424,6 +517,33 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         _stepDone = null;
         OnPropertyChanged(nameof(IsStepping));
         done?.TrySetResult();
+    }
+
+    // A step from where a script threw: the exception ended the frame, and the game stays paused after it.
+    private void OnThrownFrameEnded(object? sender, EventArgs e)
+    {
+        if (_endingFrame is not { } ending)
+            return;
+        var message = $"{Name(ending.Kind)}: the exception ended the frame, so the game paused after it. Step Into (F11) plays the next frame up to its first line of script";
+        _logger.LogInformation("{Message}", message);
+        EndFrameStep(message);
+    }
+
+    // The step from where a script threw is over: with a message, the game paused after the frame; without, it's gone.
+    private void EndFrameStep(string? message)
+    {
+        if (_endingFrame is not { } ending)
+            return;
+        _endingFrame = null;
+        ending.Runner.FrameEnded -= OnThrownFrameEnded;
+        if (message is not null)
+        {
+            _play.PausedAfterStep(message);
+            SetStepEnded(message, ending.Path);
+        }
+
+        OnPropertyChanged(nameof(IsStepping));
+        ending.Done.TrySetResult();
     }
 
     // The frame ended with the step under way: no line of script ran after where it started. The game stays paused there.
@@ -497,7 +617,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
         // A step ends here, or at a breakpoint on its way.
         var by = _step is { } step && !_armedIds.Contains(hit.Probe) ? Name(step.Kind) : "a breakpoint";
-        _paused = new Paused(probe, built, path, RelativePath(path), line, values, hit.Stack, ScriptProbes.CallStack(), runner,
+        _paused = new Paused(probe, probe.Where, probe.Line, built, path, RelativePath(path), line, values, hit.Stack, ScriptProbes.CallStack(), runner,
             by, _step is not null);
         Stops++;
         (StepEnded, StepEndedIn) = (null, null);
@@ -519,6 +639,108 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         return abandoned;
     }
 
+    // A game's frame is ending with an exception nothing in it caught: if it came up through a line of script, the game
+    // stops there (before anything unwinds), at the innermost line of script it came through: the line that threw, or that
+    // called into Griff where it was thrown.
+    ScriptFaultHold IScriptBreakHandler.Fault(Exception exception)
+    {
+        if (!PauseOnExceptions || GameRunner.Running is not { } runner || _play.IsAtBreakpoint
+            || _workspace.ScriptProbes is not { Switches: { } switches } table)
+            return ScriptFaultHold.NotHeld;
+        var scripts = switches.Assembly;
+        if (ThrowingFrame(exception, scripts) is not var (method, builtPath, builtLine))
+            return ScriptFaultHold.NotHeld;
+
+        var path = Path.GetFullPath(builtPath);
+        var built = table.SourceOf(path);
+        var line = CurrentLine(path, built, builtLine);
+        bool isScript(Type type) => type.Assembly == scripts;
+        var values = new List<DebugValue>();
+        var where = table.AtOrBefore(path, builtLine)?.Where;
+        var known = true;
+        if (ScriptProbes.ThrownAt(exception) is { } thrown && thrown.Probes == switches && Equals(thrown.Method, method) && table.Guard(thrown.Guard) is { } guard)
+        {
+            // The guard around the line noted the values in scope as it was thrown.
+            if (guard.HasThis && thrown.This is not null)
+                values.Add(new DebugValue("this", thrown.This, thrown.This.GetType(), isScript));
+            for (var i = 0; i < guard.Names.Count && i < thrown.Values.Length; i++)
+                values.Add(new DebugValue(guard.Names[i], thrown.Values[i], null, isScript));
+            where ??= guard.Where;
+        }
+        else if (ScriptProbes.RoutineOf(exception) is { } routine && method?.DeclaringType == routine.GetType())
+        {
+            // A coroutine's code: its variables are the fields of the routine running it.
+            values.AddRange(RoutineValues(routine, isScript));
+        }
+        else
+        {
+            known = false;
+        }
+
+        where ??= method?.Name ?? "?";
+        _paused = new Paused(null, where, builtLine, built, path, RelativePath(path), line, values, 0, [], runner, "an exception", false)
+        {
+            Exception = exception,
+            ValuesKnown = known,
+        };
+        Stops++;
+        (StepEnded, StepEndedIn) = (null, null);
+        EndStep();
+        RaisePaused();
+        _editors.Open(path, line);
+        bool? abandoned;
+        try
+        {
+            abandoned = _play.HoldAtException(runner, exception, $"{RelativePath(path)} line {line}, in {where}");
+        }
+        finally
+        {
+            _paused = null;
+            RaisePaused();
+        }
+
+        if (abandoned is null)
+            return ScriptFaultHold.NotHeld;
+        if (abandoned == true)
+            EndFrameStep(null);
+        return abandoned == true ? ScriptFaultHold.Abandoned : ScriptFaultHold.Resumed;
+    }
+
+    // The innermost line of the scripts (built as `scripts`) an exception came up through: its method, and the script and
+    // line as built.
+    private static (MethodBase? Method, string Path, int Line)? ThrowingFrame(Exception exception, Assembly scripts)
+    {
+        foreach (var frame in new System.Diagnostics.StackTrace(exception, fNeedFileInfo: true).GetFrames())
+        {
+            if (frame.GetMethod() is { } method && method.Module.Assembly == scripts && frame.GetFileName() is { Length: > 0 } file && frame.GetFileLineNumber() > 0)
+                return (method, file, frame.GetFileLineNumber());
+        }
+
+        return null;
+    }
+
+    // A coroutine routine's variables: the iterator's object keeps "this", its parameters and its locals as fields
+    // ("<>4__this", "count", "<enemy>5__2").
+    private static IEnumerable<DebugValue> RoutineValues(object routine, Func<Type, bool> isScript)
+    {
+        var fields = routine.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        var self = fields.FirstOrDefault(f => f.Name == "<>4__this")?.GetValue(routine);
+        if (self is not null)
+            yield return new DebugValue("this", self, self.GetType(), isScript);
+        var seen = new HashSet<string>();
+        foreach (var field in fields.Where(f => !f.Name.StartsWith('<')))
+        {
+            if (seen.Add(field.Name))
+                yield return new DebugValue(field.Name, field.GetValue(routine), field.FieldType, isScript);
+        }
+
+        foreach (var field in fields.Reverse())
+        {
+            if (field.Name.StartsWith('<') && field.Name.IndexOf(">5__", StringComparison.Ordinal) is var end and > 1 && seen.Add(field.Name[1..end]))
+                yield return new DebugValue(field.Name[1..end], field.GetValue(routine), field.FieldType, isScript);
+        }
+    }
+
     /// <summary>Raised when the game stops at a breakpoint, and again when it carries on.</summary>
     public event EventHandler? PausedChanged;
 
@@ -531,6 +753,8 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         OnPropertyChanged(nameof(PausedIn));
         OnPropertyChanged(nameof(StoppedBy));
         OnPropertyChanged(nameof(StoppedByStep));
+        OnPropertyChanged(nameof(StoppedByException));
+        OnPropertyChanged(nameof(ExceptionMessage));
         OnPropertyChanged(nameof(Values));
         OnPropertyChanged(nameof(ValuesText));
         PausedChanged?.Invoke(this, EventArgs.Empty);
@@ -541,7 +765,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     {
         if (_paused is not { } paused || !Same(paused.Path, path))
             return;
-        var line = CurrentLine(path, paused.Built, paused.Probe.Line);
+        var line = CurrentLine(path, paused.Built, paused.BuiltLine);
         if (line == paused.Line)
             return;
         _paused = paused with { Line = line };

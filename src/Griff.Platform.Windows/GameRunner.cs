@@ -66,7 +66,10 @@ public sealed class GameRunner : IDisposable
     /// </summary>
     public event EventHandler? FrameEnded;
 
-    /// <summary>Raised when gameplay code throws. The game pauses so the error can be fixed.</summary>
+    /// <summary>
+    /// Raised when gameplay code throws, ending the frame. The game pauses so the error can be fixed (unless the editor's
+    /// debugger held it where it was thrown and let it play on: see <see cref="ScriptProbes.Fault"/>).
+    /// </summary>
     public event EventHandler<Exception>? Faulted;
 
     public Game Game { get; }
@@ -240,10 +243,16 @@ public sealed class GameRunner : IDisposable
         {
             // Stopped (or rewound) at a breakpoint: this game is gone, and nothing went wrong in it.
         }
-        catch (Exception ex)
+        catch (Exception ex) when (Hold(ex) is var held)
         {
-            IsPaused = true;
-            Faulted?.Invoke(this, ex);
+            // Held where it was thrown and stopped or rewound meanwhile, the game's gone; let go, it stays paused or plays on as
+            // it was left, and the frame ends here.
+            if (held != ScriptFaultHold.Abandoned)
+            {
+                if (held == ScriptFaultHold.NotHeld)
+                    IsPaused = true;
+                Faulted?.Invoke(this, ex);
+            }
         }
         finally
         {
@@ -260,6 +269,21 @@ public sealed class GameRunner : IDisposable
 
     // When a script last let go of a breakpoint it stood at in this game's frame (a Stopwatch timestamp).
     private long _heldUntil;
+
+    // The game's frame is ending with an exception nothing in it caught: asked before anything unwinds (from the catch's
+    // filter), so the editor's debugger can hold the game at the line of script that threw, as at a breakpoint.
+    private static ScriptFaultHold Hold(Exception exception)
+    {
+        try
+        {
+            return ScriptProbes.Fault(exception);
+        }
+        catch (Exception)
+        {
+            // Something went wrong holding it: the game pauses on the error as it would anyway.
+            return ScriptFaultHold.NotHeld;
+        }
+    }
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
     // and the last good frame stays up.
@@ -288,14 +312,19 @@ public sealed class GameRunner : IDisposable
             (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
             return;
         }
-        catch (Exception ex)
+        // Held only the first time in a row it fails (a paused game is drawn again every frame).
+        catch (Exception ex) when ((_drawFaulted ? ScriptFaultHold.NotHeld : Hold(ex)) is var held)
         {
             (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
             if (!_drawFaulted)
             {
                 _drawFaulted = true;
-                IsPaused = true;
-                Faulted?.Invoke(this, ex);
+                if (held != ScriptFaultHold.Abandoned)
+                {
+                    if (held == ScriptFaultHold.NotHeld)
+                        IsPaused = true;
+                    Faulted?.Invoke(this, ex);
+                }
             }
 
             return;

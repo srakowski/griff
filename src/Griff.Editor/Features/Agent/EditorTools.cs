@@ -130,10 +130,15 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             text.AppendLine(CultureInfo.InvariantCulture, $"Prefab undo: {prefab.History.UndoDescription ?? "nothing"}; redo: {prefab.History.RedoDescription ?? "nothing"}");
         }
 
-        var stoppedAt = debugger.StoppedBy is "a breakpoint" ? $"at a breakpoint, {debugger.Location}" : $"where {debugger.StoppedBy} stopped, {debugger.Location}";
+        var stoppedAt = debugger.StoppedByException ? $"on an exception a script threw ({debugger.ExceptionMessage}), at {debugger.Location}, in the middle of its frame"
+            : debugger.StoppedBy is "a breakpoint" ? $"at a breakpoint, {debugger.Location}" : $"where {debugger.StoppedBy} stopped, {debugger.Location}";
         text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? debugger.IsPaused ? $"paused {stoppedAt}" : play.IsPaused ? "paused" : "playing" : "not playing")}");
         if (debugger.IsPaused)
-            text.Append("Values in scope there:").AppendLine().Append(debugger.ValuesText).AppendLine(Debugger.WhatNext);
+            text.Append("Values in scope there:").AppendLine().Append(debugger.ValuesText).AppendLine(debugger.WhatNextHere);
+        if (play.IsPlaying && play.CanRewindBeforeException && !debugger.StoppedByException)
+            text.AppendLine("A script threw earlier: Debug_RewindBeforeException goes back to just before the step that threw.");
+        if (!debugger.PauseOnExceptions)
+            text.AppendLine("Pause on Exceptions is off (Debug_PauseOnExceptions): a script that throws ends the frame and pauses the game, with the error in Output.");
         if (debugger.Breakpoints.Count > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Breakpoints: {string.Join(", ", debugger.Breakpoints.Select(b => b.Label + (b.IsSet ? "" : " (not in the scripts as built)")))} (ui_invoke Debugger SetBreakpoint / RemoveBreakpoint)");
         if (play.Game is { } game && Playtesting.FlagsSet(game) is { } flags)
@@ -141,7 +146,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         if (play.Game is { } running && Playtesting.AddedSystems(running) is { } systems)
             text.AppendLine(systems);
         text.AppendLine(CultureInfo.InvariantCulture, $"Selected: {(selection.Entities.Count > 0 ? string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}")) : "nothing")}");
-        var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).Select(w => w.Title).ToList();
+        var windows = Application.Current is { } app ? app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow).Select(w => w.Title).ToList() : [];
         if (windows.Count > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Open windows: {string.Join(", ", windows)}");
         var problems = log.Entries.Where(entry => entry.Level >= LogLevel.Warning).TakeLast(10).ToList();

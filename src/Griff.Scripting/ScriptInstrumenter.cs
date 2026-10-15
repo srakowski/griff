@@ -16,6 +16,11 @@ namespace Griff.Scripting;
 /// didn't before. They're found from the code itself, which is quick; Roslyn's semantic analysis, which costs about as
 /// much as compiling again, is asked only where the code can't say (a variable that may not be set yet), and for a probe
 /// that turned out not to compile.
+/// <para>
+/// It also puts in guards: each stretch of a method's code goes in a <c>try</c> whose filter notes an exception coming up
+/// through it, with the variables in scope there (<see cref="Griff.Debugging.ScriptProbes.Threw"/>), and never catches it,
+/// so the editor can pause at the line that threw and show them. A guard costs nothing until something is thrown.
+/// </para>
 /// </summary>
 public static class ScriptInstrumenter
 {
@@ -58,13 +63,22 @@ public static class ScriptInstrumenter
     // ----- Planning -----
 
     // A text change: at Offset, take out Length characters and put in Text. At one offset, closings (0) come before
-    // openings (1), which come before probes (2).
-    internal readonly record struct Edit(int Offset, int Order, string Text, int Length = 0);
+    // openings (1), which come before probes (2); among closings, the one of the innermost thing first (the lowest Rank).
+    internal readonly record struct Edit(int Offset, int Order, string Text, int Length = 0, int Rank = 0);
 
-    // One probe, where it goes and the changes it makes.
-    internal sealed record Site(ScriptProbe Probe, SyntaxNode Node, IReadOnlyList<Edit> Edits, int FirstLine, int LastLine);
+    // One probe or guard (numbered from the same count), where it goes and the changes it makes. A probe of an expression
+    // body or a lambda is a guard too, of the same number. A guard of its own can be made again with Roslyn's help (Remake).
+    internal sealed record Site(int Id, string Path, ScriptProbe? Probe, SyntaxNode Node, IReadOnlyList<Edit> Edits, int FirstLine, int LastLine)
+    {
+        public ScriptGuard? Guard { get; init; }
 
-    /// <summary>Where the probes go in <paramref name="compilation"/>'s scripts (every tree but <paramref name="skip"/>), and what each passes.</summary>
+        public Func<Lazy<SemanticModel>, Site?>? Remake { get; init; }
+    }
+
+    /// <summary>
+    /// Where the probes and guards go in <paramref name="compilation"/>'s scripts (every tree but <paramref name="skip"/>),
+    /// and what each passes.
+    /// </summary>
     internal static Plan Analyze(CSharpCompilation compilation, string skip)
     {
         var sites = new List<Site>();
@@ -73,32 +87,38 @@ public static class ScriptInstrumenter
             if (tree.FilePath == skip)
                 continue;
             var model = new Lazy<SemanticModel>(() => compilation.GetSemanticModel(tree));
+            var first = sites.Count;
             foreach (var (node, line) in Sites(tree.GetRoot()))
             {
                 if (Build(model, node, line, sites.Count, tree.FilePath, precise: false) is { } site)
                     sites.Add(site);
             }
+
+            PlanGuards(model, tree.GetRoot(), tree.FilePath, sites, first);
         }
 
         return new Plan(compilation, sites);
     }
 
     /// <summary>
-    /// Where a build's probes go: <see cref="Build"/> makes the compilation with them. A probe that doesn't compile is
-    /// looked at again closely (<see cref="Refine"/>), or left out.
+    /// Where a build's probes and guards go: <see cref="Build"/> makes the compilation with them. One that doesn't compile
+    /// is looked at again closely (<see cref="Refine"/>), or left out.
     /// </summary>
     internal sealed class Plan(CSharpCompilation compilation, List<Site> sites)
     {
         public int Count => sites.Count;
 
-        /// <summary>The compilation with the probes in (but those numbered in <paramref name="leaveOut"/>), its switches' class and their table.</summary>
+        /// <summary>
+        /// The compilation with the probes and guards in (but those numbered in <paramref name="leaveOut"/>), its switches'
+        /// class and their table.
+        /// </summary>
         public (CSharpCompilation Compilation, ProbeTable Probes) Build(IReadOnlySet<int>? leaveOut = null)
         {
-            var kept = sites.Where(s => leaveOut?.Contains(s.Probe.Id) != true).ToList();
+            var kept = sites.Where(s => leaveOut?.Contains(s.Id) != true).ToList();
             var result = compilation;
             foreach (var tree in compilation.SyntaxTrees)
             {
-                var edits = kept.Where(s => s.Probe.Path == tree.FilePath).SelectMany(s => s.Edits).ToList();
+                var edits = kept.Where(s => s.Path == tree.FilePath).SelectMany(s => s.Edits).ToList();
                 if (edits.Count == 0)
                     continue;
                 var text = Apply(tree.GetText().ToString(), edits);
@@ -106,36 +126,44 @@ public static class ScriptInstrumenter
             }
 
             var switches = new StringBuilder($"internal static class {SwitchesClass} {{");
-            foreach (var site in kept)
-                switches.Append(CultureInfo.InvariantCulture, $" public static bool P{site.Probe.Id};");
+            foreach (var site in kept.Where(s => s.Probe is not null))
+                switches.Append(CultureInfo.InvariantCulture, $" public static bool P{site.Id};");
             switches.Append(" }");
             result = result.AddSyntaxTrees(CSharpSyntaxTree.ParseText(switches.ToString(), compilation.SyntaxTrees.First().Options as CSharpParseOptions,
                 "<griff probes>", Encoding.UTF8));
-            return (result, new ProbeTable(kept.Select(s => s.Probe).ToList()));
+            return (result, new ProbeTable(kept.Where(s => s.Probe is not null).Select(s => s.Probe!).ToList(),
+                kept.Where(s => s.Guard is not null).Select(s => s.Guard!).ToList()));
         }
 
-        /// <summary>The probes an error at <paramref name="line"/> of <paramref name="path"/> could come from: those starting there, or else the innermost around it.</summary>
+        /// <summary>
+        /// The probes and guards an error at <paramref name="line"/> of <paramref name="path"/> could come from: the probes
+        /// starting there, or else the innermost around it, and the guards opening or closing there (where their code goes).
+        /// </summary>
         public IEnumerable<int> Around(string path, int line)
         {
-            var here = sites.Where(s => s.Probe.Path == path && s.FirstLine <= line && line <= s.LastLine).ToList();
-            var starting = here.Where(s => s.FirstLine == line || s.LastLine == line).ToList();
-            return (starting.Count > 0 ? starting : here.OrderByDescending(s => s.FirstLine).Take(1)).Select(s => s.Probe.Id);
+            var probes = sites.Where(s => s.Probe is not null && s.Path == path && s.FirstLine <= line && line <= s.LastLine).ToList();
+            var starting = probes.Where(s => s.FirstLine == line || s.LastLine == line).ToList();
+            var guards = sites.Where(s => s.Probe is null && s.Path == path && (s.FirstLine == line || s.LastLine == line));
+            return (starting.Count > 0 ? starting : probes.OrderByDescending(s => s.FirstLine).Take(1)).Concat(guards).Select(s => s.Id);
         }
 
-        /// <summary>Works out the probes numbered <paramref name="ids"/> again with Roslyn's semantic analysis.</summary>
+        /// <summary>Works out the probes and guards numbered <paramref name="ids"/> again with Roslyn's semantic analysis.</summary>
         public void Refine(IEnumerable<int> ids)
         {
             var models = new Dictionary<SyntaxTree, Lazy<SemanticModel>>();
             foreach (var id in ids)
             {
-                var index = sites.FindIndex(s => s.Probe.Id == id);
+                var index = sites.FindIndex(s => s.Id == id);
                 if (index < 0)
                     continue;
                 var site = sites[index];
                 var tree = site.Node.SyntaxTree;
                 if (!models.TryGetValue(tree, out var model))
                     models[tree] = model = new Lazy<SemanticModel>(() => compilation.GetSemanticModel(tree));
-                if (ScriptInstrumenter.Build(model, site.Node, site.Probe.Line, id, site.Probe.Path, precise: true) is { } refined)
+                var refined = site.Remake is { } remake ? Safely(() => remake(model))
+                    : site.Probe is { } probe ? ScriptInstrumenter.Build(model, site.Node, probe.Line, id, site.Path, precise: true)
+                    : null;
+                if (refined is not null)
                     sites[index] = refined;
             }
         }
@@ -145,7 +173,7 @@ public static class ScriptInstrumenter
     {
         var builder = new StringBuilder(text.Length + 1024);
         var at = 0;
-        foreach (var edit in edits.OrderBy(e => e.Offset).ThenBy(e => e.Order))
+        foreach (var edit in edits.OrderBy(e => e.Offset).ThenBy(e => e.Order).ThenBy(e => e.Rank))
         {
             if (edit.Offset < at)
                 continue;
@@ -157,17 +185,20 @@ public static class ScriptInstrumenter
     }
 
     // `precise` asks Roslyn about every variable's type and whether it's set, rather than reading the code.
-    private static Site? Build(Lazy<SemanticModel> model, SyntaxNode node, int line, int id, string path, bool precise)
+    private static Site? Build(Lazy<SemanticModel> model, SyntaxNode node, int line, int id, string path, bool precise) =>
+        Safely(() => node switch
+        {
+            StatementSyntax statement => Statement(model, statement, line, id, path, precise),
+            ExpressionSyntax { Parent: ArrowExpressionClauseSyntax arrow } body => Arrow(model, arrow, body, line, id, path, precise),
+            ExpressionSyntax { Parent: LambdaExpressionSyntax lambda } body => Lambda(model.Value, lambda, body, line, id, path),
+            _ => null,
+        });
+
+    private static Site? Safely(Func<Site?> build)
     {
         try
         {
-            return node switch
-            {
-                StatementSyntax statement => Statement(model, statement, line, id, path, precise),
-                ExpressionSyntax { Parent: ArrowExpressionClauseSyntax arrow } body => Arrow(model, arrow, body, line, id, path, precise),
-                ExpressionSyntax { Parent: LambdaExpressionSyntax lambda } body => Lambda(model.Value, lambda, body, line, id, path),
-                _ => null,
-            };
+            return build();
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
@@ -189,8 +220,8 @@ public static class ScriptInstrumenter
         var edits = statement.Parent is BlockSyntax or SwitchSectionSyntax
             ? new[] { new Edit(statement.SpanStart, 2, call + " ") }
             // An if's or a loop's statement on a line of its own goes in a block, with its probe.
-            : [new Edit(statement.SpanStart, 1, "{ "), new Edit(statement.SpanStart, 2, call + " "), new Edit(statement.Span.End, 0, " }")];
-        return new Site(probe, statement, edits, line, LineOf(statement, statement.Span.End));
+            : [new Edit(statement.SpanStart, 1, "{ "), new Edit(statement.SpanStart, 2, call + " "), new Edit(statement.Span.End, 0, " }", Rank: int.MinValue)];
+        return new Site(id, path, probe, statement, edits, line, LineOf(statement, statement.Span.End));
     }
 
     // The parameters and locals of `function` in scope and certainly set as `statement` starts, in the order they were
@@ -341,11 +372,14 @@ public static class ScriptInstrumenter
             .Where(p => !p.IsOut && (!precise || Passable(model.Value.GetDeclaredSymbol(p.Node))))
             .Select(p => p.Name).ToList();
         var probe = new ScriptProbe(id, path, line, Where(body), names, self) { Function = member.SpanStart, Entry = true };
+        var last = LineOf(arrow, semicolon.Span.End);
+        var guard = new ScriptGuard(id, path, line, last, probe.Where, names, self);
         var call = Call(probe);
         var getter = member is PropertyDeclarationSyntax or IndexerDeclarationSyntax;
-        var open = (getter ? "{ get { " : "{ ") + call + (returns == false || body is ThrowExpressionSyntax ? " " : " return ");
-        return new Site(probe, body, [new Edit(arrow.ArrowToken.SpanStart, 1, open, arrow.ArrowToken.Span.Length), new Edit(semicolon.Span.End, 0, getter ? " } }" : " }")],
-            line, LineOf(arrow, semicolon.Span.End));
+        var open = (getter ? "{ get { " : "{ ") + "try { " + call + (returns == false || body is ThrowExpressionSyntax ? " " : " return ");
+        return new Site(id, path, probe, body,
+            [new Edit(arrow.ArrowToken.SpanStart, 1, open, arrow.ArrowToken.Span.Length), new Edit(semicolon.Span.End, 0, Catch(guard) + (getter ? " } }" : " }"))],
+            line, last) { Guard = guard };
     }
 
     // Whether a member of this type returns a value from its body (true), returns nothing (false), or returns by ref, which
@@ -369,9 +403,11 @@ public static class ScriptInstrumenter
 
         var names = symbol.Parameters.Where(p => !p.IsDiscard && p.Name is not ("" or "_") && p.RefKind != RefKind.Out && Passable(p)).Select(p => p.Name).ToList();
         var probe = new ScriptProbe(id, path, line, Where(body), names, false) { Function = lambda.SpanStart, Entry = true };
+        var last = LineOf(body, body.Span.End);
+        var guard = new ScriptGuard(id, path, line, last, probe.Where, names, false);
         var nothing = symbol.ReturnsVoid || symbol.IsAsync && symbol.ReturnType is INamedTypeSymbol { Arity: 0 } || body is ThrowExpressionSyntax;
-        var open = "{ " + Call(probe) + (nothing ? " " : " return ");
-        return new Site(probe, body, [new Edit(body.SpanStart, 2, open), new Edit(body.Span.End, 0, "; }")], line, LineOf(body, body.Span.End));
+        var open = "{ try { " + Call(probe) + (nothing ? " " : " return ");
+        return new Site(id, path, probe, body, [new Edit(body.SpanStart, 2, open), new Edit(body.Span.End, 0, ";" + Catch(guard) + " }")], line, last) { Guard = guard };
     }
 
     private static string Call(ScriptProbe probe)
@@ -380,6 +416,249 @@ public static class ScriptInstrumenter
         var values = string.Join(", ", probe.Names.Select(n => "@" + n));
         return $"if (global::{SwitchesClass}.P{id}) {Hit}(typeof(global::{SwitchesClass}), {id}, {(probe.HasThis ? "this" : "null")}, new object[] {{ {values} }});";
     }
+
+    // ----- Guards -----
+
+    // What closes a guard's `try {`: a filter that notes an exception coming up through the code it covers, with the values in
+    // scope there, and never catches it.
+    private static string Catch(ScriptGuard guard)
+    {
+        var id = guard.Id.ToString(CultureInfo.InvariantCulture);
+        var values = string.Join(", ", guard.Names.Select(n => "@" + n));
+        return $" }} catch (global::System.Exception __griffError) when ({Probes}.Watches(__griffError) && {Probes}.Threw(__griffError, " +
+            $"typeof(global::{SwitchesClass}), {id}, {(guard.HasThis ? "this" : "null")}, new object[] {{ {values} }})) {{ throw; }}";
+    }
+
+    private const string Probes = "global::Griff.Debugging.ScriptProbes";
+
+    // Guards for a script's code: each method's (lambda's, local function's) statements are covered by guards, so an
+    // exception thrown by one is noted by the innermost guard around it, with the variables in scope there. A guard covers
+    // a block from a statement to its end, starting a new one wherever more variables are in scope (after a declaration,
+    // say) than the guard around it passes, unless a local function or label it would take in is named before it. In an
+    // iterator a guard can't hold a `yield return`, so in a block with one each other statement gets a guard of its own
+    // (unless it declares a variable for the statements after it), and a declaration is split so its value is set in one
+    // (`T x; try { x = ...`). The rest of an iterator's lines are covered by the coroutine running it (see Coroutine).
+    private static void PlanGuards(Lazy<SemanticModel> model, SyntaxNode root, string path, List<Site> sites, int first)
+    {
+        var probes = new Dictionary<SyntaxNode, ScriptProbe>();
+        for (var i = first; i < sites.Count; i++)
+        {
+            if (sites[i] is { Probe: { } probe, Node: StatementSyntax })
+                probes[sites[i].Node] = probe;
+        }
+
+        // The names the innermost guard around each statement passes (null for none).
+        var covered = new Dictionary<StatementSyntax, IReadOnlyList<string>?>();
+        var iterators = new Dictionary<SyntaxNode, bool>();
+        foreach (var block in root.DescendantNodes().OfType<BlockSyntax>())
+        {
+            if (FunctionOf(block) is not { } function)
+                continue;
+            if (!iterators.TryGetValue(function, out var iterator))
+                iterators[function] = iterator = Yields(function);
+
+            var statements = block.Statements;
+            var active = Enclosing(block, function, covered);
+            if (!iterator || !statements.Any(HasYield))
+            {
+                // Local functions at the end of the block stay outside its guards (they're seen all through the block anyway), so
+                // the code before them can use them.
+                var tail = statements.Count;
+                while (tail > 0 && statements[tail - 1] is LocalFunctionStatementSyntax)
+                    tail--;
+                // Unless one uses a variable of the block, which it couldn't see from outside the guard declaring it.
+                if (tail < statements.Count && UsesVariablesOf(statements, tail))
+                    tail = statements.Count;
+                var closeAt = tail < statements.Count ? statements[tail].SpanStart : block.CloseBraceToken.SpanStart;
+                var reached = ReachedFromBefore(statements, tail);
+                for (var i = 0; i < statements.Count; i++)
+                {
+                    var statement = statements[i];
+                    if (i < tail && probes.TryGetValue(statement, out var probe) && (active is null || !probe.Names.SequenceEqual(active)) && !reached[i]
+                        && Safely(() => Guard(model, statement, closeAt, sites.Count, path, probe.Names, probe.HasThis, precise: false)) is { } guard)
+                    {
+                        sites.Add(guard);
+                        active = probe.Names;
+                    }
+
+                    covered[statement] = active;
+                }
+
+                continue;
+            }
+
+            foreach (var statement in statements)
+            {
+                covered[statement] = null;
+                if (!probes.TryGetValue(statement, out var probe) || statement is LocalFunctionStatementSyntax or LabeledStatementSyntax || HasYield(statement)
+                    || statement is not LocalDeclarationStatementSyntax && DeclaresForLater(statement))
+                    continue;
+                var guard = statement is LocalDeclarationStatementSyntax declaration
+                    ? Safely(() => Split(model, declaration, sites.Count, path, probe.Names, probe.HasThis, precise: false))
+                    : Safely(() => Guard(model, statement, statement.Span.End, sites.Count, path, probe.Names, probe.HasThis, precise: false));
+                if (guard is null)
+                    continue;
+                sites.Add(guard);
+                if (statement is not LocalDeclarationStatementSyntax)
+                    covered[statement] = probe.Names;
+            }
+        }
+    }
+
+    // For each statement of a block, whether a guard can't start there: a local function or a label from there on (which
+    // would be inside the guard) is named by a statement before it (outside, where it couldn't be seen or jumped to). The
+    // statements from `end` on (local functions at the end) stay outside every guard.
+    private static bool[] ReachedFromBefore(SyntaxList<StatementSyntax> statements, int end)
+    {
+        var reached = new bool[statements.Count];
+        var declared = new Dictionary<string, int>();
+        for (var i = 0; i < end; i++)
+        {
+            switch (statements[i])
+            {
+                case LocalFunctionStatementSyntax local:
+                    declared.TryAdd(local.Identifier.ValueText, i);
+                    break;
+                case LabeledStatementSyntax label:
+                    declared.TryAdd(label.Identifier.ValueText, i);
+                    break;
+            }
+        }
+
+        if (declared.Count == 0)
+            return reached;
+        for (var i = 0; i < statements.Count; i++)
+        {
+            foreach (var name in statements[i].DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+            {
+                // Named at i, declared at `at` later: no guard can start after i up to `at`.
+                if (declared.TryGetValue(name.Identifier.ValueText, out var at) && at > i)
+                {
+                    for (var j = i + 1; j <= at; j++)
+                        reached[j] = true;
+                }
+            }
+        }
+
+        return reached;
+    }
+
+    // Whether the local functions from `tail` on name a variable declared in the statements before them.
+    private static bool UsesVariablesOf(SyntaxList<StatementSyntax> statements, int tail)
+    {
+        var declared = new HashSet<string>();
+        for (var i = 0; i < tail; i++)
+        {
+            foreach (var node in statements[i].DescendantNodes())
+            {
+                var name = node switch
+                {
+                    VariableDeclaratorSyntax variable => variable.Identifier.ValueText,
+                    SingleVariableDesignationSyntax designation => designation.Identifier.ValueText,
+                    ForEachStatementSyntax loop => loop.Identifier.ValueText,
+                    CatchDeclarationSyntax caught => caught.Identifier.ValueText,
+                    _ => null,
+                };
+                if (name is { Length: > 0 })
+                    declared.Add(name);
+            }
+        }
+
+        for (var i = tail; i < statements.Count; i++)
+        {
+            if (statements[i].DescendantNodes().OfType<IdentifierNameSyntax>().Any(n => declared.Contains(n.Identifier.ValueText)))
+                return true;
+        }
+
+        return false;
+    }
+
+    // The names the guard around `block` passes, from the statement of an outer block of the same function it's in.
+    private static IReadOnlyList<string>? Enclosing(BlockSyntax block, SyntaxNode function, Dictionary<StatementSyntax, IReadOnlyList<string>?> covered)
+    {
+        for (SyntaxNode node = block; node != function && node.Parent is { } parent; node = parent)
+        {
+            if (parent is BlockSyntax && node is StatementSyntax statement)
+                return covered.GetValueOrDefault(statement);
+        }
+
+        return null;
+    }
+
+    // Whether a statement declares a variable the statements after it can use (`var (a, b) = ...;`, an `out var` in a call,
+    // a pattern in an if's condition), which it couldn't in a guard of its own: a variable in its own expressions, not in
+    // the statements inside it or in a lambda.
+    private static bool DeclaresForLater(StatementSyntax statement) =>
+        statement.DescendantNodes(n => n == statement || n is not (StatementSyntax or AnonymousFunctionExpressionSyntax))
+            .Any(n => n is SingleVariableDesignationSyntax or ParenthesizedVariableDesignationSyntax);
+
+    // Whether a statement holds a `yield`, not counting the functions inside it (a local function's are its own).
+    private static bool HasYield(StatementSyntax statement) => statement is not LocalFunctionStatementSyntax && Yields(statement);
+
+    // Whether `node` (a function, or a statement) holds a `yield`, not counting the functions inside it.
+    private static bool Yields(SyntaxNode node) =>
+        node.DescendantNodesAndSelf(n => n == node || n is not (AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax)).OfType<YieldStatementSyntax>().Any();
+
+    // A guard from `start` to `closeAt` (the end of its block, or of the statement): `try {` before the statement, and the
+    // filter at the end. With `precise`, the names it passes are worked out again with Roslyn's help.
+    private static Site Guard(Lazy<SemanticModel> model, StatementSyntax start, int closeAt, int id, string path, IReadOnlyList<string> names, bool hasThis, bool precise)
+    {
+        var function = FunctionOf(start)!;
+        if (precise)
+            (names, hasThis) = (InScope(model, start, function, precise: true).Distinct().ToList(), CanPassThis(function));
+        var guard = new ScriptGuard(id, path, LineOf(start, start.SpanStart), LineOf(start, closeAt), Where(start), names, hasThis);
+        return new Site(id, path, null, start, [new Edit(start.SpanStart, 1, "try { "), new Edit(closeAt, 0, Catch(guard), Rank: -start.SpanStart)], guard.Line, guard.EndLine)
+        {
+            Guard = guard,
+            Remake = m => Guard(m, start, closeAt, id, path, names, hasThis, precise: true),
+        };
+    }
+
+    // A declaration in an iterator, `T x = value;`, split so its value is set in a guard: `T x; try { x = value; }` (with
+    // `var` written out as the type). Only one variable, with a value, of a type that can be named.
+    private static Site? Split(Lazy<SemanticModel> model, LocalDeclarationStatementSyntax declaration, int id, string path, IReadOnlyList<string> names, bool hasThis, bool precise)
+    {
+        if (declaration.UsingKeyword.IsKind(SyntaxKind.UsingKeyword) || declaration.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) || declaration.IsConst
+            || declaration.Modifiers.Count > 0 || declaration.Declaration.Variables is not [{ Initializer.Value: var value } variable]
+            || value is RefExpressionSyntax or StackAllocArrayCreationExpressionSyntax or ImplicitStackAllocArrayCreationExpressionSyntax)
+            return null;
+        var type = declaration.Declaration.Type;
+        if (type is RefTypeSyntax or ScopedTypeSyntax || !Passable(type, value))
+            return null;
+
+        var function = FunctionOf(declaration)!;
+        if (precise)
+            (names, hasThis) = (InScope(model, declaration, function, precise: true).Distinct().ToList(), CanPassThis(function));
+        var edits = new List<Edit>();
+        if (type is IdentifierNameSyntax { IsVar: true })
+        {
+            if (model.Value.GetTypeInfo(type).Type is not { } named || !Nameable(named))
+                return null;
+            edits.Add(new Edit(type.SpanStart, 3, named.ToDisplayString(TypeName), type.Span.Length));
+        }
+
+        var guard = new ScriptGuard(id, path, LineOf(declaration, declaration.SpanStart), LineOf(declaration, declaration.Span.End), Where(declaration), names, hasThis);
+        edits.Add(new Edit(variable.Identifier.Span.End, 3, "; try { @" + variable.Identifier.ValueText));
+        edits.Add(new Edit(declaration.Span.End, 0, Catch(guard), Rank: -declaration.SpanStart));
+        return new Site(id, path, null, declaration, edits, guard.Line, guard.EndLine)
+        {
+            Guard = guard,
+            Remake = m => Split(m, declaration, id, path, names, hasThis, precise: true),
+        };
+    }
+
+    private static readonly SymbolDisplayFormat TypeName =
+        SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    // Whether a type can be written out in code: not anonymous, an error, a pointer or a ref struct, nor made of one.
+    private static bool Nameable(ITypeSymbol type) => type switch
+    {
+        IErrorTypeSymbol or IPointerTypeSymbol or IFunctionPointerTypeSymbol or IDynamicTypeSymbol => false,
+        { IsAnonymousType: true } or { IsRefLikeType: true } => false,
+        IArrayTypeSymbol array => Nameable(array.ElementType),
+        INamedTypeSymbol named => named.TypeArguments.All(Nameable) && (named.ContainingType is null || Nameable(named.ContainingType)),
+        _ => true,
+    };
 
     private static int LineOf(SyntaxNode node, int offset) =>
         node.SyntaxTree.GetLineSpan(new Microsoft.CodeAnalysis.Text.TextSpan(offset, 0)).StartLinePosition.Line + 1;

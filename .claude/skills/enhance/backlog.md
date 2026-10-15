@@ -52,7 +52,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 ### Genres: cards, adventures and stories
 
 - [ ] Add an Adventure template: a point-and-click adventure.
-- [ ] Add visual novel save slots, a log of lines already read, skip and auto-advance.
 - [ ] Add a Visual Novel template.
 
 ### Genres: rhythm and fighting
@@ -125,6 +124,7 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Add visual novel save slots, a log of lines already read, skip and auto-advance. (2026-10-15)
 - [x] Add a Cards template. (2026-10-15)
   - A `Cards` template (`Griff.Modules.Cards.CardsTemplate`): a menu (Play, Quit) and a `Duel` scene, the mage against the computer's lich, one deck made from a `Cards` table of 16 cards (8 creatures, 8 spells; cost, damage or heal, draw, mana, target, color, picture, effect prefab, sound, count and prefab as columns), mana growing to ten, a row each with spells discarded after a moment, Victory and Defeat, art and sounds made in code. Engine: a deck's Prefab Column (a row names its prefab), a play zone's Discard After, a creature card's health gem, hurt flash and strike lunge, and a hand's Said for each-turn effects.
 

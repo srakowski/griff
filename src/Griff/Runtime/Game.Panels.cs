@@ -83,6 +83,18 @@ public sealed partial class Game
 
     private bool InOpenPanel(Entity entity) => _panels.Open.Any(p => Inside(entity, p.Panel));
 
+    // For a picture of the game without the panels over it (see SceneRenderer.BuildPicture).
+    internal bool IsInOpenPanel(Entity entity)
+    {
+        foreach (var (panel, _) in _panels.Open)
+        {
+            if (Inside(entity, panel))
+                return true;
+        }
+
+        return false;
+    }
+
     // Brings the list of open panels up to date with which are showing (scripts may show and hide them), hiding panels the
     // first time they're seen unless they're meant to start open. Runs at the start of each frame, before anything starts,
     // so a hidden panel's scripts don't start until it opens.
@@ -170,7 +182,20 @@ public sealed partial class Game
         return controls.Count > 0 ? First(controls) : null;
     }
 
-    private bool HasWhatItNeeds(Button button) => string.IsNullOrWhiteSpace(button.NeedsSaved) || SaveData.Has(button.NeedsSaved.Trim());
+    // What it NeedsSaved is saved; and a button that loads or deletes a saved game has one to load, while one that saves or
+    // loads can't in a network game.
+    private bool HasWhatItNeeds(Button button)
+    {
+        if (!string.IsNullOrWhiteSpace(button.NeedsSaved) && !SaveData.Has(button.NeedsSaved.Trim()))
+            return false;
+        return button.Action switch
+        {
+            ButtonAction.LoadGame or ButtonAction.DeleteSave => SlotOf(button) is { } slot && HasSave(slot) && (button.Action == ButtonAction.DeleteSave || !Net.IsOnline),
+            ButtonAction.QuickLoad => HasSave(QuickSlot) && !Net.IsOnline,
+            ButtonAction.SaveGame or ButtonAction.QuickSave => !Net.IsOnline,
+            _ => true,
+        };
+    }
 
     // Esc or B closes the top panel (unless it has a button for that), and its OpenOn action toggles it; with no panel
     // open, a panel's OpenOn action opens it. Uses the panel on top at the start of the frame, so the press that opens a

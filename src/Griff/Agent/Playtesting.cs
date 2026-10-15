@@ -113,6 +113,10 @@ public static class Playtesting
         var text = $"Talking: {who}" + (dialogue.Said is { } said ? $" says \"{said}\"." : ".");
         if (game.IsTyping(dialogue))
             text += " It's still typing out (Interact shows it all at once; choices wait for it).";
+        if (game.IsSkipping)
+            text += " Skipping.";
+        if (game.AutoReading)
+            text += " Reading on by itself (Auto).";
         if (dialogue.Choices.Count == 0)
             return text;
         var choices = dialogue.Choices.Select((choice, i) => $"{i + 1} \"{choice}\"{(i == dialogue.Picked ? " (picked)" : "")}");

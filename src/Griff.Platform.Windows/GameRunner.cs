@@ -342,7 +342,33 @@ public sealed class GameRunner : IDisposable
         (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
         _drawFaulted = false;
         _lastFrame = frame;
+        if (Game.PictureWanted)
+            TakePicture();
         _surface.Render(_lastFrame);
+    }
+
+    // A game just saved wants its screenshot: drawn once more without the panels over it, and read back.
+    private void TakePicture()
+    {
+        var outer = t_running;
+        t_running = this;
+        try
+        {
+            if (_surface.Capture(SceneRenderer.BuildPicture(Game, _surface.Aspect)) is var (pixels, width, height))
+                Game.TakePicture(pixels, width, height);
+            else
+                Game.TakePicture([], 0, 0);
+        }
+#pragma warning disable CA1031 // A script that throws while drawing the picture leaves the saved game without one, rather than stopping it.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            Game.TakePicture([], 0, 0);
+        }
+        finally
+        {
+            t_running = outer;
+        }
     }
 
     private static float Milliseconds(long from, long to) => (float)((to - from) * 1000.0 / Stopwatch.Frequency);

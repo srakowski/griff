@@ -66,6 +66,12 @@ public sealed class RenderFrame
     /// </summary>
     public double Time { get; internal set; }
 
+    /// <summary>
+    /// The pictures the game made for itself (its saved games' screenshots), which images named with
+    /// <see cref="GamePictures.Mark"/> draw; null for none.
+    /// </summary>
+    public GamePictures? Pictures { get; internal set; }
+
     /// <summary>True if the scene is dark, so the renderer darkens the first <see cref="LitCount"/> sprites and adds lights.</summary>
     public bool IsDark => Ambient.R < 1 || Ambient.G < 1 || Ambient.B < 1;
 

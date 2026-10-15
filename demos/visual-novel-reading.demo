@@ -1,0 +1,72 @@
+title: Reading a visual novel
+intro: Save slots with screenshots, a log of the lines said, Skip through what you've read, and Auto.
+project: Empty | Reading Story
+
+chapter: The reading menus | Entity > Genres > Visual Novels > Stage
+create: Stage
+expectcount: Reading Menus = 1
+expectcount: Quick Menu = 1
+expectcount: Save Screen = 1
+expectcount: Load Screen = 1
+expectcount: Log Screen = 1
+say: A new stage comes with its reading menus: a row of buttons at the top of the screen, save and load screens, a log, and settings.
+select: Slot 1
+explain: component:SaveSlot | Save Slot | Each card on the save screen is a button that saves in its slot, and a Save Slot that shows the game saved there: a screenshot, when, and the line being said.
+select: Lines
+explain: component:Backlog | Backlog | The log keeps every line said, with who said it, and the choices picked.
+
+chapter: Skip and Auto | Ctrl skips, A reads on by itself
+play
+wait: 2
+expectvalue: Stage.Dialogue.Line = 1
+say: First a quick save, then read on a few lines.
+gameclick: Q.Save
+wait: 1
+gameclick: 0, 3
+wait: 2
+gameclick: 0, 3
+wait: 2
+gameclick: 0, 3
+wait: 2
+expectvalue: Stage.Dialogue.Line = 4
+gameclick: Q.Load
+wait: 1.5
+expectvalue: Stage.Dialogue.Line = 1
+explain: game | Quick load | Quick load goes back to the quick save: the stage, the talk and the flags exactly as they were.
+say: Hold Control and the lines read before go by in a moment, stopping at the first line not read yet.
+hold: LeftControl 1.5
+wait: 0.5
+expectvalue: Stage.Dialogue.Line = 5
+say: A turns on Auto: once a line has typed out, the next comes after a pause as long as the line. It waits at choices.
+tap: A
+wait: 6
+expectvalue: Stage.Dialogue.Line = 6
+tap: A
+tap: D2
+wait: 2
+expectvalue: Stage.Stage.Background = Room
+
+chapter: Save slots and the log | Save, Load and the mouse wheel
+gameclick: Save
+wait: 1
+gameclick: -5.2, 1.5
+wait: 1
+expectvalue: Slot 1.SaveSlot.HasSave = true
+explain: game | Saved in slot 1 | The card shows a screenshot of the game without the menu, when it was saved, and the line being said.
+tap: Escape
+wait: 0.5
+gameclick: 0, 3
+wait: 2
+gameclick: Load
+wait: 1
+gameclick: -5.2, 1.5
+wait: 1.5
+expectvalue: Stage.Dialogue.Line = 13
+say: Loading slot 1 puts it all back. Saved games are kept for next time, on the desktop and in a browser.
+wheel: game = up
+wait: 1
+expectvalue: Log Screen.Panel.Open = true
+explain: game | The log | Turning the mouse wheel up opens the log of what was said. Scroll it with the wheel, the arrow keys, or a finger, and turn the wheel down past the end to close it.
+tap: Escape
+stop
+say: That's reading a visual novel: save slots with screenshots, quick saves, a log of the lines said, Skip for what you've read, and Auto.

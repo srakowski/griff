@@ -53,6 +53,7 @@ public abstract class QuadRenderer : IRenderer
     {
         Glyphs.RefreshChanged();
         RefreshImages();
+        RefreshPictures(frame.Pictures);
         List.Build(frame, width, height);
         SendGlyphs();
         Draw(List);
@@ -78,6 +79,15 @@ public abstract class QuadRenderer : IRenderer
     protected abstract void LoadImage(int texture, string path);
 
     /// <summary>
+    /// Gives <paramref name="texture"/> the image encoded in <paramref name="encoded"/> (a PNG): one of the game's own
+    /// pictures (see <see cref="GamePictures"/>), the first time it's drawn and again whenever it changes. Nothing (or what
+    /// can't be read) is the missing image's checker. A renderer that draws none of them can leave it.
+    /// </summary>
+    protected virtual void LoadImage(int texture, byte[] encoded)
+    {
+    }
+
+    /// <summary>
     /// Copies <paramref name="rows"/> rows from <paramref name="top"/> of the glyph page <paramref name="texture"/>
     /// (straight-alpha RGBA, <see cref="GlyphPage.Size"/> pixels wide) to its texture, made <see cref="GlyphPage.Size"/>
     /// pixels square the first time.
@@ -93,6 +103,8 @@ public abstract class QuadRenderer : IRenderer
     {
         if (_byName.TryGetValue(name, out var texture))
             return texture;
+        if (GamePictures.IsPicture(name))
+            return PictureTexture(name);
         var path = Path.Combine(_assetRoot, name.Replace('\\', '/').Replace('/', Path.DirectorySeparatorChar));
         if (!_byPath.TryGetValue(path, out texture))
         {
@@ -138,6 +150,48 @@ public abstract class QuadRenderer : IRenderer
             pages[i].CopyRgba(top, rows, _glyphRows);
             LoadGlyphRows(DrawList.GlyphTexture(i), top, rows, _glyphRows.AsSpan(0, length));
         }
+    }
+
+    // The game's own pictures drawn so far, by texture, with the version of each loaded (-1 for none yet), and the game's
+    // pictures they came from.
+    private readonly Dictionary<int, (string Name, int Version)> _pictureTextures = [];
+    private GamePictures? _pictures;
+
+    private int PictureTexture(string name)
+    {
+        var texture = _paths.Count;
+        _paths.Add("");
+        _stamps.Add(DateTime.MinValue);
+        _byName[name] = texture;
+        _pictureTextures[texture] = (name, -1);
+        LoadPicture(texture, name);
+        return texture;
+    }
+
+    // Loads the pictures that changed since they were last drawn (all of them, for another game's).
+    private void RefreshPictures(GamePictures? pictures)
+    {
+        if (pictures != _pictures)
+        {
+            _pictures = pictures;
+            foreach (var texture in _pictureTextures.Keys.ToList())
+                _pictureTextures[texture] = (_pictureTextures[texture].Name, -1);
+        }
+
+        if (_pictureTextures.Count == 0)
+            return;
+        foreach (var (texture, (name, version)) in _pictureTextures.ToList())
+        {
+            if ((pictures?.Get(name).Version ?? 0) != version)
+                LoadPicture(texture, name);
+        }
+    }
+
+    private void LoadPicture(int texture, string name)
+    {
+        var (png, version) = _pictures?.Get(name) ?? (null, 0);
+        _pictureTextures[texture] = (name, version);
+        LoadImage(texture, png ?? []);
     }
 
     private static DateTime Stamp(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;

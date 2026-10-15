@@ -214,6 +214,7 @@ public sealed partial class Game : IGameContext
         if (IsQuitting)
             return;
         IsQuitting = true;
+        SaveReadLines(now: true);
         QuitRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -672,18 +673,19 @@ public sealed partial class Game : IGameContext
 
     private void SwitchSceneIfRequested()
     {
-        if (_pendingScene is not { } name)
+        if (SwitchToLoadedGame() || _pendingScene is not { } name)
             return;
         _pendingScene = null;
         SwitchScene(name);
     }
 
-    // The lambdas here capture what's staying, so they're kept out of the step every frame takes.
-    private void SwitchScene(string name)
+    // The lambdas here capture what's staying, so they're kept out of the step every frame takes. A saved game's scene
+    // comes `loaded`; otherwise it's loaded by name.
+    private void SwitchScene(string name, Scene? loaded = null)
     {
         SystemsSceneEnding();
 
-        var next = SceneLoader!(name);
+        var next = loaded ?? SceneLoader!(name);
 
         // Nothing glides into the new scene: after this step it's drawn as it is.
         next.Step = next.FirstStep = Scene.Step;
@@ -711,7 +713,8 @@ public sealed partial class Game : IGameContext
         }
 
         Scene = next;
-        SceneName = SceneNameOf(name);
+        if (name.Length > 0 || loaded is null)
+            SceneName = SceneNameOf(name);
         _messages.Prune(next);
         _controlsSeen.RemoveWhere(c => c.Entity?.Scene != next);
         SystemsSceneChanged();

@@ -109,6 +109,24 @@ public enum ButtonAction
     /// none of them can do it now (a fighter off its turn, a spell without the mana).
     /// </summary>
     Do,
+
+    /// <summary>
+    /// Saves the game in <see cref="Button.Slot"/> (or the <see cref="SaveSlot"/> it's on), replacing what was there: the scene as
+    /// it is, where a talk has got to, the flags and a screenshot (see <c>Game.SaveGame</c>).
+    /// </summary>
+    SaveGame,
+
+    /// <summary>Loads the game saved in <see cref="Button.Slot"/> (or the <see cref="SaveSlot"/> it's on). It's faded while there's none.</summary>
+    LoadGame,
+
+    /// <summary>Forgets the game saved in <see cref="Button.Slot"/> (or the <see cref="SaveSlot"/> it's on or inside). It's faded while there's none.</summary>
+    DeleteSave,
+
+    /// <summary>Saves the game in the Quick slot, to load again with a Quick Load button.</summary>
+    QuickSave,
+
+    /// <summary>Loads the game saved with Quick Save. It's faded while there's none.</summary>
+    QuickLoad,
 }
 
 /// <summary>
@@ -141,7 +159,7 @@ public sealed class Button : Component, IDrawEffect
     public string? Scene { get; set; }
 
     /// <summary>For loading and restarting: seconds to fade the screen out (and back in) around the switch. 0 cuts straight there.</summary>
-    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame])]
+    [ShownWhen(nameof(Action), Is = [ButtonAction.LoadScene, ButtonAction.RestartScene, ButtonAction.HostGame, ButtonAction.LeaveGame, ButtonAction.LoadGame, ButtonAction.QuickLoad])]
     public float Fade { get; set; }
 
     /// <summary>For <see cref="ButtonAction.OpenPanel"/>: the name of the panel's entity, e.g. "Options".</summary>
@@ -165,6 +183,13 @@ public sealed class Button : Component, IDrawEffect
     /// <summary>For <see cref="ButtonAction.Do"/>: what to do it with, for an action that takes a value (Damage 2). Empty uses the action's own default.</summary>
     [ShownWhen(nameof(Action), Is = [ButtonAction.Do])]
     public string? With { get; set; }
+
+    /// <summary>
+    /// For Save Game, Load Game and Delete Save: the slot's name, e.g. "1". Empty uses the slot of the <see cref="SaveSlot"/> it's
+    /// on or inside.
+    /// </summary>
+    [ShownWhen(nameof(Action), Is = [ButtonAction.SaveGame, ButtonAction.LoadGame, ButtonAction.DeleteSave])]
+    public string? Slot { get; set; }
 
     /// <summary>For <see cref="ButtonAction.Rebind"/>: the input action it changes, e.g. "Jump".</summary>
     [Names(NameKind.Action)]
@@ -219,7 +244,10 @@ public sealed class Button : Component, IDrawEffect
     /// <summary>True while it can be clicked: it's <see cref="Interactable"/>, and what it <see cref="NeedsSaved"/> is saved.</summary>
     public bool IsUsable => Interactable && !IsMissingSave;
 
-    /// <summary>True while the game has nothing saved under <see cref="NeedsSaved"/>. Kept up to date by the game.</summary>
+    /// <summary>
+    /// True while the game has nothing saved under <see cref="NeedsSaved"/>, or, for Load Game, Delete Save and Quick Load, no
+    /// game saved in the slot (and for saving and loading, during a network game). Kept up to date by the game.
+    /// </summary>
     [DoNotSerialize]
     public bool IsMissingSave { get; internal set; }
 
@@ -260,6 +288,18 @@ public enum GameSetting
 
     /// <summary>Fullscreen or windowed (<c>Game.Fullscreen</c>).</summary>
     Fullscreen,
+
+    /// <summary>Dialogue skipping now, through lines read before (<c>Game.Skipping</c>): a toggle for a Skip button.</summary>
+    Skip,
+
+    /// <summary>Dialogue reading on by itself (<c>Game.AutoReading</c>): a toggle for an Auto button.</summary>
+    Auto,
+
+    /// <summary>Skipping goes through lines not read yet too (<c>Game.SkipUnread</c>), rather than stopping at them.</summary>
+    SkipUnread,
+
+    /// <summary>How quickly dialogue reads on by itself, 0 (slowly) to 1 (quickly) (<c>Game.AutoSpeed</c>).</summary>
+    AutoSpeed,
 }
 
 /// <summary>Which way a <see cref="Bar"/> fills up.</summary>

@@ -85,6 +85,20 @@ public sealed class Stage : Component, IDrawable
     [Names(NameKind.Action)]
     public string? AdvanceAction { get; set; } = "Jump";
 
+    /// <summary>
+    /// An input action that skips while it's held: lines read before go by in a moment, stopping at choices and at a line
+    /// not read yet (unless the player's Skip Unread setting is on). Skip is Ctrl and the gamepad's right trigger.
+    /// </summary>
+    [Names(NameKind.Action)]
+    public string? SkipAction { get; set; } = "Skip";
+
+    /// <summary>
+    /// An input action that turns reading on by itself on and off (see the player's Auto Speed setting): Auto is A and the
+    /// gamepad's X.
+    /// </summary>
+    [Names(NameKind.Action)]
+    public string? AutoAction { get; set; } = "Auto";
+
     /// <summary>The background being changed from, while a fade or slide is under way.</summary>
     [Group("State")]
     public string? LeavingBackground { get; set; }

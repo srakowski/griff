@@ -216,6 +216,26 @@ public sealed class OpenGLRenderer : QuadRenderer
         }
     }
 
+    protected override void LoadImage(int texture, byte[] encoded)
+    {
+        while (_images.Count <= texture)
+            _images.Add(0);
+        if (_images[texture] != 0)
+            _gl.DeleteTexture(_images[texture]);
+        _images[texture] = 0;
+        if (encoded.Length == 0)
+            return;
+        try
+        {
+            var image = ImageResult.FromMemory(encoded, ColorComponents.RedGreenBlueAlpha);
+            _images[texture] = Upload(image.Data, image.Width, image.Height, smooth: false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // Not an image: the checker.
+        }
+    }
+
     protected override void LoadGlyphRows(int texture, int top, int rows, Span<byte> rgba)
     {
         var page = DrawList.GlyphPage(texture);

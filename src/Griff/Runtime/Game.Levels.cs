@@ -486,17 +486,29 @@ public sealed partial class Game
         });
     }
 
-    // A pause menu over a conversation holds it where it is: Interact is for the menu.
+    // A pause menu over a conversation holds it where it is: Interact is for the menu. Then skipping and reading on by
+    // itself move a talk on.
     private void RunDialogues()
     {
         if (PausedThisFrame)
             return;
+        RunTalks();
+        RunReading();
+    }
+
+    private void RunTalks()
+    {
         if (_levels.Talking is { } talking)
         {
             if (talking.Entity?.Scene != Scene)
                 EndDialogue(finished: false);
             else if (!_levels.TalkJustStarted && !RunChoices(talking) && (Input.WasPressed("Interact") || ClickAdvances(talking)))
+            {
+                // Reading on by hand stops skipping.
+                _skipping = false;
                 AdvanceDialogue(talking);
+            }
+
             _levels.TalkJustStarted = false;
             return;
         }
@@ -638,6 +650,7 @@ public sealed partial class Game
         var picked = dialogue.Row(_levels.ChoiceRows[choice]);
         var after = _levels.AfterChoices;
         dialogue.Picked = choice;
+        AddToLogs("> " + picked.Text);
         DoTags(dialogue, picked.Tags);
         dialogue.RaiseChosen(choice);
         if (_levels.Talking != dialogue)
@@ -659,7 +672,8 @@ public sealed partial class Game
 
     /// <summary>
     /// Sets flag <paramref name="name"/> (or clears it, with <paramref name="on"/> false), as a dialogue's "[set Name]"
-    /// does. Flags are kept in <see cref="SaveData"/>, so they're still set the next time the game runs.
+    /// does. Flags are kept in <see cref="SaveData"/>, so they're still set the next time the game runs; a saved game
+    /// (<see cref="SaveGame"/>) keeps the ones set when it was saved, and loading it puts them back.
     /// </summary>
     public void SetFlag(string name, bool on = true)
     {
@@ -668,9 +682,14 @@ public sealed partial class Game
         if (HasFlag(key) == on)
             return;
         if (on)
+        {
+            NoteFlagName(key);
             SaveData.Set(key, true);
+        }
         else
+        {
             SaveData.Delete(key);
+        }
         FlagChanged?.Invoke(key, on);
     }
 
@@ -891,6 +910,7 @@ public sealed partial class Game
             text.Entity!.GetComponent<Typewriter>()?.Restart();
         }
 
+        NoteLineShown(dialogue, row, line.Kind == Dialogue.RowKind.Said, resume);
         dialogue.RaiseLineShown();
     }
 
@@ -942,37 +962,8 @@ public sealed partial class Game
         return string.Join("\n", dialogue.Said is { } said ? rows.Prepend(Wrap(said, wrap, text.Size)) : rows);
     }
 
-    // An average letter of a font is about this much of its height across.
-    private const float LetterWidth = 0.5f;
-
     // Breaks text onto more lines between words, so no line is much wider than width (0 or less doesn't).
-    internal static string Wrap(string text, float width, float size)
-    {
-        var letters = size > 0 && width > 0 ? (int)(width / (size * LetterWidth)) : 0;
-        if (letters < 4 || text.Length <= letters)
-            return text;
-        var lines = new List<string>();
-        foreach (var paragraph in text.Split('\n'))
-        {
-            var line = "";
-            foreach (var word in paragraph.Split(' '))
-            {
-                if (line.Length > 0 && line.Length + 1 + word.Length > letters)
-                {
-                    lines.Add(line);
-                    line = word;
-                }
-                else
-                {
-                    line = line.Length == 0 ? word : line + " " + word;
-                }
-            }
-
-            lines.Add(line);
-        }
-
-        return string.Join("\n", lines);
-    }
+    internal static string Wrap(string text, float width, float size) => TextWrap.Wrap(text, width, size);
 
     // Choosing with the arrow keys, D-pad or stick, the number keys and the mouse, once the line has typed out. Interact
     // picks too, through AdvanceDialogue. True if one was picked here.
@@ -1139,6 +1130,9 @@ internal sealed class LevelSystem : GameSystem
 
     // The row after the line showing and the choices under it: where the talk goes on.
     public int AfterChoices { get; set; }
+
+    // Whether the line showing had been read before it was shown this time: skipping stops at one that hadn't.
+    public bool LineReadBefore { get; set; }
 
     // Leaving a scene leaves its doors and conversations behind.
     protected override void SceneChanged()

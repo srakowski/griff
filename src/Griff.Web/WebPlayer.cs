@@ -139,6 +139,13 @@ public static partial class WebPlayer
                 return;
             }
 
+            // A game just saved wants its screenshot: drawn once more without the panels over it, and read back.
+            if (game.PictureWanted)
+            {
+                s_renderer.Render(SceneRenderer.BuildPicture(game, aspect), width, height);
+                game.TakePicture(s_renderer.Capture(width, height), width, height);
+            }
+
             s_last = SceneRenderer.Build(game, aspect, recycle: s_last);
             s_renderer.Render(s_last, width, height);
             PumpSound();

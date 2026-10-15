@@ -45,9 +45,17 @@ public sealed partial class Game
             _controlsSeen.Add(control);
     }
 
+    // The menus, then the logs and save slots on them.
+    private void UpdateMenus()
+    {
+        UpdateControls();
+        RunBacklogs();
+        ShowSaveSlots();
+    }
+
     // Clicks, hovering, dragging, picking and shortcuts. Runs after Start and before Update, using the mouse as last drawn.
     // While a panel is open, only the controls on the top one take any notice.
-    private void UpdateMenus()
+    private void UpdateControls()
     {
         if (UpdateRebinding())
             return;
@@ -266,6 +274,23 @@ public sealed partial class Game
                 break;
             case ButtonAction.Do:
                 ClickDo(button);
+                break;
+            case ButtonAction.SaveGame or ButtonAction.LoadGame or ButtonAction.DeleteSave when SlotOf(button) is null:
+                throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" works on a saved game, but its Slot isn't set (and it isn't on a Save Slot).");
+            case ButtonAction.SaveGame:
+                SaveGame(SlotOf(button)!);
+                break;
+            case ButtonAction.LoadGame:
+                LoadGame(SlotOf(button)!, button.Fade);
+                break;
+            case ButtonAction.DeleteSave:
+                DeleteSave(SlotOf(button)!);
+                break;
+            case ButtonAction.QuickSave:
+                QuickSave();
+                break;
+            case ButtonAction.QuickLoad:
+                QuickLoad(button.Fade);
                 break;
         }
 
@@ -515,6 +540,10 @@ public sealed partial class Game
         GameSetting.SoundVolume => Audio.SoundVolume,
         GameSetting.Sound => Audio.Muted ? 0 : 1,
         GameSetting.Fullscreen => Fullscreen ? 1 : 0,
+        GameSetting.Skip => IsSkipping ? 1 : 0,
+        GameSetting.Auto => AutoReading ? 1 : 0,
+        GameSetting.SkipUnread => SkipUnread ? 1 : 0,
+        GameSetting.AutoSpeed => AutoSpeed,
         _ => null,
     };
 
@@ -536,6 +565,18 @@ public sealed partial class Game
                 break;
             case GameSetting.Fullscreen:
                 Fullscreen = value >= 0.5f;
+                break;
+            case GameSetting.Skip:
+                Skipping = value >= 0.5f;
+                break;
+            case GameSetting.Auto:
+                AutoReading = value >= 0.5f;
+                break;
+            case GameSetting.SkipUnread:
+                SkipUnread = value >= 0.5f;
+                break;
+            case GameSetting.AutoSpeed:
+                AutoSpeed = value;
                 break;
         }
     }

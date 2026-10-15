@@ -39,6 +39,31 @@ public static partial class SceneRenderer
     public static RenderFrame Build(Runtime.Game game, float aspect, RenderFrame? recycle) =>
         Build(game.Scene, aspect, game, new Recycled(recycle));
 
+    /// <summary>
+    /// Builds a picture of a running game as it is now, for a saved game's screenshot (see
+    /// <see cref="Runtime.Game.PictureWanted"/>): the frame <see cref="Build(Runtime.Game, float)"/> builds, less the panels
+    /// open over the game (the save screen it's saved from), a fade or flash and debug shapes.
+    /// </summary>
+    public static RenderFrame BuildPicture(Runtime.Game game, float aspect)
+    {
+        var outer = t_picture;
+        t_picture = game;
+        try
+        {
+            return Build(game, aspect, null);
+        }
+        finally
+        {
+            t_picture = outer;
+        }
+    }
+
+    // The game whose picture is being built, if one is.
+    [ThreadStatic]
+    private static Runtime.Game? t_picture;
+
+    private static Func<Entity, bool>? s_notInPanel;
+
     // A frame the caller is done with, to fill again: its lists of draws and of lights (with their shadows' lists) too.
     private readonly record struct Recycled(RenderFrame? Frame)
     {
@@ -123,7 +148,11 @@ public static partial class SceneRenderer
         // With viewports (in a running game), each view draws what's its own.
         var showsViews = game is not null && viewport is null && scene.Active<Viewport>().Count > 0;
         var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null));
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, null, overWorld: true, timer, reuse: true, filter);
+        // A picture of the game (for a saved game) leaves out the panels open over it: the save screen itself.
+        Func<Entity, bool>? leaveOut = null;
+        if (t_picture is { } pictured && pictured == game)
+            leaveOut = s_notInPanel ??= e => t_picture is not { } shown || !shown.IsInOpenPanel(e);
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, leaveOut, overWorld: true, timer, reuse: true, filter);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
@@ -167,7 +196,7 @@ public static partial class SceneRenderer
             AddLights(scene, view, lights ??= [], t_scratch ??= new Scratch());
         timer?.Mark(ScreenPart);
 
-        if (game is not null && viewport is null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
+        if (game is not null && leaveOut is null && viewport is null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
         {
             // Quads over the whole view: twice the unit quad in clip space, taken back into the world.
             var whole = Matrix4x4.CreateScale(2, 2, 1) * clipToWorld;
@@ -177,7 +206,7 @@ public static partial class SceneRenderer
                 sprites.Add(transition);
         }
 
-        if (viewport is null && game is { Debug.HasShapes: true })
+        if (viewport is null && leaveOut is null && game is { Debug.HasShapes: true })
             sprites.AddRange(DebugDraws(game.Debug.ShapesAt(blend), size));
 
         frame.Release();
@@ -194,6 +223,7 @@ public static partial class SceneRenderer
         built.Effects = effects;
         built.Look = effects?.Drawn(StepBlend.For(scene, camera)) ?? default;
         built.Time = game?.Time.Total ?? s_clock.Elapsed.TotalSeconds;
+        built.Pictures = game?.Pictures;
         built.ViewsAt = worldCount;
         built.ClearViews();
         if (showsViews)

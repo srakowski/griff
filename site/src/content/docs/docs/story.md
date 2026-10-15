@@ -41,7 +41,7 @@ Flags remember what was said and picked. A row can start with tags in square bra
 [clear HasKey] [send OpenVault] Splendid! The vault is yours.
 ```
 
-Flags are kept in the game's save data under their own names, so they're still set the next time the game runs (**Game → Clear Save Data** forgets them while you test). Capitals don't matter. Scripts read and change them with `Game.HasFlag("MetKing")` and `Game.SetFlag("HasKey")` (or `SetFlag("HasKey", false)`), and a toggle's **Save As** is a flag too. Anything else in brackets (`[sighs] Fine.`) is said as it is.
+Flags are kept in the game's save data under their own names, so they're still set the next time the game runs (**Game → Clear Save Data** forgets them while you test). Capitals don't matter. Scripts read and change them with `Game.HasFlag("MetKing")` and `Game.SetFlag("HasKey")` (or `SetFlag("HasKey", false)`), and a toggle's **Save As** is a flag too. A saved game keeps the flags set with dialogue, triggers or `SetFlag` when it was saved, and loading it puts them back as they were (see [Saving and loading](/docs/visual-novels/#saving-and-loading)); Skip, Auto and a log of the lines said work for any dialogue (see [Skip and Auto](/docs/visual-novels/#skip-and-auto)). Anything else in brackets (`[sighs] Fine.`) is said as it is.
 
 ## Speakers and portraits
 

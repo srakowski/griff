@@ -33,6 +33,9 @@ public sealed class WebGLRenderer(string? assetRoot) : QuadRenderer(assetRoot, i
     protected override void LoadImage(int texture, string path) =>
         Browser.LoadImage(texture, File.Exists(path) ? File.ReadAllBytes(path) : []);
 
+    // One of the game's own pictures (a saved game's screenshot) goes to the page the same way.
+    protected override void LoadImage(int texture, byte[] encoded) => Browser.LoadImage(texture, encoded);
+
     protected override void LoadGlyphRows(int texture, int top, int rows, Span<byte> rgba) =>
         Browser.Glyphs(texture, GlyphPage.Size, top, rows, rgba);
 

@@ -67,6 +67,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 "The mouse: \"point\" moves it to a point, \"click\" clicks there (\"button\": \"Right\" for the right button), and \"drag\" presses " +
                 "at \"from\", moves to \"to\" over \"seconds\" (default 0.5) and lets go, e.g. {\"drag\": {\"from\": \"Card\", \"to\": \"Slot\"}} " +
                 "(with \"release\": false in it, it keeps holding, to see what's held over what, until a {\"release\": true} step lets go). " +
+                "\"scroll\" turns the mouse wheel that many notches (up, away from you, is positive; a visual novel's log opens on it), over \"point\" if given. " +
                 "A point is [x, y] in world units, an entity's name (its middle), or a button on the screen by its label (an inventory bar's item, \"Item: Key\"; the report lists them). The real mouse takes over again once it moves over the game. " +
                 "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
                 "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
@@ -80,6 +81,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 ("click", Schema.Any("One step: click at [x, y] or an entity's name.")),
                 ("drag", Schema.Map("One step: {\"from\": point, \"to\": point}, pressing at from and letting go at to (unless \"release\": false).")),
                 ("release", Schema.Bool("One step: let go of the mouse button a drag kept holding.")),
+                ("scroll", Schema.Number("One step: turn the mouse wheel this many notches (up is positive), over \"point\" if given.")),
                 ("button", Schema.String("The mouse button for click and drag: Left (default), Right or Middle.")),
                 ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards, by name (the first so called), id or path (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
@@ -439,7 +441,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     // Whether this call's steps used the mouse, to report where it is.
     private bool _usedMouse;
 
-    // A "point", "click" or "drag" step, played with the mouse pointed where it says; false for any other step.
+    // A "point", "click", "drag" or "scroll" step, played with the mouse pointed where it says; false for any other step.
     private async Task<bool> MouseStepAsync(Griff.Runtime.Game game, InputState input, JsonElement step)
     {
         if (step.ValueKind != JsonValueKind.Object)
@@ -447,6 +449,20 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var button = MouseButton.Left;
         if (step.TryGetProperty("button", out var named) && !Enum.TryParse(named.GetString(), ignoreCase: true, out button))
             throw new AgentException($"\"{named.GetString()}\" isn't a mouse button: Left, Right or Middle.");
+
+        if (step.TryGetProperty("scroll", out var scroll) && scroll.ValueKind == JsonValueKind.Number)
+        {
+            if (step.TryGetProperty("point", out var over))
+            {
+                _usedMouse = true;
+                play.PointAt(Playtesting.PointOf(over, game.Scene));
+                await FramesAsync(1);
+            }
+
+            input.AddScroll((float)scroll.GetDouble());
+            await FramesAsync(2);
+            return true;
+        }
 
         if (step.TryGetProperty("point", out var point))
         {

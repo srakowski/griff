@@ -56,6 +56,10 @@ public sealed class SaveData
 
     public string? GetString(string key, string? fallback = null) => Get(key, fallback);
 
+    // A text value as it's kept, without going through its JSON: for big ones (a saved game) read often.
+    internal string? GetText(string key) =>
+        _values[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
     public void Set(string key, int value) => Put(key, JsonValue.Create(value));
 
     public void Set(string key, float value) => Put(key, float.IsFinite(value) ? JsonValue.Create(value) : null);

@@ -127,5 +127,8 @@ deselect
 menu: Entity > Genres > Visual Novels > Stage
 deselect
 menu: Entity > Genres > Visual Novels > Character
+deselect
+menu: Entity > Genres > Visual Novels > Reading Menus
+expectcount: Reading Menus 2 = 1
 
 say: That was every one, each made straight from its category.

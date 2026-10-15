@@ -1,11 +1,11 @@
 ---
 title: "Visual novels"
-description: "A stage with backgrounds and characters at named positions, with expressions, directed by the lines of a dialogue: show, hide and move them, change the background, cut, fade or slide, with no code."
+description: "A stage with backgrounds and characters at named positions, with expressions, directed by the lines of a dialogue: show, hide and move them, change the background, cut, fade or slide; save slots, a log of lines read, skip and auto, with no code."
 ---
 
 ## A stage
 
-**Entity → Genres → Visual Novels → Stage** makes a visual novel scene you can play straight away: a **Stage** filling the camera's view with a park, a room and a night sky to show, Ava and Ben inside it (off stage until the script brings them on), each with three expressions, a dialogue box along the bottom whose lines type themselves out and wrap, and a short script on the stage that sets the scene, brings them on, changes their faces, offers a choice and moves home. Play, and the script starts by itself. Its pictures go in **Assets/Stage**, to repaint in the Sprite Painter. **Entity → Genres → Visual Novels → Character** adds someone else, inside the stage, at a free position.
+**Entity → Genres → Visual Novels → Stage** makes a visual novel scene you can play straight away: a **Stage** filling the camera's view with a park, a room and a night sky to show, Ava and Ben inside it (off stage until the script brings them on), each with three expressions, a dialogue box along the bottom whose lines type themselves out and wrap, a short script on the stage that sets the scene, brings them on, changes their faces, offers a choice and moves home, and the [reading menus](#the-reading-menus): Log, Skip, Auto, quick saves, save and load screens and settings. Play, and the script starts by itself. Its pictures go in **Assets/Stage**, to repaint in the Sprite Painter. **Entity → Genres → Visual Novels → Character** adds someone else, inside the stage, at a free position.
 
 A **Stage** draws a background filling its **Size** (as much as the camera shows, for a whole screen), under everything else (its **Order**). Its **Backgrounds** are one per row, a name and what it looks like: a picture (`Park: Stage/park.png`), a color (`Night: #10183A`) or a color at the top running to another at the bottom (`Dusk: #F2A65A #3A2F5B`). **Background** is the one showing: set it in the Inspector for the one the game starts with. Its **Positions** are where characters stand, one per row, a one-word name and how far across from the stage's middle (and, after a comma, how far up): `Left: -4.5`, `Center: 0` and `Right: 4.5` to begin with, and any of your own (`FarLeft: -7, -0.5`).
 
@@ -44,6 +44,36 @@ Whoever speaks is lit and the others on stage are dimmed (by the stage's **Dim O
 
 Lines type themselves out (the box's **Typewriter**), and long ones wrap (the **Dialogue Box**'s **Wrap Width**). A click or a tap anywhere (off buttons), Interact (E, Enter, the gamepad's Y), or Space or the gamepad's A (the stage's **Advance Action**, Jump to begin with) reads on: the first press finishes the line being typed, the next shows the next line. With choices showing, a click on one picks it, as do the arrow keys or D-pad and Interact, or a choice's number key; a click off them doesn't. A dialogue that starts with the scene (its **Start** set to **Scene Start**, as a new stage's is) needs no collider, and once said isn't said again until the scene is loaded again; set **Pause Game** off on it, as a new stage's is, so expressions that are clips keep moving. The stage plays on in real time either way, and holds still under a pause menu or in a paused group.
 
+## Skip and Auto
+
+Every line shown is remembered as read, and kept in the game's save data, so it's still read the next time the game runs (in a browser, in its storage). A line changed since reads as new.
+
+- **Skip** goes through the lines read before, a line every twentieth of a second, with fades, slides and walks done at once, and stops at choices and at the first line not read yet. Hold Ctrl or the gamepad's right trigger (the stage's **Skip Action**, `Skip`) to skip while it's held, or click the Skip button to skip until it stops; reading on by hand (a click, a tap, Interact) stops it too. With the player's **Skip Unread** setting on, it goes through lines not read yet as well, and still stops at choices.
+- **Auto** reads on by itself: once a line has typed out, the next comes after a pause as long as the line (a short "Hi." moves on in a second, a long line waits a few), shorter or longer as the player's **Auto Speed** setting says. It waits at choices, and stays on from one talk to the next. A (or the gamepad's X; the stage's **Auto Action**, `Auto`) turns it on and off, as does the Auto button.
+
+The two settings are the player's, kept in the save data like the volumes: a **Slider** set to **Auto Speed** and a **Toggle** set to **Skip Unread** change them, and a toggle set to **Skip** or **Auto** is a button that shows and flips skipping or reading on by itself. Scripts use `Game.Skipping`, `Game.AutoReading`, `Game.SkipUnread`, `Game.AutoSpeed`, `Game.AutoDelay(line)` and `Game.HasRead(dialogue, row)`. Skip and Auto work for any dialogue, not only a stage's.
+
+## The log
+
+A **Backlog** keeps the lines said so far, each with who said it (a narrator's alone) and the choices picked, newest at the bottom: every dialogue's lines go in it as they're said, up to its **Keep** (200). Put it on a panel and it's a log to read back: the mouse wheel, the arrow keys, the D-pad or stick, Page Up and Page Down, Home and End scroll it, and so does dragging it (a finger on a touch screen), with a bar down its side to show where you are. With its **Open On Wheel**, turning the wheel up over the game opens its panel, and turning it down past the newest line closes it again. The reading menus' log opens with H or the gamepad's left shoulder too (its panel's **Open On** is the `Log` action), and closes with the same, Esc or B. Its **Lines** are saved with the scene, so a saved game or a rewind has the lines said before it.
+
+## Saving and loading
+
+A game is saved in a slot of its own name ("1", "2"... "Quick" for quick saves) with everything a rewind keeps: the scene as it is, so the stage (the background, who's on, where and how they look), where the talk has got to and the log come back exactly, and the flags set then, which loading puts back as they were (clearing those set since). The panels open over the game (the save screen it's saved from) are closed in it. A screenshot of the game without them is taken as it's next drawn, and kept with it, with when it was saved and the line being said. Saved games are kept in the save data, so they're there the next time the game runs, on the desktop and in a browser alike.
+
+A **Save Slot** shows a slot on a save or load screen: its screenshot, and what its **Format** says (`{date}  {time}` and `{line}` to begin with; `{slot}` and `{scene}` too), or its **Empty Text**. Put it on a **Button** whose **Action** is **Save Game**, **Load Game** or **Delete Save**: such a button with no **Slot** of its own uses the save slot it's on or inside, so a delete X inside a card deletes the card's. **Quick Save** and **Quick Load** buttons use the Quick slot. Load Game, Delete Save and Quick Load buttons are faded while there's nothing to load; a Load Game or Quick Load button's **Fade** fades out and back in around it. Scripts call `Game.SaveGame(slot)`, `LoadGame(slot)`, `DeleteSave(slot)`, `QuickSave()` and `QuickLoad()`, and read `SavedGames` and `SavedGameIn(slot)` (each with its `Saved` time, `SceneName`, `Line` and `Describe(format)`), with `GameSaved` and `GameLoaded` events. A network game can't be saved or loaded: it isn't one machine's alone.
+
+## The reading menus
+
+**Entity → Genres → Visual Novels → Reading Menus** (and every new Stage) makes them, with no code:
+
+- A row of buttons at the top of the screen: **Log**, **Skip** and **Auto** (toggles that show when they're on), **Q.Save** and **Q.Load**, and **Save**, **Load** and **Settings**, which open their screens. They aren't picked with the arrow keys, which are for the choices.
+- **Save Screen** and **Load Screen**: six slots each, a card with the screenshot, when it was saved and the line, and an X in its corner to delete it. Click or tap a card, or pick it with the arrow keys or D-pad and press Enter or A; Esc, B or Back closes the screen.
+- **Log Screen**: the lines said, as above.
+- **Reading Settings**: Auto speed, Skip (lines read before, or all lines) and the volume.
+
+They're ordinary panels, buttons, sliders and toggles, so restyle, move or rename them in the Inspector.
+
 ## The Dialogue Editor
 
 **Entity → Edit Dialogue...** opens the Dialogue Editor on the selected entity's dialogue (or that of the stage a selected character is on). It lists the lines, each with who says it and what its tags do ("Show Ava at Left, Happy"), and for the line picked:
@@ -57,6 +87,6 @@ Lines are added, removed and moved up and down from there too. Every change rewr
 
 ## With the rest of the game
 
-The stage names its actions for a trigger, a wire or a script: **Background** (with a background's name), **Show** and **Hide** (with a character's), **Hide All**, and **Direct** (any direction as a tag says it, without the brackets: `show Ava left happy`). Its outputs are **Background** and **Speaking** (who on it is speaking), for a Text, and **On Stage** (how many are on it). Its Advance Action works only while it has focus (its **Controllable**; see [Mixing genres](/docs/mashups/)), so Space can jump in the game a visual novel scene sits inside.
+The stage names its actions for a trigger, a wire or a script: **Background** (with a background's name), **Show** and **Hide** (with a character's), **Hide All**, and **Direct** (any direction as a tag says it, without the brackets: `show Ava left happy`). Its outputs are **Background** and **Speaking** (who on it is speaking), for a Text, and **On Stage** (how many are on it). Its Advance, Skip and Auto actions work only while it has focus (its **Controllable**; see [Mixing genres](/docs/mashups/)) and the dialogue it's directing is being said, so Space can jump and A walk left in the game a visual novel scene sits inside.
 
-What the stage shows (the background, who's on, where they stand and how they look, and fades, slides and walks under way) is saved with the scene, and so is where a dialogue has got to, so rewinding in the editor goes back into the middle of a talk and the stage as it was, and the lines done before aren't done again. In a network game each machine keeps its own stage, for its own player's reading, as each player reads dialogue on their own machine. It all works in the web player too, with a finger as the mouse.
+What the stage shows (the background, who's on, where they stand and how they look, and fades, slides and walks under way) is saved with the scene, and so is where a dialogue has got to, so rewinding in the editor goes back into the middle of a talk and the stage as it was, and the lines done before aren't done again. In a network game each machine keeps its own stage, for its own player's reading, as each player reads dialogue on their own machine; skipping, Auto, the log and the reading menus are each machine's own too. It all works in the web player too, with a finger as the mouse.

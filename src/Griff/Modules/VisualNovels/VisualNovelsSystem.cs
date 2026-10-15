@@ -19,12 +19,16 @@ internal sealed class VisualNovelsSystem : GameSystem
     // Stages seen in this scene: on first sight their characters stand at their positions.
     private readonly HashSet<Stage> _seen = [];
 
+    // While skipping, a step of the stage takes this long: everything under way is done at once.
+    private const float SkippedTime = 60;
+
     public override string Name => "Stages";
 
     protected override void SceneChanged()
     {
         _seen.Clear();
         _before = default;
+        Game.SkipHeld = false;
     }
 
     /// <summary>Does one of the stage's tags as its line is said, on the stage the dialogue directs.</summary>
@@ -52,6 +56,19 @@ internal sealed class VisualNovelsSystem : GameSystem
     internal void Note()
     {
         _before = Game.Talking is { } talking ? (talking, talking.Line, Game.IsTyping(talking)) : default;
+
+        // The stage the talk directs reads its skip and auto keys, while it has focus: skip while held, auto on and off.
+        var held = false;
+        if (Game.Talking is { } said && !Game.PausedThisFrame && StageFor(said) is { Controllable: true } stage && !stage.Entity!.IsPaused &&
+            stage.Entity.IsActive)
+        {
+            var input = Game.Input;
+            held = stage.SkipAction is { Length: > 0 } skip && input.IsDown(skip.Trim());
+            if (stage.AutoAction is { Length: > 0 } auto && input.WasPressed(auto.Trim()))
+                Game.AutoReading = !Game.AutoReading;
+        }
+
+        Game.SkipHeld = held;
     }
 
     // After the dialogues' step.
@@ -77,7 +94,8 @@ internal sealed class VisualNovelsSystem : GameSystem
                 : null;
             if (speaking is not null && talking!.Expression is { Length: > 0 } face)
                 speaking.Expression = Known(speaking, face);
-            StageDirector.Step(stage, cast, speaking, Game.Time.UnscaledDelta);
+            // Skipping, fades, slides and walks are over at once.
+            StageDirector.Step(stage, cast, speaking, Game.IsSkipping ? SkippedTime : Game.Time.UnscaledDelta);
 
             if (directed && stage.Controllable && Advances(stage))
                 Game.AdvanceDialogue(talking!);

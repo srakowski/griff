@@ -57,8 +57,22 @@ public sealed partial class Game
     /// <summary>A menu that would pause the game is open here: online the game goes on, but this player's keys don't reach it.</summary>
     internal bool LocalInputBlocked => AnyPanelPauses();
 
-    /// <summary>The mouse is over this machine's HUD, so a click there isn't meant for the world.</summary>
-    internal bool MouseOnUi => MouseOnHud || Scene.Entities.Any(e => e.GetComponent<Button>() is { IsHovered: true });
+    /// <summary>
+    /// The mouse is over this machine's HUD, so a click there isn't meant for the world. Only buttons showing count: one on a
+    /// panel just closed keeps the hover it had.
+    /// </summary>
+    internal bool MouseOnUi => MouseOnHud || AnyButtonHovered();
+
+    private bool AnyButtonHovered()
+    {
+        foreach (var button in Scene.Active<Button>())
+        {
+            if (button.IsHovered)
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>The mouse is over something a system shows on the screen (see <see cref="GameSystem.MouseOnHud"/>).</summary>
     internal bool MouseOnHud => SystemHasMouse();

@@ -9,7 +9,8 @@ namespace Griff.Modules.VisualNovels;
 /// show (and a night sky in plain colors), Ava and Ben on it (off stage until the script brings them on), each with three
 /// expressions, a dialogue box along the bottom whose lines type themselves out, and a short script that sets the scene,
 /// brings them on, changes their faces, offers a choice and moves to the room. Click, tap or press Space or Enter to read
-/// on. Pictures go in Assets/Stage, to repaint. All in one undo step.
+/// on. With it come the reading menus (see Create Reading Menus): Log, Skip, Auto, quick saves, save and load screens and
+/// settings. Pictures go in Assets/Stage, to repaint. All in one undo step.
 /// </summary>
 [Category("Visual Novels")]
 public sealed class StagePreset : EntityPreset
@@ -93,12 +94,21 @@ public sealed class StagePreset : EntityPreset
 
     public override IEnumerable<IEdit> EditScene(Scene scene)
     {
-        if (StageNames.Box(scene) is not null)
+        if (StageNames.Box(scene) is null)
+        {
+            var (box, tag, line) = StageNames.MakeBox();
+            yield return new AddEntityEdit(scene, box);
+            yield return new AddEntityEdit(scene, tag, box);
+            yield return new AddEntityEdit(scene, line, box);
+        }
+
+        // Its reading menus: skip, auto, the log, saving and loading.
+        if (scene.Entities.Any(e => e.GetComponent<Backlog>() is not null || e.GetComponent<SaveSlot>() is not null))
             yield break;
-        var (box, tag, line) = StageNames.MakeBox();
-        yield return new AddEntityEdit(scene, box);
-        yield return new AddEntityEdit(scene, tag, box);
-        yield return new AddEntityEdit(scene, line, box);
+        var menus = new Entity(StageNames.Free(scene, ReadingMenus.Name));
+        yield return new AddEntityEdit(scene, menus);
+        foreach (var (part, parent) in ReadingMenus.Parts())
+            yield return new AddEntityEdit(scene, part, parent ?? menus);
     }
 }
 

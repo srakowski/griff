@@ -49,6 +49,7 @@ public sealed class GameRunner : IDisposable
         _surface.MouseButtonChanged += OnMouseButton;
         _surface.MouseWheelTurned += OnMouseWheel;
         _surface.PreviewMouseWheel += OnWpfMouseWheel;
+        _surface.TouchChanged += OnTouch;
 
         // Until the mouse moves over the game, it isn't pointing at anything (say, a button in the middle).
         _input.IsMouseInView = false;
@@ -146,6 +147,7 @@ public sealed class GameRunner : IDisposable
         _surface.MouseButtonChanged -= OnMouseButton;
         _surface.MouseWheelTurned -= OnMouseWheel;
         _surface.PreviewMouseWheel -= OnWpfMouseWheel;
+        _surface.TouchChanged -= OnTouch;
         IsRunning = false;
         _input.StopRumble();
         XInputGamepad.StopRumble();
@@ -375,17 +377,42 @@ public sealed class GameRunner : IDisposable
 
     private void UpdateMouseWorld()
     {
+        var inverse = Matrix4x4.Identity;
+        var known = _lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out inverse);
+        if (known)
+            PlaceTouches(inverse);
         if (PointerOverride is { } pointed)
         {
             (_input.MouseWorld, _input.IsMouseInView) = (pointed, true);
             return;
         }
 
-        if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
+        if (known)
         {
             var world = Vector4.Transform(new Vector4(_mouseNdc, 0, 1), inverse);
             _input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
         }
+    }
+
+    // The fingers on the view, put in the world through the last frame's camera.
+    private void PlaceTouches(Matrix4x4 inverse)
+    {
+        if (_input.Touches.Count == 0)
+            return;
+        _input.PlaceTouches(ndc =>
+        {
+            var at = Vector4.Transform(new Vector4(ndc, 0, 1), inverse);
+            return new Vector2(at.X, at.Y) / at.W;
+        });
+    }
+
+    // A finger on a touch screen, kept where it is on the view and put in the world at once (and with the mouse each frame,
+    // as the camera moves).
+    private void OnTouch(int id, Point pixel, bool down)
+    {
+        _input.SetTouch(id, _surface.ToNdc(pixel), down, onScreen: true);
+        if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
+            PlaceTouches(inverse);
     }
 
     // The mouse held for a first-person game: how far it moved since last frame, then back to the middle of the view.

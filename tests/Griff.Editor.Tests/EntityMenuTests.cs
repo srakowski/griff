@@ -70,7 +70,7 @@ public sealed class EntityMenuTests
 
         Assert.Equal(["Basics", "Characters", "Gameplay", "Level", "Physics", "UI", "Story", "Audio", "Lights and Effects"], names.Take(9));
         // Then one per genre module that makes something, alphabetically.
-        Assert.Equal(["Adventures", "Cards", "Dungeons", "Falling Blocks", "Fighting", "Match-3", "Physics Games", "Puzzles", "Tactics", "Visual Novels"], names.Skip(9));
+        Assert.Equal(["Adventures", "Cards", "Dungeons", "Falling Blocks", "Fighting", "Match-3", "Physics Games", "Puzzles", "Rhythm", "Tactics", "Visual Novels"], names.Skip(9));
         Assert.Equal(["Entity.CreateSparring", "Entity.CreateTrainingPair"], Ids("Fighting"));
         Assert.Equal(["Entity.CreateSlingshot", "Entity.CreateTower", "Entity.CreatePinballTable", "Entity.CreateFlippers", "Entity.CreateBumper",
             "Entity.CreateKickers", "Entity.CreatePlunger", "Entity.CreateDropTargets", "Entity.CreateLanes"], Ids("Physics Games"));
@@ -79,6 +79,7 @@ public sealed class EntityMenuTests
         Assert.Equal(["Entity.CreatePlatformerPlayer", "Entity.CreateTopDownPlayer", "Entity.CreateGridPlayer", "Entity.CreateGridEnemy", "Entity.CreateHitbox"], Ids("Characters"));
         Assert.Equal(["Entity.CreateMusic", "Entity.CreateSoundSource", "Entity.CreateSoundPlayer", "Entity.CreateBeatClock", "Entity.CreateCalibration"], Ids("Audio"));
         Assert.Equal(["Entity.CreateMatchBoard"], Ids("Match-3"));
+        Assert.Equal(["Entity.CreateNoteLanes"], Ids("Rhythm"));
     });
 
     [Fact]

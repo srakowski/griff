@@ -68,6 +68,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 "at \"from\", moves to \"to\" over \"seconds\" (default 0.5) and lets go, e.g. {\"drag\": {\"from\": \"Card\", \"to\": \"Slot\"}} " +
                 "(with \"release\": false in it, it keeps holding, to see what's held over what, until a {\"release\": true} step lets go). " +
                 "\"scroll\" turns the mouse wheel that many notches (up, away from you, is positive; a visual novel's log opens on it), over \"point\" if given. " +
+                "\"touch\" puts fingers on a touch screen at a point or a list of points at once, e.g. {\"touch\": [\"Lane 1\", [2, -3]]}, holding them for \"seconds\" (a tap without), for what takes several fingers (rhythm lanes' chords and holds). " +
                 "A point is [x, y] in world units, an entity's name (its middle), or a button on the screen by its label (an inventory bar's item, \"Item: Key\"; the report lists them). The real mouse takes over again once it moves over the game. " +
                 "\"flags\" sets or clears dialogue flags first, e.g. {\"HasKey\": true}, to try a branch. Afterwards it reports where \"watch\"ed " +
                 "entities are (default: Player), any dialogue being said with its choices, and the flags set or cleared. The game runs on between calls unless \"pause_after\" " +
@@ -82,6 +83,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
                 ("drag", Schema.Map("One step: {\"from\": point, \"to\": point}, pressing at from and letting go at to (unless \"release\": false).")),
                 ("release", Schema.Bool("One step: let go of the mouse button a drag kept holding.")),
                 ("scroll", Schema.Number("One step: turn the mouse wheel this many notches (up is positive), over \"point\" if given.")),
+                ("touch", Schema.Any("One step: fingers on the touch screen at a point, or a list of points at once, held for \"seconds\" (a tap without).")),
                 ("button", Schema.String("The mouse button for click and drag: Left (default), Right or Middle.")),
                 ("watch", Schema.Array(Schema.String("entity"), "Entities to report on afterwards, by name (the first so called), id or path (default: Player).")),
                 ("pause_after", Schema.Bool("Pause the game when the steps are done (the next game_input resumes it).")),
@@ -441,7 +443,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
     // Whether this call's steps used the mouse, to report where it is.
     private bool _usedMouse;
 
-    // A "point", "click", "drag" or "scroll" step, played with the mouse pointed where it says; false for any other step.
+    // A "point", "click", "drag", "scroll" or "touch" step, played with the mouse (or fingers) where it says; false for any other step.
     private async Task<bool> MouseStepAsync(Griff.Runtime.Game game, InputState input, JsonElement step)
     {
         if (step.ValueKind != JsonValueKind.Object)
@@ -460,6 +462,24 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
             }
 
             input.AddScroll((float)scroll.GetDouble());
+            await FramesAsync(2);
+            return true;
+        }
+
+        if (step.TryGetProperty("touch", out var touch))
+        {
+            // One point ([x, y], a name) or a list of them, each a finger of its own.
+            var points = touch.ValueKind == JsonValueKind.Array && touch.GetArrayLength() > 0 && touch[0].ValueKind != JsonValueKind.Number
+                ? touch.EnumerateArray().Select(p => Playtesting.PointOf(p, game.Scene, game)).ToList()
+                : [Playtesting.PointOf(touch, game.Scene, game)];
+            var held = step.TryGetProperty("seconds", out var hold) && hold.ValueKind == JsonValueKind.Number ? Math.Clamp(hold.GetDouble(), 0, 60) : 0;
+            for (var i = 0; i < points.Count; i++)
+                input.SetTouch(AgentFingers + i, points[i], down: true);
+            await FramesAsync(2);
+            if (held > 0)
+                await UntilBreakpointAsync(Task.Delay(TimeSpan.FromSeconds(held)));
+            for (var i = 0; i < points.Count; i++)
+                input.SetTouch(AgentFingers + i, points[i], down: false);
             await FramesAsync(2);
             return true;
         }
@@ -519,6 +539,9 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
     // Frames to let what was dropped slide into place before saying where it is.
     private const int Settle = 15;
+
+    // The ids of an agent's fingers on the touch screen, well clear of a real one's.
+    private const int AgentFingers = 1 << 20;
 
     private static List<Key> Keys(JsonElement step, string name, InputState input)
     {

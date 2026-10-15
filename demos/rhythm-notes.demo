@@ -1,0 +1,31 @@
+title: Rhythm notes
+intro: Notes from a chart scroll down lanes in time with the music, and every press is judged by the beat the player hears: Perfect, Great, Good or Miss.
+project: Empty | Note Lanes
+
+chapter: Lanes and a song | Entity > Genres > Rhythm > Note Lanes
+say: A rhythm game is notes on the beat, lanes to bring them in, and a judgment for every press.
+create: Note Lanes
+expectcomponents: Note Lanes = Transform, BeatClock, NoteLanes
+explain: component:NoteLanes | Note Lanes | Note Lanes come with four lanes, a beat clock, a song made in Griff, and a chart for it at three difficulties.
+explain: field:NoteLanes.Song | Its song | The song picks its chart by name: Groove dot wav plays the Groove table.
+expectvalue: Note Lanes.NoteLanes.Song = Music/Groove.wav
+set: NoteLanes.Difficulty = Easy
+explain: field:NoteLanes.Difficulty | Difficulty | Each note says which difficulties it's in, so one chart holds Easy, Normal and Hard.
+expectvalue: Note Lanes.NoteLanes.Difficulty = Easy
+explain: field:NoteLanes.PerfectWindow | Judging | A press within forty five milliseconds of the beat is Perfect, then Great, Good, or a Miss. The beat is the one the player hears, their audio offset allowed for.
+explain: field:NoteLanes.Actions | Keys, buttons and fingers | D, F, J and K press the lanes, or the arrows, a controller, a click, or on a touch screen several fingers at once, for chords and holds.
+
+chapter: The chart is a table | Data > Open Table
+menu: Data > Open Table > Groove
+expecttable: 208 rows, 4 columns
+explain: panel:Tables | A row a note | A chart is a table: each note's beat, its lane, how many beats to hold it, and the difficulties it's in. It's a line a note in git, and a spreadsheet or formulas can write it.
+
+chapter: Play | Play
+play
+wait: 3
+expectvalue: Note Lanes.NoteLanes.IsPlaying = true
+explain: game | Notes on the beat | The notes scroll down to the line in time with the music. Each press is judged and pops up, and the score, combo and accuracy are outputs anything can show.
+tap: D
+wait: 1.5
+say: Every hit and miss sends a message too, so a note on the beat can fire a weapon or a miss can hurt the hero, in any genre. In a network game each player's own machine judges their presses, and the host adds up their score.
+stop

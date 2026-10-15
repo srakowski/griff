@@ -34,6 +34,11 @@ public sealed class GameSurface : HwndHost
     private const int WmMouseWheel = 0x020A;
     private const int WmNcHitTest = 0x0084;
     private const int WmSetCursor = 0x0020;
+    private const int WmPointerUpdate = 0x0245;
+    private const int WmPointerDown = 0x0246;
+    private const int WmPointerUp = 0x0247;
+    private const int WmPointerCaptureChanged = 0x024C;
+    private const int PtTouch = 2;
     private const int HtClient = 1;
     private const uint TmeLeave = 0x00000002;
 
@@ -55,6 +60,12 @@ public sealed class GameSurface : HwndHost
 
     /// <summary>Raised when the mouse wheel turns over the surface, in notches (positive is away from the user).</summary>
     public event Action<float>? MouseWheelTurned;
+
+    /// <summary>
+    /// Raised as a finger on a touch screen goes down, moves (true) or is lifted (false), with which finger it is and where,
+    /// in pixels from the top-left of the surface. The first finger also works the mouse, as Windows makes it.
+    /// </summary>
+    public event Action<int, Point, bool>? TouchChanged;
 
     /// <summary>The pointer shown over the surface (see <c>IInput.Cursor</c>): the arrow unless the game asks for another.</summary>
     public Griff.Input.MouseCursor Pointer
@@ -206,6 +217,19 @@ public sealed class GameSurface : HwndHost
             case WmLButtonUp or WmRButtonUp or WmMButtonUp:
                 MouseButtonChanged?.Invoke(ButtonFor(msg), false);
                 break;
+            // Fingers on a touch screen: each one, so several can be down at once. Left to Windows too (not handled), so the
+            // first one still works the mouse.
+            case WmPointerDown or WmPointerUpdate or WmPointerUp or WmPointerCaptureChanged:
+                var id = (int)(wParam.ToInt64() & 0xFFFF);
+                if (GetPointerType((uint)id, out var type) && type == PtTouch)
+                {
+                    var screen = PointFrom(lParam);
+                    var client = new NativePoint { X = (int)screen.X, Y = (int)screen.Y };
+                    ScreenToClient(hwnd, ref client);
+                    TouchChanged?.Invoke(id, new Point(client.X, client.Y), msg is WmPointerDown or WmPointerUpdate);
+                }
+
+                break;
             case WmMouseWheel:
                 MouseWheelTurned?.Invoke((short)((wParam.ToInt64() >> 16) & 0xFFFF) / 120f);
                 // Handled here, so it isn't passed up to the window and counted twice.
@@ -284,4 +308,10 @@ public sealed class GameSurface : HwndHost
 
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetPointerType(uint pointerId, out int pointerType);
+
+    [DllImport("user32.dll")]
+    private static extern bool ScreenToClient(IntPtr hwnd, ref NativePoint point);
 }

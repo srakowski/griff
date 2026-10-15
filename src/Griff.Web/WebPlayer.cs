@@ -213,6 +213,18 @@ public static partial class WebPlayer
         s_input.AddMouseDelta(new Vector2((float)movedX, (float)-movedY));
     }
 
+    /// <summary>
+    /// A finger on a touch screen went down or moved (<paramref name="down"/>) or was lifted, at (<paramref name="x"/>,
+    /// <paramref name="y"/>) across the canvas (0..1 from its top left). The first finger is the mouse too.
+    /// </summary>
+    [JSExport]
+    public static void Touch(int id, double x, double y, bool down)
+    {
+        s_input.SetTouch(id, new Vector2((float)(x * 2 - 1), (float)(1 - y * 2)), down, onScreen: true);
+        // Put in the world at once (and each frame after, as the camera moves).
+        UpdatePointer();
+    }
+
     /// <summary>The mouse left the canvas (or a finger was lifted).</summary>
     [JSExport]
     public static void PointerLeft() => s_input.IsMouseInView = false;
@@ -271,7 +283,8 @@ public static partial class WebPlayer
     /// <c>talking</c> the name of the entity whose dialogue is being said ("" for none); <c>output:<i>entity</i>.<i>output</i></c>
     /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>steps</c> the game's steps since it was last asked, "count|mean ms|worst ms" (a frame's steps
-    /// timed together); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
+    /// timed together); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
+    /// semicolons); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
     /// </summary>
     [JSExport]
@@ -318,6 +331,8 @@ public static partial class WebPlayer
                        read.Output.ReadNumber(read.Component).ToString(CultureInfo.InvariantCulture);
             case "music":
                 return string.Create(CultureInfo.InvariantCulture, $"{game.Audio.Music}|{game.Audio.MusicTime:0.###}");
+            case "touches":
+                return string.Join(';', s_input.Touches.Select(t => string.Create(CultureInfo.InvariantCulture, $"{t.World.X:0.##},{t.World.Y:0.##}")));
             case "status":
                 return game.Net.Status;
             case "fullscreen=1" or "fullscreen=0":
@@ -451,6 +466,14 @@ public static partial class WebPlayer
         {
             var world = Vector4.Transform(new Vector4(s_pointer, 0, 1), inverse);
             s_input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
+            if (s_input.Touches.Count > 0)
+            {
+                s_input.PlaceTouches(ndc =>
+                {
+                    var at = Vector4.Transform(new Vector4(ndc, 0, 1), inverse);
+                    return new Vector2(at.X, at.Y) / at.W;
+                });
+            }
         }
     }
 }

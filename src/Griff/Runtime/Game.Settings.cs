@@ -1,7 +1,7 @@
 namespace Griff.Runtime;
 
 // The player's settings (volumes, sound on or off, fullscreen, how dialogue skips and reads on by itself, audio and visual
-// offsets), kept in the save data so they come back next time.
+// offsets, how fast rhythm notes come), kept in the save data so they come back next time.
 public sealed partial class Game
 {
     /// <summary>Where <see cref="IAudio.Volume"/> is kept in <see cref="SaveData"/>.</summary>
@@ -34,12 +34,41 @@ public sealed partial class Game
     /// <summary>The furthest either offset goes, in milliseconds, early or late.</summary>
     public const float MaxOffset = 1000;
 
+    /// <summary>Where <see cref="NoteSpeed"/> is kept in <see cref="SaveData"/>.</summary>
+    public const string NoteSpeedSaveKey = "griff.noteSpeed";
+
+    /// <summary>The slowest and fastest <see cref="NoteSpeed"/>.</summary>
+    public const float MinNoteSpeed = 0.25f, MaxNoteSpeed = 4;
+
     private readonly record struct Settings(float Volume, float MusicVolume, float SoundVolume, bool Muted, bool Fullscreen, bool SkipUnread, float AutoSpeed, float AudioOffset,
-        float VisualOffset);
+        float VisualOffset, float NoteSpeed);
 
     private Settings? _savedSettings;
     private bool _fullscreen;
     private float _audioOffset, _visualOffset;
+    private float _noteSpeed = 1;
+
+    /// <summary>
+    /// How fast this player likes a rhythm game's notes to come, times what the lanes say: 2 is twice as fast (the notes
+    /// further apart, and seen for half as long), 0.5 half as fast. Players who read ahead like them slow; those who like
+    /// them spread out, fast. Only how they're drawn changes, never when they're to be hit. Like the offsets, it's the
+    /// player's own, kept in <see cref="SaveData"/> and set by a <see cref="Scenes.Slider"/> bound to it; from 0.25 to 4,
+    /// 1 by default.
+    /// </summary>
+    public float NoteSpeed
+    {
+        get => _noteSpeed;
+        set
+        {
+            var speed = NoteSpeedOf(value);
+            if (speed == _noteSpeed)
+                return;
+            _noteSpeed = speed;
+            SaveSettings();
+        }
+    }
+
+    private static float NoteSpeedOf(float speed) => float.IsFinite(speed) ? Math.Clamp(speed, MinNoteSpeed, MaxNoteSpeed) : 1;
 
     /// <summary>
     /// How late this player hears the game's sound beyond what the sound card says, in milliseconds: speakers with a delay of
@@ -129,6 +158,8 @@ public sealed partial class Game
             _audioOffset = Offset(data.GetFloat(AudioOffsetSaveKey));
         if (data.Has(VisualOffsetSaveKey))
             _visualOffset = Offset(data.GetFloat(VisualOffsetSaveKey));
+        if (data.Has(NoteSpeedSaveKey))
+            _noteSpeed = NoteSpeedOf(data.GetFloat(NoteSpeedSaveKey, 1));
 
         _savedSettings = CurrentSettings();
 
@@ -166,9 +197,11 @@ public sealed partial class Game
             _saveData.Set(AudioOffsetSaveKey, now.AudioOffset);
         if (before.VisualOffset != now.VisualOffset)
             _saveData.Set(VisualOffsetSaveKey, now.VisualOffset);
+        if (before.NoteSpeed != now.NoteSpeed)
+            _saveData.Set(NoteSpeedSaveKey, now.NoteSpeed);
     }
 
     private Settings CurrentSettings() =>
         new(_audio.Volume, _audio.MusicVolume, _audio.SoundVolume, _audio.Muted, _fullscreen, _skipUnread, _autoSpeed, _audioOffset,
-            _visualOffset);
+            _visualOffset, _noteSpeed);
 }

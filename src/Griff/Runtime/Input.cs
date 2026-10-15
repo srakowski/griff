@@ -29,6 +29,12 @@ public enum MouseButton
 }
 
 /// <summary>
+/// A finger on a touch screen (see <see cref="IInput.Touches"/>): which one it is (the same from when it goes down until it's
+/// lifted), where it is in world units, and whether it went down or was lifted this frame.
+/// </summary>
+public readonly record struct TouchPoint(int Id, Vector2 World, bool Pressed, bool Released);
+
+/// <summary>
 /// A key, mouse button or gamepad button that triggers an action (see <see cref="IInput.Bind"/>). Any of the three
 /// converts to one, so a list of bindings reads <c>Key.Space, GamepadButton.A</c>.
 /// </summary>
@@ -166,6 +172,14 @@ public interface IInput
     /// <summary>Mouse position in world units.</summary>
     Vector2 MouseWorld { get; }
 
+    /// <summary>
+    /// Every finger on a touch screen this frame, each where it is in world units, those lifted this frame included (their
+    /// <see cref="TouchPoint.Released"/> set) and those that went down marked <see cref="TouchPoint.Pressed"/>. The first
+    /// finger is also the mouse (a tap is a left click), so code that only needs one pointer reads the mouse; this is for
+    /// several at once, as rhythm lanes and on-screen pads take them. Empty without a touch screen.
+    /// </summary>
+    IReadOnlyList<TouchPoint> Touches => [];
+
     /// <summary>False while the mouse is outside the game's view (or hasn't moved over it yet); buttons ignore it then.</summary>
     bool IsMouseInView { get; }
 
@@ -277,6 +291,11 @@ public sealed class InputState : IInput
             ["Nudge"] = [Key.N, Key.Up, GamepadButton.B],
             ["Punch"] = [Key.U, Key.J, GamepadButton.X],
             ["Kick"] = [Key.I, Key.K, GamepadButton.A],
+            // A rhythm game's four lanes: D F J K under the fingers, the arrows, and the D-pad or the face buttons.
+            ["Lane1"] = [Key.D, Key.Left, GamepadButton.DPadLeft, GamepadButton.X],
+            ["Lane2"] = [Key.F, Key.Down, GamepadButton.DPadDown, GamepadButton.A],
+            ["Lane3"] = [Key.J, Key.Up, GamepadButton.DPadUp, GamepadButton.Y],
+            ["Lane4"] = [Key.K, Key.Right, GamepadButton.DPadRight, GamepadButton.B],
         };
 
     private readonly Dictionary<string, InputBinding[]> _actions =
@@ -295,6 +314,69 @@ public sealed class InputState : IInput
     private float _rumbleSeconds;
 
     public Vector2 MouseWorld { get; set; }
+
+    // The fingers down (and those lifted this frame), each with where the platform said it was: on the screen (from -1 to 1
+    // across the view, placed in the world by PlaceTouches) or already in the world.
+    private readonly List<(TouchPoint Touch, Vector2 At, bool OnScreen)> _touches = [];
+    private TouchPoint[] _touchList = [];
+    private bool _touchesChanged;
+
+    public IReadOnlyList<TouchPoint> Touches
+    {
+        get
+        {
+            if (_touchesChanged)
+            {
+                _touchList = [.. _touches.Select(t => t.Touch)];
+                _touchesChanged = false;
+            }
+
+            return _touchList;
+        }
+    }
+
+    /// <summary>
+    /// A finger went down, moved or was lifted. <paramref name="at"/> is in world units, or with <paramref name="onScreen"/>
+    /// where it is on the view (from -1 to 1 across it, up positive), which <see cref="PlaceTouches"/> puts in the world.
+    /// </summary>
+    public void SetTouch(int id, Vector2 at, bool down, bool onScreen = false)
+    {
+        var index = _touches.FindIndex(t => t.Touch.Id == id && !t.Touch.Released);
+        if (down)
+        {
+            if (index < 0)
+            {
+                _touches.Add((new TouchPoint(id, at, Pressed: true, Released: false), at, onScreen));
+                UsingGamepad = false;
+            }
+            else
+            {
+                var (touch, _, _) = _touches[index];
+                _touches[index] = (touch with { World = onScreen ? touch.World : at }, at, onScreen);
+            }
+        }
+        else if (index >= 0)
+        {
+            var (touch, _, _) = _touches[index];
+            _touches[index] = (touch with { World = onScreen ? touch.World : at, Released = true }, at, onScreen);
+        }
+
+        _touchesChanged = true;
+    }
+
+    /// <summary>Puts the fingers given on the screen in the world, through <paramref name="toWorld"/> (the view as it is now).</summary>
+    public void PlaceTouches(Func<Vector2, Vector2> toWorld)
+    {
+        for (var i = 0; i < _touches.Count; i++)
+        {
+            var (touch, at, onScreen) = _touches[i];
+            if (onScreen && toWorld(at) is var world && world != touch.World)
+            {
+                _touches[i] = (touch with { World = world }, at, onScreen);
+                _touchesChanged = true;
+            }
+        }
+    }
 
     /// <summary>Set by the platform as the mouse enters and leaves the view. True by default, for tests and headless runs.</summary>
     public bool IsMouseInView { get; set; } = true;
@@ -706,6 +788,8 @@ public sealed class InputState : IInput
             SetKey(key, false);
         // Silently, so a held button doesn't count as a click on whatever is under the cursor.
         _mouseDown.Clear();
+        _touches.Clear();
+        _touchesChanged = true;
     }
 
     /// <summary>
@@ -739,6 +823,17 @@ public sealed class InputState : IInput
         _mouseReleased.Clear();
         _padPressed.Clear();
         _padReleased.Clear();
+        if (_touches.RemoveAll(t => t.Touch.Released) > 0)
+            _touchesChanged = true;
+        for (var i = 0; i < _touches.Count; i++)
+        {
+            if (_touches[i].Touch.Pressed)
+            {
+                _touches[i] = _touches[i] with { Touch = _touches[i].Touch with { Pressed = false } };
+                _touchesChanged = true;
+            }
+        }
+
         _typed.Clear();
         Scroll = 0;
         MouseDelta = Vector2.Zero;

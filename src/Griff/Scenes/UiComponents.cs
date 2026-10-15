@@ -330,6 +330,12 @@ public enum GameSetting
 
     /// <summary>The player's visual offset in milliseconds (<c>Game.VisualOffset</c>): how late they see the screen. In milliseconds, as AudioOffset is.</summary>
     VisualOffset,
+
+    /// <summary>
+    /// How fast this player likes rhythm notes to come (<c>Game.NoteSpeed</c>), times what the lanes say: the slider's value
+    /// is it (say 0.5 to 3, in steps of 0.25, with a text showing "{0:0.00}x").
+    /// </summary>
+    NoteSpeed,
 }
 
 /// <summary>Which way a <see cref="Bar"/> fills up.</summary>

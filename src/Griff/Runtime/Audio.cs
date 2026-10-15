@@ -12,6 +12,12 @@ public interface IAudio
     /// <summary>Plays background music, replacing any music already playing.</summary>
     void PlayMusic(string music, float volume = 0.6f, bool loop = true);
 
+    /// <summary>
+    /// Plays music as <see cref="PlayMusic"/> does, but from <paramref name="seconds"/> into it rather than from the start:
+    /// to carry a song on where it was (after a pause, or a rewind). <see cref="MusicTime"/> counts on from there.
+    /// </summary>
+    void PlayMusicFrom(string music, double seconds, float volume = 0.6f, bool loop = true) => PlayMusic(music, volume, loop);
+
     void StopMusic();
 
     /// <summary>Stops everything (when the game stops).</summary>
@@ -174,6 +180,13 @@ public sealed class SilentAudio : IAudio
         MusicTime = 0;
         _musicLoops = loop;
         _metronomeTempo = null;
+    }
+
+    public void PlayMusicFrom(string music, double seconds, float volume = 0.6f, bool loop = true)
+    {
+        PlayMusic(music, volume, loop);
+        if (Music is not null && double.IsFinite(seconds))
+            MusicTime = Math.Max(0, seconds);
     }
 
     public void PlayMetronome(float tempo, int beatsPerBar = 4, float volume = 1)

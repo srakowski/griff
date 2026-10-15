@@ -81,8 +81,8 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         }
     }
 
-    /// <summary>The music playing (or fading in), by name.</summary>
-    public string? Music => _musicName;
+    /// <summary>The music playing (or fading in), by name; null once music that doesn't loop has played to its end.</summary>
+    public string? Music => _music is { IsPlaying: false } ? null : _musicName;
 
     public double MusicTime => _music?.Heard ?? 0;
 
@@ -113,6 +113,12 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
     {
         StopMusic();
         StartMusic(music, volume, loop, 0);
+    }
+
+    public void PlayMusicFrom(string music, double seconds, float volume = 0.6f, bool loop = true)
+    {
+        StopMusic();
+        StartMusic(music, volume, loop, 0, double.IsFinite(seconds) ? Math.Max(0, seconds) : 0);
     }
 
     public void CrossfadeMusic(string music, float seconds, float volume = 0.6f, bool loop = true)
@@ -176,6 +182,9 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
     {
         if (seconds > 0)
             _time += seconds;
+        // Music that doesn't loop has played to its end: there's none now.
+        if (_music is { IsPlaying: false })
+            (_music, _musicName) = (null, null);
         if (_musicFade.Amount < 1)
         {
             _musicFade.Amount = Math.Min(1, _musicFade.Amount + seconds / _musicFade.Seconds);
@@ -211,14 +220,14 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         _effects.Clear();
     }
 
-    private void StartMusic(string music, float volume, bool loop, float fadeIn)
+    private void StartMusic(string music, float volume, bool loop, float fadeIn, double from = 0)
     {
         if (string.IsNullOrWhiteSpace(music) || library.Stream(music.Trim()) is not { } stream)
             return;
 
         _musicVolume = volume;
         _musicFade = fadeIn > 0 ? (0, fadeIn) : (1, 0);
-        _music = mixer.Play(stream, 0, 0, 1, loop);
+        _music = mixer.Play(stream, 0, 0, 1, loop, skip: (long)Math.Round(from * stream.SampleRate));
         _musicName = music;
         _musicTempo = library.MusicRecipeOf(music.Trim())?.Clamped().Tempo ?? 0;
         _musicIsClicks = false;

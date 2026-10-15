@@ -11,8 +11,10 @@
 //                   checks each: the proof game, the Adventure template (Enter on its menu, taps moving its talk on,
 //                   walking where it's tapped round a table, a hotspot's pointer, a right click looking, an item taken,
 //                   picked from the inventory bar and used on the kettle, the keys on the bar, and its items kept),
-//                   then Platformer, Shooter, Match3, Isometric, Physics, BunnyMark and Multiplayer (--template picks
-//                   some, Proof among them; --project checks that project). See Check below for what each is checked for.
+//                   rhythm lanes (Create Note Lanes in an empty project: notes hit on the beat heard through Web Audio
+//                   with the keys, a chord with two fingers at once and a hold held by one, to the song's end), then
+//                   Platformer, Shooter, Match3, Isometric, Physics, BunnyMark and Multiplayer (--template picks some,
+//                   Proof and Rhythm among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
 //                   files and a poster (a screenshot of it running, taken in a headless browser), and games.json, the list
@@ -29,7 +31,9 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Griff.Data;
 using Griff.Fonts;
+using Griff.Modules.Rhythm;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -295,6 +299,203 @@ async Task AdventureInput(GameCheck game)
     Console.WriteLine("  keys: Interact went to the bar, Attack looked at the tea, Jump picked it up and Dash put it back");
 }
 
+// Rhythm lanes in an empty project, as Entity > Genres > Rhythm > Create Note Lanes makes them: four lanes, a song made in
+// Griff and its chart, the lanes in the middle of a view 10 high.
+async Task<Project> RhythmGame(string folder)
+{
+    var project = await Project.CreateAsync(folder, "Rhythm on the Web", ProjectTemplates.Empty);
+    var preset = new NoteLanesPreset();
+    foreach (var (path, bytes) in preset.Files())
+    {
+        var full = Path.Combine(project.AssetsPath, path);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllBytesAsync(full, bytes);
+    }
+
+    var scenePath = project.StartScenePath!;
+    var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+    Scene scene;
+    await using (var read = File.OpenRead(scenePath))
+        scene = serializer.Load(read);
+    var lanes = new Entity(preset.EntityName(scene));
+    preset.Configure(lanes, scene);
+    scene.Add(lanes);
+    foreach (var child in preset.CreateChildren(scene))
+        scene.Add(child, lanes);
+    await using (var write = File.Create(scenePath))
+        serializer.Save(scene, write);
+    return project;
+}
+
+// The lanes in the browser, their song heard through Web Audio: notes of the Normal chart pressed with the keys as the
+// music heard (Web Audio's own latency and what it holds allowed for) reaches their beats, a chord tapped with two fingers
+// at once and a hold held by a finger to its end are all hits, and the song's end completes the lanes with a grade.
+async Task RhythmInput(GameCheck game)
+{
+    const string Lanes = "Note Lanes";
+    var (width, height) = await game.Viewport();
+    (double X, double Y) Screen(double x, double y) => (width / 2 + x * height / 10, height * (0.5 - y / 10));
+    // The middle of each lane at the hit line, on the screen: lanes 1.3 wide, the line 1.2 up from the bottom of lanes 9 long.
+    (double X, double Y) LaneAt(int lane) => Screen((lane - 1.5) * 1.3, -(4.5 - 1.2));
+    string[] keys = ["KeyD", "KeyF", "KeyJ", "KeyK"];
+    var chart = GrooveSong.Chart();
+    var notes = chart.Rows.Where(r => r["Difficulty"].ToString() == "Normal")
+        .Select(r => (Beat: r["Beat"].AsNumber, Lane: (int)r["Lane"].AsWholeNumber - 1, Hold: r["Hold"].AsNumber))
+        .OrderBy(n => n.Beat).ThenBy(n => n.Lane).ToList();
+    async Task<double> Heard() => double.Parse((await game.Probe("music")).Split('|')[1], CultureInfo.InvariantCulture);
+    async Task<int> Output(string name) => int.Parse(await game.Probe($"output:{Lanes}.{name}"), CultureInfo.InvariantCulture);
+    async Task<int> Hits() => await Output("Perfects") + await Output("Greats") + await Output("Goods");
+
+    // Waits until the music heard reaches `beat` (two a second), then does `press`. It asks the page what's been heard as it
+    // goes, so a page that stalls a moment (a busy machine) is waited for, and counts the last few hundredths itself.
+    async Task At(double beat, Func<Task> press)
+    {
+        var wait = beat * 0.5 - await Heard();
+        if (wait < 0.25)
+            throw new CheckFailed($"beat {beat} came round before it could be played ({wait:0.00} s)");
+        while (wait > 0.06)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(wait - 0.05, 0.1)));
+            wait = beat * 0.5 - await Heard();
+        }
+
+        var clock = Stopwatch.StartNew();
+        while (clock.Elapsed.TotalSeconds < wait)
+            Thread.SpinWait(100);
+        await press();
+    }
+
+    // Fingers going down on lanes (or lifted) as the page's own touch pointers, the pointer events going straight to its
+    // handlers. Going down, they wait in the page for the music heard to reach `beat` (two a second), so they're timed to it
+    // there, as a player's finger is, rather than across the DevTools connection. (The browser's own touches are checked to
+    // reach the game too, but a headless browser on a busy machine can take a second to pass one on: too late to time a note.)
+    async Task Fingers(IEnumerable<int> lanes, bool down, double beat = double.NaN)
+    {
+        var events = string.Join(";", lanes.Select(lane => string.Create(CultureInfo.InvariantCulture,
+            $"c.dispatchEvent(new PointerEvent('{(down ? "pointerdown" : "pointerup")}', {{ pointerId: {100 + lane}, pointerType: 'touch', isPrimary: false, clientX: {LaneAt(lane).X}, clientY: {LaneAt(lane).Y}, buttons: {(down ? 1 : 0)}, bubbles: true }}))")));
+        var at = double.IsNaN(beat) ? "0" : (beat * 0.5).ToString(CultureInfo.InvariantCulture);
+        await game.Evaluate("(async () => { const c = document.getElementById('game'); const heard = () => +griff.probe('music').split('|')[1]; " +
+            $"for (let left = {at} - heard(); left > 0.002; left = {at} - heard()) await new Promise(r => setTimeout(r, Math.min(20, Math.max(0, left * 1000 - 6)))); " +
+            $"{events}; return 'ok'; }})()", awaitPromise: true);
+    }
+
+    // Waits until the music heard is a moment before `beat`, for something timed in the page.
+    async Task Before(double beat)
+    {
+        var wait = beat * 0.5 - await Heard();
+        if (wait < 0.25)
+            throw new CheckFailed($"beat {beat} came round before it could be played ({wait:0.00} s)");
+        while (wait > 0.15)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(wait - 0.12, 0.1)));
+            wait = beat * 0.5 - await Heard();
+        }
+    }
+
+    if (await game.Probe($"output:{Lanes}.IsPlaying") != "1")
+        throw new CheckFailed($"the lanes aren't playing their song ({await game.Probe($"output:{Lanes}.IsPlaying")})");
+
+    string Judged(string judgment, string timing) =>
+        $"{judgment} ({double.Parse(timing, CultureInfo.InvariantCulture).ToString("+0;-0;0", CultureInfo.InvariantCulture)} ms)";
+    async Task<string> LastJudged() => Judged(await game.Probe($"output:{Lanes}.Judgment"), await game.Probe($"output:{Lanes}.Timing"));
+
+    // Through the song, the notes as they come: three on their own pressed with the keys, a chord with two fingers at once
+    // and a hold held by a finger until the game has judged its end, each timed to the beat as Web Audio plays it. A headless
+    // browser on a busy machine now and then stops drawing for a moment, which costs the note being played then, so one that
+    // isn't a hit is said and the next one like it tried, until the song runs out.
+    var keyHits = new List<string>();
+    string? chordHit = null, holdHit = null;
+    var free = await Heard() * 2 + 1.5;
+    foreach (var beat in notes.Select(n => n.Beat).Distinct().Order().ToList())
+    {
+        if (keyHits.Count == 3 && chordHit is not null && holdHit is not null)
+            break;
+        var here = notes.Where(n => n.Beat == beat).ToList();
+        if (beat < free || beat * 0.5 - await Heard() < 0.35)
+            continue;
+        var hits = await Hits();
+        if (holdHit is null && here is [{ Hold: > 0 } hold])
+        {
+            free = beat + hold.Hold + 1;
+            await Before(beat);
+            await Fingers([hold.Lane], down: true, beat);
+            var holding = Stopwatch.StartNew();
+            while (await Hits() < hits + 2 && holding.Elapsed < TimeSpan.FromSeconds(hold.Hold * 0.5 + 3))
+                await Task.Delay(50);
+            await Fingers([hold.Lane], down: false);
+            await Task.Delay(150);
+            if (await Hits() == hits + 2)
+                holdHit = $"a finger held on lane {hold.Lane + 1} from beat {beat} for {hold.Hold} beats hit its start and its end (pressed {double.Parse(await game.Probe($"output:{Lanes}.Timing"), CultureInfo.InvariantCulture).ToString("+0;-0;0", CultureInfo.InvariantCulture)} ms from its beat)";
+            else
+                Console.WriteLine($"  touch: the hold on beat {beat} was {await Hits() - hits} hits ({await LastJudged()}); trying the next");
+        }
+        else if (chordHit is null && here is [{ Hold: 0 } first, { Hold: 0 } second])
+        {
+            free = beat + 1;
+            await Before(beat);
+            await Fingers([first.Lane, second.Lane], down: true, beat);
+            await Task.Delay(60);
+            await Fingers([first.Lane, second.Lane], down: false);
+            await Task.Delay(150);
+            if (await Hits() == hits + 2)
+                chordHit = $"two fingers at once on lanes {first.Lane + 1} and {second.Lane + 1} hit the chord on beat {beat}: {await LastJudged()}";
+            else
+                Console.WriteLine($"  touch: the chord on beat {beat} was {await Hits() - hits} hits ({await LastJudged()}); trying the next");
+        }
+        else if (keyHits.Count < 3 && here is [{ Hold: 0 } note])
+        {
+            free = beat + 1.5;
+            await At(beat, () => game.Press(keys[note.Lane]));
+            await Task.Delay(150);
+            if (await Hits() == hits + 1)
+                keyHits.Add(await LastJudged());
+            else
+                Console.WriteLine($"  keys: {keys[note.Lane]} on beat {beat} wasn't a hit ({await LastJudged()}); trying the next");
+        }
+    }
+
+    if (keyHits.Count < 3 || chordHit is null || holdHit is null)
+        throw new CheckFailed($"the song ran out with {keyHits.Count} of 3 notes hit with the keys, {(chordHit is null ? "no" : "a")} chord and {(holdHit is null ? "no" : "a")} hold");
+    Console.WriteLine($"  keys: notes pressed on the beat as Web Audio plays it were {string.Join(", ", keyHits)}");
+    Console.WriteLine($"  touch: {chordHit}");
+    Console.WriteLine($"  touch: {holdHit}");
+
+    // The song plays on to its end, and the lanes are done.
+    var waited = Stopwatch.StartNew();
+    while (await game.Probe($"output:{Lanes}.IsPlaying") != "0")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(90))
+            throw new CheckFailed("the lanes didn't finish when their song ended");
+        await Task.Delay(250);
+    }
+
+    Console.WriteLine($"  song: over {waited.Elapsed.TotalSeconds:0} s later, graded {await game.Probe($"output:{Lanes}.Grade")} ({await Output("Score")} points)");
+
+    // The browser's own touch, two fingers at once: each reaches the game as a finger of its own, where it is, and lifted, goes.
+    (double X, double Y) beside = (5, 0), alsoBeside = (6, -1);
+    await game.Cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = true, ["maxTouchPoints"] = 4 });
+    var two = new JsonArray(
+        new JsonObject { ["x"] = Screen(beside.X, beside.Y).X, ["y"] = Screen(beside.X, beside.Y).Y, ["id"] = 1 },
+        new JsonObject { ["x"] = Screen(alsoBeside.X, alsoBeside.Y).X, ["y"] = Screen(alsoBeside.X, alsoBeside.Y).Y, ["id"] = 2 });
+    await game.Cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchStart", ["touchPoints"] = two });
+    bool Near(string touches, (double X, double Y) at) =>
+        touches.Split(';').Any(t => t.Split(',') is [var x, var y] && Math.Abs(double.Parse(x, CultureInfo.InvariantCulture) - at.X) < 0.2 &&
+                                    Math.Abs(double.Parse(y, CultureInfo.InvariantCulture) - at.Y) < 0.2);
+    try
+    {
+        await WaitFor(game, "touches", touches => touches.Split(';').Length == 2 && Near(touches, beside) && Near(touches, alsoBeside), "");
+    }
+    catch (CheckFailed)
+    {
+        throw new CheckFailed($"two fingers at {beside} and {alsoBeside} reached the game as \"{await game.Probe("touches")}\"");
+    }
+
+    await game.Cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
+    await WaitFor(game, "touches", touches => touches.Length == 0, "two fingers lifted are still touching the game");
+    await game.Cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    Console.WriteLine("  touch: the browser's own two fingers at once reached the game as two touches, each where it was, and were lifted");
+}
+
 // Waits (up to 6 s) for what a probe says to be as asked.
 static async Task WaitFor(GameCheck game, string probe, Func<string, bool> done, string otherwise)
 {
@@ -497,15 +698,17 @@ async Task<int> CheckGames(string root, string shots, string profile)
     }
     else
     {
-        var names = (Arg("--template") ?? "Proof,Adventure," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var names = (Arg("--template") ?? "Proof,Adventure,Rhythm," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (var name in names)
         {
             if (name.Equals("Proof", StringComparison.OrdinalIgnoreCase))
                 games.Add(("Proof", ProofGame));
+            else if (name.Equals("Rhythm", StringComparison.OrdinalIgnoreCase))
+                games.Add(("Rhythm", RhythmGame));
             else if (ProjectTemplates.Find(name) is { } template)
                 games.Add((template.Name, f => Project.CreateAsync(f, template.Title, template)));
             else
-                return Fail($"No template called {name}. Templates: Proof, {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
+                return Fail($"No template called {name}. Templates: Proof, Rhythm, {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
         }
     }
 
@@ -597,6 +800,13 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         await Saves(game, "runs");
         await Sizes(game);
         await Fullscreen(game);
+        return;
+    }
+
+    if (name == "Rhythm")
+    {
+        await Sound(game);
+        await RhythmInput(game);
         return;
     }
 

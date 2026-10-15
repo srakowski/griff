@@ -40,10 +40,10 @@ public class GameModuleTests
     [Fact]
     public void Modules_AreFound_ByName()
     {
-        Assert.Equal(["Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Blocks", "Fighting", "First Person", "Match-3", "Physics Games", "Puzzles", "Strategy", "Tactics", "Visual Novels"],
+        Assert.Equal(["Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Blocks", "Fighting", "First Person", "Match-3", "Physics Games", "Puzzles", "Rhythm", "Strategy", "Tactics", "Visual Novels"],
             GameModule.All.Select(m => m.Name));
         Assert.Equal(["Griff.Modules.Adventures", "Griff.Modules.Battles", "Griff.Modules.BlockWorlds", "Griff.Modules.Cards", "Griff.Modules.Contraptions", "Griff.Modules.Dungeons", "Griff.Modules.FallingBlocks", "Griff.Modules.Fighting",
-            "Griff.Modules.FirstPerson", "Griff.Modules.Match3", "Griff.Modules.PhysicsGames", "Griff.Modules.Puzzles", "Griff.Modules.Strategy", "Griff.Modules.Tactics", "Griff.Modules.VisualNovels"],
+            "Griff.Modules.FirstPerson", "Griff.Modules.Match3", "Griff.Modules.PhysicsGames", "Griff.Modules.Puzzles", "Griff.Modules.Rhythm", "Griff.Modules.Strategy", "Griff.Modules.Tactics", "Griff.Modules.VisualNovels"],
             GameModule.All.Select(m => m.Namespace));
     }
 
@@ -73,7 +73,7 @@ public class GameModuleTests
     {
         Assert.Equal(["Entity.CreateTacticsUnit", "Entity.CreateGoal", "Entity.CreateMatchBoard", "Entity.CreateFallingBoard", "Entity.CreateDungeon",
             "Entity.CreateDeck", "Entity.CreatePlayZone", "Entity.CreateCard",
-            "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker", "Entity.CreateItem", "Entity.CreateStage", "Entity.CreateCharacter", "Entity.CreateReadingMenus", "Entity.CreateSlingshot", "Entity.CreateTower",
+            "Entity.CreateWalkArea", "Entity.CreateHotspot", "Entity.CreateWalker", "Entity.CreateItem", "Entity.CreateStage", "Entity.CreateCharacter", "Entity.CreateNoteLanes", "Entity.CreateReadingMenus", "Entity.CreateSlingshot", "Entity.CreateTower",
             "Entity.CreatePinballTable", "Entity.CreateSparring", "Entity.CreateFlippers", "Entity.CreateBumper", "Entity.CreateKickers", "Entity.CreatePlunger", "Entity.CreateDropTargets", "Entity.CreateLanes", "Entity.CreateTrainingPair"],
             EntityPreset.All.Select(p => p.Id));
         Assert.All(EntityPreset.All, p => Assert.NotNull(GameModule.Of(p.GetType())));

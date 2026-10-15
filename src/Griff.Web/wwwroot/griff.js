@@ -747,13 +747,22 @@ function listen() {
   });
   addEventListener('blur', () => player.Blur());
 
-  // The mouse, and touch as the mouse: one finger points and its tap is a left click (a second finger is ignored).
+  // The mouse, and touch as the mouse: one finger points and its tap is a left click (a second finger isn't the mouse).
+  // Every finger is also a touch of its own, so several can be down at once (rhythm lanes, on-screen pads).
   const point = e => {
     const box = canvas.getBoundingClientRect();
     const scale = devicePixelRatio || 1;
     player.Pointer((e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height, e.movementX * scale, e.movementY * scale);
   };
+  const touch = (e, down) => {
+    if (e.pointerType !== 'touch')
+      return;
+    const box = canvas.getBoundingClientRect();
+    player.Touch(e.pointerId, (e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height, down);
+  };
   canvas.addEventListener('pointermove', e => {
+    if (e.buttons)
+      touch(e, true);
     if (e.isPrimary)
       point(e);
   });
@@ -767,8 +776,17 @@ function listen() {
   });
   canvas.addEventListener('pointerdown', e => {
     canvas.focus();
-    if (!e.isPrimary)
+    touch(e, true);
+    if (!e.isPrimary) {
+      if (e.pointerType === 'touch') {
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {
+          // A finger already lifted can't be followed off the canvas: it isn't down any more.
+        }
+      }
       return;
+    }
     // A first-person game takes the mouse when it's clicked; that click only takes it, as on the desktop.
     if (e.pointerType === 'mouse' && document.pointerLockElement !== canvas && player.WantsMouseLock() && canvas.requestPointerLock) {
       const asked = canvas.requestPointerLock();
@@ -782,10 +800,12 @@ function listen() {
     player.Button(e.pointerType === 'mouse' ? e.button : 0, true);
   });
   canvas.addEventListener('pointerup', e => {
+    touch(e, false);
     if (e.isPrimary)
       player.Button(e.pointerType === 'mouse' ? e.button : 0, false);
   });
   canvas.addEventListener('pointercancel', e => {
+    touch(e, false);
     if (e.isPrimary)
       player.Button(0, false);
   });

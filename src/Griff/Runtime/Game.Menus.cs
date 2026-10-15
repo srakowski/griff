@@ -578,11 +578,13 @@ public sealed partial class Game
         GameSetting.AutoSpeed => AutoSpeed,
         GameSetting.AudioOffset => AudioOffset,
         GameSetting.VisualOffset => VisualOffset,
+        GameSetting.NoteSpeed => NoteSpeed,
         _ => null,
     };
 
-    // Settings with units of their own (an offset's milliseconds) are a slider's value; the rest, from 0 to 1, fill it.
-    private static bool InOwnUnits(GameSetting setting) => setting is GameSetting.AudioOffset or GameSetting.VisualOffset;
+    // Settings with units of their own (an offset's milliseconds, how many times as fast notes come) are a slider's value;
+    // the rest, from 0 to 1, fill it.
+    private static bool InOwnUnits(GameSetting setting) => setting is GameSetting.AudioOffset or GameSetting.VisualOffset or GameSetting.NoteSpeed;
 
     private void ApplySetting(GameSetting setting, float value)
     {
@@ -620,6 +622,9 @@ public sealed partial class Game
                 break;
             case GameSetting.VisualOffset:
                 VisualOffset = value;
+                break;
+            case GameSetting.NoteSpeed:
+                NoteSpeed = value;
                 break;
         }
     }

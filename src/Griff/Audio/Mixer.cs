@@ -41,10 +41,15 @@ public sealed class Mixer
         }
     }
 
-    /// <summary>Starts <paramref name="stream"/> playing; the mixer disposes it when it finishes or is stopped.</summary>
-    public Voice Play(IAudioStream stream, float volume = 1, float pan = 0, float pitch = 1, bool loop = false)
+    /// <summary>
+    /// Starts <paramref name="stream"/> playing, <paramref name="skip"/> frames into it (counting on as it loops); the mixer
+    /// disposes it when it finishes or is stopped.
+    /// </summary>
+    public Voice Play(IAudioStream stream, float volume = 1, float pan = 0, float pitch = 1, bool loop = false, long skip = 0)
     {
         var voice = new Voice(stream, loop, this) { Volume = volume, Pan = pan, Pitch = pitch };
+        if (skip > 0)
+            voice.Skip(skip);
         voice.Prime();
         lock (_gate)
             _voices.Add(voice);
@@ -184,6 +189,47 @@ public sealed class Voice : IDisposable
     {
         _finished = true;
         _stream.Dispose();
+    }
+
+    // Before it's primed: reads past the first `frames` (going round again if it loops), so it starts playing there and what's
+    // heard counts from there.
+    internal void Skip(long frames)
+    {
+        var channels = Math.Max(1, _stream.Channels);
+        // A whole loop's worth (or more) of a stream that says how long it is needn't be read through again and again.
+        if (_loop && _length > 0 && frames >= _length)
+        {
+            _played += frames / _length * _length;
+            frames %= _length;
+        }
+
+        while (frames > 0)
+        {
+            var want = (int)Math.Min(frames, BlockFrames);
+            var read = _stream.Read(_block.AsSpan(0, want * channels)) / channels;
+            if (read == 0)
+            {
+                if (!_loop || _played == 0)
+                    break;
+                if (_length < 0)
+                    Interlocked.Exchange(ref _length, _read);
+                _stream.Rewind();
+                if (_length > 0 && frames >= _length)
+                {
+                    _played += frames / _length * _length;
+                    frames %= _length;
+                }
+
+                continue;
+            }
+
+            if (_length < 0)
+                _read += read;
+            _played += read;
+            frames -= read;
+        }
+
+        _blockFrames = _blockPos = 0;
     }
 
     internal void Prime()

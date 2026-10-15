@@ -315,6 +315,15 @@ public enum GameSetting
 
     /// <summary>How quickly dialogue reads on by itself, 0 (slowly) to 1 (quickly) (<c>Game.AutoSpeed</c>).</summary>
     AutoSpeed,
+
+    /// <summary>
+    /// The player's audio offset in milliseconds (<c>Game.AudioOffset</c>): how late they hear the sound. A slider bound to
+    /// it is set in milliseconds, its Min to its Max (say -100 to 400, in steps of 5).
+    /// </summary>
+    AudioOffset,
+
+    /// <summary>The player's visual offset in milliseconds (<c>Game.VisualOffset</c>): how late they see the screen. In milliseconds, as AudioOffset is.</summary>
+    VisualOffset,
 }
 
 /// <summary>Which way a <see cref="Bar"/> fills up.</summary>
@@ -508,7 +517,8 @@ public sealed class Slider : Component, IDrawable
             drawing.Rect(new Vector2(-size.X / 2 + fraction * size.X, 0), new Vector2(size.Y * 0.5f, size.Y * 1.5f), Shade(Knob));
     }
 
-    /// <summary>Where it's set, from <see cref="Min"/> to <see cref="Max"/>.</summary>
+    /// <summary>Where it's set, from <see cref="Min"/> to <see cref="Max"/>: a text inside it can show it ("{0:0} ms").</summary>
+    [Output]
     public float Value { get; set; } = 1;
 
     /// <summary>The value at its left end.</summary>
@@ -525,7 +535,8 @@ public sealed class Slider : Component, IDrawable
 
     /// <summary>
     /// A setting of the game it changes, like the music volume. While set, the slider always shows that setting: a volume
-    /// from 0 to 1 fills it from <see cref="Min"/> to <see cref="Max"/>, so a slider from 0 to 10 works too.
+    /// from 0 to 1 fills it from <see cref="Min"/> to <see cref="Max"/>, so a slider from 0 to 10 works too. An offset is in
+    /// milliseconds, which is the slider's value.
     /// </summary>
     [Group("Setting and Saving")]
     public GameSetting Setting { get; set; }

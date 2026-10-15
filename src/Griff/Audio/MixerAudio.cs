@@ -38,6 +38,8 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
     private (float Amount, float Seconds) _musicFade = (1, 0);
     private float _volume = 1, _musicMix = 1, _soundMix = 1;
     private bool _muted;
+    // The music is a metronome, heard at the sound effect volume rather than the music's.
+    private bool _musicIsClicks;
 
     public float Volume
     {
@@ -147,6 +149,19 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         (_music, _musicName) = (null, null);
     }
 
+    public void PlayMetronome(float tempo, int beatsPerBar = 4, float volume = 1)
+    {
+        StopMusic();
+        var bar = Metronome.Bar(tempo, beatsPerBar);
+        _musicVolume = Math.Max(0, volume);
+        _musicFade = (1, 0);
+        _music = mixer.Play(bar.Open(), 0, 0, 1, loop: true);
+        _musicName = IAudio.MetronomeMusic;
+        _musicTempo = float.IsFinite(tempo) ? Math.Clamp(tempo, 20, 400) : 120;
+        _musicIsClicks = true;
+        UpdateVolumes();
+    }
+
     public ISoundLoop Loop(string sound, float volume = 1)
     {
         var loop = new LoopingSound(this) { Volume = volume };
@@ -206,6 +221,7 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
         _music = mixer.Play(stream, 0, 0, 1, loop);
         _musicName = music;
         _musicTempo = library.MusicRecipeOf(music.Trim())?.Clamped().Tempo ?? 0;
+        _musicIsClicks = false;
         UpdateVolumes();
     }
 
@@ -214,7 +230,7 @@ public sealed class MixerAudio(Mixer mixer, ISoundLibrary library) : IAudio
     private void UpdateVolumes()
     {
         if (_music is not null)
-            _music.Volume = _muted ? 0 : Math.Max(0, _musicVolume * _volume * _musicMix * _musicFade.Amount);
+            _music.Volume = _muted ? 0 : Math.Max(0, _musicVolume * _volume * (_musicIsClicks ? _soundMix : _musicMix) * _musicFade.Amount);
         foreach (var loop in _loops)
             loop.Apply();
         if (_muted)

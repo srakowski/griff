@@ -75,7 +75,7 @@ public sealed class EntityMenuTests
         string[] Ids(string category) => categories.Single(g => g.Key == category).Select(c => c.Id).ToArray();
         Assert.Equal(["Entity.CreateEmpty", "Entity.CreateSprite", "Entity.CreateText", "Entity.CreateCamera"], Ids("Basics"));
         Assert.Equal(["Entity.CreatePlatformerPlayer", "Entity.CreateTopDownPlayer", "Entity.CreateGridPlayer", "Entity.CreateGridEnemy", "Entity.CreateHitbox"], Ids("Characters"));
-        Assert.Equal(["Entity.CreateMusic", "Entity.CreateSoundSource", "Entity.CreateSoundPlayer", "Entity.CreateBeatClock"], Ids("Audio"));
+        Assert.Equal(["Entity.CreateMusic", "Entity.CreateSoundSource", "Entity.CreateSoundPlayer", "Entity.CreateBeatClock", "Entity.CreateCalibration"], Ids("Audio"));
         Assert.Equal(["Entity.CreateMatchBoard"], Ids("Match-3"));
     });
 
@@ -181,7 +181,7 @@ public sealed class EntityMenuTests
 
         // By category: everything in it.
         palette.Search = "audio";
-        Assert.Equal(["Music", "Sound Source", "Sound Player", "Beat Clock"], palette.View.Cast<EntityPaletteItem>().Select(i => i.Name));
+        Assert.Equal(["Music", "Sound Source", "Sound Player", "Beat Clock", "Calibration Screen"], palette.View.Cast<EntityPaletteItem>().Select(i => i.Name));
 
         // By what it does: a waterfall is a sound that loops.
         palette.Search = "waterfall";
@@ -269,6 +269,7 @@ public sealed class EntityMenuTests
     [InlineData("Entity.CreateSoundSource", typeof(SoundSource), "Sound Source")]
     [InlineData("Entity.CreateSoundPlayer", typeof(SoundPlayer), "Sound Player")]
     [InlineData("Entity.CreateBeatClock", typeof(BeatClock), "Beat Clock")]
+    [InlineData("Entity.CreateCalibration", typeof(Calibration), "Calibrate")]
     public void TheAudioCategory_MakesSounds(string id, Type component, string name) => EditorHost.Run(services =>
     {
         var document = Open(services);

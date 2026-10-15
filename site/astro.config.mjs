@@ -88,6 +88,7 @@ export default defineConfig({
 						{ label: 'Dialogue, switches and items', slug: 'docs/story' },
 						{ label: 'Point-and-click adventures', slug: 'docs/adventures' },
 						{ label: 'Visual novels', slug: 'docs/visual-novels' },
+						{ label: 'Rhythm games', slug: 'docs/rhythm' },
 						{ label: 'Tables of game data', slug: 'docs/data-tables' },
 						{ label: 'Audio', slug: 'docs/audio' },
 						{ label: 'Text and fonts', slug: 'docs/text-and-fonts' },

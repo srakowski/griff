@@ -471,27 +471,41 @@ public static partial class ProjectTemplates
 
         var light = Color.FromBytes(0xB4, 0xB9, 0xC4);
         var gray = Color.FromBytes(0x3A, 0x3F, 0x4B);
-        scene.Add(Label("Title", new Vector2(0, 4.9f), "Options", 1.2f, Color.FromBytes(0xF0, 0x8C, 0x2E)));
-        AddSetting("Music", 3.5f, GameSetting.MusicVolume);
-        AddSetting("Sounds", 2.4f, GameSetting.SoundVolume);
+        scene.Add(Label("Title", new Vector2(0, 5f), "Options", 1.2f, Color.FromBytes(0xF0, 0x8C, 0x2E)));
+        AddSetting("Music", 3.7f, GameSetting.MusicVolume);
+        AddSetting("Sounds", 2.6f, GameSetting.SoundVolume);
 
-        scene.Add(ToggleButton("Sound", new Vector2(0, 1.15f), GameSetting.Sound, "Sound: On", "Sound: Off"));
-        scene.Add(ToggleButton("Fullscreen", new Vector2(0, -0.1f), GameSetting.Fullscreen, "Fullscreen: On", "Fullscreen: Off"));
+        scene.Add(ToggleButton("Sound", new Vector2(0, 1.4f), GameSetting.Sound, "Sound: On", "Sound: Off"));
+        scene.Add(ToggleButton("Fullscreen", new Vector2(0, 0.15f), GameSetting.Fullscreen, "Fullscreen: On", "Fullscreen: Off"));
 
         // Left and right pick one; the enemy spawner reads it back with Game.SaveData.GetString("difficulty").
-        var difficulty = MenuButton("Difficulty", new Vector2(0, -1.35f), Scenes.ButtonAction.None, null, Key.None, gray);
+        var difficulty = MenuButton("Difficulty", new Vector2(0, -1.1f), Scenes.ButtonAction.None, null, Key.None, gray);
         var choice = difficulty.AddComponent<Choice>();
         choice.Format = "< {0} >";
         choice.SaveAs = "difficulty";
         scene.Add(difficulty);
 
         // Click, then press a key or button: it fires from then on. "{Fire}" always shows what does.
-        var fire = MenuButton("Fire", new Vector2(0, -2.6f), Scenes.ButtonAction.Rebind, null, Key.None, gray);
+        var fire = MenuButton("Fire", new Vector2(0, -2.35f), Scenes.ButtonAction.Rebind, null, Key.None, gray);
         fire.GetComponent<Scenes.Button>()!.InputAction = "Fire";
         fire.GetComponent<Text>()!.Value = "Fire: {Fire}";
         scene.Add(fire);
 
-        scene.Add(MenuButton("Back", new Vector2(0, -4.2f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, Color.FromBytes(0x4C, 0x9A, 0xFF)));
+        // For speakers with a delay of their own (Bluetooth headphones): opens the calibration, saying the offset in use.
+        var offset = MenuButton("Audio Offset", new Vector2(0, -3.6f), Scenes.ButtonAction.OpenPanel, null, Key.None, gray);
+        offset.GetComponent<Scenes.Button>()!.Panel = CalibrationScreen.Name;
+        var offsetText = offset.GetComponent<Text>()!;
+        (offsetText.Value, offsetText.Track, offsetText.Output, offsetText.Size) = ("Audio Offset: {0:0} ms", CalibrationScreen.Name, nameof(Calibration.Current), 0.5f);
+        scene.Add(offset);
+
+        scene.Add(MenuButton("Back", new Vector2(0, -4.95f), Scenes.ButtonAction.LoadScene, "Main", Key.Escape, Color.FromBytes(0x4C, 0x9A, 0xFF)));
+
+        // Tap along to clicks to set the audio offset; closed until the button above opens it.
+        var calibrate = new Entity(CalibrationScreen.Name);
+        CalibrationScreen.Configure(calibrate);
+        scene.Add(calibrate);
+        foreach (var child in CalibrationScreen.Children())
+            scene.Add(child, calibrate);
         return scene;
 
         // A label on the left and a slider on the right.

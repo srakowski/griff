@@ -19,7 +19,7 @@ public class FrameTests
             "Begin: Dungeons",
             "Begin: Script Start",
             "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
-            "Logic: Beat Clocks", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: First Person",
+            "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",

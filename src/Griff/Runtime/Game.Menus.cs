@@ -463,7 +463,7 @@ public sealed partial class Game
         if (snapped == slider.Value)
             return;
         slider.Value = snapped;
-        ApplySetting(slider.Setting, slider.Fraction);
+        ApplySetting(slider.Setting, InOwnUnits(slider.Setting) ? snapped : slider.Fraction);
         if (!string.IsNullOrWhiteSpace(slider.SaveAs))
             SaveData.Set(slider.SaveAs.Trim(), snapped);
         if (!string.IsNullOrWhiteSpace(slider.Sound))
@@ -474,7 +474,8 @@ public sealed partial class Game
     private void SetToggle(Toggle toggle, bool on)
     {
         toggle.IsOn = on;
-        ApplySetting(toggle.Setting, on ? 1 : 0);
+        if (!InOwnUnits(toggle.Setting))
+            ApplySetting(toggle.Setting, on ? 1 : 0);
         if (!string.IsNullOrWhiteSpace(toggle.SaveAs))
             SaveData.Set(toggle.SaveAs.Trim(), on);
         toggle.RaiseChanged();
@@ -527,7 +528,7 @@ public sealed partial class Game
             if (SettingValue(slider.Setting) is { } setting)
             {
                 if (!slider.IsDragging)
-                    slider.Value = slider.Min + setting * (slider.Max - slider.Min);
+                    slider.Value = InOwnUnits(slider.Setting) ? slider.Snap(setting) : slider.Min + setting * (slider.Max - slider.Min);
             }
             else if (first && !string.IsNullOrWhiteSpace(slider.SaveAs) && SaveData.Has(slider.SaveAs.Trim()))
             {
@@ -538,7 +539,7 @@ public sealed partial class Game
         foreach (var toggle in toggles)
         {
             var first = _controlsSeen.Add(toggle);
-            if (SettingValue(toggle.Setting) is { } setting)
+            if (!InOwnUnits(toggle.Setting) && SettingValue(toggle.Setting) is { } setting)
                 toggle.IsOn = setting >= 0.5f;
             else if (first && !string.IsNullOrWhiteSpace(toggle.SaveAs) && SaveData.Has(toggle.SaveAs.Trim()))
                 toggle.IsOn = SaveData.GetBool(toggle.SaveAs.Trim(), toggle.IsOn);
@@ -556,8 +557,13 @@ public sealed partial class Game
         GameSetting.Auto => AutoReading ? 1 : 0,
         GameSetting.SkipUnread => SkipUnread ? 1 : 0,
         GameSetting.AutoSpeed => AutoSpeed,
+        GameSetting.AudioOffset => AudioOffset,
+        GameSetting.VisualOffset => VisualOffset,
         _ => null,
     };
+
+    // Settings with units of their own (an offset's milliseconds) are a slider's value; the rest, from 0 to 1, fill it.
+    private static bool InOwnUnits(GameSetting setting) => setting is GameSetting.AudioOffset or GameSetting.VisualOffset;
 
     private void ApplySetting(GameSetting setting, float value)
     {
@@ -590,6 +596,12 @@ public sealed partial class Game
             case GameSetting.AutoSpeed:
                 AutoSpeed = value;
                 break;
+            case GameSetting.AudioOffset:
+                AudioOffset = value;
+                break;
+            case GameSetting.VisualOffset:
+                VisualOffset = value;
+                break;
         }
     }
 
@@ -600,16 +612,33 @@ public sealed partial class Game
     // Their targets, kept to look through without garbage.
     private readonly List<Entity> _doTargets = [];
 
-    // Clicked here: done where the game is run, on the targets found here (a button is this screen's own).
+    // Clicked here: done where the game is run, on the targets found here (a button is this screen's own). Targets each
+    // machine keeps for itself (a menu, a calibration: see NetLocalAttribute) are done here, as nobody else has them.
     private void ClickDo(Button button)
     {
         if (string.IsNullOrWhiteSpace(button.Do))
             throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" does an action, but its Do isn't set.");
         _doTargets.Clear();
         TargetsOf(button.Entity!, button.Targets, _doTargets);
-        var args = new object?[2 + _doTargets.Count];
-        (args[0], args[1]) = (button.Do.Trim(), button.With);
+        var action = button.Do.Trim();
+        var shared = 0;
         for (var i = 0; i < _doTargets.Count; i++)
+        {
+            if (Net.IsOnline && NetSchema.IsLocal(_doTargets[i]))
+                DoOn(_doTargets[i], action, button.With, number: null);
+            else
+                _doTargets[shared++] = _doTargets[i];
+        }
+
+        if (shared == 0 && _doTargets.Count > 0)
+        {
+            _doTargets.Clear();
+            return;
+        }
+
+        var args = new object?[2 + shared];
+        (args[0], args[1]) = (action, button.With);
+        for (var i = 0; i < shared; i++)
             args[2 + i] = _doTargets[i];
         _doTargets.Clear();
         Net.SendCommand(ButtonDoCommand, args);

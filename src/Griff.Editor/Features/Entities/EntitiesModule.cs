@@ -50,6 +50,7 @@ public sealed class EntitiesModule : IEditorModule
             .AddCommand<CreateSoundSourceCommand>()
             .AddCommand<CreateSoundPlayerCommand>()
             .AddCommand<CreateBeatClockCommand>()
+            .AddCommand<CreateCalibrationCommand>()
             .AddCommand<CreateHitboxCommand>()
             .AddCommand<RenameEntityCommand>()
             .AddCommand<DuplicateEntityCommand>()
@@ -856,6 +857,24 @@ public sealed class CreateBeatClockCommand(IWorkspace workspace, ISelection sele
     public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 3);
     protected override string EntityName => "Beat Clock";
     protected override void Configure(Entity entity) => entity.AddComponent<BeatClock>();
+}
+
+/// <summary>
+/// Creates a calibration screen: a panel, closed until it's opened, with a <see cref="Calibration"/> that plays clicks for
+/// the player to tap along to and offers to set their audio offset (how late they hear the sound, for Bluetooth headphones
+/// and the like) to how late their taps came, its prompt, a slider to fine-tune the offset by hand, and Apply, Again and
+/// Back buttons. Give an options menu a button whose Action is Open Panel and Panel is Calibrate.
+/// </summary>
+[Category("Audio")]
+public sealed class CreateCalibrationCommand(IWorkspace workspace, ISelection selection) : CreateEntityCommand(workspace, selection)
+{
+    public override string Id => "Entity.CreateCalibration";
+    public override string Text => "Create _Calibration Screen";
+    public override string? Icon => Icons.Headphones;
+    public override MenuPlacement? Placement { get; } = new(Menus.Entity, Group: 0, Order: 4);
+    protected override string EntityName => Griff.Projects.CalibrationScreen.Name;
+    protected override void Configure(Entity entity) => Griff.Projects.CalibrationScreen.Configure(entity);
+    protected override IEnumerable<Entity> CreateChildren() => Griff.Projects.CalibrationScreen.Children();
 }
 
 /// <summary>Creates a room one camera view big, for a camera with a Follow to keep to and slide between.</summary>

@@ -93,6 +93,7 @@ public static class Icons
     public const string Speech = "\uE8BD";
     public const string Speaker = "\uE7F5";
     public const string Stopwatch = "\uE916";
+    public const string Headphones = "";
     public const string Lightbulb = "\uEA80";
     public const string Confetti = "\uEC24";
     public const string Cloud = "\uE753";

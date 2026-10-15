@@ -43,4 +43,10 @@ internal interface IGameContext
 
     /// <summary>Goes to another scene at the end of the frame, fading out and in over <paramref name="fade"/> seconds.</summary>
     void LoadScene(string scene, float fade);
+
+    /// <summary>How late this machine's player hears the sound, in milliseconds (their setting, kept in the save data).</summary>
+    float AudioOffset { get; set; }
+
+    /// <summary>How late this machine's player sees the screen, in milliseconds (their setting, kept in the save data).</summary>
+    float VisualOffset { get; set; }
 }

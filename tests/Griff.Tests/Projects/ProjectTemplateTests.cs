@@ -924,6 +924,44 @@ public sealed class ProjectTemplateTests : IDisposable
     }
 
     [Fact]
+    public async Task Arcade_Options_AudioOffset_OpensTheCalibration_AndSaysTheOffset()
+    {
+        var (project, _, input, registry) = await CreateAndLoad("Arcade");
+        var game = NewGame(project, GameLoader.LoadScene(project, registry, "Options"), input, registry);
+        game.Audio = new SilentAudio();
+        game.AudioOffset = 120;
+        Run(game, input, 0.1);
+
+        var offset = game.Find("Audio Offset")!;
+        Assert.Equal("Audio Offset: 120 ms", offset.GetComponent<Text>()!.Shown);
+        var calibration = game.Find(CalibrationScreen.Name)!.GetComponent<Calibration>()!;
+        Assert.False(calibration.Entity!.IsEnabled);
+
+        // Down past Fire to it, and Enter opens the calibration: the clicks start.
+        for (var i = 0; i < 7; i++)
+            Press(Key.Down);
+        Assert.Equal("Audio Offset", game.Focused!.Entity!.Name);
+        Press(Key.Enter);
+        Assert.True(calibration.Entity.IsEnabled);
+        Assert.True(calibration.IsRunning);
+        Assert.Equal(IAudio.MetronomeMusic, game.Audio.Music);
+
+        // Esc goes back to the options.
+        Press(Key.Escape);
+        Assert.False(calibration.Entity.IsEnabled);
+        Assert.False(calibration.IsRunning);
+        Assert.NotNull(game.Find("Difficulty"));
+
+        void Press(Key key)
+        {
+            input.SetKey(key, true);
+            Run(game, input, 0.05);
+            input.SetKey(key, false);
+            Run(game, input, 0.05);
+        }
+    }
+
+    [Fact]
     public async Task Platformer_InteractHints_ShowTheKeyOrTheButton()
     {
         var (project, scene, input, registry) = await CreateAndLoad("Platformer");

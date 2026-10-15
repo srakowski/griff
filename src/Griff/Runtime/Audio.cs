@@ -81,6 +81,19 @@ public interface IAudio
     /// with no music).
     /// </summary>
     float MusicTempo => 0;
+
+    /// <summary>What <see cref="Music"/> says while <see cref="PlayMetronome"/>'s clicks play.</summary>
+    const string MetronomeMusic = "Metronome";
+
+    /// <summary>
+    /// Plays a metronome as the music, in place of any music playing: a click on every beat at <paramref name="tempo"/>
+    /// beats a minute, a higher one on the first of each bar of <paramref name="beatsPerBar"/>, until the music is stopped
+    /// or changed. It's timed as music is (<see cref="MusicTime"/>, and its <see cref="MusicTempo"/> says the tempo), so a
+    /// <see cref="Scenes.BeatClock"/> keeps time with it and a <see cref="Scenes.Calibration"/> taps along to it.
+    /// <paramref name="volume"/> is on top of the sound effect volume rather than the music's, so a player who has turned
+    /// the music off still hears it; 0 plays it silently, keeping the time.
+    /// </summary>
+    void PlayMetronome(float tempo, int beatsPerBar = 4, float volume = 1) => PlayMusic(MetronomeMusic, volume);
 }
 
 /// <summary>A sound playing over and over, from <see cref="IAudio.Loop"/>.</summary>
@@ -126,6 +139,8 @@ public sealed class SilentLoop : ISoundLoop
 public sealed class SilentAudio : IAudio
 {
     private bool _musicLoops;
+    private float _tempo;
+    private float? _metronomeTempo;
 
     public float Volume { get; set; } = 1;
 
@@ -146,14 +161,25 @@ public sealed class SilentAudio : IAudio
     /// <summary>How long the music lasts, for a test to pretend; 0 (the default) never ends.</summary>
     public double MusicLength { get; set; }
 
-    /// <summary>The music's tempo, for a test to pretend.</summary>
-    public float MusicTempo { get; set; }
+    /// <summary>The music's tempo, for a test to pretend (a metronome's says its own).</summary>
+    public float MusicTempo
+    {
+        get => _metronomeTempo ?? _tempo;
+        set => _tempo = value;
+    }
 
     public void PlayMusic(string music, float volume = 0.6f, bool loop = true)
     {
         Music = string.IsNullOrWhiteSpace(music) ? null : music;
         MusicTime = 0;
         _musicLoops = loop;
+        _metronomeTempo = null;
+    }
+
+    public void PlayMetronome(float tempo, int beatsPerBar = 4, float volume = 1)
+    {
+        PlayMusic(IAudio.MetronomeMusic);
+        _metronomeTempo = float.IsFinite(tempo) ? Math.Clamp(tempo, 20, 400) : 120;
     }
 
     public void CrossfadeMusic(string music, float seconds, float volume = 0.6f, bool loop = true)
@@ -168,6 +194,7 @@ public sealed class SilentAudio : IAudio
     {
         Music = null;
         MusicTime = 0;
+        _metronomeTempo = null;
     }
 
     public void StopAll() => StopMusic();

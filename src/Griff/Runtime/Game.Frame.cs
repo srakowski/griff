@@ -306,6 +306,7 @@ public sealed partial class Game
         Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _switches);
         Step(FramePhase.Logic, "Turns", RunTurns);
         Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
+        Step(FramePhase.Logic, "Calibrations", RunCalibrations);
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
         Step(FramePhase.Logic, "Enemies", RunEnemies);

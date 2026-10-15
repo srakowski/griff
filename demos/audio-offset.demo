@@ -1,0 +1,44 @@
+title: Audio offset
+intro: Players with Bluetooth headphones hear the beat late. They tap along to some clicks once, and every beat clock allows for it.
+project: Arcade | Tap Along
+
+chapter: In the options | Options > Audio Offset
+scene: Options
+say: Bluetooth headphones and some TVs add a delay of their own, often a fifth of a second, that the computer can't see. For a game on the beat, that's a whole lot.
+select: Audio Offset
+explain: field:Button.Panel | Audio Offset | The Arcade options now have an Audio Offset button. It opens a calibration screen, and its label shows the offset in use.
+expectvalue: Audio Offset.Button.Panel = Calibrate
+select: Calibrate
+explain: component:Calibration | Calibration | The calibration screen is a panel with a Calibration on it. It plays clicks, the player taps along for a few bars, and it works out how late their taps came.
+explain: field:Calibration.Measures | Audio or visual | It measures what's heard, against clicks, or what's seen, against a light flashing in silence, for a TV whose picture lags.
+explain: field:Calibration.TapAction | Any way to tap | Space, the gamepad's A, a click or a touch all tap, in the editor, an exported game and the browser.
+expectvalue: Calibrate.Calibration.Beats = 16
+
+chapter: Tap along | Play
+say: Let's open it in the game.
+play
+wait: 1
+gameclick: Audio Offset
+wait: 1
+expectvalue: Calibrate.Calibration.IsRunning = true
+say: The clicks replace the music. After a bar to listen to, the player taps on each click they hear, and a dot fills in for each tap.
+tap: Space
+wait: 0.4
+tap: Space
+wait: 0.4
+tap: Space
+wait: 0.4
+tap: Space
+wait: 2
+say: When the clicks end it leaves out the odd taps, offers the average, and Apply makes it the player's audio offset, kept with their other settings. From then on every beat clock counts the beat as they hear it, so a tap on the beat is on time.
+tap: Escape
+wait: 0.5
+expectvalue: Calibrate.Calibration.IsRunning = false
+stop
+
+chapter: Any game | Entity > Audio > Calibration Screen
+scene: Main
+create: Calibration Screen
+expectcomponents: Calibrate = Transform, ScreenAnchor, Sprite, Panel, Calibration
+explain: component:Calibration | Drop it in | Any game gets the same screen from the Entity menu: a panel to open from its options or pause menu, with Apply, Again and Back, and a slider to fine tune the offset by hand.
+say: Each player's offset stays on their own machine. In a network game it never changes anyone else's timing.

@@ -1,0 +1,78 @@
+title: Polygon colliders
+intro: A collider can now be any shape with straight sides: its points dragged, added and taken off in the Scene view or traced round a sprite, concave ones split into pieces by themselves, turning with a body that rotates.
+project: Contraption | Polygons
+
+# A new scene in the Contraption project (which has a ball picture, Textures/ball.png), its camera moved out to see it
+# all: a floor 40 wide whose top is at y = -2.5.
+menu: File > New Scene...
+prompt: Polygons
+select: Main Camera
+set: Transform.Position = 0, 1, 0
+set: Camera.Size = 7
+deselect
+create: Sprite
+rename: Floor
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 40, 1
+set: Sprite.Tint = #4A4E5A
+add: BoxCollider
+set: BoxCollider.Size = 40, 1
+deselect
+
+chapter: A hill | Points dragged in the Scene view
+create: Empty
+rename: Hill
+set: Transform.Position = -4, -2.5, 0
+add: PolygonCollider
+set: PolygonCollider.Points = -3 0; 3 0; 0 2
+expectcomponents: Hill = Transform, PolygonCollider
+say: A polygon collider is a shape with straight sides between its points. Selected, each point has a knob, and each side a plus.
+explain: handle:PolygonCollider.3 | A point | Drag a point's knob to move it; hold Ctrl to snap to half units.
+path: PolygonCollider.3 = 0, 3
+expectvalue: Hill.PolygonCollider.Points = -3 0; 3 0; 0 3
+explain: handle:PolygonCollider.+2 | Add a point | Drag the plus on a side to add a point there.
+path: PolygonCollider.+2 = 1.5, -0.8
+expectvalue: Hill.PolygonCollider.Points = -3 0; 1.5 -0.8; 3 0; 0 3
+say: That made it concave. It's split into convex pieces by itself, drawn faintly inside it, and collides as the shape it is.
+removepoint: PolygonCollider.2
+expectvalue: Hill.PolygonCollider.Points = -3 0; 3 0; 0 3
+say: A double-click takes a point off again. Each change is one undo step.
+set: PolygonCollider.Points = -3 0; 3 0; -3 1.5; 3 1.5
+explain: component:PolygonCollider | Fixed up | Points that don't make a proper shape are fixed up and said so: these sides cross, so it's taken as the shape round all its points, drawn in red.
+set: PolygonCollider.Points = -3 0; 3 0; 0 3
+deselect
+
+chapter: Turning with its body | A wedge that tips over
+create: Empty
+rename: Wedge
+set: Transform.Position = -4, 2.5, 0
+set: Transform.Rotation.Z = 20
+add: PolygonCollider
+set: PolygonCollider.Points = -0.6 -0.4; 0.6 -0.4; 0 0.6
+add: Body
+set: Body.Rotates = true
+say: With a body that rotates, a polygon turns with its entity, round where it balances.
+play
+wait: 3
+expectvalue: Wedge.Body.Asleep = true
+explain: entity:Wedge | Resting | It fell on the hill, tipped over, slid off its slant and came to rest on one of its sides.
+stop
+
+chapter: Fitted to a sprite | Its outline traced
+deselect
+create: Sprite
+rename: Rock
+set: Transform.Position = 3, 3, 0
+pickimage: Sprite.Image = Textures/ball.png
+set: Sprite.Size = 1.2, 1.2
+add: BoxCollider
+menu: Entity > Fit Polygon Collider to Sprite
+expectcomponents: Rock = Transform, Sprite, PolygonCollider
+explain: component:PolygonCollider | Traced | Fit Polygon Collider to Sprite traced round the picture, in place of its box: a dozen points hugging it.
+add: Body
+set: Body.Rotates = true
+play
+wait: 4
+expectvalue: Rock.Body.Asleep = true
+explain: entity:Rock | Rests on its side | It landed on one of its sides and stays there, as the shape it is.
+stop

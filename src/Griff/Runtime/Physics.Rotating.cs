@@ -156,9 +156,8 @@ public sealed partial class Physics
             return false;
 
         var collider = entity.GetComponent<Collider>()!;
-        Hull self = default;
-        var half = Measure(collider, ref self);
-        Gather(body, solids, solids.FilterOf(collider), ref self, self.IsCircle ? self.Radius : half.X, TouchSkin, HullBounds(ref self).Min.Y, turning: false);
+        var shape = ShapeOf(body, collider);
+        Gather(body, collider, solids, solids.FilterOf(collider), shape.Footprint, TouchSkin, shape.Bottom, turning: false);
 
         // Still something under it, if it falls, and nothing pushed into it. (Something moved the old way that runs into it
         // knocks it, which wakes it.) What's under it may be one thing below it, or things either side of it it's wedged
@@ -180,11 +179,33 @@ public sealed partial class Physics
             }
         }
 
-        if (!held && !(left && right))
+        if (!held && !(left && right) && !Braced(body, up))
             return false;
 
         Touching(body, onCollision, report: true);
         return true;
+    }
+
+    // Whether what it touches (the contacts just gathered) can hold it up between them, by pushing and gripping: some push
+    // up and to one side and some up or across from the other, each as far round as its grip lets it lean (so a shape
+    // wedged between a slant below it and a side slightly above its middle, as in a jumbled heap, is held). Only the way
+    // up counts, not whether they're just so to keep it from turning: it fell asleep still, and this only asks whether
+    // what held it is still there.
+    private bool Braced(Body body, Vector2 up)
+    {
+        var lean = MathF.Atan(Math.Clamp(body.Grip, 0, 1));
+        var (left, right) = (float.PositiveInfinity, float.NegativeInfinity);
+        foreach (var contact in _contacts)
+        {
+            // How far round from straight up it pushes: positive to the left.
+            var angle = MathF.Atan2(Cross(up, contact.Normal), Vector2.Dot(up, contact.Normal));
+            if (angle + lean >= 0)
+                left = MathF.Min(left, MathF.Max(0, angle - lean));
+            if (angle - lean <= 0)
+                right = MathF.Max(right, MathF.Min(0, angle + lean));
+        }
+
+        return left - right < MathF.PI - 0.05f;
     }
 
     // From the contacts just gathered: what it stands on, a wall beside it, and (when told to) what it bumped into.
@@ -239,19 +260,17 @@ public sealed partial class Physics
             Translate(solids, entity, carry);
 
         var collider = entity.GetComponent<Collider>()!;
-        Hull self = default;
-        var half = Measure(collider, ref self);
-        var reach = self.IsCircle ? self.Radius : (self.Points[0] - self.Center).Length();
-        var thickness = MathF.Max(1e-3f, self.IsCircle ? self.Radius : MathF.Min(half.X, half.Y));
+        var shape = ShapeOf(body, collider);
+        var reach = shape.Reach;
         var pull = body.FloatThisStep ? Vector2.Zero : Gravity * body.GravityScale;
         var velocity = body.Velocity;
         var spin = Math.Clamp(body.Spin * MathF.PI / 180, -MaxSpin, MaxSpin);
         // How far it could go this step (a ball turning doesn't bring its edge any nearer anything).
-        var margin = ((velocity + pull * dt).Length() + (self.IsCircle ? 0 : MathF.Abs(spin) * reach)) * dt + TouchSkin;
+        var margin = ((velocity + pull * dt).Length() + (shape.Round ? 0 : MathF.Abs(spin) * reach)) * dt + TouchSkin;
         _widestMargin = MathF.Max(_widestMargin, margin);
 
         // A ball with nothing pulling it (top-down) rolls on the ground under the view, slowed as on level ground.
-        var floor = self.IsCircle && pull == Vector2.Zero
+        var floor = shape.Round && pull == Vector2.Zero
             ? Math.Max(0, body.RollingResistance) * (Gravity != Vector2.Zero ? Gravity.Length() : DefaultGravity.Length())
             : 0;
 
@@ -261,19 +280,19 @@ public sealed partial class Physics
             Body = body,
             Collider = collider,
             Turns = true,
-            Round = self.IsCircle,
+            Round = shape.Round,
             Pull = pull,
             Floor = floor,
-            Center = self.Center,
+            Center = shape.Center,
             InverseMass = 1 / Math.Max(0.01f, body.Mass),
-            InverseInertia = 1 / (self.IsCircle ? body.CircleInertia(self.Radius) : body.BoxInertia(half)),
+            InverseInertia = 1 / shape.Inertia,
             Velocity = velocity,
             Spin = spin,
             TurnCos = 1,
             Reach = reach,
-            Thickness = thickness,
-            Footprint = self.IsCircle ? self.Radius : half.X,
-            BottomBefore = HullBounds(ref self).Min.Y,
+            Thickness = shape.Thickness,
+            Footprint = shape.Footprint,
+            BottomBefore = shape.Bottom,
             Margin = margin,
             Filter = solids.FilterOf(collider),
             Island = index,
@@ -302,7 +321,24 @@ public sealed partial class Physics
         return index;
     }
 
-    // A collider's hull in the world, and (for a box) half its own width and height.
+    // What a turning body's collider is like as it is now: its middle (what it turns round), how far its furthest point is
+    // from that, how thick it is (half its narrowest width), how wide its foot is (on an isometric map), where its bottom is,
+    // how hard it is to turn, and whether it's round.
+    private readonly record struct TurningShape(Vector2 Center, float Reach, float Thickness, float Footprint, float Bottom, float Inertia, bool Round);
+
+    private static TurningShape ShapeOf(Body body, Collider collider)
+    {
+        if (collider is PolygonCollider polygon)
+            return new(polygon.WorldCentroid, polygon.Reach, polygon.HalfThickness, polygon.HalfWidth, polygon.WorldBounds.Min.Y, body.PolygonInertia(polygon), false);
+        Hull self = default;
+        var half = Measure(collider, ref self);
+        if (self.IsCircle)
+            return new(self.Center, self.Radius, MathF.Max(1e-3f, self.Radius), self.Radius, HullBounds(ref self).Min.Y, body.CircleInertia(self.Radius), true);
+        return new(self.Center, (self.Points[0] - self.Center).Length(), MathF.Max(1e-3f, MathF.Min(half.X, half.Y)), half.X, HullBounds(ref self).Min.Y,
+            body.BoxInertia(half), false);
+    }
+
+    // A box's or circle's hull in the world, and (for a box) half its own width and height.
     private static Vector2 Measure(Collider collider, ref Hull hull)
     {
         if (collider is CircleCollider circle)
@@ -321,9 +357,7 @@ public sealed partial class Physics
     {
         var movers = _movers;
         var mover = movers[i];
-        Hull self = default;
-        HullOf(mover.Collider!, ref self);
-        Gather(mover.Body, solids, mover.Filter, ref self, mover.Footprint, mover.Margin, mover.BottomBefore, turning: true);
+        Gather(mover.Body, mover.Collider!, solids, mover.Filter, mover.Footprint, mover.Margin, mover.BottomBefore, turning: true);
         CollectionsMarshal.AsSpan(movers)[i].Gathered = true;
 
         for (var c = 0; c < _contacts.Count; c++)
@@ -817,11 +851,9 @@ public sealed partial class Physics
     // what holds still, part of the way out of another turning body (by their weights), which is pushed the rest (and woken).
     private void PushOut(Body body, Collider collider, Solids solids, LayerFilter filter, float footprint, float inverseMass, float bottomBefore)
     {
-        Hull self = default;
         for (var pass = 0; pass < TurnPushPasses; pass++)
         {
-            HullOf(collider, ref self);
-            Gather(body, solids, filter, ref self, footprint, -PushSlop, bottomBefore, turning: false);
+            Gather(body, collider, solids, filter, footprint, -PushSlop, bottomBefore, turning: false);
             if (_contacts.Count == 0)
                 return;
 
@@ -849,57 +881,96 @@ public sealed partial class Physics
 
     // The points where a turning body touches (or is within `margin` of) everything solid, into _contacts. While `turning`
     // (gathering the step's contacts), another turning body's own reach this step counts too, and those already gathered
-    // (whose contacts with this one are in) are left out.
-    private void Gather(Body body, Solids solids, LayerFilter filter, ref Hull self, float footprint, float margin, float bottomBefore, bool turning)
+    // (whose contacts with this one are in) are left out. A polygon meets things with each of its convex pieces, and is met
+    // by each of another's.
+    private void Gather(Body body, Collider collider, Solids solids, LayerFilter filter, float footprint, float margin, float bottomBefore, bool turning)
     {
         var contacts = _contacts;
         contacts.Clear();
         var entity = body.Entity!;
-        var region = Grow(HullBounds(ref self), Math.Max(0, margin) + (turning ? _widestMargin : 0) + Margin);
+        Hull self = default;
+        var polygon = collider as PolygonCollider;
+        var pieces = polygon?.PieceCount ?? 1;
+        Box bounds;
+        Vector2 middle;
+        if (polygon is null)
+        {
+            HullOf(collider, ref self);
+            (bounds, middle) = (HullBounds(ref self), self.Center);
+        }
+        else
+            (bounds, middle) = (polygon.WorldBounds, polygon.WorldCentroid);
+
+        var grow = Math.Max(0, margin) + (turning ? _widestMargin : 0) + Margin;
+        var region = Grow(bounds, grow);
         Hull other = default;
 
         var near = solids.Near(region);
-        foreach (var index in near)
+        for (var piece = 0; piece < pieces; piece++)
         {
-            var solid = solids.All[index];
-            if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || filter.IgnoresEachOther(solid.Filter))
-                continue;
-            var area = solids.AreaOf(index);
-            var bounds = area.Bounds;
-            if (!bounds.Overlaps(region))
-                continue;
-            var moving = MovingBody(solid);
-            var reach = margin;
-            if (turning && moving is not null && _moverOf.TryGetValue(moving, out var mover))
+            var feature = piece << PieceShift;
+            var reached = region;
+            if (polygon is not null)
             {
-                if (_movers[mover].Gathered)
-                    continue;
-                reach += _movers[mover].Margin;
+                PieceHull(polygon, piece, ref self);
+                reached = Grow(HullBounds(ref self), grow);
             }
 
-            HullOf(area, ref other);
-            if (!Collide(ref self, ref other, reach, out var manifold))
-                continue;
+            foreach (var index in near)
+            {
+                var solid = solids.All[index];
+                if (solid.Entity == entity || solid.Entity.IsSelfOrDescendantOf(entity) || filter.IgnoresEachOther(solid.Filter))
+                    continue;
+                var area = solids.AreaOf(index);
+                var solidBounds = area.Bounds;
+                if (!solidBounds.Overlaps(reached))
+                    continue;
+                var moving = MovingBody(solid);
+                var reach = margin;
+                if (turning && moving is not null && _moverOf.TryGetValue(moving, out var mover))
+                {
+                    if (_movers[mover].Gathered)
+                        continue;
+                    reach += _movers[mover].Margin;
+                }
 
-            // One-way: only what comes down onto its top from above it.
-            if (solid.OneWay && (manifold.Normal.Y < 0.7f || body.IsDroppingThrough || bottomBefore < bounds.Max.Y - 0.05f))
-                continue;
-            Add(ref manifold, solid.Entity, moving, solids.PartOf(index));
+                if (area.Polygon is { } solidPolygon)
+                {
+                    // Each of its pieces.
+                    for (var part = 0; part < solidPolygon.PieceCount; part++)
+                    {
+                        PieceHull(solidPolygon, part, ref other);
+                        if (HullBounds(ref other).Overlaps(reached) && Collide(ref self, ref other, reach, out var pieceManifold))
+                            Add(ref pieceManifold, solid.Entity, moving, solids.PartOf(index) | part << PieceShift, feature: feature);
+                    }
+
+                    continue;
+                }
+
+                HullOf(area, ref other);
+                if (!Collide(ref self, ref other, reach, out var manifold))
+                    continue;
+
+                // One-way: only what comes down onto its top from above it.
+                if (solid.OneWay && (manifold.Normal.Y < 0.7f || body.IsDroppingThrough || bottomBefore < solidBounds.Max.Y - 0.05f))
+                    continue;
+                Add(ref manifold, solid.Entity, moving, solids.PartOf(index), feature: feature);
+            }
+
+            for (var s = 0; s < _slopes.Count; s++)
+            {
+                var slope = _slopes[s];
+                if (filter.IgnoresEachOther(slope.Filter) || slope.Entity.IsSelfOrDescendantOf(entity) || !slope.Cell.Overlaps(reached))
+                    continue;
+                // Its flat bottom sits on the tile below (or is a ceiling only to the old way of moving): it's met from above
+                // and the side.
+                SlopeHull(ref other, slope);
+                if (Collide(ref self, ref other, margin, out var manifold) && manifold.Normal.Y > -0.5f)
+                    Add(ref manifold, slope.Entity, null, 1 << 28 | s, feature: feature);
+            }
         }
 
         solids.Return(near);
-
-        for (var s = 0; s < _slopes.Count; s++)
-        {
-            var slope = _slopes[s];
-            if (filter.IgnoresEachOther(slope.Filter) || slope.Entity.IsSelfOrDescendantOf(entity) || !slope.Cell.Overlaps(region))
-                continue;
-            // Its flat bottom sits on the tile below (or is a ceiling only to the old way of moving): it's met from above
-            // and the side.
-            SlopeHull(ref other, slope);
-            if (Collide(ref self, ref other, margin, out var manifold) && manifold.Normal.Y > -0.5f)
-                Add(ref manifold, slope.Entity, null, 1 << 28 | s);
-        }
 
         // On an isometric map, the diamond under it meets the walls, as everything's does there.
         if (_isometric.Count > 0)
@@ -910,7 +981,7 @@ public sealed partial class Physics
                 var map = walls.Map.Entity!;
                 if (filter.IgnoresEachOther(walls.Filter) || map.IsSelfOrDescendantOf(entity))
                     continue;
-                walls.FootprintHull(ref foot, self.Center, footprint);
+                walls.FootprintHull(ref foot, middle, footprint);
                 var (x0, y0, x1, y1) = walls.CellRange(Grow(HullBounds(ref foot), Math.Max(0, margin) + Margin));
                 for (var y = y0; y <= y1; y++)
                 {
@@ -931,23 +1002,54 @@ public sealed partial class Physics
             var map = walls.Map.Entity!;
             if (filter.IgnoresEachOther(walls.Filter) || map.IsSelfOrDescendantOf(entity) || !walls.Bounds.Overlaps(region))
                 continue;
-            var (x0, y0, x1, y1) = walls.CellsNear(region);
-            for (var y = y0; y <= y1; y++)
+            for (var piece = 0; piece < pieces; piece++)
             {
-                for (var x = x0; x <= x1; x++)
+                var reached = region;
+                if (polygon is not null)
                 {
-                    if (!walls.Blocked(x, y))
-                        continue;
-                    walls.HexagonHull(ref other, x, y);
-                    // A side shared with another solid hexagon is inside the wall, not its surface.
-                    if (Collide(ref self, ref other, margin, out var manifold) && !walls.SharedSide(x, y, manifold.Normal))
-                        Add(ref manifold, map, null, 3 << 28 | (y & 0x3FFF) << 14 | (x & 0x3FFF));
+                    PieceHull(polygon, piece, ref self);
+                    reached = Grow(HullBounds(ref self), grow);
+                }
+
+                var (x0, y0, x1, y1) = walls.CellsNear(reached);
+                for (var y = y0; y <= y1; y++)
+                {
+                    for (var x = x0; x <= x1; x++)
+                    {
+                        if (!walls.Blocked(x, y))
+                            continue;
+                        walls.HexagonHull(ref other, x, y);
+                        // A side shared with another solid hexagon is inside the wall, not its surface.
+                        if (Collide(ref self, ref other, margin, out var manifold) && !walls.SharedSide(x, y, manifold.Normal))
+                            Add(ref manifold, map, null, 3 << 28 | (y & 0x3FFF) << 14 | (x & 0x3FFF), feature: piece << PieceShift);
+                    }
                 }
             }
         }
 
         if (self.IsCircle && contacts.Count > 1)
             LeaveOutFlushCorners();
+    }
+
+    // Where the piece of a polygon a contact is made by goes in its Feature (its own) or Part (what it touches): above what
+    // says which corners and sides of the piece make it, and below the kinds of tile part.
+    private const int PieceShift = 12;
+
+    // A polygon's convex piece in the world, with which of its sides are inside the polygon (where pieces meet).
+    private static void PieceHull(PolygonCollider polygon, int piece, ref Hull hull)
+    {
+        var corners = polygon.WorldPiece(piece);
+        hull.Count = corners.Length;
+        hull.Radius = 0;
+        var sum = Vector2.Zero;
+        for (var i = 0; i < corners.Length; i++)
+        {
+            hull.Points[i] = corners[i];
+            sum += corners[i];
+        }
+
+        hull.Center = sum / corners.Length;
+        hull.Inner = polygon.InnerSides(piece);
     }
 
     // A ball meeting a corner (rather than a side), in a contact's Feature.
@@ -984,7 +1086,7 @@ public sealed partial class Physics
         }
     }
 
-    private void Add(ref Manifold manifold, Entity solid, Body? other, int part, bool underfoot = false)
+    private void Add(ref Manifold manifold, Entity solid, Body? other, int part, bool underfoot = false, int feature = 0)
     {
         for (var i = 0; i < manifold.Count; i++)
         {
@@ -996,7 +1098,7 @@ public sealed partial class Physics
                 Solid = solid,
                 Other = other,
                 Part = part,
-                Feature = i == 0 ? manifold.Feature0 : manifold.Feature1,
+                Feature = (i == 0 ? manifold.Feature0 : manifold.Feature1) | feature,
                 Paired = i == 0 && manifold.Count == 2,
                 Underfoot = underfoot,
             });
@@ -1048,7 +1150,7 @@ public sealed partial class Physics
     {
         if (radians == 0)
             return;
-        var before = collider is null ? default : Area.Of(collider).Center;
+        var before = collider is null ? default : PivotOf(collider);
         var degrees = radians * 180 / MathF.PI;
         if (entity.Parent is { } parent && parent.Transform.WorldMatrix is var world && world.M11 * world.M22 - world.M12 * world.M21 < 0)
             degrees = -degrees;
@@ -1058,8 +1160,11 @@ public sealed partial class Physics
         if (collider is null)
             solids.Moved(entity);
         else
-            Translate(solids, entity, before - Area.Of(collider).Center);
+            Translate(solids, entity, before - PivotOf(collider));
     }
+
+    // What a collider turns round: its middle, or where a polygon balances.
+    private static Vector2 PivotOf(Collider collider) => collider is PolygonCollider polygon ? polygon.WorldCentroid : Area.Of(collider).Center;
 
     private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
 
@@ -1212,6 +1317,10 @@ public sealed partial class Physics
         public Vector2 Center;
         public float Radius;
 
+        // Sides inside the shape it's a piece of (bit i: from corner i to the next), where it meets another piece: not its
+        // surface, so nothing is pushed out across them.
+        public uint Inner;
+
         public readonly bool IsCircle => Count == 0;
     }
 
@@ -1240,6 +1349,7 @@ public sealed partial class Physics
     private static void CircleHull(ref Hull hull, Circle circle)
     {
         hull.Count = 0;
+        hull.Inner = 0;
         hull.Center = circle.Center;
         hull.Radius = MathF.Max(0, circle.Radius);
     }
@@ -1249,6 +1359,7 @@ public sealed partial class Physics
         half = Vector2.Abs(half);
         var (x, y) = (axis * half.X, new Vector2(-axis.Y, axis.X) * half.Y);
         hull.Count = 4;
+        hull.Inner = 0;
         hull.Center = center;
         hull.Radius = 0;
         hull.Points[0] = center - x - y;
@@ -1263,6 +1374,7 @@ public sealed partial class Physics
         var (min, max) = (slope.Cell.Min, slope.Cell.Max);
         hull.Count = 3;
         hull.Radius = 0;
+        hull.Inner = 0;
         hull.Points[0] = min;
         hull.Points[1] = new Vector2(max.X, min.Y);
         hull.Points[2] = slope.Rising ? max : new Vector2(min.X, max.Y);
@@ -1273,6 +1385,7 @@ public sealed partial class Physics
     private static void FinishPolygon(ref Hull hull)
     {
         hull.Radius = 0;
+        hull.Inner = 0;
         var (sum, twiceArea) = (Vector2.Zero, 0f);
         for (var i = 0; i < hull.Count; i++)
         {
@@ -1328,7 +1441,10 @@ public sealed partial class Physics
         {
             ref var polygon = ref a.IsCircle ? ref b : ref a;
             ref var circle = ref a.IsCircle ? ref a : ref b;
-            if (!PolygonAndCircle(ref polygon, circle.Center, circle.Radius, margin, out var normal, out var point, out var gap, out var corner))
+            if (!PolygonAndCircle(ref polygon, circle.Center, circle.Radius, margin, out var normal, out var point, out var gap, out var corner, out var face))
+                return false;
+            // Across a side inside a polygon (where two of its pieces meet) isn't its surface: the other piece has the circle.
+            if (!corner && (polygon.Inner >> face & 1) != 0)
                 return false;
             manifold.Normal = a.IsCircle ? normal : -normal;
             manifold.Add(point, gap, corner ? CornerFeature : 0);
@@ -1342,9 +1458,9 @@ public sealed partial class Physics
     // A polygon and a circle: the normal out of the polygon towards the circle's middle, a point on the polygon where they
     // touch, how far apart they are, and whether that's one of its corners (rather than along a side).
     private static bool PolygonAndCircle(ref Hull polygon, Vector2 center, float radius, float margin, out Vector2 normal, out Vector2 point, out float gap,
-        out bool corner)
+        out bool corner, out int face)
     {
-        (normal, point, gap, corner) = (default, default, 0, false);
+        (normal, point, gap, corner, face) = (default, default, 0, false, 0);
         var (best, side) = (float.NegativeInfinity, 0);
         for (var i = 0; i < polygon.Count; i++)
         {
@@ -1355,8 +1471,9 @@ public sealed partial class Physics
                 (best, side) = (separation, i);
         }
 
+        face = side;
         var (from, to) = (polygon.Points[side], polygon.Points[(side + 1) % polygon.Count]);
-        var face = SideNormal(ref polygon, side);
+        var outward = SideNormal(ref polygon, side);
         if (best > 1e-6f)
         {
             // Off past an end of its nearest side, it meets that corner.
@@ -1367,12 +1484,12 @@ public sealed partial class Physics
                 var distance = away.Length();
                 if (distance - radius > margin)
                     return false;
-                (normal, point, gap, corner) = (distance > 1e-6f ? away / distance : face, at, distance - radius, true);
+                (normal, point, gap, corner) = (distance > 1e-6f ? away / distance : outward, at, distance - radius, true);
                 return true;
             }
         }
 
-        (normal, point, gap) = (face, center - face * best, best - radius);
+        (normal, point, gap) = (outward, center - outward * best, best - radius);
         return true;
     }
 
@@ -1391,6 +1508,9 @@ public sealed partial class Physics
         ref var reference = ref onB ? ref b : ref a;
         ref var incident = ref onB ? ref a : ref b;
         var side = onB ? sideB : sideA;
+        // Across a side inside a polygon (where two of its pieces meet) isn't its surface: the other piece meets it.
+        if ((reference.Inner >> side & 1) != 0)
+            return;
         var (from, to) = (reference.Points[side], reference.Points[(side + 1) % reference.Count]);
         var normal = SideNormal(ref reference, side);
 

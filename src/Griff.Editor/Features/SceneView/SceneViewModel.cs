@@ -44,10 +44,10 @@ public sealed record SceneDistance(Component Component, PropertyDescriptor Prope
 
 /// <summary>
 /// What the Scene view does with the selection: picking everything inside a box, moving, turning or scaling everything
-/// selected together, resizing the primary selection's sprite and colliders, dragging its distances and the points of its
-/// path (a mover's or grid patrol's points, a patrol's turns), painting the selected tilemap (cell by cell, a rectangle
-/// at a time or a paint-bucket fill), and the links it draws to and from the entities the selection's fields name. The
-/// view's drags call these, and agents can too (positions are world units, Y up).
+/// selected together, resizing the primary selection's sprite and colliders, dragging its distances, the points of its
+/// path (a mover's or grid patrol's points, a patrol's turns) and its polygon collider's points, painting the selected
+/// tilemap (cell by cell, a rectangle at a time or a paint-bucket fill), and the links it draws to and from the entities
+/// the selection's fields name. The view's drags call these, and agents can too (positions are world units, Y up).
 /// </summary>
 public sealed partial class SceneViewModel(IWorkspace workspace, ISelection selection) : ObservableObject
 {
@@ -116,7 +116,7 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
     /// <summary>
     /// The topmost entity a click at <paramref name="world"/> picks, or null for empty space. Sprites, bars and sliders
     /// are hit by their area, tilemaps where they have a tile, and anything by its position within
-    /// <paramref name="pivotRadius"/> world units. Locked and hidden entities are passed over, so the click reaches what's
+    /// <paramref name="pivotRadius"/> world units; failing those, a polygon collider by its shape. Locked and hidden entities are passed over, so the click reaches what's
     /// behind.
     /// </summary>
     public Entity? EntityAt(Vector2 world, float pivotRadius)
@@ -142,6 +142,14 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
             // Tilemaps are hit where there's a tile, so the empty parts don't block clicks on what's behind.
             if (entity.GetComponent<Tilemap>() is { } tilemap && tilemap.CellAt(new Vector2(local.X, local.Y)) is var (x, y) && tilemap.GetTile(x, y) >= 0)
+                return entity;
+        }
+
+        // Inside a polygon collider with nothing drawn there (a hill, a ramp, a rock's outline drawn in the level), the
+        // polygon: after everything drawn, so a player standing in front of it is still picked.
+        foreach (var entity in DrawOrder(document.Scene).Reverse())
+        {
+            if (!entity.IsLockedInHierarchy && entity.GetComponent<PolygonCollider>() is { } polygon && polygon.Contains(world))
                 return entity;
         }
 

@@ -106,6 +106,28 @@ public sealed class EditorArt
         }
     }
 
+    /// <summary>
+    /// An image's pixels, four bytes each (blue, green, red, then alpha), row by row from the top, with its size; null if
+    /// there's no such image or it can't be read.
+    /// </summary>
+    public (byte[] Pixels, int Width, int Height)? Pixels(string? assetPath)
+    {
+        if (Resolve(assetPath) is not { } path)
+            return null;
+        try
+        {
+            if (Decode(File.ReadAllBytes(path)) is not { } image)
+                return null;
+            var pixels = new byte[image.PixelWidth * image.PixelHeight * 4];
+            image.CopyPixels(pixels, image.PixelWidth * 4, 0);
+            return (pixels, image.PixelWidth, image.PixelHeight);
+        }
+        catch (Exception e) when (e is IOException or NotSupportedException or FileFormatException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>How a picture painted in Griff is cut up, or null for any other image.</summary>
     public SheetLayout? LayoutOf(string? assetPath)
     {

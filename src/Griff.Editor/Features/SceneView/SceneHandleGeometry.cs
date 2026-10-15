@@ -185,7 +185,8 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
     /// <summary>
     /// The handles on the primary selection's path, in screen space: one on each of its points (see
     /// <see cref="SceneViewModel.PathPoints"/>), and for a mover or grid patrol a plus between each two points far enough
-    /// apart (and on the way back to the start of a loop) and one past its last point, to drag out a new point. A grid
+    /// apart (and on the way back to the start of a loop) and one past its last point, to drag out a new point; for a
+    /// polygon collider, a plus halfway along each of its sides. A grid
     /// patrol's pluses sit in cells: the one halfway between, and the next along its last stretch. The pluses hide while a
     /// point is dragged, and everything while painting.
     /// </summary>
@@ -200,7 +201,22 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
             AddMoverPluses(handles, mover);
         if (primary.GetComponent<GridPatrol>() is { } patrol && primary.GetComponent<GridMovement>() is not null)
             AddGridPatrolPluses(handles, patrol);
+        if (primary.GetComponent<PolygonCollider>() is { } polygon)
+            AddPolygonPluses(handles, polygon);
         return handles;
+    }
+
+    // A plus halfway along each side of a polygon long enough on screen, the one after point i adding point i + 1 (the
+    // side from its last point back to its first adding one after the last).
+    private void AddPolygonPluses(List<PathHandle> handles, PolygonCollider polygon)
+    {
+        var points = polygon.GivenPoints.Select(p => viewport.ToScreen(polygon.ToWorld(p))).ToList();
+        for (var i = 0; i < points.Count && points.Count >= 2; i++)
+        {
+            var (from, to) = (points[i], points[(i + 1) % points.Count]);
+            if ((to - from).Length >= PathGap)
+                handles.Add(new PathHandle($"PolygonCollider.+{i + 2}", from + (to - from) / 2, null, polygon, i + 2));
+        }
     }
 
     private void AddMoverPluses(List<PathHandle> handles, Mover mover)

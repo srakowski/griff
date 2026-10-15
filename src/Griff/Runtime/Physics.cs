@@ -12,11 +12,11 @@ public readonly record struct RaycastHit(Entity Entity, Vector2 Point, Vector2 N
 /// <summary>
 /// Simple, predictable 2D physics for jam games. Bodies move one axis at a time and are pushed out of
 /// solid colliders and solid tilemaps, which gives tight platformer and top-down movement without tunnelling
-/// at normal speeds. Boxes and circles collide with each other in any combination. On an isometric tilemap a body
+/// at normal speeds. Boxes, circles and polygons collide with each other in any combination. On an isometric tilemap a body
 /// stands on the diamond under its collider and slides along the solid diamonds' edges (see <see cref="IsometricShapes"/>);
 /// on a hex tilemap its collider meets the solid hexagons' six sides and slides along them (see <see cref="HexShapes"/>).
 /// A body that <see cref="Body.Rotates"/> is a rigid shape instead: it's pushed apart from what it touches at the points
-/// where they touch, so it spins, tips over and falls flat, and its box turns with it; everything else meets that box
+/// where they touch, so it spins, tips over and falls flat, and its box or polygon turns with it; everything else meets it
 /// turned, walks up its slant, and knocks it about.
 /// </summary>
 public sealed partial class Physics
@@ -75,11 +75,12 @@ public sealed partial class Physics
     /// <summary>World-space circle of a collider. The radius scales with the larger of the entity's X and Y scale.</summary>
     public static Circle BoundsOf(CircleCollider collider) => collider.WorldCircle;
 
-    /// <summary>The world-space box around either kind of collider.</summary>
+    /// <summary>The world-space box around any kind of collider.</summary>
     public static Box BoundsOf(Collider collider) => collider switch
     {
         BoxCollider box => BoundsOf(box),
         CircleCollider circle => BoundsOf(circle).Bounds,
+        PolygonCollider polygon => polygon.WorldBounds,
         _ => throw new NotSupportedException($"Unknown collider {collider.GetType().Name}."),
     };
 
@@ -332,8 +333,8 @@ public sealed partial class Physics
                     MoveAxis(body, collider, solids, new Vector2(0, -reach), onCollision);
             }
 
-            // So too down a turned plank or crate: down onto it, if it's still there.
-            if (wasGrounded && !body.IsGrounded && body.Velocity.Y <= 0 && lastGround?.GetComponent<Collider>() is { Turns: true })
+            // So too down a turned plank or crate, or a polygon's slant: down onto it, if it's still there.
+            if (wasGrounded && !body.IsGrounded && body.Velocity.Y <= 0 && lastGround?.GetComponent<Collider>() is { Turns: true } or PolygonCollider)
             {
                 var reach = MathF.Abs(body.Velocity.X * dt) * TurnedStepSlope + 0.05f;
                 MoveAxis(body, collider, solids, new Vector2(0, -reach), onCollision);
@@ -655,7 +656,7 @@ public sealed partial class Physics
 
             // Walking into a turned plank or crate where it slants gently enough to walk up: up onto it, rather than stopped.
             var climbed = false;
-            if (axis == 0 && other.IsTurned && carrier is null && body.GravityScale > 0 && Gravity.Y < 0)
+            if (axis == 0 && (other.IsTurned || other.IsPolygon) && carrier is null && body.GravityScale > 0 && Gravity.Y < 0)
             {
                 var lift = other.Center.Y + area.ContactDistance(other, 1, -1) - area.Center.Y;
                 if (lift > 0 && lift <= MathF.Abs(delta.X) * TurnedStepSlope + 0.02f)
@@ -1193,15 +1194,19 @@ public sealed partial class Physics
             (other.Ignores.Length > 0 && CollisionLayers.Contains(other.Ignores, Layer));
     }
 
-    // A box or a circle in world space. For a circle, Bounds is the box around it. A turned box (one whose body Rotates)
-    // has its own Axis, a unit vector, and its own Half size; Bounds is then the box round it.
-    private readonly record struct Area(Box Bounds, float Radius, bool IsCircle)
+    // A box, a circle or a polygon in world space. For a circle, Bounds is the box around it. A turned box (one whose body
+    // Rotates) has its own Axis, a unit vector, and its own Half size; Bounds is then the box round it. A polygon is its
+    // collider's convex pieces (see Physics.Polygons.cs); Bounds is the box round them.
+    private readonly partial record struct Area(Box Bounds, float Radius, bool IsCircle)
     {
         /// <summary>A turned box's X axis (its Y is that turned a quarter anticlockwise); zero for one that isn't turned.</summary>
         public Vector2 Axis { get; init; }
 
         /// <summary>Half a turned box's own width and height.</summary>
         public Vector2 Half { get; init; }
+
+        /// <summary>A polygon collider's shape: its convex pieces, where it is now. Bounds is the box round it.</summary>
+        public PolygonCollider? Polygon { get; init; }
 
         public bool IsTurned => Axis != Vector2.Zero;
 
@@ -1217,6 +1222,7 @@ public sealed partial class Physics
         {
             BoxCollider box => Of(box),
             CircleCollider circle => Of(BoundsOf(circle)),
+            PolygonCollider polygon => new Area(polygon.WorldBounds, 0, false) { Polygon = polygon },
             _ => throw new NotSupportedException($"Unknown collider {collider.GetType().Name}."),
         };
 
@@ -1244,6 +1250,8 @@ public sealed partial class Physics
 
         public bool Contains(Vector2 point)
         {
+            if (Polygon is { } polygon)
+                return polygon.Contains(point);
             if (IsTurned)
                 return new Box(Vector2.Zero, Half).Contains(ToLocal(point));
             return IsCircle ? Circle.Contains(point) : Bounds.Contains(point);
@@ -1252,6 +1260,8 @@ public sealed partial class Physics
         /// <param name="skin">Overlaps shallower than this don't count, for shapes involving a circle.</param>
         public bool Overlaps(Area other, float skin = 0)
         {
+            if (IsPolygon || other.IsPolygon)
+                return Bounds.Overlaps(other.Bounds) && PolygonOverlaps(other, skin);
             if (IsTurned || other.IsTurned)
                 return TurnedOverlaps(other, skin);
 
@@ -1303,6 +1313,13 @@ public sealed partial class Physics
         /// </summary>
         public float ContactDistance(Area other, int axis, float sign)
         {
+            if (IsPolygon || other.IsPolygon)
+            {
+                if (PolygonChord(other, axis) is not var (lowest, highest))
+                    return Component(Bounds.HalfSize, axis) + Component(other.Bounds.HalfSize, axis);
+                return sign > 0 ? -lowest : highest;
+            }
+
             if (IsTurned || other.IsTurned)
             {
                 var (low, high) = Chord(other, axis);
@@ -1400,6 +1417,8 @@ public sealed partial class Physics
         /// <summary>The entry distance and surface normal along a normalized ray, or null on a miss or when starting inside.</summary>
         public (float Distance, Vector2 Normal)? Intersect(Vector2 origin, Vector2 direction)
         {
+            if (Polygon is { } polygon)
+                return IntersectPolygon(polygon, origin, direction);
             if (!IsTurned)
                 return IsCircle ? IntersectCircle(Circle, origin, direction) : IntersectBox(Bounds, origin, direction);
             var local = ToLocal(origin);

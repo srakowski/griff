@@ -4,10 +4,11 @@
 
 // StackBench: what bodies that rotate cost a physics step when they're stacked up, measured in Release with nothing on the
 // screen. Builds a pyramid of crates that rotate (and, with --tower, a tower of ten beside it; with --balls 60, that many
-// balls heaped in a bin instead) on a floor, lets them settle, then times steps of the pile awake (woken before each step,
+// balls heaped in a bin instead; with --shapes 60, that many polygons, triangles, pentagons, hexagons and concave Ls, heaped
+// in a bin) on a floor, lets them settle, then times steps of the pile awake (woken before each step,
 // so every body and contact is worked out, as while a pile settles or is knocked about) and asleep, printing the median,
 // mean and worst step and the bytes allocated meanwhile. The numbers are this computer's: compare runs on the same one.
-//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60]
+//   dotnet run -c Release tools/stackbench.cs -- [--rows 10] [--steps 600] [--tower] [--balls 60] [--shapes 60]
 using System.Diagnostics;
 using System.Numerics;
 using Griff.Input;
@@ -26,19 +27,24 @@ floor.AddComponent<BoxCollider>().Size = new Vector2(200, 1);
 scene.Add(floor);
 var bodies = new List<Body>();
 var balls = Arg("--balls", 0);
-if (balls > 0)
+var shapes = Arg("--shapes", 0);
+if (balls > 0 || shapes > 0)
 {
-    // A bin ten balls wide, filled a row of ten (a little off true, so they tumble) at a time.
+    // A bin ten balls (or shapes) wide, filled a row of ten (a little off true, so they tumble) at a time.
+    var count = Math.Max(balls, shapes);
     foreach (var x in new[] { -5.5f, 5.5f })
     {
         var side = new Entity("Side");
-        side.Transform.Position = new Vector3(x, balls / 10f + 2, 0);
-        side.AddComponent<BoxCollider>().Size = new Vector2(1, balls / 5f + 4);
+        side.Transform.Position = new Vector3(x, count / 10f + 2, 0);
+        side.AddComponent<BoxCollider>().Size = new Vector2(1, count / 5f + 4);
         scene.Add(side);
     }
 
-    for (var i = 0; i < balls; i++)
-        bodies.Add(Ball(new Vector2(-4.5f + i % 10 + (i / 10 % 2) * 0.3f, 0.5f + i / 10 * 1.1f)));
+    for (var i = 0; i < count; i++)
+    {
+        var at = new Vector2(-4.5f + i % 10 + (i / 10 % 2) * 0.3f, 0.5f + i / 10 * 1.1f);
+        bodies.Add(balls > 0 ? Ball(at) : Shape(at, i));
+    }
 }
 else
 {
@@ -69,7 +75,9 @@ for (var i = 0; i < 120; i++)
     game.Tick(Frame);
 var asleep = Time(() => game.Tick(Frame));
 
-Console.WriteLine(balls > 0
+Console.WriteLine(shapes > 0
+    ? $"{shapes} polygons that rotate in a bin{(args.Contains("--tower") ? " and a tower of ten crates" : "")}; {settled} asleep after 3 s"
+    : balls > 0
     ? $"{balls} balls that rotate in a bin{(args.Contains("--tower") ? " and a tower of ten crates" : "")}; {settled} asleep after 3 s"
     : $"{bodies.Count} crates that rotate ({rows} rows{(args.Contains("--tower") ? " and a tower of ten" : "")}); {settled} asleep after 3 s");
 Console.WriteLine($"awake:  {awake}");
@@ -97,6 +105,28 @@ Body Ball(Vector2 at)
     scene.Add(entity);
     return body;
 }
+
+// One of four polygons in turn: a triangle, a pentagon, a hexagon or an L (concave: two convex pieces), about 0.9 across.
+Body Shape(Vector2 at, int i)
+{
+    var entity = new Entity("Shape");
+    entity.Transform.Position = new Vector3(at, 0);
+    entity.Transform.Rotation = new Vector3(0, 0, i * 37 % 360);
+    entity.AddComponent<PolygonCollider>().Points = (i % 4) switch
+    {
+        0 => Regular(3, 0.5f),
+        1 => Regular(5, 0.45f),
+        2 => Regular(6, 0.45f),
+        _ => "-0.45 -0.45; 0.45 -0.45; 0.45 -0.1; -0.1 -0.1; -0.1 0.45; -0.45 0.45",
+    };
+    var body = entity.AddComponent<Body>();
+    body.Rotates = true;
+    scene.Add(entity);
+    return body;
+}
+
+static string Regular(int sides, float radius) => string.Join("; ", Enumerable.Range(0, sides).Select(i =>
+    FormattableString.Invariant($"{radius * MathF.Cos(MathF.Tau * i / sides):0.###} {radius * MathF.Sin(MathF.Tau * i / sides):0.###}")));
 
 string Time(Action step)
 {

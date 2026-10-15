@@ -45,7 +45,7 @@ public readonly record struct ShadowEdge(Vector2 A, Vector2 B, object? Owner = n
 
 /// <summary>
 /// What blocks the light of a <see cref="Light"/> with <see cref="Light.Shadows"/> on: solid tiles (slopes included, and
-/// hex maps' hexagons) and solid colliders. Triggers, one-way platforms, background, ladder and one-way tiles let light through.
+/// hex maps' hexagons) and solid colliders (boxes, circles and polygons, as they're turned). Triggers, one-way platforms, background, ladder and one-way tiles let light through.
 /// </summary>
 public static class Shadows
 {
@@ -95,6 +95,13 @@ public static class Shadows
             else if (collider is CircleCollider circle)
             {
                 AddCircle(edges, Physics.BoundsOf(circle), entity);
+            }
+            else if (collider is PolygonCollider polygon)
+            {
+                // Clockwise round it: its corners go round anticlockwise, so each side runs from a corner back to the one before.
+                var corners = polygon.WorldPoints;
+                for (var i = 0; i < corners.Count; i++)
+                    Add(edges, corners[i], corners[(i + corners.Count - 1) % corners.Count], entity);
             }
         }
     }

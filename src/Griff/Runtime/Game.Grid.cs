@@ -643,6 +643,7 @@ public sealed partial class Game
         private readonly List<(Tilemap Map, Matrix4x4 ToLocal)> _maps = [];
         private readonly List<Box> _boxes = [];
         private readonly List<Circle> _circles = [];
+        private readonly List<PolygonCollider> _polygons = [];
         private readonly Dictionary<(int X, int Y), Entity> _movers = [];
 
         private GridWalls(GridCells grid, bool stayOnMap)
@@ -705,6 +706,9 @@ public sealed partial class Game
                         case CircleCollider { IsTrigger: false } circle when !PassesThrough(circle.Layer, circle.IgnoreLayers):
                             walls._circles.Add(Physics.BoundsOf(circle));
                             break;
+                        case PolygonCollider { IsTrigger: false } polygon when !PassesThrough(polygon.Layer, polygon.IgnoreLayers):
+                            walls._polygons.Add(polygon);
+                            break;
                     }
                 }
             }
@@ -725,7 +729,7 @@ public sealed partial class Game
                     return true;
             }
 
-            return _boxes.Any(b => b.Contains(point)) || _circles.Any(c => c.Contains(point));
+            return _boxes.Any(b => b.Contains(point)) || _circles.Any(c => c.Contains(point)) || _polygons.Any(p => p.Contains(point));
         }
 
         /// <summary>The grid mover in a cell, or heading into it.</summary>

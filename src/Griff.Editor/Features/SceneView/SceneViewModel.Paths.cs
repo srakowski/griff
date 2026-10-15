@@ -9,15 +9,16 @@ namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
 /// A point on the primary selection's path that the Scene view puts a handle on: one of its <see cref="Mover"/>'s or
-/// <see cref="GridPatrol"/>'s Points (<see cref="Index"/> 1 is the first after the start), or where its <see cref="Patrol"/>
-/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right). <see cref="World"/> is where it is in the world (a grid
+/// <see cref="GridPatrol"/>'s Points (<see cref="Index"/> 1 is the first after the start), where its <see cref="Patrol"/>
+/// turns (<see cref="Index"/> -1 for its Left, 1 for its Right), or one of its <see cref="PolygonCollider"/>'s Points
+/// (<see cref="Index"/> 1 is the first). <see cref="World"/> is where it is in the world (a grid
 /// patrol's, the middle of its cell). A patrol's side with no turn set walks on until a wall or an edge: it's
 /// <see cref="Open"/>, and its handle sits at the end of a short stub, to drag out.
 /// </summary>
 public sealed record ScenePathPoint(Component Component, int Index, Vector2 World, bool Open = false)
 {
     /// <summary>
-    /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left" or "Patrol.Right", as
+    /// "Mover.1" (its first point), "GridPatrol.1", "Patrol.Left", "Patrol.Right" or "PolygonCollider.1", as
     /// <see cref="SceneViewModel.DragPathPoint"/> takes it.
     /// </summary>
     public string Key => Component is Patrol ? Index < 0 ? "Patrol.Left" : "Patrol.Right" : $"{Component.GetType().Name}.{Index}";
@@ -87,8 +88,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// The points on the primary selection's path the Scene view puts handles on: its mover's and grid patrol's points
-    /// after the start (the start is where the entity is placed: move the entity to move it), and its patrol's Left and
-    /// Right turns.
+    /// after the start (the start is where the entity is placed: move the entity to move it), its patrol's Left and
+    /// Right turns, and its polygon collider's points.
     /// </summary>
     public IReadOnlyList<ScenePathPoint> PathPoints()
     {
@@ -106,14 +107,18 @@ public sealed partial class SceneViewModel
             points.Add(new ScenePathPoint(patrol, 1, route.Right, route.RightOpen));
         }
 
+        if (primary.GetComponent<PolygonCollider>() is { } polygon)
+            points.AddRange(polygon.GivenPoints.Select((point, i) => new ScenePathPoint(polygon, i + 1, polygon.ToWorld(point))));
+
         return points;
     }
 
     /// <summary>
-    /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2", "GridPatrol.1"
-    /// or "Patrol.Left", to a point in the world, as one undo step. A mover's point lands there, its offset on hundredths
-    /// (<paramref name="snap"/>: half units); a grid patrol's lands on the cell there; a patrol's turn goes level with it
-    /// on its side, and dragging it back past where the patrol was placed clears it, so it walks on until a wall or an edge.
+    /// Drags a point of the primary selection's path (see <see cref="PathPoints"/>), named like "Mover.2", "GridPatrol.1",
+    /// "Patrol.Left" or "PolygonCollider.3", to a point in the world, as one undo step. A mover's point lands there, its
+    /// offset on hundredths (<paramref name="snap"/>: half units); a grid patrol's lands on the cell there; a patrol's turn
+    /// goes level with it on its side, and dragging it back past where the patrol was placed clears it, so it walks on until
+    /// a wall or an edge; a polygon's point lands there, in its own units on hundredths (<paramref name="snap"/>: half units).
     /// </summary>
     public void DragPathPoint(string point, Vector2 to, bool snap = false)
     {
@@ -125,19 +130,29 @@ public sealed partial class SceneViewModel
     }
 
     /// <summary>
-    /// Adds a point to the primary selection's mover (or with none, its grid patrol) at a point in the world, as one
-    /// undo step: it becomes point <paramref name="index"/> (1 is right after the start; one past the last adds it at the
-    /// end), a mover's offset on hundredths (<paramref name="snap"/>: half units), a grid patrol's on the cell there.
+    /// Adds a point to the primary selection's mover (or with none, its grid patrol, or with neither, its polygon
+    /// collider; <paramref name="component"/> names which, e.g. "PolygonCollider") at a point in the world, as one undo
+    /// step: it becomes point <paramref name="index"/> (on a path 1 is right after the start, on a polygon its first point;
+    /// one past the last adds it at the end, a polygon's between its last and first), a mover's offset or a polygon's point
+    /// on hundredths (<paramref name="snap"/>: half units), a grid patrol's on the cell there.
     /// </summary>
-    public void InsertPathPoint(int index, Vector2 at, bool snap = false)
+    public void InsertPathPoint(int index, Vector2 at, bool snap = false, string? component = null)
     {
-        if (((Component?)selection.Entity?.GetComponent<Mover>() ?? selection.Entity?.GetComponent<GridPatrol>()) is not { } path)
-            throw new ArgumentException("The selection has no Mover or Grid Patrol to add a point to.");
+        var entity = selection.Entity;
+        var path = component is { Length: > 0 }
+            ? entity?.Components.FirstOrDefault(c => c is Mover or GridPatrol or PolygonCollider && c.GetType().Name.Equals(component.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
+            : (Component?)entity?.GetComponent<Mover>() ?? (Component?)entity?.GetComponent<GridPatrol>() ?? entity?.GetComponent<PolygonCollider>();
+        if (path is null)
+            throw new ArgumentException(component is { Length: > 0 }
+                ? $"The selection has no {component} to add a point to."
+                : "The selection has no Mover, Grid Patrol or Polygon Collider to add a point to.");
         if (path is GridPatrol && path.Entity!.GetComponent<GridMovement>() is null)
             throw new ArgumentException("The selection's Grid Patrol has no Grid Movement to step it: add one first.");
         var count = PointCount(path);
         if (index < 1 || index > count + 1)
-            throw new ArgumentOutOfRangeException(nameof(index), $"A point goes from 1 (right after the start) to {count + 1} (after the last).");
+            throw new ArgumentOutOfRangeException(nameof(index), path is PolygonCollider
+                ? $"A point goes from 1 (before the first) to {count + 1} (after the last)."
+                : $"A point goes from 1 (right after the start) to {count + 1} (after the last).");
         if (BeginInsertPathPoint(path, index) is not { } drag)
             return;
         workspace.Scene!.History.Seal();
@@ -147,7 +162,8 @@ public sealed partial class SceneViewModel
 
     /// <summary>
     /// Takes a point off the primary selection's path, as one undo step: a mover's or grid patrol's point (it keeps at
-    /// least one, to go to), or a patrol's turn (it then walks on until a wall or an edge on that side).
+    /// least one, to go to), a patrol's turn (it then walks on until a wall or an edge on that side), or a polygon's point
+    /// (it keeps at least three).
     /// </summary>
     public void RemovePathPoint(string point)
     {
@@ -159,6 +175,10 @@ public sealed partial class SceneViewModel
             Mover or GridPatrol when PointCount(found.Component) <= 1 =>
                 throw new InvalidOperationException("It needs somewhere to go: that's its only point. Drag it instead."),
             Mover or GridPatrol => (Property(found.Component, nameof(Mover.Points)),
+                (object?)FormatPoints(PointsOf(found.Component).Where((_, i) => i != found.Index - 1))),
+            PolygonCollider when PointCount(found.Component) <= 3 =>
+                throw new InvalidOperationException("A polygon needs at least three points: drag this one instead."),
+            PolygonCollider => (Property(found.Component, nameof(PolygonCollider.Points)),
                 (object?)FormatPoints(PointsOf(found.Component).Where((_, i) => i != found.Index - 1))),
             _ => (Property(found.Component, found.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), 0f),
         };
@@ -179,21 +199,23 @@ public sealed partial class SceneViewModel
         {
             Mover or GridPatrol => new PathPointDrag(document, point.Component, Property(point.Component, nameof(Mover.Points)), point.Index, insert: false),
             Patrol patrol => new PathPointDrag(document, patrol, Property(patrol, point.Index < 0 ? nameof(Patrol.Left) : nameof(Patrol.Right)), point.Index, insert: false),
+            PolygonCollider polygon => new PathPointDrag(document, polygon, Property(polygon, nameof(PolygonCollider.Points)), point.Index, insert: false),
             _ => null,
         };
     }
 
     /// <summary>
-    /// Starts dragging a new point into the primary selection's <see cref="Mover"/> or <see cref="GridPatrol"/>, for a drag
-    /// of the handle between two of its points (or past its last): the first <see cref="PathPointDrag.To"/> adds it as
-    /// point <paramref name="index"/>, and the whole drag is one undo step. Null when it isn't the primary selection's, or
-    /// a grid patrol has no <see cref="GridMovement"/> to step it.
+    /// Starts dragging a new point into the primary selection's <see cref="Mover"/>, <see cref="GridPatrol"/> or
+    /// <see cref="PolygonCollider"/>, for a drag of the handle between two of its points (or past its last): the first
+    /// <see cref="PathPointDrag.To"/> adds it as point <paramref name="index"/>, and the whole drag is one undo step. Null
+    /// when it isn't the primary selection's, or a grid patrol has no <see cref="GridMovement"/> to step it.
     /// </summary>
     public PathPointDrag? BeginInsertPathPoint(Component path, int index)
     {
         if (workspace.Scene is not { } document || selection.Entity is not { } primary || path.Entity != primary ||
-            path is not (Mover or GridPatrol) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
+            path is not (Mover or GridPatrol or PolygonCollider) || path is GridPatrol && primary.GetComponent<GridMovement>() is null)
             return null;
+        // Mover, GridPatrol and PolygonCollider all call theirs Points.
         return new PathPointDrag(document, path, Property(path, nameof(Mover.Points)), Math.Clamp(index, 1, PointCount(path) + 1), insert: true);
     }
 
@@ -202,31 +224,38 @@ public sealed partial class SceneViewModel
         var points = PathPoints();
         return points.FirstOrDefault(p => string.Equals(p.Key, point.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException(points.Count == 0
-                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol or a Patrol."
+                ? $"The selection has no path point \"{point}\": select an entity with a Mover, a Grid Patrol, a Patrol or a Polygon Collider."
                 : $"The selection has no path point \"{point}\"; it has {string.Join(", ", points.Select(p => p.Key))}.");
     }
 
     private PropertyDescriptor Property(Component component, string name) =>
         workspace.Components.Get(component.GetType()).Properties.Single(p => p.Name == name);
 
-    // A mover's or grid patrol's points after the start, as offsets from it.
+    // A mover's or grid patrol's points after the start, as offsets from it; a polygon's points.
     private static List<Vector2> PointsOf(Component path) => path switch
     {
         Mover mover => mover.Path.Skip(1).ToList(),
         GridPatrol patrol => patrol.Path.Skip(1).Select(p => new Vector2(p.X, p.Y)).ToList(),
+        PolygonCollider polygon => polygon.GivenPoints.ToList(),
         _ => [],
     };
 
     private static int PointCount(Component path) => PointsOf(path).Count;
 
-    // "4 0; 4 3", as Mover.Points and GridPatrol.Points read it.
+    // "4 0; 4 3", as Mover.Points, GridPatrol.Points and PolygonCollider.Points read it.
     private static string FormatPoints(IEnumerable<Vector2> points) =>
         string.Join("; ", points.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.X:0.##} {p.Y:0.##}")));
 
-    /// <summary>One drag of a path point's handle, from <see cref="BeginPathPoint"/> or <see cref="BeginInsertPathPoint"/>.</summary>
+    /// <summary>
+    /// One drag of a path point's handle (or a polygon's point's), from <see cref="BeginPathPoint"/> or
+    /// <see cref="BeginInsertPathPoint"/>.
+    /// </summary>
     public sealed class PathPointDrag
     {
-        /// <summary>The step Ctrl snaps points and turns to: half a unit. A grid patrol's points are always on cells.</summary>
+        /// <summary>
+        /// The step Ctrl snaps points and turns to: half a unit (a polygon's points in its own units). A grid patrol's points
+        /// are always on cells.
+        /// </summary>
         public const float SnapStep = 0.5f;
 
         private const float RoundStep = 0.01f;
@@ -262,18 +291,19 @@ public sealed partial class SceneViewModel
             document.History.Seal();
         }
 
-        /// <summary>The mover, grid patrol or patrol whose path it is.</summary>
+        /// <summary>The mover, grid patrol or patrol whose path it is, or the polygon collider whose point it is.</summary>
         public Component Component { get; }
 
         /// <summary>
-        /// The point being dragged: a mover's or grid patrol's point from 1, or -1 and 1 for a patrol's Left and Right.
+        /// The point being dragged: a mover's, grid patrol's or polygon's point from 1, or -1 and 1 for a patrol's Left and
+        /// Right.
         /// </summary>
         public int Index { get; }
 
         /// <summary>
         /// Puts the point at <paramref name="world"/>, on hundredths, or with <paramref name="snap"/> on half units, from
         /// the start (a patrol's turn only goes along its side, and clears when dragged back past home; a grid patrol's
-        /// point goes on the cell there).
+        /// point goes on the cell there; a polygon's point is in its own units).
         /// </summary>
         public void To(Vector2 world, bool snap)
         {
@@ -287,9 +317,10 @@ public sealed partial class SceneViewModel
             else
             {
                 var points = _points.ToList();
+                var own = Component is PolygonCollider polygon ? polygon.FromWorld(world) : offset;
                 var point = _grid?.CellAt(world) is (int x, int y)
                     ? new Vector2(x - _home.X, _home.Y - y)
-                    : new Vector2(Fit(offset.X), Fit(offset.Y));
+                    : new Vector2(Fit(own.X), Fit(own.Y));
                 if (_insert)
                     points.Insert(Index - 1, point);
                 else

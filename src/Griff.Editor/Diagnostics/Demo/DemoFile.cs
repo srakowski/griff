@@ -791,11 +791,12 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "path: Mover.2 = 4, 3" (or "Ctrl+Mover.+3 = 6, 3" for the plus that adds point 3): drags that knob on the
                 // selection's path to where the point is that far from the mover's start. "path: Patrol.Left = 3" drags a
                 // patrol's turn to that far out on its side (0 clears it). "path: GridPatrol.1 = 3, -2" drags a grid patrol's
-                // point to the middle of the cell that many cells from where it was placed.
+                // point to the middle of the cell that many cells from where it was placed. "path: PolygonCollider.2 = 1, 0.5"
+                // (or "PolygonCollider.+3" for the plus on the side after point 2) drags a polygon's point to there in its own units.
                 var (pathText, pathModifiers) = ParseModifiedName(a);
                 var (pathName, pathValue) = Split2(pathText, '=');
                 var (pathHandle, pathFrom) = ui.PathKnob(pathName)
-                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol or a Patrol.");
+                    ?? throw new InvalidOperationException($"The {pathName} knob isn't showing: select something with a Mover, a Grid Patrol, a Patrol or a Polygon Collider.");
                 var pathComponent = (pathHandle.Point?.Component ?? pathHandle.Path)!;
                 var pathEntity = pathComponent.Entity!;
                 var pathParent = pathEntity.Parent?.Transform.WorldMatrix ?? System.Numerics.Matrix4x4.Identity;
@@ -806,6 +807,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     var cell = Vector(pathValue);
                     pathTo = SceneViewModel.CellOf(pathGrid, (int)MathF.Round(cell.X), (int)MathF.Round(cell.Y))
                         ?? throw new InvalidOperationException($"{pathEntity.Name} has no Grid Movement to step it.");
+                }
+                else if (pathComponent is Griff.Scenes.PolygonCollider pathPolygon)
+                {
+                    pathTo = pathPolygon.ToWorld(Vector(pathValue));
                 }
                 else if (pathComponent is Griff.Scenes.Patrol pathPatrol)
                 {

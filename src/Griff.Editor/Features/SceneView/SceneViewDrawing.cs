@@ -417,12 +417,15 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         }
     }
 
-    // Physics shapes in green; triggers dashed.
+    // Physics shapes in green; triggers dashed; polygons whose points don't make a proper shape red.
     private void DrawColliders(DrawingContext dc)
     {
         var solid = new Pen(style.Brush("Brush.Status.Success"), 1.5);
         var trigger = new Pen(style.Brush("Brush.Status.Success"), 1.5) { DashStyle = new DashStyle([4, 3], 0) };
         var clickable = new Pen(style.Brush("Brush.Status.Info"), 1.5) { DashStyle = new DashStyle([2, 2], 0) };
+        var cut = new Pen(style.Brush("Brush.Status.Success"), 1) { DashStyle = new DashStyle([1, 3], 0) };
+        var broken = new Pen(style.Brush("Brush.Status.Error"), 1.5);
+        var brokenGiven = new Pen(style.Brush("Brush.Status.Error"), 1) { DashStyle = new DashStyle([4, 3], 0) };
 
         // With walls on an isometric map, a body meets them with the diamond under its collider: drawn inside it.
         var isometric = _document!.Scene.Entities.Any(e => e.IsActive && e.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Isometric });
@@ -464,6 +467,22 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                 var circle = Griff.Runtime.Physics.BoundsOf(collider);
                 var radius = circle.Radius * viewport.Zoom;
                 dc.DrawEllipse(null, collider.IsTrigger ? trigger : solid, viewport.ToScreen(circle.Center), radius, radius);
+            }
+
+            // A polygon as the shape it is, with faint lines where a concave one is cut into convex pieces. One whose points
+            // don't make a proper shape is drawn in red as it's fixed up, its points as written dashed over it.
+            foreach (var collider in entity.GetComponents<PolygonCollider>())
+            {
+                if (collider.PieceCount > 1)
+                {
+                    for (var piece = 0; piece < collider.PieceCount; piece++)
+                        DrawOutline(collider.PieceCorners(piece).ToArray(), cut);
+                }
+
+                var bad = collider.Problem is not null;
+                DrawOutline(collider.WorldPoints.ToArray(), bad ? broken : collider.IsTrigger ? trigger : solid);
+                if (bad && collider.GivenPoints.Count >= 2)
+                    DrawOutline(collider.GivenPoints.Select(collider.ToWorld).ToArray(), brokenGiven);
             }
 
             // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons.
@@ -912,9 +931,12 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             }
             else
             {
-                var offset = point.Component is GridPatrol grid
-                    ? new Vector2(grid.Path[point.Index].X, grid.Path[point.Index].Y)
-                    : ((Mover)point.Component).Path[point.Index];
+                var offset = point.Component switch
+                {
+                    GridPatrol grid => new Vector2(grid.Path[point.Index].X, grid.Path[point.Index].Y),
+                    PolygonCollider polygon => polygon.GivenPoints[point.Index - 1],
+                    _ => ((Mover)point.Component).Path[point.Index],
+                };
                 text = dragging ? $"{point.Index}  ·  {Number(offset.X)}, {Number(offset.Y)}"
                     : hovered ? $"{point.Index}  ·  double-click to remove" : $"{point.Index}";
             }

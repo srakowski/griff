@@ -3,8 +3,9 @@ using System.Numerics;
 namespace Griff.Scenes;
 
 /// <summary>
-/// A shape for collisions: a <see cref="BoxCollider"/> or a <see cref="CircleCollider"/>. Without a <see cref="Body"/>
-/// the shape is static: walls, floors, platforms. Use <c>GetComponent&lt;Collider&gt;()</c> to find either kind.
+/// A shape for collisions: a <see cref="BoxCollider"/>, a <see cref="CircleCollider"/> or a <see cref="PolygonCollider"/>.
+/// Without a <see cref="Body"/> the shape is static: walls, floors, platforms. Use <c>GetComponent&lt;Collider&gt;()</c> to
+/// find any kind.
 /// </summary>
 public abstract class Collider : Component
 {
@@ -220,11 +221,336 @@ public sealed class CircleCollider : Collider
 }
 
 /// <summary>
+/// A shape for collisions with straight sides between its <see cref="Points"/>: a ramp, a wedge, a rock, a hill, a
+/// boat's hull, a cup. Select it in the Scene view to drag its points, drag a plus on a side to add one, double-click one
+/// to take it off (Ctrl snaps to half units); Entity &gt; Fit Polygon Collider to Sprite traces its sprite's outline. A
+/// concave shape (an L, a cup) is split into convex pieces by itself. Points that don't make a proper shape (fewer than
+/// three, all in a line, sides crossing) are fixed up and said so above its fields. Like a box, it stays upright whatever
+/// the entity's rotation unless its <see cref="Body"/> <see cref="Body.Rotates"/>: then it turns with the entity, round
+/// its middle, and tips, rolls over and stacks as it should.
+/// </summary>
+[Category("Physics")]
+[WorksWith(typeof(Body), Note = "to make it move and fall")]
+[ComponentName("PolygonCollider")]
+public sealed class PolygonCollider : Collider
+{
+    /// <summary>A new polygon's points: a triangle 1 across.</summary>
+    public const string DefaultPoints = "-0.5 -0.5; 0.5 -0.5; 0 0.5";
+
+    private string? _points = DefaultPoints;
+    private List<Vector2> _given = PolygonParts.Parse(DefaultPoints);
+    private PolygonParts _parts = PolygonParts.Of(PolygonParts.Parse(DefaultPoints));
+
+    // Where it is in the world, worked out again when it moves, turns or changes.
+    private Vector2[] _worldOutline = [];
+    private Vector2[] _worldCorners = [];
+    private int[] _pieceStart = [0];
+    private Box _worldBounds;
+    private Vector2 _worldCentroid;
+    private bool _mirrored;
+    private (Matrix4x4 World, Vector2 Offset, bool Turned, PolygonParts? Parts) _placed;
+
+    // How it's built, for its size (worked out again when that changes).
+    private (Vector2 Scale, PolygonParts? Parts) _sized;
+    private float _inertiaPerMass;
+    private float _reach;
+    private float _halfThickness;
+
+    /// <summary>
+    /// Its corners in order round it, as "x y" pairs separated by semicolons, in world units before the transform's scale,
+    /// round the entity (plus <see cref="Offset"/>): "-1 0; 1 0; 0 1" is a triangle 2 wide and 1 tall. They can go round
+    /// either way.
+    /// </summary>
+    public string? Points
+    {
+        get => _points;
+        set
+        {
+            _points = value;
+            _given = PolygonParts.Parse(value);
+            _parts = PolygonParts.Of(_given);
+        }
+    }
+
+    public override Vector2 Offset { get; set; }
+
+    /// <inheritdoc/>
+    public override bool IsTrigger { get; set; }
+
+    /// <inheritdoc/>
+    public override string? Layer { get; set; }
+
+    /// <inheritdoc/>
+    public override string? IgnoreLayers { get; set; }
+
+    /// <summary>Points written as <see cref="Points"/> takes them: "x y; x y; x y", on hundredths.</summary>
+    public static string FormatPoints(IEnumerable<Vector2> points) => PolygonParts.Format(points);
+
+    /// <summary>The points as they're written in <see cref="Points"/>, in its own units.</summary>
+    public IReadOnlyList<Vector2> GivenPoints => _given;
+
+    /// <summary>
+    /// The corners of the shape it is, in its own units, anticlockwise: its <see cref="Points"/>, without repeated
+    /// points or points along a straight side, or as it's fixed up when they don't make a proper shape (see
+    /// <see cref="Problem"/>).
+    /// </summary>
+    public IReadOnlyList<Vector2> Outline => _parts.Outline;
+
+    /// <summary>
+    /// What's wrong with its <see cref="Points"/> and how it's been fixed up, e.g. "Its sides cross each other, so it's taken
+    /// as the shape round all its points."; null when they make a proper shape.
+    /// </summary>
+    public string? Problem => _parts.Problem;
+
+    /// <summary>How many convex pieces it's made of: 1 for a convex shape, more for a concave one.</summary>
+    public int PieceCount => _parts.Pieces.Length;
+
+    /// <summary>Its corners in the world, anticlockwise (as it's turned, if it <see cref="Collider.Turns"/>).</summary>
+    public IReadOnlyList<Vector2> WorldPoints
+    {
+        get
+        {
+            Place();
+            return _worldOutline;
+        }
+    }
+
+    /// <summary>
+    /// The corners of one of its convex pieces in the world, anticlockwise (from 0 to <see cref="PieceCount"/> less one):
+    /// a concave shape is split into these.
+    /// </summary>
+    public IReadOnlyList<Vector2> PieceCorners(int piece) => WorldPiece(piece).ToArray();
+
+    /// <summary>Where it balances in the world: what it turns round.</summary>
+    public Vector2 WorldCentroid
+    {
+        get
+        {
+            Place();
+            return _worldCentroid;
+        }
+    }
+
+    /// <inheritdoc/>
+    public override Box WorldBounds
+    {
+        get
+        {
+            Place();
+            return _worldBounds;
+        }
+    }
+
+    /// <summary>Where a point in its own units (as in <see cref="Points"/>) is in the world, as it's placed and turned.</summary>
+    public Vector2 ToWorld(Vector2 point)
+    {
+        var world = Entity!.Transform.WorldMatrix;
+        return Turned(world) ? Vector2.Transform(Offset + point, world) : new Vector2(world.M41, world.M42) + (Offset + point) * ScaleOf(world);
+    }
+
+    /// <summary>Where a point in the world is in its own units (as in <see cref="Points"/>): the opposite of <see cref="ToWorld"/>.</summary>
+    public Vector2 FromWorld(Vector2 point)
+    {
+        var world = Entity!.Transform.WorldMatrix;
+        if (Turned(world))
+        {
+            var plane = new Matrix3x2(world.M11, world.M12, world.M21, world.M22, world.M41, world.M42);
+            return Matrix3x2.Invert(plane, out var inverse) ? Vector2.Transform(point, inverse) - Offset : -Offset;
+        }
+
+        var scale = ScaleOf(world);
+        var offset = point - new Vector2(world.M41, world.M42);
+        return new Vector2(scale.X != 0 ? offset.X / scale.X : 0, scale.Y != 0 ? offset.Y / scale.Y : 0) - Offset;
+    }
+
+    /// <inheritdoc/>
+    public override bool Contains(Vector2 point)
+    {
+        Place();
+        for (var piece = 0; piece < _parts.Pieces.Length; piece++)
+        {
+            var corners = WorldPiece(piece);
+            var inside = true;
+            for (var i = 0; i < corners.Length && inside; i++)
+            {
+                var (a, b) = (corners[i], corners[(i + 1) % corners.Length]);
+                inside = (b.X - a.X) * (point.Y - a.Y) - (b.Y - a.Y) * (point.X - a.X) >= 0;
+            }
+
+            if (inside)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>A line on its shape for the Inspector: what's wrong with its points, if anything.</summary>
+    public override string? SetupNote() => Problem;
+
+    // Piece `piece`'s corners in the world, anticlockwise.
+    internal ReadOnlySpan<Vector2> WorldPiece(int piece)
+    {
+        Place();
+        return _worldCorners.AsSpan(_pieceStart[piece], _pieceStart[piece + 1] - _pieceStart[piece]);
+    }
+
+    // Which sides of piece `piece` (bit i: from its corner i to the next, as WorldPiece has them) are inside the shape.
+    internal uint InnerSides(int piece)
+    {
+        Place();
+        return _mirrored ? _parts.InnerReversed[piece] : _parts.Inner[piece];
+    }
+
+    // How hard it is to turn for each unit of mass, how far its furthest corner is from its middle, and half how thick its
+    // thinnest piece is, at its size in the world.
+    internal float InertiaPerMass
+    {
+        get
+        {
+            Measure();
+            return _inertiaPerMass;
+        }
+    }
+
+    internal float Reach
+    {
+        get
+        {
+            Measure();
+            return _reach;
+        }
+    }
+
+    internal float HalfThickness
+    {
+        get
+        {
+            Measure();
+            return _halfThickness;
+        }
+    }
+
+    /// <summary>Half how wide the box round it is when it's upright, at its size in the world: the foot it stands on.</summary>
+    internal float HalfWidth => (_parts.Max.X - _parts.Min.X) / 2 * ScaleOf(Entity!.Transform.WorldMatrix).X;
+
+    private bool Turned(in Matrix4x4 world) => IsTurning(world) && ScaleOf(world).X > 0 && Turns;
+
+    private static Vector2 ScaleOf(in Matrix4x4 world) =>
+        new(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
+
+    // Works out where its corners are in the world, when that may have changed since it last did.
+    private void Place()
+    {
+        var world = Entity!.Transform.WorldMatrix;
+        var turned = Turned(world);
+        var parts = _parts;
+        if (_placed.Parts == parts && _placed.World == world && _placed.Offset == Offset && _placed.Turned == turned)
+            return;
+        _placed = (world, Offset, turned, parts);
+
+        var outline = parts.Outline;
+        var origin = new Vector2(world.M41, world.M42);
+        var scale = ScaleOf(world);
+        if (_worldOutline.Length != outline.Length)
+            _worldOutline = new Vector2[outline.Length];
+        var (min, max) = (new Vector2(float.PositiveInfinity), new Vector2(float.NegativeInfinity));
+        for (var i = 0; i < outline.Length; i++)
+        {
+            var point = turned ? Vector2.Transform(Offset + outline[i], world) : origin + (Offset + outline[i]) * scale;
+            _worldOutline[i] = point;
+            (min, max) = (Vector2.Min(min, point), Vector2.Max(max, point));
+        }
+
+        _worldBounds = new Box((min + max) / 2, (max - min) / 2);
+        _worldCentroid = turned ? Vector2.Transform(Offset + parts.Centroid, world) : origin + (Offset + parts.Centroid) * scale;
+
+        // Mirrored by its turning (a negative scale), its corners go round the other way: each piece is gone round
+        // backwards, so it stays anticlockwise.
+        _mirrored = turned && world.M11 * world.M22 - world.M12 * world.M21 < 0;
+        if (_mirrored)
+            Array.Reverse(_worldOutline);
+        var pieces = parts.Pieces;
+        var total = 0;
+        foreach (var piece in pieces)
+            total += piece.Length;
+        if (_worldCorners.Length != total)
+            _worldCorners = new Vector2[total];
+        if (_pieceStart.Length != pieces.Length + 1)
+            _pieceStart = new int[pieces.Length + 1];
+        var at = 0;
+        for (var p = 0; p < pieces.Length; p++)
+        {
+            _pieceStart[p] = at;
+            var piece = pieces[p];
+            for (var i = 0; i < piece.Length; i++)
+            {
+                var corner = outline[piece[_mirrored ? piece.Length - 1 - i : i]];
+                _worldCorners[at++] = turned ? Vector2.Transform(Offset + corner, world) : origin + (Offset + corner) * scale;
+            }
+        }
+
+        _pieceStart[pieces.Length] = at;
+    }
+
+    // Works out how it turns at its size, when that may have changed since it last did.
+    private void Measure()
+    {
+        var scale = ScaleOf(Entity!.Transform.WorldMatrix);
+        var parts = _parts;
+        if (_sized.Parts == parts && _sized.Scale == scale)
+            return;
+        _sized = (scale, parts);
+
+        // Its outline at its size, round its middle: the second moment of its area about its middle, over its area.
+        var outline = parts.Outline;
+        var middle = parts.Centroid * scale;
+        var (area, moment, reach) = (0f, 0f, 0f);
+        for (var i = 0; i < outline.Length; i++)
+        {
+            var (a, b) = (outline[i] * scale - middle, outline[(i + 1) % outline.Length] * scale - middle);
+            var cross = a.X * b.Y - a.Y * b.X;
+            area += cross;
+            moment += cross * (Vector2.Dot(a, a) + Vector2.Dot(a, b) + Vector2.Dot(b, b));
+            reach = MathF.Max(reach, a.Length());
+        }
+
+        _inertiaPerMass = MathF.Abs(area) > 1e-12f ? moment / 6 / area : 0;
+        _reach = reach;
+
+        // Half the narrowest width of its thinnest piece (but no thinner than a quarter of the whole), so a fast one moves
+        // in steps small enough not to pass through anything.
+        var (thinnest, whole) = (float.PositiveInfinity, 0f);
+        foreach (var piece in parts.Pieces)
+        {
+            var width = float.PositiveInfinity;
+            for (var i = 0; i < piece.Length; i++)
+            {
+                var (a, b) = (outline[piece[i]] * scale, outline[piece[(i + 1) % piece.Length]] * scale);
+                var side = b - a;
+                var length = side.Length();
+                if (length < 1e-9f)
+                    continue;
+                var normal = new Vector2(side.Y, -side.X) / length;
+                var deepest = 0f;
+                foreach (var corner in piece)
+                    deepest = MathF.Max(deepest, Vector2.Dot(normal, a - outline[corner] * scale));
+                width = MathF.Min(width, deepest);
+            }
+
+            if (float.IsFinite(width))
+                (thinnest, whole) = (MathF.Min(thinnest, width), MathF.Max(whole, width));
+        }
+
+        _halfThickness = MathF.Max(1e-3f, float.IsFinite(thinnest) ? MathF.Max(thinnest, whole / 4) / 2 : 0);
+    }
+}
+
+/// <summary>
 /// Makes an entity with a <see cref="Collider"/> move under velocity and gravity and collide with solids. On an
 /// isometric <see cref="Tilemap"/>, it meets the solid diamonds with the diamond under its collider (as wide as the
 /// collider, half as tall, round its middle) and slides along them; on a hex one, its collider meets the solid
 /// hexagons' six sides and slides along them. With <see cref="Rotates"/> on, it turns too: knocked off its middle it
-/// spins, it tips over edges and falls flat, and its box collider turns with it.
+/// spins, it tips over edges and falls flat, and its box or polygon collider turns with it.
 /// </summary>
 [Category("Physics")]
 [Requires(typeof(Collider), Note = "the shape that collides")]
@@ -279,7 +605,7 @@ public sealed class Body : Component
 
     /// <summary>
     /// Lets it turn: hit or pushed off its middle it spins (see <see cref="Spin"/>), it tips over edges and falls flat, and
-    /// its box collider turns with the entity, so others meet it turned. Off (the default), it stays upright whatever hits
+    /// its box or polygon collider turns with the entity, so others meet it turned. Off (the default), it stays upright whatever hits
     /// it, as players and enemies should, and so does its box. Welded to others, it moves with them without turning.
     /// </summary>
     public bool Rotates { get; set; }
@@ -343,6 +669,7 @@ public sealed class Body : Component
     {
         BoxCollider box => BoxInertia(box.WorldShape.HalfSize),
         CircleCollider circle => CircleInertia(circle.WorldCircle.Radius),
+        PolygonCollider polygon => PolygonInertia(polygon),
         _ => Math.Max(1e-4f, Math.Max(0.01f, Mass) / 6),
     };
 
@@ -351,9 +678,14 @@ public sealed class Body : Component
 
     internal float CircleInertia(float radius) => Math.Max(1e-4f, Math.Max(0.01f, Mass) * radius * radius / 2);
 
-    /// <summary>What it turns round: its collider's middle in the world (its position, without a collider).</summary>
+    internal float PolygonInertia(PolygonCollider polygon) => Math.Max(1e-4f, Math.Max(0.01f, Mass) * polygon.InertiaPerMass);
+
+    /// <summary>
+    /// What it turns round: its collider's middle in the world (where a polygon balances), or its position without a
+    /// collider.
+    /// </summary>
     public Vector2 CenterOfMass => Entity?.GetComponent<Collider>() is { } collider
-        ? collider.WorldBounds.Center
+        ? collider is PolygonCollider polygon ? polygon.WorldCentroid : collider.WorldBounds.Center
         : Entity is { } entity ? new Vector2(entity.Transform.WorldPosition.X, entity.Transform.WorldPosition.Y) : Vector2.Zero;
 
     /// <summary>True if the body rested on something below it during the last physics step.</summary>

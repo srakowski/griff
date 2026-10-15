@@ -17,9 +17,9 @@ chapter: What names it | Arrows the other way
 select: Player
 look: -3, 1, 6
 expectlink: Main Camera > Player = Follow Target
-expectlink: Health Bar > Player = Bar Track
+expectlink: Player > Health Bar = Health
 explain: link:Main Camera > Player | Follow Target | Nothing on the player names the camera, but the camera's Follow names the player, so selecting the player shows that arrow too, pointing at it.
-explain: link:Health Bar > Player | Bar Track | And the health bar tracks the player. Before deleting or renaming something, you can see everything that depends on it.
+explain: link:Player > Health Bar | Health | And the health bar reads the player's health, so that arrow comes from the player, labelled with what it reads. Before deleting or renaming something, you can see everything that depends on it.
 select: Lever
 pickentity: Switch.Targets = Lift
 expectlink: Lever > Lift = none

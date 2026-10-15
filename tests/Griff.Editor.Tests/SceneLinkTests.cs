@@ -40,7 +40,7 @@ public class SceneLinkTests
         Assert.Empty(model.Links());
 
         selection.Select(Named(document, "Lever"));
-        Assert.Equal(["Lever to Bridge: Switch.Targets", "Lamp to Lever: Wire.From"], model.Links().Select(l => l.Label));
+        Assert.Equal(["Lever to Bridge: Switch.Targets", "Lever to Lamp: Wire.From (Out to Power)"], model.Links().Select(l => l.Label));
 
         selection.Select(Named(document, "Player"));
         Assert.Equal(["Camera to Player: Follow.Target"], model.Links().Select(l => l.Label));
@@ -53,7 +53,7 @@ public class SceneLinkTests
 
         selection.SelectEntities([Named(document, "Lever"), Named(document, "Bridge"), Named(document, "Lamp")]);
 
-        Assert.Equal(["Lever to Bridge: Switch.Targets", "Lamp to Lever: Wire.From"], model.Links().Select(l => l.Label));
+        Assert.Equal(["Lever to Bridge: Switch.Targets", "Lever to Lamp: Wire.From (Out to Power)"], model.Links().Select(l => l.Label));
     });
 
     [Fact]
@@ -67,6 +67,6 @@ public class SceneLinkTests
         Assert.Contains("Lever to Player: Switch.Targets", model.Links().Select(l => l.Label));
 
         lever.GetComponent<Switch>()!.Targets = "";
-        Assert.Equal(["Lamp to Lever: Wire.From"], model.Links().Select(l => l.Label));
+        Assert.Equal(["Lever to Lamp: Wire.From (Out to Power)"], model.Links().Select(l => l.Label));
     });
 }

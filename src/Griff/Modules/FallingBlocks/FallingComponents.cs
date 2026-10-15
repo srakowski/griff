@@ -65,6 +65,7 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     public int LinesPerLevel { get; set; } = 10;
 
     /// <summary>The level now, from 1. Set it higher to start faster. Saved with the scene, so a rewind takes it back.</summary>
+    [Output]
     public int Level { get; set; } = 1;
 
     /// <summary>Seconds a row while down is held: the soft drop.</summary>
@@ -81,12 +82,15 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     public int Points { get; set; } = 100;
 
     /// <summary>The points scored so far. Saved with the scene, so a rewind takes them back.</summary>
+    [Output]
     public int Score { get; set; }
 
     /// <summary>How many rows have been cleared. Saved with the scene, so a rewind takes them back.</summary>
+    [Output]
     public int Lines { get; set; }
 
     /// <summary>True once the blocks have stacked up to the top and a new piece has no room: nothing more falls. Saved with the scene.</summary>
+    [Output]
     public bool GameOver { get; set; }
 
     /// <summary>The input action that turns the piece clockwise, as up does: "Fire" is J, the gamepad's X or the right shoulder. Empty only uses up.</summary>

@@ -30,13 +30,16 @@ public sealed partial class Game
         foreach (var @switch in all.Where(s => s.Entity!.IsActive))
         {
             var users = TouchersOf(@switch.Entity!).Where(t => @switch.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
+
+            // Until the flag it needs is set, working it does nothing.
+            var works = FlagHolds(@switch.NeedsFlag);
             switch (@switch.Mode)
             {
                 case SwitchMode.Lever:
-                    ShowPrompt(@switch.Entity!, @switch.Prompt, users.Count > 0 && _levels.Talking is null);
+                    ShowPrompt(@switch.Entity!, @switch.Prompt, works && users.Count > 0 && _levels.Talking is null);
 
                     // Not with the press that just started a conversation beside it.
-                    if (users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
+                    if (works && users.Count > 0 && _levels.Talking is null && !PausedThisFrame && users.Any(u => InputOf(u).WasPressed("Interact")))
                     {
                         if (@switch.IsOn)
                             @switch.IsOn = false;
@@ -50,20 +53,20 @@ public sealed partial class Game
                     // Touches only come from physics, which a paused game doesn't run: keep a plate as it was meanwhile.
                     if (Time.Delta <= 0)
                         break;
-                    if (users.Count > 0 && !@switch.IsOn)
+                    if (works && users.Count > 0 && !@switch.IsOn)
                         TryTurnOn(@switch, users);
                     else if (users.Count == 0 && @switch.IsOn)
                         @switch.IsOn = false;
                     break;
 
                 case SwitchMode.Button:
-                    if (users.Count > 0 && !@switch.IsOn)
+                    if (works && users.Count > 0 && !@switch.IsOn)
                         TryTurnOn(@switch, users);
                     break;
             }
 
             // On the beat it flips, whoever has worked it.
-            if (@switch.Beats > 0 && OnBeat(@switch.Clock, @switch.Beats, @switch.BeatOffset))
+            if (works && @switch.Beats > 0 && OnBeat(@switch.Clock, @switch.Beats, @switch.BeatOffset))
                 @switch.IsOn = !@switch.IsOn;
 
             if (@switch.IsOn && @switch.OnTime > 0 && @switch.Mode != SwitchMode.Plate && @switch.Shown == true)

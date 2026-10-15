@@ -275,6 +275,55 @@ public class SceneToolsTests
         Assert.Contains("- SetFlag (done with a name, its flag", trigger);
     }
 
+    /// <summary>Flies.</summary>
+    public sealed class Ship : Griff.Runtime.Behavior
+    {
+        /// <summary>Fuel left in the tank.</summary>
+        [Output(OutOf = nameof(Tank))]
+        public float Fuel { get; set; }
+
+        public float Tank { get; set; } = 100;
+
+        /// <summary>How many of a crate it carries.</summary>
+        [Output("Crates", Example = "Ore")]
+        public int Carried(string kind) => kind.Length;
+    }
+
+    [Fact]
+    public void Outputs_reach_component_describe_and_components_list_by_themselves_scripts_too()
+    {
+        _host.Components.Register<Ship>();
+
+        var board = Run("component_describe", """{"component": "TurnOrder"}""").Text;
+        Assert.Contains("Outputs (what anything can read with no code", board);
+        Assert.Contains("- Turn (a name). The side whose turn it is", board);
+        Assert.Contains("- Round (a whole number). How many times the turns have come round", board);
+        Assert.Contains("- Left (a whole number, read by a side after a colon, e.g. \"Left:Enemy\")", board);
+        var ship = Run("component_describe", """{"component": "Ship"}""").Text;
+        Assert.Contains("- Fuel (a number, out of its tank)", ship);
+        Assert.Contains("- Crates (a whole number, read by a kind after a colon, e.g. \"Crates:Ore\")", ship);
+        Assert.Contains("Outputs: Fuel, Crates:Ore.", Run("components_list", """{"search": "Ship"}""").Text);
+
+        var counter = Run("component_describe", """{"component": "Counter"}""").Text;
+        Assert.Contains("Names an output of the entity track names, or without one this entity or the nearest it's inside with it", counter);
+        Assert.Contains("- Reached (true or false)", counter);
+    }
+
+    [Fact]
+    public void Counters_bars_and_texts_read_outputs_made_like_any_component_and_one_nothing_has_is_reported()
+    {
+        Run("entity_create", """{"entity": {"name": "Turns", "components": {"TurnOrder": {"sides": "Knights, Orcs"}}}}""");
+        Run("entity_create", """{"entity": {"name": "Label", "components": {"Text": {"track": "Turns", "output": "Turn", "value": "{0} to move"}}}}""");
+        var text = Named("Label").GetComponent<Text>()!;
+        Assert.Equal(("Turns", "Turn"), (text.Track, text.Output));
+        Assert.DoesNotContain("Text.Output", Run("entity_get", """{"entity": "Label"}""").Text);
+
+        Run("entity_create", """{"entity": {"name": "Rounds", "components": {"Counter": {"track": "Turns", "output": "Turn"}}}}""");
+        Assert.Contains("Counter.Output", Run("entity_get", """{"entity": "Rounds"}""").Text);
+        Run("entity_update", """{"entity": "Rounds", "changes": {"components": {"Counter": {"output": "Lives"}}}}""");
+        Assert.Contains("Nothing it reads has an output called \"Lives\"", Run("scene_tree", "{}").Text);
+    }
+
     [Fact]
     public void Triggers_are_made_like_any_component_and_a_do_nothing_can_do_is_reported()
     {

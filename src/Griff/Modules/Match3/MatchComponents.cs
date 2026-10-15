@@ -79,6 +79,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     public bool Paused { get; set; }
 
     /// <summary>How many swaps have been made (not counting those that slid back). Saved with the scene, so a rewind takes them back.</summary>
+    [Output(OutOf = nameof(Moves))]
     public int Swaps { get; set; }
 
     /// <summary>
@@ -89,6 +90,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     public int Points { get; set; } = 10;
 
     /// <summary>The points scored so far. Saved with the scene, so a rewind takes them back.</summary>
+    [Output(OutOf = nameof(TargetScore))]
     public int Score { get; set; }
 
     /// <summary>
@@ -204,6 +206,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
 
     /// <summary>How many swaps are left of <see cref="Moves"/>: 0 once they've run out, -1 with no limit.</summary>
     [DoNotSerialize]
+    [Output]
     public int MovesLeft => Moves > 0 ? Math.Max(0, Moves - Swaps) : -1;
 
     /// <summary>True if the board has goals (a <see cref="TargetScore"/> or gems to <see cref="Collect"/>) and they're all met.</summary>
@@ -230,6 +233,8 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
 
     /// <summary>How many clears the last swap has set off so far: 1 for a plain match, more for a chain.</summary>
     [DoNotSerialize]
+    [Sent]
+    [Output]
     public int Chain { get; internal set; }
 
     /// <summary>The cell of the gem this machine's player has picked up to swap, or null.</summary>

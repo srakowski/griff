@@ -612,6 +612,13 @@ public sealed class Door : Component
     /// </summary>
     public string? Key { get; set; }
 
+    /// <summary>
+    /// A flag that has to be set before anyone can use it, e.g. "MetKing" (set by a trigger's Set Flag, a dialogue's
+    /// "[set MetKing]" or a script's <c>Game.SetFlag</c>), or "not MetKing" for while it isn't: it stays shut until then,
+    /// and its prompt hidden.
+    /// </summary>
+    public string? NeedsFlag { get; set; }
+
     /// <summary>Raised when it's used, with whatever used it.</summary>
     public event Action<Entity>? Used;
 

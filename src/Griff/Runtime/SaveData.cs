@@ -97,9 +97,13 @@ public sealed class SaveData
         Write();
     }
 
+    /// <summary>Changes whenever a value is set, deleted or cleared: cheap to poll for changes.</summary>
+    internal long Version { get; private set; }
+
     // Written to a temporary file first, so a crash mid-write can't leave a half-written save.
     private void Write()
     {
+        Version++;
         if (FilePath is null)
             return;
 

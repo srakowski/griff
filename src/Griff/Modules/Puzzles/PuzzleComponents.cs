@@ -60,7 +60,32 @@ public sealed class Goal : Component, ICounterSource
 
     /// <summary>True while a crate it accepts rests on it.</summary>
     [DoNotSerialize]
+    [Output("Covered")]
     public bool IsCovered => CoveredBy is not null;
+
+    /// <summary>How many goals in the scene are covered, this one too: all of them once every crate is home.</summary>
+    [DoNotSerialize]
+    [Output(OutOf = nameof(Goals))]
+    public int GoalsCovered => CountGoals(coveredOnly: true);
+
+    /// <summary>How many goals the scene has.</summary>
+    [DoNotSerialize]
+    [Output]
+    public int Goals => CountGoals(coveredOnly: false);
+
+    private int CountGoals(bool coveredOnly)
+    {
+        if (Entity?.Scene is not { } scene)
+            return 0;
+        var count = 0;
+        foreach (var goal in scene.Active<Goal>())
+        {
+            if (!coveredOnly || goal.IsCovered)
+                count++;
+        }
+
+        return count;
+    }
 
     /// <summary>Raised when a crate covers it, with the crate.</summary>
     public event Action<Entity>? Covered;
@@ -145,6 +170,7 @@ public sealed class MoveHistory : Component, ICounterSource
 
     /// <summary>How many moves have been taken: one more with each, one fewer with each undo, 0 after a restart.</summary>
     [DoNotSerialize]
+    [Output]
     public int Moves { get; internal set; }
 
     /// <summary>True while there's a move (or a restart) to take back.</summary>

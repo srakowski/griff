@@ -349,11 +349,12 @@ public sealed partial class Game : IGameContext
             Net.Relay(message, data, route);
         var heard = _messages.Send(message, data, Scene, route);
 
-        // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something else).
+        // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something
+        // else); or 1 a message, whatever it sends.
         var counters = Active<Counter>()
             .Where(c => c.Message?.Trim() == message && !c.CountsOwn && route.Reaches(c.Entity)).ToList();
         foreach (var counter in counters)
-            counter.Add(CountOf(data));
+            counter.Add(counter.OnePerMessage ? 1 : CountOf(data));
 
         // So do sound players.
         var players = Scene.Active<SoundPlayer>()
@@ -361,10 +362,10 @@ public sealed partial class Game : IGameContext
         foreach (var player in players)
             Play(player);
 
-        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing.
+        // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing and they need no flag that isn't set.
         var panels = Scene.All<Panel>()
             .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive) &&
-                        route.Reaches(p.Entity))
+                        route.Reaches(p.Entity) && FlagHolds(p.NeedsFlag))
             .ToList();
         foreach (var panel in panels)
             OpenPanel(panel);
@@ -901,6 +902,8 @@ public sealed partial class Game : IGameContext
                 counter.Add(ItemCount(counter.Item) - counter.Value);
             if (counter.CountsFromSource)
                 CountFromSource(counter);
+            if (!string.IsNullOrWhiteSpace(counter.Output))
+                CountOutput(counter);
 
             if (counter.Shown is null)
             {
@@ -915,8 +918,18 @@ public sealed partial class Game : IGameContext
                     SaveData.Set(key, counter.Best);
             }
 
-            if (counter.Entity.GetComponent<Text>() is { } text && counter.Display() is var display && text.Value != display)
-                text.Value = display;
+            // The text is only written again when what it shows has changed, so a steady count makes no garbage.
+            if (counter.Entity.GetComponent<Text>() is { } text &&
+                (counter.Displayed != (counter.Value, counter.Best, counter.Total, counter.Format) || text.Value != counter.DisplayedText))
+            {
+                var display = counter.Display();
+                counter.Displayed = (counter.Value, counter.Best, counter.Total, counter.Format);
+                counter.DisplayedText = display;
+                if (text.Value != display)
+                    text.Value = display;
+            }
+
+            ReachedOrNot(counter);
 
             if (counter.Shown is { } shown && shown != counter.Value && counter.Pop > 0 && counter.Pop != 1 && counter.RestingScale is { } rest)
             {
@@ -942,6 +955,58 @@ public sealed partial class Game : IGameContext
             counter.Add(count.Value - counter.Value);
             return;
         }
+    }
+
+    // Texts showing an output fill it into what they say, made again only when it (or what it's out of) changes.
+    private void ShowOutputs()
+    {
+        foreach (var text in Active<Text>())
+        {
+            if (string.IsNullOrWhiteSpace(text.Output))
+            {
+                if (text.ReadFrom is not null)
+                {
+                    text.ReadFrom = null;
+                    text.SetReadout(null);
+                }
+
+                continue;
+            }
+
+            var reader = text.Reader;
+            var found = reader.Find(text.Entity!, text.Track, text.Output);
+            var (number, name, outOf) = found ? (reader.Number, reader.Text, reader.OutOf) : (0f, "", 0f);
+            if (text.ReadFrom is { } from && ReferenceEquals(from.Template, text.Value) && from.Number.Equals(number) && from.Name == name &&
+                from.OutOf.Equals(outOf))
+                continue;
+            text.ReadFrom = (text.Value, number, name, outOf);
+            text.SetReadout(Readout.Fill(text.Value, number, name, outOf, found ? reader.Output!.ValueType : typeof(string)));
+        }
+    }
+
+    // A counter counting an output (a board's score, the dungeon's floor, a faction's gold), out of what it's out of.
+    private static void CountOutput(Counter counter)
+    {
+        if (!counter.Reader.Find(counter.Entity!, counter.Track, counter.Output))
+            return;
+        counter.Total = (int)MathF.Round(counter.Reader.OutOf);
+        counter.Add((int)MathF.Round(counter.Reader.Number) - counter.Value);
+    }
+
+    // As a counter reaches its value, it sends its Reach Message (where the game is run; a player's own counter, such as
+    // one on their HUD, on their machine alone). Starting there, or being put back there by a rewind, isn't reaching it.
+    private void ReachedOrNot(Counter counter)
+    {
+        var reached = counter.Reached;
+        var was = counter.WasReached ?? reached;
+        counter.WasReached = reached;
+        if (!reached || was || string.IsNullOrWhiteSpace(counter.ReachMessage) || !Runs(counter.Entity!))
+            return;
+        var message = counter.ReachMessage.Trim();
+        if (Net.IsOnline && NetLocalAttribute.IsOn(counter.Entity!))
+            SendFromNetwork(message, counter.Value, relay: false, ScopeOf(counter.Entity));
+        else
+            Send(message, counter.Value, from: counter.Entity);
     }
 
     // Each pair that touched this frame (bumped, or overlapping as a trigger) counts once, however many times physics saw it.

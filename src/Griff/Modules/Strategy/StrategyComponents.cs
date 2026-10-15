@@ -53,8 +53,34 @@ public sealed class Faction : Component
     /// <summary>Raised when it loses its last building.</summary>
     public event Action<Faction>? Defeated;
 
-    /// <summary>How much of <paramref name="kind"/> (e.g. "Gold") it has.</summary>
+    /// <summary>How much of <paramref name="kind"/> (e.g. "Gold") it has. Read as "Amount:Gold".</summary>
+    [Output(Example = "Gold")]
     public int Amount(string kind) => Stock().GetValueOrDefault(kind.Trim());
+
+    /// <summary>How many units its team has left in the scene.</summary>
+    [DoNotSerialize]
+    [Output]
+    public int Units => CountTeam<Unit>(u => u.Team);
+
+    /// <summary>How many buildings its team has left in the scene, built or going up.</summary>
+    [DoNotSerialize]
+    [Output]
+    public int Buildings => CountTeam<Building>(b => b.Team);
+
+    private int CountTeam<T>(Func<T, string?> teamOf) where T : Component
+    {
+        if (Entity?.Scene is not { } scene)
+            return 0;
+        var team = Team.AsSpan().Trim();
+        var count = 0;
+        foreach (var member in scene.Active<T>())
+        {
+            if (teamOf(member).AsSpan().Trim().Equals(team, StringComparison.OrdinalIgnoreCase))
+                count++;
+        }
+
+        return count;
+    }
 
     /// <summary>Adds <paramref name="amount"/> of <paramref name="kind"/>, e.g. gold brought back to a town hall.</summary>
     public void Add(string kind, int amount)

@@ -225,7 +225,9 @@ public sealed partial class Game
             case ButtonAction.OpenPanel when string.IsNullOrWhiteSpace(button.Panel):
                 throw new InvalidOperationException($"The button \"{button.Entity!.Name}\" opens a panel, but its Panel isn't set.");
             case ButtonAction.OpenPanel:
-                OpenPanel(button.Panel!);
+                // Not one that needs a flag that isn't set.
+                if (PanelNamed(button.Panel!) is not { } shut || FlagHolds(shut.NeedsFlag))
+                    OpenPanel(button.Panel!);
                 break;
             case ButtonAction.ClosePanel:
                 ClosePanel(_panels.Open.Select(p => p.Panel).LastOrDefault(p => Inside(button.Entity!, p)));

@@ -256,8 +256,9 @@ public enum BarDirection
 
 /// <summary>
 /// A bar that fills up to show <see cref="Value"/> out of <see cref="Max"/>: health, a boss's health, charge, a timer.
-/// Name an entity in <see cref="Track"/> and it shows that entity's <see cref="Health"/> with no code. When it goes down,
-/// the part just lost lingers in the <see cref="Trail"/> color for a moment before draining away.
+/// Name an entity in <see cref="Track"/> and it shows that entity's <see cref="Health"/> with no code, or any of its
+/// outputs with <see cref="Output"/> (a board's score towards its target, a turn's time left). When it goes down, the part
+/// just lost lingers in the <see cref="Trail"/> color for a moment before draining away.
 /// </summary>
 [Category("UI")]
 [ComponentName("Bar")]
@@ -303,10 +304,26 @@ public sealed class Bar : Component, IDrawable
 
     /// <summary>
     /// The name of an entity whose <see cref="Health"/> the bar shows, e.g. "Player" or "Boss": its Current out of its
-    /// Max, every frame. Once that entity is gone the bar shows empty.
+    /// Max, every frame (or its <see cref="Output"/>). Once that entity is gone the bar shows empty.
     /// </summary>
-    [EntityName]
+    [EntityName(Incoming = true)]
     public string? Track { get; set; }
+
+    /// <summary>
+    /// Show an output instead of health: what it gives now (see component_describe's Outputs), out of what it says it's out
+    /// of, or <see cref="Max"/> if it doesn't, e.g. a board's "Score" (out of its Target Score), a turn order's "Time Left",
+    /// a faction's "Amount:Gold". Without a <see cref="Track"/>, it's this entity's, or the nearest one it's inside.
+    /// </summary>
+    [OutputName(On = nameof(Track))]
+    public string? Output { get; set; }
+
+    // The output it shows, found once.
+    internal OutputReader Reader { get; } = new();
+
+    // Its arrow from what it shows says what it shows.
+    public override string? LinkLabel(string property) => property == nameof(Track)
+        ? string.IsNullOrWhiteSpace(Output) ? "Health" : Output.Trim()
+        : null;
 
     /// <summary>World units before the transform's scale, centered on the entity.</summary>
     public Vector2 Size { get; set; } = new(3, 0.35f);
@@ -337,7 +354,19 @@ public sealed class Bar : Component, IDrawable
     /// <summary>Follows <see cref="Track"/> and drains the trail by <paramref name="seconds"/>. Called by the game.</summary>
     internal void Advance(float seconds, Scene scene)
     {
-        if (!string.IsNullOrWhiteSpace(Track))
+        if (!string.IsNullOrWhiteSpace(Output))
+        {
+            // An output, out of what it says (or the bar's own Max); empty once it's gone.
+            if (Reader.Find(Entity!, Track, Output))
+            {
+                Value = Reader.Number;
+                if (Reader.OutOf > 0)
+                    Max = Reader.OutOf;
+            }
+            else
+                Value = 0;
+        }
+        else if (!string.IsNullOrWhiteSpace(Track))
         {
             // In a network game, this player's own character comes first.
             if (_tracked?.Scene != scene || _tracked.Name != Track || (scene.PreferNamed is { } prefer && !prefer(_tracked)))
@@ -558,6 +587,14 @@ public sealed class Panel : Component
     /// </summary>
     [Names(NameKind.Message, Hears = true)]
     public string? OpenMessage { get; set; }
+
+    /// <summary>
+    /// A flag that has to be set before it opens, e.g. "FoundMap" (set by a trigger's Set Flag, a dialogue's
+    /// "[set FoundMap]" or a script's <c>Game.SetFlag</c>), or "not FoundMap" for while it isn't: until then its
+    /// <see cref="OpenOn"/> action, <see cref="OpenMessage"/> and buttons that open it do nothing. Its Open action and
+    /// scripts still open it.
+    /// </summary>
+    public string? NeedsFlag { get; set; }
 
     /// <summary>
     /// Whether Esc and the gamepad's B close it. If it has a button whose Shortcut is Esc, they click that instead. Untick

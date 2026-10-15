@@ -98,6 +98,7 @@ public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
 
     /// <summary>The floor the players are on, from 1 once the game has started; 0 before. Saved with the scene, so a rewind takes it back.</summary>
     [Group("Floors")]
+    [Output]
     public int Floor { get; set; }
 
     /// <summary>A player stepping onto the <see cref="Exit"/>'s cell goes down to the next floor. Untick it to go down only when told to.</summary>

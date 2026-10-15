@@ -32,7 +32,7 @@ public class FrameTests
             "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Dialogues", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Touch Damage",
-            "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Counters", "Resolve: Fade",
+            "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Counters", "Resolve: Text Outputs", "Resolve: Fade",
             "Resolve: Screen Flash", "Resolve: Destroys", "Resolve: Scene Change",
             "Present: Rooms", "Present: Followers", "Present: Late Scripts", "Present: Screen Anchors", "Present: Trails",
             "Present: Lights", "Present: Weather", "Present: Prompts", "Present: Sound Sources", "Present: Sound Players",

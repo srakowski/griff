@@ -191,7 +191,7 @@ public sealed partial class Game
         {
             if (string.IsNullOrWhiteSpace(panel.OpenOn) || panel.Entity!.IsEnabled)
                 continue;
-            if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && Input.WasPressed(panel.OpenOn))
+            if ((panel.Entity.Parent is null || panel.Entity.Parent.IsActive) && Input.WasPressed(panel.OpenOn) && FlagHolds(panel.NeedsFlag))
             {
                 OpenPanel(panel);
                 return;
@@ -240,7 +240,7 @@ public sealed partial class Game
     {
         foreach (var text in Scene.Active<Text>())
         {
-            if (text.Value is { } value && value.Contains('{'))
+            if (text.Said is { } value && value.Contains('{'))
                 text.SetShown(InputPrompts.Fill(Input, value, _panels.Rebinding));
         }
     }

@@ -46,8 +46,13 @@ public static class EntityReferences
         /// <summary>The entity whose field names <see cref="To"/>.</summary>
         public Entity From => Reference.Component.Entity!;
 
-        /// <summary>"Lever to Door: Switch.Targets".</summary>
-        public string Label => $"{From.Name} to {To.Name}: {Reference.Label}";
+        /// <summary>
+        /// "Lever to Door: Switch.Targets", the way the arrow points (from what a wire's or trigger's From names to the
+        /// field's own entity, "Button to Lamp: Wire.From"), with what the arrow says when the component words it itself:
+        /// "Board to Score Label: Counter.Track (Score)".
+        /// </summary>
+        public string Label =>
+            $"{Tail.Name} to {Head.Name}: {Reference.Label}{(Reference.Component.LinkLabel(Reference.Property.Name) is { } words ? $" ({words})" : "")}";
 
         /// <summary>
         /// Where the Scene view's arrow starts: the field's entity, or the one it names for a field that says where

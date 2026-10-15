@@ -58,12 +58,15 @@ public sealed class BeatClock : Component
     public float Beats => (float)Counted;
 
     /// <summary>The beat it's on, counting from 0; -1 before the first.</summary>
+    [Output]
     public int Beat => (int)Math.Floor(Counted);
 
     /// <summary>The bar it's on, counting from 0.</summary>
+    [Output]
     public int Bar => (int)Math.Floor(Counted / PerBar);
 
     /// <summary>Which beat of the bar it's on, from 0 (the bar's first, the downbeat) to <see cref="BeatsPerBar"/> - 1.</summary>
+    [Output]
     public int BeatInBar => Beat - Bar * PerBar;
 
     /// <summary>How far through the beat it is, from 0 (on it) to almost 1 (the next is due).</summary>

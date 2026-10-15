@@ -82,6 +82,14 @@ public static partial class DocComments
     /// <summary>What a component's action does, from its method's <c>///</c> summary.</summary>
     public static DocText Summary(Scenes.ComponentAction action) => Summary(action.Method);
 
+    /// <summary>What a component's output is, from its property's (or method's) <c>///</c> summary.</summary>
+    public static DocText Summary(Scenes.ComponentOutput output) => output.Member switch
+    {
+        PropertyInfo property => Summary(property),
+        MethodInfo method => Summary(method),
+        _ => DocText.Empty,
+    };
+
     private static DocText Read(MemberInfo member, Type context, string section)
     {
         // Overridden properties often say <inheritdoc/>, or nothing: use what the base says. A type only takes its base

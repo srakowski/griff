@@ -89,6 +89,8 @@ public static class ComponentDescription
                 });
             if (property.ActionName is { } actionName)
                 text.Append(CultureInfo.InvariantCulture, $" (Names an action of {(string.IsNullOrEmpty(actionName.On) ? "this entity" : $"the entities {JsonNamingPolicy.CamelCase.ConvertName(actionName.On)} names, or this entity without any")}: one component_describe lists under Actions, e.g. \"Damage\", or \"Health.Damage\" for one component's.)");
+            if (property.OutputName is { } outputName)
+                text.Append(CultureInfo.InvariantCulture, $" (Names an output of {(string.IsNullOrEmpty(outputName.On) ? "this entity" : $"the entity {JsonNamingPolicy.CamelCase.ConvertName(outputName.On)} names, or without one this entity or the nearest it's inside with it")}: one component_describe lists under Outputs, {(outputName.TakesNames ? "any kind" : "a number or true or false")}, e.g. \"Score\", \"MatchBoard.Score\" for one component's, or \"Amount:Gold\" for one read by a name.)");
             if (property.Names is { } names)
                 text.Append(names switch
                 {
@@ -110,6 +112,19 @@ public static class ComponentDescription
                     ? $" (done with {kind}, its {action.ValueName}: a trigger's with{(action.DefaultValue is { } fallback ? $", {AgentValues.ToJson(fallback)?.ToJsonString()} without one" : "")})"
                     : "";
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {action.Name}{value}{meaning}");
+            }
+        }
+
+        if (descriptor.Outputs.Count > 0)
+        {
+            text.AppendLine().AppendLine("Outputs (what anything can read with no code: a Counter's, Bar's or Text's output, a Contraptions Wire's " +
+                "output as its signal; Text shows names too, the rest read numbers, true as 1):");
+            foreach (var output in descriptor.Outputs)
+            {
+                var meaning = DocComments.Summary(output) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
+                var by = output.KeyName is { } key ? $", read by a {ComponentAction.Spaced(key).ToLowerInvariant()} after a colon, e.g. \"{output.Reference}\"" : "";
+                var of = output.OutOfName is { } outOf ? $", out of its {JsonNamingPolicy.CamelCase.ConvertName(outOf)}" : "";
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {output.Name} ({output.ValueKind}{by}{of}){meaning}");
             }
         }
 

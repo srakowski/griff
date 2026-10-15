@@ -36,6 +36,7 @@ public sealed class Switch : Component
     public SwitchMode Mode { get; set; }
 
     /// <summary>True while it's on. Tick it to start switched on; scripts can set it too.</summary>
+    [Output("On")]
     public bool IsOn { get; set; }
 
     /// <summary>
@@ -60,6 +61,13 @@ public sealed class Switch : Component
     /// used up. It only takes it once; after that this is cleared and it works like any other switch.
     /// </summary>
     public string? Key { get; set; }
+
+    /// <summary>
+    /// A flag that has to be set before it can be worked, e.g. "PowerOn" (set by a trigger's Set Flag, a dialogue's
+    /// "[set PowerOn]" or a script's <c>Game.SetFlag</c>), or "not PowerOn" for while it isn't. Until then levers, plates
+    /// and buttons do nothing and its prompt stays hidden; a trigger's or script's On still turns it on.
+    /// </summary>
+    public string? NeedsFlag { get; set; }
 
     /// <summary>Seconds it stays on before turning itself off again: a timed button. 0 stays on.</summary>
     public float OnTime { get; set; }
@@ -239,7 +247,8 @@ public sealed class Inventory : Component
     /// <summary>Everything it holds and how many, in the order each was first added.</summary>
     public IReadOnlyList<(string Name, int Count)> Contents => _items.ToList();
 
-    /// <summary>How many of <paramref name="item"/> it holds (names ignore case).</summary>
+    /// <summary>How many of <paramref name="item"/> it holds (names ignore case). Read as "Count:Key".</summary>
+    [Output(Example = "Key")]
     public int Count(string item) => IndexOf(item) is var i and >= 0 ? _items[i].Count : 0;
 
     /// <summary>True if it holds at least <paramref name="count"/> of <paramref name="item"/>.</summary>
@@ -291,10 +300,17 @@ public sealed class Inventory : Component
         return true;
     }
 
+    // Without garbage, so its count can be read every frame.
     private int IndexOf(string item)
     {
-        item = item?.Trim() ?? "";
-        return _items.FindIndex(i => string.Equals(i.Name, item, StringComparison.OrdinalIgnoreCase));
+        var name = item.AsSpan().Trim();
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (_items[i].Name.AsSpan().Equals(name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
     }
 }
 

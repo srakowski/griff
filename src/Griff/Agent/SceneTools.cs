@@ -248,7 +248,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
         if (unknown.Count > 0)
         {
-            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, tables or their rows, flagged in the Inspector):");
+            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, outputs, tables or their rows, flagged in the Inspector):");
             foreach (var (component, label, problem) in unknown)
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
         }
@@ -256,8 +256,9 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         return ToolResult.Ok(text.ToString());
     }
 
-    // The components' fields naming a prefab, scene, input action, layer or message the project hasn't got, or an action
-    // what they're done on can't do, each as "Shooter.Prefab" and why, as the Inspector flags them.
+    // The components' fields naming a prefab, scene, input action, layer or message the project hasn't got, an action what
+    // they're done on can't do, or an output what they read hasn't got, each as "Shooter.Prefab" and why, as the Inspector
+    // flags them.
     private IEnumerable<(Component Component, string Label, string Problem)> UnmatchedKnown(IEnumerable<Component> components)
     {
         foreach (var component in components.Where(c => host.Components.IsRegistered(c.GetType())))
@@ -268,6 +269,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     yield return (component, $"{component.GetType().Name}.{property.Name}", KnownNames.Problem(property.Names, names) + ".");
                 if (property.ActionName is not null && ActionNames.Unmatched(component, property) is { Count: > 0 } actions)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", ActionNames.Problem(actions) + ".");
+                if (property.OutputName is not null && OutputNames.Unmatched(component, property) is { Count: > 0 } outputs)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", OutputNames.Problem(outputs) + ".");
             }
         }
     }
@@ -761,6 +764,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                 text.Append("- ").Append(entry.Name).Append(": ").Append(entry.Summary.FirstSentence is { Length: > 0 } s ? s : "(no description)");
                 if (entry.Descriptor.Actions.Count > 0)
                     text.Append(" Actions: ").Append(string.Join(", ", entry.Descriptor.Actions.Select(a => a.Name))).Append('.');
+                if (entry.Descriptor.Outputs.Count > 0)
+                    text.Append(" Outputs: ").Append(string.Join(", ", entry.Descriptor.Outputs.Select(o => o.Reference))).Append('.');
                 text.AppendLine();
             }
         }

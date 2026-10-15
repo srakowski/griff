@@ -83,12 +83,15 @@ public sealed class TurnOrder : Component
     /// the turn straight to a side (its turn starts afresh).
     /// </summary>
     [Group("State")]
+    [Output("Turn")]
     public string? Current { get; set; }
 
     /// <summary>How many times the turns have come round, from 1. The game counts it; it's 0 until the game starts.</summary>
+    [Output]
     public int Round { get; set; }
 
     /// <summary>Seconds left of a timed turn. The game counts it down.</summary>
+    [Output(OutOf = nameof(TurnTime))]
     public float TimeLeft { get; set; }
 
     /// <summary>Seconds until the <see cref="Current"/> side's turn starts, between turns. The game counts it down.</summary>
@@ -102,6 +105,26 @@ public sealed class TurnOrder : Component
 
     /// <summary>True while it's <paramref name="side"/>'s turn (not between turns).</summary>
     public bool IsTurn(string? side) => Round > 0 && StartsIn <= 0 && SameSide(side, Current);
+
+    /// <summary>
+    /// How many turn takers <paramref name="side"/> has left in the scene, e.g. "Enemy": units left in tactics, monsters
+    /// left in a roguelike. Read as "Left:Enemy".
+    /// </summary>
+    [Output(Example = "Enemy")]
+    public int Left(string side)
+    {
+        if (Entity?.Scene is not { } scene)
+            return 0;
+        var wanted = side.AsSpan().Trim();
+        var count = 0;
+        foreach (var taker in scene.Active<TurnTaker>())
+        {
+            if (taker.Side.AsSpan().Trim().Equals(wanted, StringComparison.OrdinalIgnoreCase))
+                count++;
+        }
+
+        return count;
+    }
 
     /// <summary>True if the computer plays <paramref name="side"/> (see <see cref="ComputerSides"/>).</summary>
     public bool IsComputer(string? side) => Split(ComputerSides).Any(s => SameSide(s, side));

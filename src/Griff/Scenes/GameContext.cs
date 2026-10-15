@@ -29,6 +29,9 @@ internal interface IGameContext
     /// <summary>Sets or clears a flag in the game's save data.</summary>
     void SetFlag(string name, bool on);
 
+    /// <summary>True if a Needs Flag holds: empty, a flag that's set, or "not" one that isn't.</summary>
+    bool FlagHolds(string? needs);
+
     /// <summary>Opens a panel over the game.</summary>
     void OpenPanel(Panel panel);
 

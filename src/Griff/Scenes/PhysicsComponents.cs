@@ -232,6 +232,16 @@ public sealed class Body : Component
     [Sent(ByMover = true)]
     public Vector2 Velocity { get; set; }
 
+    /// <summary>How fast it's going, in world units per second, whichever way.</summary>
+    [DoNotSerialize]
+    [Output]
+    public float Speed => Velocity.Length();
+
+    /// <summary>How high it is: its entity's height in the world.</summary>
+    [DoNotSerialize]
+    [Output]
+    public float Height => Entity?.Transform.WorldPosition.Y ?? 0;
+
     /// <summary>Multiplier on world gravity. 0 for top-down games or floating things.</summary>
     public float GravityScale { get; set; } = 1f;
 

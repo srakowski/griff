@@ -1,0 +1,49 @@
+title: Anything reads anything
+intro: Components name what they know as outputs. A Text, a Counter, a Bar or a wire shows any of them, a counter does something when it reaches a value, and flags work outside dialogue.
+project: Platformer | Outputs
+
+chapter: A speedometer with no code | A Text's Output
+select: Player
+look: -6, -2, 5
+create: Text
+rename: Speedometer
+set: Transform.Position.Y = 1
+set: Text.Size = 0.4
+set: Text.Value = {0:0.0} m/s
+pick: Text.Output = Speed
+expectvalue: Speedometer.Text.Output = Speed
+explain: field:Text.Output | Output | Every component names what it knows as outputs: a body's speed and height, health, a board's score and moves, the dungeon floor, whose turn it is, the beat, a faction's gold. This list is what the player has.
+say: With no Track, a text reads the entity it's inside, so this one shows the player's speed. Its Value says how: the zero in braces is the output.
+
+chapter: Counting to a value | Reaches, and a wire from Reached
+select: Score
+set: Counter.Reaches = At Least
+set: Counter.Reach = 1
+set: Counter.Reach Message = FirstCoin
+explain: field:Counter.Reaches | Reaches | A counter can do something as it reaches a value: send a message, and turn on its own output Reached.
+select: Bridge
+add: Wire
+pick: Wire.From = Score
+pick: Wire.Output = Reached
+set: Wire.Input = Show
+expectvalue: Bridge.Wire.Output = Reached
+explain: field:Wire.Output | Output | A wire carries any output that gives a number or true or false. This one shows the bridge once the score reaches one coin.
+
+chapter: Flags outside dialogue | A trigger sets one, the lever needs it
+create: Empty
+rename: Rules
+add: Trigger
+pick: Trigger.Message = FirstCoin
+pick: Trigger.Do = Set Flag
+set: Trigger.With = Rich
+select: Lever
+set: Switch.Needs Flag = Rich
+expectvalue: Lever.Switch.NeedsFlag = Rich
+explain: field:Switch.NeedsFlag | Needs Flag | Switches, doors, spawners and panels can need a flag now. Until a trigger, a dialogue or a script sets it, this lever won't budge.
+
+chapter: Playing it | Run for the coin
+play
+hold: Right 3
+waitfor: Bridge | 5
+explain: game | The bridge | The first coin brought the score to one, so its Reached came on and the wire showed the bridge, and the trigger set the flag the lever needs. The speedometer read the player all the way.
+stop

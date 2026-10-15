@@ -10,7 +10,9 @@ namespace Griff.Tests.Architecture;
 /// online the same way Griff's do. Only the components that make up a view (cameras, what's pinned to the screen,
 /// parallax, sprites, lights) and an entity's networking settings may be named here. Likewise triggers, wires and
 /// switches know nothing of what they set off: a component names its actions ([Action]) and what a switch powers
-/// ([Powered]), so the code that finds and does them names no component but the trigger and scope it runs.
+/// ([Powered]), so the code that finds and does them names no component but the trigger and scope it runs. And counters,
+/// bars, texts and wires know nothing of what they read: a component names its outputs ([Output]), so the code that
+/// finds and reads them names none.
 /// </summary>
 public sealed class ExtensionPointTests
 {
@@ -21,6 +23,13 @@ public sealed class ExtensionPointTests
     [InlineData("Runtime/Game.Triggers.cs", new[] { "Trigger", "MessageScope" })]
     [InlineData("Scenes/ComponentActions.cs", new string[0])]
     [InlineData("Editing/ActionNames.cs", new string[0])]
+    [InlineData("Scenes/ComponentOutputs.cs", new string[0])]
+    [InlineData("Scenes/OutputReader.cs", new string[0])]
+    [InlineData("Scenes/Readout.cs", new string[0])]
+    [InlineData("Editing/OutputNames.cs", new string[0])]
+
+    // A wire reads any output by name; only the wiring parts' own inputs are named.
+    [InlineData("Modules/Contraptions/WirePorts.cs", new[] { "WireGate", "WireLamp", "Switch", "WireDisplay", "Light" })]
     public void Core_NamesNoComponentButItsOwn(string file, string[] allowed)
     {
         var (compilation, trees) = LayerTests.Core();

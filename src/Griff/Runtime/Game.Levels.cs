@@ -433,7 +433,7 @@ public sealed partial class Game
         {
             var users = TouchersOf(door.Entity!).Where(t => door.AcceptsLayer(t.Layer)).Select(t => t.By).ToList();
             touchingAnyDoor.UnionWith(users);
-            var ready = door.Locked ? [] : users.Where(u => !_levels.ArrivedByDoor.Contains(u) && CanUnlock(door, u)).ToList();
+            var ready = door.Locked || !FlagHolds(door.NeedsFlag) ? [] : users.Where(u => !_levels.ArrivedByDoor.Contains(u) && CanUnlock(door, u)).ToList();
             ShowPrompt(door.Entity!, door.Prompt, ready.Count > 0);
 
             // One trip at a time: not while a scene change or another door's fade is under way.
@@ -631,6 +631,52 @@ public sealed partial class Game
 
     /// <summary>Raised when a flag is set or cleared, with its name and whether it's set now.</summary>
     public event Action<string, bool>? FlagChanged;
+
+    /// <summary>
+    /// True if <paramref name="needs"/> holds, as a switch's, door's, spawner's or panel's Needs Flag says: empty always
+    /// does, "Name" while that flag is set, and "not Name" (or "!Name") while it isn't. Asking every frame makes no garbage.
+    /// </summary>
+    public bool FlagHolds(string? needs)
+    {
+        var name = needs.AsSpan().Trim();
+        if (name.Length == 0)
+            return true;
+        var not = false;
+        if (name[0] == '!')
+        {
+            name = name[1..].TrimStart();
+            not = true;
+        }
+        else if (name.Length > 4 && name.StartsWith("not ", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[4..].TrimStart();
+            not = true;
+        }
+
+        return SetFlags().Contains(name) != not;
+    }
+
+    // The flags set now, by name whatever their capitals, made again only when the save data changes.
+    private HashSet<string>.AlternateLookup<ReadOnlySpan<char>> SetFlags()
+    {
+        if (_setFlags is null || _setFlagsOf != SaveData || _setFlagsVersion != SaveData.Version)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var key in SaveData.Keys)
+            {
+                if (SaveData.GetBool(key))
+                    set.Add(key);
+            }
+
+            (_setFlags, _setFlagsOf, _setFlagsVersion) = (set, SaveData, SaveData.Version);
+        }
+
+        return _setFlags.GetAlternateLookup<ReadOnlySpan<char>>();
+    }
+
+    private HashSet<string>? _setFlags;
+    private SaveData? _setFlagsOf;
+    private long _setFlagsVersion;
 
     // The name a flag is saved under, matched without minding capitals, or null when it's not saved.
     private string? FlagKey(string name)

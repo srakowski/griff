@@ -9,7 +9,7 @@ Scripts are components too: see [Scripting](/docs/scripting/).
 
 ## Spawners and lifetimes
 
-A **Spawner** spawns its **Prefab** every **Interval** seconds where it stands, after a **Delay**, within a **Radius**, up to **Count** in all and **Max Alive** at once; with **Beats** set, it spawns on the music's beat instead (see [Keeping the beat](/docs/audio/#keeping-the-beat)). A **Lifetime** destroys its entity after **Seconds**, fading it out over the last **Fade Out** seconds: bullets, effects, score popups.
+A **Spawner** spawns its **Prefab** every **Interval** seconds where it stands, after a **Delay**, within a **Radius**, up to **Count** in all and **Max Alive** at once (and, with **Needs Flag**, only once that flag is set); with **Beats** set, it spawns on the music's beat instead (see [Keeping the beat](/docs/audio/#keeping-the-beat)). A **Lifetime** destroys its entity after **Seconds**, fading it out over the last **Fade Out** seconds: bullets, effects, score popups.
 
 ## Prefabs
 

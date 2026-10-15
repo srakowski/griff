@@ -197,17 +197,49 @@ public sealed class Text : Component, IDrawable
     /// <summary>Where the text sits relative to the entity; lines of several-line text line up the same way.</summary>
     public TextAlign Align { get; set; }
 
-    private (string? From, string? To) _shown;
+    /// <summary>
+    /// An entity whose <see cref="Output"/> it shows, by name, e.g. "Board". Empty is this entity, or the nearest one it's
+    /// inside with that output.
+    /// </summary>
+    [EntityName(Incoming = true)]
+    [Group("Showing an Output")]
+    public string? Track { get; set; }
 
     /// <summary>
-    /// What's drawn: <see cref="Value"/>, with input prompts filled in while the game runs. An action's name in braces
-    /// becomes the key or button that does it on the device being played with, so "Press {Interact}" reads "Press E" on
-    /// the keyboard and "Press Y" on a gamepad, and follows the player's own bindings.
+    /// Show an output while the game runs: what it gives now (see component_describe's Outputs), e.g. a board's "Score", a
+    /// turn order's "Turn", a beat clock's "Beat", a faction's "Amount:Gold". <see cref="Value"/> is then how it reads, with
+    /// <c>{0}</c> for the output and <c>{1}</c> what it's out of, e.g. "Gold: {0}", "{0} / {1}" or "{0:0.0} m/s"; a Value
+    /// without them shows just the output.
     /// </summary>
-    public string? Shown => _shown.From is not null && _shown.From == Value ? _shown.To : Value;
+    [OutputName(On = nameof(Track), TakesNames = true)]
+    public string? Output { get; set; }
 
-    /// <summary>Sets what <see cref="Shown"/> is for the current <see cref="Value"/>. Called by the game.</summary>
-    internal void SetShown(string? shown) => _shown = (Value, shown);
+    private (string? From, string? To) _shown;
+    private string? _readout;
+
+    /// <summary>
+    /// What's drawn: <see cref="Value"/> (with its <see cref="Output"/> filled in), with input prompts filled in while the
+    /// game runs. An action's name in braces becomes the key or button that does it on the device being played with, so
+    /// "Press {Interact}" reads "Press E" on the keyboard and "Press Y" on a gamepad, and follows the player's own bindings.
+    /// </summary>
+    public string? Shown => _shown.From is not null && _shown.From == Said ? _shown.To : Said;
+
+    /// <summary>Sets what <see cref="Shown"/> is for what it says now. Called by the game.</summary>
+    internal void SetShown(string? shown) => _shown = (Said, shown);
+
+    // What it says before prompts are filled in: its Value, with the output it shows filled in while the game runs.
+    internal string? Said => _readout ?? Value;
+
+    // The output it shows, found once, and what its readout was last made from (so it's only made again when that changes).
+    internal OutputReader Reader { get; } = new();
+
+    internal (string? Template, float Number, string? Name, float OutOf)? ReadFrom { get; set; }
+
+    internal void SetReadout(string? readout) => _readout = readout;
+
+    // Its arrow from what it shows says what it shows.
+    public override string? LinkLabel(string property) =>
+        property == nameof(Track) && !string.IsNullOrWhiteSpace(Output) ? Output.Trim() : null;
 
     int? IDrawable.DrawOrder => Order;
 

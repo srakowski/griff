@@ -26,6 +26,7 @@ public sealed class ComponentDescriptor
         Version = type.GetCustomAttribute<ComponentVersionAttribute>()?.Version ?? 1;
         _upgrades = DiscoverUpgrades(type, Version);
         Actions = ComponentActions.Of(type);
+        Outputs = ComponentOutputs.Of(type);
     }
 
     // The step up from version n is at n - 1.
@@ -47,6 +48,12 @@ public sealed class ComponentDescriptor
     /// script's <c>Game.Do</c>.
     /// </summary>
     public IReadOnlyList<ComponentAction> Actions { get; }
+
+    /// <summary>
+    /// What it knows that anything can read (see <see cref="OutputAttribute"/>): a counter, bar or text showing it, a wire
+    /// carrying it.
+    /// </summary>
+    public IReadOnlyList<ComponentOutput> Outputs { get; }
 
     /// <summary>Where the editor's catalog lists it, from <see cref="CategoryAttribute"/>; null if it doesn't say.</summary>
     public string? Category { get; }
@@ -195,6 +202,7 @@ public sealed class PropertyDescriptor
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
         Names = property.PropertyType == typeof(string) ? property.GetCustomAttribute<NamesAttribute>() : null;
         ActionName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<ActionNameAttribute>() : null;
+        OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
     }
 
     internal PropertyInfo Info => _property;
@@ -229,6 +237,12 @@ public sealed class PropertyDescriptor
     /// of its own entity), which the Inspector picks from a list of theirs.
     /// </summary>
     public ActionNameAttribute? ActionName { get; }
+
+    /// <summary>
+    /// For a string marked <see cref="OutputNameAttribute"/>: it names an output of the entity another property names (or of
+    /// its own entity), which the Inspector picks from a list of theirs.
+    /// </summary>
+    public OutputNameAttribute? OutputName { get; }
 
     /// <summary>The subheading the Inspector shows it under, from the <see cref="GroupAttribute"/> on it or before it; null for none.</summary>
     public string? Group { get; }

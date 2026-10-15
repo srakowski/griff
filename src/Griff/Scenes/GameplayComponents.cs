@@ -30,6 +30,7 @@ public sealed class Health : Component
     }
 
     /// <summary>Hit points now. Normally starts at <see cref="Max"/>.</summary>
+    [Output("Health", OutOf = nameof(Max))]
     public float Current
     {
         get => _current.Value;
@@ -339,13 +340,30 @@ public sealed class Pickup : Component
     internal void RaiseCollected(Entity by) => Collected?.Invoke(by);
 }
 
+/// <summary>When a <see cref="Counter"/> does something as its count reaches a value.</summary>
+public enum CounterReach
+{
+    /// <summary>It just counts.</summary>
+    Never,
+
+    /// <summary>Once the count is at least its Reach: counting up to it (10 coins, a score of 1000).</summary>
+    AtLeast,
+
+    /// <summary>Once the count is at most its Reach: counting down to it (no moves left, the last enemy gone).</summary>
+    AtMost,
+}
+
 /// <summary>
 /// Keeps count and shows it in its entity's <see cref="Text"/>: a score, coins, kills. Every <see cref="Message"/> sent
-/// adds to it (the number sent along, or 1), so it adds up <see cref="Pickup"/>s with no code; scripts can call
-/// <see cref="Add"/>. With <see cref="SaveBestAs"/> it remembers the highest count ever, between runs.
+/// adds to it (the number sent along, or 1; or just 1 with <see cref="OnePerMessage"/>), so it adds up
+/// <see cref="Pickup"/>s with no code; scripts can call <see cref="Add"/>. It can count anything's output instead (a board's
+/// score, the dungeon floor, a faction's gold: see <see cref="Output"/>). When it <see cref="Reaches"/> a value it sends its
+/// <see cref="ReachMessage"/> and its own output Reached turns on. With <see cref="SaveBestAs"/> it remembers the highest
+/// count ever, between runs.
 /// </summary>
 [Category("Gameplay")]
 [WorksWith(typeof(Text), Note = "shows the count")]
+[WorksWith(typeof(Trigger), Note = "doing something on its Reach Message")]
 [ComponentName("Griff.Counter")]
 public sealed class Counter : Component
 {
@@ -353,7 +371,14 @@ public sealed class Counter : Component
     [Names(NameKind.Message, Hears = true)]
     public string? Message { get; set; } = "Score";
 
+    /// <summary>
+    /// Add 1 for each <see cref="Message"/>, whatever number it sends: a beat clock's Beat sends the beat's number (0, 1,
+    /// 2...), so a counter of beats adds one a beat with this, rather than adding the numbers up.
+    /// </summary>
+    public bool OnePerMessage { get; set; }
+
     /// <summary>The count now. Set it to start from something other than 0.</summary>
+    [Output("Count", OutOf = nameof(Total))]
     public int Value { get; set; }
 
     /// <summary>
@@ -412,6 +437,52 @@ public sealed class Counter : Component
     public int CountKind { get; set; } = -1;
 
     /// <summary>
+    /// An entity whose <see cref="Output"/> it counts, by name, e.g. "Board". Empty is this entity, or the nearest one it's
+    /// inside with that output.
+    /// </summary>
+    [EntityName(Incoming = true)]
+    [Group("Counting an Output")]
+    public string? Track { get; set; }
+
+    /// <summary>
+    /// Count an output instead of a message: whatever it gives, now (see component_describe's Outputs), e.g. a board's
+    /// "Score" or "Moves Left", a dungeon's "Floor", a turn order's "Round", a beat clock's "Beat", a faction's
+    /// "Amount:Gold" or "Units", another counter's "Count". What it's out of, if it says, is <c>{2}</c> in <see cref="Format"/>.
+    /// </summary>
+    [OutputName(On = nameof(Track))]
+    public string? Output { get; set; }
+
+    /// <summary>
+    /// Do something as the count reaches <see cref="Reach"/>: once it's at least that (counting up) or at most that
+    /// (counting down). It sends <see cref="ReachMessage"/> each time it gets there, and its output Reached is on while it's
+    /// there, for a wire into a door's Power.
+    /// </summary>
+    [Group("Reaching a Value")]
+    public CounterReach Reaches { get; set; }
+
+    /// <summary>The count it reaches, e.g. 10 coins, or 0 moves left.</summary>
+    [ShownWhen(nameof(Reaches))]
+    public int Reach { get; set; } = 10;
+
+    /// <summary>
+    /// A message sent as the count reaches <see cref="Reach"/>, with the count as its data: a trigger opens a door or a panel
+    /// on it. Sent again if the count leaves it and comes back.
+    /// </summary>
+    [Names(NameKind.Message)]
+    [ShownWhen(nameof(Reaches))]
+    public string? ReachMessage { get; set; }
+
+    /// <summary>True while the count is at (or past) <see cref="Reach"/>, the way <see cref="Reaches"/> says.</summary>
+    [DoNotSerialize]
+    [Output]
+    public bool Reached => Reaches switch
+    {
+        CounterReach.AtLeast => Value >= Reach,
+        CounterReach.AtMost => Value <= Reach,
+        _ => false,
+    };
+
+    /// <summary>
     /// What the count is out of, for a counter that counts goals, a match board's moves, score or gems (<c>{2}</c> in
     /// <see cref="Format"/>); 0 otherwise.
     /// </summary>
@@ -420,10 +491,12 @@ public sealed class Counter : Component
 
     /// <summary>How far the count is from <see cref="Total"/>, never below 0 (<c>{3}</c> in <see cref="Format"/>): goals left, moves left.</summary>
     [DoNotSerialize]
+    [Output]
     public int Left => Math.Max(0, Total - Value);
 
     /// <summary>The best count, from <see cref="SaveBestAs"/> (or this run's, without it).</summary>
     [DoNotSerialize]
+    [Output]
     public int Best { get; internal set; }
 
     /// <summary>Raised when the count changes.</summary>
@@ -435,6 +508,7 @@ public sealed class Counter : Component
     {
         if (amount == 0)
             return;
+        WasReached ??= Reached;
         Value += amount;
         Changed?.Invoke(this);
     }
@@ -445,6 +519,7 @@ public sealed class Counter : Component
     {
         if (Value == 0)
             return;
+        WasReached ??= Reached;
         Value = 0;
         Changed?.Invoke(this);
     }
@@ -464,8 +539,32 @@ public sealed class Counter : Component
         }
     }
 
-    // Counts an item, goals, moves, a board's score or gems rather than its Message.
-    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || CountsFromSource;
+    // Counts an item, an output, goals, moves, a board's score or gems rather than its Message.
+    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || !string.IsNullOrWhiteSpace(Output) || CountsFromSource;
+
+    // The output it counts, found once.
+    internal OutputReader Reader { get; } = new();
+
+    // Whether it had reached its value when last looked at, so it sends its Reach Message as it gets there (not when a
+    // scene or a rewind starts it there).
+    internal bool? WasReached { get; set; }
+
+    // What its text was last written from, and what it said: written again only when that changes.
+    internal (int Value, int Best, int Total, string? Format)? Displayed { get; set; }
+
+    internal string? DisplayedText { get; set; }
+
+    // A message's own fields only matter when it counts one.
+    public override bool Uses(string property) => property switch
+    {
+        nameof(Message) => string.IsNullOrWhiteSpace(Output),
+        nameof(OnePerMessage) => !CountsOwn,
+        _ => true,
+    };
+
+    // Its arrow from what it counts says what it counts.
+    public override string? LinkLabel(string property) =>
+        property == nameof(Track) && !string.IsNullOrWhiteSpace(Output) ? Output.Trim() : null;
 
     // Counts what a component in the scene counts (see ICounterSource) rather than a message or an item.
     internal bool CountsFromSource => CountGoals || CountMoves || CountScore || CountFloor || CountKind >= 0;
@@ -533,6 +632,13 @@ public sealed class Spawner : Component
     public bool Running { get; set; } = true;
 
     /// <summary>
+    /// A flag that has to be set before it starts spawning, e.g. "AlarmRaised" (set by a trigger's Set Flag, a dialogue's
+    /// "[set AlarmRaised]" or a script's <c>Game.SetFlag</c>), or "not AlarmRaised" to spawn only while it isn't. Its count
+    /// down waits until then; its Spawn action still spawns one.
+    /// </summary>
+    public string? NeedsFlag { get; set; }
+
+    /// <summary>
     /// Steps to the music of a <see cref="BeatClock"/>: spawns on every this many beats instead of every <see cref="Interval"/>
     /// seconds, once <see cref="Delay"/> has passed. A spawn that has no room waits for the next. 0 goes by seconds.
     /// </summary>
@@ -566,10 +672,10 @@ public sealed class Spawner : Component
     /// <summary>Counts down and spawns when due. Called by the game.</summary>
     internal void Advance(float seconds, IGameContext game)
     {
-        _alive.RemoveAll(e => e.Scene != game.Scene);
+        ForgetGone(game.Scene);
         if (float.IsNaN(_untilNext))
             _untilNext = Delay;
-        if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab))
+        if (IsFinished || !Running || string.IsNullOrWhiteSpace(Prefab) || !game.FlagHolds(NeedsFlag))
             return;
 
         // On the beat, the count down is just its Delay, and each spawn waits for a beat it steps on.
@@ -598,10 +704,20 @@ public sealed class Spawner : Component
     private void SpawnNow(IGameContext game)
     {
         ArgumentNullException.ThrowIfNull(game);
-        _alive.RemoveAll(e => e.Scene != game.Scene);
+        ForgetGone(game.Scene);
         if (IsFinished || string.IsNullOrWhiteSpace(Prefab) || (MaxAlive > 0 && _alive.Count >= MaxAlive))
             return;
         SpawnOne(game);
+    }
+
+    // Its spawns no longer in the scene make room, without any garbage.
+    private void ForgetGone(Scene scene)
+    {
+        for (var i = _alive.Count - 1; i >= 0; i--)
+        {
+            if (_alive[i].Scene != scene)
+                _alive.RemoveAt(i);
+        }
     }
 
     private void SpawnOne(IGameContext game)

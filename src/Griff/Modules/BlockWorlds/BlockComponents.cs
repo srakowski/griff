@@ -416,7 +416,29 @@ public sealed class Hotbar : Component, IClaimsNumberKeys
     public IReadOnlyList<(string? Item, int Count)> Shown { get; internal set; } = [];
 
     /// <summary>The item in the picked slot, or null if it's empty.</summary>
+    [Output]
     public string? SelectedItem => Selected >= 0 && Selected < Shown.Count ? Shown[Selected].Item : null;
+
+    /// <summary>How many of the picked slot's item it holds: the blocks left to place.</summary>
+    [DoNotSerialize]
+    [Output]
+    public int SelectedCount => Selected >= 0 && Selected < Shown.Count ? Shown[Selected].Count : 0;
+
+    /// <summary>How many of <paramref name="item"/> (e.g. "Dirt") its slots hold. Read as "Blocks:Dirt".</summary>
+    [Output("Blocks", Example = "Dirt")]
+    public int CountOf(string item)
+    {
+        var name = item.AsSpan().Trim();
+        var count = 0;
+        var shown = Shown;
+        for (var i = 0; i < shown.Count; i++)
+        {
+            if (shown[i].Item.AsSpan().Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+                count += shown[i].Count;
+        }
+
+        return count;
+    }
 
     /// <summary>The color of <paramref name="item"/>'s slot: from <see cref="Colors"/>, or picked from its name.</summary>
     public Color ColorOf(string item)

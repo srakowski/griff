@@ -260,6 +260,7 @@ public sealed class WireGate : Component, IDrawable
 
     /// <summary>Its output, worked out every frame.</summary>
     [DoNotSerialize]
+    [Output]
     public float Out { get; internal set; }
 
     /// <summary>What it's labeled with in the game: "AND", "+", "DELAY".</summary>
@@ -300,6 +301,7 @@ public sealed class WireButton : Component
     public bool Toggle { get; set; } = true;
 
     /// <summary>True while it's on.</summary>
+    [Output("On")]
     public bool IsOn { get; set; }
 
     /// <summary>The color its sprite turns while it's on. Transparent leaves it alone.</summary>
@@ -328,7 +330,13 @@ public sealed class WireSensor : Component
 
     /// <summary>How many things are inside it.</summary>
     [DoNotSerialize]
+    [Output]
     public int Count { get; internal set; }
+
+    /// <summary>True while anything is inside it.</summary>
+    [DoNotSerialize]
+    [Output]
+    public bool Out => Count > 0;
 
     public bool AcceptsLayer(string? layer)
     {
@@ -381,18 +389,32 @@ public sealed class WireDisplay : Component, IDrawable
     public string? Format { get; set; } = "0.##";
 
     /// <summary>The number as shown.</summary>
-    public string Shown => Value.ToString(string.IsNullOrWhiteSpace(Format) ? "0.##" : Format, CultureInfo.InvariantCulture);
+    public string Shown
+    {
+        get
+        {
+            // Written again only when the number or its format changes, so a steady display makes no garbage.
+            if (_shown is not { } shown || !shown.Value.Equals(Value) || !ReferenceEquals(shown.Format, Format))
+                _shown = shown = (Value, Format, Value.ToString(string.IsNullOrWhiteSpace(Format) ? "0.##" : Format, CultureInfo.InvariantCulture));
+            return shown.Text;
+        }
+    }
+
+    private (float Value, string? Format, string Text)? _shown;
 }
 
 /// <summary>
 /// Connects an output of another entity to an input of this one, so one drives the other: a button's "On" to a lamp's
-/// "On", a sensor to a door's "Power". Every entity has the inputs "Power" (switches it on and off as a
-/// <see cref="Switch"/> does) and "Show"; the parts in Wiring add their own.
+/// "On", a sensor to a door's "Power", a board's "Score" to a display's "Value". Every entity has the inputs "Power"
+/// (switches it on and off as a <see cref="Switch"/> does) and "Show"; the parts in Wiring add their own, and every
+/// component's actions are inputs too.
 /// </summary>
 /// <remarks>
-/// Outputs: a button's or switch's "On", a gate's "Out", a sensor's "Out" and "Count", a body's "Speed" and "Height",
-/// health's "Health", a counter's "Count". Inputs: "Power", "Show", a gate's "A" and "B", a lamp's "On", a
-/// thruster's "Power", a display's "Value", a switch's "On", a light's "Brightness". Several wires into one input add up.
+/// Outputs are what components know (see component_describe's Outputs), numbers and true or false: a button's or switch's
+/// "On", a gate's "Out", a sensor's "Out" and "Count", a body's "Speed" and "Height", health's "Health", a counter's
+/// "Count" and "Reached", a board's "Score", a dungeon's "Floor", a beat clock's "Beat", a faction's "Amount:Gold", and a
+/// script's own. Inputs: "Power", "Show", a gate's "A" and "B", a lamp's "On", a thruster's "Power", a display's "Value", a
+/// switch's "On", a light's "Brightness", and any action. Several wires into one input add up.
 /// </remarks>
 [Category("Wiring")]
 [ComponentName("Griff.Wire")]
@@ -431,7 +453,11 @@ public sealed class Wire : Component, IDrawable
     [EntityName(Incoming = true)]
     public string? From { get; set; }
 
-    /// <summary>The output it carries from there, e.g. "On" or "Out".</summary>
+    /// <summary>
+    /// The output it carries from there, e.g. a button's "On", a gate's "Out", a board's "Score" or a faction's
+    /// "Amount:Gold": one that gives a number or true or false (1 or 0).
+    /// </summary>
+    [OutputName(On = nameof(From))]
     public string? Output { get; set; } = "Out";
 
     /// <summary>The wire's color.</summary>
@@ -445,6 +471,16 @@ public sealed class Wire : Component, IDrawable
     public float Signal { get; internal set; }
 
     internal Entity? Source { get; set; }
+
+    // Its Input as a port's name, worked out once for each Input it's given.
+    internal (string? Input, string Name)? Port { get; set; }
+
+    // The output it carries, found once on its source.
+    internal OutputReader Reader { get; } = new();
+
+    // Its arrow from where it comes from says what it carries where: "On to Power".
+    public override string? LinkLabel(string property) =>
+        property == nameof(From) ? $"{(string.IsNullOrWhiteSpace(Output) ? "Out" : Output.Trim())} to {(string.IsNullOrWhiteSpace(Input) ? "Power" : Input.Trim())}" : null;
 }
 
 /// <summary>Where the parts of a contraption are, for ropes and wires: shared by the game and how they're drawn.</summary>

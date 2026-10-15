@@ -212,6 +212,13 @@ static class Reference
                 inActions = true;
                 continue;
             }
+            else if (line.StartsWith("Outputs (", StringComparison.Ordinal))
+            {
+                result.AppendLine().AppendLine("## Outputs").AppendLine().AppendLine(Escape(char.ToUpperInvariant(line[9]) + line[10..].TrimEnd(':')[..^1]) + ".");
+                previousList = false;
+                inActions = true;
+                continue;
+            }
             else if (line.StartsWith("While the game runs", StringComparison.Ordinal))
             {
                 inActions = false;

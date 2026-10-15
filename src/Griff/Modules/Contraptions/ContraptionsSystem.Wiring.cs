@@ -23,21 +23,39 @@ internal sealed partial class ContraptionsSystem
         if (wires.Count > 0 || gates.Count > 0)
             PassSignals(wires, gates);
         if (Sandbox.Applied.Count > 0)
-            Sandbox.Applied.Keys.Where(k => k.Entity.Scene != Scene).ToList().ForEach(k => Sandbox.Applied.Remove(k));
+            ForgetGoneInputs();
         RunWireOutputs();
+    }
+
+    // What each input is given this frame, and inputs whose entities have gone: kept to fill again, so wiring makes no garbage.
+    private readonly Dictionary<(Entity Entity, string Port), float> _wireInputs = [];
+    private readonly List<(Entity Entity, string Port)> _goneInputs = [];
+
+    private void ForgetGoneInputs()
+    {
+        _goneInputs.Clear();
+        foreach (var key in Sandbox.Applied.Keys)
+        {
+            if (key.Entity.Scene != Scene)
+                _goneInputs.Add(key);
+        }
+
+        foreach (var key in _goneInputs)
+            Sandbox.Applied.Remove(key);
+        _goneInputs.Clear();
     }
 
     private void PassSignals(ComponentList<Wire> wires, ComponentList<WireGate> gates)
     {
-        var inputs = new Dictionary<(Entity Entity, string Port), float>();
+        var inputs = _wireInputs;
         for (var pass = 0; pass < WirePasses; pass++)
         {
             inputs.Clear();
             foreach (var wire in wires)
             {
                 var source = wire.Source?.Scene == Scene ? wire.Source : wire.Source = WirePorts.Find(wire.Entity!, wire.From);
-                wire.Signal = source is null ? 0 : WirePorts.Read(source, wire.Output);
-                var key = (wire.Entity!, PortName(wire.Input));
+                wire.Signal = source is not null && wire.Reader.Find(source, null, wire.Output) ? wire.Reader.Number : 0;
+                var key = (wire.Entity!, PortName(wire));
                 inputs[key] = inputs.GetValueOrDefault(key) + wire.Signal;
             }
 
@@ -65,7 +83,16 @@ internal sealed partial class ContraptionsSystem
             WriteInput(entity, port, value);
     }
 
-    // "power" and " Power " are both "Power".
+    // "power" and " Power " are both "Power": worked out once for each Input a wire is given.
+    private static string PortName(Wire wire)
+    {
+        if (wire.Port is { } known && ReferenceEquals(known.Input, wire.Input))
+            return known.Name;
+        var name = PortName(wire.Input);
+        wire.Port = (wire.Input, name);
+        return name;
+    }
+
     private static string PortName(string? port)
     {
         var name = port?.Trim() ?? "";

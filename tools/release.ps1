@@ -23,7 +23,7 @@ if (-not $NoBuild) {
 }
 
 $build = Join-Path $repo 'src\Griff.Editor\bin\Release\net10.0-windows'
-foreach ($needed in 'Griff.Editor.exe', 'Player\Standalone\Griff.Player.exe', 'Player\Small\Griff.Player.exe', 'FreeFonts\JetBrainsMono-OFL.txt') {
+foreach ($needed in 'Griff.Editor.exe', 'Player\Standalone\Griff.Player.exe', 'Player\Small\Griff.Player.exe', 'Player\Web\wwwroot\index.html', 'FreeFonts\JetBrainsMono-OFL.txt') {
     if (-not (Test-Path (Join-Path $build $needed))) { throw "The Release build has no $needed (in $build)." }
 }
 
@@ -54,7 +54,8 @@ To run it:
   2. Unzip this folder anywhere you can write to, and run Griff.Editor.exe.
   3. File > New Project, pick a template, press Play.
 
-The Player folder holds the game players that Game > Build Game packs your games with. FreeFonts holds
+The Player folder holds the game players the Build menu packs your games with (for Windows, and for the
+web in Player\Web). FreeFonts holds
 the fonts Griff offers for games, each with its license. LICENSE is Griff's (MIT); THIRD-PARTY-NOTICES.txt lists
 what others made that Griff carries.
 "@ | Set-Content -Encoding utf8 (Join-Path $folder 'README.txt')

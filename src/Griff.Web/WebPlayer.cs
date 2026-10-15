@@ -1,23 +1,28 @@
 using System.Globalization;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
+using Griff.Audio;
 using Griff.Graphics;
 using Griff.Input;
 using Griff.Rendering;
 using Griff.Runtime;
+using Griff.Scenes;
 
 namespace Griff.Web;
 
 /// <summary>
 /// Plays a Griff game in the browser. The page calls <see cref="Frame"/> once for each frame the screen shows (its
-/// <c>requestAnimationFrame</c>): the game takes the steps that frame's time holds, as on the desktop, and its picture
-/// is drawn with WebGL (<see cref="WebGLRenderer"/>). The page sends the keyboard and mouse here as they happen.
+/// <c>requestAnimationFrame</c>): the game takes the steps that frame's time holds, as on the desktop, its picture is
+/// drawn with WebGL (<see cref="WebGLRenderer"/>) and its sound is handed to Web Audio (<see cref="BufferedOutput"/>).
+/// The page sends the keyboard, mouse, touch and controller here as they happen. Saves go to the page's
+/// <c>localStorage</c>, under a key of the game's own (<see cref="WebSaves.KeyOf"/>).
 /// </summary>
 /// <remarks>
 /// With <c>?still=<i>steps</i></c> on the page's address, the game takes that many steps on its first frame (its
 /// <see cref="Rand"/> numbers started from 0) and then stays still, drawn again each frame: a moment of it to compare
-/// with the desktop's picture of the same moment (<c>tools\web.ps1 -Compare</c>).
-
+/// with the desktop's picture of the same moment (<c>tools\web.ps1 -Compare</c>). <c>?scene=<i>name</i></c> starts it in
+/// that scene rather than its start scene.
 /// </remarks>
 public static partial class WebPlayer
 {
@@ -28,20 +33,26 @@ public static partial class WebPlayer
     private static WebGLRenderer? s_renderer;
     private static Game? s_game;
     private static RenderFrame? s_last;
+    private static BufferedOutput? s_sound;
     private static double s_lastTime = -1;
     private static Vector2 s_pointer;
-    private static bool s_faulted;
+    private static bool s_faulted, s_quit, s_soundWaiting, s_noticed, s_syncingFullscreen;
+    private static float s_rumble;
+    private static string? s_netStatus;
     private static int? s_still;
 
     /// <summary>
     /// Fetches the game exported next to the page (the files its <see cref="ExportLayout.WebFileList"/> lists, under
-    /// <see cref="ExportLayout.GameFolder"/>) into <see cref="GameFolder"/>, and loads it.
+    /// <see cref="ExportLayout.GameFolder"/>) into <see cref="GameFolder"/>, saying how far it's got on the loading screen,
+    /// and loads it.
     /// </summary>
     public static async Task<LoadedGame> FetchGameAsync(Uri page)
     {
         using var http = new HttpClient { BaseAddress = new Uri(page, ExportLayout.GameFolder + "/") };
         var list = await http.GetStringAsync(new Uri(ExportLayout.WebFileList, UriKind.Relative));
         var files = list.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var done = 0;
+        Browser.Progress(0, files.Length);
         await Task.WhenAll(files.Select(async file =>
         {
             var parts = file.Split('/');
@@ -51,46 +62,58 @@ public static partial class WebPlayer
             var path = Path.Combine(GameFolder, file);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, bytes);
+            Browser.Progress(++done, files.Length);
         }));
         return await GameLoader.LoadAsync(GameFolder);
     }
 
-    /// <summary>Starts <paramref name="loaded"/>'s start scene, set up as the desktop player sets it up, and the page's frames.</summary>
-    public static void Run(LoadedGame loaded)
+    /// <summary>
+    /// Starts <paramref name="loaded"/>'s start scene (or the one <c>?scene=</c> names), set up as the desktop player sets
+    /// it up: its sound, its saves in the browser's storage, fullscreen and quitting; then the page's frames.
+    /// </summary>
+    public static async Task RunAsync(LoadedGame loaded)
     {
+        var query = Browser.Query();
         s_renderer = new WebGLRenderer(loaded.Project.AssetsPath);
         // The browser build has one thread (the page's): a big scene's work is done on it rather than shared out.
         Workers.Count = 1;
-        // A still moment is the same moment wherever it's reached: its random numbers (Rand) start from 0.
-        s_still = Still(Browser.Query());
+        var sounds = new WebSoundLibrary(loaded.Project.AssetsPath);
+        await DecodeMp3Async(loaded.Project.AssetsPath, sounds);
+
+        var start = QueryValue(query, "scene") is { Length: > 0 } named ? loaded with { Scene = loaded.LoadScene(named), SceneName = named } : loaded;
+        // A still moment is the same moment wherever it's reached: its random numbers (Rand) start from 0 as the game does.
+        s_still = Number(QueryValue(query, "still"));
         if (s_still is not null)
             Rand.Seed(0);
-        s_game = loaded.NewGame(s_input);
+        var game = s_game = start.NewGame(s_input);
         // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
-        s_game.Warning += (_, message) => Console.WriteLine(message);
+        game.Warning += (_, message) => Console.WriteLine(message);
         foreach (var warning in loaded.Warnings)
             Console.WriteLine(warning);
-        Browser.Start(loaded.Project.Name, Shaders.Web, Shaders.Vertex, Shaders.Sprite, Shaders.Shape, Shaders.Effects);
-    }
 
-    /// <summary>The steps <c>?still=<i>steps</i></c> asks for in an address's query, or null if it doesn't.</summary>
-    private static int? Still(string query)
-    {
-        foreach (var part in query.TrimStart('?').Split('&'))
+        var mixer = new Mixer();
+        s_sound = new BufferedOutput(mixer);
+        game.Audio = new MixerAudio(mixer, sounds);
+        game.FullscreenChanged += (_, _) =>
         {
-            if (part.StartsWith("still=", StringComparison.Ordinal) &&
-                int.TryParse(part["still=".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var steps))
-                return steps;
-        }
-
-        return null;
+            if (!s_syncingFullscreen)
+                Browser.Fullscreen(game.Fullscreen);
+        };
+        var key = WebSaves.KeyOf(loaded.Project);
+        game.SaveData = new SaveData(Browser.LoadSave(key), json => Browser.StoreSave(key, json));
+        if (game.Fullscreen)
+            Browser.Fullscreen(true);
+        game.QuitRequested += (_, _) => s_quit = true;
+        game.SceneChanged += (_, scene) => NoticeNetwork(scene);
+        NoticeNetwork(game.Scene);
+        Browser.Start(loaded.Project.Name, Shaders.Web, Shaders.Vertex, Shaders.Sprite, Shaders.Shape, Shaders.Effects);
     }
 
     /// <summary>A frame of the screen, shown at <paramref name="now"/> (milliseconds) on a canvas this many pixels big.</summary>
     [JSExport]
     public static void Frame(double now, int width, int height)
     {
-        if (s_game is null || s_renderer is null || s_faulted)
+        if (s_game is not { } game || s_renderer is null || s_faulted || s_quit)
             return;
         var seconds = s_lastTime < 0 ? 0 : (now - s_lastTime) / 1000;
         s_lastTime = now;
@@ -98,19 +121,27 @@ public static partial class WebPlayer
         try
         {
             UpdatePointer();
-            s_game.ViewAspect = aspect;
+            game.ViewAspect = aspect;
             if (s_still is not { } steps)
             {
-                s_game.Advance(seconds);
+                game.Advance(seconds);
             }
             else if (steps >= 0)
             {
-                TakeSteps(s_game, steps);
+                TakeSteps(game, steps);
                 s_still = -1;
             }
 
-            s_last = SceneRenderer.Build(s_game, aspect, recycle: s_last);
+            if (s_quit)
+            {
+                Quit(game);
+                return;
+            }
+
+            s_last = SceneRenderer.Build(game, aspect, recycle: s_last);
             s_renderer.Render(s_last, width, height);
+            PumpSound();
+            AfterFrame(game);
         }
 #pragma warning disable CA1031 // A game that throws stops, and says why, as the desktop player's does.
         catch (Exception ex)
@@ -120,14 +151,6 @@ public static partial class WebPlayer
             Console.Error.WriteLine(ex);
             Browser.Fail($"The game hit an error: {ex.Message}");
         }
-    }
-
-    /// <summary>Takes <paramref name="steps"/> of <paramref name="game"/>'s steps, a frame of one step each, as a still moment of it is reached.</summary>
-    private static void TakeSteps(Game game, int steps)
-    {
-        var step = 1.0 / game.Time.StepRate;
-        for (var i = 0; i < steps; i++)
-            game.Advance(step);
     }
 
     /// <summary>
@@ -156,8 +179,8 @@ public static partial class WebPlayer
     }
 
     /// <summary>
-    /// The mouse moved to (<paramref name="x"/>, <paramref name="y"/>) across the canvas (0..1 from its top left), by
-    /// (<paramref name="movedX"/>, <paramref name="movedY"/>) pixels.
+    /// The mouse (or a finger) moved to (<paramref name="x"/>, <paramref name="y"/>) across the canvas (0..1 from its top
+    /// left), by (<paramref name="movedX"/>, <paramref name="movedY"/>) pixels.
     /// </summary>
     [JSExport]
     public static void Pointer(double x, double y, double movedX, double movedY)
@@ -170,11 +193,11 @@ public static partial class WebPlayer
         s_input.AddMouseDelta(new Vector2((float)movedX, (float)-movedY));
     }
 
-    /// <summary>The mouse left the canvas.</summary>
+    /// <summary>The mouse left the canvas (or a finger was lifted).</summary>
     [JSExport]
     public static void PointerLeft() => s_input.IsMouseInView = false;
 
-    /// <summary>A mouse button (the DOM's: 0 left, 1 middle, 2 right) went down or up.</summary>
+    /// <summary>A mouse button (the DOM's: 0 left, 1 middle, 2 right) went down or up; a touch is the left button.</summary>
     [JSExport]
     public static void Button(int button, bool down)
     {
@@ -189,6 +212,180 @@ public static partial class WebPlayer
     /// <summary>The page lost the keyboard: nothing stays held.</summary>
     [JSExport]
     public static void Blur() => s_input.ReleaseAll();
+
+    /// <summary>The first controller this frame (see <see cref="WebGamepad.Apply"/>), or none.</summary>
+    [JSExport]
+    public static void Gamepad(bool connected, int pressed, double leftX, double leftY, double rightX, double rightY, double leftTrigger, double rightTrigger) =>
+        WebGamepad.Apply(s_input, connected, pressed, leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);
+
+    /// <summary>True when a click should take the mouse (a first-person game wants it) rather than reach the game.</summary>
+    [JSExport]
+    public static bool WantsMouseLock() => s_input.WantsMouseLock && s_game is not null && !s_quit && !s_faulted;
+
+    /// <summary>The browser took the mouse for the game (pointer lock), or gave it back (Esc).</summary>
+    [JSExport]
+    public static void MouseLocked(bool locked) => s_input.IsMouseLocked = locked;
+
+    /// <summary>The page went into fullscreen or out of it (the player pressed Esc): the game's setting follows.</summary>
+    [JSExport]
+    public static void FullscreenChanged(bool on)
+    {
+        if (s_game is not { } game || game.Fullscreen == on)
+            return;
+        s_syncingFullscreen = true;
+        try
+        {
+            game.Fullscreen = on;
+        }
+        finally
+        {
+            s_syncingFullscreen = false;
+        }
+    }
+
+    /// <summary>
+    /// For checks (and anyone curious in the console): <c>scene</c> is the scene's name; <c>entity:<i>name</i></c> where
+    /// that entity is ("x,y,z", or "" for none); <c>count</c> how many entities there are; <c>save:<i>key</i></c> a saved
+    /// value, and <c>save:<i>key</i>=<i>value</i></c> saves one; <c>music</c> the music playing and how much of it has been
+    /// heard ("name|seconds"); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
+    /// <c>fullscreen=1</c> sets it.
+    /// </summary>
+    [JSExport]
+    public static string Probe(string what)
+    {
+        if (s_game is not { } game)
+            return "";
+        var (name, argument) = what.IndexOf(':', StringComparison.Ordinal) is var colon and >= 0 ? (what[..colon], what[(colon + 1)..]) : (what, "");
+        switch (name)
+        {
+            case "scene":
+                return game.SceneName ?? "";
+            case "count":
+                return game.Scene.Entities.Count.ToString(CultureInfo.InvariantCulture);
+            case "entity":
+                return game.Find(argument) is { } entity
+                    ? string.Create(CultureInfo.InvariantCulture, $"{entity.Transform.WorldPosition.X:0.###},{entity.Transform.WorldPosition.Y:0.###},{entity.Transform.WorldPosition.Z:0.###}")
+                    : "";
+            case "save" when argument.IndexOf('=', StringComparison.Ordinal) is var equals and >= 0:
+                game.SaveData.Set(argument[..equals], argument[(equals + 1)..]);
+                return argument[(equals + 1)..];
+            case "save":
+                return !game.SaveData.Has(argument) ? ""
+                    : game.SaveData.GetString(argument) ?? game.SaveData.GetFloat(argument).ToString(CultureInfo.InvariantCulture);
+            case "music":
+                return string.Create(CultureInfo.InvariantCulture, $"{game.Audio.Music}|{game.Audio.MusicTime:0.###}");
+            case "status":
+                return game.Net.Status;
+            case "fullscreen=1" or "fullscreen=0":
+                game.Fullscreen = name[^1] == '1';
+                return game.Fullscreen ? "1" : "0";
+            case "fullscreen":
+                return game.Fullscreen ? "1" : "0";
+            default:
+                return "";
+        }
+    }
+
+    /// <summary>A whole number a query gives, or null.</summary>
+    private static int? Number(string? text) =>
+        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : null;
+
+    /// <summary>The value of <paramref name="name"/> in an address's query ("?still=90&amp;scene=Level"), unescaped, or null.</summary>
+    internal static string? QueryValue(string query, string name)
+    {
+        foreach (var part in query.TrimStart('?').Split('&'))
+        {
+            if (part.StartsWith(name + "=", StringComparison.Ordinal))
+                return Uri.UnescapeDataString(part[(name.Length + 1)..].Replace('+', ' '));
+        }
+
+        return null;
+    }
+
+    /// <summary>Takes <paramref name="steps"/> of <paramref name="game"/>'s steps, a frame of one step each, as a still moment of it is reached.</summary>
+    private static void TakeSteps(Game game, int steps)
+    {
+        var step = 1.0 / game.Time.StepRate;
+        for (var i = 0; i < steps; i++)
+            game.Advance(step);
+    }
+
+    // The game's MP3s, decoded by the browser before it starts (Load is called as the game plays, and can't wait).
+    private static async Task DecodeMp3Async(string assets, WebSoundLibrary sounds)
+    {
+        if (!Directory.Exists(assets))
+            return;
+        foreach (var file in Directory.EnumerateFiles(assets, "*.mp3", SearchOption.AllDirectories))
+        {
+            try
+            {
+                using var decoded = await Browser.DecodeSound(new ArraySegment<byte>(await File.ReadAllBytesAsync(file)));
+                var channels = Math.Clamp(decoded.GetPropertyAsInt32("numberOfChannels"), 1, 2);
+                var samples = new float[decoded.GetPropertyAsInt32("length") * channels];
+                Browser.SoundSamples(decoded, MemoryMarshal.AsBytes(samples.AsSpan()));
+                var rate = (int)Math.Round(decoded.GetPropertyAsDouble("sampleRate"));
+                sounds.Decoded[Path.GetRelativePath(assets, file).Replace(Path.DirectorySeparatorChar, '/')] = new SoundClip(samples, channels, rate);
+            }
+#pragma warning disable CA1031 // A sound the browser can't decode plays as silence, as a missing one does.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                Console.WriteLine($"Couldn't decode {Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
+    }
+
+    // Keeps Web Audio a little ahead with what the mixer plays, or, until the browser lets the page make sound, plays it
+    // silently in time (and says a click or key starts it).
+    private static void PumpSound()
+    {
+        if (s_sound is not { } output)
+            return;
+        var state = Browser.AudioState();
+        var block = output.Pump(state >= 0 ? state : null, state >= 0 ? Browser.AudioLatency() : 0);
+        if (!block.IsEmpty)
+            Browser.AudioPush(MemoryMarshal.AsBytes(block));
+        var waiting = state == -1 && output.Mixer.Playing > 0;
+        if (waiting != s_soundWaiting)
+            Browser.SoundWaiting(s_soundWaiting = waiting);
+    }
+
+    // What the page does for the game once a frame is drawn: shake the controller, give back the mouse, say why hosting or
+    // joining can't happen here.
+    private static void AfterFrame(Game game)
+    {
+        if (s_input.RumbleStrength != s_rumble)
+            Browser.Rumble(s_rumble = s_input.RumbleStrength);
+        if (s_input.IsMouseLocked && !s_input.WantsMouseLock)
+            Browser.ReleaseMouse();
+        var status = game.Net.Status;
+        if (!ReferenceEquals(status, s_netStatus))
+        {
+            s_netStatus = status;
+            if (status == game.Net.Unavailable)
+                Browser.Notice(status);
+        }
+    }
+
+    // A scene set up for network play says, once, that it isn't there in a browser.
+    private static void NoticeNetwork(Scene scene)
+    {
+        if (s_noticed || s_game?.Net.Unavailable is not { } why || !NetSession.IsUsedIn(scene))
+            return;
+        s_noticed = true;
+        Browser.Notice(why);
+    }
+
+    // The game's Quit: a page can't close itself, so the game stops and says so.
+    private static void Quit(Game game)
+    {
+        game.Stop();
+        s_input.StopRumble();
+        Browser.Rumble(0);
+        Browser.ReleaseMouse();
+        Browser.SoundWaiting(false);
+        Browser.Ended($"Thanks for playing {game.Title}.\nReload the page to play again.");
+    }
 
     // The mouse in the world, from where it is on the canvas, through the last frame's camera.
     private static void UpdatePointer()

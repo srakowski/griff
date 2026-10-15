@@ -489,6 +489,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     throw new FormatException("tune: <Property> = <value>");
                 await ui.Tune(a[..tuneAt].Trim(), a[(tuneAt + 1)..].Trim());
                 break;
+            case "build" when a.Equals("web", StringComparison.OrdinalIgnoreCase):
+                await BuildWeb();
+                break;
             case "build":
                 await Build(a.Equals("small", StringComparison.OrdinalIgnoreCase));
                 break;
@@ -1588,11 +1591,30 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var project = workspace.Project ?? throw new InvalidOperationException("No project is open.");
         var folder = Path.Combine(project.RootPath, "Build");
         var started = DateTime.Now;
-        await ui.Menu("Game", small ? "Build Small Game (Needs .NET)" : "Build Game");
+        await ui.Menu("Build", small ? "Build Small Game (Needs .NET)" : "Build Game");
         var exe = await DemoUi.WaitFor(() => Directory.Exists(folder)
             ? Directory.GetFiles(folder, "*.exe").FirstOrDefault(f => File.GetLastWriteTime(f) >= started.AddSeconds(-1))
             : null, "the built game", 180000);
         options.Log($"built {exe} ({new FileInfo(exe).Length / 1048576.0:0.0} MB)");
+        await options.Control.Delay(1500);
+        CloseExplorer(folder);
+        ui.Main.Activate();
+    }
+
+    // Build > Build for Web..., into the project's Build folder (the folder picker opens there: Select Folder takes it), and
+    // waits for the zip; asked whether to play it in the browser, a demo says no and the zip shows in Explorer.
+    private async Task BuildWeb()
+    {
+        var project = workspace.Project ?? throw new InvalidOperationException("No project is open.");
+        var folder = Path.Combine(project.RootPath, "Build");
+        var started = DateTime.Now;
+        await ui.Menu("Build", "Build for Web...");
+        await ui.Answer("Select Folder");
+        var zip = await DemoUi.WaitFor(() => Directory.Exists(folder)
+            ? Directory.GetFiles(folder, "*.zip").FirstOrDefault(f => File.GetLastWriteTime(f) >= started.AddSeconds(-1))
+            : null, "the web build", 180000);
+        options.Log($"built {zip} ({new FileInfo(zip).Length / 1048576.0:0.0} MB)");
+        await ui.Answer("No");
         await options.Control.Delay(1500);
         CloseExplorer(folder);
         ui.Main.Activate();

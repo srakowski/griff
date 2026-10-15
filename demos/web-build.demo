@@ -1,0 +1,15 @@
+title: Games in the browser
+intro: Build for Web makes a game anyone can play in a browser, with its sound, saves and controllers.
+project: Platformer | Sky Hop
+
+chapter: The Build menu | Every way to ship a game
+explain: menu:Build | The Build menu | Every kind of build lives in the Build menu: two for Windows, and now one for the web.
+say: Build for Web asks where to put the game, starting in the project's Build folder, and builds it there in a folder of its own.
+build: web
+say: The Output panel says what it made: a folder with an index page and everything it needs, ready for GitHub Pages or any web host, and a zip of it beside it to upload to itch dot io as an HTML game.
+say: When it asks, say yes, and Griff serves the game on this computer and opens it in your browser to try.
+
+chapter: The whole game | Not just the pictures
+say: In the browser it's the same game. It draws what the desktop draws, and plays its music and sounds once the player clicks or presses a key, which browsers insist on. Until then the music keeps time silently, so it starts in step.
+say: Saves go in the browser's storage, kept for each game, so high scores and unlocked levels are still there tomorrow. Controllers, touch and fullscreen work too, and it fits any page from a phone to a big screen.
+say: The one thing a browser can't do is network play. A multiplayer game built for the web says so, when it's built and in the game, and plays on alone.

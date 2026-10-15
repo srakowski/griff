@@ -26,7 +26,7 @@ title: Single-file builds
 intro: Build Game now makes one exe.
 project: Platformer | Jump Kit
 
-chapter: One exe, nothing to install | Game > Build Game
+chapter: One exe, nothing to install | Build > Build Game
 say: Build Game now makes a single exe.
 build: standalone
 ```
@@ -39,7 +39,7 @@ build: standalone
 | `scene: <name>` | Open a scene by name. |
 | `chapter: <title> [\| <subtitle>]` | Start a chapter: a card, a dot on the control bar, a rewind point. |
 | `say: <text>` | Narrate (spoken and captioned). |
-| `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Game > Build Game`, and into submenus: `menu: View > Layouts > Level Building`. |
+| `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Build > Build Game`, and into submenus: `menu: View > Layouts > Level Building`. |
 | `create: <thing>` | Shorthand for `menu: Entity > Create <thing>`, e.g. `create: Platformer Player`. |
 | `key: <shortcut>` | Press a shortcut, e.g. `key: Ctrl+Shift+B`, `key: F5`. |
 | `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. `select: Ctrl+Sign` Ctrl-clicks its row (adding it to the selection, or taking it out), `select: Shift+Coins` Shift-clicks it (selecting every row from the last one clicked). |
@@ -130,7 +130,8 @@ build: standalone
 | `expectstopped: <code>` | Wait (up to 8 seconds) for the game to stop at a breakpoint (or the end of a step) on the line with that code, e.g. `expectstopped: _cooldown = 1 / FireRate` after `click: code:breakpoint:_cooldown = 1 / FireRate` and firing, or after `click: code:stepover`; `expectstopped: none` for it not to be stopped at one (after `pause` resumes it). Where a script threw counts too (after `play`, say). |
 | `tune: <Property> = <value>` | Type a value into a property in the script editor's component panel. |
 | `expect: <code>` | Fail unless the script contains `<code>`: checks that what was typed came out as narrated. |
-| `build: standalone` / `build: small` | Game > Build Game (or Build Small Game) and wait for the exe. |
+| `build: standalone` / `build: small` | Build > Build Game (or Build Small Game) and wait for the exe. |
+| `build: web` | Build > Build for Web... into the project's Build folder (Select Folder in the folder picker) and wait for the zip; asked whether to play it in the browser, it says No. |
 | `maker` | Wait for the Sound Maker to open (after `menu: Audio > New Sound...` or a field's Sound Maker button). |
 | `slide: <Setting> = <value>` | Drag a Sound Maker slider to a value, e.g. `slide: Slide = 0.4`, `slide: Tempo = 110`. |
 | `name: <text>` | Type the Sound Maker's file name (Save puts it in `Sounds/` or `Music/`). |

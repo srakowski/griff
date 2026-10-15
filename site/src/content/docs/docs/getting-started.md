@@ -50,6 +50,6 @@ While playing, Griff keeps the last 20 seconds: pause and drag the **Rewind** ba
 
 ## Ship it
 
-**Game → Build Game** (Ctrl+B) makes a single `.exe` that carries everything, .NET included: zip it and upload it to your jam's page. **Build Small Game** makes a 4 MB `.exe` for players who have the .NET Desktop Runtime.
+**Build → Build Game** (Ctrl+B) makes a single `.exe` that carries everything, .NET included: zip it and upload it to your jam's page. **Build Small Game** makes a 4 MB `.exe` for players who have the .NET Desktop Runtime, and **Build for Web** makes a game anyone can play in a browser, with a zip to upload to itch.io (see [exporting](/docs/exporting/)).
 
 Next: [the editor](/docs/editor/) goes through everything it can do, and [scenes and components](/docs/scenes-and-components/) what a game is made of.

@@ -4,16 +4,18 @@
 #:property PublishAot=false
 
 // Griff in a browser: exports a game for the web (WebExporter, with the web player Griff.Web publishes) and serves it on
-// http://127.0.0.1:<port>/, this computer only. With no project it's the proof game: the griffin, a sprite, which the
-// arrow keys or WASD move (a script reads the input), under a label. With --check it plays it in a headless Edge (or
-// Chrome) through the DevTools protocol, so no window opens: it waits for the game to run, takes a screenshot, holds the
-// right arrow, takes another, and checks the label's text is drawn as wide as Griff lays it out, and the griffin is drawn
-// and moved right, then exits 0 (or 1, saying why). With --compare it checks the browser draws what the desktop draws:
-// every template's start scene, and three scenes of lights, shadows, screen effects and a viewport, held still after --steps steps
-// (90 by default) in the headless browser and drawn by the desktop's OpenGL renderer (off the screen) after the same,
-// the pictures compared pixel by pixel (--template picks some, by name, comma-separated). Otherwise it serves until
-// Ctrl+C, for a person to open the address. Run through tools\web.ps1, which publishes the web player first.
-//   dotnet run -c Release tools/web.cs -- [--check | --compare [--template <names>] [--steps <n>]] [--project <folder>] [--port <port>] [--out <folder>]
+// http://127.0.0.1:<port>/, this computer only, until Ctrl+C: a project (--project), a template (--template) or, with
+// neither, the proof game (the griffin, a sprite, which the arrow keys, WASD or a stick move, under a label).
+//   --export        exports to --out and stops there (--zip packs it for itch.io too): what a script or a site's build uses.
+//   --check         plays games in a headless Edge (or Chrome) through the DevTools protocol, so no window opens, and
+//                   checks each: the proof game, then Platformer, Shooter, Match3, Isometric, BunnyMark and Multiplayer
+//                   (--template picks some; --project checks that project). See Check below for what each is checked for.
+//   --compare       checks the browser draws what the desktop draws: every scene of every template, and three scenes of
+//                   lights, shadows, screen effects and a viewport, held still after --steps steps (90) in the headless
+//                   browser and drawn by the desktop's OpenGL renderer (off the screen) after the same, compared pixel by
+//                   pixel (--template picks some, by name, comma-separated).
+// Run through tools\web.ps1, which publishes the web player first.
+//   dotnet run -c Release tools/web.cs -- [--export [--zip] | --check | --compare [--steps <n>]] [--project <folder> | --template <names>] [--port <port>] [--out <folder>]
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.WebSockets;
@@ -34,8 +36,11 @@ using StbImageSharp;
 const string LabelText = "Griff on the Web ♥";
 const float LabelSize = 0.8f;
 const float LabelY = 3.8f;
+// The templates --check plays unless --template picks others.
+const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,BunnyMark,Multiplayer";
 
 var check = args.Contains("--check");
+var exportOnly = args.Contains("--export");
 var port = int.TryParse(Arg("--port"), CultureInfo.InvariantCulture, out var p) ? p : 8091;
 
 var repo = new DirectoryInfo(Environment.CurrentDirectory);
@@ -64,44 +69,64 @@ if (args.Contains("--compare"))
     }
 }
 
+if (check)
+{
+    // A check keeps only its screenshots: in --out's folder if it's given.
+    try
+    {
+        return await CheckGames(Path.Combine(work, "site"), Arg("--out") is null ? Path.Combine(work, "screenshots") : site, Path.Combine(work, "browser"));
+    }
+    finally
+    {
+        foreach (var folder in new[] { "site", "projects", "browser" })
+            TryDelete(Path.Combine(work, folder));
+    }
+}
+
+if (exportOnly && Arg("--out") is null)
+    return Fail("--export needs --out <folder> to export to.");
 try
 {
-    var project = Arg("--project") is { } folder ? await Project.LoadAsync(Path.GetFullPath(folder)) : await ProofGame(Path.Combine(work, "project"));
+    var project = Arg("--project") is { } folder ? await Project.LoadAsync(Path.GetFullPath(folder))
+        : Arg("--template") is { } template ? await Template(template, Path.Combine(work, "project"))
+        : await ProofGame(Path.Combine(work, "project"));
     var export = WebExporter.Export(project, player, site);
     if (!export.Success)
         return Fail($"The export failed: {export.Error}\n{string.Join("\n", export.Diagnostics.Select(d => d.ToString()))}");
     foreach (var warning in export.Warnings)
         Console.WriteLine("Warning: " + warning);
     Report(site);
-
-    await using var server = await Serve(site, port);
-    var url = $"http://127.0.0.1:{port}/";
-    if (!check)
+    if (exportOnly)
     {
-        Console.WriteLine($"Serving {project.Name} at {url} (this computer only). Press Ctrl+C to stop.");
-        var stop = new TaskCompletionSource();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
-        await stop.Task;
+        if (args.Contains("--zip"))
+            Console.WriteLine($"Zipped for itch.io: {WebExporter.Zip(site)} ({new FileInfo(site.TrimEnd(Path.DirectorySeparatorChar) + ".zip").Length / 1048576.0:0.0} MB)");
         return 0;
     }
 
-    return await Check(url, Path.Combine(work, "browser"), Arg("--out") is null ? Path.Combine(work, "screenshots") : site);
+    await using var server = await Serve(site, port);
+    Console.WriteLine($"Serving {project.Name} at http://127.0.0.1:{port}/ (this computer only). Press Ctrl+C to stop.");
+    var stop = new TaskCompletionSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
+    await stop.Task;
+    return 0;
 }
 finally
 {
-    // A check keeps only its screenshots; an export asked for with --out stays where it was put.
+    // An export asked for with --out stays where it was put.
+    TryDelete(Path.Combine(work, "project"));
     if (Arg("--out") is null)
-    {
-        foreach (var folder in new[] { "site", "project", "browser" })
-            TryDelete(Path.Combine(work, folder));
-        if (!check)
-            TryDelete(work);
-    }
+        TryDelete(work);
 }
 
+// A template made into a project in `folder`, by name ("Match3", "match-3").
+static async Task<Project> Template(string name, string folder) =>
+    ProjectTemplates.Find(name) is { } template ? await Project.CreateAsync(folder, template.Title, template)
+        : throw new ArgumentException($"No template called {name}. Templates: {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
+
 // The proof game: an empty project with the griffin (Griff's logo) in the middle of the screen, a script that moves
-// it with the Move action (the arrow keys, WASD or a stick) and a label over it, so drawing a sprite and text, a script
-// compiled at export and input all have to work in the browser.
+// it with the Move action (the arrow keys, WASD or a stick), one that counts the times it's been played and keeps where it
+// was last clicked or tapped (in its saves), and a label over it, so drawing a sprite and text, scripts compiled at
+// export, input and saves all have to work in the browser.
 async Task<Project> ProofGame(string folder)
 {
     var project = await Project.CreateAsync(folder, "Griff on the Web", ProjectTemplates.Empty);
@@ -116,6 +141,19 @@ async Task<Project> ProofGame(string folder)
             protected override void Update() => Transform.Position += new Vector3(Input.Move * Speed * Time.Delta, 0);
         }
         """);
+    await File.WriteAllTextAsync(Path.Combine(project.AssetsPath, "Scripts", "Visits.cs"), """
+        /// <summary>Counts the times the game has been played, and keeps where it was last clicked (or tapped), in its saves.</summary>
+        public class Visits : Behavior
+        {
+            protected override void Start() => Game.SaveData.Set("runs", Game.SaveData.GetInt("runs") + 1);
+
+            protected override void Update()
+            {
+                if (Input.WasPressed(MouseButton.Left))
+                    Game.SaveData.Set("clicked", $"{Input.MouseWorld.X:0.0},{Input.MouseWorld.Y:0.0}");
+            }
+        }
+        """);
 
     var scenePath = project.StartScenePath!;
     var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
@@ -126,8 +164,12 @@ async Task<Project> ProofGame(string folder)
     var sprite = griffin.AddComponent<Sprite>();
     sprite.Image = "Griffin.png";
     sprite.Size = new System.Numerics.Vector2(3, 3);
-    using (var data = JsonDocument.Parse("""{ "type": "Mover" }"""))
-        griffin.AddComponent(new MissingComponent("Mover", data.RootElement));
+    foreach (var script in new[] { "Mover", "Visits" })
+    {
+        using var data = JsonDocument.Parse($$"""{ "type": "{{script}}" }""");
+        griffin.AddComponent(new MissingComponent(script, data.RootElement));
+    }
+
     scene.Add(griffin);
     var label = new Entity("Label");
     label.Transform.Position = new System.Numerics.Vector3(0, LabelY, 0);
@@ -164,70 +206,475 @@ static async Task<WebApplication> Serve(string site, int port)
     return app;
 }
 
-// Plays the game in a headless browser and checks the griffin is drawn and moves right while the right arrow is held.
-async Task<int> Check(string url, string profile, string shots)
+// Plays each game in one headless browser, each exported into its own folder of one site (so their saves, kept per game
+// in the same page storage, must not mix), and checks it: that it runs and draws; that its sound waits for a click or key
+// (saying so) with its music keeping time, then plays through Web Audio (an AnalyserNode in the page hears it) in step;
+// that input works (keys, a touch, a controller, as each game takes them); and that its saves survive reloading the page.
+// The proof game is also checked at a phone's and a 4K screen's size and going fullscreen and back, Match-3 quitting from
+// its menu, and Multiplayer saying network play isn't there.
+async Task<int> CheckGames(string root, string shots, string profile)
 {
+    var games = new List<(string Name, Func<string, Task<Project>> Make)>();
+    if (Arg("--project") is { } folder)
+    {
+        games.Add(("Project", _ => Project.LoadAsync(Path.GetFullPath(folder))));
+    }
+    else
+    {
+        var names = (Arg("--template") ?? "Proof," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        foreach (var name in names)
+        {
+            if (name.Equals("Proof", StringComparison.OrdinalIgnoreCase))
+                games.Add(("Proof", ProofGame));
+            else if (ProjectTemplates.Find(name) is { } template)
+                games.Add((template.Name, f => Project.CreateAsync(f, template.Title, template)));
+            else
+                return Fail($"No template called {name}. Templates: Proof, {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
+        }
+    }
+
+    Directory.CreateDirectory(root);
+    await using var server = await Serve(root, port);
     if (LaunchBrowser(profile) is not { } process)
         return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+    var failed = new List<string>();
     try
     {
         var log = new List<string>();
         using var cdp = await ConnectAsync(profile, log);
-        var started = Stopwatch.StartNew();
-        await cdp.SendAsync("Page.navigate", new JsonObject { ["url"] = url });
-
-        // Running once it has drawn a second's frames (and the griffin's image has had time to decode).
-        string status;
-        while (true)
+        // A controller the page can be handed (navigator.getGamepads gives it while __griffPad is set), as if one were plugged in.
+        await cdp.SendAsync("Page.addScriptToEvaluateOnNewDocument", new JsonObject
         {
-            status = await Evaluate(cdp, "globalThis.griff ? griff.status + '|' + griff.frames : 'loading|0'");
-            if (status.StartsWith("failed", StringComparison.Ordinal) || started.Elapsed > TimeSpan.FromSeconds(90))
-                return Fail($"The game didn't run: {status}\n{string.Join("\n", log)}");
-            if (status.StartsWith("running|", StringComparison.Ordinal) && int.Parse(status["running|".Length..], CultureInfo.InvariantCulture) >= 60)
-                break;
-            await Task.Delay(250);
+            ["source"] = "(() => { const own = navigator.getGamepads?.bind(navigator); navigator.getGamepads = () => globalThis.__griffPad ? [globalThis.__griffPad] : (own ? own() : []); })();",
+        });
+        foreach (var (name, make) in games)
+        {
+            lock (log)
+                log.Clear();
+            var slug = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+            var game = new GameCheck(cdp, name, $"http://127.0.0.1:{port}/{slug}/", Path.Combine(shots, slug));
+            Console.WriteLine($"{name}:");
+            try
+            {
+                var project = await make(Path.Combine(work, "projects", slug));
+                var export = WebExporter.Export(project, player, Path.Combine(root, slug));
+                if (!export.Success)
+                    throw new CheckFailed($"the export failed: {export.Error}");
+                foreach (var warning in export.Warnings)
+                    Console.WriteLine($"  export warns: {warning}");
+                await Play(game, name, export.Warnings);
+                Console.WriteLine($"  OK");
+            }
+            catch (Exception ex) when (ex is CheckFailed or TimeoutException or InvalidOperationException or IOException)
+            {
+                try
+                {
+                    Console.WriteLine("  state: " + await game.Evaluate("JSON.stringify({ status: griff.status, frames: griff.frames, lost: griff.lost, visibility: griff.visibility, audio: griff.audio.state })"));
+                    await Task.Delay(500);
+                    Console.WriteLine("  state: " + await game.Evaluate("JSON.stringify({ status: griff.status, frames: griff.frames })"));
+                }
+                catch (Exception e) when (e is InvalidOperationException or TimeoutException)
+                {
+                }
+
+                lock (log)
+                    failed.Add($"{name}: {ex.Message}{(log.Count > 0 ? "\n  " + string.Join("\n  ", log) : "")}");
+                Console.WriteLine($"  FAILED: {ex.Message}");
+            }
+            finally
+            {
+                TryDelete(Path.Combine(root, slug));
+            }
         }
-
-        Console.WriteLine($"Running after {started.Elapsed.TotalSeconds:0.0} s: \"{await Evaluate(cdp, "document.title")}\"");
-        if (await Evaluate(cdp, "document.getElementById('status').checkVisibility()") != "false")
-            return Fail("The page still shows its status over the game.");
-        var before = await Screenshot(cdp, Path.Combine(shots, "before.png"));
-        if (Label(before) is not { } label)
-            return Fail($"The label's text isn't drawn (see {Path.Combine(shots, "before.png")}).\n{string.Join("\n", log)}");
-        var expected = LabelWidth(before.Height);
-        Console.WriteLine($"The label is drawn: {label.Pixels} pixels in {label.Runs} runs across, {label.Width} pixels wide (laid out at {expected:0}).");
-        if (label.Runs < 10 || Math.Abs(label.Width - expected) > expected * 0.06)
-            return Fail($"The label's text isn't drawn as Griff lays it out (see {Path.Combine(shots, "before.png")}).");
-        if (Griffin(before) is not { } first)
-            return Fail($"Nothing but the background is drawn (see {Path.Combine(shots, "before.png")}).\n{string.Join("\n", log)}");
-        Console.WriteLine($"The griffin is drawn: {first.Pixels} pixels, around ({first.X:0}, {first.Y:0}) of {before.Width}x{before.Height}.");
-
-        await Key(cdp, "keyDown");
-        await Task.Delay(600);
-        await Key(cdp, "keyUp");
-        await Task.Delay(300);
-        var after = await Screenshot(cdp, Path.Combine(shots, "after.png"));
-        if (Griffin(after) is not { } moved)
-            return Fail($"The griffin's gone after the right arrow (see {Path.Combine(shots, "after.png")}).");
-        Console.WriteLine($"After holding the right arrow for 0.6 s it's around ({moved.X:0}, {moved.Y:0}): {moved.X - first.X:0} pixels right.");
-        Console.WriteLine($"Screenshots: {Path.Combine(shots, "before.png")}, {Path.Combine(shots, "after.png")}");
-        foreach (var line in log)
-            Console.WriteLine(line);
-
-        if (moved.X - first.X < 50 || Math.Abs(moved.Y - first.Y) > 4)
-            return Fail("The right arrow didn't move the griffin right.");
-        Console.WriteLine("Web proof: OK. Text and a sprite draw, and input moves the sprite, in the browser.");
-        return 0;
     }
     finally
     {
         process.Kill(entireProcessTree: true);
         await process.WaitForExitAsync();
     }
+
+    Console.WriteLine($"Screenshots: {shots}");
+    foreach (var failure in failed)
+        Console.Error.WriteLine(failure);
+    if (failed.Count > 0)
+        return 1;
+    Console.WriteLine($"Web games: OK. All {games.Count} run, draw, play their sound, take input and keep their saves in the browser.");
+    return 0;
+}
+
+// The checks for one game, as its name says it plays.
+async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
+{
+    await game.Open();
+    var drawn = await game.Screenshot("running.png");
+    var (share, colors) = Drawn(drawn);
+    if (share < 0.02 || colors < 3)
+        throw new CheckFailed($"next to nothing is drawn ({share:P1} of the screen differs from its main color, {colors} colors; see {game.Shot("running.png")})");
+    Console.WriteLine($"  draws: {share:P0} of the screen is more than its background, in {colors} colors");
+
+    if (name == "Proof")
+    {
+        await ProofLabel(game, drawn);
+        await NoSound(game);
+        await game.Gesture();
+        await ProofInput(game);
+        await Saves(game, "runs");
+        await Sizes(game);
+        await Fullscreen(game);
+        return;
+    }
+
+    var music = await game.Probe("music");
+    if (music.Split('|')[0].Length > 0)
+        await Sound(game);
+    else
+        await NoSound(game);
+
+    switch (name)
+    {
+        case "Platformer":
+            await Moves(game, "Player", "ArrowRight", (before, after) => after.X - before.X > 0.5, "right");
+            await PadMoves(game, "Player");
+            break;
+        case "Isometric":
+            await Moves(game, "Player", "ArrowRight", (before, after) => System.Numerics.Vector3.Distance(before, after) > 0.3, "");
+            break;
+        case "Shooter":
+            await Moves(game, "Player", "KeyW", (before, after) => System.Numerics.Vector3.Distance(before, after) > 0.5, "forward");
+            break;
+        case "Match3":
+            await Taps(game);
+            break;
+        case "BunnyMark":
+            await Restarts(game);
+            break;
+        case "Multiplayer":
+            await NetworkNotice(game, warnings);
+            break;
+    }
+
+    await Saves(game, null);
+    if (name == "Match3")
+        await Quits(game);
+}
+
+// The proof game's label: its text drawn as wide as Griff lays it out.
+async Task ProofLabel(GameCheck game, ImageResult drawn)
+{
+    if (Label(drawn) is not { } label)
+        throw new CheckFailed($"the label's text isn't drawn (see {game.Shot("running.png")})");
+    var expected = LabelWidth(drawn.Height);
+    if (label.Runs < 10 || Math.Abs(label.Width - expected) > expected * 0.06)
+        throw new CheckFailed($"the label's text isn't drawn as Griff lays it out: {label.Width} pixels wide, laid out at {expected:0} (see {game.Shot("running.png")})");
+    Console.WriteLine($"  the label is drawn: {label.Pixels} pixels in {label.Runs} runs across, {label.Width} pixels wide (laid out at {expected:0})");
+    await Task.CompletedTask;
+}
+
+// The arrow keys, a tap and a controller, in the proof game.
+async Task ProofInput(GameCheck game)
+{
+    var before = await game.Screenshot("before.png");
+    if (Griffin(before) is not { } first)
+        throw new CheckFailed($"the griffin isn't drawn (see {game.Shot("before.png")})");
+    await game.Hold("ArrowRight", 600);
+    await Task.Delay(300);
+    var after = await game.Screenshot("after.png");
+    if (Griffin(after) is not { } moved || moved.X - first.X < 50 || Math.Abs(moved.Y - first.Y) > 4)
+        throw new CheckFailed($"holding the right arrow didn't move the griffin right (see {game.Shot("before.png")}, {game.Shot("after.png")})");
+    Console.WriteLine($"  keys: holding the right arrow for 0.6 s moved the griffin {moved.X - first.X:0} pixels right");
+
+    // A tap three quarters across, halfway down: the game sees the left button there, in the world (the view is 10 high).
+    var (width, height) = await game.Viewport();
+    await game.Tap(width * 0.75, height * 0.5);
+    await Task.Delay(300);
+    var tapped = await game.Probe("save:clicked");
+    var expectedX = 0.5 * 5 * width / height;
+    if (tapped.Split(',') is not [var x, var y] || Math.Abs(double.Parse(x, CultureInfo.InvariantCulture) - expectedX) > 0.3 || Math.Abs(double.Parse(y, CultureInfo.InvariantCulture)) > 0.3)
+        throw new CheckFailed($"a tap at ({width * 0.75:0}, {height * 0.5:0}) wasn't a click there: the game saw \"{tapped}\", expected about ({expectedX:0.0}, 0.0)");
+    Console.WriteLine($"  touch: a tap is a click where it touched ({tapped} in the world)");
+
+    var start = Position(await game.Probe("entity:Griffin"));
+    await game.Pad(stickX: 1);
+    await Task.Delay(500);
+    await game.Pad(null);
+    var pushed = Position(await game.Probe("entity:Griffin"));
+    if (pushed.X - start.X < 1)
+        throw new CheckFailed($"a controller's stick pushed right didn't move the griffin ({start.X:0.0} to {pushed.X:0.0})");
+    Console.WriteLine($"  controller: its stick pushed right for 0.5 s moved the griffin {pushed.X - start.X:0.0} units right");
+}
+
+// A game with no music: Web Audio is there, but the page doesn't ask for a click to hear nothing.
+async Task NoSound(GameCheck game)
+{
+    var state = await game.Evaluate("griff.audio.state");
+    if (state == "none")
+        throw new CheckFailed("the page has no Web Audio");
+    if (await game.Evaluate("String(griff.audio.hint)") == "true")
+        throw new CheckFailed("it asks for a click for sound, with no sound playing");
+    Console.WriteLine($"  sound: none playing; Web Audio {state}, and no hint asking for a click");
+}
+
+// The music: kept in time while the browser holds the sound back (and the page says a click or key starts it), then
+// heard through Web Audio after a key press, still in time.
+async Task Sound(GameCheck game)
+{
+    if (await game.Evaluate("griff.audio.state") != "waiting")
+        throw new CheckFailed($"sound isn't waiting for a click or key before one (it's {await game.Evaluate("griff.audio.state")})");
+    if (await game.Evaluate("String(griff.audio.hint)") != "true")
+        throw new CheckFailed("the page doesn't say sound starts with a click or key");
+    var held = await MusicPace(game);
+    if (held is < 0.75 or > 1.25)
+        throw new CheckFailed($"the music didn't keep time while the sound waited: {held:0.00} s heard in 1 s");
+    Console.WriteLine($"  sound: waits for a click or key, saying so; the music keeps time meanwhile ({held:0.00} s in 1 s)");
+
+    await game.Gesture();
+    var waited = Stopwatch.StartNew();
+    while (await game.Evaluate("griff.audio.state") != "running")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(3))
+            throw new CheckFailed("a key press didn't start the sound");
+        await Task.Delay(100);
+    }
+
+    if (await game.Evaluate("String(griff.audio.hint)") == "true")
+        throw new CheckFailed("the page still asks for a click once sound plays");
+    double loudest = 0;
+    for (var i = 0; i < 20 && loudest < 0.01; i++)
+    {
+        await Task.Delay(100);
+        loudest = Math.Max(loudest, double.Parse(await game.Evaluate("String(griff.audio.level())"), CultureInfo.InvariantCulture));
+    }
+
+    if (loudest < 0.01)
+        throw new CheckFailed($"Web Audio plays nothing once started (its loudest sample {loudest:0.0000})");
+    var playing = await MusicPace(game);
+    if (playing is < 0.75 or > 1.25)
+        throw new CheckFailed($"the music doesn't keep time once it's heard: {playing:0.00} s heard in 1 s");
+    Console.WriteLine($"  sound: a key press starts it; Web Audio plays it (loudest sample {loudest:0.00}), and the music keeps time ({playing:0.00} s in 1 s)");
+}
+
+// How many seconds of music are heard in a second of real time.
+static async Task<double> MusicPace(GameCheck game)
+{
+    static double Time(string probe) => double.Parse(probe.Split('|')[1], CultureInfo.InvariantCulture);
+    var clock = Stopwatch.StartNew();
+    var from = Time(await game.Probe("music"));
+    await Task.Delay(1000);
+    var to = Time(await game.Probe("music"));
+    return (to - from) / clock.Elapsed.TotalSeconds;
+}
+
+// Holding a key moves an entity as `moved` says.
+async Task Moves(GameCheck game, string entity, string key, Func<System.Numerics.Vector3, System.Numerics.Vector3, bool> moved, string way)
+{
+    var before = Position(await game.Probe($"entity:{entity}"));
+    await game.Hold(key, 800);
+    await Task.Delay(200);
+    var after = Position(await game.Probe($"entity:{entity}"));
+    if (!moved(before, after))
+        throw new CheckFailed($"holding {key} didn't move the {entity} {way} ({Show(before)} to {Show(after)})");
+    Console.WriteLine($"  keys: holding {key} for 0.8 s moved the {entity}{(way.Length > 0 ? " " + way : "")}, {Show(before)} to {Show(after)}");
+}
+
+// A controller's stick pushed right moves an entity right.
+async Task PadMoves(GameCheck game, string entity)
+{
+    var before = Position(await game.Probe($"entity:{entity}"));
+    await game.Pad(stickX: -1);
+    await Task.Delay(600);
+    await game.Pad(null);
+    await Task.Delay(200);
+    var after = Position(await game.Probe($"entity:{entity}"));
+    if (before.X - after.X < 0.5)
+        throw new CheckFailed($"a controller's stick pushed left didn't move the {entity} left ({Show(before)} to {Show(after)})");
+    Console.WriteLine($"  controller: its stick pushed left moved the {entity} left, {Show(before)} to {Show(after)}");
+}
+
+// Match-3's menu: a tap on the first level's button (the camera is 12 high, the button's middle 1.9 up) opens it.
+async Task Taps(GameCheck game)
+{
+    var scene = await game.Probe("scene");
+    var (width, height) = await game.Viewport();
+    await game.Tap(width / 2, height * (0.5 - 1.9 / 12));
+    var waited = Stopwatch.StartNew();
+    string now;
+    while ((now = await game.Probe("scene")) == scene)
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(4))
+            throw new CheckFailed($"a tap on the first level's button didn't open it (still in {scene})");
+        await Task.Delay(100);
+    }
+
+    Console.WriteLine($"  touch: a tap on the first level's button went from {scene} to {now}");
+}
+
+// BunnyMark's Space starts its run again, back to its first hundred bunnies: fewer than it had once it's added more, or
+// more once a slow machine (a busy one, a software GPU) has taken them all away again for missing its frame rate.
+async Task Restarts(GameCheck game)
+{
+    const int First = 100;
+    var waited = Stopwatch.StartNew();
+    int count;
+    while ((count = int.Parse(await game.Probe("count"), CultureInfo.InvariantCulture)) is >= First and < First * 3 / 2 + 10)
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(10))
+            break;
+        await Task.Delay(250);
+    }
+
+    await game.Press("Space");
+    var after = count;
+    for (var i = 0; i < 20 && after == count; i++)
+    {
+        await Task.Delay(100);
+        after = int.Parse(await game.Probe("count"), CultureInfo.InvariantCulture);
+    }
+
+    if (count >= First * 3 / 2 + 10 ? after >= count : count < First ? after < First : after == count)
+        throw new CheckFailed($"Space didn't start the run again ({count} entities before, {after} after)");
+    Console.WriteLine($"  keys: Space started the run again ({count} entities, then {after})");
+}
+
+// Multiplayer: the export warned, the menu says network play isn't there, and Host Game (Enter) says so too and stays put.
+async Task NetworkNotice(GameCheck game, IReadOnlyList<string> warnings)
+{
+    if (!warnings.Any(w => w.Contains("network play", StringComparison.Ordinal)))
+        throw new CheckFailed("the export didn't warn that network play isn't available in a browser");
+    var notice = await game.Evaluate("griff.notice");
+    if (notice != NetSession.BrowserUnavailable || await game.Evaluate("document.getElementById('notice').checkVisibility()") != "true")
+        throw new CheckFailed($"the page doesn't say network play isn't there (its notice: \"{notice}\")");
+    await game.Press("Enter");
+    await Task.Delay(500);
+    var status = await game.Probe("status");
+    if (status != NetSession.BrowserUnavailable || await game.Probe("scene") != "Main")
+        throw new CheckFailed($"Host Game didn't say network play isn't there (status \"{status}\", scene {await game.Probe("scene")})");
+    Console.WriteLine("  network: the export warns, the page says network play isn't there, and so does Host Game");
+}
+
+// Match-3's Quit (Esc on its menu): the game stops and says so, as a page can't close itself.
+async Task Quits(GameCheck game)
+{
+    await game.Press("Escape");
+    var waited = Stopwatch.StartNew();
+    while (await game.Evaluate("griff.status") != "ended")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(3))
+            throw new CheckFailed("Esc on the menu (Quit) didn't end the game");
+        await Task.Delay(100);
+    }
+
+    var said = await game.Evaluate("document.getElementById('status').textContent");
+    Console.WriteLine($"  quit: Esc on the menu ends it, saying \"{said.ReplaceLineEndings(" ")}\"");
+}
+
+// Saves survive reloading the page: one made through the game (the proof game's play count, kept by its script) or set
+// now, kept in the page's storage under the game's own key and read back by the game after a reload.
+async Task Saves(GameCheck game, string? counted)
+{
+    var key = await game.Evaluate("griff.saveKey");
+    var token = Guid.NewGuid().ToString("N")[..8];
+    var before = counted is null ? "" : await game.Probe($"save:{counted}");
+    await game.Probe($"save:web-check={token}");
+    if (await game.Evaluate($"localStorage.getItem({JsonSerializer.Serialize(key)}) ?? ''") is not { Length: > 0 } stored || !stored.Contains(token, StringComparison.Ordinal))
+        throw new CheckFailed($"its saves aren't in the page's storage under {key}");
+    await game.Open(reload: true);
+    var read = await game.Probe("save:web-check");
+    if (read != token)
+        throw new CheckFailed($"its saves didn't survive reloading the page (\"{read}\", not \"{token}\")");
+    if (counted is not null)
+    {
+        var after = await game.Probe($"save:{counted}");
+        if (!int.TryParse(before, out var was) || !int.TryParse(after, out var now) || now != was + 1)
+            throw new CheckFailed($"its own save didn't survive reloading the page ({counted} was {before}, then {after})");
+        Console.WriteLine($"  saves: kept under \"{key}\" and read back after reloading the page (its script's play count {before}, then {after})");
+        return;
+    }
+
+    Console.WriteLine($"  saves: kept under \"{key}\" and read back after reloading the page");
+}
+
+// The page at a phone's size (390 by 844 at 3 pixels each) and a big screen's (2560 by 1440 at 2): the canvas is the
+// screen's own pixels (up to 4096 along its longer side) and the game is drawn there.
+async Task Sizes(GameCheck game)
+{
+    foreach (var (width, height, scale, expectWidth, expectHeight) in new[] { (390, 844, 3.0, 1170, 2532), (2560, 1440, 2.0, 4096, 2304) })
+    {
+        await game.Cdp.SendAsync("Emulation.setDeviceMetricsOverride", new JsonObject
+        {
+            ["width"] = width, ["height"] = height, ["deviceScaleFactor"] = scale, ["mobile"] = width < height,
+        });
+        await Task.Delay(700);
+        var canvas = await game.Evaluate("(c => c.width + 'x' + c.height)(document.getElementById('game'))");
+        if (canvas != $"{expectWidth}x{expectHeight}")
+            throw new CheckFailed($"at {width}x{height} (x{scale}) the canvas is {canvas}, not {expectWidth}x{expectHeight}");
+        var frames = await game.Evaluate("String(griff.frames)");
+        await Task.Delay(300);
+        if (await game.Evaluate("String(griff.frames)") == frames)
+            throw new CheckFailed($"at {width}x{height} (x{scale}) the game stopped drawing frames");
+        if (width < height)
+        {
+            var shot = await game.Screenshot("phone.png");
+            if (Griffin(shot) is null)
+                throw new CheckFailed($"at a phone's size the griffin isn't drawn (see {game.Shot("phone.png")})");
+        }
+
+        Console.WriteLine($"  size: at {width}x{height} (x{scale}) the canvas is {canvas} and the game draws");
+    }
+
+    await game.Cdp.SendAsync("Emulation.clearDeviceMetricsOverride");
+    await Task.Delay(300);
+}
+
+// The game's Fullscreen (a toggle or a script) fills the screen, and leaving it in the browser turns the game's setting off.
+async Task Fullscreen(GameCheck game)
+{
+    await game.Gesture();
+    await game.Probe("fullscreen=1");
+    var waited = Stopwatch.StartNew();
+    while (await game.Evaluate("String(!!document.fullscreenElement)") != "true")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(3))
+            throw new CheckFailed("the game's Fullscreen didn't fill the screen");
+        await Task.Delay(100);
+    }
+
+    await game.Evaluate("document.exitFullscreen().then(() => 'out')", awaitPromise: true);
+    waited.Restart();
+    while (await game.Probe("fullscreen") != "0")
+    {
+        if (waited.Elapsed > TimeSpan.FromSeconds(3))
+            throw new CheckFailed("leaving fullscreen in the browser didn't turn the game's Fullscreen off");
+        await Task.Delay(100);
+    }
+
+    Console.WriteLine("  fullscreen: the game's setting fills the screen, and leaving it turns the setting off");
+}
+
+static System.Numerics.Vector3 Position(string probe) =>
+    probe.Split(',') is [var x, var y, var z]
+        ? new(float.Parse(x, CultureInfo.InvariantCulture), float.Parse(y, CultureInfo.InvariantCulture), float.Parse(z, CultureInfo.InvariantCulture))
+        : throw new CheckFailed($"no such entity (probe gave \"{probe}\")");
+
+static string Show(System.Numerics.Vector3 v) => string.Create(CultureInfo.InvariantCulture, $"({v.X:0.0}, {v.Y:0.0}, {v.Z:0.0})");
+
+// How much of a picture is more than its most common color (its background), and how many colors it has (to the nearest 16).
+static (double Share, int Colors) Drawn(ImageResult image)
+{
+    var counts = new Dictionary<int, int>();
+    var pixels = image.Width * image.Height;
+    for (var i = 0; i < pixels; i++)
+    {
+        var key = (image.Data[i * 4] >> 4 << 8) | (image.Data[i * 4 + 1] >> 4 << 4) | (image.Data[i * 4 + 2] >> 4);
+        counts[key] = counts.GetValueOrDefault(key) + 1;
+    }
+
+    var most = counts.Values.Max();
+    return ((double)(pixels - most) / pixels, counts.Count(c => c.Value > pixels / 2000));
 }
 
 // A headless Edge (or Chrome), with software WebGL (SwiftShader) so a check draws the same on any machine and needs no
-// GPU; null if there's neither.
+// GPU, and its sound muted (Web Audio still plays, so the page can listen to it), whatever else is on the screen; null if
+// there's neither.
 static Process? LaunchBrowser(string profile)
 {
     if (Browser() is not { } browser)
@@ -238,7 +685,10 @@ static Process? LaunchBrowser(string profile)
         {
             "--headless=new", "--remote-debugging-port=0", $"--user-data-dir={profile}", "--no-first-run",
             "--no-default-browser-check", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=960,540",
-            "--force-device-scale-factor=1", "--hide-scrollbars", "--mute-audio", "about:blank",
+            "--force-device-scale-factor=1", "--hide-scrollbars", "--mute-audio",
+            // Never hidden or throttled because of what's on the real screen (Windows marks covered windows hidden).
+            "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling",
+            "--disable-features=CalculateNativeWinOcclusion", "about:blank",
         },
         UseShellExecute = false,
         RedirectStandardError = true,
@@ -268,14 +718,18 @@ static async Task<DevTools> ConnectAsync(string profile, List<string> log)
     };
     await cdp.SendAsync("Runtime.enable");
     await cdp.SendAsync("Page.enable");
+    // The page counts as focused (so as shown, its frames running) whatever has the real screen's focus: without it, a
+    // headless page on a busy desktop goes hidden after a few seconds and stops drawing.
+    await cdp.SendAsync("Emulation.setFocusEmulationEnabled", new JsonObject { ["enabled"] = true });
     return cdp;
 }
 
-// Same frame, same pixels: each template's start scene (and three scenes of the dark, lights and shadows, the second with
-// screen effects, the third with a minimap viewport) is exported for the web, held still after `steps` steps in the browser (?still=) and drawn by the
-// desktop's OpenGL renderer after the same steps, and the two pictures are compared. Passes if every game's differ by
-// little: at most MaxOffShare of the pixels more than MaxOff in a channel, and MaxMean on average. Each game's
-// desktop.png, web.png and diff.png (what differs, brightened) go in `shots`.
+// Same frame, same pixels: every scene of each template (and three scenes of the dark, lights and shadows, the second with
+// screen effects, the third with a minimap viewport) is exported for the web, held still after `steps` steps in the
+// browser (?still=, and ?scene= for each scene but the start) and drawn by the desktop's OpenGL renderer after the same
+// steps, and the two pictures are compared. Passes if every one differs by little: at most MaxOffShare of the pixels more
+// than MaxOff in a channel, and MaxMean on average. Each one's desktop.png, web.png and diff.png (what differs,
+// brightened) go in `shots`.
 async Task<int> Compare(string root, string shots, string profile, int steps)
 {
     const double MaxOffShare = 0.005, MaxMean = 1.0;
@@ -299,17 +753,16 @@ async Task<int> Compare(string root, string shots, string profile, int steps)
     if (LaunchBrowser(profile) is not { } process)
         return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
     var failed = new List<string>();
+    var compared = 0;
     try
     {
         var log = new List<string>();
         using var cdp = await ConnectAsync(profile, log);
-        Console.WriteLine($"Comparing {games.Count} games after {steps} steps: the desktop's OpenGL against the browser's WebGL (headless, SwiftShader).");
+        Console.WriteLine($"Comparing every scene of {games.Count} games after {steps} steps: the desktop's OpenGL against the browser's WebGL (headless, SwiftShader).");
         foreach (var (name, make) in games)
         {
             var slug = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
             var site = Path.Combine(root, slug);
-            lock (log)
-                log.Clear();
             try
             {
                 var project = await make(Path.Combine(work, "projects", slug));
@@ -320,25 +773,47 @@ async Task<int> Compare(string root, string shots, string profile, int steps)
                     continue;
                 }
 
-                if (await Still(cdp, $"http://127.0.0.1:{port}/{slug}/?still={steps}") is not var (web, width, height))
+                // The start scene first, then the rest, by name.
+                var start = project.StartScenePath is { } startPath ? Path.GetFullPath(startPath) : null;
+                var scenes = project.FindScenes().OrderBy(s => Path.GetFullPath(s) == start ? 0 : 1).ThenBy(s => s, StringComparer.Ordinal).ToList();
+                foreach (var scenePath in scenes)
                 {
+                    var scene = Path.GetFullPath(scenePath) == start ? null : Path.GetFileNameWithoutExtension(scenePath);
+                    var label = scene is null ? name : $"{name} / {scene}";
+                    var folder = Path.Combine(shots, scene is null ? slug : $"{slug}-{new string(scene.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant()}");
                     lock (log)
-                        failed.Add($"{name}: it didn't run in the browser.\n  {string.Join("\n  ", log)}");
-                    continue;
-                }
+                        log.Clear();
+                    try
+                    {
+                        var query = $"?still={steps}" + (scene is null ? "" : "&scene=" + Uri.EscapeDataString(scene));
+                        if (await Still(cdp, $"http://127.0.0.1:{port}/{slug}/{query}") is not var (web, width, height))
+                        {
+                            lock (log)
+                                failed.Add($"{label}: it didn't run in the browser.\n  {string.Join("\n  ", log)}");
+                            continue;
+                        }
 
-                var desktop = await DrawOnDesktop(Path.Combine(site, ExportLayout.GameFolder), steps, width, height);
-                var (offShare, mean, worst, diff) = Difference(desktop, web, width, height);
-                Png(Path.Combine(shots, slug, "desktop.png"), desktop, width, height);
-                Png(Path.Combine(shots, slug, "web.png"), web, width, height);
-                Png(Path.Combine(shots, slug, "diff.png"), diff, width, height);
-                var same = offShare <= MaxOffShare && mean <= MaxMean;
-                Console.WriteLine($"  {(same ? "same" : "DIFFERENT"),-9} {name,-18} {width}x{height}: {offShare:P2} of pixels off by more than {MaxOff}, " +
-                                  $"{mean:0.00} off on average, {worst} at most");
-                if (!same)
-                    failed.Add($"{name}: {offShare:P2} of its pixels differ by more than {MaxOff} (at most {MaxOffShare:P1}), {mean:0.00} on average (at most {MaxMean:0.0}); see {Path.Combine(shots, slug)}");
+                        var desktop = await DrawOnDesktop(Path.Combine(site, ExportLayout.GameFolder), scene, steps, width, height);
+                        var (offShare, mean, worst, diff) = Difference(desktop, web, width, height);
+                        Png(Path.Combine(folder, "desktop.png"), desktop, width, height);
+                        Png(Path.Combine(folder, "web.png"), web, width, height);
+                        Png(Path.Combine(folder, "diff.png"), diff, width, height);
+                        compared++;
+                        var same = offShare <= MaxOffShare && mean <= MaxMean;
+                        Console.WriteLine($"  {(same ? "same" : "DIFFERENT"),-9} {label,-30} {width}x{height}: {offShare:P2} of pixels off by more than {MaxOff}, " +
+                                          $"{mean:0.00} off on average, {worst} at most");
+                        if (!same)
+                            failed.Add($"{label}: {offShare:P2} of its pixels differ by more than {MaxOff} (at most {MaxOffShare:P1}), {mean:0.00} on average (at most {MaxMean:0.0}); see {folder}");
+                    }
+#pragma warning disable CA1031 // One scene failing to compare is reported with the rest.
+                    catch (Exception ex)
+#pragma warning restore CA1031
+                    {
+                        failed.Add($"{label}: {ex.Message}");
+                    }
+                }
             }
-#pragma warning disable CA1031 // One game failing to compare is reported with the rest.
+#pragma warning disable CA1031 // One game failing to export is reported with the rest.
             catch (Exception ex)
 #pragma warning restore CA1031
             {
@@ -361,7 +836,7 @@ async Task<int> Compare(string root, string shots, string profile, int steps)
         Console.Error.WriteLine(failure);
     if (failed.Count > 0)
         return 1;
-    Console.WriteLine($"Same pixels: all {games.Count} games draw the same on the desktop and in the browser.");
+    Console.WriteLine($"Same pixels: all {compared} scenes of {games.Count} games draw the same on the desktop and in the browser.");
     return 0;
 
     // A pixel is off by its channel furthest from the other picture's (red, green and blue: the canvas has no alpha).
@@ -424,10 +899,12 @@ static async Task<(byte[] Pixels, int Width, int Height)?> Still(DevTools cdp, s
 }
 
 // The exported game drawn by the desktop's renderer, off the screen, as the web player draws it held still: started the
-// same, `steps` steps of a frame each, and its frame built at the canvas's aspect.
-static async Task<byte[]> DrawOnDesktop(string gameFolder, int steps, int width, int height)
+// same (in `scene`, or its start scene), `steps` steps of a frame each, and its frame built at the canvas's aspect.
+static async Task<byte[]> DrawOnDesktop(string gameFolder, string? scene, int steps, int width, int height)
 {
     var loaded = await GameLoader.LoadAsync(gameFolder);
+    if (scene is not null)
+        loaded = loaded with { Scene = loaded.LoadScene(scene), SceneName = scene };
     Griff.Rand.Seed(0);
     var game = loaded.NewGame(new InputState { IsMouseInView = false });
     var aspect = (float)width / height;
@@ -559,29 +1036,15 @@ static void Png(string path, byte[] rgba, int width, int height)
     }
 }
 
-static async Task<string> Evaluate(DevTools cdp, string expression)
+static async Task<string> Evaluate(DevTools cdp, string expression, bool awaitPromise = false)
 {
-    var result = await cdp.SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = expression, ["returnByValue"] = true });
+    var result = await cdp.SendAsync("Runtime.evaluate", new JsonObject
+    {
+        ["expression"] = expression, ["returnByValue"] = true, ["awaitPromise"] = awaitPromise,
+    });
+    if (result["exceptionDetails"] is { } thrown)
+        throw new InvalidOperationException($"The page threw evaluating {expression}: {thrown["exception"]?["description"] ?? thrown["text"]}");
     return result["result"]?["value"]?.ToString() ?? "";
-}
-
-// The right arrow, as the browser's own input sends it (so it arrives as a trusted KeyboardEvent).
-static Task Key(DevTools cdp, string type) => cdp.SendAsync("Input.dispatchKeyEvent", new JsonObject
-{
-    ["type"] = type,
-    ["key"] = "ArrowRight",
-    ["code"] = "ArrowRight",
-    ["windowsVirtualKeyCode"] = 39,
-    ["nativeVirtualKeyCode"] = 39,
-});
-
-static async Task<ImageResult> Screenshot(DevTools cdp, string path)
-{
-    var shot = await cdp.SendAsync("Page.captureScreenshot", new JsonObject { ["format"] = "png" });
-    var png = Convert.FromBase64String(shot["data"]!.ToString());
-    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-    await File.WriteAllBytesAsync(path, png);
-    return ImageResult.FromMemory(png, ColorComponents.RedGreenBlueAlpha);
 }
 
 // Where the griffin is: the middle of the pixels that aren't the empty scene's background (the camera's, #1E222B), below
@@ -658,15 +1121,15 @@ static string? Browser()
     return candidates.FirstOrDefault(File.Exists);
 }
 
-// What a browser downloads to play it: .NET (the runtime, its libraries and Griff) and the game.
-static void Report(string site)
+// What a browser downloads to play it: .NET (the runtime, its libraries and Griff) and the game. Hosts compress it as they
+// send it; the published player's Brotli copies say how small that gets.
+void Report(string folder)
 {
-    static long Size(string folder) => Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
-    var framework = Path.Combine(site, "_framework");
-    var compressed = Directory.EnumerateFiles(framework, "*.br").Sum(f => new FileInfo(f).Length);
-    var plain = Directory.EnumerateFiles(framework).Where(f => !f.EndsWith(".br", StringComparison.Ordinal) && !f.EndsWith(".gz", StringComparison.Ordinal)).Sum(f => new FileInfo(f).Length);
-    Console.WriteLine($"Exported to {site}: .NET and Griff {plain / 1048576.0:0.0} MB ({compressed / 1048576.0:0.0} MB compressed with Brotli), " +
-                      $"the game {Size(Path.Combine(site, ExportLayout.GameFolder)) / 1024.0:0} KB.");
+    static long Size(string path) => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
+    var plain = Directory.EnumerateFiles(Path.Combine(folder, "_framework")).Sum(f => new FileInfo(f).Length);
+    var compressed = Directory.EnumerateFiles(Path.Combine(player, "_framework"), "*.br").Sum(f => new FileInfo(f).Length);
+    Console.WriteLine($"Exported to {folder}: .NET and Griff {plain / 1048576.0:0.0} MB ({compressed / 1048576.0:0.0} MB compressed with Brotli), " +
+                      $"the game {Size(Path.Combine(folder, ExportLayout.GameFolder)) / 1024.0:0} KB.");
 }
 
 static void TryDelete(string folder)
@@ -691,6 +1154,136 @@ static int Fail(string message)
     Console.Error.WriteLine(message);
     return 1;
 }
+
+// One game being checked in the browser: opening it, its screenshots, and the keys, taps and controller it's sent.
+sealed class GameCheck(DevTools cdp, string name, string url, string shots)
+{
+    public DevTools Cdp => cdp;
+
+    public string Name => name;
+
+    public string Shot(string file) => Path.Combine(shots, file);
+
+    // Opens (or reloads) the page and waits until the game has drawn a second's frames, its images decoded.
+    public async Task Open(bool reload = false)
+    {
+        var started = Stopwatch.StartNew();
+        await cdp.SendAsync(reload ? "Page.reload" : "Page.navigate", reload ? new JsonObject() : new JsonObject { ["url"] = url });
+        while (true)
+        {
+            await Task.Delay(250);
+            string status;
+            try
+            {
+                status = await Evaluate("globalThis.griff ? griff.status + '|' + griff.frames + '|' + griff.pending : 'loading|0|0'");
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            if (status.StartsWith("failed", StringComparison.Ordinal))
+                throw new CheckFailed($"it didn't run: {status}");
+            if (started.Elapsed > TimeSpan.FromSeconds(90))
+                throw new CheckFailed($"it didn't start in 90 s ({status})");
+            var parts = status.Split('|');
+            if (parts[0] == "running" && int.Parse(parts[1], CultureInfo.InvariantCulture) >= 60 && parts[2] == "0")
+                break;
+        }
+
+        if (await Evaluate("document.getElementById('loading').checkVisibility()") != "false")
+            throw new CheckFailed("the loading screen still shows over the game");
+        if (!reload)
+            Console.WriteLine($"  runs: {started.Elapsed.TotalSeconds:0.0} s after the page opened, titled \"{await Evaluate("document.title")}\"");
+    }
+
+    public Task<string> Evaluate(string expression, bool awaitPromise = false) => EvaluateIn(cdp, expression, awaitPromise);
+
+    public Task<string> Probe(string what) => Evaluate($"griff.probe({JsonSerializer.Serialize(what)})");
+
+    public async Task<ImageResult> Screenshot(string file)
+    {
+        var shot = await cdp.SendAsync("Page.captureScreenshot", new JsonObject { ["format"] = "png" });
+        var png = Convert.FromBase64String(shot["data"]!.ToString());
+        Directory.CreateDirectory(shots);
+        await File.WriteAllBytesAsync(Shot(file), png);
+        return ImageResult.FromMemory(png, ColorComponents.RedGreenBlueAlpha);
+    }
+
+    // The page's size in CSS pixels.
+    public async Task<(double Width, double Height)> Viewport()
+    {
+        var size = (await Evaluate("innerWidth + 'x' + innerHeight")).Split('x');
+        return (double.Parse(size[0], CultureInfo.InvariantCulture), double.Parse(size[1], CultureInfo.InvariantCulture));
+    }
+
+    // A key press nothing in a game takes (F13), which lets the page play sound and go fullscreen, as a player's would.
+    public async Task Gesture()
+    {
+        await Key("keyDown", "F13", 124);
+        await Key("keyUp", "F13", 124);
+        await Task.Delay(200);
+    }
+
+    public async Task Hold(string code, int milliseconds)
+    {
+        await Key("keyDown", code, VirtualKey(code));
+        await Task.Delay(milliseconds);
+        await Key("keyUp", code, VirtualKey(code));
+    }
+
+    public async Task Press(string code)
+    {
+        await Key("keyDown", code, VirtualKey(code));
+        await Task.Delay(80);
+        await Key("keyUp", code, VirtualKey(code));
+    }
+
+    // A finger touching the page at (x, y), CSS pixels from its top left, and lifted.
+    public async Task Tap(double x, double y)
+    {
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = true, ["maxTouchPoints"] = 1 });
+        var point = new JsonArray(new JsonObject { ["x"] = x, ["y"] = y });
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchStart", ["touchPoints"] = point });
+        await Task.Delay(50);
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    }
+
+    // A controller in the standard layout with its left stick at (stickX, 0), as if plugged in; null unplugs it.
+    public async Task Pad(double? stickX) => await Evaluate(stickX is not { } x ? "globalThis.__griffPad = null; 'ok'"
+        : "globalThis.__griffPad = { connected: true, mapping: 'standard', axes: [" + x.ToString(CultureInfo.InvariantCulture) + ", 0, 0, 0], " +
+          "buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }; 'ok'");
+
+    private async Task Key(string type, string code, int virtualKey) => await cdp.SendAsync("Input.dispatchKeyEvent", new JsonObject
+    {
+        ["type"] = type,
+        ["key"] = code switch { "Space" => " ", "Enter" => "Enter", "Escape" => "Escape", var c when c.StartsWith("Key", StringComparison.Ordinal) => c[3..].ToLowerInvariant(), var c => c },
+        ["code"] = code,
+        ["windowsVirtualKeyCode"] = virtualKey,
+        ["nativeVirtualKeyCode"] = virtualKey,
+    });
+
+    private static int VirtualKey(string code) => code switch
+    {
+        "ArrowLeft" => 37, "ArrowUp" => 38, "ArrowRight" => 39, "ArrowDown" => 40, "Space" => 32, "Enter" => 13, "Escape" => 27,
+        var c when c.Length == 4 && c.StartsWith("Key", StringComparison.Ordinal) => c[3],
+        _ => 0,
+    };
+
+    private static async Task<string> EvaluateIn(DevTools cdp, string expression, bool awaitPromise)
+    {
+        var result = await cdp.SendAsync("Runtime.evaluate", new JsonObject
+        {
+            ["expression"] = expression, ["returnByValue"] = true, ["awaitPromise"] = awaitPromise,
+        });
+        if (result["exceptionDetails"] is { } thrown)
+            throw new InvalidOperationException($"The page threw evaluating {expression}: {thrown["exception"]?["description"] ?? thrown["text"]}");
+        return result["result"]?["value"]?.ToString() ?? "";
+    }
+}
+
+sealed class CheckFailed(string message) : Exception(message);
 
 // Chrome's DevTools protocol over its WebSocket: commands answered by id, and events as they come.
 sealed class DevTools : IDisposable

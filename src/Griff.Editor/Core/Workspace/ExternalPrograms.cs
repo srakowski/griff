@@ -11,6 +11,9 @@ public interface IExternalPrograms
 
     /// <summary>Shows a file (selected) or a folder in File Explorer.</summary>
     void ShowInExplorer(string path);
+
+    /// <summary>Opens a web address (http or https only) in the browser Windows has set as the default.</summary>
+    void OpenInBrowser(string url);
 }
 
 public sealed class ExternalPrograms : IExternalPrograms
@@ -35,6 +38,20 @@ public sealed class ExternalPrograms : IExternalPrograms
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             // No program for it; nothing useful to do.
+        }
+    }
+
+    public void OpenInBrowser(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+            throw new InvalidOperationException($"{url} isn't a web address.");
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // No browser; nothing useful to do.
         }
     }
 

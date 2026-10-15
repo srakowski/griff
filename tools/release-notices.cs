@@ -28,9 +28,12 @@ foreach (var file in Directory.EnumerateFiles(editor, "*.*", SearchOption.AllDir
     var extension = Path.GetExtension(file);
     if (file.StartsWith(player + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
     {
-        // A player is a single-file bundle: its notices come from the files inside it.
+        // A desktop player is a single-file bundle: its notices come from the files inside it. The web player's are its
+        // own files (.NET for WebAssembly, one .wasm an assembly), as a web export's are.
         if (extension.Equals(".exe", StringComparison.OrdinalIgnoreCase))
             files.AddRange(ThirdPartyNotices.FilesIn(file));
+        else if (extension is ".wasm" or ".dll")
+            files.Add(relative);
     }
     else if (extension is ".dll" or ".exe")
     {

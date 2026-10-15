@@ -21,4 +21,12 @@
     <ProjectReference Include="..\..\src\Griff.Editor\Griff.Editor.csproj" />
   </ItemGroup>
 
+  <!-- Build for Web exports with the web player the editor publishes beside itself (Player\Web): the tests have it beside them too. -->
+  <Target Name="CopyWebPlayer" AfterTargets="Build">
+    <ItemGroup>
+      <WebPlayerFile Include="..\..\src\Griff.Editor\bin\$(Configuration)\net10.0-windows\Player\Web\wwwroot\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebPlayerFile)" DestinationFiles="@(WebPlayerFile->'$(OutDir)Player\Web\wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

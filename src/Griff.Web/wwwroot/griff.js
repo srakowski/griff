@@ -1,6 +1,7 @@
-// The page's side of Griff's web player: draws the frames the game builds with WebGL 2, runs a frame each time the
-// browser shows one, and sends the game the keyboard and mouse. The C# side calls the exported functions here (its
-// [JSImport]s); `attach` gives this side the C# WebPlayer's [JSExport]s.
+// The page's side of Griff's web player: shows the loading screen, draws the frames the game builds with WebGL 2, runs a
+// frame each time the browser shows one, plays the sound the game mixes through Web Audio, keeps its saves in
+// localStorage, and sends the game the keyboard, mouse, touch and controller. The C# side calls the exported functions
+// here (its [JSImport]s); `attach` gives this side the C# WebPlayer's [JSExport]s.
 //
 // A frame comes as a draw list (Griff.Graphics' DrawList, the same one the desktop's OpenGL renderer draws): its quads,
 // its commands (five ints each: the op, a texture, the first quad, how many, and where its values start) and its values
@@ -8,7 +9,18 @@
 // shaders (given by `start`), so both draw the same pixels.
 
 const canvas = document.getElementById('game');
+const loadingScreen = document.getElementById('loading');
 const status = document.getElementById('status');
+const fill = document.getElementById('fill');
+const noticeBox = document.getElementById('notice');
+const hint = document.getElementById('hint');
+
+// The largest canvas drawn at full resolution, along its longer side: a bigger page (a 4K screen at twice its pixels) is
+// drawn at this size and scaled up, sharp, by the browser.
+const MAX_CANVAS = 4096;
+// Griff's mixer's rate, and how far ahead of the current moment a new run of sound starts in Web Audio.
+const SAMPLE_RATE = 44100;
+const AUDIO_LEAD = 0.02;
 
 // A quad's floats and bytes (its corners in clip space, the part of the texture, tint and flash: four floats each).
 const QUAD_FLOATS = 20;
@@ -42,15 +54,46 @@ const whole = new Float32Array(QUAD_FLOATS);
 let quadBytes = new Uint8Array(QUAD_BYTES * 1024);
 let capturing = null;
 
-// What a test (or a person in the console) can see of the game: 'loading', 'running' or 'failed: <why>', the frames
-// drawn, the images still being decoded, and capture(), which resolves to the next frame's pixels (top-down RGBA, in
-// base64) once it's drawn.
+let audio = null;
+let pad = null;
+let hadPad = false;
+let rumbleStrength = 0;
+let rumbledAt = 0;
+let wantFullscreen = false;
+let touchLeft = false;
+let noticeTimer = 0;
+
+// What a test (or a person in the console) can see of the game: 'loading', 'running', 'ended' or 'failed: <why>', the
+// frames drawn, the images still being decoded, capture(), which resolves to the next frame's pixels (top-down RGBA, in
+// base64) once it's drawn, probe() (WebPlayer.Probe: the scene, an entity's place, a saved value...), where its saves
+// are kept, the notice shown, and its sound: 'none', 'waiting' (for a click or key) or 'running', and level(), the loudest
+// sample Web Audio is playing right now (0 to 1, through an AnalyserNode).
 globalThis.griff = {
   status: 'loading',
   frames: 0,
   pending: 0,
+  saveKey: null,
+  notice: '',
   capture: () => new Promise(resolve => { capturing = resolve; }),
+  probe: what => player ? player.Probe(what) : '',
+  get lost() { return gl?.isContextLost() ?? false; },
+  get visibility() { return document.visibilityState; },
+  audio: {
+    get state() { return !audio ? 'none' : audio.context.state === 'running' ? 'running' : 'waiting'; },
+    get hint() { return !hint.hidden; },
+    level() {
+      if (!audio)
+        return 0;
+      audio.analyser.getFloatTimeDomainData(audio.samples);
+      let peak = 0;
+      for (const sample of audio.samples)
+        peak = Math.max(peak, Math.abs(sample));
+      return peak;
+    },
+  },
 };
+
+setUpAudio();
 
 /** Takes the C# WebPlayer's exports (called by main.js before the game starts). */
 export function attach(exports) {
@@ -69,10 +112,151 @@ export function query() {
 
 /** Shows what went wrong over the game, and stops its frames. */
 export function fail(message) {
-  status.hidden = false;
+  loadingScreen.hidden = false;
+  loadingScreen.className = 'over failed';
   status.textContent = message;
-  status.className = 'failed';
+  hint.hidden = true;
   globalThis.griff.status = `failed: ${message}`;
+}
+
+/** .NET's own files loading (from main.js): most of the loading screen's bar. */
+export function loading(loaded, total) {
+  if (total > 0)
+    fill.style.width = `${Math.round(80 * Math.min(loaded / total, 1))}%`;
+}
+
+/** The game's files loading: the rest of the bar. */
+export function progress(done, total) {
+  fill.style.width = `${80 + Math.round(20 * (total > 0 ? done / total : 1))}%`;
+  status.textContent = 'Loading the game…';
+}
+
+/** The game quit: its frames stop and `message` shows instead (a page can't close itself). */
+export function ended(message) {
+  globalThis.griff.status = 'ended';
+  loadingScreen.hidden = false;
+  loadingScreen.className = 'over ended';
+  status.textContent = message;
+  hint.hidden = true;
+  if (document.fullscreenElement)
+    document.exitFullscreen?.().catch(() => {});
+}
+
+/** Shows `message` over the top of the game for a while (or until it's clicked). */
+export function notice(message) {
+  globalThis.griff.notice = message;
+  noticeBox.textContent = message;
+  noticeBox.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { noticeBox.hidden = true; }, 12000);
+}
+
+/** The save kept under `key` in the page's storage, or null (none, or storage is off). */
+export function loadSave(key) {
+  globalThis.griff.saveKey = key;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps a save under `key` in the page's storage: it survives reloading the page (not clearing the site's data). */
+export function storeSave(key, json) {
+  try {
+    localStorage.setItem(key, json);
+  } catch (error) {
+    console.warn(`Couldn't save: ${error?.message ?? error}`);
+  }
+}
+
+/** Shakes the first controller this hard, 0 to 1 (0 stops it), where the browser lets a page. */
+export function rumble(strength) {
+  rumbleStrength = strength;
+  rumbledAt = 0;
+  if (strength <= 0)
+    pad?.vibrationActuator?.reset?.()?.catch?.(() => {});
+}
+
+/** Fills the screen with the page, or stops; the browser allows it only after a click or a key, so it may wait for one. */
+export function fullscreen(on) {
+  wantFullscreen = on;
+  applyFullscreen();
+}
+
+/** Gives back the mouse a first-person game had. */
+export function releaseMouse() {
+  if (document.pointerLockElement)
+    document.exitPointerLock();
+}
+
+/** Says (or stops saying) that sound starts with a click or a key: the browser holds it until then. */
+export function soundWaiting(waiting) {
+  hint.hidden = !waiting || !audio || audio.context.state === 'running';
+}
+
+/** Seconds of sound queued and not yet played (from where the next run starts); -1 while the page may not play sound, -2 with no Web Audio. */
+export function audioState() {
+  if (!audio)
+    return -2;
+  const context = audio.context;
+  if (context.state !== 'running')
+    return -1;
+  const start = context.currentTime + AUDIO_LEAD;
+  if (audio.next < start)
+    audio.next = start;
+  return audio.next - context.currentTime;
+}
+
+/** Seconds Web Audio takes to get what it plays to the speakers. */
+export function audioLatency() {
+  return audio ? (audio.context.baseLatency || 0) + (audio.context.outputLatency || 0) : 0;
+}
+
+/** Queues sound, 32-bit floats left and right in turn at Griff's mixer's rate, straight after what's queued. */
+export function audioPush(view) {
+  if (!audio || audio.context.state !== 'running')
+    return;
+  const bytes = view.slice();
+  const samples = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+  const frames = samples.length / 2;
+  if (frames < 1)
+    return;
+  const buffer = audio.context.createBuffer(2, frames, SAMPLE_RATE);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+  for (let i = 0; i < frames; i++) {
+    left[i] = samples[i * 2];
+    right[i] = samples[i * 2 + 1];
+  }
+
+  const source = audio.context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.analyser);
+  source.start(audio.next);
+  audio.next += frames / SAMPLE_RATE;
+}
+
+/** Decodes a sound file (MP3) with the browser's own decoders, as an AudioBuffer at Griff's mixer's rate where it can. */
+export async function decodeSound(view) {
+  const bytes = view.slice();
+  const context = audio?.context ?? new OfflineAudioContext(2, 1, SAMPLE_RATE);
+  return await context.decodeAudioData(bytes.buffer);
+}
+
+/** A decoded sound's samples, its channels (at most two) in turn, as 32-bit floats' bytes into `view`. */
+export function soundSamples(buffer, view) {
+  const channels = Math.min(2, buffer.numberOfChannels);
+  const data = [];
+  for (let c = 0; c < channels; c++)
+    data.push(buffer.getChannelData(c));
+  const out = new Float32Array(buffer.length * channels);
+  for (let i = 0; i < buffer.length; i++) {
+    for (let c = 0; c < channels; c++)
+      out[i * channels + c] = data[c][i];
+  }
+
+  view.set(new Uint8Array(out.buffer));
 }
 
 /** Starts drawing frames, with these shaders (`header` goes before each), and listening to the keyboard and mouse. */
@@ -86,7 +270,7 @@ export function start(title, header, vertex, sprite, shape, effectsSource) {
 
   setUp(header, vertex, sprite, shape, effectsSource);
   listen();
-  status.hidden = true;
+  loadingScreen.hidden = true;
   globalThis.griff.status = 'running';
   canvas.focus();
   requestAnimationFrame(frame);
@@ -303,14 +487,101 @@ function read(width, height) {
 function frame(now) {
   if (globalThis.griff.status !== 'running')
     return;
-  const scale = devicePixelRatio || 1;
+  // The screen's own pixels (devicePixelRatio), so the game is sharp on any screen, up to MAX_CANVAS along its longer side.
+  let scale = devicePixelRatio || 1;
+  const longest = Math.max(canvas.clientWidth, canvas.clientHeight) * scale;
+  if (longest > MAX_CANVAS)
+    scale *= MAX_CANVAS / longest;
   const width = Math.max(1, Math.round(canvas.clientWidth * scale));
   const height = Math.max(1, Math.round(canvas.clientHeight * scale));
   if (canvas.width !== width || canvas.height !== height)
     [canvas.width, canvas.height] = [width, height];
+  readGamepad(now);
   player.Frame(now, width, height);
+  // A finger lifted counts as the mouse leaving only once the game has seen the tap.
+  if (touchLeft) {
+    touchLeft = false;
+    player.PointerLeft();
+  }
+
   globalThis.griff.frames++;
   requestAnimationFrame(frame);
+}
+
+// The first controller plugged in, in the browser's standard layout (the Xbox one's), handed to the game each frame; its
+// rumble kept going while the game asks for one.
+function readGamepad(now) {
+  pad = null;
+  for (const candidate of navigator.getGamepads?.() ?? []) {
+    if (candidate?.connected) {
+      pad = candidate;
+      break;
+    }
+  }
+
+  if (!pad) {
+    if (hadPad)
+      player.Gamepad(false, 0, 0, 0, 0, 0, 0, 0);
+    hadPad = false;
+    return;
+  }
+
+  hadPad = true;
+  let pressed = 0;
+  pad.buttons.forEach((button, i) => {
+    if (i < 31 && button.pressed)
+      pressed |= 1 << i;
+  });
+  const axis = i => pad.axes[i] ?? 0;
+  const value = i => pad.buttons[i]?.value ?? 0;
+  player.Gamepad(true, pressed, axis(0), axis(1), axis(2), axis(3), value(6), value(7));
+  if (rumbleStrength > 0 && now - rumbledAt > 100 && pad.vibrationActuator?.playEffect) {
+    rumbledAt = now;
+    pad.vibrationActuator.playEffect('dual-rumble', { duration: 200, strongMagnitude: rumbleStrength, weakMagnitude: rumbleStrength })
+      .catch(() => {});
+  }
+}
+
+// Web Audio, made as the page opens: the browser holds it until the player clicks or presses a key (its autoplay rule),
+// so it's resumed by the first one. The game's sound is mixed in C# and queued here (audioPush), through an AnalyserNode
+// to the speakers.
+function setUpAudio() {
+  const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+  if (!Context)
+    return;
+  let context;
+  try {
+    context = new Context({ sampleRate: SAMPLE_RATE, latencyHint: 'interactive' });
+  } catch {
+    try {
+      context = new Context();
+    } catch {
+      return;
+    }
+  }
+
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.connect(context.destination);
+  audio = { context, analyser, next: 0, samples: new Float32Array(analyser.fftSize) };
+  const resume = () => {
+    if (context.state !== 'running')
+      context.resume().catch(() => {});
+  };
+  for (const type of ['pointerdown', 'keydown', 'touchend'])
+    addEventListener(type, resume, { capture: true });
+  context.addEventListener('statechange', () => {
+    if (context.state === 'running')
+      hint.hidden = true;
+  });
+}
+
+// Fullscreen the game asked for: now, or with the next click or key press if the browser wouldn't allow it without one.
+function applyFullscreen() {
+  if (wantFullscreen && !document.fullscreenElement)
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  else if (!wantFullscreen && document.fullscreenElement)
+    document.exitFullscreen?.().catch(() => {});
 }
 
 function textureOf(id) {
@@ -438,6 +709,25 @@ function filter(mode) {
 // so the arrows and Space don't scroll it, but leaves the browser its own: F keys and shortcuts with Ctrl or Cmd.
 function listen() {
   const keep = e => !e.ctrlKey && !e.metaKey && !/^F\d+$/.test(e.code);
+  // A click or key press lets the page go fullscreen, if the game asked to before there was one.
+  const gesture = () => {
+    if (wantFullscreen && !document.fullscreenElement)
+      applyFullscreen();
+  };
+  addEventListener('pointerdown', gesture, { capture: true });
+  addEventListener('keydown', gesture, { capture: true });
+  document.addEventListener('fullscreenchange', () => {
+    wantFullscreen = !!document.fullscreenElement;
+    player.FullscreenChanged(wantFullscreen);
+  });
+  document.addEventListener('pointerlockchange', () => player.MouseLocked(document.pointerLockElement === canvas));
+  noticeBox.addEventListener('click', () => { noticeBox.hidden = true; });
+  // The browser can take WebGL away (a GPU reset, too many pages drawing): the game can't go on drawing, so it says so.
+  canvas.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    fail("The browser stopped the game's graphics. Reload the page to play again.");
+  });
+
   addEventListener('keydown', e => {
     if (player.Key(e.code, true, e.repeat) && keep(e))
       e.preventDefault();
@@ -452,18 +742,48 @@ function listen() {
   });
   addEventListener('blur', () => player.Blur());
 
-  canvas.addEventListener('pointermove', e => {
+  // The mouse, and touch as the mouse: one finger points and its tap is a left click (a second finger is ignored).
+  const point = e => {
     const box = canvas.getBoundingClientRect();
     const scale = devicePixelRatio || 1;
     player.Pointer((e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height, e.movementX * scale, e.movementY * scale);
+  };
+  canvas.addEventListener('pointermove', e => {
+    if (e.isPrimary)
+      point(e);
   });
-  canvas.addEventListener('pointerleave', () => player.PointerLeft());
+  canvas.addEventListener('pointerleave', e => {
+    if (!e.isPrimary)
+      return;
+    if (e.pointerType === 'mouse')
+      player.PointerLeft();
+    else
+      touchLeft = true;
+  });
   canvas.addEventListener('pointerdown', e => {
     canvas.focus();
+    if (!e.isPrimary)
+      return;
+    // A first-person game takes the mouse when it's clicked; that click only takes it, as on the desktop.
+    if (e.pointerType === 'mouse' && document.pointerLockElement !== canvas && player.WantsMouseLock() && canvas.requestPointerLock) {
+      const asked = canvas.requestPointerLock();
+      asked?.catch?.(() => {});
+      return;
+    }
+
+    touchLeft = false;
+    point(e);
     canvas.setPointerCapture(e.pointerId);
-    player.Button(e.button, true);
+    player.Button(e.pointerType === 'mouse' ? e.button : 0, true);
   });
-  canvas.addEventListener('pointerup', e => player.Button(e.button, false));
+  canvas.addEventListener('pointerup', e => {
+    if (e.isPrimary)
+      player.Button(e.pointerType === 'mouse' ? e.button : 0, false);
+  });
+  canvas.addEventListener('pointercancel', e => {
+    if (e.isPrimary)
+      player.Button(0, false);
+  });
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   // A notch is 100 pixels of scrolling in Chrome and Edge, or 3 lines; more than 0 is away from the player, as on Windows.
   canvas.addEventListener('wheel', e => {

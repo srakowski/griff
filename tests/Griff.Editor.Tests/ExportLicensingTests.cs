@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using Griff.Fonts;
@@ -17,7 +16,7 @@ namespace Griff.Editor.Tests;
 /// </summary>
 public sealed class ExportLicensingTests : IDisposable
 {
-    private static readonly Lazy<string> WebPlayer = new(PublishWebPlayer);
+    private static readonly Lazy<string> WebPlayer = new(PublishedWebPlayer);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "griff-licensing-" + Guid.NewGuid().ToString("N"));
 
@@ -135,26 +134,11 @@ public sealed class ExportLicensingTests : IDisposable
         return repo.FullName;
     }
 
-    // The web player, published as tools\web.ps1 publishes it, into a folder of the tests' own (kept, so publishing again
-    // only does what changed).
-    private static string PublishWebPlayer()
+    // The web player the editor ships for Build for Web, published with it (beside the desktop players).
+    private static string PublishedWebPlayer()
     {
-        var project = Path.Combine(Repo(), "src", "Griff.Web", "Griff.Web.csproj");
-        var output = Path.Combine(Path.GetTempPath(), "griff-tests-web-player");
-        using var process = Process.Start(new ProcessStartInfo("dotnet", ["publish", project, "-c", "Release", "-o", output, "--nologo", "-v", "q"])
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        })!;
-        var log = process.StandardOutput.ReadToEndAsync();
-        var errors = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail("Publishing the web player didn't finish in 10 minutes.");
-        }
-        Assert.True(process.ExitCode == 0, $"Publishing the web player failed:\n{log.Result}\n{errors.Result}");
-        return Path.Combine(output, "wwwroot");
+        var player = Path.Combine(Repo(), "src", "Griff.Editor", "bin", Configuration, "net10.0-windows", "Player", "Web", "wwwroot");
+        Assert.True(File.Exists(Path.Combine(player, WebExporter.Page)), $"Build the editor first: no web player at {player}");
+        return player;
     }
 }

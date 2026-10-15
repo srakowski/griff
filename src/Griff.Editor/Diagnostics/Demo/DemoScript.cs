@@ -905,10 +905,10 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private async Task Ship()
     {
         await Chapter(15, "Ship it", "One click makes a standalone game you can zip and upload.");
-        await ui.Say("Finally, let's ship it. Game, Build Game, or Control B, exports the whole game as one exe file. Players don't need to install anything.");
+        await ui.Say("Finally, let's ship it. Build, Build Game, or Control B, exports the whole game as one exe file. Players don't need to install anything.");
         await ui.FocusEditor();
         var buildFolder = Path.Combine(workspace.Project!.RootPath, "Build");
-        await ui.Menu("Game", "Build Game", "Build Game (Ctrl+B)");
+        await ui.Menu("Build", "Build Game", "Build Game (Ctrl+B)");
         // The game lands in a folder of its own under Build, next to the runtime's helpers (createdump.exe and so on).
         var exe = await DemoUi.WaitFor(() => Directory.Exists(buildFolder)
             ? Directory.GetFiles(buildFolder, ProjectName + ".exe", SearchOption.AllDirectories).FirstOrDefault()

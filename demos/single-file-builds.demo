@@ -2,13 +2,13 @@ title: Single-file builds
 intro: Build Game makes one exe that carries everything, or a small one for players with .NET.
 project: Platformer | Jump Kit
 
-chapter: One file, nothing to install | Game > Build Game
+chapter: One file, nothing to install | Build > Build Game
 say: Here's the Platformer template, ready to share. Builds used to be a folder of four hundred files. Now they're one.
-explain: menu:Game | The Game menu | Both kinds of build live in the Game menu.
+explain: menu:Build | The Build menu | Every kind of build lives in the Build menu: two for Windows, and one for the web.
 build: standalone
 say: That's it: one exe of about sixty megabytes, with .NET built in, so players just double click it. The game's scenes, art and compiled scripts ride along inside the file.
 
-chapter: Small builds | Game > Build Small Game
+chapter: Small builds | Build > Build Small Game
 say: If your players already have the .NET Desktop Runtime, there's a smaller option.
 build: small
 say: Build Small Game makes a four megabyte exe instead. Both sit side by side in the project's Build folder, so you can ship either.

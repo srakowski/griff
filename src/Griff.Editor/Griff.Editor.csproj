@@ -44,20 +44,23 @@
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
 
-  <!-- Ship the game player next to the editor so Build Game can export it. -->
+  <!-- Ship the game players next to the editor so Build Game and Build for Web can export them. -->
   <ItemGroup>
     <ProjectReference Include="..\Griff.Player\Griff.Player.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <!--
     Build Game copies a single-file player and packs the game onto its end. Two kinds ship with the editor:
-    Standalone carries its own .NET (one big file, nothing to install), Small needs the .NET Desktop Runtime.
+    Standalone carries its own .NET (one big file, nothing to install), Small needs the .NET Desktop Runtime. Build for
+    Web copies the web player (Griff.Web, published in Release, without the compressed copies static hosts don't need)
+    from Player\Web\wwwroot and puts the game beside it.
     Each publishes from its own output folders so the two don't trip over each other. tools/docs.cs builds the editor with
     -p:SkipPlayers=true: it needs the editor's services, not the players.
   -->
   <Target Name="PublishPlayers" AfterTargets="Build" Condition="'$(SkipPlayers)' != 'true'">
     <MSBuild Projects="..\Griff.Player\Griff.Player.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PlayerKind=Standalone;SelfContained=true;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;EnableCompressionInSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Standalone\;IntermediateOutputPath=obj\$(Configuration)\Standalone\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Standalone\" />
     <MSBuild Projects="..\Griff.Player\Griff.Player.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PlayerKind=Small;SelfContained=false;PublishSingleFile=true;DebugType=none;SatelliteResourceLanguages=en;OutputPath=bin\$(Configuration)\Small\;IntermediateOutputPath=obj\$(Configuration)\Small\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Small\" />
+    <MSBuild Projects="..\Griff.Web\Griff.Web.csproj" Targets="Publish" Properties="Configuration=Release;CompressionEnabled=false;OutputPath=bin\Release\Editor\;IntermediateOutputPath=obj\Release\Editor\;PublishDir=$(MSBuildProjectDirectory)\$(OutDir)Player\Web\" />
   </Target>
 
 </Project>

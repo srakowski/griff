@@ -94,6 +94,26 @@ public sealed class SaveDataTests : IDisposable
     }
 
     [Fact]
+    public void StoredElsewhere_StartsFromWhatWasStored_AndHandsOverEveryChange()
+    {
+        // As the web player keeps a game's saves in the page's localStorage.
+        string? stored = null;
+        var save = new SaveData(null, json => stored = json);
+        save.Set("best", 42);
+        save.Set("name", "Ada");
+
+        var reloaded = new SaveData(stored, json => stored = json);
+
+        Assert.Null(reloaded.FilePath);
+        Assert.Equal(42, reloaded.GetInt("best"));
+        Assert.Equal("Ada", reloaded.GetString("name"));
+        reloaded.Clear();
+        Assert.Empty(new SaveData(stored, _ => { }).Keys);
+        // Something else in the storage under its key starts over rather than stopping the game.
+        Assert.Empty(new SaveData("{ not json", _ => { }).Keys);
+    }
+
+    [Fact]
     public void Paths_AreScopedToTheGameOrProject()
     {
         Assert.EndsWith(Path.Combine("Griff Games", "My_Game", "save.json"), SaveData.PlayerPath("My:Game"));

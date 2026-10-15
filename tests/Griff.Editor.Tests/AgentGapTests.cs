@@ -240,5 +240,7 @@ public sealed class AgentGapTests : IDisposable
         public void Open(string path) => Calls.Add("open " + path);
 
         public void ShowInExplorer(string path) => Calls.Add("show " + path);
+
+        public void OpenInBrowser(string url) => Calls.Add("browse " + url);
     }
 }

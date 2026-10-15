@@ -39,8 +39,9 @@ internal sealed class DungeonsSystem : GameSystem
         }
     }
 
-    // The seed a new game's dungeon starts from: its own, or one picked now.
-    private static int NewSeed(DungeonGenerator dungeon) => dungeon.Seed != 0 ? dungeon.Seed : Random.Shared.Next(1, int.MaxValue);
+    // The seed a new game's dungeon starts from: its own, or one picked now from the game's Rand (so a check that seeds Rand
+    // gets the same crypt on the desktop and in the browser).
+    private static int NewSeed(DungeonGenerator dungeon) => dungeon.Seed != 0 ? dungeon.Seed : Rand.Range(1, int.MaxValue);
 
     // The next floor: made from the dungeon's seed and the floor's number (or a fresh seed once a rewind forgot the last).
     private void Descend(DungeonGenerator dungeon, Tilemap map)

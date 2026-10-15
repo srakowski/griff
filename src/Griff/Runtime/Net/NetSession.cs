@@ -67,6 +67,11 @@ public sealed partial class NetSession : IDisposable
     /// <summary>Where the address last joined is kept in <see cref="Game.SaveData"/>.</summary>
     public const string AddressSaveKey = "griff.net.address";
 
+    /// <summary>What <see cref="Unavailable"/> says in a browser.</summary>
+    public const string BrowserUnavailable =
+        "Network play isn't available in the browser version of this game: browsers can't make the connections it needs. " +
+        "Download the game to play with others.";
+
     private readonly Game _game;
     private readonly List<NetPlayer> _players = [];
     private NetPeer? _peer;
@@ -83,6 +88,36 @@ public sealed partial class NetSession : IDisposable
     internal NetSession(Game game) => _game = game;
 
     public NetRole Role { get; private set; }
+
+    /// <summary>
+    /// Why this machine can't play over the network, or null when it can. In a browser (the web player) it's
+    /// <see cref="BrowserUnavailable"/>: a browser has no UDP, so <see cref="Host"/>, <see cref="HostServer"/> and
+    /// <see cref="Join(string?, int)"/> put this in <see cref="Status"/> (and joining raises <see cref="Ended"/> with it)
+    /// rather than failing some other way. Playing on sockets the caller makes (<see cref="Host(INetSocket, bool)"/>) is
+    /// still allowed.
+    /// </summary>
+    public string? Unavailable { get; set; } = OperatingSystem.IsBrowser() ? BrowserUnavailable : null;
+
+    /// <summary>
+    /// True if <paramref name="scene"/> is set up for network play: it has a <see cref="Multiplayer"/> or something
+    /// <see cref="Networked"/>, a button that hosts or joins a game, or a field for the address to join. The web player
+    /// says network play isn't there (<see cref="Unavailable"/>) when a scene like this starts.
+    /// </summary>
+    public static bool IsUsedIn(Scene scene)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        foreach (var entity in scene.Entities)
+        {
+            foreach (var component in entity.Components)
+            {
+                if (component is Multiplayer or Networked or Button { Action: ButtonAction.HostGame or ButtonAction.JoinGame }
+                    or TextField { Use: TextFieldUse.JoinAddress })
+                    return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>True while hosting or playing in someone else's game.</summary>
     public bool IsOnline => Role != NetRole.Offline;
@@ -210,6 +245,12 @@ public sealed partial class NetSession : IDisposable
 
     private bool StartHost(int port, bool dedicated)
     {
+        if (Unavailable is { } why)
+        {
+            Status = why;
+            return false;
+        }
+
         var chosen = port > 0 ? port : Settings?.Port is > 0 and < 65536 and var p ? p : DefaultPort;
         INetSocket socket;
         try
@@ -236,6 +277,12 @@ public sealed partial class NetSession : IDisposable
     public void Join(string? address, int port = 0)
     {
         Leave();
+        if (Unavailable is { } why)
+        {
+            Fail(why);
+            return;
+        }
+
         var chosen = port > 0 ? port : Settings?.Port is > 0 and < 65536 and var p ? p : DefaultPort;
         var text = (address ?? "").Trim();
         if (text.Length > 0 && !text.Equals("lan", StringComparison.OrdinalIgnoreCase))

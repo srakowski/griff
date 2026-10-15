@@ -19,12 +19,25 @@ public sealed class SaveData
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
     private readonly JsonObject _values;
+    private readonly Action<string>? _store;
 
     /// <param name="path">The file to keep values in, or null to keep them in memory only (tests, previews).</param>
     public SaveData(string? path = null)
     {
         FilePath = path;
-        _values = Load(path);
+        _values = Load(path is not null && File.Exists(path) ? ReadFile(path) : null);
+    }
+
+    /// <summary>
+    /// Values kept somewhere other than a file, such as a browser's storage (the web player keeps each game's in its page's
+    /// <c>localStorage</c>): they start from <paramref name="saved"/> (what <paramref name="store"/> was last given, or null
+    /// for none) and every change hands <paramref name="store"/> them all, as JSON.
+    /// </summary>
+    public SaveData(string? saved, Action<string> store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        _values = Load(saved);
     }
 
     /// <summary>Where values are written, or null when they're only kept in memory.</summary>
@@ -104,6 +117,12 @@ public sealed class SaveData
     private void Write()
     {
         Version++;
+        if (_store is not null)
+        {
+            _store(_values.ToJsonString(WriteOptions));
+            return;
+        }
+
         if (FilePath is null)
             return;
 
@@ -113,13 +132,25 @@ public sealed class SaveData
         File.Move(temporary, FilePath, overwrite: true);
     }
 
-    private static JsonObject Load(string? path)
+    private static string? ReadFile(string path)
     {
-        if (path is null || !File.Exists(path))
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    private static JsonObject Load(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
             return [];
         try
         {
-            return JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? [];
+            return JsonNode.Parse(text) as JsonObject ?? [];
         }
         catch (JsonException)
         {

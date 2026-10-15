@@ -74,6 +74,19 @@ export const games = {
 			['Esc', 'pause'],
 		],
 	},
+	Rhythm: {
+		tagline: 'Neon Pulse: press each lane as its notes cross the line, to three songs at three difficulties.',
+		about:
+			'Pick a song (each plays as you pick it out) and a difficulty, then hit the notes on the beat: Perfect, Great, Good or Miss, holds held to their end, a combo, a score and a grade, with your best kept for every song and difficulty. Settings set the note speed, the volumes and your audio offset, which you can tap along to calibrate.',
+		controls: [
+			['D F J K, or the arrow keys', 'press the four lanes'],
+			['Up, Down, Left and Right', 'pick a song and a difficulty'],
+			['Enter or Space', 'play'],
+			['A controller', 'the D-pad or X A Y B on the lanes'],
+			['Mouse or fingers', 'press the lanes, several at once for a chord'],
+			['Esc', 'pause'],
+		],
+	},
 	Contraption: {
 		tagline: 'Build machines in a room full of props: wheels, thrusters, ropes, hinges and logic gates.',
 		about:

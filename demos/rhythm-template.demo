@@ -1,0 +1,55 @@
+title: The Rhythm template
+intro: Neon Pulse, a rhythm game to play straight away: three songs made in Griff at three difficulties, a song select, results with the best kept, and settings with a calibration, with no code.
+project: Rhythm | Neon Pulse
+
+chapter: The title | Main
+expectcount: Play = 1
+expectcount: Open Settings = 1
+expectcount: Settings = 1
+expectcount: Calibrate = 1
+say: The title has Play, Settings and Quit over a city at night, the speakers bopping to the theme.
+select: Settings
+explain: component:Panel | Settings | Settings is a panel the title and the pause menu both open: the note speed, the audio and visual offsets, the volumes, and a calibration screen to tap along to. They're each player's own, kept with their other settings.
+deselect
+
+chapter: The song select | Select
+scene: Select
+expectcount: Cursor = 1
+expectcount: Neon Avenue = 1
+select: Songs
+explain: component:SongSelect | Song Select | A song select picks a song and a difficulty with no code. Its songs are its cards, and the song picked out plays as you move to it, so you hear it before you choose.
+explain: field:SongSelect.BestFrom | Best scores | Each card shows the best grade kept for that song at the difficulty picked out, and beside them its notes and best score.
+deselect
+play
+wait: 1
+expectvalue: Songs.SongSelect.Index = 0
+tap: Down
+expectvalue: Songs.SongSelect.Index = 1
+tap: Right
+expectvalue: Songs.SongSelect.DifficultyIndex = 2
+explain: game | Pick a song | Up and down pick a song, left and right the difficulty, and Enter plays it. A click on a song picks it out, and another plays it, and a controller works too.
+tap: Left
+expectvalue: Songs.SongSelect.DifficultyIndex = 1
+tap: Enter
+wait: 3
+expectvalue: Note Lanes.NoteLanes.Title = Neon Avenue
+expectvalue: Note Lanes.NoteLanes.IsPlaying = true
+explain: game | Play | The lanes play the song and difficulty picked. Press D, F, J and K, the arrows, a controller's buttons, or touch the lanes as the notes cross the line.
+tap: J
+wait: 2
+tap: Escape
+expectvalue: Note Lanes.NoteLanes.IsPlaying = true
+explain: game | Pause | The pause menu holds the song where it is: resume, restart, change the settings or go back to the songs.
+tap: Escape
+wait: 1
+stop
+
+chapter: How it's made | Play
+scene: Play
+select: Note Lanes
+explain: field:NoteLanes.SavedSong | The song picked | The lanes play the song the song select kept, its chart the table named like it, written from the song's own notes at Easy, Normal and Hard.
+explain: field:NoteLanes.SaveBestAs | Best scores | As the song ends they keep the best score and grade for that song and difficulty, and the results panel opens.
+select: Results
+explain: component:Panel | Results | The results show the grade, the score, accuracy and every judgment, a new best and a full combo, with Retry, Songs and Title.
+deselect
+say: That's the Rhythm template: a song select, three songs with their charts, results with the best kept, a pause menu and settings with a calibration, all of it no code, playable with keys, a controller, the mouse or fingers.

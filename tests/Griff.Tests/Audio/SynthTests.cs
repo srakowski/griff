@@ -117,6 +117,27 @@ public class SynthTests
     }
 
     [Fact]
+    public void Music_ListsTheNotesItPlays_ForChartingItsBeats()
+    {
+        var recipe = MusicRecipe.ForMood(MusicMood.Bright, seed: 3) with { Bars = 4 };
+        var notes = MusicSynth.Notes(recipe);
+
+        // Every part, earliest first, within the loop: four kicks a bar's worth of the bright beat, a bass note on each
+        // bar's first step, and a melody in the tune's range.
+        Assert.Equal(notes.OrderBy(n => n.Step), notes);
+        Assert.All(notes, n => Assert.InRange(n.Step, 0, 4 * 16 - 1));
+        Assert.Equal(Enum.GetValues<MusicPart>(), notes.Select(n => n.Part).Distinct().Order());
+        Assert.Equal([0, 6, 8], notes.Where(n => n.Part == MusicPart.Kick && n.Step < 16).Select(n => n.Step));
+        Assert.All(Enumerable.Range(0, 4), bar => Assert.Contains(notes, n => n.Part == MusicPart.Bass && n.Step == bar * 16));
+        Assert.All(notes.Where(n => n.Part == MusicPart.Melody), n => Assert.InRange(n.Pitch, 50, 100));
+        Assert.All(notes.Where(n => n.Part is MusicPart.Kick or MusicPart.Snare or MusicPart.Hat), n => Assert.Equal(0, n.Pitch));
+
+        // The same tune every time, and without a part, the rest as they were.
+        Assert.Equal(notes, MusicSynth.Notes(recipe));
+        Assert.Equal(notes.Where(n => n.Part != MusicPart.Melody), MusicSynth.Notes(recipe with { Melody = false }));
+    }
+
+    [Fact]
     public void Peaks_DescribeTheShapeOfTheSound()
     {
         var clip = new SoundClip([0, 0.5f, -1, 0.25f], 1, 4);

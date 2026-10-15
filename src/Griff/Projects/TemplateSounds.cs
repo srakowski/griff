@@ -45,12 +45,16 @@ internal static class TemplateSounds
     ];
 
     /// <summary>
-    /// The sound effects every template with sounds comes with, plus <paramref name="music"/> and a template's own sounds
-    /// (<paramref name="more"/>), keyed by path relative to Assets, as WAV bytes.
+    /// The sound effects every template with sounds comes with, plus <paramref name="music"/>, a template's own sounds
+    /// (<paramref name="more"/>) and its own music (<paramref name="moreMusic"/>), keyed by path relative to Assets, as WAV
+    /// bytes.
     /// </summary>
-    public static IReadOnlyDictionary<string, byte[]> Files(MusicRecipe music, IReadOnlyDictionary<string, SoundRecipe>? more = null)
+    public static IReadOnlyDictionary<string, byte[]> Files(MusicRecipe music, IReadOnlyDictionary<string, SoundRecipe>? more = null,
+        IReadOnlyDictionary<string, MusicRecipe>? moreMusic = null)
     {
         var files = new Dictionary<string, byte[]>();
+        foreach (var (path, recipe) in moreMusic ?? new Dictionary<string, MusicRecipe>())
+            files[path] = Wav.Encode(MusicSynth.Render(recipe), music: recipe);
         foreach (var (path, recipe) in more ?? new Dictionary<string, SoundRecipe>())
             files[path] = Wav.Encode(SoundSynth.Render(recipe), recipe);
         foreach (var (path, preset, seed, maxSeconds, volume) in Effects)

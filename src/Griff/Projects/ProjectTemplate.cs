@@ -83,8 +83,20 @@ public abstract class ProjectTemplate
     /// </summary>
     protected virtual IReadOnlyDictionary<string, SoundRecipe> MoreSounds => new Dictionary<string, SoundRecipe>();
 
+    /// <summary>
+    /// Music of its own besides its theme, keyed by path relative to Assets ("Music/First Light.wav"): a rhythm game's songs,
+    /// recipes the Sound Maker opens to tweak.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, MusicRecipe> MoreMusic => new Dictionary<string, MusicRecipe>();
+
+    /// <summary>
+    /// Whether <paramref name="scene"/> gets the theme playing (a Background Music): every scene does, unless the template
+    /// plays music of its own there (a rhythm game's songs).
+    /// </summary>
+    protected virtual bool PlaysTheme(Scene scene) => true;
+
     /// <summary>Sound and music files, keyed by path relative to Assets, as WAV bytes.</summary>
-    public IReadOnlyDictionary<string, byte[]> Sounds() => HasSounds ? TemplateSounds.Files(Music, MoreSounds) : new Dictionary<string, byte[]>();
+    public IReadOnlyDictionary<string, byte[]> Sounds() => HasSounds ? TemplateSounds.Files(Music, MoreSounds, MoreMusic) : new Dictionary<string, byte[]>();
 
     public override string ToString() => Name;
 
@@ -95,7 +107,8 @@ public abstract class ProjectTemplate
             return scene;
         foreach (var entity in scene.Entities)
             WireSounds(entity);
-        TemplateSounds.AddMusic(scene);
+        if (PlaysTheme(scene))
+            TemplateSounds.AddMusic(scene);
         return scene;
     }
 }

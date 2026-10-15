@@ -9,9 +9,9 @@
   -Check plays games in a headless Chrome (or Edge) instead, with no window, and exits 0 if all pass: the proof game, the
   Adventure template (Enter plays, taps move its talk on, a tap walks round the table, the pointer is a hand over a
   hotspot, a right click looks, a mug taken is picked from the inventory bar and filled at the kettle, the keys work the
-  bar, and the items are still there after a reload), rhythm lanes (Create Note Lanes in an empty project: notes pressed
+  bar, and the items are still there after a reload), rhythm lanes (Lanes: Create Note Lanes in an empty project, notes pressed
   on the beat Web Audio plays are hits, with the keys, two fingers at once and one held) and the Platformer, Shooter,
-  Match3, Isometric, Physics, Pinball, BunnyMark and Multiplayer templates (-Template picks some, Proof and Rhythm among them; -Project
+  Match3, Isometric, Physics, Pinball, Rhythm, BunnyMark and Multiplayer templates (-Template picks some, Proof and Lanes among them; -Project
   checks that project). Each must run and draw; its sound must wait for a click or key, saying so, with its music keeping time,
   then play through Web Audio; input must reach it (keys, a tap, a controller, as each game takes them); and its saves
   must survive reloading the page. The proof game is also checked at a phone's and a 4K screen's size and going

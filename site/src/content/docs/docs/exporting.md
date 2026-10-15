@@ -74,8 +74,8 @@ main's templates. A page needs a template's tagline, paragraph and controls in `
 build fails without them.
 
 `-Check` plays games in a headless Chrome or Edge (no window, software WebGL, muted) and passes if all of them work: the
-proof game, an adventure, rhythm lanes, and the Platformer, Shooter, Match3, Isometric, Physics, Pinball, BunnyMark and
-Multiplayer templates (`-Template` picks some, `Proof`, `Adventure` and `Rhythm` among them; `-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping
+proof game, an adventure, rhythm lanes, and the Platformer, Shooter, Match3, Isometric, Physics, Pinball, Rhythm, BunnyMark and
+Multiplayer templates (`-Template` picks some, `Proof`, `Adventure` and `Lanes` among them; `-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping
 time, then play through Web Audio (an AnalyserNode in the page hears it) still in time; input must reach it (the arrow
 keys and WASD move the player, a tap opens Match-3's first level, a tap walks the adventure's player round a table, its
 pointer is a hand over a hotspot, and a right click there looks at it and a tap uses it, a key tapped is taken into the
@@ -85,7 +85,9 @@ griffin, in Physics a finger, a controller and the keys each pull the slingshot 
 controller's shoulders and a finger each side (and two fingers at once) flip and the keys, a controller's right stick and a
 finger on the plunger each shoot a ball, Space restarts
 BunnyMark, and the rhythm lanes' notes pressed with the keys on the beat as Web Audio plays it are hits, as are a chord
-tapped with two fingers at once and a hold held by one to its end, and the lanes finish with the song); the steps of
+tapped with two fingers at once and a hold held by one to its end, and the lanes finish with the song, and in Rhythm Enter
+opens the song select, which plays the song picked out, Down picks out the next (heard in its place), a controller's A
+plays it and its lanes are played the same way to the results, its best score kept); the steps of
 Physics' first and third levels' collapses and of a pinball ball's play through the lanes and bumpers must take less
 than a frame on average (the slowest frame's is printed too); and its saves must survive reloading the page (the proof game's script counts its
 plays). The proof game's label must be drawn as wide as Griff lays it out, the game must fit a phone's page and a 4K
@@ -99,7 +101,8 @@ says how long its warm-up took (below).
 web player in one), and three scenes of the dark (walls and crates casting shadows from a lamp, a light that doesn't,
 sparks, a label), the second through screen effects and the third with a minimap (a viewport, dark and lit by itself),
 are exported, held still in the headless browser after 90 steps (`-Steps`; the page's `?still=<steps>` takes them on its
-first frame, with `Rand` started from 0, and stays there) and drawn by the desktop's OpenGL renderer off the screen after
+first frame, with `Rand` started from 0 and its music silent, counted by those steps as the desktop's is, so what moves to
+the beat is where the desktop's is, and stays there) and drawn by the desktop's OpenGL renderer off the screen after
 the same steps, and the two pictures are compared: it passes if, in each, at most 0.5% of the pixels differ by more than
 48 in a channel and they differ by at most 1 on average. They differ by a few hundredths on average, at most a fifth of
 a percent off: single pixels along the edges of tiles and quads, where the GPU and SwiftShader round a pixel's middle

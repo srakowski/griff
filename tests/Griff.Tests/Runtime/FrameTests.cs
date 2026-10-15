@@ -19,7 +19,7 @@ public class FrameTests
             "Begin: Dungeons",
             "Begin: Script Start",
             "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
-            "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Note Lanes", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: Character Select", "Logic: Versus", "Logic: Fighters", "Logic: First Person",
+            "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Note Lanes", "Logic: Song Select", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: Character Select", "Logic: Versus", "Logic: Fighters", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
@@ -62,7 +62,7 @@ public class FrameTests
         // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
         Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Fighters", "Hitboxes", "Versus", "First Person",
-            "Match Boards", "Slingshots", "Breakables", "Level Goals", "Pinball", "Puzzles", "Note Lanes", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
+            "Match Boards", "Slingshots", "Breakables", "Level Goals", "Pinball", "Puzzles", "Note Lanes", "Song Select", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
         Assert.Equal("Slingshots", game.Frame.Single(s => s.Name == "Slingshots").System?.Name);
         Assert.Equal("Breakables", game.Frame.Single(s => s.Name == "Breakables").System?.Name);
         Assert.Equal("Level Goals", game.Frame.Single(s => s.Name == "Level Goals").System?.Name);
@@ -147,7 +147,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(25, game.Systems.Count);
+        Assert.Equal(26, game.Systems.Count);
     }
 
     [Fact]

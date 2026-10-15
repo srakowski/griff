@@ -11,10 +11,10 @@
 //                   checks each: the proof game, the Adventure template (Enter on its menu, taps moving its talk on,
 //                   walking where it's tapped round a table, a hotspot's pointer, a right click looking, an item taken,
 //                   picked from the inventory bar and used on the kettle, the keys on the bar, and its items kept),
-//                   rhythm lanes (Create Note Lanes in an empty project: notes hit on the beat heard through Web Audio
+//                   rhythm lanes (Lanes: Create Note Lanes in an empty project, notes hit on the beat heard through Web Audio
 //                   with the keys, a chord with two fingers at once and a hold held by one, to the song's end), then
-//                   Platformer, Shooter, Match3, Isometric, Physics, Pinball, BunnyMark and Multiplayer (--template picks some,
-//                   Proof and Rhythm among them; --project checks that project). See Check below for what each is checked for.
+//                   Platformer, Shooter, Match3, Isometric, Physics, Pinball, Rhythm, BunnyMark and Multiplayer (--template picks some,
+//                   Proof and Lanes among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
 //                   files and a poster (a screenshot of it running, taken in a headless browser), and games.json, the list
@@ -48,7 +48,7 @@ const string LabelText = "Griff on the Web ♥";
 const float LabelSize = 0.8f;
 const float LabelY = 3.8f;
 // The templates --check plays unless --template picks others.
-const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,Pinball,BunnyMark,Multiplayer";
+const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,Pinball,Rhythm,BunnyMark,Multiplayer";
 
 var check = args.Contains("--check");
 var exportOnly = args.Contains("--export");
@@ -327,10 +327,11 @@ async Task<Project> RhythmGame(string folder)
     return project;
 }
 
-// The lanes in the browser, their song heard through Web Audio: notes of the Normal chart pressed with the keys as the
-// music heard (Web Audio's own latency and what it holds allowed for) reaches their beats, a chord tapped with two fingers
-// at once and a hold held by a finger to its end are all hits, and the song's end completes the lanes with a grade.
-async Task RhythmInput(GameCheck game)
+// The lanes in the browser, their song heard through Web Audio (`perBeat` seconds a beat): notes of `chart`'s Normal pressed
+// with the keys as the music heard (Web Audio's own latency and what it holds allowed for) reaches their beats, a chord
+// tapped with two fingers at once and a hold held by a finger to its end are all hits, and the song's end completes the
+// lanes with a grade.
+async Task RhythmInput(GameCheck game, Table chart, double perBeat)
 {
     const string Lanes = "Note Lanes";
     var (width, height) = await game.Viewport();
@@ -338,7 +339,6 @@ async Task RhythmInput(GameCheck game)
     // The middle of each lane at the hit line, on the screen: lanes 1.3 wide, the line 1.2 up from the bottom of lanes 9 long.
     (double X, double Y) LaneAt(int lane) => Screen((lane - 1.5) * 1.3, -(4.5 - 1.2));
     string[] keys = ["KeyD", "KeyF", "KeyJ", "KeyK"];
-    var chart = GrooveSong.Chart();
     var notes = chart.Rows.Where(r => r["Difficulty"].ToString() == "Normal")
         .Select(r => (Beat: r["Beat"].AsNumber, Lane: (int)r["Lane"].AsWholeNumber - 1, Hold: r["Hold"].AsNumber))
         .OrderBy(n => n.Beat).ThenBy(n => n.Lane).ToList();
@@ -358,13 +358,13 @@ async Task RhythmInput(GameCheck game)
     // goes, so a page that stalls a moment (a busy machine) is waited for, and counts the last few hundredths itself.
     async Task At(double beat, Func<Task> press)
     {
-        var wait = beat * 0.5 - await Heard();
+        var wait = beat * perBeat - await Heard();
         if (wait < 0.25)
             throw new CheckFailed($"beat {beat} came round before it could be played ({wait:0.00} s)");
         while (wait > 0.06)
         {
             await Task.Delay(TimeSpan.FromSeconds(Math.Min(wait - 0.05, 0.1)));
-            wait = beat * 0.5 - await Heard();
+            wait = beat * perBeat - await Heard();
         }
 
         var clock = Stopwatch.StartNew();
@@ -381,7 +381,7 @@ async Task RhythmInput(GameCheck game)
     {
         var events = string.Join(";", lanes.Select(lane => string.Create(CultureInfo.InvariantCulture,
             $"c.dispatchEvent(new PointerEvent('{(down ? "pointerdown" : "pointerup")}', {{ pointerId: {100 + lane}, pointerType: 'touch', isPrimary: false, clientX: {LaneAt(lane).X}, clientY: {LaneAt(lane).Y}, buttons: {(down ? 1 : 0)}, bubbles: true }}))")));
-        var at = double.IsNaN(beat) ? "0" : (beat * 0.5).ToString(CultureInfo.InvariantCulture);
+        var at = double.IsNaN(beat) ? "0" : (beat * perBeat).ToString(CultureInfo.InvariantCulture);
         await game.Evaluate("(async () => { const c = document.getElementById('game'); const heard = () => +griff.probe('music').split('|')[1]; " +
             $"for (let left = {at} - heard(); left > 0.002; left = {at} - heard()) await new Promise(r => setTimeout(r, Math.min(20, Math.max(0, left * 1000 - 6)))); " +
             $"{events}; return 'ok'; }})()", awaitPromise: true);
@@ -390,13 +390,13 @@ async Task RhythmInput(GameCheck game)
     // Waits until the music heard is a moment before `beat`, for something timed in the page.
     async Task Before(double beat)
     {
-        var wait = beat * 0.5 - await Heard();
+        var wait = beat * perBeat - await Heard();
         if (wait < 0.25)
             throw new CheckFailed($"beat {beat} came round before it could be played ({wait:0.00} s)");
         while (wait > 0.15)
         {
             await Task.Delay(TimeSpan.FromSeconds(Math.Min(wait - 0.12, 0.1)));
-            wait = beat * 0.5 - await Heard();
+            wait = beat * perBeat - await Heard();
         }
     }
 
@@ -414,13 +414,13 @@ async Task RhythmInput(GameCheck game)
     var keyHits = new List<string>();
     string? chordHit = null, holdHit = null;
     var tried = new HashSet<int>();
-    var free = await Heard() * 2 + 1.5;
+    var free = await Heard() / perBeat + 1.5;
     foreach (var beat in notes.Select(n => n.Beat).Distinct().Order().ToList())
     {
         if (keyHits.Count == 3 && chordHit is not null && holdHit is not null)
             break;
         var here = notes.Where(n => n.Beat == beat).ToList();
-        if (beat < free || beat * 0.5 - await Heard() < 0.35)
+        if (beat < free || beat * perBeat - await Heard() < 0.35)
             continue;
         if (holdHit is null && here is [{ Hold: > 0 } hold])
         {
@@ -430,7 +430,7 @@ async Task RhythmInput(GameCheck game)
             await Before(beat);
             await Fingers([hold.Lane], down: true, beat);
             var holding = Stopwatch.StartNew();
-            while (!await Hit(index, end: true) && holding.Elapsed < TimeSpan.FromSeconds(hold.Hold * 0.5 + 3))
+            while (!await Hit(index, end: true) && holding.Elapsed < TimeSpan.FromSeconds(hold.Hold * perBeat + 3))
                 await Task.Delay(50);
             await Fingers([hold.Lane], down: false);
             await Task.Delay(150);
@@ -723,17 +723,17 @@ async Task<int> CheckGames(string root, string shots, string profile)
     }
     else
     {
-        var names = (Arg("--template") ?? "Proof,Adventure,Rhythm," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var names = (Arg("--template") ?? "Proof,Adventure,Lanes," + CheckedTemplates).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (var name in names)
         {
             if (name.Equals("Proof", StringComparison.OrdinalIgnoreCase))
                 games.Add(("Proof", ProofGame));
-            else if (name.Equals("Rhythm", StringComparison.OrdinalIgnoreCase))
-                games.Add(("Rhythm", RhythmGame));
+            else if (name.Equals("Lanes", StringComparison.OrdinalIgnoreCase))
+                games.Add(("Lanes", RhythmGame));
             else if (ProjectTemplates.Find(name) is { } template)
                 games.Add((template.Name, f => Project.CreateAsync(f, template.Title, template)));
             else
-                return Fail($"No template called {name}. Templates: Proof, Rhythm, {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
+                return Fail($"No template called {name}. Templates: Proof, Lanes, {string.Join(", ", ProjectTemplates.All.Select(t => t.Name))}.");
         }
     }
 
@@ -766,7 +766,7 @@ async Task<int> CheckGames(string root, string shots, string profile)
                     throw new CheckFailed($"the export failed: {export.Error}");
                 foreach (var warning in export.Warnings)
                     Console.WriteLine($"  export warns: {warning}");
-                await Play(game, name, export.Warnings);
+                await Play(game, name, export.Warnings, project);
                 Console.WriteLine($"  OK");
             }
             catch (Exception ex) when (ex is CheckFailed or TimeoutException or InvalidOperationException or IOException)
@@ -807,7 +807,7 @@ async Task<int> CheckGames(string root, string shots, string profile)
 }
 
 // The checks for one game, as its name says it plays.
-async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
+async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings, Project project)
 {
     await game.Open();
     var drawn = await game.Screenshot("running.png");
@@ -828,10 +828,10 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         return;
     }
 
-    if (name == "Rhythm")
+    if (name == "Lanes")
     {
         await Sound(game);
-        await RhythmInput(game);
+        await RhythmInput(game, GrooveSong.Chart(), 0.5);
         return;
     }
 
@@ -876,6 +876,9 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         case "Pinball":
             await Pinball(game);
             break;
+        case "Rhythm":
+            await RhythmTemplate(game, project);
+            break;
         case "Multiplayer":
             await NetworkNotice(game, warnings);
             break;
@@ -884,6 +887,36 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
     await Saves(game, null);
     if (name == "Match3")
         await Quits(game);
+}
+
+// The Rhythm template, Neon Pulse: Enter on its title opens the song select, which plays the song picked out (Down picks out
+// the second, heard in the first's place); the controller's A plays it, and its lanes play as the Note Lanes' do (the keys
+// on the beat, a chord with two fingers, a hold), to the song's end, when the results open and its best score is kept.
+async Task RhythmTemplate(GameCheck game, Project project)
+{
+    const string Song = "Neon Avenue";
+    await game.Press("Enter");
+    await WaitFor(game, "scene", scene => scene == "Select", "Enter on the title didn't open the song select");
+    await WaitFor(game, "music", music => music.StartsWith("Music/First Light.wav|", StringComparison.Ordinal), "the song select isn't playing the first song");
+    await game.Press("ArrowDown");
+    await WaitFor(game, "output:Songs.Title", title => title == Song, "Down didn't pick out the next song");
+    await WaitFor(game, "music", music => music.StartsWith($"Music/{Song}.wav|", StringComparison.Ordinal), "the song picked out isn't heard");
+    Console.WriteLine($"  song select: Enter on the title opened it, playing First Light; Down picked out {Song}, heard in its place");
+
+    await game.Pad(0, pressA: true);
+    await Task.Delay(150);
+    await game.Pad(null);
+    await WaitFor(game, "scene", scene => scene == "Play", "the controller's A didn't play the song picked out");
+    await WaitFor(game, "output:Note Lanes.Title", title => title == Song, "the lanes aren't playing the song picked out");
+    Console.WriteLine($"  controller: A played {Song} at {await game.Probe("output:Note Lanes.Playing")}");
+
+    var chart = TableFile.Load(Path.Combine(project.AssetsPath, TableFile.Folder, Song + TableFile.Extension));
+    var tempo = Griff.Audio.Wav.ReadMusicRecipe(Path.Combine(project.AssetsPath, "Music", Song + ".wav"))!.Tempo;
+    await RhythmInput(game, chart, 60.0 / tempo);
+
+    await WaitFor(game, "save:Best.Neon Avenue.Normal", best => best.Length > 0, "the song's best score wasn't kept");
+    Console.WriteLine($"  results: {await game.Probe("output:Note Lanes.Grade")}, the best kept ({await game.Probe("save:Best.Neon Avenue.Normal")} points, " +
+                      $"{await game.Probe("save:Best.Neon Avenue.Normal.Grade")})");
 }
 
 // The proof game's label: its text drawn as wide as Griff lays it out.

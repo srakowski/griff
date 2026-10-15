@@ -21,8 +21,9 @@ namespace Griff.Web;
 /// <remarks>
 /// With <c>?still=<i>steps</i></c> on the page's address, the game takes that many steps on its first frame (its
 /// <see cref="Rand"/> numbers started from 0) and then stays still, drawn again each frame: a moment of it to compare
-/// with the desktop's picture of the same moment (<c>tools\web.ps1 -Compare</c>). <c>?scene=<i>name</i></c> starts it in
-/// that scene rather than its start scene.
+/// with the desktop's picture of the same moment (<c>tools\web.ps1 -Compare</c>). Its music is silent, and counted by
+/// those steps rather than by what the page plays, so what moves to the music (a Beat Pulse, rhythm notes) is where the
+/// desktop's is. <c>?scene=<i>name</i></c> starts it in that scene rather than its start scene.
 /// </remarks>
 public static partial class WebPlayer
 {
@@ -108,7 +109,9 @@ public static partial class WebPlayer
 
         var mixer = new Mixer();
         s_sound = new BufferedOutput(mixer);
-        game.Audio = new MixerAudio(mixer, sounds);
+        // A still moment keeps the game's own silent audio, which counts the music by its steps as the desktop's does.
+        if (s_still is null)
+            game.Audio = new MixerAudio(mixer, sounds);
         game.FullscreenChanged += (_, _) =>
         {
             if (!s_syncingFullscreen)

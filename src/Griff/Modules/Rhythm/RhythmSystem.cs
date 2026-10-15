@@ -25,6 +25,10 @@ internal sealed class RhythmSystem : GameSystem
     // Lanes seen showing, so one that goes (its panel closing) takes its song with it.
     private readonly List<NoteLanes> _showing = [];
 
+    // The save data the lanes last read from, and how many the game has had: lanes read again from new save data.
+    private SaveData? _saves;
+    private int _savesSeen;
+
     public override string Name => "Note Lanes";
 
     private IAudio Audio => Game.Audio;
@@ -64,6 +68,7 @@ internal sealed class RhythmSystem : GameSystem
     {
         lanes.Now = Game.Time.RealTotal;
         SizeLanes(lanes);
+        ReadSaved(lanes);
         var wanted = lanes.Wanted;
         lanes.Wanted = LanesRequest.None;
         if (!lanes.Seen)
@@ -97,7 +102,11 @@ internal sealed class RhythmSystem : GameSystem
         var restarted = KeepSong(lanes, paused);
         var music = !restarted && clock is { IsPlaying: true } && (!OwnsSong(lanes) || PlayingIts(lanes));
         if (clock is not null && music)
+        {
             (lanes.ShownBeats, lanes.SecondsPerBeat) = (clock.Shown, clock.SecondsPerBeat);
+            if (lanes.IsPlaying)
+                lanes.Progress = lanes.LastBeat > 0 ? (float)Math.Clamp(clock.Beats / lanes.LastBeat, 0, 1) : 0;
+        }
         // Held still by a pause, the notes stay where they were.
         lanes.Following = music || lanes.SongHeld || restarted;
         if (restarted)
@@ -154,12 +163,13 @@ internal sealed class RhythmSystem : GameSystem
         FreshMarks(lanes);
         Array.Fill(lanes.Holding, -1);
         Array.Clear(lanes.Down);
-        (lanes.IsPlaying, lanes.SongTime, lanes.SongHeld, lanes.Fresh) = (true, 0, false, true);
+        (lanes.IsPlaying, lanes.SongTime, lanes.SongHeld, lanes.Fresh, lanes.Progress) = (true, 0, false, true, 0);
+        ReadBest(lanes);
         if (OwnsSong(lanes))
         {
-            Audio.PlayMusic(lanes.Song!.Trim(), Volume(lanes), loop: false);
+            Audio.PlayMusic(lanes.PlayingSong!.Trim(), Volume(lanes), loop: false);
             if (!PlayingIts(lanes))
-                Game.Warn($"The note lanes \"{lanes.Entity!.Name}\" can't play their song \"{lanes.Song!.Trim()}\": it isn't in the project's Assets.");
+                Game.Warn($"The note lanes \"{lanes.Entity!.Name}\" can't play their song \"{lanes.PlayingSong!.Trim()}\": it isn't in the project's Assets.");
         }
         else if (Audio.Music is null)
         {
@@ -175,7 +185,7 @@ internal sealed class RhythmSystem : GameSystem
         Array.Fill(lanes.Holding, -1);
         lanes.Fresh = true;
         if (OwnsSong(lanes))
-            Audio.PlayMusicFrom(lanes.Song!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
+            Audio.PlayMusicFrom(lanes.PlayingSong!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
     }
 
     private void Stop(NoteLanes lanes)
@@ -209,7 +219,7 @@ internal sealed class RhythmSystem : GameSystem
         if (lanes.SongHeld)
         {
             lanes.SongHeld = false;
-            Audio.PlayMusicFrom(lanes.Song!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
+            Audio.PlayMusicFrom(lanes.PlayingSong!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
             return true;
         }
 
@@ -219,7 +229,7 @@ internal sealed class RhythmSystem : GameSystem
         var heard = Math.Max(0, Audio.MusicTime);
         if (heard - lanes.SongTime > HeldStill)
         {
-            Audio.PlayMusicFrom(lanes.Song!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
+            Audio.PlayMusicFrom(lanes.PlayingSong!.Trim(), lanes.SongTime, Volume(lanes), loop: false);
             return true;
         }
 
@@ -242,14 +252,65 @@ internal sealed class RhythmSystem : GameSystem
         Array.Fill(lanes.Holding, -1);
         if (!OwnsSong(lanes) && Audio.Music == IAudio.MetronomeMusic)
             Audio.StopMusic();
+        lanes.Progress = 1;
+        KeepBest(lanes);
         lanes.RaiseCompleted();
         Game.Net.SendCommand(RhythmCommand, new object?[] { CompletedCommand, lanes.Entity!.Name, 0, lanes.Score });
     }
 
-    private static bool OwnsSong(NoteLanes lanes) => !string.IsNullOrWhiteSpace(lanes.Song);
+    // The best score of the song at its difficulty kept so far, as a play starts.
+    private void ReadBest(NoteLanes lanes)
+    {
+        lanes.NewBest = false;
+        lanes.Best = BestKeyOf(lanes) is { } key ? Math.Max(0, Game.SaveData.GetInt(key)) : 0;
+    }
+
+    // Once the song's over: a score beating the best kept for it is kept in its place, with its grade.
+    private void KeepBest(NoteLanes lanes)
+    {
+        if (BestKeyOf(lanes) is not { } key || lanes.Perfects + lanes.Greats + lanes.Goods + lanes.Misses == 0)
+            return;
+        var best = Math.Max(0, Game.SaveData.GetInt(key));
+        if (lanes.Score <= best && Game.SaveData.Has(key))
+        {
+            (lanes.Best, lanes.NewBest) = (best, false);
+            return;
+        }
+
+        Game.SaveData.Set(key, lanes.Score);
+        Game.SaveData.Set(key + ".Grade", lanes.Grade);
+        (lanes.Best, lanes.NewBest) = (lanes.Score, lanes.Score > best);
+    }
+
+    private static string? BestKeyOf(NoteLanes lanes) =>
+        string.IsNullOrWhiteSpace(lanes.SaveBestAs) || string.IsNullOrWhiteSpace(lanes.ChartName) ? null
+            : NoteLanes.BestKey(lanes.SaveBestAs, lanes.ChartName, lanes.PlayingDifficulty);
+
+    // What its Saved Song and Saved Difficulty name in the save data: read again only when something's been saved (or they
+    // name something else), so a step makes no garbage. The song it plays is the saved one, or its own.
+    private void ReadSaved(NoteLanes lanes)
+    {
+        var saves = Game.SaveData;
+        if (saves != _saves)
+            (_saves, _savesSeen) = (saves, _savesSeen + 1);
+        var read = lanes.SavesRead;
+        if (read.Saves != _savesSeen || read.Version != saves.Version || read.Song != lanes.SavedSong || read.Difficulty != lanes.SavedDifficulty)
+        {
+            lanes.SavesRead = (_savesSeen, saves.Version, lanes.SavedSong, lanes.SavedDifficulty);
+            lanes.SavedSongValue = Saved(lanes.SavedSong);
+            lanes.SavedDifficultyValue = Saved(lanes.SavedDifficulty);
+        }
+
+        lanes.PlayingSong = lanes.SavedSongValue ?? lanes.Song;
+
+        string? Saved(string? name) =>
+            string.IsNullOrWhiteSpace(name) || saves.GetString(name.Trim()) is not { } value || string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool OwnsSong(NoteLanes lanes) => !string.IsNullOrWhiteSpace(lanes.PlayingSong);
 
     private bool PlayingIts(NoteLanes lanes) =>
-        OwnsSong(lanes) && Audio.Music is { } music && string.Equals(music.Trim(), lanes.Song!.Trim(), StringComparison.OrdinalIgnoreCase);
+        OwnsSong(lanes) && Audio.Music is { } music && string.Equals(music.Trim(), lanes.PlayingSong!.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static float Volume(NoteLanes lanes) => float.IsFinite(lanes.Volume) ? Math.Clamp(lanes.Volume, 0, 1) : 0.8f;
 
@@ -262,16 +323,17 @@ internal sealed class RhythmSystem : GameSystem
     private void LoadChart(NoteLanes lanes)
     {
         var name = !string.IsNullOrWhiteSpace(lanes.Chart) ? lanes.Chart.Trim()
-            : OwnsSong(lanes) ? ChartNamed(lanes.Song!)
+            : OwnsSong(lanes) ? ChartNamed(lanes.PlayingSong!)
             : Audio.Music is { } music && music != IAudio.MetronomeMusic ? ChartNamed(music)
             : null;
         var count = (int)lanes.LaneCount;
         var version = Game.Tables.Version;
-        var saved = string.IsNullOrWhiteSpace(lanes.SavedDifficulty) ? null : Game.SaveData.GetString(lanes.SavedDifficulty.Trim());
+        var saved = lanes.SavedDifficultyValue;
         if (lanes.ChartFrom is { } from && from.Table == name && from.Version == version && from.Lanes == count &&
             from.Difficulty == lanes.Difficulty && from.Saved == saved)
             return;
         lanes.ChartFrom = (name, version, lanes.Difficulty, saved, count);
+        (lanes.ChartName, lanes.Title) = (name, name ?? "");
 
         Table? table = null;
         try
@@ -284,7 +346,8 @@ internal sealed class RhythmSystem : GameSystem
         }
 
         var difficulty = Pick(lanes, table, saved);
-        lanes.PlayingDifficulty = difficulty;
+        if (lanes.PlayingDifficulty != difficulty)
+            lanes.PlayingDifficulty = difficulty;
 
         var notes = Array.Empty<RhythmNote>();
         if (table is not null)

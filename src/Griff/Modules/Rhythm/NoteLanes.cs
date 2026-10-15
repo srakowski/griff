@@ -82,6 +82,12 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     public string? Song { get; set; }
 
     /// <summary>
+    /// A name in the save data holding the song to play, e.g. "Song" (where a <see cref="SongSelect"/> keeps the one picked):
+    /// while a song is saved there it's played in place of <see cref="Song"/>, with its own chart (the table named like it).
+    /// </summary>
+    public string? SavedSong { get; set; }
+
+    /// <summary>
     /// The table of notes to play: a row a note, with a Beat, a Lane (from 1), a Hold in beats (empty for a tap) and the
     /// Difficulty it's in (empty for all). Empty: the table named like the <see cref="Song"/> (or the music playing).
     /// </summary>
@@ -95,8 +101,8 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     public string? Difficulty { get; set; } = "Normal";
 
     /// <summary>
-    /// A value a menu saved (a <see cref="Choice"/>'s Save As, e.g. "difficulty") naming the difficulty to play, when the
-    /// chart has it; <see cref="Difficulty"/> otherwise.
+    /// A value a menu saved (a <see cref="Choice"/>'s or a <see cref="SongSelect"/>'s Save As, e.g. "difficulty") naming the
+    /// difficulty to play, when the chart has it; <see cref="Difficulty"/> otherwise.
     /// </summary>
     public string? SavedDifficulty { get; set; }
 
@@ -226,6 +232,14 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     [Names(NameKind.Message)]
     public string? CompleteMessage { get; set; } = "Song Complete";
 
+    /// <summary>
+    /// A name to keep the best score of each song and difficulty under in the save data, with its grade: "Best" keeps a Normal
+    /// play of the Groove chart as "Best.Groove.Normal" (and "Best.Groove.Normal.Grade"), which <see cref="Best"/> and a
+    /// <see cref="SongSelect"/> show. Empty keeps none.
+    /// </summary>
+    [Group("Scores")]
+    public string? SaveBestAs { get; set; } = "Best";
+
     /// <summary>True while its chart plays. Saved with the scene, so a rewind carries the song on from there.</summary>
     [Group("State")]
     [Output]
@@ -283,6 +297,37 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     [Output]
     public int Misses { get; set; }
 
+    /// <summary>
+    /// The best score kept for the song and difficulty it plays (see <see cref="SaveBestAs"/>), 0 before any: this play's
+    /// once it's over and beats it. Set by the game.
+    /// </summary>
+    [Output]
+    public int Best { get; set; }
+
+    /// <summary>True once the song is over with a score beating the best kept for it: a "New best!" on the results. Set by the game.</summary>
+    [Output("New Best")]
+    public bool NewBest { get; set; }
+
+    /// <summary>True while every note judged so far was hit (one at least, and no Miss): a "Full combo!" on the results.</summary>
+    [DoNotSerialize]
+    [Output("Full Combo")]
+    public bool FullCombo => Misses == 0 && Perfects + Greats + Goods > 0;
+
+    /// <summary>The name of the chart it plays (its song's, "Groove" for Music/Groove.wav): a title over the lanes or on the results.</summary>
+    [DoNotSerialize]
+    [Output]
+    public string Title { get; internal set; } = "";
+
+    /// <summary>The difficulty it plays: a saved one (see <see cref="SavedDifficulty"/>), or its <see cref="Difficulty"/>.</summary>
+    [DoNotSerialize]
+    [Output("Playing")]
+    public string PlayingDifficulty { get; internal set; } = "";
+
+    /// <summary>How far through the chart it is, from 0 at the start of the song to 1 at its last note's end: a bar shows it.</summary>
+    [DoNotSerialize]
+    [Output]
+    public float Progress { get; internal set; }
+
     /// <summary>How many notes the chart it plays has (a hold is one note, judged as it's pressed and at its end).</summary>
     [DoNotSerialize]
     [Output]
@@ -306,15 +351,7 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// <summary>A letter for the <see cref="Accuracy"/>: S from 95, A from 90, B from 80, C from 70, D below (empty before the first note).</summary>
     [DoNotSerialize]
     [Output]
-    public string Grade => Perfects + Greats + Goods + Misses == 0 ? ""
-        : Accuracy switch
-        {
-            >= 95 => "S",
-            >= 90 => "A",
-            >= 80 => "B",
-            >= 70 => "C",
-            _ => "D",
-        };
+    public string Grade => Perfects + Greats + Goods + Misses == 0 ? "" : GradeFor(Accuracy);
 
     /// <summary>The last judgment, "Perfect", "Great", "Good" or "Miss" (empty before the first).</summary>
     [DoNotSerialize]
@@ -362,6 +399,23 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
         NoteJudgment.Great => GreatPoints,
         NoteJudgment.Good => GoodPoints,
         _ => 0,
+    };
+
+    /// <summary>
+    /// The name in the save data the best score of <paramref name="chart"/> at <paramref name="difficulty"/> is kept under
+    /// by lanes whose Save Best As is <paramref name="saveAs"/>: "Best.Groove.Normal" (its grade under the same with ".Grade").
+    /// </summary>
+    public static string BestKey(string saveAs, string chart, string? difficulty) =>
+        string.IsNullOrWhiteSpace(difficulty) ? $"{saveAs.Trim()}.{chart.Trim()}" : $"{saveAs.Trim()}.{chart.Trim()}.{difficulty.Trim()}";
+
+    /// <summary>The grade an accuracy (0 to 100) gets: S from 95, A from 90, B from 80, C from 70, D below.</summary>
+    public static string GradeFor(float accuracy) => accuracy switch
+    {
+        >= 95 => "S",
+        >= 90 => "A",
+        >= 80 => "B",
+        >= 70 => "C",
+        _ => "D",
     };
 
     /// <summary>
@@ -420,8 +474,18 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     // When the last note's over, in beats.
     internal double LastBeat { get; set; } = double.NegativeInfinity;
 
-    // The difficulty it plays (a saved one, or its own).
-    internal string? PlayingDifficulty { get; set; }
+    // The song it plays (a saved one, or its own), and the chart's name.
+    internal string? PlayingSong { get; set; }
+
+    internal string? ChartName { get; set; }
+
+    // What it read from the save data (a saved song and difficulty), and the save data's version then: read again only as
+    // something's saved, so a step makes no garbage.
+    internal (int Saves, long Version, string? Song, string? Difficulty) SavesRead { get; set; } = (-1, 0, null, null);
+
+    internal string? SavedSongValue { get; set; }
+
+    internal string? SavedDifficultyValue { get; set; }
 
     // Each note's marks (see Played), and the text made from them for saving.
     internal char[] Marks { get; set; } = [];

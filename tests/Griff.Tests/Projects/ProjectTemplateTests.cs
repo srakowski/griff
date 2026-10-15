@@ -129,6 +129,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Adventure")]
     [InlineData("VisualNovel")]
     [InlineData("Fighter")]
+    [InlineData("Rhythm")]
     public async Task Template_ComesWithSoundsAndMusic_ThatEverythingNoisyUses(string template)
     {
         var (project, scene, _, registry) = await CreateAndLoad(template);
@@ -154,6 +155,8 @@ public sealed class ProjectTemplateTests : IDisposable
             Assert.Contains(sounds, s => s.Component == nameof(Typewriter) && s.Path is not null);
         else if (template == "Pinball")
             Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.PhysicsGames.Flipper) && s.Path is not null);
+        else if (template == "Rhythm")
+            Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.Rhythm.NoteLanes) && s.Path is not null);
         else
             Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
         Assert.All(sounds.Where(s => s.Path is not null), s =>
@@ -831,6 +834,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Adventure")]
     [InlineData("VisualNovel")]
     [InlineData("Fighter")]
+    [InlineData("Rhythm")]
     public async Task EveryTemplate_HasAPauseMenu_ThatStopsTheGame_AndResumes(string template)
     {
         var (project, scene, input, registry) = await CreateAndLoad(template);
@@ -854,6 +858,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Stage");
         if (template == "Pinball")
             scene = GameLoader.LoadScene(project, registry, "Table");
+        if (template == "Rhythm")
+            scene = GameLoader.LoadScene(project, registry, "Play");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -877,6 +883,7 @@ public sealed class ProjectTemplateTests : IDisposable
             : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"
             : game.Find("Stage")?.GetComponent<Dialogue>() is { } story ? $"{story.Line} {story.Picked} {game.Find("Line")!.GetComponent<Typewriter>()!.Shown}"
             : game.Find("Slingshot")?.GetComponent<Griff.Modules.PhysicsGames.Slingshot>() is { } slingshot ? $"{slingshot.Pull} {slingshot.ShotsLeft}"
+            : game.Find("Note Lanes")?.GetComponent<Griff.Modules.Rhythm.NoteLanes>() is { } lanes ? $"{lanes.SongTime} {lanes.Score} {lanes.Played} {game.Audio.Music}"
             : game.Find("Plunger")?.GetComponent<Griff.Modules.PhysicsGames.Plunger>() is { } plunger
                 ? $"{plunger.Pull} {game.Find("Left Flipper")!.GetComponent<Griff.Modules.PhysicsGames.Flipper>()!.Up} {game.Find("Table")!.GetComponent<Griff.Modules.PhysicsGames.Tilt>()!.Nudges}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"

@@ -53,13 +53,13 @@ public sealed partial class Game
             (clock.LandedFrom, clock.LandedTo) = (Math.Max(0, first), beat);
             clock.RaiseBeat((int)beat);
             if (!Net.IsClient && !string.IsNullOrWhiteSpace(clock.BeatMessage))
-                Send(clock.BeatMessage.Trim(), (int)beat, from: clock.Entity);
+                Send(clock.BeatMessage.Trim(), Boxed((int)beat), from: clock.Entity);
             var perBar = Math.Max(1, clock.BeatsPerBar);
             if (beat % perBar != 0)
                 continue;
             clock.RaiseBar((int)(beat / perBar));
             if (!Net.IsClient && !string.IsNullOrWhiteSpace(clock.BarMessage))
-                Send(clock.BarMessage.Trim(), (int)(beat / perBar), from: clock.Entity);
+                Send(clock.BarMessage.Trim(), Boxed((int)(beat / perBar)), from: clock.Entity);
         }
 
         foreach (var pulse in Showing<BeatPulse>())
@@ -103,4 +103,9 @@ public sealed partial class Game
         var position = time - loops * length;
         return (position, loops * Math.Max(1, Math.Round(length * perSecond)) + (position - offset) * perSecond);
     }
+
+    // Beats and bars as the messages' data, boxed once: a beat landing makes no garbage (for a song's first thousand beats).
+    private static readonly object[] BoxedBeats = [.. Enumerable.Range(0, 1024).Select(i => (object)i)];
+
+    private static object Boxed(int beat) => beat >= 0 && beat < BoxedBeats.Length ? BoxedBeats[beat] : beat;
 }

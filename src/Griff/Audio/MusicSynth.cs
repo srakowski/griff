@@ -71,6 +71,35 @@ public sealed record MusicRecipe
     };
 }
 
+/// <summary>Which part of a tune <see cref="MusicSynth"/> writes plays a <see cref="MusicNote"/>.</summary>
+public enum MusicPart
+{
+    /// <summary>The tune itself, on the recipe's lead.</summary>
+    Melody,
+
+    /// <summary>The bass line: the chords' roots.</summary>
+    Bass,
+
+    /// <summary>The accompaniment: an arpeggio, a pad or a pulse of the chords.</summary>
+    Chords,
+
+    /// <summary>The kick drum.</summary>
+    Kick,
+
+    /// <summary>The snare drum (a fill's too).</summary>
+    Snare,
+
+    /// <summary>The hi-hat.</summary>
+    Hat,
+}
+
+/// <summary>
+/// A note of a tune <see cref="MusicSynth"/> writes: the part that plays it, when it starts (in steps, sixteenth notes from
+/// the start: 4 a beat, 16 a bar), how many steps it's held for, and its pitch as a MIDI note number (60 is middle C; 0 for
+/// a drum).
+/// </summary>
+public readonly record struct MusicNote(MusicPart Part, double Step, double Length, int Pitch);
+
 /// <summary>
 /// Writes and plays a short looping chiptune from a <see cref="MusicRecipe"/>: chords from the mood's progressions, a
 /// melody built from a repeating motif, a bass line, accompaniment and drums. The end runs seamlessly into the start,
@@ -97,11 +126,23 @@ public static class MusicSynth
     public static SoundClip Render(MusicRecipe recipe)
     {
         var r = recipe.Clamped();
-        var song = new Song(r);
+        var song = new Song(r, listing: false);
         song.Write();
         var samples = song.Mix;
         SoundSynth.Normalize(samples, r.Volume * 0.9f);
         return new SoundClip(samples, 2, Mixer.SampleRate);
+    }
+
+    /// <summary>
+    /// The notes <paramref name="recipe"/>'s tune plays, earliest first: every note of the melody, bass and accompaniment and
+    /// every drum hit, as <see cref="Render"/> plays them. A rhythm game's chart can be written from them, so its notes fall
+    /// on what the player hears.
+    /// </summary>
+    public static IReadOnlyList<MusicNote> Notes(MusicRecipe recipe)
+    {
+        var song = new Song(recipe.Clamped(), listing: true);
+        song.Write();
+        return [.. song.Listed!.OrderBy(n => n.Step).ThenBy(n => n.Part).ThenBy(n => n.Pitch)];
     }
 
     private enum Accompaniment
@@ -122,7 +163,7 @@ public static class MusicSynth
         private readonly double _stepFrames;
         private readonly int _frames;
 
-        public Song(MusicRecipe recipe)
+        public Song(MusicRecipe recipe, bool listing)
         {
             _r = recipe;
             _rng = new Random(unchecked(recipe.Seed * 7919 + (int)recipe.Mood * 104729));
@@ -139,10 +180,14 @@ public static class MusicSynth
             _root = keys[_rng.Next(keys.Length)];
             _stepFrames = Mixer.SampleRate * 60.0 / recipe.Tempo / 4;
             _frames = (int)Math.Round(_stepFrames * StepsPerBar * recipe.Bars);
-            Mix = new float[_frames * 2];
+            // Listing its notes, it plays none of them.
+            Listed = listing ? [] : null;
+            Mix = listing ? [] : new float[_frames * 2];
         }
 
         public float[] Mix { get; }
+
+        public List<MusicNote>? Listed { get; }
 
         private int Steps => _r.Bars * StepsPerBar;
 
@@ -225,7 +270,7 @@ public static class MusicSynth
                     if (pitchRng.NextDouble() < 0.08 && n > 0 && !last)
                         continue;
                     var start = segment * 2 * StepsPerBar + step;
-                    Tone(start, length - 0.25, Hz(Midi(degree)), _r.Lead, 0.22f, 0.12f,
+                    Tone(MusicPart.Melody, Midi(degree), start, length - 0.25, _r.Lead, 0.22f, 0.12f,
                         attack: _r.Mood == MusicMood.Spooky ? 0.04 : 0.005, release: 0.06, decay: 0.35,
                         vibrato: length >= 4 ? 0.004 : 0, duty: 0.5f, softness: 0.35f);
                 }
@@ -270,7 +315,7 @@ public static class MusicSynth
                 {
                     // Now and then a walk up into the next bar.
                     var pitch = step == 14 && rng.NextDouble() < 0.3 ? root + 5 : root + interval;
-                    Tone(bar * StepsPerBar + step, length, Hz(pitch), Waveform.Triangle, 0.34f, 0,
+                    Tone(MusicPart.Bass, pitch, bar * StepsPerBar + step, length, Waveform.Triangle, 0.34f, 0,
                         attack: 0.004, release: 0.04, decay: 0.15, softness: 0);
                 }
             }
@@ -297,7 +342,7 @@ public static class MusicSynth
                         var up = notes.Append(notes[0] + 12).ToArray();
                         for (var step = 0; step < StepsPerBar; step++)
                         {
-                            Tone(start + step, 0.8, Hz(up[step % up.Length]), Waveform.Square, 0.075f, -0.35f,
+                            Tone(MusicPart.Chords, up[step % up.Length], start + step, 0.8, Waveform.Square, 0.075f, -0.35f,
                                 attack: 0.002, release: 0.02, decay: 0.6, duty: 0.125f, softness: 0.5f);
                         }
 
@@ -306,7 +351,7 @@ public static class MusicSynth
                     case Accompaniment.Pad:
                         for (var i = 0; i < notes.Length; i++)
                         {
-                            Tone(start, StepsPerBar - 0.5, Hz(notes[i]), Waveform.Triangle, 0.06f, i % 2 == 0 ? -0.3f : 0.3f,
+                            Tone(MusicPart.Chords, notes[i], start, StepsPerBar - 0.5, Waveform.Triangle, 0.06f, i % 2 == 0 ? -0.3f : 0.3f,
                                 attack: 0.25, release: 0.3, decay: 0, vibrato: 0.002, softness: 0.6f);
                         }
 
@@ -317,7 +362,7 @@ public static class MusicSynth
                         {
                             foreach (var note in notes)
                             {
-                                Tone(start + step, 1, Hz(note), Waveform.Square, 0.045f, -0.25f,
+                                Tone(MusicPart.Chords, note, start + step, 1, Waveform.Square, 0.045f, -0.25f,
                                     attack: 0.002, release: 0.03, decay: 0.8, duty: 0.25f, softness: 0.7f);
                             }
                         }
@@ -360,6 +405,12 @@ public static class MusicSynth
 
         private void Kick(double step)
         {
+            if (Listed is not null)
+            {
+                Listed.Add(new MusicNote(MusicPart.Kick, step, 1, 0));
+                return;
+            }
+
             var start = FrameOf(step);
             var length = (int)(0.22 * Mixer.SampleRate);
             var phase = 0.0;
@@ -375,6 +426,12 @@ public static class MusicSynth
 
         private void Snare(double step, float strength)
         {
+            if (Listed is not null)
+            {
+                Listed.Add(new MusicNote(MusicPart.Snare, step, 1, 0));
+                return;
+            }
+
             var start = FrameOf(step);
             var length = (int)(0.16 * Mixer.SampleRate);
             var previous = 0f;
@@ -391,6 +448,12 @@ public static class MusicSynth
 
         private void Hat(double step, float strength)
         {
+            if (Listed is not null)
+            {
+                Listed.Add(new MusicNote(MusicPart.Hat, step, 1, 0));
+                return;
+            }
+
             var start = FrameOf(step);
             var length = (int)(0.05 * Mixer.SampleRate);
             var previous = 0f;
@@ -408,9 +471,16 @@ public static class MusicSynth
 
         // One note: <length> steps long, then a release. Decay (0 to 1) is how much it fades while held: a pluck or
         // an organ. Softness rounds off its harsh edges with a gentle low-pass filter.
-        private void Tone(double step, double length, double hz, Waveform wave, float volume, float pan,
+        private void Tone(MusicPart part, int pitch, double step, double length, Waveform wave, float volume, float pan,
             double attack, double release, double decay, double vibrato = 0, float duty = 0.5f, float softness = 0)
         {
+            if (Listed is not null)
+            {
+                Listed.Add(new MusicNote(part, step, length, pitch));
+                return;
+            }
+
+            var hz = Hz(pitch);
             var start = FrameOf(step);
             var held = Math.Max(1, (int)(length * _stepFrames));
             var tail = (int)(release * Mixer.SampleRate);

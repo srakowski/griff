@@ -90,7 +90,9 @@ internal sealed partial class DemoUi
     /// <summary>
     /// A part of the open Clip Editor: clip:Run (a row in the list), frame:3 (a frame in the strip, by its sheet frame),
     /// sheet:3 (a frame on the sheet), list, preview, frames, sheet, settings, speed, loop, note, play, back, forward,
-    /// position, add, rename, remove, start, buttons, notice, addanimation, entity; or the whole window.
+    /// position, add, rename, remove, start, buttons, notice, addanimation, entity; the boxes: boxes (the panel), tool:Hitbox
+    /// (or Select, Hurtbox), circles, onion, copyprevious, boxessummary, boxlist, box:0 (a box by its place), boxsettings,
+    /// damage, knockbackx, knockbacky, stun, group, multiplier, removebox, canvas (over the frame); or the whole window.
     /// </summary>
     public static FrameworkElement ClipsPart(string part)
     {
@@ -125,7 +127,31 @@ internal sealed partial class DemoUi
             "notice" => Named("NoticeBar"),
             "addanimation" => Named("AddAnimationButton"),
             "entity" => Named("EntityName"),
-            _ => throw new FormatException($"Unknown Clip Editor part \"{part}\" (clip:, frame:, sheet:, list, preview, frames, sheet, settings, speed, loop, note, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation, entity)."),
+            "boxes" => Named("BoxesPanel"),
+            "tool" => name.ToLowerInvariant() switch
+            {
+                "select" => Named("SelectTool"),
+                "hitbox" => Named("HitboxTool"),
+                "hurtbox" => Named("HurtboxTool"),
+                _ => throw new FormatException($"No Clip Editor tool \"{name}\" (Select, Hitbox, Hurtbox)."),
+            },
+            "circles" => Named("CirclesBox"),
+            "onion" => Named("OnionBox"),
+            "copyprevious" => Named("CopyPreviousButton"),
+            "boxessummary" => Named("BoxesSummary"),
+            "boxlist" => Named("BoxList"),
+            "box" => Descendants<ListBoxItem>(Named("BoxList")).FirstOrDefault(i => i.DataContext is FrameBoxRow r && r.Index.ToString(CultureInfo.InvariantCulture) == name)
+                ?? throw new InvalidOperationException($"No box {name} on the Clip Editor's frame."),
+            "boxsettings" => Named("BoxSettings"),
+            "damage" => Named("DamageBox"),
+            "knockbackx" => Named("KnockbackXBox"),
+            "knockbacky" => Named("KnockbackYBox"),
+            "stun" => Named("StunBox"),
+            "group" => Named("GroupBox"),
+            "multiplier" => Named("MultiplierBox"),
+            "removebox" => Named("RemoveBoxButton"),
+            "canvas" => Named("BoxCanvas"),
+            _ => throw new FormatException($"Unknown Clip Editor part \"{part}\" (clip:, frame:, sheet:, list, preview, frames, sheet, settings, speed, loop, note, play, back, forward, position, add, rename, remove, start, buttons, notice, addanimation, entity, boxes, tool:, circles, onion, copyprevious, boxessummary, boxlist, box:, boxsettings, damage, knockbackx, knockbacky, stun, group, multiplier, removebox, canvas)."),
         };
     }
 
@@ -167,6 +193,44 @@ internal sealed partial class DemoUi
                 await Settle();
             }
         }
+    }
+
+    /// <summary>
+    /// Drags over the Clip Editor's frame with the real mouse, between two points in world units (as boxes are placed, from
+    /// the entity's middle): with the Hitbox or Hurtbox tool it draws one from corner to corner, with Select it moves the
+    /// box under the first point (or resizes the picked one by its corner there).
+    /// </summary>
+    public async Task DragClipBox(System.Numerics.Vector2 from, System.Numerics.Vector2 to)
+    {
+        var window = await WaitForClipEditor();
+        var model = window.Model;
+        if (window.ScreenPointOf(from) is not { } start || window.ScreenPointOf(to) is not { } end)
+            throw new InvalidOperationException("The Clip Editor shows no frame to draw boxes on.");
+        var before = model.Hitboxes?.Boxes.ToList() ?? [];
+        await input.Drag(start, [end], 500);
+        await Settle(120);
+
+        // A drag that missed (the window lost the mouse): do it the same way through the model.
+        if ((model.Hitboxes?.Boxes ?? []).SequenceEqual(before))
+        {
+            var (min, max) = (System.Numerics.Vector2.Min(from, to), System.Numerics.Vector2.Max(from, to));
+            if (model.Tool != BoxTool.Select)
+            {
+                var kind = model.Tool == BoxTool.Hitbox ? Griff.Modules.Fighting.FrameBoxKind.Hit : Griff.Modules.Fighting.FrameBoxKind.Hurt;
+                if (model.DrawCircles)
+                    model.AddCircle(kind, (min.X + max.X) / 2, (min.Y + max.Y) / 2, MathF.Max(max.X - min.X, max.Y - min.Y) / 2);
+                else
+                    model.AddBox(kind, (min.X + max.X) / 2, (min.Y + max.Y) / 2, max.X - min.X, max.Y - min.Y);
+            }
+            else if (model.Boxes.LastOrDefault(b => Contains(b.Box, from)) is { } row)
+                model.MoveBox(row.Index, row.Box.Center.X + to.X - from.X, row.Box.Center.Y + to.Y - from.Y);
+            Log?.Invoke($"FORCED clipbox {from.X},{from.Y} > {to.X},{to.Y}");
+            await Settle();
+        }
+
+        static bool Contains(Griff.Modules.Fighting.FrameBox box, System.Numerics.Vector2 at) => box.IsCircle
+            ? System.Numerics.Vector2.Distance(at, box.Center) <= box.Radius
+            : MathF.Abs(at.X - box.Center.X) <= box.Size.X / 2 && MathF.Abs(at.Y - box.Center.Y) <= box.Size.Y / 2;
     }
 
     /// <summary>

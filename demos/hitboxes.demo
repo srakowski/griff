@@ -1,0 +1,60 @@
+title: Hitboxes and hurtboxes
+intro: Boxes on each frame of an animation, drawn in the Clip Editor, that land hits with damage, knockback and hitstun, frame by frame.
+project: Empty | Sparring
+
+chapter: A sparring pair | Entity > Genres > Fighting
+create: Sparring Pair
+expectcount: Brawler = 1
+expectcount: Sandbag = 1
+expectvalue: Sandbag Health.Text.Output = Health
+say: Sparring Pair makes a brawler to play and a sandbag to punch, on a floor of their own, with the sandbag's health over them.
+select: Brawler
+explain: component:Hitboxes | Hitboxes | The brawler has a Hitboxes: boxes on each frame of its animation. Hitboxes where it hits, hurtboxes where it can be hit.
+menu: Art > Animation Clips...
+clips
+click: clips:clip:Attack
+click: clips:frame:6
+expectboxes: Frame 3: 1 hitbox, 3 hurtboxes
+explain: clips:preview | The punch, frame by frame | On the punch's third frame the fist is out. The red box is its hitbox; the blue ones are where it can be hit: its body, its head and its outstretched arm.
+click: clips:box:2
+expectboxes: Hitbox 1: 2 damage, knockback 4, 3, 18 stun
+explain: clips:boxsettings | What it does | Each hitbox has its damage, how hard it knocks what it hits away, and how many frames of hitstun it leaves it in.
+click: clips:box:1
+explain: clips:boxsettings | The head takes more | A hurtbox can take more than the rest. The head's multiplier of one and a half makes a hit there half as hard again.
+
+chapter: Draw the boxes | Hitbox, Hurtbox, onion skin
+click: clips:frame:7
+expectboxes: Frame 4: 2 hurtboxes
+click: clips:onion
+explain: clips:preview | Onion skin | Onion skin shows the frame before underneath, with its boxes dashed, to line new ones up with.
+click: clips:tool:Hitbox
+clipbox: 0.28, 0.06 > 0.6, 0.38
+expectboxes: Frame 4: 1 hitbox, 2 hurtboxes
+say: With the Hitbox tool, drag over the picture and a box is drawn there, snapped to its pixels. One undo step.
+clipset: damage = 1
+expectboxes: Hitbox 1: 1 damage
+explain: clips:boxsettings | Once a swing | The fist coming back can still land, for less. All the punch's hitboxes are in group one, so a punch hits once, however many of its frames touch.
+click: clips:tool:Hurtbox
+clipbox: 0.12, 0.12 > 0.3, 0.32
+expectboxes: Frame 4: 1 hitbox, 3 hurtboxes
+say: A hurtbox is drawn the same way. Copy From Previous Frame gives a frame the one before's boxes, to move on a little, and every change undoes.
+key: Ctrl+Z
+expectboxes: Frame 4: 1 hitbox, 2 hurtboxes
+key: Escape
+
+chapter: Spar | Game > Show Hitboxes
+menu: Game > Show Hitboxes
+play
+wait: 0.5
+tap: X
+wait: 0.8
+expectvalue: Brawler.Hitboxes.Hits = 1
+expectvalue: Sandbag.Health.Current = 18
+explain: game | Frame by frame | Show Hitboxes draws the boxes as the game plays. The punch lands on the frame its fist reaches the sandbag, once, and sends it flying.
+hold: Right 0.6
+tap: X
+wait: 0.8
+expectvalue: Brawler.Hitboxes.Hits = 2
+say: Hits land on the same step every time, a rewind carries on from the middle of a punch, and in a network game the host lands them.
+stop
+say: That's hitboxes and hurtboxes for each frame, drawn in the Clip Editor. Blocking, hitstun moves and special moves come next.

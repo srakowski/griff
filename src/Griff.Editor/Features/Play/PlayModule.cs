@@ -29,7 +29,8 @@ public sealed class PlayModule : IEditorModule
             .AddCommand<PlayWithThreeCommand>()
             .AddCommand<PlayWithFourCommand>()
             .AddCommand<SlowConnectionCommand>()
-            .AddCommand<StepRateCommand>();
+            .AddCommand<StepRateCommand>()
+            .AddCommand<ShowHitboxesCommand>();
     }
 }
 
@@ -225,6 +226,27 @@ public sealed class ClearSaveDataCommand(IWorkspace workspace, IStatusService st
             status.Show($"Couldn't clear save data: {ex.Message}");
         }
 
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Shows every hitbox and hurtbox in play over the running game (a Hitboxes' boxes on the frame each entity shows):
+/// hitboxes red, hurtboxes blue, yellow while in hitstun, and hitboxes that have hit already this swing faint. Again
+/// hides them. It stays on for the games played after.
+/// </summary>
+public sealed class ShowHitboxesCommand(PlayMode play, IStatusService status) : EditorCommand
+{
+    public override string Id => "Game.ShowHitboxes";
+    public override string Text => "Show _Hitboxes";
+    public override MenuPlacement? Placement { get; } = new(Menus.Game, Group: 0, Order: 7);
+
+    public override bool? IsChecked => play.ShowHitboxes;
+
+    protected override Task ExecuteCoreAsync()
+    {
+        play.ShowHitboxes = !play.ShowHitboxes;
+        status.Show(play.ShowHitboxes ? "Showing hitboxes (red) and hurtboxes (blue) in play" : "Hitboxes hidden");
         return Task.CompletedTask;
     }
 }

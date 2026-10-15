@@ -9,6 +9,7 @@ using Griff.Networking;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
+using Griff.Modules.Fighting;
 using Griff.Platform.Windows;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -34,6 +35,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private MemoryNetwork? _network;
     private readonly List<PlayerWindow> _players = [];
     private bool _slowConnection;
+    private bool _showHitboxes;
     private long _refreshedAt;
     // The Game tab's game's tables: kept through rewinds, which start a new game from a snapshot, so what Table Values set
     // isn't set again (with new dice) unless its row has changed, and a change waiting for the next step still reaches it.
@@ -130,6 +132,22 @@ public sealed class PlayMode : ObservableObject, IDisposable
             _slowConnection = value;
             foreach (var game in AllGames())
                 game.Net.FakeLag = value ? SlowConditions : new NetConditions();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Draws every hitbox and hurtbox in play over the running games (Game &gt; Show Hitboxes), straight away and in every
+    /// game played after: the Game tab's, other players' and a rewind's.
+    /// </summary>
+    public bool ShowHitboxes
+    {
+        get => _showHitboxes;
+        set
+        {
+            _showHitboxes = value;
+            foreach (var game in AllGames())
+                game.ShowHitboxes = value;
             OnPropertyChanged();
         }
     }
@@ -416,6 +434,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner.Game.Warning += OnGameWarning;
         _runner.Game.SceneName = _sceneName;
         _runner.Game.Profiler = _profiler;
+        _runner.Game.ShowHitboxes = _showHitboxes;
         _runner.Game.SceneChanged += OnGameSceneChanged;
         _runner.Game.Stepped += OnStepped;
         _runner.Game.QuitRequested += OnGameQuit;
@@ -630,6 +649,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.SceneName = _sceneName;
         game.Net.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Net.PlayerName = $"Player {number}";
+        game.ShowHitboxes = _showHitboxes;
         game.UseProjectSettings(project);
         game.Warning += OnGameWarning;
         game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));

@@ -60,8 +60,9 @@ public sealed partial class Game
         {
             attack.Queued = false;
             UseAction(owner);
-            if (owner.GetComponent<Animation>() is { } animation)
-                PlayFirst(animation, AttackClips(owner));
+            // From its first frame each swing, even straight after the last (so the frames that hit come round again).
+            if (owner.GetComponent<Animation>() is { } animation && AttackClips(owner).FirstOrDefault(animation.HasClip) is { } clip)
+                animation.Play(clip, restart: true);
         }
 
         attack.PhaseTime += Time.Delta;

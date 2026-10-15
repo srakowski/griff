@@ -1,6 +1,6 @@
 ---
 title: "The editor"
-description: "Griff's editor: shortcuts, the Scene view, the Hierarchy, panels and layouts, the Inspector, the Assets panel, the Sprite Painter, Clip Editor and Sound Maker, the Controls window and the Profiler."
+description: "Griff's editor: shortcuts, the Scene view, the Hierarchy, panels and layouts, the Inspector, the Assets panel, the Sprite Painter, Clip Editor (with hitboxes) and Sound Maker, the Controls window and the Profiler."
 ---
 
 Griff's editor is where a game is made and played at once. These are its parts and what each does, starting with the shortcuts. Every command is listed in the [command reference](/reference/commands/).
@@ -88,6 +88,8 @@ The **BunnyMark** template is a benchmark rather than a game: bunnies pour in fr
 ## Animation clips
 
 **Art → Animation Clips** opens the Clip Editor beside the scene. It follows the selection, listing the selected entity's clips (an **Animation**'s **Clips**) with each one's frames, speed and whether it loops, and plays the one you pick in a preview, cut from the sprite sheet the way the game cuts it, with a strip of its frames underneath. Pause and step through them (Space, Left and Right, or click a frame in the strip); a clip that plays once stops on its last frame. **Add** makes a clip (the first takes the animation's own frames, later ones the frame after the last clip's), **Rename** (F2) and **Remove** (Delete) change the one picked, and **Start With This** makes it the clip the game starts playing (marked *starts*); each is one undo step, and the clip the game starts with follows a rename. Until it has clips, or when the game starts without one, the list shows the animation's *own frames* (its **First Frame** and **Frame Count**), which is what plays then. Selecting a sprite with no animation offers **Add Animation**, which plays every frame of its sheet. The whole sheet is shown under the preview with the picked clip's frames marked: drag across frames to make the clip play those (a click picks one), or Shift-click to stretch it to reach a frame. **Speed** (frames a second) and **Loops** set how it plays; a clip that leaves them out uses the animation's (the editor says so), and setting them here gives it its own. For the *own frames*, all three set the animation's **First Frame**, **Frame Count**, **Frames Per Second** and **Loop**. Each change is one undo step, and the **Clips** field in the Inspector shows the text it writes.
+
+Beside the preview, **Boxes** lists the hitboxes and hurtboxes of the frame showing (a **Hitboxes**'s, for fighting games), drawn over the picture: **Hitbox** (H) or **Hurtbox** (U) and drag to draw one, snapped to the picture's pixels (**Draw circles**, C, for circles); **Select** (S) to pick one, move it and drag its corners to resize it, and set its **Damage**, **Knockback**, **Stun** and **Group** (a hurtbox's **Multiplier**); Delete removes it. **Copy From Previous Frame** (Ctrl+D) gives the frame the boxes of the one before, and **Onion skin** (O) shows that frame faintly underneath with its boxes dashed. Each change is one undo step (Ctrl+Z and Ctrl+Y work in the Clip Editor too), the first box adds a **Hitboxes**, and renaming or removing a clip takes its boxes along. See [Fighting games](/docs/fighting-games/).
 
 ## Making sounds and music
 

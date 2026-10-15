@@ -32,7 +32,7 @@ public class FrameTests
             "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
             "Physics: Breakables", "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Stage Input", "Resolve: Dialogues", "Resolve: Stages", "Resolve: Switches",
-            "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Touch Damage",
+            "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Hitboxes", "Resolve: Touch Damage",
             "Resolve: Health", "Resolve: Respawns", "Resolve: Bars", "Resolve: Counters", "Resolve: Text Outputs", "Resolve: Fade",
             "Resolve: Screen Flash", "Resolve: Destroys", "Resolve: Scene Change",
             "Present: Rooms", "Present: Followers", "Present: Late Scripts", "Present: Screen Anchors", "Present: Trails",
@@ -58,10 +58,10 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks,
+        // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks, Fighting,
         // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "First Person",
+        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Hitboxes", "First Person",
             "Match Boards", "Slingshots", "Breakables", "Puzzles", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
         Assert.Equal("Slingshots", game.Frame.Single(s => s.Name == "Slingshots").System?.Name);
         Assert.Equal("Breakables", game.Frame.Single(s => s.Name == "Breakables").System?.Name);
@@ -146,7 +146,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(19, game.Systems.Count);
+        Assert.Equal(20, game.Systems.Count);
     }
 
     [Fact]

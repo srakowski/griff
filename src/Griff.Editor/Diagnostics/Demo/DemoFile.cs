@@ -1092,6 +1092,25 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 await DemoUi.WaitForClipEditor();
                 await ui.EditBox((TextBox)DemoUi.ClipsPart("speed"), a);
                 break;
+            case "clipbox":
+                // "clipbox: 0.3, 0.1 > 0.7, 0.4" drags over the Clip Editor's frame between two points in world units.
+                var (clipBoxFrom, clipBoxTo) = Split2(a, '>');
+                var (boxFrom, boxTo) = (Numbers(clipBoxFrom, 2), Numbers(clipBoxTo, 2));
+                await ui.DragClipBox(new System.Numerics.Vector2((float)boxFrom[0], (float)boxFrom[1]), new System.Numerics.Vector2((float)boxTo[0], (float)boxTo[1]));
+                break;
+            case "clipset":
+                // "clipset: damage = 3" types into one of the Clip Editor's fields for the box picked.
+                await DemoUi.WaitForClipEditor();
+                var (clipSetField, clipSetValue) = Split2(a, '=');
+                await ui.EditBox((TextBox)DemoUi.ClipsPart(clipSetField), clipSetValue);
+                break;
+            case "expectboxes":
+                // The Clip Editor's line on the frame's boxes, or one of their labels, has this in it.
+                var boxesWindow = await DemoUi.WaitForClipEditor();
+                if (!await Until(() => boxesWindow.Model.BoxesSummary.Contains(a, StringComparison.OrdinalIgnoreCase) ||
+                        boxesWindow.Model.Boxes.Any(b => b.Label.Contains(a, StringComparison.OrdinalIgnoreCase)), 3000))
+                    throw new InvalidOperationException($"The Clip Editor's boxes are \"{boxesWindow.Model.BoxesSummary}\" ({string.Join("; ", boxesWindow.Model.Boxes.Select(b => b.Label))}), not \"{a}\".");
+                break;
             case "paint":
                 // "paint: 3,4 > 12,4 > 12,10" drags through those pixels of the frame; "| right" erases.
                 var (paintPath, paintButton) = Split2(a);

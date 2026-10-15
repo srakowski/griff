@@ -258,13 +258,13 @@ internal static partial class TemplateArt
                 Pixel.Clamp(under.B + (over.B - under.B) * a), Math.Max(under.A, over.A));
         }
 
-        /// <summary>The picture as a PNG file.</summary>
-        public byte[] Png()
+        /// <summary>The picture as a PNG file; with a <paramref name="layout"/>, a sprite sheet the Sprite Painter opens cut into its frames.</summary>
+        public byte[] Png(Art.SheetLayout? layout = null)
         {
             var rgba = new byte[width * height * 4];
             for (var i = 0; i < _pixels.Length; i++)
                 (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]) = (_pixels[i].R, _pixels[i].G, _pixels[i].B, _pixels[i].A);
-            return Art.Png.Encode(rgba, width, height);
+            return Art.Png.Encode(rgba, width, height, layout?.ToText());
         }
     }
 }

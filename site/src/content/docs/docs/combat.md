@@ -1,6 +1,6 @@
 ---
 title: "Health, enemies and combat"
-description: "Health and hazards, moving platforms, enemies, grid enemies, swords, turrets and guns, and checkpoints."
+description: "Health and hazards, moving platforms, enemies, grid enemies, swords, turrets and guns, checkpoints, and hitboxes on animation frames."
 ---
 
 ## Health and hazards
@@ -21,7 +21,7 @@ A **Patrol** walks its body back and forth at **Speed**, turning at walls and, w
 
 ## Swords and close-up attacks
 
-Select the player and choose **Entity → Characters → Add Attack**: it gets an **Attack** and a `Hitbox` child to its right, a trigger on the `Attack` layer with a **DamageOnTouch** that hurts enemies. Pressing the Attack action (X, L, the right mouse button or the gamepad's X) winds up for **Windup** seconds, brings the hitbox out for **Active Time** seconds (it's hidden the rest of the time), then rests for **Cooldown**; a press meanwhile swings as soon as it can. Each swing hurts each thing once, however long it lingers on it, and a hit freezes the game for **Hit Stop** seconds so it lands hard. The hitbox swings the way its owner faces (laid out facing right, it's mirrored to face left, and turned up and down in a top-down game). **Lunge** steps forward as it strikes, a **Sound** plays, and an **Animation** with an `Attack` clip (`AttackUp` and `AttackDown` too, top-down) plays it. An enemy's attack has no **Action**: it swings at its **Target** (`Player`) once it's within **Range**, turning to face it first, so a knight is a **Patrol**, a **Chase** and an **Attack** with a hitbox that hurts the `Player` layer.
+Select the player and choose **Entity → Characters → Add Attack**: it gets an **Attack** and a `Hitbox` child to its right, a trigger on the `Attack` layer with a **DamageOnTouch** that hurts enemies. Pressing the Attack action (X, L, the right mouse button or the gamepad's X) winds up for **Windup** seconds, brings the hitbox out for **Active Time** seconds (it's hidden the rest of the time), then rests for **Cooldown**; a press meanwhile swings as soon as it can. Each swing hurts each thing once, however long it lingers on it, and a hit freezes the game for **Hit Stop** seconds so it lands hard. The hitbox swings the way its owner faces (laid out facing right, it's mirrored to face left, and turned up and down in a top-down game). **Lunge** steps forward as it strikes, a **Sound** plays, and an **Animation** with an `Attack` clip (`AttackUp` and `AttackDown` too, top-down) plays it. An enemy's attack has no **Action**: it swings at its **Target** (`Player`) once it's within **Range**, turning to face it first, so a knight is a **Patrol**, a **Chase** and an **Attack** with a hitbox that hurts the `Player` layer. For hits that follow the animation frame by frame (the fist out on two frames of a punch, a head that takes more), leave its **Hitbox** empty and give the entity a **Hitboxes** instead: see below.
 
 ## Turrets and guns
 
@@ -30,3 +30,7 @@ A **Shooter** fires its **Prefab** (`Bullet`, which needs a Body) every **Interv
 ## Checkpoints
 
 Tick a player's **Health**'s **Respawn** and losing its hit points doesn't destroy it: it disappears for **Respawn Delay** seconds, then comes back with full health (and a moment of invincibility) at the last **Checkpoint** it touched, or where it started. A checkpoint is a trigger with a **Checkpoint**: touching it makes it the **Active** one, turns its sprite its **Active Tint**, plays its **Sound** and sends its **Message**. Bottomless pits and lava are a **DamageOnTouch** with **Kill** ticked, which kills straight through invincibility. Cameras following the player jump straight to where it comes back.
+
+## Hitboxes on animation frames
+
+A **Hitboxes** puts hitboxes and hurtboxes on each frame of an entity's animation, drawn over the frames in the Clip Editor (**Art → Animation Clips**): while the entity shows a frame, that frame's hitboxes hit other entities' hurtboxes (and, on its **Layers**, the colliders of things with a **Health**), once per group a swing, with each hitbox's damage, knockback and hitstun and each hurtbox's multiplier. The **Health** takes the damage (nothing lands during its **Invincible Time**), the **Body** flies off, and **Game → Show Hitboxes** draws the boxes as the game plays. With an **Attack** whose **Hitbox** is empty, the Attack action plays its `Attack` clip from the start each swing and that clip's frames do the hitting. It's all in [Fighting games](/docs/fighting-games/).

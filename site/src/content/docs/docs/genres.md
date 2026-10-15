@@ -71,3 +71,7 @@ Walk areas drawn round a room's floor (with holes for the furniture, and depth s
 ## Physics games
 
 Physics puzzlers have a page of their own: a slingshot to pull back and let go (with the mouse, a finger, the keys or a gamepad), shots that fly where its dotted line says with the camera following them, and blocks of wood, glass and stone that crack and break into pieces on hard knocks, are in [Physics games](/docs/physics-games/). They're built to mix with the rest: a **Slingshot** takes the player's input only while it has focus (and on its side's turn), and names its actions (**Load**, **Launch**) for triggers and wires and its outputs (**Shots Left**, **Out Of Shots**) for counters, bars and texts; a **Breakable** has **Break**, **Damage** and **Repair**, and the outputs **Damage** and **Broken**.
+
+## Fighting games
+
+Fighting games have a page of their own: hitboxes and hurtboxes on each frame of an animation's clips, drawn over the frames in the Clip Editor, that land hits frame by frame with damage, knockback and hitstun, once per group a swing, with a head that takes more than the legs, and a sparring pair to try them on, are in [Fighting games](/docs/fighting-games/). They're built to mix with the rest: a **Hitboxes** takes no input of its own, hits things with a Health on its **Layers** through their colliders (a hero's sword drawn on the frames of its swing hits a platformer's slimes), has the actions **Stun** and **Recover**, and the outputs **Hit**, **Got Hit**, **Hits**, **Hitstun** and **Stunned** for wires, counters, bars and texts.

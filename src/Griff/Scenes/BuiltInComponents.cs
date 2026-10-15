@@ -578,8 +578,12 @@ public sealed class Animation : Component
     [Sent(ByMover = true)]
     public string? Clip { get; set; }
 
-    /// <summary>Seconds into the current animation; restart by setting to 0.</summary>
-    [DoNotSerialize]
+    /// <summary>
+    /// Seconds into the current animation; restart by setting to 0. Kept with the scene, so a rewind or a saved game comes
+    /// back to the frame it was on (and the boxes of a <c>Hitboxes</c> with it); give a row of torches different times so
+    /// they don't flicker in step.
+    /// </summary>
+    [NotSent]
     public float Time { get; set; }
 
     /// <summary>The parsed <see cref="Clips"/>.</summary>
@@ -715,8 +719,10 @@ public sealed class Animation : Component
     {
         if (!string.IsNullOrEmpty(clip))
         {
-            foreach (var c in _parsed)
+            // By index: a frame of animations playing clips makes nothing to collect.
+            for (var i = 0; i < _parsed.Count; i++)
             {
+                var c = _parsed[i];
                 if (string.Equals(c.Name, clip, StringComparison.OrdinalIgnoreCase))
                     return (c.FirstFrame, c.FrameCount, c.FramesPerSecond ?? FramesPerSecond, c.Loop ?? Loop);
             }

@@ -77,6 +77,7 @@ export default defineConfig({
 						{ label: 'Health, enemies and combat', slug: 'docs/combat' },
 						{ label: 'Puzzles and boards', slug: 'docs/puzzles' },
 						{ label: 'Roguelikes, turns and tactics', slug: 'docs/turns' },
+						{ label: 'Card games', slug: 'docs/cards' },
 						{ label: 'Dialogue, switches and items', slug: 'docs/story' },
 						{ label: 'Tables of game data', slug: 'docs/data-tables' },
 						{ label: 'Audio', slug: 'docs/audio' },

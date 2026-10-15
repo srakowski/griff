@@ -80,6 +80,21 @@ public sealed class SentAttribute : Attribute
 public sealed class NotSentAttribute : Attribute;
 
 /// <summary>
+/// A component that keeps its entity (and what's inside it) from some players in a network game: their machines aren't
+/// sent it at all, so nothing there can read it, not even by looking at what arrives. A card in a face-down deck (the order
+/// of the deck is nobody's business) or in another player's hand. While it's kept from a player their machine has no copy;
+/// once it isn't, it's sent as it is then, and as it's kept from them again their copy goes.
+/// </summary>
+public interface INetSecret
+{
+    /// <summary>
+    /// True if the player numbered <paramref name="player"/>, on <paramref name="team"/> (empty in a game without teams),
+    /// isn't to have the entity now. The host asks each time it sends.
+    /// </summary>
+    bool HiddenFrom(int player, string team);
+}
+
+/// <summary>
 /// A component that says for itself what it sends in a network game, besides its saved and <see cref="SentAttribute"/>
 /// properties: values it keeps in a form that can't be sent as it is (a board's gems, sent as lines of text), or a
 /// property it doesn't send just now.

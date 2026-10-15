@@ -62,7 +62,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 
 ### Genres: cards, adventures and stories
 
-- [ ] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them.
 - [ ] Add card effects without code (damage, draw, cost) and a turn-based card opponent.
 - [ ] Add a Cards template.
 - [ ] Add hotspots and click-to-walk: click somewhere to walk there around obstacles; click a hotspot to look at it or use it.
@@ -383,3 +382,4 @@ so a jam team's design, plan and game live in one project and agents can read th
 - [x] Add a BunnyMark benchmark: a scene that keeps adding bouncing sprites, shows the fps and the sprite count, and records how many it holds at 60 fps. (2026-10-13)
   - A BunnyMark template, and `tools\bunnymark.ps1`, which exports it with the Release player and prints the count. It found the player only ran at about 32 fps (WPF's render loop got every other frame of the screen), so a running game is now paced by the compositor (`FramePacer`). Baseline: about 1,000 bunnies (797 to 1,147 over three runs) in an exported game on a mid-range desktop PC.
 - [x] Publish releases: a GitHub Action that builds the editor on a version tag, attaches a zip to a GitHub Release with notes from the commits, and the site's Download button and a releases page that always point to the latest. (2026-10-15)
+- [x] Add decks, hands and play zones: draw, shuffle, and play cards by dragging them. (2026-10-15) A Cards module: a Card that draws itself (title, value, picture, wrapped text, kind, its deck's back), a Deck (shuffled with Rand, Click To Draw, Takes Drops, Refill From a discard pile, made from a table with a Count column and a card prefab), a Hand that fans and lifts its cards (drag, click-click, keys and gamepad; Turn Taker side, Hidden), a Play Zone with rules (Accepts, Limit, From, Row or Pile, face up or down); actions Draw, Shuffle, Restart and Discard, outputs Count, Shuffles and Played; ICardPart for effects to hang off a card; INetSecret keeps a face-down deck's cards and other sides' hidden hands off players' machines; Create Deck, Create Play Zone and Create Card.

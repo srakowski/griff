@@ -23,7 +23,7 @@ public class FrameTests
             "Logic: Item Uses",
             "Scripts: Scripts",
             "Simulate: HUD", "Simulate: Blocks", "Simulate: Tools", "Simulate: Other Players' Tools",
-            "Simulate: Dragging", "Simulate: Match Boards", "Simulate: Falling Boards", "Simulate: Strategy",
+            "Simulate: Dragging", "Simulate: Cards", "Simulate: Match Boards", "Simulate: Falling Boards", "Simulate: Strategy",
             "Simulate: Attacks", "Simulate: Idle Grid Movers", "Simulate: Timers", "Simulate: Coroutines",
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
@@ -57,13 +57,14 @@ public class FrameTests
     {
         var game = CreateGame();
 
-        // Griff's core systems, then each module's in module order (Battles, Block Worlds, Contraptions, Dungeons, Falling Blocks,
+        // Griff's core systems, then each module's in module order (Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks,
         // First Person, Match-3, Puzzles, Strategy, Tactics): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Battles", "Block Worlds", "Contraptions", "Dungeons", "Falling Boards", "First Person",
+        Assert.Equal(["Levels", "Switches", "Dragging", "Panels", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "First Person",
             "Match Boards", "Puzzles", "Strategy", "Tactics"], game.Systems.Select(s => s.Name));
         Assert.Equal("Strategy", game.Frame.Single(s => s.Name == "Strategy").System?.Name);
         Assert.Equal("Tactics", game.Frame.Single(s => s.Name == "Tactics").System?.Name);
+        Assert.Equal("Cards", game.Frame.Single(s => s.Name == "Cards").System?.Name);
         Assert.Equal("Match Boards", game.Frame.Single(s => s.Name == "Match Boards").System?.Name);
         Assert.Equal("Falling Boards", game.Frame.Single(s => s.Name == "Falling Boards").System?.Name);
         Assert.Equal("Levels", game.Frame.Single(s => s.Name == "Doors").System?.Name);
@@ -141,7 +142,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(14, game.Systems.Count);
+        Assert.Equal(15, game.Systems.Count);
     }
 
     [Fact]

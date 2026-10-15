@@ -1,0 +1,59 @@
+title: Card games
+intro: Decks, hands and play zones, with no code: shuffle and deal, draw, and play cards by dragging them onto the table, by the rules each place on it sets.
+project: Empty | Card Table
+
+chapter: A deck, a hand and a table | Entity > Create Deck
+create: Deck
+expectcount: Hand = 1
+expectcount: Play Zone = 1
+expectcount: Discard Pile = 1
+explain: component:Deck | Deck | A deck is a pile of cards: the cards inside it, twenty here, Sun and Moon from one to ten. It's shuffled as the game starts, with the game's own random numbers.
+explain: field:Deck.Table | From a table | Or it makes its cards from a table of game data, a card for each row, with the row's title, text, value and color.
+select: Hand
+explain: component:Hand | Hand | Create Deck brought along a hand that draws five cards as the game starts and fans them out, a play zone to play them onto, and a discard pile.
+select: Play Zone
+set: PlayZone.Limit = 1
+explain: field:PlayZone.Accepts | Rules | A play zone has rules: the kinds of card it takes, which hands may play onto it, and a limit. This one holds one card.
+deselect
+create: Text
+rename: Hand Count
+set: Transform.Position.Y = 4
+set: Text.Size = 0.5
+add: Counter
+set: Counter.Track = Hand
+set: Counter.Output = Count
+set: Counter.Format = In hand: {0}
+explain: field:Counter.Output | Outputs | Decks, hands and zones say how many cards they hold, for a counter, a bar or a text to show. This counter shows the cards in the hand.
+
+chapter: Playing | Drag a card onto the table
+play
+wait: 1.5
+expectvalue: Hand Count.Counter.Value = 5
+explain: game | Dealt | Shuffled, and dealt a card at a time into a fan.
+gameclick: Deck
+wait: 0.6
+expectvalue: Hand Count.Counter.Value = 6
+say: Clicking the deck draws another card.
+gamedrag: Hand > Play Zone
+wait: 0.8
+expectvalue: Play Zone.PlayZone.Played = 1
+expectvalue: Hand Count.Counter.Value = 5
+explain: game | Played | Drag a card onto the zone, and it's played and slides into place.
+gamedrag: Hand > Play Zone
+wait: 0.8
+expectvalue: Play Zone.PlayZone.Played = 1
+expectvalue: Hand Count.Counter.Value = 5
+say: The zone holds one card, so the next slides back to the hand.
+gamedrag: Hand > Discard Pile
+wait: 0.8
+expectvalue: Hand Count.Counter.Value = 4
+say: The discard pile takes cards dragged onto it.
+tap: Right
+tap: Space
+wait: 0.3
+tap: Space
+wait: 0.8
+expectvalue: Hand Count.Counter.Value = 3
+say: With the keys or a gamepad, left and right pick a card, and Space takes it up and plays it where it can go.
+stop
+say: That's decks, hands and play zones, with no code. Decks shuffle, draw and refill from their discard pile, hands play on their side's turn, and in a network game nobody's machine is sent the deck's order or another player's hidden hand.

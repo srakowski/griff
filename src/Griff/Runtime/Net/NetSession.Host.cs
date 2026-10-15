@@ -41,6 +41,9 @@ internal sealed class NetObject(uint id, Entity entity)
 
     public bool AlwaysSent { get; set; }
 
+    // Its components that keep it from some players (see INetSecret).
+    public INetSecret[] Secrets { get; set; } = [];
+
     // For a character its player moves: the values that player last reported, and how many times the host has overruled them.
     public object?[]? FromOwner { get; set; }
 
@@ -628,6 +631,7 @@ public sealed partial class NetSession
     {
         obj.Slots = NetSchema.Build(obj.Entity, Registry, obj.OwnerMoves);
         obj.Shape = [.. obj.Entity.Components];
+        obj.Secrets = [.. obj.Entity.Components.OfType<INetSecret>()];
         obj.Current = new object?[obj.Slots.Count];
         for (var i = 0; i < obj.Slots.Count; i++)
             obj.Current[i] = obj.Slots[i].Get(obj.Entity);
@@ -719,7 +723,7 @@ public sealed partial class NetSession
         {
             var parent = obj.ParentId != 0 ? _objectsById.GetValueOrDefault(obj.ParentId) : null;
             var seen = player.Ghosts.TryGetValue(obj, out var ghost);
-            var visible = (parent is null || relevant.GetValueOrDefault(parent)) && IsRelevant(obj, player, eyes, range, seen);
+            var visible = (parent is null || relevant.GetValueOrDefault(parent)) && IsRelevant(obj, player, eyes, range, seen) && !IsSecret(obj, player);
             relevant[obj] = visible;
             if (!seen)
             {
@@ -781,6 +785,18 @@ public sealed partial class NetSession
         var reach = alreadySent ? range * 1.15f : range;
         var at = Flat(obj.Entity.Transform.WorldPosition);
         return eyes.Any(e => Vector2.DistanceSquared(e, at) <= reach * reach);
+    }
+
+    // Kept from this player by one of its components (a card in a face-down deck, or in someone else's hand).
+    private static bool IsSecret(NetObject obj, NetPlayer player)
+    {
+        foreach (var secret in obj.Secrets)
+        {
+            if (secret.HiddenFrom(player.Id, player.Team))
+                return true;
+        }
+
+        return false;
     }
 
     private static void ForgetTree(NetPlayer player, NetObject obj)

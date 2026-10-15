@@ -52,7 +52,7 @@ internal sealed class PuzzlesSystem : GameSystem
             if (was is not null)
             {
                 if (!string.IsNullOrWhiteSpace(goal.UncoverMessage))
-                    Game.Send(goal.UncoverMessage.Trim(), goal.Entity);
+                    Game.Send(goal.UncoverMessage.Trim(), goal.Entity, from: goal.Entity);
                 goal.RaiseUncovered(was);
             }
 
@@ -60,7 +60,7 @@ internal sealed class PuzzlesSystem : GameSystem
             {
                 Game.PlayIfSet(goal.Sound);
                 if (!string.IsNullOrWhiteSpace(goal.CoverMessage))
-                    Game.Send(goal.CoverMessage.Trim(), goal.Entity);
+                    Game.Send(goal.CoverMessage.Trim(), goal.Entity, from: goal.Entity);
                 goal.RaiseCovered(by);
             }
         }
@@ -69,7 +69,7 @@ internal sealed class PuzzlesSystem : GameSystem
         {
             var all = group.All(g => g.IsCovered);
             if (AllCovered.TryGetValue(group.Key, out var was) && all && !was)
-                Game.Send(group.Key, group.Last().Entity);
+                Game.Send(group.Key, group.Last().Entity, from: group.Last().Entity);
             AllCovered[group.Key] = all;
         }
     }
@@ -163,7 +163,7 @@ internal sealed class PuzzlesSystem : GameSystem
         PutBack(history, to);
         Game.PlayIfSet(history.UndoSound);
         if (!string.IsNullOrWhiteSpace(history.UndoMessage))
-            Game.Send(history.UndoMessage.Trim(), history.Moves);
+            Game.Send(history.UndoMessage.Trim(), history.Moves, from: history.Entity);
         history.RaiseUndone();
     }
 
@@ -187,7 +187,7 @@ internal sealed class PuzzlesSystem : GameSystem
 
         Game.PlayIfSet(history.RestartSound);
         if (!string.IsNullOrWhiteSpace(history.RestartMessage))
-            Game.Send(history.RestartMessage.Trim(), history.Entity);
+            Game.Send(history.RestartMessage.Trim(), history.Entity, from: history.Entity);
         history.RaiseRestarted();
     }
 

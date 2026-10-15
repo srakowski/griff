@@ -296,21 +296,41 @@ public sealed partial class Game
             if (!shooter.Ready(Time.Delta, wantsToFire, onBeat) || string.IsNullOrWhiteSpace(shooter.Prefab))
                 continue;
 
-            aim = aim.LengthSquared() > 1e-8f ? Vector2.Normalize(aim) : Vector2.UnitX;
-            foreach (var direction in shooter.VolleyAround(aim))
-            {
-                var shot = Spawn(shooter.Prefab.Trim(), here + shooter.Offset);
-                Claim(shot, entity);
-                if (shot.GetComponent<Body>() is { } body)
-                    body.Velocity = direction * shooter.Speed;
-                shot.Transform.Rotation = shot.Transform.Rotation with { Z = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI };
-                shooter.RaiseFired(shot);
-            }
-
-            if (!string.IsNullOrWhiteSpace(shooter.Sound))
-                PlayShared(shooter.Sound);
+            Volley(shooter, here, aim);
             UseAction(entity);
         }
+    }
+
+    void IGameContext.FireVolley(Shooter shooter) => FireVolley(shooter);
+
+    /// <summary>A shooter's Fire action: one volley now, at its target if it has one in the scene, otherwise its way.</summary>
+    internal void FireVolley(Shooter shooter)
+    {
+        if (shooter.Entity is not { } entity || entity.Scene != Scene || string.IsNullOrWhiteSpace(shooter.Prefab))
+            return;
+        var here = Flat(entity.Transform.WorldPosition);
+        var aim = shooter.Direction;
+        if (!string.IsNullOrWhiteSpace(shooter.Target) && Nearest(shooter.Target.Trim(), here) is { } target)
+            aim = Flat(target.Transform.WorldPosition) - here;
+        Volley(shooter, here, aim);
+    }
+
+    private void Volley(Shooter shooter, Vector2 here, Vector2 aim)
+    {
+        var entity = shooter.Entity!;
+        aim = aim.LengthSquared() > 1e-8f ? Vector2.Normalize(aim) : Vector2.UnitX;
+        foreach (var direction in shooter.VolleyAround(aim))
+        {
+            var shot = Spawn(shooter.Prefab!.Trim(), here + shooter.Offset);
+            Claim(shot, entity);
+            if (shot.GetComponent<Body>() is { } body)
+                body.Velocity = direction * shooter.Speed;
+            shot.Transform.Rotation = shot.Transform.Rotation with { Z = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI };
+            shooter.RaiseFired(shot);
+        }
+
+        if (!string.IsNullOrWhiteSpace(shooter.Sound))
+            PlayShared(shooter.Sound);
     }
 
     // Who's touching what this frame, for checkpoints, doors and dialogue: the thing touched, and whatever touched it
@@ -341,7 +361,7 @@ public sealed partial class Game
                 PlayShared(checkpoint.Sound);
             checkpoint.RaiseReached(by);
             if (!string.IsNullOrWhiteSpace(checkpoint.Message))
-                Send(checkpoint.Message.Trim(), checkpoint.Entity);
+                Send(checkpoint.Message.Trim(), checkpoint.Entity, from: checkpoint.Entity);
         }
 
         // The active one shows its color; the others go back to theirs.
@@ -633,7 +653,7 @@ public sealed partial class Game
                     SetFlag(tag.Name, on: false);
                     break;
                 case Dialogue.TagKind.Send:
-                    Send(tag.Name, dialogue.Entity);
+                    Send(tag.Name, dialogue.Entity, from: dialogue.Entity);
                     break;
             }
         }
@@ -923,7 +943,7 @@ public sealed partial class Game
             return;
         dialogue.IsDone = true;
         if (!string.IsNullOrWhiteSpace(dialogue.Message))
-            Send(dialogue.Message.Trim(), dialogue.Entity);
+            Send(dialogue.Message.Trim(), dialogue.Entity, from: dialogue.Entity);
         dialogue.RaiseFinished();
     }
 

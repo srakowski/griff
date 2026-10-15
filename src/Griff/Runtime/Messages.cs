@@ -63,8 +63,11 @@ internal sealed class MessageBoard
         return listener;
     }
 
-    /// <summary>Delivers to everyone listening when it was sent; listeners added during delivery hear the next one.</summary>
-    public int Send(string message, object? data, Scene scene)
+    /// <summary>
+    /// Delivers to everyone listening when it was sent whom <paramref name="route"/> reaches (a listener with no entity
+    /// of its own hears only what's sent to everyone); listeners added during delivery hear the next one.
+    /// </summary>
+    public int Send(string message, object? data, Scene scene, MessageRoute route = default)
     {
         if (!_listeners.TryGetValue(message, out var list))
             return 0;
@@ -72,6 +75,8 @@ internal sealed class MessageBoard
         var heard = 0;
         foreach (var listener in list.ToList())
         {
+            if (!route.IsEveryone && !route.Reaches(listener.OwnerEntity ?? listener.OwnerBehavior?.Entity))
+                continue;
             if (listener.Deliver(data, scene))
                 heard++;
         }
@@ -96,4 +101,26 @@ internal sealed class MessageBoard
         foreach (var listener in _listeners.Values.SelectMany(l => l).Where(l => l.OwnerBehavior == owner))
             listener.Cancel();
     }
+}
+
+/// <summary>
+/// Who sent a message and who it's for: everyone (as most are), or one entity (and with <see cref="Children"/>, everything
+/// inside it). See <see cref="Game.SendTo"/> and <see cref="MessageScope"/>.
+/// </summary>
+internal readonly struct MessageRoute(Entity? from, Entity? to, bool children)
+{
+    /// <summary>What sent it, if known: a <see cref="Trigger"/>'s From matches it or something it's inside.</summary>
+    public Entity? From { get; } = from;
+
+    /// <summary>The entity it's for, or null for everyone.</summary>
+    public Entity? To { get; } = to;
+
+    /// <summary>It's for everything inside <see cref="To"/> too.</summary>
+    public bool Children { get; } = children;
+
+    public bool IsEveryone => To is null;
+
+    /// <summary>True if <paramref name="entity"/> hears it: everyone does when it's for everyone; nothing without an entity otherwise.</summary>
+    public bool Reaches(Entity? entity) =>
+        To is null || (entity is not null && (entity == To || (Children && entity.IsSelfOrDescendantOf(To))));
 }

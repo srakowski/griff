@@ -8,7 +8,9 @@ namespace Griff.Tests.Architecture;
 /// itself (IDrawable, IDrawEffect, ILightSource) and says what it sends (NetLocal, PlayerMovement, Sent, NotSent,
 /// INetState), and a game's systems draw what the game knows of (GameSystem.Draw), so script components draw and play
 /// online the same way Griff's do. Only the components that make up a view (cameras, what's pinned to the screen,
-/// parallax, sprites, lights) and an entity's networking settings may be named here.
+/// parallax, sprites, lights) and an entity's networking settings may be named here. Likewise triggers, wires and
+/// switches know nothing of what they set off: a component names its actions ([Action]) and what a switch powers
+/// ([Powered]), so the code that finds and does them names no component but the trigger and scope it runs.
 /// </summary>
 public sealed class ExtensionPointTests
 {
@@ -16,6 +18,9 @@ public sealed class ExtensionPointTests
     [InlineData("Rendering/SceneRenderer.cs", new[] { "Transform", "Camera", "ScreenAnchor", "Parallax", "Sprite", "Light", "ScreenEffects" })]
     [InlineData("Runtime/FrameDrawing.cs", new string[0])]
     [InlineData("Runtime/Net/NetSchema.cs", new[] { "Transform", "MissingComponent", "Networked" })]
+    [InlineData("Runtime/Game.Triggers.cs", new[] { "Trigger", "MessageScope" })]
+    [InlineData("Scenes/ComponentActions.cs", new string[0])]
+    [InlineData("Editing/ActionNames.cs", new string[0])]
     public void Core_NamesNoComponentButItsOwn(string file, string[] allowed)
     {
         var (compilation, trees) = LayerTests.Core();

@@ -311,35 +311,60 @@ public sealed partial class Game : IGameContext
     }
 
     /// <summary>
-    /// Tells everyone listening for <paramref name="message"/> (with <c>On</c>) straight away, passing along
-    /// <paramref name="data"/>. Returns how many listeners heard it; nobody listening is fine.
+    /// Tells everyone listening for <paramref name="message"/> (with <c>On</c>, a <see cref="Trigger"/>, a
+    /// <see cref="Counter"/>...) straight away, passing along <paramref name="data"/>. Returns how many heard it; nobody
+    /// listening is fine.
     /// </summary>
     /// <example><code>Game.Send("PlayerDied"); Game.Send("ScoreChanged", 10);</code></example>
-    public int Send(string message, object? data = null)
+    public int Send(string message, object? data = null) => Deliver(message, data, default);
+
+    /// <summary>
+    /// Like <see cref="Send(string, object?)"/>, saying who sent it: a <see cref="Trigger"/> whose From names
+    /// <paramref name="from"/> (or something it's inside) hears it, and if <paramref name="from"/> or something it's inside
+    /// has a <see cref="MessageScope"/>, only the part of the scene the scope says does. Griff's own components send their
+    /// messages this way.
+    /// </summary>
+    /// <example><code>Game.Send("Opened", data: null, from: Entity);</code></example>
+    public int Send(string message, object? data, Entity? from) => Deliver(message, data, ScopeOf(from));
+
+    /// <summary>
+    /// Sends <paramref name="message"/> only to <paramref name="to"/> (and with <paramref name="children"/>, everything
+    /// inside it): its counters, triggers, sound players, panels and scripts listening with <c>On</c>, so one of two boards
+    /// can be told something. <paramref name="from"/> says who sent it, for a <see cref="Trigger"/>'s From.
+    /// </summary>
+    /// <example><code>Game.SendTo(Game.Find("Board A")!, "Bonus", 50, children: true);</code></example>
+    public int SendTo(Entity to, string message, object? data = null, bool children = false, Entity? from = null)
+    {
+        ArgumentNullException.ThrowIfNull(to);
+        return Deliver(message, data, new MessageRoute(from, to, children));
+    }
+
+    private int Deliver(string message, object? data, MessageRoute route)
     {
         Crowds.ThrowIfRunning("send messages");
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
         // On the host, everyone else's machine hears it too (their HUD counts it, their sound players play).
         if (Net.IsHost && !_netMessage)
-            Net.Relay(message, data);
-        var heard = _messages.Send(message, data, Scene);
+            Net.Relay(message, data, route);
+        var heard = _messages.Send(message, data, Scene, route);
 
         // Counters add up their message with no listener of their own: the number sent, or 1 (unless they count something else).
         var counters = Active<Counter>()
-            .Where(c => c.Message?.Trim() == message && !c.CountsOwn).ToList();
+            .Where(c => c.Message?.Trim() == message && !c.CountsOwn && route.Reaches(c.Entity)).ToList();
         foreach (var counter in counters)
             counter.Add(CountOf(data));
 
         // So do sound players.
         var players = Scene.Active<SoundPlayer>()
-            .Where(p => p.Message?.Trim() == message).ToList();
+            .Where(p => p.Message?.Trim() == message && route.Reaches(p.Entity)).ToList();
         foreach (var player in players)
             Play(player);
 
         // And panels open on theirs (a puzzle's "Solved" screen), if what they're in is showing.
         var panels = Scene.All<Panel>()
-            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive))
+            .Where(p => p.OpenMessage?.Trim() == message && !p.Entity!.IsEnabled && (p.Entity.Parent is null || p.Entity.Parent.IsActive) &&
+                        route.Reaches(p.Entity))
             .ToList();
         foreach (var panel in panels)
             OpenPanel(panel);
@@ -351,11 +376,13 @@ public sealed partial class Game : IGameContext
         {
             foreach (var hearer in hearers.ToList())
             {
-                if (hearer is Component { Entity: { } entity } && Runs(entity) && hearer.Hear(message, data))
+                if (hearer is Component { Entity: { } entity } && Runs(entity) && route.Reaches(entity) && hearer.Hear(message, data))
                     done++;
             }
         }
 
+        // And triggers do what they do.
+        done += FireTriggers(message, data, route);
         return heard + counters.Count + players.Count + panels.Count + done;
     }
 
@@ -837,7 +864,7 @@ public sealed partial class Game : IGameContext
         Notify(collector, behavior => behavior.RunPickup(entity));
         pickup.RaiseCollected(collector);
         if (!string.IsNullOrWhiteSpace(pickup.Message))
-            Send(pickup.Message.Trim(), pickup.Amount);
+            Send(pickup.Message.Trim(), pickup.Amount, from: pickup.Entity);
         Destroy(entity);
     }
 
@@ -983,7 +1010,7 @@ public sealed partial class Game : IGameContext
             if (!string.IsNullOrWhiteSpace(health.DeathSound))
                 PlaySoundAt(health.DeathSound.Trim(), at);
             if (!string.IsNullOrWhiteSpace(health.DeathMessage))
-                Send(health.DeathMessage, health.Entity);
+                Send(health.DeathMessage, health.Entity, from: health.Entity);
             if (health.Respawn)
                 health.Entity!.IsEnabled = false;
             else if (health.DestroyOnDeath)

@@ -117,6 +117,18 @@ public sealed class Switch : Component
         return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
     }
 
+    /// <summary>Turns it on, as working it does (sounding, sending its On Message and switching its targets).</summary>
+    [Action("On")]
+    public void TurnOn() => IsOn = true;
+
+    /// <summary>Turns it off.</summary>
+    [Action("Off")]
+    public void TurnOff() => IsOn = false;
+
+    /// <summary>Turns it on if it's off, and off if it's on.</summary>
+    [Action]
+    public void Toggle() => IsOn = !IsOn;
+
     /// <summary>
     /// The entities a list of names (<see cref="Targets"/> or <see cref="Hides"/>) means: for each name, those inside
     /// <paramref name="owner"/> (itself included) if there are any, else every entity in the scene called that.

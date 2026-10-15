@@ -585,6 +585,14 @@ public sealed class Panel : Component
     internal void RaiseOpened() => Opened?.Invoke(this);
 
     internal void RaiseClosed() => Closed?.Invoke(this);
+
+    /// <summary>Opens it over the game, as its Open Message does.</summary>
+    [Action("Open")]
+    private void OpenIt(IGameContext game) => game.OpenPanel(this);
+
+    /// <summary>Closes it, and any panel opened inside it.</summary>
+    [Action("Close")]
+    private void CloseIt(IGameContext game) => game.ClosePanel(this);
 }
 
 /// <summary>

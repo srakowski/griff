@@ -134,13 +134,13 @@ public sealed partial class Game
             Audio.Play(sound, volume, 0, pitch);
     }
 
-    internal void SendFromNetwork(string message, object? data, bool relay)
+    internal void SendFromNetwork(string message, object? data, bool relay, MessageRoute route = default)
     {
         var before = _netMessage;
         _netMessage = !relay;
         try
         {
-            Send(message, data);
+            Deliver(message, data, route);
         }
         finally
         {

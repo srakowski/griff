@@ -158,9 +158,11 @@ public sealed class MoveHistory : Component, ICounterSource
     public event Action<MoveHistory>? Restarted;
 
     /// <summary>Takes the last move back at the start of the next frame, as pressing Undo does.</summary>
+    [Action]
     public void Undo() => UndoRequests++;
 
     /// <summary>Starts the level over at the start of the next frame, as pressing Restart does.</summary>
+    [Action]
     public void Restart() => RestartRequested = true;
 
     /// <summary>

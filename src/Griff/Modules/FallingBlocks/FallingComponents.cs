@@ -51,6 +51,9 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     /// <summary>Picks the order the pieces come in: the same number always gives the same ones. 0 is different each game.</summary>
     public int Seed { get; set; }
 
+    /// <summary>True while it stands still: the piece doesn't fall and takes no moves. Its Pause and Resume actions set it.</summary>
+    public bool Paused { get; set; }
+
     /// <summary>Seconds a piece takes to fall one row at level 1.</summary>
     [Group("Speed")]
     public float FallTime { get; set; } = 0.8f;
@@ -210,6 +213,18 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     /// <summary>Drops the falling piece all the way down and locks it, at the start of the next frame.</summary>
     public void Drop() => Requests.Add(FallingRequest.Drop);
 
+    /// <summary>Stops the board where it is: the piece doesn't fall and takes no moves, until it's resumed.</summary>
+    [Action]
+    public void Pause() => Paused = true;
+
+    /// <summary>Lets a paused board go on.</summary>
+    [Action]
+    public void Resume() => Paused = false;
+
+    /// <summary>Starts the board over at the start of the next frame: empty, at the level it started at, with no score or lines.</summary>
+    [Action]
+    public void Restart() => RestartRequested = true;
+
     internal void RaiseLocked(IReadOnlyList<(int X, int Y)> cells) => Locked?.Invoke(cells);
 
     internal void RaiseCleared(int rows) => Cleared?.Invoke(rows);
@@ -236,6 +251,11 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     // ----- What the game keeps while it runs (rewinds start these afresh) -----
 
     internal bool Started { get; set; }
+
+    internal bool RestartRequested { get; set; }
+
+    // The level it started at, to go back to on a restart.
+    internal int? StartLevel { get; set; }
 
     internal Random? Random { get; set; }
 

@@ -226,6 +226,7 @@ public sealed class SoundSource : Component
     public float Range { get; set; } = 10;
 
     /// <summary>True while it plays. Untick it to start silent; switches and scripts can set it.</summary>
+    [Powered]
     public bool Playing { get; set; } = true;
 
     /// <summary>1 as recorded, 2 an octave up, 0.5 an octave down. Scripts can change it as it plays: an engine revving.</summary>
@@ -293,6 +294,10 @@ public sealed class SoundPlayer : Component
 
     /// <summary>Heard from where it is (quieter off screen, from that side) rather than everywhere equally.</summary>
     public bool Positional { get; set; }
+
+    /// <summary>Plays its sound now.</summary>
+    [Action]
+    private void Play(IGameContext game) => game.Play(this);
 
     // Whether it's had its start, so OnStart plays once.
     internal bool Started { get; set; }

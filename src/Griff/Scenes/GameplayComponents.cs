@@ -165,7 +165,16 @@ public sealed class Health : Component
         return Current - before;
     }
 
+    /// <summary>Takes <paramref name="amount"/> hit points away, as a hit does (not while it can't be hurt after the last one).</summary>
+    [Action("Damage")]
+    private void DamageBy(float amount) => Damage(amount);
+
+    /// <summary>Gives back up to <paramref name="amount"/> hit points, never past its Max.</summary>
+    [Action("Heal")]
+    private void HealBy(float amount) => Heal(amount);
+
     /// <summary>Dies straight away, invincible or not: falling out of the world, a reset button.</summary>
+    [Action]
     public void Kill()
     {
         if (IsDead)
@@ -421,11 +430,22 @@ public sealed class Counter : Component
     public event Action<Counter>? Changed;
 
     /// <summary>Adds <paramref name="amount"/> (take some away with a negative amount).</summary>
+    [Action]
     public void Add(int amount = 1)
     {
         if (amount == 0)
             return;
         Value += amount;
+        Changed?.Invoke(this);
+    }
+
+    /// <summary>Starts the count again from 0.</summary>
+    [Action]
+    public void Reset()
+    {
+        if (Value == 0)
+            return;
+        Value = 0;
         Changed?.Invoke(this);
     }
 
@@ -509,6 +529,7 @@ public sealed class Spawner : Component
     public float Radius { get; set; }
 
     /// <summary>Untick it to stop spawning for now. <see cref="Switch"/>es tick and untick it.</summary>
+    [Powered]
     public bool Running { get; set; } = true;
 
     /// <summary>
@@ -565,11 +586,30 @@ public sealed class Spawner : Component
             return;
         }
 
+        SpawnOne(game);
+        _untilNext = Beats > 0 ? 0 : Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
+    }
+
+    /// <summary>
+    /// Spawns one now, running or not: a wave on a message, a crate from a button. Not once it has spawned its
+    /// <see cref="Count"/>, or while <see cref="MaxAlive"/> of its spawns are around. Its own timing carries on as it was.
+    /// </summary>
+    [Action("Spawn")]
+    private void SpawnNow(IGameContext game)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        _alive.RemoveAll(e => e.Scene != game.Scene);
+        if (IsFinished || string.IsNullOrWhiteSpace(Prefab) || (MaxAlive > 0 && _alive.Count >= MaxAlive))
+            return;
+        SpawnOne(game);
+    }
+
+    private void SpawnOne(IGameContext game)
+    {
         var position = Entity!.Transform.WorldPosition;
-        var entity = game.Spawn(Prefab, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
+        var entity = game.Spawn(Prefab!, new Vector2(position.X, position.Y) + (Radius > 0 ? Rand.InsideCircle(Radius) : Vector2.Zero));
         _alive.Add(entity);
         Spawned++;
-        _untilNext = Beats > 0 ? 0 : Math.Max(_untilNext + Math.Max(Interval, 0.01f), 0);
         EntitySpawned?.Invoke(entity);
     }
 }

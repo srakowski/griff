@@ -1,0 +1,43 @@
+title: Anything triggers anything
+intro: Components name what they do, and a Trigger does it when a message arrives. No code, and it works with every part of Griff.
+project: Platformer | Triggers
+
+chapter: The flag pulls the lever | A Trigger on the lever
+select: Checkpoint
+set: Checkpoint.Message = Reached
+say: The checkpoint flag already sends a message when the player reaches it. Call it Reached.
+select: Lever
+look: -6, 0, 7
+add: Trigger
+explain: component:Trigger | Trigger | Any entity can have a Trigger, one for each thing it reacts to. When its message arrives, it does something.
+pick: Trigger.Message = Reached
+pick: Trigger.Do = On
+explain: field:Trigger.Do | Do | What it can do is a list of what its targets can do. With no targets it's this lever, so: switch on, off or toggle, or set a flag.
+expectvalue: Lever.Trigger.Do = On
+say: Every component names its actions this way: doors open and lock, spawners spawn, shooters fire, health takes damage, turn orders end the turn, boards pause and restart. A script's own methods join in with one attribute.
+
+chapter: Driving something else | Targets, a value, and who it hears
+create: Empty
+rename: Rules
+add: Trigger
+pick: Trigger.Message = Reached
+pick: Trigger.Targets = Slime
+pick: Trigger.Do = Damage
+set: Trigger.With = 2
+expectvalue: Rules.Trigger.Do = Damage
+explain: field:Trigger.With | With | Damage takes an amount, so the trigger says how much. Two hits is all the slime has.
+pick: Trigger.From = Checkpoint
+say: And From means it only listens to the checkpoint, so two things sending the same message can be told apart.
+look: -4, 0, 9
+expectlink: Rules > Slime = Reached: Damage 2
+explain: link:Rules > Slime | Reached: Damage 2 | The Scene view draws a line from the trigger to what it drives, saying what it does there.
+expectlink: Checkpoint > Rules = Reached
+explain: link:Checkpoint > Rules | Reached | And one from what it listens to.
+
+chapter: Playing it | Run to the flag
+play
+hold: Right 1.4
+waitfor: Bridge | 5
+waitgone: Slime | 5
+explain: game | The flag | Reaching the flag pulled the lever, so the bridge came out, and it struck down the slime on the ledge. A pickup could fire a cannon, a match could end the turn, a beat could open a door: anything can trigger anything.
+stop

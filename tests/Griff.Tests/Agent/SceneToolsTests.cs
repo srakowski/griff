@@ -243,6 +243,53 @@ public class SceneToolsTests
         Assert.DoesNotContain("crowd", Run("component_describe", """{"component": "Sprite"}""").Text, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Goes off.</summary>
+    public sealed class Bomb : Griff.Runtime.Behavior
+    {
+        public int Fuses { get; set; }
+
+        [Action]
+        public void Explode() => Fuses++;
+
+        [Action]
+        public void Delay(float seconds) => Fuses += (int)seconds;
+    }
+
+    [Fact]
+    public void Actions_reach_component_describe_and_components_list_by_themselves_scripts_too()
+    {
+        _host.Components.Register<Bomb>();
+
+        var health = Run("component_describe", """{"component": "Health"}""").Text;
+        Assert.Contains("Actions (what anything can make it do with no code", health);
+        Assert.Contains("- Damage (done with a number, its amount: a trigger's with, 1 without one). Takes amount hit points away", health);
+        Assert.Contains("- Kill. Dies straight away", health);
+        var bomb = Run("component_describe", """{"component": "Bomb"}""").Text;
+        Assert.Contains("- Explode", bomb);
+        Assert.Contains("- Delay (done with a number, its seconds", bomb);
+        Assert.Contains("Actions: Explode, Delay.", Run("components_list", """{"search": "Bomb"}""").Text);
+
+        var trigger = Run("component_describe", """{"component": "Trigger"}""").Text;
+        Assert.Contains("- do: text = null", trigger);
+        Assert.Contains("Names an action of the entities targets names, or this entity without any", trigger);
+        Assert.Contains("- SetFlag (done with a name, its flag", trigger);
+    }
+
+    [Fact]
+    public void Triggers_are_made_like_any_component_and_a_do_nothing_can_do_is_reported()
+    {
+        Run("entity_create", """{"entity": {"name": "Boss", "components": {"Health": {"max": 10}}}}""");
+        var made = Run("entity_create", """{"entity": {"name": "Rules", "components": {"Trigger": {"message": "Score", "do": "Damage", "targets": "Boss", "with": "2"}}}}""").Text;
+        Assert.DoesNotContain("Trigger.Do", made);
+        var trigger = Named("Rules").GetComponent<Trigger>()!;
+        Assert.Equal(("Score", "Damage", "Boss", "2"), (trigger.Message, trigger.Do, trigger.Targets, trigger.With));
+        Assert.Contains("When Score arrives, Damage 2 on Boss.", Run("entity_get", """{"entity": "Rules"}""").Text);
+
+        Run("entity_update", """{"entity": "Rules", "changes": {"components": {"Trigger": {"do": "Explode"}}}}""");
+        Assert.Contains("Trigger.Do", Run("entity_get", """{"entity": "Rules"}""").Text);
+        Assert.Contains("Nothing it's done on has an action called \"Explode\"", Run("scene_tree", "{}").Text);
+    }
+
     [Fact]
     public void Long_numbers_a_component_shows_while_playing_are_shown_too()
     {

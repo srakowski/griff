@@ -75,6 +75,9 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// <summary>Picks the gems dealt and dropped in: the same number always gives the same ones. 0 is different each game.</summary>
     public int Seed { get; set; }
 
+    /// <summary>True while it stands still: nothing moves, falls or clears, and it takes no swaps. Its Pause and Resume actions set it.</summary>
+    public bool Paused { get; set; }
+
     /// <summary>How many swaps have been made (not counting those that slid back). Saved with the scene, so a rewind takes them back.</summary>
     public int Swaps { get; set; }
 
@@ -293,7 +296,20 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     }
 
     /// <summary>Shuffles the gems at the start of the next frame, as a stuck board is.</summary>
+    [Action]
     public void Shuffle() => ShuffleRequested = true;
+
+    /// <summary>Stops the board where it is: nothing moves, falls or clears, and no swaps are taken, until it's resumed.</summary>
+    [Action]
+    public void Pause() => Paused = true;
+
+    /// <summary>Lets a paused board go on.</summary>
+    [Action]
+    public void Resume() => Paused = false;
+
+    /// <summary>Starts the board over at the start of the next frame: a fresh deal (blocks stay), no swaps, score or gems cleared.</summary>
+    [Action]
+    public void Restart() => RestartRequested = true;
 
     internal void RaiseMatched(MatchInfo match) => Matched?.Invoke(match);
 
@@ -344,6 +360,8 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     internal List<((int X, int Y) A, (int X, int Y) B)> SwapRequests { get; } = [];
 
     internal bool ShuffleRequested { get; set; }
+
+    internal bool RestartRequested { get; set; }
 
     // A swap has set things off and the board hasn't come to rest yet.
     internal bool AwaitingSettle { get; set; }

@@ -38,6 +38,15 @@ internal sealed class FallingBlocksSystem : GameSystem
     {
         board.Random ??= new Random(board.Seed != 0 ? board.Seed : Rand.Range(1, int.MaxValue));
         board.Started = true;
+        board.StartLevel ??= board.Level;
+        if (board.RestartRequested)
+            Restart(board, map);
+        if (board.Paused)
+        {
+            board.Requests.Clear();
+            return;
+        }
+
         TopUp(board);
         if (board.GameOver)
         {
@@ -111,6 +120,21 @@ internal sealed class FallingBlocksSystem : GameSystem
             LockPiece(board, map);
     }
 
+    // Its Restart action: an empty board at the level it started at, with no score or lines, and a new piece coming in.
+    private static void Restart(FallingBoard board, Tilemap map)
+    {
+        board.RestartRequested = false;
+        if (board.Columns > 0 && board.Rows > 0)
+            map.FillRect(0, 0, board.Columns - 1, board.Rows - 1, -1);
+        board.Falling = null;
+        board.ClearingRows.Clear();
+        board.ClearingFor = 0;
+        board.Requests.Clear();
+        board.Held.Clear();
+        (board.FallFor, board.RestingFor, board.LockResets) = (0, 0, 0);
+        (board.Score, board.Lines, board.Level, board.GameOver) = (0, 0, board.StartLevel ?? 1, false);
+    }
+
     // Seconds a row at the board's level: each level's fall takes Speedup of the one before's.
     private static float FallInterval(FallingBoard board) =>
         Math.Max(board.FallTime * MathF.Pow(Math.Clamp(board.Speedup, 0.01f, 1), Math.Max(0, board.Level - 1)), 1 / 120f);
@@ -151,7 +175,7 @@ internal sealed class FallingBlocksSystem : GameSystem
         board.GameOver = true;
         Game.PlayIfSet(board.GameOverSound);
         if (!string.IsNullOrWhiteSpace(board.GameOverMessage))
-            Game.Send(board.GameOverMessage.Trim(), board.Entity);
+            Game.Send(board.GameOverMessage.Trim(), board.Entity, from: board.Entity);
         board.RaiseEnded();
     }
 
@@ -233,16 +257,16 @@ internal sealed class FallingBlocksSystem : GameSystem
         board.Score += points;
         Game.PlayIfSet(board.ClearSound);
         if (!string.IsNullOrWhiteSpace(board.LinesMessage))
-            Game.Send(board.LinesMessage.Trim(), full.Count);
+            Game.Send(board.LinesMessage.Trim(), full.Count, from: board.Entity);
         if (points > 0 && !string.IsNullOrWhiteSpace(board.ScoreMessage))
-            Game.Send(board.ScoreMessage.Trim(), points);
+            Game.Send(board.ScoreMessage.Trim(), points, from: board.Entity);
         board.RaiseCleared(full.Count);
         if (levels <= 0)
             return;
         board.Level += levels;
         Game.PlayIfSet(board.LevelUpSound);
         if (!string.IsNullOrWhiteSpace(board.LevelMessage))
-            Game.Send(board.LevelMessage.Trim(), levels);
+            Game.Send(board.LevelMessage.Trim(), levels, from: board.Entity);
         board.RaiseLeveledUp(board.Level);
     }
 

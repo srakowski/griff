@@ -1046,7 +1046,7 @@ public sealed partial class NetSession
         switch (target)
         {
             case 0:
-                Relay(name, data, player, except: player);
+                Relay(name, data, from: player, except: player);
                 Deliver(name, data, player);
                 break;
             case 1:
@@ -1066,7 +1066,7 @@ public sealed partial class NetSession
     }
 
     /// <summary>Called by <c>Game.Send</c> on the host: everyone else hears it too.</summary>
-    internal void Relay(string message, object? data, NetPlayer? from = null, NetPlayer? except = null)
+    internal void Relay(string message, object? data, MessageRoute route = default, NetPlayer? from = null, NetPlayer? except = null)
     {
         if (!IsHost || !NetCodec.CanSend(data))
             return;
@@ -1075,19 +1075,43 @@ public sealed partial class NetSession
         {
             if (player == except || player.Connection is not { } connection || player.ReadyEpoch != _epoch)
                 continue;
-            bytes ??= MessageBytes(message, data, from?.Id ?? LocalPlayer?.Id ?? 0);
+            bytes ??= MessageBytes(message, data, from?.Id ?? LocalPlayer?.Id ?? 0, route);
             connection.SendReliable(bytes);
         }
     }
 
-    private byte[] MessageBytes(string message, object? data, int from)
+    private byte[] MessageBytes(string message, object? data, int from, MessageRoute route = default)
     {
         var w = new NetWriter();
         w.Byte((byte)NetMessage.Message);
         w.VarInt(from);
         w.String(message);
         WriteData(w, data);
+
+        // Who sent it (for a trigger's From) and who it's for (a scope's), when it's for part of the scene, by their ids:
+        // the same on every machine for what the scene file holds and for what the host sends, networked or not.
+        w.Bool(route.From is not null);
+        if (route.From is { } sender)
+            w.Guid(sender.Id);
+        w.Bool(!route.IsEveryone);
+        if (route.To is { } to)
+        {
+            w.Guid(to.Id);
+            w.Bool(route.Children);
+        }
+
         return w.ToArray();
+    }
+
+    // What MessageBytes wrote after a message's data: its route, or null when it's for an entity this machine hasn't got.
+    private MessageRoute? ReadRoute(ref NetReader r)
+    {
+        var from = r.Bool() ? _game.Scene.Find(r.Guid()) : null;
+        if (!r.Bool())
+            return new MessageRoute(from, null, false);
+        var to = _game.Scene.Find(r.Guid());
+        var children = r.Bool();
+        return to is null ? null : new MessageRoute(from, to, children);
     }
 
     /// <summary>A sound the host played, for everyone to hear (from where it was, if it was somewhere).</summary>
@@ -1168,13 +1192,13 @@ public sealed partial class NetSession
     }
 
     // Delivers a message here as Game.Send would, saying who sent it.
-    private void Deliver(string message, object? data, NetPlayer? from, bool relay = false)
+    private void Deliver(string message, object? data, NetPlayer? from, bool relay = false, MessageRoute route = default)
     {
         var before = Sender;
         Sender = from;
         try
         {
-            _game.SendFromNetwork(message, data, relay);
+            _game.SendFromNetwork(message, data, relay, route);
         }
         finally
         {

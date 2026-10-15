@@ -78,7 +78,7 @@ public sealed partial class Game
 
             room.RaiseEntered(target);
             if (!string.IsNullOrWhiteSpace(room.Message))
-                Send(room.Message.Trim(), room.Entity);
+                Send(room.Message.Trim(), room.Entity, from: room.Entity);
         }
     }
 
@@ -128,8 +128,11 @@ public sealed partial class Game
 
     private readonly HashSet<BackgroundMusic> _startedMusic = [];
 
+    // A sound player's Play action.
+    void IGameContext.Play(SoundPlayer player) => Play(player);
+
     // One play of a sound player, at its pitch give or take its variation.
-    private void Play(SoundPlayer player)
+    internal void Play(SoundPlayer player)
     {
         if (string.IsNullOrWhiteSpace(player.Sound))
             return;

@@ -205,8 +205,9 @@ public sealed partial class NetSession
                     var from = PlayerById(r.VarInt());
                     var name = r.String() ?? "";
                     var payload = ReadData(ref r);
-                    if (_clientEpoch >= 0 && name.Length > 0)
-                        Deliver(name, payload, from);
+                    var route = ReadRoute(ref r);
+                    if (_clientEpoch >= 0 && name.Length > 0 && route is { } heardBy)
+                        Deliver(name, payload, from, route: heardBy);
                     break;
                 }
 

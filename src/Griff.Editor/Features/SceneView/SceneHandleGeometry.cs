@@ -265,15 +265,17 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
             .FirstOrDefault();
 
     /// <summary>
-    /// The arrows for the selection's links, in screen space: one from each entity to each it names (several fields
-    /// naming the same one share it, their names joined, as "Switch Targets"), bowed to one side so links both ways
+    /// The arrows for the selection's links, in screen space: one from each entity to each it names, or from the named one
+    /// for a field saying where something comes from (a wire's or trigger's From), labelled with the component's words for
+    /// it (a trigger's "Score: Damage 2") or the field's name (several fields between the same two share an arrow, their
+    /// labels joined, as "Switch Targets"), bowed to one side so links both ways
     /// between two entities stay apart, its tip a little short of the entity so its marker stays clear, and
     /// <c>Middle</c> where the fields are named: halfway along, or past the tip when the arrow is too short.
     /// </summary>
     public List<(Entity From, Entity To, string Fields, Point Start, Point Bend, Point Tip, Point Middle)> LinkArrows()
     {
         var arrows = new List<(Entity, Entity, string, Point, Point, Point, Point)>();
-        foreach (var pair in model.Links().GroupBy(l => (l.From, l.To)))
+        foreach (var pair in model.Links().GroupBy(l => (From: l.Tail, To: l.Head)))
         {
             var from = viewport.ToScreen(Flat(pair.Key.From.Transform.WorldPosition));
             var to = viewport.ToScreen(Flat(pair.Key.To.Transform.WorldPosition));
@@ -284,7 +286,7 @@ internal sealed class SceneHandleGeometry(SceneViewport viewport, SceneViewModel
             var bend = from + along / 2 + side * Math.Min(along.Length * 0.15, 40);
             var into = to - bend;
             into.Normalize();
-            var fields = string.Join(", ", pair.Select(l => $"{l.Reference.Component.GetType().Name} {l.Reference.Property.Name}"));
+            var fields = string.Join(", ", pair.Select(l => l.Words).Distinct());
 
             // Too short to hold its label (a lever's own hint, a fighter's hitbox), the label goes past the tip instead,
             // off the selection.

@@ -76,6 +76,12 @@ public static partial class DocComments
     public static DocText Summary(Enum value) =>
         value.GetType().GetField(value.ToString()) is { } field ? Read(field, field.DeclaringType!, "summary") : DocText.Empty;
 
+    /// <summary>What a method does, from its <c>///</c> summary: a component's action (see <see cref="Scenes.ActionAttribute"/>).</summary>
+    public static DocText Summary(MethodInfo method) => Read(method, method.ReflectedType ?? method.DeclaringType!, "summary");
+
+    /// <summary>What a component's action does, from its method's <c>///</c> summary.</summary>
+    public static DocText Summary(Scenes.ComponentAction action) => Summary(action.Method);
+
     private static DocText Read(MemberInfo member, Type context, string section)
     {
         // Overridden properties often say <inheritdoc/>, or nothing: use what the base says. A type only takes its base
@@ -97,6 +103,7 @@ public static partial class DocComments
     {
         Type type => type.BaseType is { } b && b != typeof(object) ? b : null,
         PropertyInfo property => property.DeclaringType?.BaseType?.GetProperty(property.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
+        MethodInfo method when method.GetBaseDefinition() is var root && root != method => root,
         _ => null,
     };
 
@@ -108,12 +115,20 @@ public static partial class DocComments
             Type type => "T:" + TypeId(type),
             PropertyInfo property => $"P:{TypeId(property.DeclaringType!)}.{property.Name}",
             FieldInfo field => $"F:{TypeId(field.DeclaringType!)}.{field.Name}",
+            MethodInfo method => $"M:{TypeId(method.DeclaringType!)}.{method.Name}{Parameters(method)}",
             _ => null,
         };
         return id is not null ? docs.GetValueOrDefault(id) : null;
     }
 
     private static string TypeId(Type type) => type.FullName!.Replace('+', '.');
+
+    // "(System.Single)", or nothing for a method that takes nothing, as the compiler writes a method's documentation id.
+    private static string Parameters(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        return parameters.Length == 0 ? "" : $"({string.Join(",", parameters.Select(p => TypeId(p.ParameterType)))})";
+    }
 
     private static IReadOnlyDictionary<string, XElement> Load(Assembly assembly)
     {

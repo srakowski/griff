@@ -558,6 +558,7 @@ public sealed class GridPatrol : Component, IGridDriver
     public float Wait { get; set; } = 0.5f;
 
     /// <summary>Untick it to stop it where it is. <see cref="Switch"/>es tick and untick it.</summary>
+    [Powered]
     public bool Running { get; set; } = true;
 
     /// <summary>

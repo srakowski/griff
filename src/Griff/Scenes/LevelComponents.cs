@@ -69,7 +69,14 @@ public sealed class Mover : Component
     /// Untick it to stop it where it is; a <see cref="MoverMode.Once"/> mover slides back to its start instead, so a gate
     /// closes again. <see cref="Switch"/>es tick and untick it.
     /// </summary>
+    [Powered]
     public bool Running { get; set; } = true;
+
+    /// <summary>
+    /// Moves only when it's stepped, point by point: by its Step action (a trigger, a wire) or on its <see cref="Beats"/>.
+    /// Its first Step ticks it.
+    /// </summary>
+    public bool StepByStep { get; set; }
 
     /// <summary>
     /// Steps to the music of a <see cref="BeatClock"/>: sets off for its next point on every this many beats, getting there at
@@ -128,6 +135,21 @@ public sealed class Mover : Component
     }
 
     /// <summary>
+    /// Sets off for its next point, getting there at its <see cref="Speed"/>, and waits there for the next step: a lift
+    /// called by a button, a platform that moves on each match. From then on it moves only when stepped (see
+    /// <see cref="StepByStep"/>).
+    /// </summary>
+    [Action]
+    public void Step()
+    {
+        StepByStep = true;
+        StepPending = true;
+    }
+
+    // A Step asked for, taken as it next moves.
+    internal bool StepPending { get; set; }
+
+    /// <summary>
     /// Moves on by <paramref name="seconds"/>; stepping to the <see cref="Beats"/>, of <paramref name="clock"/> (none holds it
     /// at its next point). Called by the game before physics, so riders are carried.
     /// </summary>
@@ -143,8 +165,13 @@ public sealed class Mover : Component
         else if (placed != _lastPlaced)
             _origin += placed - _lastPlaced;
 
-        if (Running && !IsFinished && Beats > 0)
-            Time = Stepped(seconds, clock?.OnBeat(Beats, BeatOffset) == true, clock is null ? 0 : Beats * clock.SecondsPerBeat);
+        var stepped = StepPending;
+        StepPending = false;
+        if (Running && !IsFinished && (Beats > 0 || StepByStep))
+        {
+            var onBeat = Beats > 0 && clock?.OnBeat(Beats, BeatOffset) == true;
+            Time = Stepped(seconds, onBeat || stepped, Beats > 0 && clock is not null ? Beats * clock.SecondsPerBeat : 0);
+        }
         else if (Running && !IsFinished)
             Time += seconds;
         else if (!Running && Mode == MoverMode.Once && Time > 0)
@@ -418,6 +445,7 @@ public sealed class Shooter : Component
     public string? Action { get; set; }
 
     /// <summary>Untick it to hold fire. <see cref="Switch"/>es tick and untick it.</summary>
+    [Powered]
     public bool Running { get; set; } = true;
 
     /// <summary>
@@ -440,6 +468,14 @@ public sealed class Shooter : Component
     public event Action<Entity>? Fired;
 
     internal void RaiseFired(Entity shot) => Fired?.Invoke(shot);
+
+    /// <summary>Fires one volley now, running or not: at its Target if it has one in the scene, otherwise its way.</summary>
+    [Action("Fire")]
+    private void FireNow(IGameContext game)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        game.FireVolley(this);
+    }
 
     /// <summary>
     /// Counts down; returns true when a volley is due (and resets the count). Stepping to the <see cref="Beats"/>, a volley
@@ -567,6 +603,7 @@ public sealed class Door : Component
     public string? Prompt { get; set; }
 
     /// <summary>Nobody can use it while it's locked. <see cref="Switch"/>es lock and unlock it.</summary>
+    [Powered(Inverted = true)]
     public bool Locked { get; set; }
 
     /// <summary>
@@ -586,6 +623,18 @@ public sealed class Door : Component
     }
 
     internal void RaiseUsed(Entity by) => Used?.Invoke(by);
+
+    /// <summary>Unlocks it for good, key or not.</summary>
+    [Action]
+    public void Open()
+    {
+        Locked = false;
+        Key = null;
+    }
+
+    /// <summary>Locks it: nobody can use it until it's opened (or a switch unlocks it).</summary>
+    [Action]
+    public void Lock() => Locked = true;
 }
 
 /// <summary>When a <see cref="Dialogue"/> starts.</summary>
@@ -707,6 +756,10 @@ public sealed class Dialogue : Component
     internal void RaiseChosen(int index) => Chosen?.Invoke(index);
 
     internal void RaiseFinished() => Finished?.Invoke();
+
+    /// <summary>Starts saying it now, as if the player had pressed Interact beside it: a cutscene, a boss appearing. Not while another dialogue is being said.</summary>
+    [Action("Start")]
+    private void Begin(IGameContext game) => game.StartDialogue(this);
 
     /// <summary>What a row of <see cref="Lines"/> is.</summary>
     internal enum RowKind

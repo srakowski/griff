@@ -56,7 +56,7 @@ public sealed partial class Game
                     Spawn(argument, at);
                     break;
                 case "send":
-                    Send(argument, entity);
+                    Send(argument, entity, from: entity);
                     break;
             }
         }

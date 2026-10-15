@@ -72,6 +72,7 @@ public sealed class ParticleEmitter : Component, IDrawable
     public string? Image { get; set; }
 
     /// <summary>While set, emits <see cref="Rate"/> particles per second.</summary>
+    [Powered]
     public bool Emitting { get; set; } = true;
 
     /// <summary>Particles per second while <see cref="Emitting"/>.</summary>

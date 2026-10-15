@@ -1032,7 +1032,7 @@ internal sealed partial class StrategySystem : GameSystem
             faction.IsDefeated = true;
             faction.RaiseDefeated();
             if (!string.IsNullOrWhiteSpace(faction.DefeatMessage))
-                Game.Send(faction.DefeatMessage.Trim(), faction.Team);
+                Game.Send(faction.DefeatMessage.Trim(), faction.Team, from: faction.Entity);
         }
 
         if (Rts.Ended || Rts.Commander is not { } commander || factions.Count < 2)

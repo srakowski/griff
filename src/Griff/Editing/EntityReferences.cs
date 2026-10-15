@@ -48,6 +48,21 @@ public static class EntityReferences
 
         /// <summary>"Lever to Door: Switch.Targets".</summary>
         public string Label => $"{From.Name} to {To.Name}: {Reference.Label}";
+
+        /// <summary>
+        /// Where the Scene view's arrow starts: the field's entity, or the one it names for a field that says where
+        /// something comes from (<see cref="EntityNameAttribute.Incoming"/>, a wire's or a trigger's From).
+        /// </summary>
+        public Entity Tail => Reference.Kind.Incoming ? To : From;
+
+        /// <summary>Where the arrow points: the entity named, or the field's own for an incoming one.</summary>
+        public Entity Head => Reference.Kind.Incoming ? From : To;
+
+        /// <summary>
+        /// What the arrow says: the component's own words for it (a trigger's "Score: Damage 2", see
+        /// <see cref="Component.LinkLabel"/>), or its name and the field's, "Switch Targets".
+        /// </summary>
+        public string Words => Reference.Component.LinkLabel(Reference.Property.Name) ?? $"{Reference.Component.GetType().Name} {Reference.Property.Name}";
     }
 
     /// <summary>The names a field's value holds: split at commas for one that names several, empty when it's unset.</summary>

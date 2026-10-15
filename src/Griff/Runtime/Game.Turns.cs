@@ -96,7 +96,7 @@ public sealed partial class Game
                 order.Fielded.Add(side.Trim());
             else if (order.Fielded.Remove(side.Trim()) && !string.IsNullOrWhiteSpace(order.DefeatMessage) &&
                      Fill(order.DefeatMessage, side.Trim()).Trim() is { Length: > 0 } message)
-                Send(message, side.Trim());
+                Send(message, side.Trim(), from: order.Entity);
         }
     }
 
@@ -173,7 +173,7 @@ public sealed partial class Game
         }
 
         if (!string.IsNullOrWhiteSpace(order.Message) && Fill(order.Message, side).Trim() is { Length: > 0 } message)
-            Send(message, side);
+            Send(message, side, from: order.Entity);
     }
 
     private static string Fill(string format, params object[] values)

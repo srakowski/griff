@@ -26,6 +26,8 @@ internal sealed class Match3System : GameSystem
             if (board.Entity!.GetComponent<Tilemap>() is not { } map)
                 continue;
             board.LocalPlayer = Game.Net.LocalPlayer?.Id ?? 0;
+            if (board.Paused)
+                continue;
             AdvanceGems(board);
             if (Game.Runs(board.Entity))
                 RunBoard(board, map);
@@ -75,6 +77,9 @@ internal sealed class Match3System : GameSystem
                 board.Deal = false;
             }
         }
+
+        if (board.RestartRequested)
+            Restart(board, map);
 
         // Matched gems gone, what's above falls.
         if (board.Clearing.Count > 0)
@@ -145,7 +150,7 @@ internal sealed class Match3System : GameSystem
         {
             board.AwaitingSettle = false;
             if (!string.IsNullOrWhiteSpace(board.SettledMessage))
-                Game.Send(board.SettledMessage.Trim(), board.Chain);
+                Game.Send(board.SettledMessage.Trim(), board.Chain, from: board.Entity);
             board.RaiseSettled(board.Chain);
             if (board.IsOver)
                 Finish(board);
@@ -223,6 +228,21 @@ internal sealed class Match3System : GameSystem
             new(new Vector2(0, -cells), Math.Max(board.FallTime, 0) * MathF.Sqrt(cells), falls: true);
     }
 
+    // Its Restart action: a fresh deal (the blocks stay), with nothing under way and no swaps, score or gems cleared.
+    private static void Restart(MatchBoard board, Tilemap map)
+    {
+        board.RestartRequested = false;
+        board.Motions.Clear();
+        board.Clearing.Clear();
+        board.SwapRequests.Clear();
+        board.Swapping = null;
+        (board.ShuffleRequested, board.AwaitingSettle, board.StuckTiles, board.Chain) = (false, false, null, 0);
+        (board.Swaps, board.Score, board.Cleared) = (0, 0, null);
+        foreach (var hand in board.Hands.Values)
+            hand.Picked = null;
+        board.DealInto(map, board.Random!);
+    }
+
     // The level is over, the board at rest: won if its goals are met, otherwise out of moves.
     private void Finish(MatchBoard board)
     {
@@ -232,7 +252,7 @@ internal sealed class Match3System : GameSystem
         Game.PlayIfSet(won ? board.WinSound : board.OutOfMovesSound);
         var message = won ? board.WinMessage : board.OutOfMovesMessage;
         if (!string.IsNullOrWhiteSpace(message))
-            Game.Send(message.Trim(), board.Entity);
+            Game.Send(message.Trim(), board.Entity, from: board.Entity);
         board.RaiseFinished(won);
     }
 
@@ -251,11 +271,11 @@ internal sealed class Match3System : GameSystem
         board.Score += points;
         Game.PlayIfSet(board.MatchSound);
         if (!string.IsNullOrWhiteSpace(board.MatchMessage))
-            Game.Send(board.MatchMessage.Trim(), board.Clearing.Count);
+            Game.Send(board.MatchMessage.Trim(), board.Clearing.Count, from: board.Entity);
         if (points > 0 && !string.IsNullOrWhiteSpace(board.ScoreMessage))
-            Game.Send(board.ScoreMessage.Trim(), points);
+            Game.Send(board.ScoreMessage.Trim(), points, from: board.Entity);
         if (board.Chain >= 2 && !string.IsNullOrWhiteSpace(board.ChainMessage))
-            Game.Send(board.ChainMessage.Trim(), board.Chain);
+            Game.Send(board.ChainMessage.Trim(), board.Chain, from: board.Entity);
         foreach (var (kind, cells) in matches)
             board.RaiseMatched(new MatchInfo(kind, cells, board.Chain));
     }
@@ -307,7 +327,7 @@ internal sealed class Match3System : GameSystem
             hand.Picked = null;
         Game.PlayIfSet(board.ShuffleSound);
         if (!string.IsNullOrWhiteSpace(board.ShuffleMessage))
-            Game.Send(board.ShuffleMessage.Trim(), board.Entity);
+            Game.Send(board.ShuffleMessage.Trim(), board.Entity, from: board.Entity);
     }
 
     // ----- Hands: the mouse, keys and gamepads -----

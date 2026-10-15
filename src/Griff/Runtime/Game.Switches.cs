@@ -83,7 +83,7 @@ public sealed partial class Game
                     Audio.Play(@switch.Sound);
                 var message = @switch.IsOn ? @switch.OnMessage : @switch.OffMessage;
                 if (!string.IsNullOrWhiteSpace(message))
-                    Send(message.Trim(), @switch.Entity);
+                    Send(message.Trim(), @switch.Entity, from: @switch.Entity);
                 @switch.RaiseChanged();
                 @switch.Shown = @switch.IsOn;
                 @switch.OnFor = 0;
@@ -153,27 +153,24 @@ public sealed partial class Game
 
     /// <summary>
     /// Switches <paramref name="entity"/> on or off as a <see cref="Switch"/> does: its movers, grid patrols, spawners and
-    /// shooters run, particles emit, animations play and doors unlock; if it has none of those, it appears or disappears.
+    /// shooters run, particles emit, animations play and doors unlock (whatever its components mark
+    /// <see cref="PoweredAttribute"/>, a script's too); if it has none of those, it appears or disappears.
     /// </summary>
     public static void Power(Entity entity, bool on)
     {
+        // Whatever its components say a switch turns on and off ([Powered]), script components' too.
         var any = false;
-        foreach (var mover in entity.GetComponents<Mover>())
-            (mover.Running, any) = (on, true);
-        foreach (var spawner in entity.GetComponents<Spawner>())
-            (spawner.Running, any) = (on, true);
-        foreach (var shooter in entity.GetComponents<Shooter>())
-            (shooter.Running, any) = (on, true);
-        foreach (var patrol in entity.GetComponents<GridPatrol>())
-            (patrol.Running, any) = (on, true);
-        foreach (var emitter in entity.GetComponents<ParticleEmitter>())
-            (emitter.Emitting, any) = (on, true);
-        foreach (var animation in entity.GetComponents<Animation>())
-            (animation.Playing, any) = (on, true);
-        foreach (var door in entity.GetComponents<Door>())
-            (door.Locked, any) = (!on, true);
-        foreach (var source in entity.GetComponents<SoundSource>())
-            (source.Playing, any) = (on, true);
+        var components = entity.Components;
+        for (var i = 0; i < components.Count; i++)
+        {
+            var powered = ComponentActions.PoweredOf(components[i].GetType());
+            for (var p = 0; p < powered.Count; p++)
+            {
+                powered[p].Set(components[i], on != powered[p].Inverted);
+                any = true;
+            }
+        }
+
         if (!any)
             entity.IsEnabled = on;
     }

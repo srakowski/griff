@@ -199,7 +199,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Image { get; set; }
     public DataTemplate? Entity { get; set; }
 
-    /// <summary>For <see cref="FieldKind.Name"/>: a prefab, scene, input action, layer or message.</summary>
+    /// <summary>For <see cref="FieldKind.Name"/> and <see cref="FieldKind.Action"/>: a prefab, scene, input action, layer, message or action.</summary>
     public DataTemplate? Named { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) =>
@@ -215,7 +215,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Sound => Sound,
             FieldKind.Image => Image,
             FieldKind.Entity => Entity,
-            FieldKind.Name => Named,
+            FieldKind.Name or FieldKind.Action => Named,
             _ => null,
         };
 }

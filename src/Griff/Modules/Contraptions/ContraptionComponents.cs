@@ -420,11 +420,15 @@ public sealed class Wire : Component, IDrawable
         drawing.Quad(b, new Vector2(thickness * 4), color);
     }
 
-    /// <summary>The input on this entity it drives, e.g. "On" or "Power".</summary>
+    /// <summary>
+    /// The input on this entity it drives: "Power" or "Show" (held while the signal is on), a part's own such as a lamp's "On",
+    /// or one of its components' actions, e.g. "Spawn", "Fire" or "Damage", done once each time the signal comes on (with
+    /// the signal as its amount).
+    /// </summary>
     public string? Input { get; set; } = "Power";
 
     /// <summary>The entity it comes from, by name. The nearest one with that name is used.</summary>
-    [EntityName]
+    [EntityName(Incoming = true)]
     public string? From { get; set; }
 
     /// <summary>The output it carries from there, e.g. "On" or "Out".</summary>

@@ -52,7 +52,7 @@ internal sealed class DungeonsSystem : GameSystem
         MakeFloor(dungeon, map, seed);
         Game.PlayIfSet(dungeon.FloorSound);
         if (!string.IsNullOrWhiteSpace(dungeon.FloorMessage))
-            Game.Send(dungeon.FloorMessage.Trim(), 1);
+            Game.Send(dungeon.FloorMessage.Trim(), 1, from: dungeon.Entity);
     }
 
     // A player on the exit's cell: a grid mover once it has glided onto it, or as it steps on from it (walking on with a

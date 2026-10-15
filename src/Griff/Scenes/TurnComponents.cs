@@ -110,6 +110,7 @@ public sealed class TurnOrder : Component
     /// Ends the current turn at the start of the next frame, whoever's it is (a script's own End Turn, or a computer side
     /// whose script has finished its moves). Between turns it does nothing.
     /// </summary>
+    [Action]
     public void EndTurn() => EndRequested = true;
 
     /// <summary>Raised as each side's turn starts, with the side's name.</summary>

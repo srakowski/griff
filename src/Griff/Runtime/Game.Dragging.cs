@@ -187,13 +187,13 @@ public sealed partial class Game
         thing.IsHeld = true;
         PlayIfSet(thing.PickUpSound);
         if (!string.IsNullOrWhiteSpace(thing.PickUpMessage))
-            Send(thing.PickUpMessage.Trim(), entity);
+            Send(thing.PickUpMessage.Trim(), entity, from: entity);
         thing.RaisePickedUp();
         if (holder is Grabber grabber)
         {
             (grabber.Holding, grabber.InReach) = (entity, null);
             if (!string.IsNullOrWhiteSpace(grabber.PickUpMessage))
-                Send(grabber.PickUpMessage.Trim(), entity);
+                Send(grabber.PickUpMessage.Trim(), entity, from: grabber.Entity);
             grabber.RaisePickedUp(entity);
         }
     }
@@ -266,7 +266,7 @@ public sealed partial class Game
             SlideTo(thing, to);
         Dropped(thing, landing.Target?.Entity);
         if (!string.IsNullOrWhiteSpace(grabber.DropMessage))
-            Send(grabber.DropMessage.Trim(), entity);
+            Send(grabber.DropMessage.Trim(), entity, from: grabber.Entity);
         grabber.RaiseDropped(entity, landing.Target?.Entity);
         if (landing.Swapped is { } swapped)
             PickUp(grabber, swapped, hand);
@@ -276,7 +276,7 @@ public sealed partial class Game
     {
         PlayIfSet(thing.DropSound);
         if (!string.IsNullOrWhiteSpace(thing.DropMessage))
-            Send(thing.DropMessage.Trim(), thing.Entity);
+            Send(thing.DropMessage.Trim(), thing.Entity, from: thing.Entity);
         thing.RaiseDropped(landed);
     }
 
@@ -373,14 +373,14 @@ public sealed partial class Game
                 foreach (var gone in seen.Where(e => !kept.Contains(e)).ToList())
                 {
                     if (!string.IsNullOrWhiteSpace(target.TakeMessage))
-                        Send(target.TakeMessage.Trim(), target.Entity);
+                        Send(target.TakeMessage.Trim(), target.Entity, from: target.Entity);
                     target.RaiseTaken(gone);
                 }
 
                 foreach (var arrived in kept.Where(e => !seen.Contains(e)).ToList())
                 {
                     if (!string.IsNullOrWhiteSpace(target.DropMessage))
-                        Send(target.DropMessage.Trim(), target.Entity);
+                        Send(target.DropMessage.Trim(), target.Entity, from: target.Entity);
                     target.RaiseReceived(arrived);
                 }
             }
@@ -393,7 +393,7 @@ public sealed partial class Game
         {
             var full = group.All(t => t.IsFull);
             if (_drags.AllFull.TryGetValue(group.Key, out var was) && full && !was)
-                Send(group.Key, group.Last().Entity);
+                Send(group.Key, group.Last().Entity, from: group.Last().Entity);
             _drags.AllFull[group.Key] = full;
         }
     }

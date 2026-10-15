@@ -136,6 +136,7 @@ public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
     public DungeonRoom? RoomAt(int x, int y) => RoomList.Cast<DungeonRoom?>().FirstOrDefault(r => r!.Value.Contains(x, y));
 
     /// <summary>Goes down to the next floor, at the start of the next frame: a new dungeon, the players in its first room.</summary>
+    [Action]
     public void NextFloor() => DescendAsked = true;
 
     /// <summary>Makes this floor again, at the start of the next frame: a different one when <see cref="Seed"/> is 0.</summary>

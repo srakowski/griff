@@ -519,6 +519,7 @@ public sealed class Animation : Component
 
     /// <summary>Whether it's playing now; off holds the frame it's on.</summary>
     [Sent(ByMover = true)]
+    [Powered]
     public bool Playing { get; set; } = true;
 
     /// <summary>

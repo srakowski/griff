@@ -24,7 +24,11 @@ public static class WirePorts
         return ports.Distinct().ToList();
     }
 
-    /// <summary>The inputs <paramref name="entity"/> has: its parts' own, then "Power" and "Show", which everything has.</summary>
+    /// <summary>
+    /// The inputs <paramref name="entity"/> has: its parts' own, then "Power" and "Show", which everything has (held while
+    /// the signal is on), then its components' actions (see <see cref="ActionAttribute"/>), each done once as the signal
+    /// comes on, e.g. "Spawn" or "Damage" (with the signal as the amount).
+    /// </summary>
     public static IReadOnlyList<string> Inputs(Entity entity)
     {
         var ports = new List<string>();
@@ -37,6 +41,12 @@ public static class WirePorts
         if (entity.GetComponent<Light>() is not null && entity.GetComponent<WireLamp>() is null)
             ports.Add("Brightness");
         ports.AddRange(["Power", "Show"]);
+        foreach (var action in ComponentActions.On([entity]))
+        {
+            if (!ports.Any(p => ComponentAction.SameWords(p, action.Name)))
+                ports.Add(action.Name);
+        }
+
         return ports.Distinct().ToList();
     }
 

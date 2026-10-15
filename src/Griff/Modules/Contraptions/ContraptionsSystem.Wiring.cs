@@ -184,6 +184,12 @@ internal sealed partial class ContraptionsSystem
             case "Show":
                 entity.IsEnabled = value > 0;
                 break;
+
+            // Any other input is one of its actions, done as the signal comes on (with the signal as its value).
+            default:
+                if (value > 0 && !(last > 0) && Game.Runs(entity))
+                    Game.Do(entity, port, value);
+                break;
         }
     }
 

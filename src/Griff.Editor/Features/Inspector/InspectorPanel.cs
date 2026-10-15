@@ -1242,6 +1242,12 @@ public enum FieldKind
     /// with a button to pick one of the project's, flagged when it matches none of them.
     /// </summary>
     Name,
+
+    /// <summary>
+    /// The name of an action (a trigger's Do): text, with a button to pick one of what the entities it's done on can do,
+    /// flagged when none of them can.
+    /// </summary>
+    Action,
 }
 
 /// <summary>
@@ -1282,6 +1288,7 @@ public sealed class PropertyField : ObservableObject
             : type == typeof(string) && IsImageName(property.Name) ? FieldKind.Image
             : property.EntityName is not null ? FieldKind.Entity
             : property.Names is not null ? FieldKind.Name
+            : property.ActionName is not null ? FieldKind.Action
             : type == typeof(string) ? FieldKind.Text
             : type.IsEnum ? FieldKind.Enum
             : type == typeof(Color) ? FieldKind.Color
@@ -1469,6 +1476,7 @@ public sealed class PropertyField : ObservableObject
     {
         FieldKind.Entity => EntityReferences.Unmatched(new(_components[0], _property), _owner.PrefabNames, _owner.InPrefab),
         FieldKind.Name => _owner.Names?.Unmatched(_components[0], _property) ?? [],
+        FieldKind.Action => ActionNames.Unmatched(_components[0], _property),
         _ => [],
     };
 
@@ -1482,6 +1490,7 @@ public sealed class PropertyField : ObservableObject
     /// </summary>
     public string? UnmatchedTip => !IsUnmatched ? null
         : Kind == FieldKind.Name ? KnownNames.Problem(_property.Names!, UnmatchedNames)
+        : Kind == FieldKind.Action ? ActionNames.Problem(UnmatchedNames)
         : $"Nothing {(_property.EntityName!.Inside ? $"inside {_components[0].Entity?.Name}" : "in the scene")} is called " +
           string.Join(" or ", UnmatchedNames.Select(n => $"\"{n}\""));
 
@@ -1490,7 +1499,7 @@ public sealed class PropertyField : ObservableObject
 
     // Entities and messages match exactly, as the game matches them; prefabs, scenes, actions and layers whatever their capitals.
     private StringComparer NameComparer =>
-        _property.Names is { Kind: not NameKind.Message } ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        _property.Names is { Kind: not NameKind.Message } || _property.ActionName is not null ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     /// <summary>
     /// Picks something from the field's list by name, as clicking it there does: an image or sound by its path; on a
@@ -1549,7 +1558,7 @@ public sealed class PropertyField : ObservableObject
         [.. (value as string ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
     /// <summary>True for a field with a list to pick from: images, sounds, and names of entities, prefabs, scenes, input actions, layers and messages.</summary>
-    public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name;
+    public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name or FieldKind.Action;
 
     /// <summary>For a field naming a prefab, scene, input action, layer or message: "a prefab", "a message".</summary>
     public string? NameNoun => _property.Names is { } kind ? KnownNames.Noun(kind) : null;
@@ -1562,6 +1571,7 @@ public sealed class PropertyField : ObservableObject
         FieldKind.Entity => _property.EntityName?.Inside == true
             ? "Choose an entity inside this one, or drag one here from the Hierarchy"
             : "Choose an entity from the scene, or drag one here from the Hierarchy",
+        FieldKind.Action => "Choose something it can do: what the components of what it's done on can do",
         _ => _property.Names?.Kind switch
         {
             NameKind.Message => "Choose a message the project sends or listens for, or type a new one",
@@ -1634,6 +1644,11 @@ public sealed class PropertyField : ObservableObject
                 choices = [.. EntityChoices().Select(c => new PickerChoice(c.Entity.Name, depth: c.Depth))];
                 setup = new(inside ? "Type to find an entity inside this one" : "Type to find an entity",
                     inside ? "Nothing inside this entity yet" : "No entities in the scene", NamesMany, true, none);
+                break;
+            case FieldKind.Action:
+                choices = [.. ActionNames.Choices(_components[0], _property).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                setup = new("Type to find something it can do", "What it's done on can't do anything yet: give it a component that can",
+                    false, true, none);
                 break;
             default:
                 var kind = _property.Names!;

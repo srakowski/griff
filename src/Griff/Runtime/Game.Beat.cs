@@ -40,13 +40,13 @@ public sealed partial class Game
             (clock.LandedFrom, clock.LandedTo) = (Math.Max(0, (long)Math.Floor(before) + 1), beat);
             clock.RaiseBeat((int)beat);
             if (!Net.IsClient && !string.IsNullOrWhiteSpace(clock.BeatMessage))
-                Send(clock.BeatMessage.Trim(), (int)beat);
+                Send(clock.BeatMessage.Trim(), (int)beat, from: clock.Entity);
             var perBar = Math.Max(1, clock.BeatsPerBar);
             if (beat % perBar != 0)
                 continue;
             clock.RaiseBar((int)(beat / perBar));
             if (!Net.IsClient && !string.IsNullOrWhiteSpace(clock.BarMessage))
-                Send(clock.BarMessage.Trim(), (int)(beat / perBar));
+                Send(clock.BarMessage.Trim(), (int)(beat / perBar), from: clock.Entity);
         }
 
         foreach (var pulse in Showing<BeatPulse>())

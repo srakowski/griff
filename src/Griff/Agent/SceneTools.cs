@@ -248,7 +248,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
         if (unknown.Count > 0)
         {
-            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers or messages, flagged in the Inspector):");
+            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages or actions, flagged in the Inspector):");
             foreach (var (component, label, problem) in unknown)
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
         }
@@ -256,18 +256,18 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         return ToolResult.Ok(text.ToString());
     }
 
-    // The components' fields naming a prefab, scene, input action, layer or message the project hasn't got, each as
-    // "Shooter.Prefab" and why, as the Inspector flags them.
+    // The components' fields naming a prefab, scene, input action, layer or message the project hasn't got, or an action
+    // what they're done on can't do, each as "Shooter.Prefab" and why, as the Inspector flags them.
     private IEnumerable<(Component Component, string Label, string Problem)> UnmatchedKnown(IEnumerable<Component> components)
     {
-        if (host.Names is not { } known)
-            yield break;
         foreach (var component in components.Where(c => host.Components.IsRegistered(c.GetType())))
         {
-            foreach (var property in host.Components.Get(component.GetType()).Properties.Where(p => p.Names is not null))
+            foreach (var property in host.Components.Get(component.GetType()).Properties)
             {
-                if (known.Unmatched(component, property) is { Count: > 0 } names)
-                    yield return (component, $"{component.GetType().Name}.{property.Name}", KnownNames.Problem(property.Names!, names) + ".");
+                if (property.Names is not null && host.Names is { } known && known.Unmatched(component, property) is { Count: > 0 } names)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", KnownNames.Problem(property.Names, names) + ".");
+                if (property.ActionName is not null && ActionNames.Unmatched(component, property) is { Count: > 0 } actions)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", ActionNames.Problem(actions) + ".");
             }
         }
     }
@@ -757,7 +757,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         {
             text.Append("## ").Append(group.Key).AppendLine();
             foreach (var entry in group)
-                text.Append("- ").Append(entry.Name).Append(": ").Append(entry.Summary.FirstSentence is { Length: > 0 } s ? s : "(no description)").AppendLine();
+            {
+                text.Append("- ").Append(entry.Name).Append(": ").Append(entry.Summary.FirstSentence is { Length: > 0 } s ? s : "(no description)");
+                if (entry.Descriptor.Actions.Count > 0)
+                    text.Append(" Actions: ").Append(string.Join(", ", entry.Descriptor.Actions.Select(a => a.Name))).Append('.');
+                text.AppendLine();
+            }
         }
 
         return ToolResult.Ok(text.Length == 0 ? "No components match." : text.ToString());
@@ -836,6 +841,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     { Inside: true } => " (Names an entity inside this one.)",
                     _ => " (Names an entity.)",
                 });
+            if (property.ActionName is { } actionName)
+                text.Append(CultureInfo.InvariantCulture, $" (Names an action of {(string.IsNullOrEmpty(actionName.On) ? "this entity" : $"the entities {JsonNamingPolicy.CamelCase.ConvertName(actionName.On)} names, or this entity without any")}: one component_describe lists under Actions, e.g. \"Damage\", or \"Health.Damage\" for one component's.)");
             if (property.Names is { } names)
                 text.Append(names switch
                 {
@@ -844,6 +851,20 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     _ => $" (Names {KnownNames.Noun(names)}.)",
                 });
             text.AppendLine();
+        }
+
+        if (descriptor.Actions.Count > 0)
+        {
+            text.AppendLine().AppendLine("Actions (what anything can make it do with no code: a Trigger's do when its message arrives, a Contraptions " +
+                "Wire's input as its signal comes on, a script's Game.Do(entity, \"Name\")):");
+            foreach (var action in descriptor.Actions)
+            {
+                var meaning = DocComments.Summary(action) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
+                var value = action.ValueKind is { } kind
+                    ? $" (done with {kind}, its {action.ValueName}: a trigger's with{(action.DefaultValue is { } fallback ? $", {AgentValues.ToJson(fallback)?.ToJsonString()} without one" : "")})"
+                    : "";
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {action.Name}{value}{meaning}");
+            }
         }
 
         var live = LiveProperties(descriptor).ToList();

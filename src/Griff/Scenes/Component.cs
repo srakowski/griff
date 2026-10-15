@@ -20,6 +20,12 @@ public abstract class Component
     public virtual string? SetupNote() => null;
 
     /// <summary>
+    /// What the Scene view's arrow for one of its fields naming entities (<paramref name="property"/>) says, e.g. a
+    /// trigger's "Score: Damage 2"; null for the component's and field's names ("Switch Targets").
+    /// </summary>
+    public virtual string? LinkLabel(string property) => null;
+
+    /// <summary>
     /// Saved values this component's type has no property for (from a newer version, or a property since removed), in
     /// the order they were saved. The serializer writes them back, so loading and saving a scene loses nothing.
     /// </summary>
@@ -190,6 +196,24 @@ public sealed class EntityNameAttribute : Attribute
     /// to another Scene. Its names then aren't drawn as links or flagged when they match nothing.
     /// </summary>
     public string? Unless { get; init; }
+
+    /// <summary>
+    /// It names where something comes from (a wire's From, a trigger's From) rather than what this entity acts on: the
+    /// Scene view's arrow points from the entity it names to this one.
+    /// </summary>
+    public bool Incoming { get; init; }
+}
+
+/// <summary>
+/// Marks a string property as naming an action (see <see cref="ActionAttribute"/>) of the entities another of the
+/// component's properties names, or of its own entity: the editor's Inspector lists their actions to pick from, and
+/// flags a name none of them has.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class ActionNameAttribute : Attribute
+{
+    /// <summary>The property naming the entities whose actions it names (marked <see cref="EntityNameAttribute"/>); empty for its own entity's.</summary>
+    public string? On { get; init; }
 }
 
 /// <summary>What a <see cref="NamesAttribute"/> field names.</summary>

@@ -45,7 +45,7 @@ public sealed partial class KnownNames
     /// <summary>The messages sent: by components' message fields, dialogue's [send] tags and scripts' <c>Send</c>.</summary>
     public IReadOnlyCollection<string> Sent => _sent;
 
-    /// <summary>The messages listened for: by counters, sound players and scripts' <c>On</c>.</summary>
+    /// <summary>The messages listened for: by counters, triggers, sound players and scripts' <c>On</c>.</summary>
     public IReadOnlyCollection<string> Heard => _heard;
 
     /// <summary>
@@ -157,7 +157,7 @@ public sealed partial class KnownNames
             NameKind.Action => $"There's no input action called {quoted}: add one in Game > Controls",
             NameKind.Layer => $"Nothing is on the layer {quoted}: no collider or tilemap has it as its Layer",
             _ when kind.Hears => $"Nothing sends {quoted}: no component's message, dialogue's [send] or script's Game.Send",
-            _ => $"Nothing listens for {quoted}: no Counter, Sound Player or script's On",
+            _ => $"Nothing listens for {quoted}: no Counter, Trigger, Sound Player or script's On",
         };
     }
 

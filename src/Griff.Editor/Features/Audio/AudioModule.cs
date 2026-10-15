@@ -14,11 +14,13 @@ public sealed class AudioModule : IEditorModule
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<EditorAudio>();
+        services.AddSingleton<EditorMute>();
         services.AddMenu(Menu, "_Audio", order: 5);
         services
             .AddCommand<NewSoundCommand>()
             .AddCommand<NewMusicCommand>()
-            .AddCommand<StopPreviewCommand>();
+            .AddCommand<StopPreviewCommand>()
+            .AddCommand<MuteCommand>();
     }
 }
 

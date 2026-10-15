@@ -1,0 +1,29 @@
+title: Mute
+intro: One button silences everything the editor plays, and it's remembered. Agents start the editor with GRIFF_MUTE=1 to test and profile games in silence.
+project: Platformer | Quiet Please
+
+chapter: The speaker button | Game > Mute
+say: The Platformer template plays music and sound effects from the first second.
+expectmuted: false
+play
+wait: 2
+explain: toolbar:Game.Mute | Mute | This speaker on the toolbar mutes everything the editor plays: the game, the windows of Play with Players, the Sound Maker and sound previews.
+click: toolbar:Game.Mute
+expectmuted: true
+explain: toolbar:Game.Mute | Muted | Now it's crossed out, and nothing is heard. The game plays on exactly as it would with sound: its music keeps time and its scripts play their sounds, but the sound device isn't even open.
+wait: 1.5
+stop
+
+chapter: Remembered | Game menu, Ctrl+Shift+M
+spot: menu:Game | Game menu
+say: It's in the Game menu too, ticked while it's on. Clicking it turns the sound back on.
+menu: Game > Mute
+expectmuted: false
+say: Control Shift M switches it from anywhere.
+key: Ctrl+Shift+M
+expectmuted: true
+explain: toolbar:Game.Mute | Kept | It's kept between sessions, so the editor opens muted next time. It sits on top of the game's own Muted setting and never changes the game's saves.
+
+chapter: Agents work in silence | GRIFF_MUTE=1
+say: An agent testing or profiling a game starts the editor with GRIFF MUTE set to 1. The editor, and every player it starts, makes no sound for that session, and the user's own Mute choice stays as it was, even if the agent flips the switch.
+say: Exported games take dash dash mute, and demo checks run silent the same way.

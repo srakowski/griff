@@ -109,7 +109,9 @@ static async Task<Result?> RunOnce(string executable, string save)
 {
     if (File.Exists(save))
         File.Delete(save);
-    using var game = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false })!;
+    // GRIFF_MUTE=1 (as agents set it) plays it without sound: the player never opens the sound device.
+    var mute = Environment.GetEnvironmentVariable("GRIFF_MUTE") is { Length: > 0 } on && on != "0";
+    using var game = Process.Start(new ProcessStartInfo(executable, mute ? "--mute" : "") { UseShellExecute = false })!;
     try
     {
         var timeout = Stopwatch.StartNew();

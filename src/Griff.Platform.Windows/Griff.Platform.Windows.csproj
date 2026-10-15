@@ -10,6 +10,10 @@
     <PackageReference Include="NVorbis" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Griff.Editor.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>

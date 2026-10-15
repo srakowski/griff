@@ -18,7 +18,8 @@ namespace Griff.Player;
 /// <remarks>
 /// For network games: <c>--host [port]</c> hosts straight away, <c>--join &lt;address&gt;</c> joins, <c>--name &lt;name&gt;</c>
 /// sets the player's name, and <c>--server [port]</c> runs a dedicated server with no window (the game's start scene,
-/// hosted for everyone, played by nobody) until it's closed.
+/// hosted for everyone, played by nobody) until it's closed. <c>--mute</c> (or <c>GRIFF_MUTE=1</c>) plays it without
+/// opening the sound device: nothing is heard, and the game runs just as it would with sound.
 /// </remarks>
 public partial class App : Application, IDisposable
 {
@@ -26,13 +27,15 @@ public partial class App : Application, IDisposable
     private WindowState _windowedState;
 
     // What the command line asked for, besides the game folder.
-    private sealed record Options(string? Folder, int? Host, string? Join, int? Server, string? Name);
+    private sealed record Options(string? Folder, int? Host, string? Join, int? Server, string? Name, bool Mute);
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         var options = Parse(e.Args);
+        if (options.Mute)
+            AudioOutput.Muted = true;
         var folder = options.Folder ?? Path.Combine(AppContext.BaseDirectory, ExportLayout.GameFolder);
         LoadedGame game;
         try
@@ -127,6 +130,7 @@ public partial class App : Application, IDisposable
         {
             await Task.Delay(1000);
             var ok = !_runner.IsPaused && SaveFrame(surface, _runner.Game.Scene, smokeOutput);
+            Console.WriteLine(AudioOutput.IsAvailable ? "Sound device: open" : "Sound device: not open");
             Shutdown(ok ? 0 : 1);
             return;
         }
@@ -138,6 +142,7 @@ public partial class App : Application, IDisposable
     {
         string? folder = null, join = null, name = null;
         int? host = null, server = null;
+        var mute = false;
         for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
@@ -149,6 +154,7 @@ public partial class App : Application, IDisposable
                 case "--server": server = Port(); break;
                 case "--join": join = Next() ?? ""; break;
                 case "--name": name = Next(); break;
+                case "--mute": mute = true; break;
                 default:
                     if (!arg.StartsWith("--", StringComparison.Ordinal))
                         folder ??= arg;
@@ -156,7 +162,7 @@ public partial class App : Application, IDisposable
             }
         }
 
-        return new Options(folder, host, join, server, name);
+        return new Options(folder, host, join, server, name, mute);
     }
 
     /// <summary>Stops the game when the app exits (stopping twice is harmless: the window's closing stops it too).</summary>

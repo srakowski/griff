@@ -49,6 +49,8 @@ public static class Icons
     public const string StepOver = "\uE72A";
     public const string StepInto = "\uE74B";
     public const string StepOut = "\uE74A";
+    public const string Volume = "\uE767";
+    public const string Mute = "\uE74F";
 
     // Tools and panels
     public const string Hierarchy = "\uE8FD";

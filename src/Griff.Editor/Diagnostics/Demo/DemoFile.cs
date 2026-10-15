@@ -254,6 +254,14 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 if (!await Until(() => DemoUi.InspectorRow(fadedComponent, Label(fadedField)) is { DataContext: PropertyField f } && f.IsFaded == wantFaded, 3000))
                     throw new InvalidOperationException($"Expected {fadedName} to be {(wantFaded ? "faded" : "not faded")}.");
                 break;
+            case "expectmuted":
+                // "expectmuted: true": Game > Mute is on and nothing reaches the sound device (as with GRIFF_MUTE, in checks).
+                var wantMuted = bool.Parse(a);
+                var muteSwitch = (Core.Commands.EditorCommand)ui.ToolbarButton("Game.Mute").Command;
+                var deviceShut = wantMuted || Platform.Windows.AudioOutput.MutedByEnvironment;
+                if (muteSwitch.IsChecked != wantMuted || Platform.Windows.AudioOutput.Muted != deviceShut)
+                    throw new InvalidOperationException($"Expected Mute {(wantMuted ? "on" : "off")}, with the sound device {(deviceShut ? "shut" : "open")}.");
+                break;
             case "rename":
                 var box = await DemoUi.WaitFor(() => DemoUi.Descendants<TextBox>(DemoUi.Inspector).FirstOrDefault(b => b.DataContext is EntityHeader), "the name field");
                 await ui.EditBox(box, a);

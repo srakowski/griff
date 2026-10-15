@@ -7,10 +7,13 @@
     demo.ps1 demos\single-file-builds.demo -Check   Run it silently at speed and report whether it got to the end.
     demo.ps1 -All -Check                       Check every demo in demos\ (a regression run for the demos).
     demo.ps1 -Tour                             The full guided tour that builds Ember Hollow (about 20 minutes).
+    demo.ps1 demos\mute.demo -Mute             Play a demo in silence: captions, no voice and no game sound.
 
     Demos run in a Debug build of the editor with throwaway settings and projects under %TEMP%\griff-demos, so
     they never touch your own settings or projects. While one runs the screen is the demo's: hands off, or move the
-    mouse to pause it. The bar at the top (or Ctrl+Alt+Space / Left / Right / Up / Down / X) controls it.
+    mouse to pause it. The bar at the top (or Ctrl+Alt+Space / Left / Right / Up / Down / X) controls it; its speaker
+    mutes the narration, and that's kept for the next demo. -Check runs are silent: no voice and no game sound
+    (GRIFF_MUTE=1). GRIFF_MUTE=1 set before running this mutes the game's sound in narrated playback too.
 #>
 param(
     [string] $Demo,
@@ -18,8 +21,13 @@ param(
     [switch] $All,
     [switch] $Tour,
     [switch] $NoBuild,
-    [string] $Voice
+    [string] $Voice,
+    [switch] $Mute
 )
+
+# What the caller set (an agent sets GRIFF_MUTE=1), kept under what each run sets.
+$callerMute = $env:GRIFF_MUTE
+$callerMuteNarration = $env:GRIFF_MUTE_NARRATION
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -50,6 +58,9 @@ function Start-Demo([string] $what, [bool] $silent, [bool] $wait) {
     $env:GRIFF_DEMO_FAST = if ($silent) { '1' } else { '0' }
     $env:GRIFF_DEMO_EXIT = if ($wait) { '1' } else { '0' }
     if ($Voice) { $env:GRIFF_DEMO_VOICE = $Voice }
+    # Checks make no sound at all; -Mute plays in silence for this run (the bar's speaker is the lasting choice).
+    $env:GRIFF_MUTE = if ($silent -or $Mute) { '1' } else { $callerMute }
+    $env:GRIFF_MUTE_NARRATION = if ($Mute) { '1' } else { $callerMuteNarration }
     $process = Start-Process $editor -PassThru
     if (-not $wait) { return $null }
     $process.WaitForExit()

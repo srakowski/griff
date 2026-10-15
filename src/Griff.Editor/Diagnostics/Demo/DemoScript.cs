@@ -932,7 +932,9 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
         Process? game = null;
         try
         {
-            game = _shippedGame = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = buildFolder, UseShellExecute = true });
+            // A muted editor (Game > Mute, or GRIFF_MUTE=1) runs the exported game muted too.
+            var arguments = Griff.Platform.Windows.AudioOutput.Muted ? "--mute" : "";
+            game = _shippedGame = Process.Start(new ProcessStartInfo(exe, arguments) { WorkingDirectory = buildFolder, UseShellExecute = true });
             var window = await WaitForWindow(game!, 20000);
             if (window != IntPtr.Zero)
             {

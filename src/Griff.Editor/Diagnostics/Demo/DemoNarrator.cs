@@ -45,8 +45,8 @@ internal sealed class DemoNarrator
         IsSpeaking = true;
         try
         {
-            // Hurrying past a chapter, or no voice: show the caption for about as long as it takes to read.
-            if (_voice is null || control?.Skipping == true)
+            // Hurrying past a chapter, no voice or the narration muted: show the caption for about as long as it takes to read.
+            if (_voice is null || control?.Skipping == true || control?.NarrationMuted == true)
             {
                 var ms = Math.Max(150, text.Length * 55 / _silentSpeed);
                 await (control?.Delay(ms) ?? Task.Delay(TimeSpan.FromMilliseconds(ms)));
@@ -74,7 +74,7 @@ internal sealed class DemoNarrator
                     }
 
                     await control.Gate();
-                    if (control.Skipping)
+                    if (control.Skipping || control.NarrationMuted)
                     {
                         _voice.Speak("", SpeakAsync | PurgeBeforeSpeak);
                         break;

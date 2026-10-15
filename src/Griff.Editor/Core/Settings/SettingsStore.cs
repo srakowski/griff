@@ -42,6 +42,12 @@ public sealed class EditorSettings
 
     /// <summary>Whether a game playing in the editor pauses at the line where a script throws an exception (see the Debugger).</summary>
     public bool PauseOnExceptions { get; set; } = true;
+
+    /// <summary>
+    /// Whether the editor plays no sound (Game > Mute). Only the user's own choice is kept here: a session muted by
+    /// GRIFF_MUTE=1 never writes it.
+    /// </summary>
+    public bool Mute { get; set; }
 }
 
 /// <summary>A breakpoint kept between sessions: the project's folder, the script's path in its Assets, and the line.</summary>
@@ -80,25 +86,40 @@ public sealed class JsonSettingsStore : ISettingsStore
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     // GRIFF_SETTINGS_PATH points the editor at another settings file (tests, portable installs).
-    private readonly string _filePath = Environment.GetEnvironmentVariable("GRIFF_SETTINGS_PATH") ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "settings.json");
+    private readonly string _filePath;
 
     private readonly ILogger<JsonSettingsStore> _logger;
 
     public JsonSettingsStore(ILogger<JsonSettingsStore> logger)
+        : this(logger, Environment.GetEnvironmentVariable("GRIFF_SETTINGS_PATH") ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "settings.json"))
+    {
+    }
+
+    /// <summary>Settings kept in <paramref name="filePath"/> (for tests).</summary>
+    internal JsonSettingsStore(ILogger<JsonSettingsStore> logger, string filePath)
     {
         _logger = logger;
+        _filePath = filePath;
         Settings = Load();
+        _savedMute = Settings.Mute;
     }
 
     public EditorSettings Settings { get; }
+
+    // Mute as this editor last read or wrote it. Every editor on the machine shares the file (agents' too), so a save that
+    // didn't change Mute keeps what's in the file now: an editor started earlier can't undo the user's choice made since.
+    private bool _savedMute;
 
     public void Save()
     {
         try
         {
+            if (Settings.Mute == _savedMute && File.Exists(_filePath))
+                Settings.Mute = Load().Mute;
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             File.WriteAllText(_filePath, JsonSerializer.Serialize(Settings, JsonOptions));
+            _savedMute = Settings.Mute;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -26,7 +26,7 @@ namespace Griff.Editor.Features.Agent;
 /// What an agent needs to see its work and try it: where the editor is at, pictures of the game and the editor, the
 /// Output log, and keys pressed in the running game to playtest it.
 /// </summary>
-public sealed class EditorTools(IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger) : IAgentToolSource
+public sealed class EditorTools(IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, OutputLog log, Debugger debugger, Audio.EditorMute mute) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -133,6 +133,13 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var stoppedAt = debugger.StoppedByException ? $"on an exception a script threw ({debugger.ExceptionMessage}), at {debugger.Location}, in the middle of its frame"
             : debugger.StoppedBy is "a breakpoint" ? $"at a breakpoint, {debugger.Location}" : $"where {debugger.StoppedBy} stopped, {debugger.Location}";
         text.AppendLine(CultureInfo.InvariantCulture, $"Game: {(play.IsPlaying ? debugger.IsPaused ? $"paused {stoppedAt}" : play.IsPaused ? "paused" : "playing" : "not playing")}");
+        if (mute.IsSilent)
+        {
+            text.AppendLine(mute.MutedByEnvironment
+                ? "Sound: none heard (GRIFF_MUTE is set for this session); the game runs just as it would with sound"
+                : "Sound: muted (Game_Mute turns it back on); the game runs just as it would with sound");
+        }
+
         if (debugger.IsPaused)
             text.Append("Values in scope there:").AppendLine().Append(debugger.ValuesText).AppendLine(debugger.WhatNextHere);
         if (play.IsPlaying && play.CanRewindBeforeException && !debugger.StoppedByException)

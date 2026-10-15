@@ -2,11 +2,13 @@
 
 Each `.demo` file is a short, narrated walkthrough of one feature or change. Griff plays it by driving its own
 editor with real mouse and keyboard input, speaking the narration aloud, spotlighting what it talks about, and
-showing a control bar to pause, change speed, skip or rewind between chapters, or exit.
+showing a control bar to pause, change speed, skip or rewind between chapters, mute the narration (kept for the next
+demo), or exit. Checks make no sound at all (`GRIFF_MUTE=1`).
 
 ```powershell
 tools\demo.ps1 demos\single-file-builds.demo           # play it, narrated (move the mouse to pause)
 tools\demo.ps1 demos\single-file-builds.demo -Check    # run it silently at speed; PASS or FAIL
+tools\demo.ps1 demos\single-file-builds.demo -Mute     # play it in silence: captions, no voice or game sound
 tools\demo.ps1 -All -Check                             # check every demo (only when asked for)
 tools\demo.ps1 -Tour                                   # the full guided tour that builds Ember Hollow
 ```
@@ -71,6 +73,7 @@ build: standalone
 | `closefloat: <panel>` | Click the close button on the floating window a panel is in, putting its panels back. |
 | `expectlayout: <summary>` | Fail unless the panels are laid out as `PanelLayout.Summary` says, e.g. `Hierarchy \| (Documents / Assets, Output) \| Inspector`: `\|` between parts side by side, `/` between parts one above another, `,` between tabs, then `; floating: Output` for each floating window. |
 | `expectprofiler: <what>` | Fail unless the Profiler panel shows it: `frames` (it has recorded some), `recording = true` or `false`, `entities = <n>` (as it counted them, within five seconds), or `cost = <name>` (it shows what a kind of script, a step or a part of building the picture costs, such as `Sprite` or `Sorting`), or `no garbage = <name>` (it shows that cost, making no garbage), e.g. `expectprofiler: entities = 2006`, `expectprofiler: cost = Bunny` or `expectprofiler: no garbage = Lights`. |
+| `expectmuted: true\|false` | Fail unless **Game → Mute** is on (or off) and the sound device is shut while it is (and in checks, where `GRIFF_MUTE=1` keeps it shut either way). |
 | `rename: <name>` | Rename the selected entity. |
 | `add: <Component>` | Add Component: opens the list, types the name and presses Enter, e.g. `add: Health`. It brings what the component needs, as the list does (`add: Patrol` adds a BoxCollider and a Body first). |
 | `addlist` | Open the Add Component list with nothing typed, to show it: `type: patr` filters it, `key: Enter` adds the one picked, `click: addlist:item:Patrol` adds that one. |

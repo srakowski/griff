@@ -83,6 +83,26 @@ internal sealed class DemoControl : IDisposable
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// The narration is shown as captions without being spoken. Kept between demos (see <see cref="DemoPreferences"/>);
+    /// GRIFF_MUTE_NARRATION=1 (tools\demo.ps1 -Mute) mutes it for one run.
+    /// </summary>
+    public bool NarrationMuted
+    {
+        get => _narrationMuted;
+        set
+        {
+            if (_narrationMuted == value)
+                return;
+            _narrationMuted = value;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private bool _narrationMuted;
+
+    public void ToggleNarration() => NarrationMuted = !NarrationMuted;
+
     /// <summary>Like a media player's back button: restart this chapter, or go to the previous one if it just began.</summary>
     public void Back() => GoTo(DateTime.Now - CurrentStarted > TimeSpan.FromSeconds(4) ? Current : Current - 1);
 

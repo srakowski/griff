@@ -12,7 +12,8 @@ using WpfColor = System.Windows.Media.Color;
 namespace Griff.Editor.Diagnostics.Demo;
 
 /// <summary>
-/// The demo's transport bar, pinned to the top of the screen: back, pause, next, speed, a dot per chapter and Exit.
+/// The demo's transport bar, pinned to the top of the screen: back, pause, next, speed, a dot per chapter, the narration
+/// on or off (kept for the next demo) and Exit.
 /// It never takes focus (so the demo's typing keeps going to the editor), and the same controls work from anywhere with
 /// hotkeys: Ctrl+Alt+Space pause, Ctrl+Alt+Left/Right chapter, Ctrl+Alt+Up/Down speed, Ctrl+Alt+X exit.
 /// </summary>
@@ -24,6 +25,9 @@ internal sealed class DemoControlBar : Window
 
     private readonly DemoControl _control;
     private readonly Button _pause;
+    // Speaks the narration or doesn't (kept between demos): a speaker, crossed out when muted.
+    private readonly Button _narration;
+    private const string NarrationGlyph = "", NarrationMutedGlyph = "";
     private readonly StackPanel _speeds = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 10, 0) };
     private readonly StackPanel _dots = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _title = new() { Foreground = Brushes.White, FontFamily = UiFont, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 12, 0), MinWidth = 220 };
@@ -50,6 +54,8 @@ internal sealed class DemoControlBar : Window
         row.Children.Add(_speeds);
         row.Children.Add(_dots);
         row.Children.Add(_title);
+        _narration = Glyph(NarrationGlyph, "Mute narration", control.ToggleNarration);
+        row.Children.Add(_narration);
         row.Children.Add(Text("Exit demo", "Stop the demo and remove its overlays (Ctrl+Alt+X)", control.Exit, danger: true));
 
         Content = new Border
@@ -95,6 +101,9 @@ internal sealed class DemoControlBar : Window
     {
         _pause.Content = GlyphText(_control.Paused ? "" : "");
         _pause.ToolTip = _control.Paused ? "Play (Ctrl+Alt+Space)" : "Pause (Ctrl+Alt+Space)";
+
+        _narration.Content = GlyphText(_control.NarrationMuted ? NarrationMutedGlyph : NarrationGlyph);
+        _narration.ToolTip = _control.NarrationMuted ? "Speak the narration (kept for the next demo)" : "Mute the narration: captions only (kept for the next demo)";
 
         _speeds.Children.Clear();
         foreach (var speed in DemoControl.Speeds)

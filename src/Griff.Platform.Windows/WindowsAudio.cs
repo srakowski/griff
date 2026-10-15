@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using Griff.Audio;
 using NAudio.Wave;
@@ -7,49 +8,240 @@ using NVorbis;
 namespace Griff.Platform.Windows;
 
 /// <summary>
-/// The sound card: one <see cref="Mixer"/> for the whole app, played through the default output device. Without a
-/// sound device it stays silent rather than failing.
+/// The sound card: one <see cref="Mixer"/> for the whole app (the editor's game, its other players' windows, previews and
+/// the Sound Maker), played through the default output device. Without a sound device it stays silent rather than
+/// failing. <see cref="Muted"/> (and <c>GRIFF_MUTE=1</c>, or the player's <c>--mute</c>) keeps the device shut.
 /// </summary>
 public static class AudioOutput
 {
-    private static readonly Lazy<Mixer> Shared = new(Start);
-    private static WaveOut? _device;
+    /// <summary>The environment variable that starts a Griff program muted (<c>GRIFF_MUTE=1</c>); programs it starts inherit it.</summary>
+    public const string MuteVariable = "GRIFF_MUTE";
 
-    public static Mixer Mixer => Shared.Value;
+    /// <summary>The mixer everything plays through. The first use opens the sound device (unless muted).</summary>
+    public static Mixer Mixer
+    {
+        get
+        {
+            Shared.Start();
+            return Shared.Mixer;
+        }
+    }
+
+    /// <summary>True when <c>GRIFF_MUTE</c> was set (to anything but 0, false, no or off) as the program started.</summary>
+    public static bool MutedByEnvironment { get; } = IsOn(Environment.GetEnvironmentVariable(MuteVariable));
+
+    // After MutedByEnvironment, which it reads: static fields start in the order they're written.
+    private static readonly SoundOutput Shared = new(OpenWaveOut, MutedByEnvironment);
+
+    /// <summary>
+    /// Nothing reaches the speakers: the sound device is closed (or never opened) while everything plays on, silently and
+    /// at the same pace, so a game runs just as it would with sound. On from the start with <c>GRIFF_MUTE=1</c>.
+    /// </summary>
+    public static bool Muted
+    {
+        get => Shared.Muted;
+        set => Shared.Muted = value;
+    }
 
     /// <summary>True when sound actually reaches a device.</summary>
-    public static bool IsAvailable => Shared.Value is not null && _device is not null;
+    public static bool IsAvailable => Shared.IsDeviceOpen;
 
-    private static Mixer Start()
+    /// <summary>Whether an environment variable's value turns a switch on: anything but empty, 0, false, no or off.</summary>
+    public static bool IsOn(string? value) => !string.IsNullOrWhiteSpace(value) &&
+        value.Trim().ToLowerInvariant() is not ("0" or "false" or "no" or "off");
+
+    private static SoundDevice? OpenWaveOut(SoundOutput output)
     {
-        var mixer = new Mixer();
+        WaveOut? device = null;
         try
         {
-            var device = new WaveOut { BufferMilliseconds = 25, NumberOfBuffers = 3 };
-            device.Init(new SampleToWaveProvider(new MixerProvider(mixer)));
+            device = new WaveOut { BufferMilliseconds = 25, NumberOfBuffers = 3 };
+            device.Init(new SampleToWaveProvider(new OutputProvider(output)));
             device.Play();
-            _device = device;
             // A block is mixed as a buffer comes free, behind the others still queued, and Windows' own mixing holds about
             // one more: so about every buffer's worth goes by before it's heard.
-            mixer.OutputLatency = device.BufferMilliseconds * device.NumberOfBuffers / 1000.0;
+            return new SoundDevice(device, device.BufferMilliseconds * device.NumberOfBuffers / 1000.0);
         }
         catch (Exception ex) when (ex is NAudio.MmException or InvalidOperationException or DllNotFoundException)
         {
             // No sound device: everything still "plays", silently.
+            device?.Dispose();
+            return null;
         }
-
-        return mixer;
     }
 
-    private sealed class MixerProvider(Mixer mixer) : ISampleProvider
+    private sealed class OutputProvider(SoundOutput output) : ISampleProvider
     {
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(Mixer.SampleRate, 2);
 
         public int Read(Span<float> buffer)
         {
-            mixer.Mix(buffer);
+            output.Mix(buffer);
             return buffer.Length;
         }
+    }
+}
+
+/// <summary>An open sound device, and how many seconds of sound it holds ahead of the speakers.</summary>
+public sealed record SoundDevice(IDisposable Device, double Latency);
+
+/// <summary>
+/// A <see cref="Mixer"/> and the device it plays through, which can be muted. Muted (or with no device) the device is
+/// closed and the mixer is still pulled along in real time with nothing heard, so sounds finish, music keeps its time and
+/// the game can't tell. <see cref="AudioOutput"/> is the app's one.
+/// </summary>
+public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool muted = false) : IDisposable
+{
+    private const int PumpMilliseconds = 20;
+
+    private readonly object _gate = new();
+    private readonly object _mixGate = new();
+    private readonly Stopwatch _clock = new();
+    private readonly float[] _scratch = new float[1024 * 2];
+    private SoundDevice? _device;
+    private Timer? _pump;
+    private bool _pumping, _started, _muted = muted;
+    private double _pumpedAt, _owed;
+
+    public Mixer Mixer { get; } = new();
+
+    /// <summary>Whether a muted mixer is pulled along in real time on its own; tests turn it off to call <see cref="Pump"/>.</summary>
+    internal bool KeepsTime { get; init; } = true;
+
+    /// <summary>True while the device is open (not muted, and there is one).</summary>
+    public bool IsDeviceOpen
+    {
+        get
+        {
+            lock (_gate)
+                return _device is not null;
+        }
+    }
+
+    /// <summary>Muted, the device is closed (or never opened) and the mixer plays on silently.</summary>
+    public bool Muted
+    {
+        get => _muted;
+        set
+        {
+            lock (_gate)
+            {
+                if (_muted == value)
+                    return;
+                _muted = value;
+                if (_started)
+                    Apply();
+            }
+        }
+    }
+
+    /// <summary>Opens the device (unless muted). The first use of the mixer calls it.</summary>
+    public void Start()
+    {
+        if (_started)
+            return;
+        lock (_gate)
+        {
+            if (_started)
+                return;
+            _started = true;
+            Apply();
+        }
+    }
+
+    /// <summary>Fills <paramref name="buffer"/> from the mixer: the device calls it as it plays.</summary>
+    public void Mix(Span<float> buffer)
+    {
+        lock (_mixGate)
+            Mixer.Mix(buffer);
+    }
+
+    /// <summary>Mixes <paramref name="seconds"/> of sound into nothing, as the device would have played it.</summary>
+    internal void Pump(double seconds)
+    {
+        lock (_mixGate)
+        {
+            // Nothing playing: nothing to keep up with.
+            if (Mixer.Playing == 0)
+            {
+                _owed = 0;
+                return;
+            }
+
+            _owed += Math.Clamp(seconds, 0, 0.25) * Mixer.SampleRate;
+            var frames = (int)_owed;
+            _owed -= frames;
+            while (frames > 0)
+            {
+                var n = Math.Min(frames, _scratch.Length / 2);
+                Mixer.Mix(_scratch.AsSpan(0, n * 2));
+                frames -= n;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            StopPump();
+            CloseDevice();
+        }
+    }
+
+    private void Apply()
+    {
+        if (_muted)
+        {
+            CloseDevice();
+            StartPump();
+            return;
+        }
+
+        StopPump();
+        if ((_device = openDevice(this)) is { } device)
+            Mixer.OutputLatency = device.Latency;
+        else
+            StartPump();
+    }
+
+    private void CloseDevice()
+    {
+        _device?.Device.Dispose();
+        _device = null;
+    }
+
+    private void StartPump()
+    {
+        lock (_mixGate)
+        {
+            Mixer.OutputLatency = 0;
+            _pumping = true;
+            _clock.Restart();
+            _pumpedAt = 0;
+        }
+
+        if (!KeepsTime)
+            return;
+        _pump ??= new Timer(_ =>
+        {
+            lock (_mixGate)
+            {
+                if (!_pumping)
+                    return;
+                var now = _clock.Elapsed.TotalSeconds;
+                Pump(now - _pumpedAt);
+                _pumpedAt = now;
+            }
+        }, null, PumpMilliseconds, PumpMilliseconds);
+    }
+
+    private void StopPump()
+    {
+        lock (_mixGate)
+            _pumping = false;
+        _pump?.Dispose();
+        _pump = null;
     }
 }
 

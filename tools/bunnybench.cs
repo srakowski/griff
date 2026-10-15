@@ -8,7 +8,8 @@
 // bunnies in it, lets them spread out for ten seconds of frames, then times each frame's parts: the game's steps,
 // building the frame to draw, drawing it with OpenGL (into a hidden window: the CPU's part), and the GPU's part. It
 // prints the median, mean, 99th percentile and worst of each, and the garbage collections and bytes allocated meanwhile.
-// The numbers are this computer's: compare runs on the same one.
+// The numbers are this computer's: compare runs on the same one. It's always silent, GRIFF_MUTE or not: its game has no
+// sound device (Game's own SilentAudio), so sound costs nothing in the numbers.
 //   dotnet run -c Release tools/bunnybench.cs -- [--count 50000] [--frames 600] [--steps 1] [--no-draw] [--by-step] [--timeline] [--profile] [--workers n] [--dark]
 // --steps 2 takes two steps every frame, as a frame after a missed one does; --no-draw leaves OpenGL out; --by-step
 // also prints what each of the game's steps (scripts, physics...) costs a frame, the costliest first; --timeline keeps

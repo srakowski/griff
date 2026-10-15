@@ -18,7 +18,9 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// Debug-only guided demo: set GRIFF_DEMO=1 and the editor narrates and drives itself through building a small game,
 /// with real mouse and keyboard input (hands off while it runs). GRIFF_DEMO=fast runs silently at speed, for checking
 /// the script. Pair with GRIFF_SETTINGS_PATH so it starts from a clean editor. GRIFF_DEMO_LOG names a log file.
-/// A bar at the top pauses, changes speed, jumps between chapters and exits (Ctrl+Alt+Space, Up/Down, Left/Right, X).
+/// A bar at the top pauses, changes speed, jumps between chapters and exits (Ctrl+Alt+Space, Up/Down, Left/Right, X),
+/// and mutes the narration (kept for the next demo: see <see cref="DemoPreferences"/>). GRIFF_MUTE_NARRATION=1 mutes it
+/// for one run; GRIFF_MUTE=1 mutes the editor's own sound, as anywhere.
 /// </summary>
 internal static class DemoRunner
 {
@@ -64,6 +66,7 @@ internal static class DemoRunner
 
         var control = new DemoControl();
         DemoControl.Active = control;
+        DemoPreferences.Attach(control, DemoPreferences.DefaultPath, DemoPreferences.MutedForRun);
         var overlay = new DemoOverlay();
         var bar = new DemoControlBar(control);
         overlay.Above.Add(bar);

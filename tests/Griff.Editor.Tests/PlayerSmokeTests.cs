@@ -23,21 +23,23 @@ public sealed class PlayerSmokeTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Standalone", "")]
-    [InlineData("Small", " (needs .NET)")]
-    public async Task ExportedArcade_RunsAndDrawsAFrame(string playerKind, string suffix)
+    [InlineData("Standalone", "", true)]
+    [InlineData("Small", " (needs .NET)", false)]
+    public async Task ExportedArcade_RunsAndDrawsAFrame(string playerKind, string suffix, bool muteArgument)
     {
         var project = await Project.CreateAsync(_root, "Griff Smoke", ProjectTemplates.Get("Arcade"));
         var export = GameExporter.Export(project, PlayerPath(playerKind), Path.Combine(_root, "Build"), suffix);
         Assert.True(export.Success, export.Error);
 
         var frame = Path.Combine(_root, "frame.png");
-        var (exitCode, output) = await RunAsync(export.Executable!, frame);
+        // Muted, as the tests run (GRIFF_MUTE=1, inherited) or by --mute: the player never opens the sound device.
+        var (exitCode, output) = await RunAsync(export.Executable!, frame, muteArgument);
         try
         {
             Assert.True(exitCode == 0, $"The player exited with {exitCode}.\n{output}");
             Assert.True(File.Exists(frame), "The player didn't save a frame.");
             Assert.True(ColorsIn(frame) > 1, "The frame is one flat color: nothing was drawn.");
+            Assert.Contains("Sound device: not open", output, StringComparison.Ordinal);
         }
         finally
         {
@@ -65,15 +67,17 @@ public sealed class PlayerSmokeTests : IDisposable
         return player;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame)
+    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame, bool muteArgument)
     {
-        var start = new ProcessStartInfo(executable)
+        var start = new ProcessStartInfo(executable, muteArgument ? "--mute" : "")
         {
             UseShellExecute = false,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
             Environment = { ["GRIFF_PLAYER_SMOKE"] = frame },
         };
+        if (muteArgument)
+            start.Environment.Remove(Platform.Windows.AudioOutput.MuteVariable);
         using var process = Process.Start(start)!;
         var errors = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEndAsync();

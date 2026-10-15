@@ -6,7 +6,8 @@ namespace Griff.Fonts;
 /// <summary>
 /// Fonts installed on this computer, found by family name (a <see cref="Scenes.Text.Font"/> such as "Consolas"): the
 /// files in Windows' font folders, the machine's and the user's. Elsewhere (the browser) there are none, and text in an
-/// installed font draws in the built-in one.
+/// installed font draws in the built-in one. They're drawn on the computer they're on and never copied anywhere: not into a
+/// project, an export or anything baked.
 /// </summary>
 public static class InstalledFonts
 {
@@ -15,9 +16,53 @@ public static class InstalledFonts
 
     private static readonly Lazy<Dictionary<string, List<Candidate>>> s_families = new(Scan);
     private static readonly ConcurrentDictionary<string, FontFace?> s_faces = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Lazy<IReadOnlyList<string>> s_sorted = new(() => s_families.Value.Keys.Order(StringComparer.OrdinalIgnoreCase).ToList());
+    private static readonly ConcurrentDictionary<int, FontFace?> s_fallbacks = new();
+    private static readonly Lazy<IReadOnlyList<string>> s_fallbackFamilies = new(FallbackOrder);
 
     /// <summary>The installed font families, by name, in order (read from the folders the first time it's asked).</summary>
-    public static IReadOnlyList<string> Families => s_families.Value.Keys.Order(StringComparer.OrdinalIgnoreCase).ToList();
+    public static IReadOnlyList<string> Families => s_sorted.Value;
+
+    /// <summary>
+    /// The installed font to draw <paramref name="codepoint"/> in when the text's font, the built-in font and its fallback
+    /// haven't got it (Chinese, Japanese, Korean, emoji, scripts from Arabic to Thai), as WPF fell back to Windows' fonts:
+    /// the first of Windows' own fonts for those (<see cref="FallbackFamilies"/>) that's installed and has it, or null.
+    /// Only ever on the player's own computer: in a browser there are none, and nothing is copied or kept.
+    /// </summary>
+    public static FontFace? Fallback(int codepoint) => s_fallbacks.GetOrAdd(codepoint, c =>
+    {
+        foreach (var family in s_fallbackFamilies.Value)
+        {
+            if (Find(family) is { } face && face.GlyphOf(c) > 0)
+                return face;
+        }
+
+        return null;
+    });
+
+    /// <summary>
+    /// The installed fonts characters are looked for in, in order: Windows' fonts for the scripts and symbols the built-in
+    /// fonts lack, the one for the computer's own language first among Chinese, Japanese and Korean.
+    /// </summary>
+    public static IReadOnlyList<string> FallbackFamilies => s_fallbackFamilies.Value;
+
+    private static IReadOnlyList<string> FallbackOrder()
+    {
+        string[] cjk = ["Microsoft YaHei", "Yu Gothic", "Malgun Gothic", "Microsoft JhengHei"];
+        var language = System.Globalization.CultureInfo.CurrentUICulture.Name;
+        var first = language.StartsWith("ja", StringComparison.OrdinalIgnoreCase) ? "Yu Gothic"
+            : language.StartsWith("ko", StringComparison.OrdinalIgnoreCase) ? "Malgun Gothic"
+            : language is "zh-TW" or "zh-HK" or "zh-MO" || language.StartsWith("zh-Hant", StringComparison.OrdinalIgnoreCase) ? "Microsoft JhengHei"
+            : "Microsoft YaHei";
+        return
+        [
+            "Segoe UI", "Segoe UI Symbol", "Segoe UI Emoji", "Segoe UI Historic",
+            first, .. cjk.Where(f => f != first),
+            "Nirmala UI", "Leelawadee UI", "Ebrima", "Gadugi", "Javanese Text", "Myanmar Text", "Mongolian Baiti",
+            "Microsoft Himalaya", "Microsoft Yi Baiti", "Microsoft New Tai Lue", "Microsoft Tai Le", "Microsoft PhagsPa",
+            "Sylfaen", "SimSun", "SimSun-ExtB", "Arial Unicode MS",
+        ];
+    }
 
     /// <summary>
     /// The installed family's face nearest semibold and upright (heavier wins a tie), or null if no family has that name.

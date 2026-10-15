@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Griff.Fonts;
 using Griff.Projects;
 using Griff.Runtime;
 
@@ -42,7 +39,8 @@ public static class WebExporter
         if (Directory.Exists(partial))
             Directory.Delete(partial, recursive: true);
         GameExporter.CopyFolder(webPlayerFolder, partial, _ => true);
-        var notices = ThirdPartyNotices.For(Directory.EnumerateFiles(partial, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(partial, f)));
+        var notices = ThirdPartyNotices.For(Directory.EnumerateFiles(partial, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(partial, f)),
+            project.AssetsPath);
         File.WriteAllText(Path.Combine(partial, ThirdPartyNotices.FileName), notices.Text);
         var game = Path.Combine(partial, ExportLayout.GameFolder);
         GameExporter.WriteGame(project, compiled, game);
@@ -61,70 +59,11 @@ public static class WebExporter
 
     /// <summary>
     /// A warning for each text in the project's scenes and prefabs set in an installed font (a name, not a font file in
-    /// Assets): the browser has only the game's own files, so it draws them in the built-in font. Installed fonts are never
-    /// copied into an export: they're licensed to the computer they're on.
+    /// Assets), which a browser hasn't got, so it draws in the built-in font there, and each font file Assets hasn't got
+    /// (see <see cref="ExportFonts"/>). Installed fonts are never copied into an export: they're licensed to the computer
+    /// they're on.
     /// </summary>
-    public static IReadOnlyList<string> InstalledFontWarnings(Project project)
-    {
-        var warnings = new List<string>();
-        var files = Directory.EnumerateFiles(project.AssetsPath, "*", SearchOption.AllDirectories)
-            .Where(f => f.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal);
-        foreach (var file in files)
-        {
-            JsonNode? root;
-            try
-            {
-                root = JsonNode.Parse(File.ReadAllText(file));
-            }
-            catch (Exception ex) when (ex is IOException or JsonException)
-            {
-                continue;
-            }
-
-            var relative = Path.GetRelativePath(project.AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
-            foreach (var font in FontsIn(root).Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                if (!ProjectFonts.IsFontFile(font))
-                    warnings.Add($"{relative} sets text in the installed font \"{font}\", which a browser hasn't got: it draws in the " +
-                                 "built-in font there. Put a font file (.ttf or .otf) in Assets and choose that to have it everywhere.");
-            }
-        }
-
-        return warnings;
-    }
-
-    // Every "Font" a component in the file sets to something, however deep.
-    private static IEnumerable<string> FontsIn(JsonNode? node)
-    {
-        switch (node)
-        {
-            case JsonObject obj:
-                foreach (var (key, value) in obj)
-                {
-                    if (key.Equals("Font", StringComparison.OrdinalIgnoreCase) && value is JsonValue v && v.TryGetValue<string>(out var font) &&
-                        !string.IsNullOrWhiteSpace(font))
-                    {
-                        yield return font.Trim();
-                    }
-                    else
-                    {
-                        foreach (var inner in FontsIn(value))
-                            yield return inner;
-                    }
-                }
-
-                break;
-            case JsonArray array:
-                foreach (var item in array)
-                {
-                    foreach (var inner in FontsIn(item))
-                        yield return inner;
-                }
-
-                break;
-        }
-    }
+    public static IReadOnlyList<string> InstalledFontWarnings(Project project) => ExportFonts.Warnings(project, web: true);
 
     /// <summary>The files of a game folder, as its <see cref="ExportLayout.WebFileList"/> names them: '/' between folders, in a stable order.</summary>
     public static IReadOnlyList<string> FilesOf(string gameFolder) =>

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -72,6 +74,24 @@ public partial class FieldPickerView : UserControl
         if (sender is FrameworkElement { DataContext: PickerAction action })
             Picker?.Do(action.Tag);
     }
+}
+
+/// <summary>
+/// A picker's choices as the list shows them: under their groups' headings when they have groups (a font's: safe to
+/// ship, then only on this PC), as they are otherwise.
+/// </summary>
+public sealed class GroupedChoices : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not IList list || !list.OfType<PickerChoice>().Any(c => c.Group is not null))
+            return value;
+        var view = new ListCollectionView(list);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PickerChoice.Group)));
+        return view;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
 /// <summary>

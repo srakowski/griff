@@ -1,0 +1,39 @@
+title: A font picker
+intro: Every font field picks from fonts shown in their own faces: the ones safe to ship first, and fonts only on this PC set apart.
+project: Arcade | Font Picker
+
+chapter: Fonts in their own faces | The Font field's list
+select: Title
+say: A Text's Font field now has a list of fonts, each one shown in its own face.
+click: pick:Text.Font
+wait: 1
+explain: picker:list | Fonts | First the fonts that are safe to ship: the built-in font, the free fonts that come with Griff, and font files in the project. Then, set apart under a warning, fonts only installed on this computer.
+explain: picker:Fonts/PressStart2P-Regular.ttf | Free fonts | Griff comes with four free fonts for games, a pixel font, a clean sans, a serif and a mono, all under the SIL Open Font License.
+say: Pick the pixel font for the arcade's title.
+pick: Text.Font = Fonts/PressStart2P-Regular.ttf
+expectvalue: Title.Text.Font = Fonts/PressStart2P-Regular.ttf
+expectflagged: Text.Font = none
+expectfile: Fonts/PressStart2P-Regular.ttf
+expectfile: Fonts/PressStart2P-OFL.txt
+explain: scene | Scene view | Picking it copied the font and its license into the project's Assets, so the game ships it, and its third party notices name it.
+
+chapter: Installed fonts | Only on this PC
+select: Best
+pick: Text.Font = Consolas
+expectvalue: Best.Text.Font = Consolas
+explain: field:Text.Font | Not shipped | An installed font still draws on your own computer, but it's never copied into the game. Players may not have it, a browser never does, and both exports warn of it.
+set: Text.Font = Nofont Sans
+expectflagged: Text.Font = Nofont Sans
+explain: field:Text.Font | Flagged | A font that's nowhere, no file in Assets and nothing installed, is flagged, as the built-in font would draw instead.
+
+chapter: Free fonts from the menu | Art > Add Free Font
+menu: Art > Add Free Font > Crimson Text SemiBold
+expectvalue: Best.Text.Font = Fonts/CrimsonText-SemiBold.ttf
+expectfile: Fonts/CrimsonText-OFL.txt
+expectflagged: Text.Font = none
+say: Art, Add Free Font does the same from the menu, and sets the selected text in it. Agents get the same choices through the editor's MCP.
+
+chapter: Every language | What no font of the game's has
+set: Text.Value = Best 你好 こんにちは 😀
+expectvalue: Best.Text.Value = Best 你好 こんにちは 😀
+explain: scene | Scene view | Chinese, Japanese and emoji come from Windows' own fonts again, a letter at a time, on the computer the game runs on. They're never shipped with the game.

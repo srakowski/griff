@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Griff.Fonts;
 
 /// <summary>
-/// The one place a <see cref="Scenes.Text.Font"/> becomes a face: empty for the built-in font
+/// The one place a <see cref="Scenes.Text.Font"/> becomes a face: empty or its name for the built-in font
 /// (<see cref="BuiltInFonts"/>), a font file in the project's Assets (<see cref="ProjectFonts"/>), or an installed font's
 /// name (<see cref="InstalledFonts"/>, drawn on the computer it's on and never shipped). Whatever can't be found or read
 /// draws in the built-in font.
@@ -47,5 +47,5 @@ public sealed class FontCatalog
     }
 
     private FontFace Resolve(string font) =>
-        (ProjectFonts.IsFontFile(font) ? Project.Find(font) : InstalledFonts.Find(font)) ?? BuiltInFonts.Default.Face;
+        (ProjectFonts.IsFontFile(font) ? Project.Find(font) : BuiltInFonts.Find(font)?.Face ?? InstalledFonts.Find(font)) ?? BuiltInFonts.Default.Face;
 }

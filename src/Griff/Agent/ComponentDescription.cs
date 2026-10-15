@@ -15,7 +15,11 @@ namespace Griff.Agent;
 /// </summary>
 public static class ComponentDescription
 {
-    public static string Of(ComponentRegistry registry, ComponentDescriptor descriptor)
+    /// <param name="known">
+    /// The project's names (see <see cref="KnownNames"/>): each field naming a prefab, font or the like then lists what
+    /// it can name now, as the Inspector's picker does. Null leaves them out (the site's reference).
+    /// </param>
+    public static string Of(ComponentRegistry registry, ComponentDescriptor descriptor, KnownNames? known = null)
     {
         var all = ComponentCatalog.Build(registry);
         var entry = all.FirstOrDefault(e => e.Descriptor == descriptor);
@@ -98,6 +102,8 @@ public static class ComponentDescription
                     { Many: true } => $" (Names {KnownNames.Noun(names)[(KnownNames.Noun(names).IndexOf(' ') + 1)..]}s: their names, separated by commas.)",
                     _ => $" (Names {KnownNames.Noun(names)}.)",
                 });
+            if (property.Names is { } named && known?.Choices(named) is { Count: > 0 } choices)
+                text.Append(ChoicesText(named, choices));
             text.AppendLine();
         }
 
@@ -140,6 +146,30 @@ public static class ComponentDescription
             }
         }
 
+        return text.ToString();
+    }
+
+    // What a field naming prefabs, fonts and the like can name now, as the Inspector's picker lists it: in its groups (a
+    // font's: safe to ship, then installed on this PC only, with what to know about them), each with its word.
+    private static string ChoicesText(NamesAttribute kind, IReadOnlyList<NameChoice> choices)
+    {
+        static string Choice(NameChoice c)
+        {
+            var notes = string.Join("; ", new[] { c.Label, c.Detail }.Where(n => !string.IsNullOrEmpty(n) && n != c.Name));
+            return notes.Length == 0 ? $"\"{c.Name}\"" : $"\"{c.Name}\" ({notes})";
+        }
+
+        var text = new StringBuilder(" Choices now:");
+        foreach (var group in choices.GroupBy(c => c.Group))
+        {
+            if (group.Key is { } heading)
+                text.Append(CultureInfo.InvariantCulture, $" {heading.Title}{(heading.Warning is null ? "" : $" ({heading.Warning})")}:");
+            text.Append(' ').Append(string.Join(", ", group.Select(Choice))).Append('.');
+        }
+
+        if (kind.Kind == NameKind.Font)
+            text.Append(" Empty is the built-in font. A free font not in Assets yet is copied there with its license by Art_AddFreeFont " +
+                        "(or by picking it in the Inspector); then name it by its path.");
         return text.ToString();
     }
 

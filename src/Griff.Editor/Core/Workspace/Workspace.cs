@@ -36,7 +36,7 @@ public interface IWorkspace : INotifyPropertyChanged
     SceneSerializer Serializer { get; }
 
     /// <summary>
-    /// The project's prefabs, scenes, input actions, collision layers and messages as they are now (the open scene's as
+    /// The project's prefabs, scenes, input actions, collision layers, messages and fonts as they are now (the open scene's as
     /// it's being edited, not as last saved), which fields naming them pick from. Null with no project open.
     /// </summary>
     Griff.Editing.KnownNames? Names { get; }
@@ -190,7 +190,7 @@ public sealed class Workspace(
     private Griff.Editing.KnownNameIndex? _names;
 
     public Griff.Editing.KnownNames? Names =>
-        Project is { } project ? (_names ??= new(Components)).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
+        Project is { } project ? (_names ??= new(Components, p => Griff.Fonts.FontChoices.For(p.AssetsPath))).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
     public ScriptHost Scripts => _scripts ??= new ScriptHost(Components) { WithProbes = true };
 

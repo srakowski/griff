@@ -267,6 +267,11 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     /// <summary>The project's prefabs' names, read as the selection changes: fields can name them as well as entities.</summary>
     public IReadOnlyCollection<string> PrefabNames { get; private set; } = [];
 
+    private readonly FontPreviews _fontPreviews = new();
+
+    /// <summary>The font picker's preview of a font: its name drawn in it, as the game draws it.</summary>
+    public ImageSource? FontPreview(string? font, string text) => _fontPreviews.Preview(_workspace.Project?.AssetsPath, font, text);
+
     /// <summary>
     /// True while a prefab's tab is showing: fields naming things outside the entity they're on aren't flagged, as they
     /// name things in whatever scene the prefab is placed in.
@@ -1238,8 +1243,9 @@ public enum FieldKind
     Entity,
 
     /// <summary>
-    /// The name of a prefab, scene, input action, collision layer or message (or several, separated by commas): text,
-    /// with a button to pick one of the project's, flagged when it matches none of them.
+    /// The name of a prefab, scene, input action, collision layer, message or font (or several, separated by commas):
+    /// text, with a button to pick one of the project's, flagged when it matches none of them. A font's list previews each
+    /// in its own face, the ones safe to ship first and those only installed on this PC apart.
     /// </summary>
     Name,
 
@@ -1529,8 +1535,8 @@ public sealed class PropertyField : ObservableObject
         : $"Nothing {(_property.EntityName!.Inside ? $"inside {_components[0].Entity?.Name}" : "in the scene")} is called " +
           string.Join(" or ", UnmatchedNames.Select(n => $"\"{n}\""));
 
-    /// <summary>True when the field names <paramref name="name"/>: on every selected entity, when there are several.</summary>
-    public bool Names(string name) => _components.All(c => SplitNames(_property.GetValue(c)).Contains(name, NameComparer));
+    /// <summary>True when the field names <paramref name="name"/>: on every selected entity, when there are several (an empty font names the built-in one).</summary>
+    public bool Names(string name) => IsFont ? NamesFont(name) : _components.All(c => SplitNames(_property.GetValue(c)).Contains(name, NameComparer));
 
     // Entities and messages match exactly, as the game matches them; prefabs, scenes, actions and layers whatever their capitals.
     private StringComparer NameComparer =>
@@ -1555,6 +1561,12 @@ public sealed class PropertyField : ObservableObject
                 TextValue = name;
                 _owner.Audio.Preview(name);
                 return;
+        }
+
+        if (IsFont)
+        {
+            PickFont(name);
+            return;
         }
 
         if (!NamesMany)
@@ -1592,6 +1604,38 @@ public sealed class PropertyField : ObservableObject
     private static List<string> SplitNames(object? value) =>
         [.. (value as string ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
+    /// <summary>True for a field naming a font (a Text's Font, or a script's string called ...Font).</summary>
+    public bool IsFont => Kind == FieldKind.Name && _property.Names?.Kind == NameKind.Font;
+
+    // A font picked: the built-in font empties the field; one of Griff's free fonts is copied into Assets/Fonts with its
+    // license first (unless it's there), then named by its path, so the game ships it.
+    private void PickFont(string name)
+    {
+        if (Griff.Fonts.BuiltInFonts.Find(name) == Griff.Fonts.BuiltInFonts.Default)
+        {
+            Value = null;
+        }
+        else if (Griff.Fonts.FreeFonts.Find(name) is { } free && _owner.Art.AssetsPath is { } assets)
+        {
+            Value = free.AddTo(assets);
+        }
+        else
+        {
+            Value = name;
+        }
+
+        _owner.Seal();
+    }
+
+    // True when every selected component's font is the one called name: an empty font is the built-in one.
+    private bool NamesFont(string name) => _components.All(c =>
+    {
+        var font = (_property.GetValue(c) as string)?.Trim();
+        return string.IsNullOrEmpty(font)
+            ? Griff.Fonts.BuiltInFonts.Find(name) == Griff.Fonts.BuiltInFonts.Default
+            : string.Equals(font.Replace('\\', '/'), name, StringComparison.OrdinalIgnoreCase);
+    });
+
     /// <summary>True for a field with a list to pick from: images, sounds, and names of entities, prefabs, scenes, input actions, layers and messages.</summary>
     public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name or FieldKind.Action or FieldKind.Output;
 
@@ -1616,6 +1660,7 @@ public sealed class PropertyField : ObservableObject
             NameKind.Prefab => "Choose a prefab from the project, or drag one here from the Assets panel",
             NameKind.Table => "Choose a table from the project, or drag one here from the Assets panel",
             NameKind.Row => "Choose a row of the table",
+            NameKind.Font => "Choose a font, each shown in its own face: the ones safe to ship first (Griff's free fonts are copied into Assets), or drag a font file here from the Assets panel",
             _ => "Choose a scene from the project, or drag one here from the Assets panel",
         },
     };
@@ -1695,9 +1740,12 @@ public sealed class PropertyField : ObservableObject
                 break;
             default:
                 var kind = _property.Names!;
-                choices = [.. (_owner.Names?.Choices(kind, _components[0]) ?? []).Select(c => new PickerChoice(c.Name, detail: c.Detail))];
+                var owner = _owner;
+                choices = [.. (_owner.Names?.Choices(kind, _components[0]) ?? []).Select(c => new PickerChoice(c.Name, label: c.Label, detail: c.Detail,
+                    group: c.Group, preview: IsFont ? () => owner.FontPreview(c.Name, c.Text) : null))];
                 setup = new($"Type to find {NameNoun}", kind.Kind switch
                 {
+                    NameKind.Font => "Fonts can't be listed now: type a font file in Assets or an installed font's name",
                     NameKind.Prefab => "No prefabs in the project yet",
                     NameKind.Scene => "No scenes in the project yet",
                     NameKind.Table => "No tables in the project yet: Data > New Table makes one",
@@ -1726,6 +1774,7 @@ public sealed class PropertyField : ObservableObject
             NameKind.Prefab => path.EndsWith(Griff.Projects.Project.PrefabExtension, StringComparison.OrdinalIgnoreCase),
             NameKind.Scene => path.EndsWith(Griff.Projects.Project.SceneExtension, StringComparison.OrdinalIgnoreCase),
             NameKind.Table => path.EndsWith(Griff.Data.TableFile.Extension, StringComparison.OrdinalIgnoreCase),
+            NameKind.Font => Griff.Fonts.ProjectFonts.IsFontFile(path),
             _ => false,
         },
         _ => false,
@@ -1737,7 +1786,9 @@ public sealed class PropertyField : ObservableObject
     /// </summary>
     public void DropAsset(string path)
     {
-        if (Kind == FieldKind.Name)
+        if (IsFont)
+            Pick(path.Replace('\\', '/'));
+        else if (Kind == FieldKind.Name)
             Pick(System.IO.Path.GetFileNameWithoutExtension(path));
         else
             TextValue = path;
@@ -2145,6 +2196,12 @@ public interface IPropertyHost
 
     /// <summary>For a component of a placed prefab copy (or of something inside one): the prefab's own, or null.</summary>
     Component? PrefabComponent(Component component) => null;
+
+    /// <summary>
+    /// For the font picker: <paramref name="text"/> drawn in <paramref name="font"/> (as a Font names it), white with
+    /// coverage as alpha; null when it can't be drawn.
+    /// </summary>
+    System.Windows.Media.ImageSource? FontPreview(string? font, string text) => null;
 
     /// <summary>Saves the components' value of the property into their prefabs, updating the prefabs' other copies.</summary>
     void ApplyToPrefab(IReadOnlyList<Component> components, PropertyDescriptor property)

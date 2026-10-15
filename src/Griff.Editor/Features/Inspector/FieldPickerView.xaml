@@ -13,6 +13,7 @@
     <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="Visible" />
         <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
+        <inspector:GroupedChoices x:Key="Grouped" />
     </UserControl.Resources>
 
     <Border Style="{StaticResource Style.Border.Flyout}">
@@ -93,12 +94,40 @@
                          Background="Transparent"
                          BorderThickness="0"
                          Focusable="False"
-                         ItemsSource="{Binding Matches}"
+                         ItemsSource="{Binding Matches, Converter={StaticResource Grouped}}"
                          PreviewMouseLeftButtonUp="OnListClicked"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          SelectedItem="{Binding Selected}"
                          SelectionChanged="OnListSelectionChanged"
-                         VirtualizingPanel.IsVirtualizing="True">
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                    <!-- Groups (a font's: safe to ship, then only on this PC), each headed with what to know about it -->
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="6,6,6,2">
+                                        <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Name.Title, Mode=OneTime}" />
+                                        <DockPanel x:Name="Warning" Margin="0,2,0,2">
+                                            <TextBlock Margin="0,1,6,0"
+                                                       VerticalAlignment="Top"
+                                                       DockPanel.Dock="Left"
+                                                       FontSize="{StaticResource IconSize.Small}"
+                                                       Foreground="{DynamicResource Brush.Status.Warning}"
+                                                       Style="{StaticResource Style.Icon}"
+                                                       Text="{x:Static theme:Icons.Warning}" />
+                                            <TextBlock Style="{StaticResource Style.Text.Caption}" Text="{Binding Name.Warning, Mode=OneTime}" TextWrapping="Wrap" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Name.Warning, Mode=OneTime}" Value="{x:Null}">
+                                            <Setter TargetName="Warning" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                             <Setter Property="Focusable" Value="False" />
@@ -124,7 +153,7 @@
                                            Foreground="{DynamicResource Brush.Text.Tertiary}"
                                            Style="{StaticResource Style.Text.Caption}"
                                            Text="{Binding Detail, Mode=OneTime}" />
-                                <StackPanel Margin="{Binding Indent, Mode=OneTime}" Orientation="Horizontal">
+                                <StackPanel Margin="{Binding Indent, Mode=OneTime}" ClipToBounds="True" Orientation="Horizontal">
                                     <Image Width="16" Height="16"
                                            Margin="0,0,6,0"
                                            RenderOptions.BitmapScalingMode="NearestNeighbor"
@@ -138,7 +167,20 @@
                                                Foreground="{DynamicResource Brush.Text.Secondary}"
                                                Style="{StaticResource Style.Icon}"
                                                Text="{Binding Icon, Mode=OneTime}" />
-                                    <TextBlock VerticalAlignment="Center" Text="{Binding Label, Mode=OneTime}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock x:Name="Label" VerticalAlignment="Center" Text="{Binding Label, Mode=OneTime}" TextTrimming="CharacterEllipsis" />
+                                    <!-- A font: its name in its own face, tinted like the text -->
+                                    <Border x:Name="Preview"
+                                            Width="{Binding PreviewWidth, Mode=OneTime}"
+                                            Height="{Binding PreviewHeight, Mode=OneTime}"
+                                            Margin="0,2"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource Brush.Text.Primary}"
+                                            ToolTip="{Binding Label, Mode=OneTime}"
+                                            Visibility="Collapsed">
+                                        <Border.OpacityMask>
+                                            <ImageBrush ImageSource="{Binding Preview, Mode=OneTime}" />
+                                        </Border.OpacityMask>
+                                    </Border>
                                 </StackPanel>
                             </DockPanel>
                             <DataTemplate.Triggers>
@@ -147,6 +189,10 @@
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Icon, Mode=OneTime}" Value="{x:Null}">
                                     <Setter TargetName="Icon" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasPreview, Mode=OneTime}" Value="True">
+                                    <Setter TargetName="Preview" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="Label" Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>
                         </DataTemplate>

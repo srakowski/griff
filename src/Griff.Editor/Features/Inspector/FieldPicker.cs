@@ -6,8 +6,8 @@ namespace Griff.Editor.Features.Inspector;
 
 /// <summary>
 /// The list a field's ▾ button opens: what the field can name (the scene's entities, or the project's prefabs, scenes,
-/// input actions, layers or messages) or the project's images or sounds, narrowed to those matching what's typed in
-/// <see cref="Search"/>. Up and Down move <see cref="Selected"/>, Enter picks it (<see cref="PickSelected"/>), and a
+/// input actions, layers, messages or fonts) or the project's images or sounds, narrowed to those matching what's typed
+/// in <see cref="Search"/>, in their groups (a font's: safe to ship, then only on this PC) when they have them. Up and Down move <see cref="Selected"/>, Enter picks it (<see cref="PickSelected"/>), and a
 /// field naming several keeps the list open to tick more. Typing a name it doesn't have offers to use it as typed.
 /// </summary>
 public sealed class FieldPicker : ObservableObject
@@ -16,6 +16,7 @@ public sealed class FieldPicker : ObservableObject
     private readonly Action<string> _pick;
     private readonly Func<string, bool> _isPicked;
     private readonly Action _close;
+    private readonly Dictionary<Griff.Editing.NameGroup, int> _groupOrder = [];
     private string _search = "";
     private IReadOnlyList<PickerChoice> _matches;
     private PickerChoice? _selected;
@@ -28,7 +29,12 @@ public sealed class FieldPicker : ObservableObject
         _isPicked = isPicked;
         _close = close;
         foreach (var choice in _all)
+        {
             choice.IsPicked = isPicked(choice.Name);
+            if (choice.Group is { } group)
+                _groupOrder.TryAdd(group, _groupOrder.Count);
+        }
+
         _matches = _all;
         // Start on what's picked now, so Enter keeps it.
         _selected = _all.FirstOrDefault(c => c.IsPicked) ?? (_all.Count > 0 ? _all[0] : null);
@@ -53,7 +59,8 @@ public sealed class FieldPicker : ObservableObject
             var text = _search.Trim();
             Matches = text.Length == 0
                 ? _all
-                : [.. _all.Select(c => (Choice: c, Rank: Rank(c, text))).Where(m => m.Rank >= 0).OrderBy(m => m.Rank).Select(m => m.Choice)];
+                : [.. _all.Select(c => (Choice: c, Rank: Rank(c, text))).Where(m => m.Rank >= 0)
+                    .OrderBy(m => m.Choice.Group is { } group ? _groupOrder[group] : 0).ThenBy(m => m.Rank).Select(m => m.Choice)];
             Selected = Matches.Count > 0 ? Matches[0] : null;
             OnPropertyChanged(nameof(TypedOffer));
             OnPropertyChanged(nameof(HasTypedOffer));
@@ -81,7 +88,10 @@ public sealed class FieldPicker : ObservableObject
         return best;
     }
 
-    /// <summary>The choices matching <see cref="Search"/>, best first (all of them, in their own order, while it's empty).</summary>
+    /// <summary>
+    /// The choices matching <see cref="Search"/>, best first within each group (all of them, in their own order, while it's
+    /// empty).
+    /// </summary>
     public IReadOnlyList<PickerChoice> Matches
     {
         get => _matches;
@@ -192,15 +202,47 @@ public sealed class FieldPicker : ObservableObject
 internal sealed record PickerSetup(string Placeholder, string Empty, bool Many, bool TakesTyped, IReadOnlyList<PickerAction> Actions);
 
 /// <summary>
-/// One thing a picker lists: its <see cref="Name"/> (what the field is set to), how it reads, a word on it, and a
-/// picture or icon.
+/// One thing a picker lists: its <see cref="Name"/> (what the field is set to), how it reads, a word on it, a picture or
+/// icon, the group it's under, and for a font, a preview of it in its own face.
 /// </summary>
 public sealed class PickerChoice(string name, string? label = null, string? detail = null, int depth = 0, string? icon = null,
-    Func<ImageSource?>? thumbnail = null) : ObservableObject
+    Func<ImageSource?>? thumbnail = null, Griff.Editing.NameGroup? group = null, Func<ImageSource?>? preview = null) : ObservableObject
 {
     private bool _isPicked;
     private ImageSource? _thumbnail;
     private bool _thumbnailRead;
+    private ImageSource? _preview;
+    private bool _previewRead;
+
+    /// <summary>The group it's listed under (a font's "Safe to ship" or "Only on this PC"), or null.</summary>
+    public Griff.Editing.NameGroup? Group { get; } = group;
+
+    /// <summary>
+    /// For a font: its name drawn in the font itself (white, with coverage as alpha; the list tints it), made when it's
+    /// first shown. Null for other choices, or a font that can't be drawn.
+    /// </summary>
+    public ImageSource? Preview
+    {
+        get
+        {
+            if (!_previewRead)
+            {
+                _previewRead = true;
+                _preview = preview?.Invoke();
+            }
+
+            return _preview;
+        }
+    }
+
+    public bool HasPreview => preview is not null && Preview is not null;
+
+    /// <summary>How wide and tall the preview is shown: a line <see cref="FontPreviews.LineHeight"/> pixels high.</summary>
+    public double PreviewWidth => Preview is System.Windows.Media.Imaging.BitmapSource image ? image.PixelWidth * PreviewScale : 0;
+
+    public double PreviewHeight => Preview is System.Windows.Media.Imaging.BitmapSource image ? image.PixelHeight * PreviewScale : 0;
+
+    private static double PreviewScale => FontPreviews.LineHeight / Griff.Fonts.TextRaster.LinePixels;
 
     /// <summary>What picking it sets the field to: an entity's or prefab's name, an image's path.</summary>
     public string Name { get; } = name;

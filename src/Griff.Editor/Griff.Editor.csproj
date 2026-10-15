@@ -18,6 +18,15 @@
     <None Include="Themes\Fonts\JetBrainsMono-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    The free fonts that ship with Griff for games (SIL Open Font License 1.1, unmodified, with their licenses; see
+    src/Griff.Fonts/Free/README.md), beside the editor in FreeFonts: the font picker copies one into a project's Assets
+    when it's picked. They're never inside the player.
+  -->
+  <ItemGroup>
+    <None Include="..\Griff.Fonts\Free\*.ttf;..\Griff.Fonts\Free\*.txt" Link="FreeFonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The griffin logo (drawn by tools\logo.ps1): the .exe's icon, and the title bar's and start page's mark. -->
   <ItemGroup>
     <Resource Include="..\..\assets\griff.png" Link="Themes\griff.png" />

@@ -38,7 +38,7 @@ public sealed class WebFrame
     public WebFrame(Func<string, int> imageId, string? assetRoot = null)
     {
         _imageId = imageId;
-        Glyphs = new GlyphAtlas(assetRoot);
+        Glyphs = new GlyphAtlas(assetRoot, installedFallback: false);
     }
 
     /// <summary>The glyphs text is drawn with; the page keeps a texture of each page, from the rows that change.</summary>

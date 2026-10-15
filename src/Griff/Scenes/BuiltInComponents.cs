@@ -187,11 +187,14 @@ public sealed class Text : Component, IDrawable
     public int Order { get; set; }
 
     /// <summary>
-    /// A font file relative to Assets (.ttf, .otf or .ttc, e.g. "Fonts/pixel.ttf"), or the name of an installed font such
-    /// as "Consolas". Empty uses the built-in font (Selawik Semibold). Prefer font files: they ship with the game, while
-    /// an installed font is never copied into it, so it may be missing on players' PCs and is never there in a browser
-    /// (the built-in font draws instead, and the web export warns of it).
+    /// A font file relative to Assets (.ttf, .otf or .ttc, e.g. "Fonts/PressStart2P-Regular.ttf"), or the name of an
+    /// installed font such as "Consolas". Empty uses the built-in font (Selawik Semibold). The Inspector's picker lists the
+    /// fonts safe to ship (the built-in one, Griff's free fonts, which picking copies into Assets/Fonts with their
+    /// licenses, and the project's font files) and, apart, those only installed on this PC: an installed font is never
+    /// copied into the game, so it may be missing on players' PCs and is never there in a browser (the built-in font draws
+    /// instead, and exports warn of it).
     /// </summary>
+    [Names(NameKind.Font)]
     public string? Font { get; set; }
 
     /// <summary>Where the text sits relative to the entity; lines of several-line text line up the same way.</summary>

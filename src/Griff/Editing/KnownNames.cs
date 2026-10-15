@@ -9,19 +9,23 @@ namespace Griff.Editing;
 /// <summary>
 /// The names a project's fields can name besides entities (see <see cref="NamesAttribute"/>): its prefabs and scenes,
 /// its input actions, the collision layers its colliders and tilemaps are on, the messages its components and scripts
-/// send and listen for, and its tables and their rows. The Inspector lists them in a field's picker and flags a name that
-/// matches none.
+/// send and listen for, its tables and their rows, and the fonts it can draw text in (<see cref="FontNames"/>, when
+/// they're known). The Inspector lists them in a field's picker and flags a name that matches none.
 /// </summary>
 public sealed partial class KnownNames
 {
     private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard;
     private readonly List<Regex> _sentPatterns;
     private readonly Dictionary<string, TableNames> _tables;
+    private readonly Lazy<FontNames?> _fonts;
 
     /// <param name="tables">The project's tables by name, each with its rows' names (and the names its rows had before they were renamed).</param>
+    /// <param name="fonts">The fonts it can name, worked out the first time they're asked for; null when they can't be known (font names then match).</param>
     public KnownNames(IEnumerable<string> prefabs, IEnumerable<string> scenes, IEnumerable<string> actions,
-        IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null)
+        IEnumerable<string> layers, IEnumerable<string> sent, IEnumerable<string> heard, IEnumerable<TableNames>? tables = null,
+        Func<FontNames>? fonts = null)
     {
+        _fonts = new(() => fonts?.Invoke());
         _tables = new(StringComparer.OrdinalIgnoreCase);
         foreach (var table in tables ?? [])
             _tables.TryAdd(table.Name, table);
@@ -65,9 +69,12 @@ public sealed partial class KnownNames
     public IReadOnlyList<string> RowsOf(string? table) =>
         table is not null && _tables.TryGetValue(AssetName(table, Data.TableFile.Extension), out var names) ? names.Rows : [];
 
+    /// <summary>The fonts text can be set in, or null when they can't be known.</summary>
+    public FontNames? Fonts => _fonts.Value;
+
     /// <summary>
     /// What a field naming <paramref name="kind"/> can pick from, alphabetically, each with a word on it for messages
-    /// ("sent", "heard", or both).
+    /// ("sent", "heard", or both); fonts in their groups (see <see cref="FontNames"/>).
     /// </summary>
     public IReadOnlyList<NameChoice> Choices(NamesAttribute kind) => Choices(kind, null);
 
@@ -77,6 +84,7 @@ public sealed partial class KnownNames
     /// </summary>
     public IReadOnlyList<NameChoice> Choices(NamesAttribute kind, Component? component) => kind.Kind switch
     {
+        NameKind.Font => Fonts?.Choices ?? [],
         NameKind.Prefab => Sorted(_prefabs),
         NameKind.Scene => Sorted(_scenes),
         NameKind.Action => Sorted(_actions),
@@ -171,6 +179,7 @@ public sealed partial class KnownNames
         NameKind.Table => _tables.ContainsKey(AssetName(name, Data.TableFile.Extension)),
         // A row is matched against its table, which takes the component (see Unmatched(Component, ...)).
         NameKind.Row => true,
+        NameKind.Font => Fonts is not { } fonts || fonts.Draws(name),
         _ when IsPattern(name) => true,
         _ when kind.Hears => _sent.Contains(name) || _sentPatterns.Any(p => p.IsMatch(name)),
         _ => _heard.Contains(name),
@@ -198,14 +207,17 @@ public sealed partial class KnownNames
             NameKind.Layer => $"Nothing is on the layer {quoted}: no collider or tilemap has it as its Layer",
             NameKind.Table => $"There's no table called {quoted} in the project: make one with Data > New Table",
             NameKind.Row => $"The table has no row called {quoted}: add it in the Tables panel",
+            NameKind.Font => $"There's no font file in Assets or font installed on this PC called {quoted}, so the built-in font draws " +
+                             "instead (Griff's free fonts go into Assets when picked, or with Art > Add Free Font)",
             _ when kind.Hears => $"Nothing sends {quoted}: no component's message, dialogue's [send] or script's Game.Send",
             _ => $"Nothing listens for {quoted}: no Counter, Trigger, Sound Player or script's On",
         };
     }
 
-    /// <summary>"a prefab", "a scene", "an input action", "a collision layer" or "a message": what a field names.</summary>
+    /// <summary>"a prefab", "a scene", "an input action", "a collision layer", "a font" or "a message": what a field names.</summary>
     public static string Noun(NamesAttribute kind) => kind.Kind switch
     {
+        NameKind.Font => "a font",
         NameKind.Prefab => "a prefab",
         NameKind.Scene => "a scene",
         NameKind.Action => "an input action",
@@ -285,8 +297,11 @@ public sealed partial class KnownNames
     [GeneratedRegex("""\bLayer\s*=\s*"([^"\\]+)"\s*[;,}]""")]
     private static partial Regex ScriptLayer();
 
-    /// <summary>Everything a project's names come from put together: its files, and what was found in them.</summary>
-    public static KnownNames From(Project project, IEnumerable<Found> found, IEnumerable<TableNames>? tables = null)
+    /// <summary>
+    /// Everything a project's names come from put together: its files, and what was found in them; its tables; and its
+    /// fonts, from <paramref name="fonts"/> (null when they can't be known).
+    /// </summary>
+    public static KnownNames From(Project project, IEnumerable<Found> found, IEnumerable<TableNames>? tables = null, Func<Project, FontNames>? fonts = null)
     {
         var all = found.ToList();
         var actions = InputState.BuiltInActions.Keys.Concat(project.Manifest.Controls?.Keys ?? Enumerable.Empty<string>());
@@ -297,7 +312,8 @@ public sealed partial class KnownNames
             all.SelectMany(f => f.Layers),
             all.SelectMany(f => f.Sent),
             all.SelectMany(f => f.Heard),
-            tables);
+            tables,
+            fonts is null ? null : () => fonts(project));
     }
 }
 
@@ -325,14 +341,38 @@ public sealed class TableNames(string name, IReadOnlyList<string> rows, IEnumera
         new(table.Name, [.. table.Rows.Select(r => r.Name)], table.RenamedRows.Keys, [.. table.Columns.Select(c => c.Name)]);
 }
 
-/// <summary>A name a field can pick, with a word on it ("sent" for a message only sent so far), or none.</summary>
-public sealed record NameChoice(string Name, string? Detail);
+/// <summary>
+/// A name a field can pick, with a word on it ("sent" for a message only sent so far), or none; for a font, the group it's
+/// listed in and how it reads when its name is a path ("Press Start 2P" for "Fonts/PressStart2P-Regular.ttf").
+/// </summary>
+public sealed record NameChoice(string Name, string? Detail, NameGroup? Group = null, string? Label = null)
+{
+    /// <summary>How it reads: its <see cref="Label"/>, or its name.</summary>
+    public string Text => Label ?? Name;
+}
+
+/// <summary>A group of choices in a picker, with what to know about them (e.g. that installed fonts aren't shipped).</summary>
+public sealed record NameGroup(string Title, string? Warning = null);
+
+/// <summary>
+/// The fonts a project's text can be set in, as the font picker groups them: those safe to ship first (the built-in
+/// font, Griff's free fonts and the project's font files), then, apart and with a warning, fonts only installed on this
+/// PC. Built in Griff.Fonts (<c>FontChoices</c>), which knows them.
+/// </summary>
+/// <param name="Choices">Every font, in the picker's order, each with its group.</param>
+/// <param name="Usable">The names that draw in a font of their own now (the built-in font's, the project's font files, installed fonts).</param>
+public sealed record FontNames(IReadOnlyList<NameChoice> Choices, IReadOnlyCollection<string> Usable)
+{
+    /// <summary>True when text set in <paramref name="font"/> draws in it (or in the built-in font, for none).</summary>
+    public bool Draws(string font) => string.IsNullOrWhiteSpace(font) || Usable.Contains(font.Trim().Replace('\\', '/'));
+}
 
 /// <summary>
 /// Keeps a project's <see cref="KnownNames"/> up to date cheaply: each scene, prefab, script and table is read again only
 /// once it's been saved since it was last read, and the open scene's live entities stand in for its file.
 /// </summary>
-public sealed class KnownNameIndex(ComponentRegistry registry)
+/// <param name="fonts">Works out a project's fonts (Griff.Fonts' <c>FontChoices.For</c>); null leaves fonts unknown.</param>
+public sealed class KnownNameIndex(ComponentRegistry registry, Func<Project, FontNames>? fonts = null)
 {
     private readonly Dictionary<string, (DateTime Written, KnownNames.Found Found)> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (DateTime Written, TableNames Names)> _tables = new(StringComparer.OrdinalIgnoreCase);
@@ -433,6 +473,6 @@ public sealed class KnownNameIndex(ComponentRegistry registry)
             _tables.Remove(gone);
         if (open is not null)
             found.Add(KnownNames.Collect(open, registry));
-        return KnownNames.From(project, found, tables);
+        return KnownNames.From(project, found, tables, fonts);
     }
 }

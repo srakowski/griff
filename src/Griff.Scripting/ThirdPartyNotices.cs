@@ -12,7 +12,8 @@ namespace Griff.Scripting;
 /// </summary>
 /// <remarks>
 /// Griff's own files and the game's (its Assets, scripts and settings) need no notice: what a game maker puts in their
-/// Assets, fonts included, is theirs to license.
+/// Assets, fonts included, is theirs to license. The exception is a copy of one of Griff's <see cref="FreeFonts"/> in
+/// Assets (picked in the font picker), which is listed with its license.
 /// </remarks>
 public static class ThirdPartyNotices
 {
@@ -59,11 +60,13 @@ public static class ThirdPartyNotices
 
     /// <summary>
     /// The notices for <paramref name="files"/>: paths relative to the export (or inside a bundle), with '/' or '\'
-    /// between folders. Griff's own and the game's need none.
+    /// between folders. Griff's own and the game's need none, except copies of Griff's free fonts in the game's
+    /// <paramref name="assets"/> (its Assets folder, if given), which are listed with their licenses.
     /// </summary>
-    public static Notices For(IEnumerable<string> files)
+    public static Notices For(IEnumerable<string> files, string? assets = null)
     {
         var used = new HashSet<Component>();
+        var freeFonts = FreeFontsIn(assets);
         var unlisted = new List<string>();
         foreach (var file in files)
         {
@@ -81,7 +84,7 @@ public static class ThirdPartyNotices
         text.AppendLine();
         text.AppendLine("This game was made with Griff. It carries software and fonts made by others, listed here with their");
         text.AppendLine("licenses. What the game's maker made (its pictures, sounds, music, fonts and scripts) is theirs.");
-        foreach (var component in Components.Where(used.Contains))
+        foreach (var component in Components.Where(used.Contains).Concat(freeFonts))
         {
             text.AppendLine();
             text.AppendLine(new string('-', 78));
@@ -183,6 +186,27 @@ public static class ThirdPartyNotices
                name.EndsWith(".deps", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".runtimeconfig", StringComparison.OrdinalIgnoreCase) ||
                name is "index" or "main" or "griff" or "THIRD-PARTY-NOTICES" || Path.GetFileName(path) == ExportLayout.Marker ||
                name.Equals(Path.GetFileNameWithoutExtension(ExportLayout.ScriptsAssembly), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The copies of Griff's free fonts in a game's Assets, each with its license: Griff's own copy of it, or the one
+    // picking the font put beside it.
+    private static List<Component> FreeFontsIn(string? assets)
+    {
+        if (assets is null || !Directory.Exists(assets))
+            return [];
+        var found = new List<Component>();
+        var files = Directory.EnumerateFiles(assets, "*", SearchOption.AllDirectories).Where(ProjectFonts.IsFontFile).Order(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            if (FreeFonts.CopyOf(file) is not { } font)
+                continue;
+            var path = "Assets/" + Path.GetRelativePath(assets, file).Replace(Path.DirectorySeparatorChar, '/');
+            var license = new[] { font.LicensePath, Path.Combine(Path.GetDirectoryName(file)!, font.LicenseFile) }.FirstOrDefault(File.Exists);
+            found.Add(new Component(font.About + $" (from {font.Source})", path, _ => false,
+                () => [license is null ? $"The {font.License}: see {font.LicenseFile}." : File.ReadAllText(license)]));
+        }
+
+        return found;
     }
 
     private static string Read(string fileName)

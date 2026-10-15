@@ -56,6 +56,8 @@ public sealed class ThirdPartyNoticesTests : IDisposable
 
         await using (var file = File.Create(Path.Combine(project.AssetsPath, "Fonts.scene")))
             serializer.Save(scene, file);
+        Directory.CreateDirectory(Path.Combine(project.AssetsPath, "Fonts"));
+        File.Copy(FreeFonts.Mono.FilePath, Path.Combine(project.AssetsPath, "Fonts", "pixel.ttf"));
 
         var warning = Assert.Single(WebExporter.InstalledFontWarnings(project));
         Assert.Contains("Fonts.scene", warning, StringComparison.Ordinal);
@@ -71,5 +73,54 @@ public sealed class ThirdPartyNoticesTests : IDisposable
         var notices = File.ReadAllText(Path.Combine(result.OutputFolder!, ThirdPartyNotices.FileName));
         Assert.Contains("Selawik", notices, StringComparison.Ordinal);
         Assert.Contains("SIL OPEN FONT LICENSE", notices, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Exports_WarnOfInstalledFontsAndMissingFontFiles_ForTheDesktopToo()
+    {
+        var project = await Project.CreateAsync(_root, "Font Warnings");
+        var serializer = new SceneSerializer(ComponentRegistry.CreateDefault());
+        var scene = new Scene();
+        foreach (var font in new[] { "Consolas", "Fonts/gone.ttf", FreeFonts.Pixel.AssetPath, "Selawik Semibold", "" })
+        {
+            var label = new Entity("Label " + font);
+            label.AddComponent<Text>().Font = font;
+            scene.Add(label);
+        }
+
+        await using (var file = File.Create(Path.Combine(project.AssetsPath, "Level.scene")))
+            serializer.Save(scene, file);
+
+        var desktop = ExportFonts.Warnings(project, web: false);
+        Assert.Equal(3, desktop.Count);
+        Assert.Contains(desktop, w => w.Contains("\"Consolas\"", StringComparison.Ordinal) && w.Contains("players without it", StringComparison.Ordinal));
+        Assert.Contains(desktop, w => w.Contains("\"Fonts/gone.ttf\", which isn't in Assets", StringComparison.Ordinal));
+        Assert.Contains(desktop, w => w.Contains("Griff's free font Press Start 2P", StringComparison.Ordinal));
+        Assert.Contains(ExportFonts.Warnings(project, web: true), w => w.Contains("a browser hasn't got", StringComparison.Ordinal));
+
+        // Once the free font is picked (copied into Assets), it isn't warned of.
+        FreeFonts.Pixel.AddTo(project.AssetsPath);
+        Assert.Equal(2, ExportFonts.Warnings(project, web: false).Count);
+    }
+
+    [Fact]
+    public void Notices_ListGriffsFreeFonts_InTheGamesAssets_WithTheirLicenses()
+    {
+        var assets = Directory.CreateDirectory(Path.Combine(_root, "Assets")).FullName;
+        FreeFonts.Pixel.AddTo(assets);
+        Directory.CreateDirectory(Path.Combine(assets, "Text"));
+        File.Copy(FreeFonts.Serif.FilePath, Path.Combine(assets, "Text", "story.ttf"));
+        File.WriteAllText(Path.Combine(assets, "Fonts", "mine.ttf"), "my own font");
+
+        var notices = ThirdPartyNotices.For(["Griff.dll"], assets);
+
+        Assert.Empty(notices.Unlisted);
+        Assert.Contains(FreeFonts.Pixel.About, notices.Text, StringComparison.Ordinal);
+        Assert.Contains("Files: Assets/Fonts/PressStart2P-Regular.ttf", notices.Text, StringComparison.Ordinal);
+        Assert.Contains("Files: Assets/Text/story.ttf", notices.Text, StringComparison.Ordinal);
+        Assert.Contains("Reserved Font Name \"Press Start 2P\"", notices.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("mine.ttf", notices.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(FreeFonts.Mono.Name, notices.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(FreeFonts.Pixel.Name, ThirdPartyNotices.For(["Griff.dll"]).Text, StringComparison.Ordinal);
     }
 }

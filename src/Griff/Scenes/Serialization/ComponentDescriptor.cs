@@ -200,10 +200,16 @@ public sealed class PropertyDescriptor
         FormerSerializedNames = FormerNames.Select(n => JsonNamingPolicy.CamelCase.ConvertName(n)).Where(n => n != SerializedName).Distinct().ToList();
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
-        Names = property.PropertyType == typeof(string) ? property.GetCustomAttribute<NamesAttribute>() : null;
+        Names = property.PropertyType != typeof(string) ? null
+            : property.GetCustomAttribute<NamesAttribute>() ?? (EntityName is null && IsFontName(property.Name) ? FontNames : null);
         ActionName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<ActionNameAttribute>() : null;
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
     }
+
+    // A string called Font, or ending in Font ("TitleFont"), names a font without being marked.
+    private static readonly NamesAttribute FontNames = new(NameKind.Font);
+
+    private static bool IsFontName(string name) => name.EndsWith("Font", StringComparison.Ordinal);
 
     internal PropertyInfo Info => _property;
 
@@ -227,8 +233,9 @@ public sealed class PropertyDescriptor
     public EntityNameAttribute? EntityName { get; }
 
     /// <summary>
-    /// For a string marked <see cref="NamesAttribute"/>: it names a prefab, scene, input action, collision layer or
-    /// message, which the Inspector picks from a list of the project's.
+    /// For a string marked <see cref="NamesAttribute"/>: it names a prefab, scene, input action, collision layer, message
+    /// or font, which the Inspector picks from a list of the project's. A string called Font (or ending in Font) names a
+    /// font without being marked.
     /// </summary>
     public NamesAttribute? Names { get; }
 

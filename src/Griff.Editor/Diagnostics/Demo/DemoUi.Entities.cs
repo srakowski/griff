@@ -1,4 +1,5 @@
 #if DEBUG
+using System.Windows;
 using System.Windows.Controls;
 using Griff.Editor.Features.Inspector;
 
@@ -14,6 +15,14 @@ internal sealed partial class DemoUi
             ? Descendants<Button>(row).FirstOrDefault(b => b.Tag is string tag && tag.EndsWith(":choose", StringComparison.Ordinal))
             : null;
 
+    /// <summary>
+    /// A part of the field list that's open: "list" for all of it, or a choice in it by what picking it names
+    /// ("Fonts/PressStart2P-Regular.ttf", "Consolas").
+    /// </summary>
+    public static FrameworkElement? PickerPart(string name) => name.Equals("list", StringComparison.OrdinalIgnoreCase)
+        ? Find<FieldPickerView>(v => v.IsVisible)
+        : Find<ListBoxItem>(i => i.Tag as string == name && i.IsVisible);
+
     /// <summary>The search box of the field list that's open, once it has the keyboard.</summary>
     public static TextBox? PickerSearch() => Find<TextBox>(t => t.Tag as string == "picker:search" && t.IsVisible && t.IsKeyboardFocusWithin);
 
@@ -26,7 +35,11 @@ internal sealed partial class DemoUi
         var field = (await WaitFor(() => InspectorRow(component, label), $"{component}.{label}")).DataContext as PropertyField;
         var wanted = field is null || !field.NamesMany || !field.Names(name);
         if (field is { IsPickerOpen: true })
+        {
+            // Shut it, and wait out the moment after shutting in which a click on the button keeps it shut.
             field.IsPickerOpen = false;
+            await Settle(350);
+        }
         var button = await WaitFor(() => PickerButton(component, label), $"{component}.{label}'s list");
         await Click(button);
         try

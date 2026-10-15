@@ -48,8 +48,9 @@ How it works:
   one draws as the magenta checker.
 - **Text draws as on the desktop**, from the same glyph atlas (`Griff.Fonts`, which runs in the browser as it is): a quad
   a glyph, with the rows of an atlas page that glyphs were added to that frame copied to its texture before drawing.
-  Font files in the game's Assets work; an installed font can't (the browser has only the game's files), so its text
-  draws in the built-in font and the export warns of it. `-Check` also checks the proof game's label ("Griff on the Web
+  Font files in the game's Assets work (Griff's free fonts too, once picked); an installed font can't (the browser has
+  only the game's files), so its text draws in the built-in font and the export warns of it, and a character no font of
+  the game's has stays the missing-glyph box (the desktop falls back to Windows' fonts). `-Check` also checks the proof game's label ("Griff on the Web
   ♥") is drawn, as wide in the browser as Griff lays it out.
 - **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
   page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl
@@ -84,7 +85,14 @@ it carries an assembly or font with no notice.
   as Bitstream Vera's license asks of a changed font (no "Bitstream" or "Vera" in its names, and no "Arev" or "Tavmjong
   Bah" for Arev's glyphs), keeping its copyright notices. JetBrains Mono, the script editor's font (SIL Open Font License;
   see `Themes/Fonts`), is the editor's own and never goes into a game.
+- **Free fonts for games** ship beside the editor (`src/Griff.Fonts/Free`, whose README and `FreeFonts.cs` record each
+  one's source, version, license and SHA-256), never inside the player: Press Start 2P 3.000, Atkinson Hyperlegible
+  Bold 1.006 and Crimson Text SemiBold 1.100 from google/fonts, and JetBrains Mono Bold 2.304 from JetBrains' release,
+  each under the SIL Open Font License 1.1, unmodified (so Press Start 2P's Reserved Font Name is respected), with its
+  license beside it. Picking one copies it and its license into the project's Assets; an export lists every unchanged
+  copy of one it carries (found by its SHA-256, whatever it's called) in `THIRD-PARTY-NOTICES.txt` with its license.
 - **Installed fonts** (Segoe UI, Consolas, Arial...) are licensed to the computer they're on: Griff draws them there at
-  run time and never copies, bakes or embeds one into an export. In a browser their text draws in the built-in font, and
-  the web export warns of it rather than failing.
+  run time (text set in one, and characters no font of the game's has) and never copies, bakes or embeds one into a
+  project or an export. The font picker sets them apart with a warning; in a browser their text draws in the built-in
+  font, and both exports warn of each one a scene names rather than failing.
 - **A game maker's own Assets** (pictures, sounds, music, fonts, scripts) are theirs to license; Griff just ships them.

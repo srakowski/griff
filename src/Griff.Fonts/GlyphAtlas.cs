@@ -31,7 +31,9 @@ public readonly record struct GlyphQuad(float Left, float Top, float Right, floa
 /// block is centered on its anchor up and down, and each line lines up with it by the <see cref="TextAlign"/>: starting
 /// at it, ending at it or centered on it. Fonts come from <see cref="Fonts"/> (see <see cref="FontCatalog"/>); a
 /// character a font hasn't got comes from the built-in font, then from the fallback (arrows, shapes, symbols such as ♥,
-/// Greek and Cyrillic; see <see cref="BuiltInFonts"/>), and is drawn as the font's missing-glyph box if none has it.
+/// Greek and Cyrillic; see <see cref="BuiltInFonts"/>), then, with <see cref="InstalledFallback"/> (on the desktop), from
+/// Windows' own fonts on the player's computer (Chinese, Japanese, Korean, emoji...; see
+/// <see cref="InstalledFonts.Fallback"/>), and is drawn as the font's missing-glyph box if none has it.
 /// </remarks>
 public sealed class GlyphAtlas
 {
@@ -47,10 +49,25 @@ public sealed class GlyphAtlas
     private GlyphQuad[] _quads = new GlyphQuad[64];
 
     /// <param name="assetRoot">The project's Assets folder, which font files are found in; null for none.</param>
-    public GlyphAtlas(string? assetRoot) => Fonts = new FontCatalog(assetRoot);
+    /// <param name="installedFallback">See <see cref="InstalledFallback"/>.</param>
+    public GlyphAtlas(string? assetRoot, bool installedFallback = true)
+    {
+        Fonts = new FontCatalog(assetRoot);
+        InstalledFallback = installedFallback;
+    }
 
     /// <summary>Where the faces text names come from.</summary>
     public FontCatalog Fonts { get; }
+
+    /// <summary>
+    /// Whether a character no built-in font has is looked for in the fonts installed on this computer, as WPF did: drawn
+    /// there and never shipped or kept. A browser has none, so there it stays the missing-glyph box.
+    /// </summary>
+    public bool InstalledFallback { get; }
+
+    /// <summary>The face <paramref name="codepoint"/> is drawn from in <paramref name="font"/>: its own, a fallback's, or null for the missing-glyph box.</summary>
+    public FontFace? FaceOf(int codepoint, string? font) =>
+        Resolve(Fonts.FaceFor(font), codepoint) is { Index: > 0 } glyph ? glyph.Face : null;
 
     /// <summary>The pages glyphs are on, which <see cref="GlyphQuad.Page"/> indexes.</summary>
     public IReadOnlyList<GlyphPage> Pages => _pages;
@@ -207,8 +224,8 @@ public sealed class GlyphAtlas
         return c;
     }
 
-    // The glyph a character is drawn with in a face, looked for in the built-in font and then the fallback when the face
-    // hasn't got it, and the face's missing-glyph box when none has. Control characters (a carriage return) are nothing.
+    // The glyph a character is drawn with in a face, looked for in the built-in font, then the fallback, then (on the
+    // desktop) the installed fonts when the face hasn't got it, and the face's missing-glyph box when none has. Control characters (a carriage return) are nothing.
     private Glyph? Resolve(FontFace face, int codepoint)
     {
         if (codepoint < ' ' && codepoint != '\t')
@@ -222,6 +239,8 @@ public sealed class GlyphAtlas
             (from, index) = (builtIn, inBuiltIn);
         if (index == 0 && fallback.GlyphOf(codepoint) is var inFallback and > 0)
             (from, index) = (fallback, inFallback);
+        if (index == 0 && InstalledFallback && codepoint > ' ' && InstalledFonts.Fallback(codepoint) is { } installed)
+            (from, index) = (installed, installed.GlyphOf(codepoint));
 
         if (!_glyphs.TryGetValue((from.Id, index), out glyph))
         {

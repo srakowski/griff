@@ -16,7 +16,7 @@ public sealed class ExportResult
 
     public string? Error { get; init; }
 
-    /// <summary>What the game maker should know about the export, which didn't stop it (e.g. fonts the browser hasn't got).</summary>
+    /// <summary>What the game maker should know about the export, which didn't stop it (e.g. installed fonts players may not have).</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
@@ -50,7 +50,7 @@ public static class GameExporter
         try
         {
             WriteGame(project, compiled, staging);
-            var notices = ThirdPartyNotices.For(ThirdPartyNotices.FilesIn(playerExecutable));
+            var notices = ThirdPartyNotices.For(ThirdPartyNotices.FilesIn(playerExecutable), project.AssetsPath);
             File.WriteAllText(Path.Combine(staging, ThirdPartyNotices.FileName), notices.Text);
 
             // Written next to the target and moved into place, so a failed export leaves the last good one alone.
@@ -71,7 +71,11 @@ public static class GameExporter
             }
         }
 
-        return new ExportResult { Success = true, Diagnostics = compiled.Diagnostics, OutputFolder = outputFolder, Executable = executable };
+        return new ExportResult
+        {
+            Success = true, Diagnostics = compiled.Diagnostics, OutputFolder = outputFolder, Executable = executable,
+            Warnings = ExportFonts.Warnings(project, web: false),
+        };
     }
 
     /// <summary>

@@ -242,11 +242,19 @@ public enum NameKind
     /// <see cref="NamesAttribute.Table"/>).
     /// </summary>
     Row,
+
+    /// <summary>
+    /// A font: a font file in Assets ("Fonts/PressStart2P-Regular.ttf"), the built-in font's name or empty for it, or an
+    /// installed font's name ("Consolas"). A string property called Font, or ending in Font ("TitleFont"), names one
+    /// without being marked.
+    /// </summary>
+    Font,
 }
 
 /// <summary>
-/// Marks a string property as naming a prefab, scene, input action, collision layer, message, table or table row: the
-/// editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of them.
+/// Marks a string property as naming a prefab, scene, input action, collision layer, message, table, table row or font:
+/// the editor's Inspector lets you pick one from a list of those the project has, and flags a name that matches none of
+/// them.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class NamesAttribute(NameKind kind) : Attribute

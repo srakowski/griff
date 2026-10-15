@@ -36,13 +36,18 @@ public sealed class ExportLicensingTests : IDisposable
         var player = Path.Combine(Repo(), "src", "Griff.Editor", "bin", Configuration, "net10.0-windows", "Player", playerKind, "Griff.Player.exe");
         Assert.True(File.Exists(player), $"Build the editor first: no player at {player}");
 
+        // A free font picked in the font picker ships from Assets, named in the notices with its license.
+        FreeFonts.Pixel.AddTo(project.AssetsPath);
         var export = GameExporter.Export(project, player, Path.Combine(_root, "Build"));
         Assert.True(export.Success, export.Error);
+        Assert.Contains(export.Warnings, w => w.Contains("\"Consolas\"", StringComparison.Ordinal) && w.Contains("isn't shipped", StringComparison.Ordinal));
 
         var carried = ThirdPartyNotices.FilesIn(player);
         Assert.Contains("Griff.Fonts.dll", carried);
         Assert.Contains("StbTrueTypeSharp.dll", carried);
-        var notices = ThirdPartyNotices.For(carried);
+        Assert.DoesNotContain(carried, f => FreeFonts.All.Any(font => f.EndsWith(font.FileName, StringComparison.OrdinalIgnoreCase)));
+        var notices = ThirdPartyNotices.For(carried, project.AssetsPath);
+        Assert.Contains(FreeFonts.Pixel.About, notices.Text, StringComparison.Ordinal);
         Assert.True(notices.Unlisted.Count == 0, "No notice for: " + string.Join(", ", notices.Unlisted));
         var beside = File.ReadAllText(Path.Combine(export.OutputFolder!, ThirdPartyNotices.FileName));
         Assert.Equal(notices.Text, beside);

@@ -84,6 +84,51 @@ public sealed class GlyphAtlasTests : IDisposable
     }
 
     [Fact]
+    public void CharactersNoBuiltInFontHas_ComeFromWindowsOwnFonts_OnTheDesktopOnly()
+    {
+        const string Chinese = "中文", Japanese = "ひらがな", Emoji = "😀";
+        var desktop = new GlyphAtlas(null);
+        var browser = new GlyphAtlas(null, installedFallback: false);
+
+        // The built-in fonts haven't got them, so a browser (which has no installed fonts) draws the missing-glyph box.
+        foreach (var codepoint in new[] { '中', 'ひ', char.ConvertToUtf32(Emoji, 0) })
+        {
+            Assert.Equal(0, BuiltInFonts.Default.Face.GlyphOf(codepoint));
+            Assert.Equal(0, BuiltInFonts.Fallback.Face.GlyphOf(codepoint));
+            Assert.Null(browser.FaceOf(codepoint, null));
+        }
+
+        Assert.Same(BuiltInFonts.Fallback.Face, desktop.FaceOf('♥', null));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Empty(InstalledFonts.Families);
+            Assert.Null(desktop.FaceOf('中', null));
+            return;
+        }
+
+        // On Windows they come, a glyph at a time, from its own fonts on the player's computer, as WPF drew them.
+        var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        foreach (var (text, file) in new[] { (Chinese, "msyh.ttc"), (Japanese, "YuGothM.ttc"), (Emoji, "seguiemj.ttf") })
+        {
+            if (!File.Exists(Path.Combine(fonts, file)))
+                continue;
+            var face = desktop.FaceOf(char.ConvertToUtf32(text, 0), "Fonts/missing.ttf");
+            Assert.NotNull(face);
+            Assert.StartsWith(fonts, face!.Name, StringComparison.OrdinalIgnoreCase);
+            var laid = desktop.Lay(text, null, TextAlign.Left).ToArray();
+            Assert.Equal(new System.Globalization.StringInfo(text).LengthInTextElements, laid.Length);
+            Assert.All(laid, q => Assert.True(q.Right - q.Left > 0.3f, $"{text} is drawn about a line high"));
+            // The missing-glyph box isn't as wide as these characters, which are an em wide.
+            Assert.NotEqual(Extent(browser.Lay(text, null, TextAlign.Left)).Max, Extent(desktop.Lay(text, null, TextAlign.Left)).Max, 2);
+        }
+
+        // Latin letters still come from the font itself, and a character no font has stays a box.
+        Assert.Same(BuiltInFonts.Default.Face, desktop.FaceOf('A', null));
+        Assert.Null(desktop.FaceOf(0x10FFFD, null));
+        Assert.Contains("Segoe UI Emoji", InstalledFonts.FallbackFamilies);
+    }
+
+    [Fact]
     public void FontFiles_InAssets_AreUsed_AndReadAgainWhenTheyChange()
     {
         var atlas = new GlyphAtlas(_assets);

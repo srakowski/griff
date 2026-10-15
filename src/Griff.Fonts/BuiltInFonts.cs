@@ -63,4 +63,8 @@ public static class BuiltInFonts
 
     /// <summary>Every built-in font.</summary>
     public static IReadOnlyList<BuiltInFont> All { get; } = [Default, Fallback];
+
+    /// <summary>The built-in font a Font names (by its name, any case), or null: "Selawik Semibold" is the default's.</summary>
+    public static BuiltInFont? Find(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? null : All.FirstOrDefault(f => f.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
 }

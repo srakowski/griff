@@ -22,6 +22,11 @@
     <Compile Include="..\..\src\Griff.Web\WebFrame.cs" Link="Web\WebFrame.cs" />
   </ItemGroup>
 
+  <!-- Griff's free fonts, where FreeFonts looks for them (beside the editor, here beside the tests). -->
+  <ItemGroup>
+    <None Include="..\..\src\Griff.Fonts\Free\*.ttf;..\..\src\Griff.Fonts\Free\*.txt" Link="FreeFonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Griff\Griff.csproj" />
     <ProjectReference Include="..\..\src\Griff.Fonts\Griff.Fonts.csproj" />

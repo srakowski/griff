@@ -25,7 +25,8 @@ public sealed class ArtModule : IEditorModule
             .AddCommand<PaintSelectedCommand>()
             .AddCommand<AddTilesetCommand>()
             .AddCommand<AddTilemapLayerCommand>()
-            .AddCommand<OpenClipEditorCommand>();
+            .AddCommand<OpenClipEditorCommand>()
+            .AddCommand<AddFreeFontCommand>();
     }
 }
 

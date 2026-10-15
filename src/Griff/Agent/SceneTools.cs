@@ -248,7 +248,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
         if (unknown.Count > 0)
         {
-            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, outputs, tables or their rows, flagged in the Inspector):");
+            text.AppendLine("Names that match nothing in the project (fields naming prefabs, scenes, input actions, layers, messages, actions, outputs, tables or their rows, or fonts, flagged in the Inspector):");
             foreach (var (component, label, problem) in unknown)
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {component.Entity!.Name} #{AgentValues.ShortId(component.Entity.Id)} {label}: {problem}");
         }
@@ -776,7 +776,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
     private ToolResult Describe(ToolArgs args)
     {
         var descriptor = FindComponent(args.String("component"));
-        return ToolResult.Ok(ComponentDescription.Of(host.Components, descriptor));
+        return ToolResult.Ok(ComponentDescription.Of(host.Components, descriptor, host.Names));
     }
 
     // --- Helpers ---

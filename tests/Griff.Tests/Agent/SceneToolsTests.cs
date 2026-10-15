@@ -558,6 +558,28 @@ public class SceneToolsTests
     }
 
     [Fact]
+    public void Describe_ListsTheFontsAFontCanName_AsThePickerGroupsThem()
+    {
+        _host.Names = new KnownNames([], [], [], [], [], [], fonts: () => Griff.Fonts.FontChoices.For(null));
+
+        var text = Run("component_describe", """{"component": "Text"}""").Text;
+        var font = text.Split('\n').Single(l => l.StartsWith("- font:", StringComparison.Ordinal));
+        Assert.Contains("(Names a font.)", font);
+        Assert.Contains("Safe to ship: \"Selawik Semibold\" (built in)", font);
+        Assert.Contains("\"Fonts/PressStart2P-Regular.ttf\" (Press Start 2P; pixel, free: copied into Assets)", font);
+        Assert.Contains("Art_AddFreeFont", font);
+        if (Griff.Fonts.InstalledFonts.Families.Count > 0)
+        {
+            Assert.Contains("Only on this PC (Installed fonts aren't shipped", font);
+            Assert.True(font.IndexOf("Only on this PC", StringComparison.Ordinal) > font.IndexOf("JetBrains Mono Bold", StringComparison.Ordinal));
+        }
+
+        // A font that's nowhere is flagged, as the Inspector flags it.
+        Run("entity_create", """{"entities": [{"name": "Title", "components": {"Text": {"font": "Fonts/PressStart2P-Regular.ttf"}}}]}""");
+        Assert.Contains("Text.Font: There's no font file in Assets or font installed on this PC called", Run("scene_tree", "{}").Text);
+    }
+
+    [Fact]
     public void Describe_SaysWhatAFieldNames()
     {
         var spawner = Run("component_describe", """{"component": "Spawner"}""").Text;

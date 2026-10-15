@@ -6,6 +6,10 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Editor fixes
+
+- [ ] Fix the New Project window growing too tall with all the templates: cap its height to fit the screen (it opens at a sensible size, never taller than the screen's work area, and can be resized) and make the template list scroll, with the name, folder and Create button always in view; keyboard and mouse-wheel scrolling work, and the selected template scrolls into view.
+
 ### Web
 
 First, at the user's request (2026-10-14): a game playable in a browser comes before the rest. The proof goes first to

@@ -88,9 +88,14 @@ public static partial class WebPlayer
 
         var start = QueryValue(query, "scene") is { Length: > 0 } named ? loaded with { Scene = loaded.LoadScene(named), SceneName = named } : loaded;
         // A still moment is the same moment wherever it's reached: its random numbers (Rand) start from 0 as the game does.
+        // Otherwise .NET's interpreter is readied for the game before it starts, rather than in its frames (WebWarmup); a
+        // still moment is drawn once, so it needn't be.
         s_still = Number(QueryValue(query, "still"));
         if (s_still is not null)
             Rand.Seed(0);
+        else
+            WebWarmup.Run(WebWarmup.HasTurningBodies(loaded.Project));
+
         var game = s_game = start.NewGame(s_input);
         // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
         game.Warning += (_, message) => Console.WriteLine(message);
@@ -284,7 +289,8 @@ public static partial class WebPlayer
     /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>steps</c> the game's steps since it was last asked, "count|mean ms|worst ms" (a frame's steps
     /// timed together); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
-    /// semicolons); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
+    /// semicolons); <c>warmup</c> how long readying .NET took before the game started, in milliseconds
+    /// (<see cref="WebWarmup"/>); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
     /// </summary>
     [JSExport]
@@ -321,6 +327,8 @@ public static partial class WebPlayer
                 return read;
             }
 
+            case "warmup":
+                return WebWarmup.Milliseconds.ToString("0", CultureInfo.InvariantCulture);
             case "flag":
                 return game.HasFlag(argument) ? "1" : "0";
             case "talking":

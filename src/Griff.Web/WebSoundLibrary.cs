@@ -6,8 +6,8 @@ namespace Griff.Web;
 /// <summary>
 /// The game's sounds in the browser, from its Assets (fetched into the in-memory file system): WAV (Griff's Sound Maker
 /// and music synth make these) and OGG decoded by .NET, as on the desktop, and MP3 decoded by the browser before the game
-/// starts (<see cref="Decoded"/>: Windows decodes it with its own codec, which a browser hasn't got). Long OGG music is
-/// decoded as it plays.
+/// starts (<see cref="Decoded"/>: Windows decodes it with its own codec, which a browser hasn't got). Music in WAV and OGG
+/// is read as it plays.
 /// </summary>
 public sealed class WebSoundLibrary(string assetRoot) : ISoundLibrary
 {
@@ -38,6 +38,10 @@ public sealed class WebSoundLibrary(string assetRoot) : ISoundLibrary
     {
         if (Resolve(sound) is not { } path)
             return null;
+        // WAV music (what Griff's music synth makes) is read as it plays: decoded whole as it starts, a few minutes of it
+        // would hold up the frame it starts in for tens of milliseconds and leave megabytes to clear up.
+        if (path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+            return Wav.Open(path);
         if (!path.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase))
             return Load(sound)?.Open();
         try

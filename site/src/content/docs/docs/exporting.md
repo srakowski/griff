@@ -73,7 +73,7 @@ running, taken in the headless browser), and `games.json`, which the site's page
 main's templates. A page needs a template's tagline, paragraph and controls in `site/src/data/games.mjs`, and the
 build fails without them.
 
-`-Check` plays games in a headless Edge or Chrome (no window, software WebGL, muted) and passes if all of them work: the
+`-Check` plays games in a headless Chrome or Edge (no window, software WebGL, muted) and passes if all of them work: the
 proof game, an adventure, rhythm lanes, and the Platformer, Shooter, Match3, Isometric, Physics, BunnyMark and Multiplayer
 templates (`-Template` picks some, `Proof`, `Adventure` and `Rhythm` among them; `-Project` checks yours). Each must start and draw; its sound must wait for a key, saying so, with the music keeping
 time, then play through Web Audio (an AnalyserNode in the page hears it) still in time; input must reach it (the arrow
@@ -84,11 +84,13 @@ items together, a controller's stick moves the platformer and the
 griffin, in Physics a finger, a controller and the keys each pull the slingshot back and let a bird go, Space restarts
 BunnyMark, and the rhythm lanes' notes pressed with the keys on the beat as Web Audio plays it are hits, as are a chord
 tapped with two fingers at once and a hold held by one to its end, and the lanes finish with the song); the steps of
-Physics' first and third levels' collapses must take less than a frame on average; and its saves must survive reloading the page (the proof game's script counts its
+Physics' first and third levels' collapses must take less than a frame on average (the slowest frame's is printed too); and its saves must survive reloading the page (the proof game's script counts its
 plays). The proof game's label must be drawn as wide as Griff lays it out, the game must fit a phone's page and a 4K
 screen and go fullscreen and back; Match-3's Quit must end it; and Multiplayer must be warned of at export and say in the
 page and on Host Game that network play isn't there. The page counts as focused throughout, as a headless page on a busy
-desktop otherwise goes hidden and stops drawing.
+desktop otherwise goes hidden and stops drawing. Chrome is used when it's there: a headless Edge left running on a
+computer nobody is using slows its page to a frame a second or so after a few seconds, which stalls a check. Each game
+says how long its warm-up took (below).
 
 `-Compare` checks the browser draws the same pixels as the desktop: every scene of every template (`?scene=` starts the
 web player in one), and three scenes of the dark (walls and crates casting shadows from a lamp, a light that doesn't,
@@ -134,16 +136,38 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   browser lets the page play, the mixer is pulled along in real time with nothing heard, as a muted desktop game's is;
   and a stall (a page hidden in a background tab stops drawing) is left out of its clock, so the music doesn't jump.
   WAV and OGG are decoded by .NET (NVorbis, as on the desktop), MP3 by the browser as the game starts (Windows decodes
-  it with its own codec).
+  it with its own codec). Music in WAV or OGG is read as it plays: decoded whole as it starts, a few minutes of Griff's
+  synth music held up that frame by some 60 ms and left megabytes for the garbage collector.
 - **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
   page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl
   shortcuts), typed text, pointer events for the mouse and touch (its position in the world through the last frame's
   camera, its buttons and wheel), and `navigator.getGamepads()` each frame.
 - **Saves** are a `SaveData` kept somewhere other than a file: it starts from what `localStorage` holds under the game's
   key and hands it every change.
+- **.NET runs Griff in an interpreter, readied before the game starts.** Without the `wasm-tools` workload, .NET for
+  WebAssembly interprets Griff: it prepares each method the first time it's called, prepares it again (optimized) once
+  it has been called a thousand times, and compiles the busiest stretches to WebAssembly as they run (its
+  jiterpreter). So the steps cost more than on the desktop (the Physics template's biggest collapse about 3 to 5 ms a
+  step against about 1 ms), and, left to the game, preparing happens in its frames: a thousand steps in (about 17
+  seconds) every step's work was prepared again at once, a frame of 50 to 110 ms in every game, and the first pile to
+  collapse prepared the physics of bodies that turn as it went (frames of 20 to 45 ms). `WebWarmup` does that work
+  while the loading screen still shows: it plays a scene of its own out of sight for a thousand steps, each built
+  into a picture but not drawn, and, if any of the game's scenes or prefabs has a Body that turns (Rotates), starts
+  it with eight crates, balls and polygons tumbling into a bin and a tower of posts and planks that break, knocked
+  down by a ball. It adds 0.3 to 0.5 s to loading, 1 to 1.5 s with the pile (`-Check` prints it), and the Physics
+  template's collapses then have their slowest frames at 8 to 15 ms a step, where they had frames of 40 to 110 ms. A
+  still moment (`?still=`) skips it.
+- **Not compiled ahead of time (AOT).** With the `wasm-tools` workload (Emscripten, about 2 GB), `RunAOTCompilation`
+  compiles .NET and Griff to WebAssembly when the player is published. It needs trimming on, which drops what scripts
+  compiled later might call unless every assembly is kept whole (`TrimmerRootAssembly` for each, and JSON's reflection
+  turned back on), and measured on the Physics template it made the steps about desktop speed (1.2 ms a step in a
+  collapse), but publishing the player took 12 to 15 minutes instead of about one, every build of the editor, and
+  the download grew from about 30 MB to 100 MB (9 MB to 22 MB compressed with Brotli), which costs players more time
+  loading than the warm-up does; and methods first called in play were still slow once (a 160 ms step as a bird first
+  hit something). So the player is interpreted and warmed up.
 - **Size:** .NET and Griff are about 30 MB untrimmed (about 10 MB as hosts send them compressed); a game adds its own
   files. Trimming is off, since scenes load by reflection and scripts are compiled against all of .NET after the player
-  is published. A template starts 2 to 5 seconds after the page opens, served locally.
+  is published. A template starts 3 to 6 seconds after the page opens, served locally, its warm-up included.
 - File-based C# apps (`dotnet run tool.cs`) default to Native AOT, which turns off the reflection Griff's JSON uses;
   `tools\web.cs` turns it off as `tools\bunnymark.cs` does.
 

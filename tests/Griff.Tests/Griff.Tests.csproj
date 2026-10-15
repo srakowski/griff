@@ -22,11 +22,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <!-- The web player's own logic (its keys, controllers and save keys): Griff.Web targets the browser, so a test can't reference it. -->
+  <!-- The web player's own logic (its keys, controllers, save keys and warm-up): Griff.Web targets the browser, so a test can't reference it. -->
   <ItemGroup>
     <Compile Include="..\..\src\Griff.Web\WebKeys.cs" Link="Web\WebKeys.cs" />
     <Compile Include="..\..\src\Griff.Web\WebGamepad.cs" Link="Web\WebGamepad.cs" />
     <Compile Include="..\..\src\Griff.Web\WebSaves.cs" Link="Web\WebSaves.cs" />
+    <Compile Include="..\..\src\Griff.Web\WebWarmup.cs" Link="Web\WebWarmup.cs" />
   </ItemGroup>
 
   <!-- Griff's free fonts, where FreeFonts looks for them (beside the editor, here beside the tests). -->

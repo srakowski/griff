@@ -7,7 +7,7 @@
 // http://127.0.0.1:<port>/, this computer only, until Ctrl+C: a project (--project), a template (--template) or, with
 // neither, the proof game (the griffin, a sprite, which the arrow keys, WASD or a stick move, under a label).
 //   --export        exports to --out and stops there (--zip packs it for itch.io too): what a script or a site's build uses.
-//   --check         plays games in a headless Edge (or Chrome) through the DevTools protocol, so no window opens, and
+//   --check         plays games in a headless Chrome (or Edge) through the DevTools protocol, so no window opens, and
 //                   checks each: the proof game, the Adventure template (Enter on its menu, taps moving its talk on,
 //                   walking where it's tapped round a table, a hotspot's pointer, a right click looking, an item taken,
 //                   picked from the inventory bar and used on the kettle, the keys on the bar, and its items kept),
@@ -575,7 +575,7 @@ async Task<int> BuildSite(string folder, string profile)
     await using (var server = await Serve(layout, port))
     {
         if (LaunchBrowser(profile) is not { } process)
-            return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+            return Fail("No Chrome or Edge found (set GRIFF_BROWSER to one's .exe).");
         try
         {
             var log = new List<string>();
@@ -715,7 +715,7 @@ async Task<int> CheckGames(string root, string shots, string profile)
     Directory.CreateDirectory(root);
     await using var server = await Serve(root, port);
     if (LaunchBrowser(profile) is not { } process)
-        return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+        return Fail("No Chrome or Edge found (set GRIFF_BROWSER to one's .exe).");
     var failed = new List<string>();
     try
     {
@@ -1012,7 +1012,7 @@ async Task Taps(GameCheck game)
 // stick pulls the next and A lets it go (both straight down, to launch it straight up and back), and the arrows pull the
 // last back and Space lets go, each launching a bird; the last knocks the tower down. Then the third level, the biggest
 // collapse, knocked down with the keys too. The steps of each collapse, timed, must take less than a frame (a 60th of a
-// second) on average.
+// second) on average; the slowest frame's is said too (a hitch shows there, but so does a busy machine's, so it isn't failed).
 async Task Slingshots(GameCheck game)
 {
     await game.Press("Enter");
@@ -1252,7 +1252,7 @@ static (double Share, int Colors) Drawn(ImageResult image)
     return ((double)(pixels - most) / pixels, counts.Count(c => c.Value > pixels / 2000));
 }
 
-// A headless Edge (or Chrome), with software WebGL (SwiftShader) so a check draws the same on any machine and needs no
+// A headless Chrome (or Edge), with software WebGL (SwiftShader) so a check draws the same on any machine and needs no
 // GPU, and its sound muted (Web Audio still plays, so the page can listen to it), whatever else is on the screen; null if
 // there's neither.
 static Process? LaunchBrowser(string profile)
@@ -1331,7 +1331,7 @@ async Task<int> Compare(string root, string shots, string profile, int steps)
     Directory.CreateDirectory(root);
     await using var server = await Serve(root, port);
     if (LaunchBrowser(profile) is not { } process)
-        return Fail("No Edge or Chrome found (set GRIFF_BROWSER to one's .exe).");
+        return Fail("No Chrome or Edge found (set GRIFF_BROWSER to one's .exe).");
     var failed = new List<string>();
     var compared = 0;
     try
@@ -1690,13 +1690,16 @@ static double LabelWidth(int screenHeight)
 
 static string? Browser()
 {
+    // Chrome before Edge: a headless Edge left running while the computer's been left alone slows its page's frames to about
+    // one a second after a few seconds (with nothing busy), which stalls a check; Chrome keeps drawing.
     string[] candidates =
     [
         Environment.GetEnvironmentVariable("GRIFF_BROWSER") ?? "",
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
     ];
     return candidates.FirstOrDefault(File.Exists);
 }
@@ -1774,7 +1777,10 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
         if (await Evaluate("document.getElementById('loading').checkVisibility()") != "false")
             throw new CheckFailed("the loading screen still shows over the game");
         if (!reload)
+        {
             Console.WriteLine($"  runs: {started.Elapsed.TotalSeconds:0.0} s after the page opened, titled \"{await Evaluate("document.title")}\"");
+            Console.WriteLine($"  warm-up: .NET was readied for it in {await Probe("warmup")} ms before it started");
+        }
     }
 
     public Task<string> Evaluate(string expression, bool awaitPromise = false) => EvaluateIn(cdp, expression, awaitPromise);

@@ -99,8 +99,9 @@ public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool
     private readonly Stopwatch _clock = new();
     private readonly float[] _scratch = new float[1024 * 2];
     private SoundDevice? _device;
-    private Timer? _pump;
-    private bool _pumping, _started, _muted = muted;
+    private Thread? _pump;
+    private int _pumpGeneration;
+    private bool _pumping, _idle, _started, _muted = muted;
     private double _pumpedAt, _owed;
 
     public Mixer Mixer { get; } = new();
@@ -211,36 +212,56 @@ public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool
         _device = null;
     }
 
+    // The muted mixer is pulled along by a thread of its own, as a device's is, rather than by the thread pool: a busy pool
+    // (a game loading, tests running side by side) would hold sound up, and the game's music time with it.
     private void StartPump()
     {
         lock (_mixGate)
         {
             Mixer.OutputLatency = 0;
-            _pumping = true;
+            _pumping = _idle = true;
             _clock.Restart();
             _pumpedAt = 0;
         }
 
-        if (!KeepsTime)
+        if (!KeepsTime || _pump is not null)
             return;
-        _pump ??= new Timer(_ =>
+        int generation;
+        lock (_mixGate)
+            generation = ++_pumpGeneration;
+        _pump = new Thread(() => KeepTime(generation)) { IsBackground = true, Name = "Griff muted sound" };
+        _pump.Start();
+    }
+
+    private void KeepTime(int generation)
+    {
+        while (true)
         {
+            Thread.Sleep(PumpMilliseconds);
             lock (_mixGate)
             {
-                if (!_pumping)
+                if (!_pumping || generation != _pumpGeneration)
                     return;
                 var now = _clock.Elapsed.TotalSeconds;
-                Pump(now - _pumpedAt);
+                // A sound that started while nothing was playing starts from here: the time before it isn't owed to it, so it
+                // never plays out faster than real time.
+                var playing = Mixer.Playing > 0;
+                if (playing && !_idle)
+                    Pump(now - _pumpedAt);
+                _idle = !playing;
                 _pumpedAt = now;
             }
-        }, null, PumpMilliseconds, PumpMilliseconds);
+        }
     }
 
     private void StopPump()
     {
         lock (_mixGate)
+        {
             _pumping = false;
-        _pump?.Dispose();
+            _pumpGeneration++;
+        }
+
         _pump = null;
     }
 }

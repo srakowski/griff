@@ -6,7 +6,7 @@
   -Export writes the export to -Out and stops (with -Zip, a zip for itch.io beside it): the command line's Build > Web.
   -Site <folder> exports every template for the website into <folder> (the site's playable games): .NET once in _player,
   then a folder, page and poster for each game, and games.json; -Template picks some. site\package.json's `npm run games`.
-  -Check plays games in a headless Edge (or Chrome) instead, with no window, and exits 0 if all pass: the proof game, the
+  -Check plays games in a headless Chrome (or Edge) instead, with no window, and exits 0 if all pass: the proof game, the
   Adventure template (Enter plays, taps move its talk on, a tap walks round the table, the pointer is a hand over a
   hotspot, a right click looks, a mug taken is picked from the inventory bar and filled at the kettle, the keys work the
   bar, and the items are still there after a reload), rhythm lanes (Create Note Lanes in an empty project: notes pressed

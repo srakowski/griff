@@ -92,12 +92,43 @@ public sealed class MuteTests : IDisposable
     {
         using var output = new SoundOutput(_ => throw new InvalidOperationException("The device was opened."), muted: true);
         output.Start();
-        var voice = output.Mixer.Play(Beep(0.1).Open());
-        var waited = System.Diagnostics.Stopwatch.StartNew();
-        while (voice.IsPlaying && waited.Elapsed < TimeSpan.FromSeconds(5))
-            Thread.Sleep(10);
-        Assert.False(voice.IsPlaying);
-        Assert.InRange(waited.Elapsed.TotalSeconds, 0.05, 5);
+
+        // The thread pool kept busy meanwhile, as a full run's other tests can keep it: the pump has a thread of its own.
+        var busy = new TaskCompletionSource();
+        for (var i = 0; i < Environment.ProcessorCount * 2; i++)
+            ThreadPool.QueueUserWorkItem(_ => busy.Task.Wait(TimeSpan.FromSeconds(10)));
+        try
+        {
+            var voice = output.Mixer.Play(Beep(0.1).Open());
+            var waited = System.Diagnostics.Stopwatch.StartNew();
+            while (voice.IsPlaying && waited.Elapsed < TimeSpan.FromSeconds(5))
+                Thread.Sleep(10);
+            Assert.False(voice.IsPlaying);
+            // In real time: never faster, however late the pump's first beat after the sound starts (none of the time before
+            // it is owed to it, so it takes the sound's whole length, give or take the clock's grain), and not held up.
+            Assert.InRange(waited.Elapsed.TotalSeconds, 0.095, 5);
+        }
+        finally
+        {
+            busy.SetResult();
+        }
+    }
+
+    [Fact]
+    public void With_no_sound_device_sound_keeps_time_muted_or_not()
+    {
+        using var output = new SoundOutput(_ => null);
+        output.Start();
+        Assert.False(output.IsDeviceOpen);
+        foreach (var muted in new[] { true, false, true })
+        {
+            output.Muted = muted;
+            var voice = output.Mixer.Play(Beep(0.1).Open());
+            var waited = System.Diagnostics.Stopwatch.StartNew();
+            while (voice.IsPlaying && waited.Elapsed < TimeSpan.FromSeconds(5))
+                Thread.Sleep(10);
+            Assert.False(voice.IsPlaying);
+        }
     }
 
     [Fact]

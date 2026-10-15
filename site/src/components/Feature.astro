@@ -1,0 +1,20 @@
+---
+// A card on the landing page: an optional screenshot, a heading and a sentence or two.
+import type { ImageMetadata } from 'astro';
+import Shot from './Shot.astro';
+
+interface Props {
+	title: string;
+	shot?: ImageMetadata;
+	alt?: string;
+}
+const { title, shot, alt = '' } = Astro.props;
+---
+
+<article class="feature">
+	{shot && <Shot src={shot} alt={alt} />}
+	<div class="feature-text">
+		<h3>{title}</h3>
+		<div class="feature-body"><slot /></div>
+	</div>
+</article>

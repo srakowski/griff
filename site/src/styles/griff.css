@@ -1,0 +1,137 @@
+/* griff.games: Starlight's theme in Griff's colours (the editor's design system, src/Griff.Editor/Themes). */
+
+/* JetBrains Mono ExtraBold, for the wordmark. Self-hosted, under the SIL Open Font License (public/fonts/JetBrainsMono-OFL.txt). */
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-ExtraBold.woff2') format('woff2');
+	font-weight: 800;
+	font-style: normal;
+	font-display: swap;
+}
+
+/* Dark (Starlight's default): the editor's grays, with its orange as the accent. */
+:root {
+	--sl-color-accent-low: #3a230e;
+	--sl-color-accent: #d4761c;
+	--sl-color-accent-high: #f5a453;
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #e2e4e9;
+	--sl-color-gray-2: #c3c7d0;
+	--sl-color-gray-3: #a1a6b2;
+	--sl-color-gray-4: #5e626e;
+	--sl-color-gray-5: #33353d;
+	--sl-color-gray-6: #1c1d22;
+	--sl-color-black: #16171b;
+
+	--griff-wordmark: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+	--griff-card: #1c1d22;
+	--griff-card-border: #2a2c32;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #fde3c8;
+	--sl-color-accent: #b35f0f;
+	--sl-color-accent-high: #6b3606;
+	--sl-color-white: #16171b;
+	--sl-color-gray-1: #1c1d22;
+	--sl-color-gray-2: #33353d;
+	--sl-color-gray-3: #484b55;
+	--sl-color-gray-4: #7d8290;
+	--sl-color-gray-5: #c3c7d0;
+	--sl-color-gray-6: #eef0f3;
+	--sl-color-gray-7: #f6f7f9;
+	--sl-color-black: #ffffff;
+
+	--griff-card: #f6f7f9;
+	--griff-card-border: #e2e4e9;
+}
+
+/* Pixel art is scaled with nearest-neighbour, so the griffin stays crisp at any size. */
+.pixel {
+	image-rendering: pixelated;
+}
+
+.wordmark {
+	font-family: var(--griff-wordmark);
+	font-weight: 800;
+	letter-spacing: -0.03em;
+	color: var(--sl-color-white);
+}
+
+/* The landing page. */
+.hero .hero-html {
+	justify-content: center;
+}
+.hero-logo {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: clamp(0.75rem, 3vw, 1.5rem);
+}
+.hero-logo img {
+	width: clamp(96px, 22vw, 192px);
+	height: auto;
+}
+.hero-logo .wordmark {
+	font-size: clamp(3.5rem, 13vw, 7.5rem);
+	line-height: 1;
+}
+.hero h1 {
+	font-size: clamp(var(--sl-text-3xl), 5vw, var(--sl-text-5xl));
+}
+
+.features {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+	gap: 1.5rem;
+	margin-top: 1.5rem;
+}
+.features-wide {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+}
+.features > * {
+	margin: 0 !important;
+}
+.feature {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--griff-card-border);
+	background: var(--griff-card);
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+.feature img {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 10;
+	object-fit: cover;
+	object-position: top left;
+	border-bottom: 1px solid var(--griff-card-border);
+	margin: 0 !important;
+}
+.feature .feature-text {
+	padding: 1rem 1.25rem 1.25rem;
+}
+.feature h3 {
+	font-size: var(--sl-text-xl);
+	margin: 0 0 0.5rem !important;
+}
+.feature p {
+	margin: 0 !important;
+	color: var(--sl-color-gray-2);
+}
+
+.shot-wide img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 0.5rem;
+	border: 1px solid var(--griff-card-border);
+}
+
+.link-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1.5rem;
+}

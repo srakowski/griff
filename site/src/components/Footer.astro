@@ -1,0 +1,38 @@
+---
+// Starlight's footer (edit link, previous and next), then links to the project on every page.
+import Default from '@astrojs/starlight/components/Footer.astro';
+
+const repo = 'https://github.com/srakowski/griff';
+---
+
+<Default><slot /></Default>
+<div class="griff-footer">
+	<nav aria-label="Project links" class="link-row">
+		<a href={repo}>GitHub</a>
+		<a href={`${repo}/issues`}>Issues</a>
+		<a href={`${repo}/releases`}>Releases</a>
+		<a href={`${repo}/blob/main/LICENSE`}>MIT License</a>
+	</nav>
+	<p>
+		Griff is open source under the MIT License. The wordmark is set in <a href="https://github.com/JetBrains/JetBrainsMono">JetBrains Mono</a>, under the <a href="/fonts/JetBrainsMono-OFL.txt">SIL Open Font License</a>.
+	</p>
+</div>
+
+<style>
+	.griff-footer {
+		margin-top: 2rem;
+		padding-top: 1.25rem;
+		border-top: 1px solid var(--sl-color-hairline);
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-3);
+	}
+	.griff-footer p {
+		margin-top: 0.75rem;
+	}
+	.griff-footer a {
+		color: var(--sl-color-gray-2);
+	}
+	.griff-footer a:hover {
+		color: var(--sl-color-text-accent);
+	}
+</style>

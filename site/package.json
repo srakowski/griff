@@ -1,0 +1,17 @@
+{
+  "name": "griff-site",
+  "private": true,
+  "type": "module",
+  "description": "griff.games: Griff's website, built with Astro Starlight and deployed to GitHub Pages.",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1 --port 4321",
+    "check-links": "node scripts/check-links.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.3.8"
+  }
+}

@@ -1,0 +1,28 @@
+---
+// The header's logo: the 16x16 Pixel Griffin, scaled with nearest-neighbour, and the "griff" wordmark.
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title">
+	<img class="pixel" src="/griff.png" width="16" height="16" alt="" />
+	<span class="wordmark" translate="no">griff</span>
+</a>
+
+<style>
+	.site-title {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		text-decoration: none;
+		white-space: nowrap;
+		min-width: 0;
+	}
+	img {
+		width: 32px;
+		height: 32px;
+	}
+	.wordmark {
+		font-size: 1.6rem;
+		line-height: 1;
+	}
+</style>

@@ -1,0 +1,123 @@
+---
+title: A game engine for game jams
+description: Griff is a 2D game engine and editor, written in C#. It aims to be the shortest path from an idea to something people can play by Sunday night.
+template: splash
+editUrl: false
+lastUpdated: false
+next: false
+prev: false
+hero:
+  tagline: Griff is a 2D game engine and editor, written in C#. It aims to be the shortest path from an idea to something people can play by Sunday night, with an editor that just works.
+  image:
+    html: '<div class="hero-logo"><img class="pixel" src="/griff.png" width="16" height="16" alt="The Pixel Griffin, Griff''s logo"><span class="wordmark" translate="no">griff</span></div>'
+  actions:
+    - text: Download
+      link: https://github.com/srakowski/griff/releases
+      icon: download
+      variant: primary
+    - text: GitHub
+      link: https://github.com/srakowski/griff
+      icon: github
+      variant: secondary
+    - text: Get started
+      link: /docs/getting-started/
+      icon: right-arrow
+      variant: minimal
+---
+
+import Shot from '../../components/Shot.astro';
+import Feature from '../../components/Feature.astro';
+import editor from '../../assets/screens/editor.webp';
+import editorScript from '../../assets/screens/editor-script.webp';
+import editorTilemap from '../../assets/screens/editor-tilemap.webp';
+import isometric from '../../assets/screens/isometric.webp';
+import match3 from '../../assets/screens/match-3.webp';
+import strategy from '../../assets/screens/strategy.webp';
+import shooter from '../../assets/screens/shooter.webp';
+import sandbox from '../../assets/screens/sandbox.webp';
+import tactics from '../../assets/screens/tactics.webp';
+import roguelike from '../../assets/screens/roguelike.webp';
+import fallingBlocks from '../../assets/screens/falling-blocks.webp';
+
+<div class="shot-wide">
+	<Shot src={editor} eager alt="Griff's editor with the Platformer template open: the Hierarchy, the Scene view with the player selected and arrows to what its fields name, and the Inspector showing its components." />
+</div>
+
+## Why Griff
+
+Most engines make you stop the game to change it, lose your changes when play mode ends, and break undo in creative ways. Griff is built around a few promises.
+
+<div class="features features-wide">
+	<Feature title="The game keeps running while you change it" shot={editorScript} alt="Griff's script editor with the Arcade template's Ship script open, and the component it makes beside the code.">
+		Save a C# script and every instance of it is swapped in the running game within a moment. Public properties carry over and the game doesn't restart; a compile error leaves the last good version running and points at the line.
+	</Feature>
+	<Feature title="Levels painted in the Scene view" shot={editorTilemap} alt="Painting the Isometric template's courtyard: the tile palette, brush, rectangle and fill tools over the Scene view.">
+		Tilemaps square, isometric or hex, in layers, with autotiles and slopes, painted with a brush, rectangles and fills. Prefabs, sprites drawn in the Sprite Painter and sounds made in the Sound Maker, all without leaving the editor.
+	</Feature>
+</div>
+
+<div class="features">
+	<Feature title="Rewind, breakpoints and stepping">
+		Griff keeps the last 20 seconds of play: drag back to just before the bug, tweak something and resume. Breakpoints cost nothing, a script that throws stops at the line that threw, and you step a line at a time into the next frame.
+	</Feature>
+	<Feature title="Undo covers everything, and play can't hurt your work">
+		Every change goes through one undo history, even across a script reload. Play runs on a copy of the scene; Stop puts everything back, and Keep Play Changes copies the values you found while playing into your scene.
+	</Feature>
+	<Feature title="Build with an agent">
+		While it's open, the editor serves the Model Context Protocol, so an agent like Claude Code can build games with it. Every command, component, window and panel is a tool, and anything added later shows up by itself.
+	</Feature>
+	<Feature title="The same game on every machine">
+		The game moves in fixed steps whatever the screen's frame rate, and is drawn smoothly between them: smooth on a 144 Hz screen, and the same input gives the same result anywhere.
+	</Feature>
+	<Feature title="Multiplayer for every kind of game">
+		Host or join over the local network or the internet, or run a dedicated server. Each player moves their own character at once, and Griff's components work for every player, from platformers to strategy.
+	</Feature>
+	<Feature title="One click to ship">
+		Build Game makes a single `.exe` that carries everything, .NET included, so players install nothing. Build Small Game makes a 4 MB one for players who have the .NET Desktop Runtime.
+	</Feature>
+</div>
+
+## Start from a game that already plays
+
+Every template is playable, and audible, from the first second: pick one in New Project and change it into yours. These pictures are the templates as they come.
+
+<div class="features">
+	<Feature title="Isometric" shot={isometric} alt="The Isometric template: a hero in a walled garden of diamond tiles, with a gardener, a crate and a slime.">
+		A garden of diamond tiles to walk round, with walls to sort behind, a crate to push and someone to talk to.
+	</Feature>
+	<Feature title="Match-3" shot={match3} alt="The Match-3 template: a board of gems, the score and the moves left.">
+		Swap gems into lines that clear, fall and refill in chains, with goals, a move limit and four levels.
+	</Feature>
+	<Feature title="Shooter" shot={shooter} alt="The Shooter template in first person: a brick corridor, a door, a pistol and a minimap.">
+		A first-person shooter whose levels are painted top-down: mouse look, guns with ammo, enemies, keys and sliding doors.
+	</Feature>
+	<Feature title="Sandbox" shot={sandbox} alt="The Sandbox template: a side-on block world of grass, sand and stone with a tree and a hotbar.">
+		A block world made from a seed to dig up and build in, with caves, ores, crafting and torch-lit darkness underground.
+	</Feature>
+	<Feature title="Tactics" shot={tactics} alt="The Tactics template: knights and archers facing an orc warband on a grassy field of trees and rocks.">
+		Pick a unit, see how far it can walk and hit, and send it to fight, while the computer plays the other side.
+	</Feature>
+	<Feature title="Roguelike" shot={roguelike} alt="The Roguelike template: a hero in a torch-lit stone dungeon with a slime nearby.">
+		Dungeons of rooms and corridors made from a seed, floor after floor, where everything moves when you do.
+	</Feature>
+	<Feature title="Strategy" shot={strategy} alt="The Strategy template: a town hall, workers and soldiers, a minimap and the gold and wood counts.">
+		Real-time strategy: workers gather and build, barracks train armies, and a computer opponent comes out of the fog.
+	</Feature>
+	<Feature title="Falling Blocks" shot={fallingBlocks} alt="The Falling Blocks template: pieces stacking in the well, the next pieces and the score.">
+		Pieces of four slide, turn and drop; full rows clear, and every few rows it all speeds up.
+	</Feature>
+</div>
+
+There are Platformer, Top-down, Arcade, Puzzle, Contraption, Multiplayer and BunnyMark templates too.
+
+## Open source
+
+Griff is open source under the [MIT License](https://github.com/srakowski/griff/blob/main/LICENSE). Its code, issues and releases are on GitHub.
+
+<div class="link-row">
+	<a href="https://github.com/srakowski/griff">Repository</a>
+	<a href="https://github.com/srakowski/griff/issues">Issues</a>
+	<a href="https://github.com/srakowski/griff/releases">Releases</a>
+	<a href="https://github.com/srakowski/griff/blob/main/LICENSE">License</a>
+	<a href="/docs/what-is-griff/">Docs</a>
+</div>

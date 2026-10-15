@@ -6,7 +6,7 @@ namespace Griff.Modules.PhysicsGames;
 /// The drain at the bottom of a pinball table, with no code: a ball that falls into it is lost, and the next of its
 /// <see cref="Balls"/> is served onto the <see cref="Plunger"/> <see cref="ServeDelay"/> seconds later, until there are none
 /// left and the game's over. A ball lost within <see cref="BallSave"/> seconds of being shot is given back instead, and shot
-/// again by itself.
+/// again by itself (once: shot again, it has no ball save of its own).
 /// </summary>
 /// <remarks>
 /// Put it on a trigger below the flippers. A ball is any body that falls into it (or one on its <see cref="Layers"/>); with
@@ -33,8 +33,8 @@ public sealed class Drain : Component, IPlaytestReport
     public float ServeDelay { get; set; } = 1;
 
     /// <summary>
-    /// Seconds after each ball is shot from the plunger that losing it gives it back (served and shot again by itself): a ball
-    /// save. 0 saves none.
+    /// Seconds after each ball is shot from the plunger that losing it gives it back (served and shot again by itself, with no
+    /// save of its own this time): a ball save. 0 saves none.
     /// </summary>
     public float BallSave { get; set; } = 5;
 
@@ -93,7 +93,7 @@ public sealed class Drain : Component, IPlaytestReport
     /// <summary>True if the ball being served was saved, so it's shot again by itself. Set by the game.</summary>
     public bool Saved { get; set; }
 
-    /// <summary>True from a ball being served until it's shot, which starts its ball save. Set by the game.</summary>
+    /// <summary>True from a ball being served until it's shot, which starts its ball save (not for a saved ball). Set by the game.</summary>
     public bool SaveReady { get; set; } = true;
 
     /// <summary>How many balls are left, the one being played too: 0 once the game's over.</summary>

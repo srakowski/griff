@@ -47,6 +47,10 @@ public static partial class WebPlayer
     private static long s_stepCount;
     private static double s_stepMilliseconds, s_worstStepMilliseconds;
 
+    // The frames since the "frames" probe last read them: how many, and how long building, drawing and mixing the sound took.
+    private static long s_frameCount;
+    private static double s_buildMilliseconds, s_renderMilliseconds, s_soundMilliseconds;
+
     /// <summary>
     /// Fetches the game exported next to the page (the files its <see cref="ExportLayout.WebFileList"/> lists, under
     /// <see cref="ExportLayout.GameFolder"/>) into <see cref="GameFolder"/>, saying how far it's got on the loading screen,
@@ -163,9 +167,17 @@ public static partial class WebPlayer
                 game.TakePicture(s_renderer.Capture(width, height), width, height);
             }
 
+            var built = System.Diagnostics.Stopwatch.GetTimestamp();
             s_last = SceneRenderer.Build(game, aspect, recycle: s_last);
+            var rendered = System.Diagnostics.Stopwatch.GetTimestamp();
             s_renderer.Render(s_last, width, height);
+            var sounded = System.Diagnostics.Stopwatch.GetTimestamp();
             PumpSound();
+            var done = System.Diagnostics.Stopwatch.GetTimestamp();
+            s_frameCount++;
+            s_buildMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(built, rendered).TotalMilliseconds;
+            s_renderMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(rendered, sounded).TotalMilliseconds;
+            s_soundMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(sounded, done).TotalMilliseconds;
             AfterFrame(game);
         }
 #pragma warning disable CA1031 // A game that throws stops, and says why, as the desktop player's does.
@@ -288,7 +300,8 @@ public static partial class WebPlayer
     /// <c>talking</c> the name of the entity whose dialogue is being said ("" for none); <c>output:<i>entity</i>.<i>output</i></c>
     /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>steps</c> the game's steps since it was last asked, "count|mean ms|worst ms" (a frame's steps
-    /// timed together); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
+    /// timed together); <c>frames</c> the frames drawn since it was last asked, "count|build ms|draw ms|sound ms" (each on
+    /// average); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
     /// semicolons); <c>warmup</c> how long readying .NET took before the game started, in milliseconds
     /// (<see cref="WebWarmup"/>); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
@@ -329,6 +342,15 @@ public static partial class WebPlayer
 
             case "warmup":
                 return WebWarmup.Milliseconds.ToString("0", CultureInfo.InvariantCulture);
+            case "frames":
+            {
+                var frames = Math.Max(1, s_frameCount);
+                var read = string.Create(CultureInfo.InvariantCulture,
+                    $"{s_frameCount}|{s_buildMilliseconds / frames:0.###}|{s_renderMilliseconds / frames:0.###}|{s_soundMilliseconds / frames:0.###}");
+                (s_frameCount, s_buildMilliseconds, s_renderMilliseconds, s_soundMilliseconds) = (0, 0, 0, 0);
+                return read;
+            }
+
             case "flag":
                 return game.HasFlag(argument) ? "1" : "0";
             case "talking":

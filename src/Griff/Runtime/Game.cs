@@ -12,8 +12,8 @@ namespace Griff.Runtime;
 public sealed partial class Game : IGameContext
 {
     private readonly List<Entity> _pendingDestroy = [];
-    private readonly List<GameTimer> _timers = [];
-    private readonly List<Tween> _tweens = [];
+    private readonly List<GameTimer> _timers = new(16);
+    private readonly List<Tween> _tweens = new(16);
     private readonly List<Coroutine> _coroutines = [];
     private readonly List<Entity> _kept = [];
     private readonly MessageBoard _messages = new();
@@ -659,19 +659,33 @@ public sealed partial class Game : IGameContext
         return tween;
     }
 
+    // The tweens and timers a frame runs, copied out (into lists kept for the next frame, so running them makes no garbage)
+    // since what they call can start more.
+    private readonly List<Tween> _runningTweens = new(16);
+    private readonly List<GameTimer> _runningTimers = new(16);
+
     // Tweens added by callbacks (e.g. chained with Then) start on the next frame.
     private void RunTweens()
     {
         if (_tweens.Count == 0)
             return;
-        foreach (var tween in _tweens.ToList())
+        _runningTweens.AddRange(_tweens);
+        try
         {
-            // One on a paused entity holds where it is, finishing as much later (see Entity.IsPaused).
-            if (tween.Owner is { IsPaused: true })
-                tween.Hold(Time.Delta);
-            else
-                tween.Run(Time.Total, Scene);
+            foreach (var tween in _runningTweens)
+            {
+                // One on a paused entity holds where it is, finishing as much later (see Entity.IsPaused).
+                if (tween.Owner is { IsPaused: true })
+                    tween.Hold(Time.Delta);
+                else
+                    tween.Run(Time.Total, Scene);
+            }
         }
+        finally
+        {
+            _runningTweens.Clear();
+        }
+
         _tweens.RemoveAll(t => !t.IsActive);
     }
 
@@ -680,17 +694,29 @@ public sealed partial class Game : IGameContext
     {
         if (_timers.Count == 0)
             return;
-        foreach (var timer in _timers.ToList())
+        _runningTimers.AddRange(_timers);
+        try
         {
-            // One whose entity is paused goes off as much later (see Entity.IsPaused).
-            if (timer.Owner is { IsPaused: true })
-                timer.Hold(Time.Delta);
-            else
-                timer.Run(Time.Total, Scene);
+            foreach (var timer in _runningTimers)
+            {
+                // One whose entity is paused goes off as much later (see Entity.IsPaused).
+                if (timer.Owner is { IsPaused: true })
+                    timer.Hold(Time.Delta);
+                else
+                    timer.Run(Time.Total, Scene);
+            }
+        }
+        finally
+        {
+            _runningTimers.Clear();
         }
 
-        foreach (var timer in _timers.Where(t => t.Owner is not null && t.Owner.Scene != Scene))
-            timer.Cancel();
+        foreach (var timer in _timers)
+        {
+            if (timer.Owner is not null && timer.Owner.Scene != Scene)
+                timer.Cancel();
+        }
+
         _timers.RemoveAll(t => !t.IsActive);
     }
 
@@ -994,7 +1020,7 @@ public sealed partial class Game : IGameContext
             var transform = counter.Entity!.Transform;
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
-                counter.Add(ItemCount(counter.Item) - counter.Value);
+                counter.Change(ItemCount(counter.Item) - counter.Value);
             if (counter.CountsFromSource)
                 CountFromSource(counter);
             if (!string.IsNullOrWhiteSpace(counter.Output))
@@ -1004,10 +1030,16 @@ public sealed partial class Game : IGameContext
             {
                 counter.RestingScale = transform.Scale;
                 counter.Best = string.IsNullOrEmpty(key) ? counter.Value : SaveData.GetInt(key);
+                if (counter.BestToBeat < 0 && !string.IsNullOrEmpty(key))
+                    counter.BestToBeat = SaveData.Has(key) ? counter.Best : 0;
             }
 
             if (counter.Value > counter.Best)
             {
+                // Beating the best kept as the scene started is a new best, said once (and not when nothing was kept).
+                if (counter.BestToBeat > 0 && counter.Best <= counter.BestToBeat && !string.IsNullOrWhiteSpace(counter.NewBestMessage) &&
+                    Runs(counter.Entity!))
+                    Send(counter.NewBestMessage.Trim(), counter.Value, from: counter.Entity);
                 counter.Best = counter.Value;
                 if (!string.IsNullOrEmpty(key))
                     SaveData.Set(key, counter.Best);
@@ -1026,10 +1058,22 @@ public sealed partial class Game : IGameContext
 
             ReachedOrNot(counter);
 
-            if (counter.Shown is { } shown && shown != counter.Value && counter.Pop > 0 && counter.Pop != 1 && counter.RestingScale is { } rest)
+            // A change pops it bigger, springing back over a moment (in game time, held while it's paused), with no garbage:
+            // a pinball score changes all the time.
+            if (counter.RestingScale is { } rest)
             {
-                transform.Scale = new Vector3(rest.X * counter.Pop, rest.Y * counter.Pop, rest.Z);
-                ScaleTo(counter.Entity, new Vector2(rest.X, rest.Y), 0.3f, Ease.OutBack);
+                if (counter.Shown is { } shown && shown != counter.Value && counter.Pop > 0 && counter.Pop != 1)
+                {
+                    transform.Scale = new Vector3(rest.X * counter.Pop, rest.Y * counter.Pop, rest.Z);
+                    counter.Popping = (0, counter.Pop);
+                }
+                else if (counter.Popping is var (age, pop) && !counter.Entity.IsPaused)
+                {
+                    age += Time.Delta;
+                    var size = age >= Counter.PopTime ? 1 : pop + (1 - pop) * Ease.OutBack(age / Counter.PopTime);
+                    transform.Scale = new Vector3(rest.X * size, rest.Y * size, transform.Scale.Z);
+                    counter.Popping = age >= Counter.PopTime ? null : (age, pop);
+                }
             }
 
             counter.Shown = counter.Value;
@@ -1047,7 +1091,7 @@ public sealed partial class Game : IGameContext
             if (source.CountFor(counter) is not { } count)
                 continue;
             counter.Total = count.Total;
-            counter.Add(count.Value - counter.Value);
+            counter.Change(count.Value - counter.Value);
             return;
         }
     }
@@ -1085,7 +1129,7 @@ public sealed partial class Game : IGameContext
         if (!counter.Reader.Find(counter.Entity!, counter.Track, counter.Output))
             return;
         counter.Total = (int)MathF.Round(counter.Reader.OutOf);
-        counter.Add((int)MathF.Round(counter.Reader.Number) - counter.Value);
+        counter.Change((int)MathF.Round(counter.Reader.Number) - counter.Value);
     }
 
     // As a counter reaches its value, it sends its Reach Message (where the game is run; a player's own counter, such as

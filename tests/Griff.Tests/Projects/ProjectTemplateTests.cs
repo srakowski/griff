@@ -52,8 +52,8 @@ public sealed class ProjectTemplateTests : IDisposable
     public void Templates_AreFoundByNameOrTitle(string asked, string name)
     {
         Assert.Equal(name, ProjectTemplates.Get(asked).Name);
-        Assert.Null(ProjectTemplates.Find("Pinball"));
-        Assert.Contains("Platformer", Assert.Throws<ArgumentException>(() => ProjectTemplates.Get("Pinball")).Message);
+        Assert.Null(ProjectTemplates.Find("Bowling"));
+        Assert.Contains("Platformer", Assert.Throws<ArgumentException>(() => ProjectTemplates.Get("Bowling")).Message);
     }
 
     [Theory]
@@ -123,6 +123,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Strategy")]
     [InlineData("Shooter")]
     [InlineData("Physics")]
+    [InlineData("Pinball")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
@@ -145,12 +146,14 @@ public sealed class ProjectTemplateTests : IDisposable
             .ToList();
 
         Assert.Contains(sounds, s => s.Component == nameof(BackgroundMusic) && s.Path == "Music/theme.wav");
-        // Something gets hurt in all but the adventure, whose items, uses and combinations make sounds instead, and the visual
-        // novel, whose lines tick as they type out.
+        // Something gets hurt in all but the adventure, whose items, uses and combinations make sounds instead, the visual
+        // novel, whose lines tick as they type out, and pinball, whose flippers flip.
         if (template == "Adventure")
             Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.Adventures.InventoryBar) && s.Path is not null);
         else if (template == "VisualNovel")
             Assert.Contains(sounds, s => s.Component == nameof(Typewriter) && s.Path is not null);
+        else if (template == "Pinball")
+            Assert.Contains(sounds, s => s.Component == nameof(Griff.Modules.PhysicsGames.Flipper) && s.Path is not null);
         else
             Assert.Contains(sounds, s => s.Component == nameof(Health) && s.Path is not null);
         Assert.All(sounds.Where(s => s.Path is not null), s =>
@@ -822,6 +825,7 @@ public sealed class ProjectTemplateTests : IDisposable
     [InlineData("Roguelike")]
     [InlineData("Tactics")]
     [InlineData("Physics")]
+    [InlineData("Pinball")]
     [InlineData("RpgStats")]
     [InlineData("Cards")]
     [InlineData("Adventure")]
@@ -848,6 +852,8 @@ public sealed class ProjectTemplateTests : IDisposable
             scene = GameLoader.LoadScene(project, registry, "Story");
         if (template == "Fighter")
             scene = GameLoader.LoadScene(project, registry, "Stage");
+        if (template == "Pinball")
+            scene = GameLoader.LoadScene(project, registry, "Table");
         var game = NewGame(project, scene, input, registry);
         input.MouseWorld = new Vector2(100, 0);
         Run(game, input, 0.5);
@@ -871,14 +877,18 @@ public sealed class ProjectTemplateTests : IDisposable
             : game.Find("Player Hand")?.GetComponent<Griff.Modules.Cards.Hand>() is { } hand ? $"{hand.Count} {hand.Mana} {hand.Picked?.Entity?.Name}"
             : game.Find("Stage")?.GetComponent<Dialogue>() is { } story ? $"{story.Line} {story.Picked} {game.Find("Line")!.GetComponent<Typewriter>()!.Shown}"
             : game.Find("Slingshot")?.GetComponent<Griff.Modules.PhysicsGames.Slingshot>() is { } slingshot ? $"{slingshot.Pull} {slingshot.ShotsLeft}"
+            : game.Find("Plunger")?.GetComponent<Griff.Modules.PhysicsGames.Plunger>() is { } plunger
+                ? $"{plunger.Pull} {game.Find("Left Flipper")!.GetComponent<Griff.Modules.PhysicsGames.Flipper>()!.Up} {game.Find("Table")!.GetComponent<Griff.Modules.PhysicsGames.Tilt>()!.Nudges}"
             : game.Find("Board")!.GetComponent<FallingBoard>() is { } falling ? $"{falling.PieceAt}"
             : $"{game.Find("Board")!.GetComponent<MatchBoard>()!.Cursor}";
         var before = Moving();
-        input.SetKey(Key.D, true);
-        input.SetKey(Key.D1, true); // an RPG hero's attack
+        // A pinball table's flippers and nudge (its plunger's keys are the menu's too: see PinballTemplateTests).
+        Key[] pushed = template == "Pinball" ? [Key.D, Key.Z, Key.RightShift, Key.N] : [Key.D, Key.D1]; // D1: an RPG hero's attack
+        foreach (var key in pushed)
+            input.SetKey(key, true);
         Run(game, input, 0.5);
-        input.SetKey(Key.D, false);
-        input.SetKey(Key.D1, false);
+        foreach (var key in pushed)
+            input.SetKey(key, false);
         Assert.Equal(before, Moving());
 
         // Enter clicks Resume.

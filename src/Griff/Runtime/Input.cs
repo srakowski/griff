@@ -303,9 +303,10 @@ public sealed class InputState : IInput
     private readonly Dictionary<string, InputBinding[]> _rebound = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _projectActions = new(StringComparer.OrdinalIgnoreCase);
 
-    // Buffered presses: when each binding was last pressed, and the latest press each action has already reported.
-    private readonly Dictionary<InputBinding, double> _pressedAt = [];
-    private readonly Dictionary<string, double> _usedPress = new(StringComparer.OrdinalIgnoreCase);
+    // Buffered presses: when each binding was last pressed, and the latest press each action has already reported. With
+    // room for a game's worth of keys and buttons, so pressing one for the first time mid-game doesn't grow them.
+    private readonly Dictionary<InputBinding, double> _pressedAt = new(64);
+    private readonly Dictionary<string, double> _usedPress = new(64, StringComparer.OrdinalIgnoreCase);
     private double _clock;
 
     // Typed characters in order, with '\b' for each Backspace.

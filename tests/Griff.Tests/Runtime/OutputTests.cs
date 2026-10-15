@@ -262,6 +262,91 @@ public sealed class OutputTests
         Assert.True(counter.Reached);
     }
 
+    [Fact]
+    public void ACounter_MultipliedByAnother_AddsTimesItsCount_AndStopsAtItsMax()
+    {
+        var multiplier = Add("Multiplier").AddComponent<Counter>();
+        (multiplier.Message, multiplier.OnePerMessage, multiplier.Value, multiplier.Max) = ("Lit", true, 1, 3);
+        var score = Add("Score").AddComponent<Counter>();
+        (score.Message, score.MultiplyBy) = ("Score", "Multiplier");
+        var bonus = score.Entity!.AddComponent<Trigger>();
+        (bonus.Message, bonus.Do, bonus.UseMessageNumber) = ("Bonus", "Add", true);
+        var back = multiplier.Entity!.AddComponent<Trigger>();
+        (back.Message, back.Do, back.With) = ("Lost", "Set", "1");
+        Run();
+
+        _game.Send("Score", 100);
+        Assert.Equal(100, score.Value);
+        _game.Send("Lit");
+        _game.Send("Score", 100);
+        Assert.Equal(300, score.Value);
+
+        // The multiplier stops at its Max; the Add action (here from a trigger) is multiplied too.
+        for (var i = 0; i < 4; i++)
+            _game.Send("Lit");
+        Assert.Equal(3, multiplier.Value);
+        _game.Send("Bonus", 1000);
+        Run();
+        Assert.Equal(3300, score.Value);
+
+        // A trigger's Set puts it back.
+        _game.Send("Lost");
+        Run();
+        Assert.Equal(1, multiplier.Value);
+        _game.Send("Score", 10);
+        Assert.Equal(3310, score.Value);
+
+        // Taking away isn't stopped by its Max; a counter can't be multiplied by itself.
+        multiplier.Add(-5);
+        Assert.Equal(-4, multiplier.Value);
+        multiplier.MultiplyBy = "Multiplier";
+        multiplier.Set(2);
+        multiplier.Add(1);
+        Assert.Equal(3, multiplier.Value);
+    }
+
+    [Fact]
+    public void ACounter_SaysWhenItBeatsTheBestKept_ANewBest_OnceAndNotWithoutOne()
+    {
+        var score = Add("Score").AddComponent<Counter>();
+        (score.Message, score.SaveBestAs, score.NewBestMessage) = ("Score", "best", "New Best");
+        var said = new List<object?>();
+        _game.On("New Best", said.Add);
+        _game.SaveData.Set("best", 50);
+        var label = Add("New Best Label").AddComponent<Text>();
+        (label.Track, label.Output, label.Value) = ("Score", "New Best", "{0:'New best!';;''}");
+        Run();
+        Assert.False(score.NewBest);
+        Assert.Equal(50, score.BestToBeat);
+        Assert.Equal("", label.Shown);
+
+        _game.Send("Score", 40);
+        Run();
+        _game.Send("Score", 20);
+        Run();
+        _game.Send("Score", 30);
+        Run();
+        Assert.True(score.NewBest);
+        Assert.Equal([60], said);
+        Assert.Equal("New best!", label.Shown);
+        Assert.Equal(90, _game.SaveData.GetInt("best"));
+
+        // With nothing kept yet, the first points are a new best, but not one to say.
+        var fresh = Add("Fresh").AddComponent<Counter>();
+        (fresh.Message, fresh.SaveBestAs, fresh.NewBestMessage) = ("Points", "fresh", "New Best");
+        Run();
+        _game.Send("Points", 5);
+        Run();
+        Assert.True(fresh.NewBest);
+        Assert.Single(said);
+
+        // A true-or-false output without a format still says On or Off.
+        var plain = Add("Plain").AddComponent<Text>();
+        (plain.Track, plain.Output, plain.Value) = ("Score", "New Best", "");
+        Run();
+        Assert.Equal("On", plain.Shown);
+    }
+
     // ----- Bars and texts -----
 
     [Fact]

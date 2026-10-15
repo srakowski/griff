@@ -77,9 +77,10 @@ internal sealed partial class PinballSystem
             return;
         }
 
-        // The button, or the mouse or a finger held on it: pulled further the longer it's held.
+        // The button, or the mouse or a finger held on it: pulled further the longer it's held. A pull starts with a press
+        // while the table's being played, so a button still held from a menu (Space or A clicking Resume) doesn't pull it.
         var grabbed = Grab(plunger);
-        var held = grabbed || Held(entity, plunger.Action);
+        var held = grabbed || (plunger.Pulling ? Held(entity, plunger.Action) : !Game.PausedThisFrame && Pressed(entity, plunger.Action, out _));
         if (held)
         {
             if (!plunger.Pulling)
@@ -120,9 +121,24 @@ internal sealed partial class PinballSystem
         for (var i = 0; i < _inputs.Count; i++)
         {
             var input = _inputs[i];
+
+            // A finger (of several on a touch screen) pressed on it holds it until that finger's lifted.
+            var touches = input.Touches;
+            for (var t = 0; t < touches.Count && !held; t++)
+            {
+                var touch = touches[t];
+                if (touch.Released)
+                    continue;
+                if (plunger.Grabbed && plunger.GrabbedTouch == touch.Id ||
+                    !plunger.Grabbed && touch.Pressed && Vector2.Distance(touch.World, plunger.Tip) <= plunger.GrabRadius)
+                    (held, plunger.GrabbedTouch) = (true, touch.Id);
+            }
+
+            if (held)
+                break;
             if (!input.IsDown(MouseButton.Left))
                 continue;
-            if (plunger.Grabbed)
+            if (plunger.Grabbed && plunger.GrabbedTouch < 0)
             {
                 held = true;
                 break;
@@ -131,12 +147,14 @@ internal sealed partial class PinballSystem
             if (input.WasPressed(MouseButton.Left) && input.IsMouseInView && !(ReferenceEquals(input, Game.Input) && Game.MouseOnUi) &&
                 Vector2.Distance(input.MouseWorld, plunger.Tip) <= plunger.GrabRadius)
             {
-                held = true;
+                (held, plunger.GrabbedTouch) = (true, -1);
                 break;
             }
         }
 
         plunger.Grabbed = held;
+        if (!held)
+            plunger.GrabbedTouch = -1;
         return held;
     }
 
@@ -298,13 +316,16 @@ internal sealed partial class PinballSystem
         if (ball.GetComponent<Body>() is { } body)
             (body.Velocity, body.Spin, body.Asleep, body.StillFor) = (Vector2.Zero, 0, false, 0);
         ball.IsEnabled = true;
-        if (drain.Saved)
+
+        // A saved ball is shot again by itself, without a ball save of its own: a ball is saved once.
+        var saved = drain.Saved;
+        if (saved)
         {
             drain.Saved = false;
             plunger.LaunchIn = SavedLaunchDelay;
         }
 
-        drain.SaveReady = true;
+        drain.SaveReady = !saved;
     }
 
     // The plunger a drain serves onto: the one its Plunger names, or the nearest.

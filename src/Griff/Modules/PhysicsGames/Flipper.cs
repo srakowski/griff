@@ -62,7 +62,8 @@ public sealed class Flipper : Component, IPlaytestReport
 
     /// <summary>
     /// The mouse button or a finger held down on its side of the flippers (left of the middle between them, for one on the
-    /// left) holds it up too: on a phone, a finger on the left of the screen flips the left flipper.
+    /// left) holds it up too: on a phone, a finger on the left of the screen flips the left flipper, and a finger on each side
+    /// holds both up.
     /// </summary>
     public bool Touch { get; set; } = true;
 

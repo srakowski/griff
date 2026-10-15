@@ -62,6 +62,18 @@ export const games = {
 			['Esc', 'pause'],
 		],
 	},
+	Pinball: {
+		tagline: 'Midnight Midway: a pinball table at a night carnival, with bumpers, a skyway and a bell to ring.',
+		about:
+			'Three balls to score with. Light M, I and D to raise the multiplier up to five times, knock the drop targets down twice for an extra ball, ride the orbit and the skyway, and ring the bell. A ball lost straight after it is shot is saved once; nudge the table to keep the ball alive, but not too often; and the best score is kept.',
+		controls: [
+			['Space or Down (held)', 'pull the plunger back, let go to shoot'],
+			['Left and Right Shift, or Z and /', 'flip'],
+			['Mouse or a finger', 'press either side to flip, hold the plunger to pull it'],
+			['N or Up', 'nudge'],
+			['Esc', 'pause'],
+		],
+	},
 	Contraption: {
 		tagline: 'Build machines in a room full of props: wheels, thrusters, ropes, hinges and logic gates.',
 		about:

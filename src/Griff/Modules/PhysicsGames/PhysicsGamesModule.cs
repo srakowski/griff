@@ -9,7 +9,8 @@ namespace Griff.Modules.PhysicsGames;
 /// Tower to make from the Entity menu (Genres, Physics Games); and the Physics template, levels of wood, glass and stone to
 /// knock down. And pinball: <see cref="Flipper"/>s, <see cref="Bumper"/>s and kickers, a <see cref="Plunger"/>, a
 /// <see cref="Tilt"/> to nudge, <see cref="Target"/>s and <see cref="Lane"/>s that score, and a <see cref="Drain"/> that loses,
-/// saves and serves balls, with a Pinball Table and each piece to make from the Entity menu.
+/// saves and serves balls, with a Pinball Table and each piece to make from the Entity menu, and the Pinball template, a
+/// whole table.
 /// </summary>
 public sealed class PhysicsGamesModule : GameModule
 {

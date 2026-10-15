@@ -48,7 +48,10 @@ public sealed class Plunger : Component, IDrawable, IPlaytestReport, IActionRead
     /// <summary>A gamepad's right stick pushed down pulls it back as far as it's pushed, and shoots as it's let go.</summary>
     public bool Analog { get; set; } = true;
 
-    /// <summary>The mouse button or a finger held down within this of its tip pulls it, and letting go shoots.</summary>
+    /// <summary>
+    /// The mouse button or a finger held down within this of its tip pulls it, and letting go shoots (a finger on it while
+    /// another holds a flipper up, too).
+    /// </summary>
     public float GrabRadius { get; set; } = 1.2f;
 
     /// <summary>
@@ -140,9 +143,11 @@ public sealed class Plunger : Component, IDrawable, IPlaytestReport, IActionRead
 
     internal bool LaunchRequested { get; set; }
 
-    // The most it was pulled by a stick since the stick was pushed, and whether the mouse or a finger holds it here.
+    // The most it was pulled by a stick since the stick was pushed, whether the mouse or a finger holds it here, and which
+    // finger (-1: the mouse, or the first finger, which is the mouse).
     internal float StickPeak;
     internal bool Grabbed;
+    internal int GrabbedTouch = -1;
 
     internal void RaiseLaunched(Entity ball) => Launched?.Invoke(this, ball);
 

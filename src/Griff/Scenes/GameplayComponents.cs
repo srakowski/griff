@@ -416,6 +416,24 @@ public sealed class Counter : Component
     /// </summary>
     public string? SaveBestAs { get; set; }
 
+    /// <summary>
+    /// A message sent as the count first beats the best kept under <see cref="SaveBestAs"/> while it's being played (a new
+    /// best), with the count as its data, e.g. "New Best": a sound player plays a sting on it. Not sent while nothing's
+    /// been kept yet.
+    /// </summary>
+    [Names(NameKind.Message)]
+    public string? NewBestMessage { get; set; }
+
+    /// <summary>
+    /// Another counter, by name, whose count multiplies what each <see cref="Message"/> (and the Add action) adds to this
+    /// one: a score counted double, triple and so on while a "Multiplier" counter says so. Empty multiplies by nothing.
+    /// </summary>
+    [EntityName(Incoming = true)]
+    public string? MultiplyBy { get; set; }
+
+    /// <summary>The most the count goes up to: adding past it stops there, e.g. 5 for a multiplier up to 5x. 0 has no limit.</summary>
+    public int Max { get; set; }
+
     /// <summary>How big the text pops when the count changes, springing back: 1.3 is a little pop, 1 none.</summary>
     public float Pop { get; set; } = 1.3f;
 
@@ -521,19 +539,57 @@ public sealed class Counter : Component
     [Output]
     public int Best { get; internal set; }
 
+    /// <summary>
+    /// The best kept under <see cref="SaveBestAs"/> as this scene started: what the count has to beat to be a new best. -1
+    /// until the game has read it. Set by the game.
+    /// </summary>
+    [Group("State")]
+    public int BestToBeat { get; set; } = -1;
+
+    /// <summary>True once the count has beaten the best kept under <see cref="SaveBestAs"/> as the scene started: a new best.</summary>
+    [DoNotSerialize]
+    [Output]
+    public bool NewBest => !string.IsNullOrWhiteSpace(SaveBestAs) && BestToBeat >= 0 && Value > BestToBeat;
+
     /// <summary>Raised when the count changes.</summary>
     public event Action<Counter>? Changed;
 
-    /// <summary>Adds <paramref name="amount"/> (take some away with a negative amount).</summary>
+    /// <summary>
+    /// Adds <paramref name="amount"/> (take some away with a negative amount), times the count of the counter it's
+    /// multiplied by (see <see cref="MultiplyBy"/>), never past its <see cref="Max"/>.
+    /// </summary>
     [Action]
-    public void Add(int amount = 1)
+    public void Add(int amount = 1) => Change(amount * Multiplier());
+
+    /// <summary>Sets the count to <paramref name="amount"/>, e.g. a multiplier back to 1 as the ball drains.</summary>
+    [Action]
+    public void Set(int amount = 0) => Change(amount - Value);
+
+    // Changes the count by `amount`, never past its Max (the game counting an item, an output or a source sets it outright).
+    internal void Change(int amount)
     {
+        if (Max > 0 && amount > 0)
+            amount = Math.Max(0, Math.Min(amount, Max - Value));
         if (amount == 0)
             return;
         WasReached ??= Reached;
         Value += amount;
         Changed?.Invoke(this);
     }
+
+    // The count of the counter it's multiplied by (found by name, kept until the name changes), or 1.
+    private int Multiplier()
+    {
+        var name = MultiplyBy;
+        if (string.IsNullOrWhiteSpace(name) || Entity?.Scene is not { } scene)
+            return 1;
+        if (_multiplier is not { } kept || kept.Scene != scene || !ReferenceEquals(_multiplierName, name))
+            (_multiplier, _multiplierName) = (HingeJoint.Nearest(scene, Entity, name.Trim()), name);
+        return _multiplier?.GetComponent<Counter>() is { } other && other != this ? other.Value : 1;
+    }
+
+    private Entity? _multiplier;
+    private string? _multiplierName;
 
     /// <summary>Starts the count again from 0.</summary>
     [Action]
@@ -581,12 +637,18 @@ public sealed class Counter : Component
     {
         nameof(Message) => string.IsNullOrWhiteSpace(Output),
         nameof(OnePerMessage) => !CountsOwn,
+        nameof(NewBestMessage) => !string.IsNullOrWhiteSpace(SaveBestAs),
+        nameof(BestToBeat) => false,
         _ => true,
     };
 
-    // Its arrow from what it counts says what it counts.
-    public override string? LinkLabel(string property) =>
-        property == nameof(Track) && !string.IsNullOrWhiteSpace(Output) ? Output.Trim() : null;
+    // Its arrow from what it counts says what it counts; from what it's multiplied by, that it multiplies.
+    public override string? LinkLabel(string property) => property switch
+    {
+        nameof(Track) when !string.IsNullOrWhiteSpace(Output) => Output.Trim(),
+        nameof(MultiplyBy) => "times",
+        _ => null,
+    };
 
     // Counts what a component in the scene counts (see ICounterSource) rather than a message or an item.
     internal bool CountsFromSource => CountGoals || CountMoves || CountScore || CountFloor || CountKind >= 0;
@@ -595,6 +657,11 @@ public sealed class Counter : Component
     internal int? Shown { get; set; }
 
     internal Vector3? RestingScale { get; set; }
+
+    // How long a pop takes to spring back, and how far one has got (seconds) from how big; null when it isn't popping.
+    internal const float PopTime = 0.3f;
+
+    internal (float Age, float Size)? Popping { get; set; }
 }
 
 /// <summary>Destroys its entity after <see cref="Seconds"/> of game time, optionally fading it out first: bullets, effects, popups.</summary>

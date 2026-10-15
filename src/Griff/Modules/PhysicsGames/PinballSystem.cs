@@ -29,12 +29,13 @@ internal sealed partial class PinballSystem : GameSystem
     public override string Name => "Pinball";
 
     // The step's tilts and what each covers.
-    private readonly List<(Tilt Tilt, Scope Scope)> _tilts = [];
+    private readonly List<(Tilt Tilt, Scope Scope)> _tilts = new(4);
 
-    // What touched a piece this step, the controls that work one, and a set of lanes being changed.
-    private readonly List<Entity> _found = [];
-    private readonly List<IInput> _inputs = [];
-    private readonly List<Lane> _set = [];
+    // What touched a piece this step, the controls that work one, and a set of lanes being changed: with room to start
+    // with, so the first ball to touch something, the first flip and the first player don't grow them mid-game.
+    private readonly List<Entity> _found = new(8);
+    private readonly List<IInput> _inputs = new(8);
+    private readonly List<Lane> _set = new(8);
 
     private Scene Scene => Game.Scene;
 
@@ -110,7 +111,8 @@ internal sealed partial class PinballSystem : GameSystem
         }
 
         IInput? by = null;
-        var nudged = tilt.NudgeRequested || (tilt.Controllable && Pressed(entity, tilt.NudgeAction, out by));
+        // Not with a press that closed a menu (B going back out of the pause menu) the moment the game goes on.
+        var nudged = tilt.NudgeRequested || (tilt.Controllable && !Game.PausedThisFrame && Pressed(entity, tilt.NudgeAction, out by));
         tilt.NudgeRequested = false;
         if (nudged)
             Nudge(tilt, scope, by?.Horizontal ?? 0);
@@ -239,15 +241,26 @@ internal sealed partial class PinballSystem : GameSystem
         }
 
         var middle = count > 0 ? sum / count : At(entity).X;
+        var onItsSide = flipper.Side == FlipperSide.Left;
         for (var i = 0; i < _inputs.Count; i++)
         {
             var input = _inputs[i];
+
+            // Every finger on a touch screen, so one on each side holds both flippers up (the first is the mouse as well).
+            var touches = input.Touches;
+            for (var t = 0; t < touches.Count; t++)
+            {
+                var touch = touches[t];
+                if (!touch.Released && !OnPlunger(touch.World) && (!(left && right) || (touch.World.X < middle) == onItsSide))
+                    return true;
+            }
+
             if (!input.IsDown(MouseButton.Left) || !input.IsMouseInView || (ReferenceEquals(input, Game.Input) && Game.MouseOnUi))
                 continue;
             var mouse = input.MouseWorld;
             if (OnPlunger(mouse))
                 continue;
-            if (!(left && right) || (mouse.X < middle) == (flipper.Side == FlipperSide.Left))
+            if (!(left && right) || (mouse.X < middle) == onItsSide)
                 return true;
         }
 

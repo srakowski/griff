@@ -256,12 +256,12 @@ internal static class PinballParts
     public const float CameraSize = 10;
 
     // The playfield's sides, its middle (left of the shooter lane), and where the flippers turn.
-    private const float Left = -5;
-    private const float Right = 5;
-    private const float Divider = 3.8f;
-    private const float Middle = (Left + Divider - 0.15f) / 2;
-    private const float PivotY = -6.5f;
-    private const float PivotX = Middle - 2.025f;
+    internal const float Left = -5;
+    internal const float Right = 5;
+    internal const float Divider = 3.8f;
+    internal const float Middle = (Left + Divider - 0.15f) / 2;
+    internal const float PivotY = -6.5f;
+    internal const float PivotX = Middle - 2.025f;
 
     private static readonly Color Chrome = Color.FromBytes(0xA8, 0xB4, 0xC8);
 
@@ -353,14 +353,14 @@ internal static class PinballParts
     }
 
     // Puts a child in an entity that isn't in a scene yet.
-    private static void Put(Entity parent, Entity child)
+    internal static void Put(Entity parent, Entity child)
     {
         parent.ChildList.Add(child);
         child.Parent = parent;
     }
 
     // A wall from one point to another, `thick` across, in chrome.
-    private static Entity Wall(string name, Vector2 from, Vector2 to, float thick)
+    internal static Entity Wall(string name, Vector2 from, Vector2 to, float thick)
     {
         var wall = new Entity(name);
         var (middle, along) = ((from + to) / 2, to - from);

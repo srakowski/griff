@@ -1,0 +1,52 @@
+title: The Pinball template
+intro: Midnight Midway, a pinball table at a night carnival to play straight away: a multiplier, an extra ball, a ball save and the best score kept, with no code.
+project: Pinball | Midway
+
+chapter: The title | Main
+expectcount: Play = 1
+expectcount: Quit = 1
+say: The title shows the best score, with Play and Quit and the controls, over the midway at night.
+select: Best
+explain: field:Counter.SaveBestAs | The best | A counter keeps the best score in the save data, so it's here the next time the game runs.
+deselect
+
+chapter: The table | Table
+scene: Table
+expectcount: Ball = 1
+expectcount: Lane M = 1
+expectcount: Bell = 1
+expectcount: Drop Target = 3
+say: The table has flippers, kickers over the inlanes and outlanes, three pop bumpers under the top lanes M, I and D, a bank of drop targets with the orbit above it, the skyway up the right, and a brass bell hanging on a rope.
+select: Score
+explain: field:Counter.MultiplyBy | Times the multiplier | The score is a counter of every piece's points, each one counted as many times over as the multiplier says.
+explain: field:Counter.NewBestMessage | A new best | It keeps the best, and says so the moment a game beats it: a sting plays and New Best pops up over the table.
+select: Multiplier
+explain: field:Counter.Max | Up to five times | Lighting M, I and D raises the multiplier one step, up to five, and a trigger puts it back to one as the ball drains.
+select: Target Banks
+explain: field:Counter.ReachMessage | An extra ball | Knock the drop targets down twice and this counter says Extra Ball, which a trigger on the drain turns into a ball more, once a game.
+select: Drain
+explain: field:Drain.BallSave | Ball save | A ball lost within eight seconds of being shot is saved once, and the shoot again light shows while it would be.
+deselect
+
+chapter: Play | Shoot, flip and nudge
+play
+wait: 1
+expectvalue: Plunger.Plunger.Loaded = true
+expectvalue: Drain.Drain.Ball = 1
+hold: Space 1.2
+wait: 0.3
+expectvalue: Plunger.Plunger.Launches = 1
+explain: game | Away it goes | Held a second, the plunger shoots the ball round the top: it rings the bell and drops through the lanes, scoring as it goes.
+wait: 1.5
+expectvalue: Score.Counter.Value = 50000 ~ 49990
+hold: LeftShift 0.4
+expectvalue: Left Flipper.Flipper.Flips = 1
+hold: RightShift 0.4
+expectvalue: Right Flipper.Flipper.Flips = 1
+explain: game | The flippers | Left and Right Shift flip, or Z and slash, a controller's shoulders, or a click or a tap on either side of the table.
+tap: N
+expectvalue: Table.Tilt.Nudges = 1
+explain: game | Nudge | N nudges the table, but nudge too often and it tilts, and the table goes dead until the ball drains.
+wait: 1
+stop
+say: That's the Pinball template: a whole table with a multiplier, an extra ball, a ball save, a tilt and the best score kept, made of the pinball pieces and counters, triggers and spawners, all with no code.

@@ -13,7 +13,7 @@
 //                   picked from the inventory bar and used on the kettle, the keys on the bar, and its items kept),
 //                   rhythm lanes (Create Note Lanes in an empty project: notes hit on the beat heard through Web Audio
 //                   with the keys, a chord with two fingers at once and a hold held by one, to the song's end), then
-//                   Platformer, Shooter, Match3, Isometric, Physics, BunnyMark and Multiplayer (--template picks some,
+//                   Platformer, Shooter, Match3, Isometric, Physics, Pinball, BunnyMark and Multiplayer (--template picks some,
 //                   Proof and Rhythm among them; --project checks that project). See Check below for what each is checked for.
 //   --site <folder> exports every template for the website into <folder> (replacing what an earlier --site wrote there):
 //                   one shared copy of .NET and the player in _player/, then for each game a folder with its page, its
@@ -48,7 +48,7 @@ const string LabelText = "Griff on the Web ♥";
 const float LabelSize = 0.8f;
 const float LabelY = 3.8f;
 // The templates --check plays unless --template picks others.
-const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,BunnyMark,Multiplayer";
+const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,Pinball,BunnyMark,Multiplayer";
 
 var check = args.Contains("--check");
 var exportOnly = args.Contains("--export");
@@ -848,6 +848,9 @@ async Task Play(GameCheck game, string name, IReadOnlyList<string> warnings)
         case "Physics":
             await Slingshots(game);
             break;
+        case "Pinball":
+            await Pinball(game);
+            break;
         case "Multiplayer":
             await NetworkNotice(game, warnings);
             break;
@@ -1086,6 +1089,157 @@ async Task Slingshots(GameCheck game)
             throw new CheckFailed($"{which} collapse's steps took {mean:0.0} ms on average ({count} steps, the slowest frame's {worst:0.0} ms a step), more than a frame");
         Console.WriteLine($"  steps: {which} collapse's {count} steps took {mean:0.00} ms on average, the slowest frame's {worst:0.00} ms a step");
     }
+}
+
+// The Pinball template's table, from its title (Enter). The keys flip (Left and Right Shift), a controller flips (its
+// shoulders) and a finger flips (held on either side of the table). Then a ball each: the keys shoot the first (Space held and
+// let go), a controller the next (its right stick pulled down and let spring back) and a finger the next (held on the
+// plunger), each once the one before has come back to the plunger. The last goes round the top and down through the lanes and bumpers,
+// the flippers working all the while: the steps of those seconds, timed, must take less than a frame (a 60th of a second) on
+// average; the slowest frame's, the points scored and the bumpers' and kickers' knocks are reported.
+async Task Pinball(GameCheck game)
+{
+    await game.Press("Enter");
+    await WaitFor(game, "scene", scene => scene == "Table", "Enter on the title didn't open the table");
+    await Task.Delay(1200);
+    async Task<double> Out(string what) => await game.Probe("output:" + what) is { Length: > 0 } read ? double.Parse(read, CultureInfo.InvariantCulture) : double.NaN;
+
+    // Waits (for a while: a browser can stall for a moment) for an output to say what's wanted.
+    async Task<bool> Until(string what, Func<double, bool> wanted, double seconds = 6)
+    {
+        var waited = Stopwatch.StartNew();
+        while (!wanted(await Out(what)))
+        {
+            if (waited.Elapsed > TimeSpan.FromSeconds(seconds))
+                return false;
+            await Task.Delay(50);
+        }
+
+        return true;
+    }
+
+    // Where a point of the table is on the page: the camera's at its middle, 20 high.
+    async Task<(double X, double Y)> OnPage(double x, double y)
+    {
+        var (width, height) = await game.Viewport();
+        var scale = height / 20;
+        return (width / 2 + x * scale, height / 2 - y * scale);
+    }
+
+    async Task Flips(string how, string flipper, Func<Task> press, Func<Task> release)
+    {
+        await press();
+        var up = await Until($"{flipper}.Up", up => up == 1);
+        await Task.Delay(100);
+        await release();
+        var down = await Until($"{flipper}.Up", up => up == 0);
+        if (!up || !down)
+            throw new CheckFailed($"{how} didn't flip the {flipper} up and let it drop ({(up ? "up" : "not up")} while held, {(down ? "down" : "still up")} after)");
+        Console.WriteLine($"  {how} flipped the {flipper.ToLowerInvariant()} up and let it drop");
+    }
+
+    // The next ball on the plunger (the one before lost and the next served, or one fallen back down the shooter lane), once
+    // it has rested there a second (a saved ball is shot again by itself), is shot: it must leave the plunger and go up the
+    // shooter lane.
+    async Task Shoots(string how, Func<Task> shoot)
+    {
+        var waited = Stopwatch.StartNew();
+        var resting = Stopwatch.StartNew();
+        while (resting.Elapsed < TimeSpan.FromSeconds(1.2))
+        {
+            if (await Out("Plunger.Loaded") != 1)
+                resting.Restart();
+            if (waited.Elapsed > TimeSpan.FromSeconds(120))
+            {
+                await game.Screenshot("unserved.png");
+                throw new CheckFailed($"no ball came back to the plunger for {how} to shoot (it's ball {await Out("Drain.Ball")}, the ball at " +
+                                      $"{await game.Probe("entity:Ball")}; see {game.Shot("unserved.png")})");
+            }
+
+            await Task.Delay(100);
+        }
+
+        await Task.Delay(300);
+        var launches = await Out("Plunger.Launches");
+        await shoot();
+        var shot = await Until("Plunger.Launches", now => now > launches);
+        await Task.Delay(300);
+        var at = Position(await game.Probe("entity:Ball"));
+        if (!shot || at.Y < -4)
+            throw new CheckFailed($"{how} didn't shoot the ball (it's at {at.X:0.0}, {at.Y:0.0})");
+        Console.WriteLine($"  {how} shot ball {await Out("Drain.Ball")} up the shooter lane (at {at.X:0.0}, {at.Y:0.0} a moment later)");
+    }
+
+    await Flips("keys: Left Shift", "Left Flipper", () => game.Down("ShiftLeft"), () => game.Up("ShiftLeft"));
+    await Flips("keys: Right Shift", "Right Flipper", () => game.Down("ShiftRight"), () => game.Up("ShiftRight"));
+    await Flips("controller: the left shoulder", "Left Flipper", () => game.PadButtons(0, [4]), () => game.PadButtons(0, []));
+    await Flips("controller: the right shoulder", "Right Flipper", () => game.PadButtons(0, [5]), () => game.PadButtons(0, []));
+    await game.Pad(null);
+    var (leftX, leftY) = await OnPage(-3, -2);
+    var (rightX, rightY) = await OnPage(2, 2);
+    var (plungerX, plungerY) = await OnPage(4.47, -8.3);
+    await Flips("touch: a finger on the left", "Left Flipper", () => game.TouchDown(leftX, leftY), () => game.TouchUp());
+    await Flips("touch: a finger on the right", "Right Flipper", () => game.TouchDown(rightX, rightY), () => game.TouchUp());
+
+    // Two fingers at once, one each side: both flippers up together.
+    await game.Cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = true, ["maxTouchPoints"] = 4 });
+    await game.Cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject
+    {
+        ["type"] = "touchStart",
+        ["touchPoints"] = new JsonArray(new JsonObject { ["x"] = leftX, ["y"] = leftY, ["id"] = 1 }, new JsonObject { ["x"] = rightX, ["y"] = rightY, ["id"] = 2 }),
+    });
+    var both = await Until("Left Flipper.Up", up => up == 1) && await Until("Right Flipper.Up", up => up == 1);
+    await game.Cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
+    await game.Cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    if (!both || !await Until("Left Flipper.Up", up => up == 0) || !await Until("Right Flipper.Up", up => up == 0))
+        throw new CheckFailed($"two fingers, one each side, didn't hold both flippers up together and let them drop (touches: \"{await game.Probe("touches")}\")");
+    Console.WriteLine("  touch: two fingers at once, one each side, held both flippers up together and let them drop");
+
+    await Shoots("keys: Space held and let go", () => game.Hold("Space", 900));
+    await Shoots("controller: the right stick pulled down and let spring back", async () =>
+    {
+        await game.PadButtons(1, []);
+        await Task.Delay(600);
+        await game.PadButtons(0, []);
+        await Task.Delay(200);
+        await game.Pad(null);
+    });
+
+    // The last ball, shot hard round the top, down through the lanes and the bumpers, the flippers going all the while.
+    string[] knockers = ["Left Bumper", "Right Bumper", "Bottom Bumper", "Left Kicker", "Right Kicker"];
+    var knocks = 0.0;
+    foreach (var name in knockers)
+        knocks -= await Out($"{name}.Hits");
+    var score = await Out("Score.Count");
+    var watch = new Stopwatch();
+    await Shoots("touch: a finger held on the plunger and lifted", async () =>
+    {
+        await game.Probe("steps");
+        await game.Probe("frames");
+        watch.Start();
+        await game.TouchDown(plungerX, plungerY);
+        await Task.Delay(1200);
+        await game.TouchUp();
+    });
+    for (var i = 0; i < 16; i++)
+    {
+        var key = i % 2 == 0 ? "ShiftLeft" : "ShiftRight";
+        await game.Down(key);
+        await Task.Delay(200);
+        await game.Up(key);
+        await Task.Delay(300);
+    }
+
+    var steps = (await game.Probe("steps")).Split('|');
+    var frames = (await game.Probe("frames")).Split('|');
+    var (count, mean, worst) = (int.Parse(steps[0], CultureInfo.InvariantCulture), double.Parse(steps[1], CultureInfo.InvariantCulture), double.Parse(steps[2], CultureInfo.InvariantCulture));
+    foreach (var name in knockers)
+        knocks += await Out($"{name}.Hits");
+    var scored = await Out("Score.Count") - score;
+    if (count < 30 || mean > 1000.0 / 60)
+        throw new CheckFailed($"the table's steps took {mean:0.0} ms on average ({count} steps, the slowest frame's {worst:0.0} ms a step), more than a frame");
+    Console.WriteLine($"  steps: {count} steps of play ({scored:0} points scored, {knocks:0} knocks off the bumpers and kickers) took {mean:0.00} ms on average, the slowest frame's {worst:0.00} ms a step; " +
+                      $"{frames[0]} frames drawn in {watch.Elapsed.TotalSeconds:0.0} s, each built in {frames[1]} ms and drawn in {frames[2]} ms on average");
 }
 
 // BunnyMark's Space starts its run again, back to its first hundred bunnies: fewer than it had once it's added more, or
@@ -1818,6 +1972,11 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
         await Key("keyUp", code, VirtualKey(code));
     }
 
+    // A key pressed and held, or let go.
+    public async Task Down(string code) => await Key("keyDown", code, VirtualKey(code));
+
+    public async Task Up(string code) => await Key("keyUp", code, VirtualKey(code));
+
     public async Task Press(string code)
     {
         await Key("keyDown", code, VirtualKey(code));
@@ -1862,6 +2021,26 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
           stickY.ToString(CultureInfo.InvariantCulture) + ", 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: " +
           (pressA ? "i === 0" : "false") + ", value: " + (pressA ? "i === 0 ? 1 : 0" : "0") + " })) }; 'ok'");
 
+    // A controller in the standard layout with its right stick at (0, rightStickY) (down positive) and the buttons numbered
+    // held (0 A, 1 B, 4 the left shoulder, 5 the right, 6 and 7 the triggers), as if plugged in.
+    public async Task PadButtons(double rightStickY, int[] held) => await Evaluate(
+        "globalThis.__griffPad = { connected: true, mapping: 'standard', axes: [0, 0, 0, " + rightStickY.ToString(CultureInfo.InvariantCulture) +
+        "], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: [" + string.Join(",", held) + "].includes(i), value: [" + string.Join(",", held) +
+        "].includes(i) ? 1 : 0 })) }; 'ok'");
+
+    // A finger pressed at (x, y), CSS pixels from the page's top left, and held; and lifted.
+    public async Task TouchDown(double x, double y)
+    {
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = true, ["maxTouchPoints"] = 1 });
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchStart", ["touchPoints"] = new JsonArray(new JsonObject { ["x"] = x, ["y"] = y }) });
+    }
+
+    public async Task TouchUp()
+    {
+        await cdp.SendAsync("Input.dispatchTouchEvent", new JsonObject { ["type"] = "touchEnd", ["touchPoints"] = new JsonArray() });
+        await cdp.SendAsync("Emulation.setTouchEmulationEnabled", new JsonObject { ["enabled"] = false });
+    }
+
     // A finger pressed at (x, y), CSS pixels from the page's top left, dragged to (toX, toY) over a few moves and lifted.
     public async Task Drag(double x, double y, double toX, double toY)
     {
@@ -1891,6 +2070,7 @@ sealed class GameCheck(DevTools cdp, string name, string url, string shots)
     private static int VirtualKey(string code) => code switch
     {
         "ArrowLeft" => 37, "ArrowUp" => 38, "ArrowRight" => 39, "ArrowDown" => 40, "Space" => 32, "Enter" => 13, "Escape" => 27, "ShiftLeft" => 16,
+        "ShiftRight" => 16, "Slash" => 191,
         var c when c.Length == 4 && c.StartsWith("Key", StringComparison.Ordinal) => c[3],
         _ => 0,
     };

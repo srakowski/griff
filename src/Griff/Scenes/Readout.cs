@@ -12,7 +12,8 @@ internal static class Readout
 {
     /// <summary>
     /// <paramref name="template"/> with the output filled in: <paramref name="name"/> for one that gives a name, otherwise
-    /// <paramref name="number"/> (a whole number as one, true or false as On or Off). A template without <c>{0}</c> or
+    /// <paramref name="number"/> (a whole number as one, true or false as On or Off, or with a format as 1 or 0, so
+    /// <c>{0:'New best!';;''}</c> says something only while it's true). A template without <c>{0}</c> or
     /// <c>{1}</c> is just the output.
     /// </summary>
     public static string Fill(string? template, float number, string? name, float outOf, Type valueType)
@@ -43,8 +44,10 @@ internal static class Readout
     {
         if (valueType == typeof(string))
             return name ?? "";
-        if (valueType == typeof(bool))
+        if (valueType == typeof(bool) && format is null)
             return number != 0 ? "On" : "Off";
+        if (valueType == typeof(bool))
+            number = number != 0 ? 1 : 0;
         try
         {
             if (valueType == typeof(int) || (format is null && number == MathF.Round(number)))

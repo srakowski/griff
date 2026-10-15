@@ -102,7 +102,7 @@ internal static class PinballArt
         .Select(p => FormattableString.Invariant($"{p.X:0.###} {p.Y:0.###}")));
 
     // A sound of a preset kind, the first (counting seeds up from its own) short enough.
-    private static byte[] Sound(SoundPreset preset, int seed, float maxSeconds, float volume)
+    internal static byte[] Sound(SoundPreset preset, int seed, float maxSeconds, float volume)
     {
         SoundRecipe recipe;
         for (var s = seed; ; s++)
@@ -120,7 +120,7 @@ internal static class PinballArt
 
     // Paints a picture `width` by `height` world units, PerUnit pixels to one: `paint` gives each point's color (its
     // alpha 0 outside), sampled four times a pixel so edges are smooth.
-    private static Canvas Paint(float width, float height, Func<Vector2, Vector4> paint, int perUnit = PerUnit)
+    internal static Canvas Paint(float width, float height, Func<Vector2, Vector4> paint, int perUnit = PerUnit)
     {
         var (w, h) = ((int)MathF.Round(width * perUnit), (int)MathF.Round(height * perUnit));
         var c = new Canvas(w, h);
@@ -147,11 +147,11 @@ internal static class PinballArt
         return c;
     }
 
-    private static Vector4 Rgb(int hex, float alpha = 1) => new(((hex >> 16) & 0xFF) / 255f, ((hex >> 8) & 0xFF) / 255f, (hex & 0xFF) / 255f, alpha);
+    internal static Vector4 Rgb(int hex, float alpha = 1) => new(((hex >> 16) & 0xFF) / 255f, ((hex >> 8) & 0xFF) / 255f, (hex & 0xFF) / 255f, alpha);
 
-    private static Vector4 Shade(Vector4 color, float amount) => new(Math.Clamp(color.X * amount, 0, 1), Math.Clamp(color.Y * amount, 0, 1), Math.Clamp(color.Z * amount, 0, 1), color.W);
+    internal static Vector4 Shade(Vector4 color, float amount) => new(Math.Clamp(color.X * amount, 0, 1), Math.Clamp(color.Y * amount, 0, 1), Math.Clamp(color.Z * amount, 0, 1), color.W);
 
-    private static Vector4 Mix(Vector4 a, Vector4 b, float t) => Vector4.Lerp(a, b, Math.Clamp(t, 0, 1));
+    internal static Vector4 Mix(Vector4 a, Vector4 b, float t) => Vector4.Lerp(a, b, Math.Clamp(t, 0, 1));
 
     // A steel ball, lit from the top left.
     private static Canvas BallArt() => Paint(0.6f, 0.6f, p =>
@@ -217,7 +217,7 @@ internal static class PinballArt
     });
 
     // How far inside the line from a to b (on its left, going round the corners as listed) a point is.
-    private static float Side(Vector2 a, Vector2 b, Vector2 p)
+    internal static float Side(Vector2 a, Vector2 b, Vector2 p)
     {
         var along = Vector2.Normalize(b - a);
         return along.X * (p.Y - a.Y) - along.Y * (p.X - a.X);

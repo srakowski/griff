@@ -25,6 +25,7 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 {
     private string? _text;
     private float _wrappedAt;
+    private string? _wrapped;
     private string[] _lines = [];
 
     /// <summary>What it's called, written along its top. Empty writes its entity's name.</summary>
@@ -38,6 +39,7 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
         {
             _text = value;
             _wrappedAt = 0;
+            _wrapped = null;
         }
     }
 
@@ -50,6 +52,13 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 
     /// <summary>What kind of card it is, e.g. "Spell" or "Hearts": a play zone's Accepts names the kinds it takes.</summary>
     public string? Kind { get; set; }
+
+    /// <summary>
+    /// Mana it costs to play, paid from the hand's Mana (which refills as each of its side's turns starts): a card that
+    /// costs more than the hand has can't be played. Shown in its top-right corner. 0 is free.
+    /// </summary>
+    [Output]
+    public int Cost { get; set; }
 
     /// <summary>The color of its face.</summary>
     [Group("Look")]
@@ -82,6 +91,13 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     [EntityName]
     public string? Home { get; set; }
 
+    /// <summary>
+    /// The hand it was last played from, by name: whose side it's on while it's on the table (its effects' "you", a
+    /// creature's side). Set by the game as it's played.
+    /// </summary>
+    [EntityName]
+    public string? PlayedBy { get; set; }
+
     /// <summary>The place it's in (the deck, hand or play zone it's inside), or null.</summary>
     [DoNotSerialize]
     public CardZone? Zone => Entity?.Parent?.GetComponent<CardZone>();
@@ -101,6 +117,45 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 
     /// <summary>The title it shows: <see cref="Title"/>, or its entity's name.</summary>
     public string ShownTitle => string.IsNullOrWhiteSpace(Title) ? Entity?.Name ?? "" : Title;
+
+    /// <summary>The rules text it shows: its <see cref="Text"/>, or with none, what its <see cref="CardEffect"/>s do.</summary>
+    public string ShownText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_text) || Entity is null)
+                return _text ?? "";
+            string? only = null;
+            var count = 0;
+            var same = true;
+            var components = Entity.Components;
+            for (var i = 0; i < components.Count; i++)
+            {
+                if (components[i] is not CardEffect effect || effect.Describe() is not { Length: > 0 } words)
+                    continue;
+                only ??= words;
+                same &= count < _effectWords.Length && ReferenceEquals(_effectWords[count], words);
+                count++;
+            }
+
+            if (count <= 1)
+                return only ?? "";
+            if (same && count == _effectWords.Length && _effectsText is { } kept)
+                return kept;
+            _effectWords = new string[count];
+            count = 0;
+            for (var i = 0; i < components.Count; i++)
+            {
+                if (components[i] is CardEffect effect && effect.Describe() is { Length: > 0 } words)
+                    _effectWords[count++] = words;
+            }
+
+            return _effectsText = string.Join(" ", _effectWords);
+        }
+    }
+
+    private string[] _effectWords = [];
+    private string? _effectsText;
 
     internal void RaiseDrawn(Hand hand) => Drawn?.Invoke(this, hand);
 
@@ -124,6 +179,17 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 
     // Shown face down on this machine: in a hidden hand of a side this player isn't on.
     internal bool HiddenHere { get; set; }
+
+    // Lifted out of its hand by the computer, about to be played: sent, so every player sees what's coming.
+    [Sent]
+    internal bool Readied { get; set; }
+
+    // What the computer is about to play it at, by name, if it chooses a target: sent, so every player sees the aim.
+    [Sent]
+    internal string? ReadiedAt { get; set; }
+
+    // In a hand that hasn't the mana for it on this machine: its cost is drawn dimmed.
+    internal bool Unaffordable { get; set; }
 
     // Lit with a hand's highlight on this machine (under the mouse, picked, the keyboard's cursor on it), and in what color.
     internal Color Highlight { get; set; }
@@ -193,10 +259,11 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     internal string[] Lines(float size, float width)
     {
         var at = size * 1000 + width;
-        if (at == _wrappedAt)
+        var text = ShownText;
+        if (at == _wrappedAt && ReferenceEquals(text, _wrapped))
             return _lines;
-        _wrappedAt = at;
-        _lines = CardLook.Wrap(_text, size, width);
+        (_wrappedAt, _wrapped) = (at, text);
+        _lines = CardLook.Wrap(text, size, width);
         return _lines;
     }
 
@@ -230,6 +297,10 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 
         if (!FaceUp)
             text += ", face down";
+        if (Cost != 0)
+            text += $", costs {Cost}";
+        if (Readied)
+            text += ", about to be played";
         return text + (Resting || Zone is null ? "" : ", sliding into place");
     }
 }

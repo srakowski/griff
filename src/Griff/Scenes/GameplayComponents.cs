@@ -123,9 +123,15 @@ public sealed class Health : Component
     /// Takes <paramref name="amount"/> hit points away, unless it's already dead or still invincible from the last hit.
     /// Returns whether the damage landed. <paramref name="source"/> is passed on to <c>OnDamage</c>.
     /// </summary>
-    public bool Damage(float amount, Entity? source = null)
+    public bool Damage(float amount, Entity? source = null) => Damage(amount, source, always: false);
+
+    /// <summary>
+    /// As <see cref="Damage(float, Entity?)"/>; with <paramref name="always"/>, it lands even while it can't be hurt after the
+    /// last hit: a blow that isn't a touch, such as a card's damage, each of which counts.
+    /// </summary>
+    internal bool Damage(float amount, Entity? source, bool always)
     {
-        if (!(amount > 0) || IsDead || IsInvincible)
+        if (!(amount > 0) || IsDead || (IsInvincible && !always))
             return false;
 
         Current = Math.Max(0, Current - amount);

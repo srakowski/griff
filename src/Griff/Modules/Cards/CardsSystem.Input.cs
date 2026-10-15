@@ -11,7 +11,7 @@ namespace Griff.Modules.Cards;
 /// </summary>
 internal sealed class CardsView
 {
-    public int Count => Pending.Count + (Hovered is null ? 0 : 1) + (Pressed is null ? 0 : 1) + (Picked is null ? 0 : 1);
+    public int Count => Pending.Count + (Hovered is null ? 0 : 1) + (Pressed is null ? 0 : 1) + (Picked is null ? 0 : 1) + (Aiming is null ? 0 : 1);
 
     public Card? Hovered { get; set; }
 
@@ -41,6 +41,16 @@ internal sealed class CardsView
 
     // Plays this player's machine has sent the host, with the seconds it waits for them before the card eases back.
     public Dictionary<Card, float> Pending { get; } = [];
+
+    // A card let go on a zone whose effect chooses a target, waiting for the player to pick it (with the mouse, or with
+    // the keys the one at AimIndex): where it's going and where it was let go.
+    public Card? Aiming { get; set; }
+
+    public CardZone? AimZone { get; set; }
+
+    public Vector2? AimAt { get; set; }
+
+    public int AimIndex { get; set; }
 }
 
 internal sealed partial class CardsSystem
@@ -98,6 +108,8 @@ internal sealed partial class CardsSystem
             var back = DeckOf(hand, decks);
             (hand.BackImage, hand.BackColor) = back is null ? (null, CardLook.DefaultBack) : (back.Back, back.BackColor);
             hand.CanPlay = MayPlay(hand, Game.Net.LocalPlayer, now: true);
+            hand.Computer = ComputerPlays(hand);
+            hand.Aiming = View.Aiming is { } aiming && aiming.Zone == hand ? aiming : null;
         }
 
         foreach (var card in cards)
@@ -112,6 +124,7 @@ internal sealed partial class CardsSystem
             var home = !string.IsNullOrWhiteSpace(card.Home) && homes.TryGetValue(card.Home.Trim(), out var h) ? h : zone as Deck;
             (card.BackImage, card.BackColor) = home is null ? (null, CardLook.DefaultBack) : (home.Back, home.BackColor);
             card.HiddenHere = zone is Hand held && HiddenHere(held);
+            card.Unaffordable = zone is Hand from && card.Cost > from.Mana;
         }
 
         if (!Game.PausedThisFrame && !Game.LocalInputBlocked && Game.TopPanel is null)
@@ -147,6 +160,9 @@ internal sealed partial class CardsSystem
             Unpick();
         if (View.Pressed is { } pressed && (pressed.Entity?.Scene != Scene || pressed.Zone is not Hand))
             (View.Pressed, View.Dragging) = (null, false);
+        if (View.Aiming is { } aiming && (aiming.Entity?.Scene != Scene || aiming.Zone is not Hand holder || !mine.Contains(holder) ||
+                                          !MayPlay(holder, me, now: true) || View.AimZone is not { } aimZone || !CanGo(aiming, holder, aimZone)))
+            CancelAim();
 
         Mouse(mine, decks, tables);
         Keys(mine, decks, tables);
@@ -162,6 +178,25 @@ internal sealed partial class CardsSystem
         if (inView && View.LastMouse is { } last && Vector2.DistanceSquared(last, mouse) > 1e-6f)
             View.Keys = false;
         View.LastMouse = mouse;
+
+        // Picking what a card is aimed at: click it, or anywhere else (or right-click) to put the card back.
+        if (View.Aiming is { } aiming)
+        {
+            View.Hovered = null;
+            if (input.WasPressed(MouseButton.Left) && inView && !overUi)
+            {
+                if (UnitAt(aiming, mouse) is { } unit)
+                    Aimed(aiming, unit);
+                else
+                    CancelAim();
+            }
+            else if (input.WasPressed(MouseButton.Right) && inView)
+            {
+                CancelAim();
+            }
+
+            return;
+        }
 
         View.Hovered = View.Dragging ? View.Pressed : inView && !overUi ? CardUnder(mine, mouse) : null;
 
@@ -205,7 +240,11 @@ internal sealed partial class CardsSystem
                 {
                     var at = Visual(pressed);
                     var zone = ZoneAt(mouse, decks, tables, z => CanGo(pressed, hand2, z)) ?? ZoneAt(at, decks, tables, z => CanGo(pressed, hand2, z));
-                    if (zone is not null)
+                    // A card that's aimed, let go on what it can be aimed at, goes for it from the first zone that takes it.
+                    if (Chooses(pressed) && UnitAt(pressed, mouse) is { } unit &&
+                        Targets(pressed, hand2, decks, tables).OfType<PlayZone>().FirstOrDefault() is { } into)
+                        PlayHere(pressed, into, at, unit);
+                    else if (zone is not null)
                         PlayHere(pressed, zone, at);
                     else
                         Unpick();
@@ -234,7 +273,7 @@ internal sealed partial class CardsSystem
     private void Keys(List<Hand> mine, List<Deck> decks, List<PlayZone> tables)
     {
         var me = Game.Net.LocalPlayer;
-        var hand = View.Picked?.Zone as Hand ?? mine.FirstOrDefault(h => MayPlay(h, me, now: true)) ?? mine.FirstOrDefault();
+        var hand = (View.Aiming ?? View.Picked)?.Zone as Hand ?? mine.FirstOrDefault(h => MayPlay(h, me, now: true)) ?? mine.FirstOrDefault();
         if (View.KeyHand != hand)
             (View.KeyHand, View.Cursor) = (hand, -1);
         var way = Way();
@@ -243,6 +282,29 @@ internal sealed partial class CardsSystem
         var input = Input;
         bool Pressed(string? action) => !string.IsNullOrWhiteSpace(action) && input.WasPressed(action.Trim());
 
+        var pick = Pressed(hand.PickAction);
+        if (View.Aiming is { } aiming)
+        {
+            // Left and right choose what it's aimed at, the Pick Action plays it there, the Cancel Action puts it back.
+            var aims = AimOptions(aiming);
+            if (Pressed(hand.CancelAction) || aims.Count == 0)
+            {
+                CancelAim();
+                return;
+            }
+
+            if (way != 0)
+            {
+                View.Keys = true;
+                View.AimIndex = ((View.AimIndex + way) % aims.Count + aims.Count) % aims.Count;
+            }
+
+            View.AimIndex = Math.Clamp(View.AimIndex, 0, aims.Count - 1);
+            if (pick)
+                Aimed(aiming, aims[View.AimIndex]);
+            return;
+        }
+
         if (Pressed(hand.DrawAction) && DeckOf(hand, decks) is { ClickToDraw: true } deck && MayPlay(hand, me, now: true))
             SendDraw(deck, hand);
         if (Pressed(hand.CancelAction))
@@ -250,8 +312,6 @@ internal sealed partial class CardsSystem
             Unpick();
             return;
         }
-
-        var pick = Pressed(hand.PickAction);
         if (View.Picked is { } picked)
         {
             var targets = Targets(picked, hand, decks, tables);
@@ -328,7 +388,7 @@ internal sealed partial class CardsSystem
     }
 
     // The zones a card from a hand can go to now, left to right.
-    private static List<CardZone> Targets(Card card, Hand hand, List<Deck> decks, List<PlayZone> tables) =>
+    private List<CardZone> Targets(Card card, Hand hand, List<Deck> decks, List<PlayZone> tables) =>
         [.. tables.Cast<CardZone>().Concat(decks).Where(z => CanGo(card, hand, z)).OrderBy(z => Center(z.Entity!).X)];
 
     private void Pick(Card card)
@@ -364,15 +424,90 @@ internal sealed partial class CardsSystem
             pressed.Dragged = false;
         (View.Pressed, View.Dragging, View.Hovered) = (null, false, null);
         Unpick();
+        CancelAim();
     }
 
-    // Asks the host to play it; on a player's machine the card stays where it was let go until the host has.
-    private void PlayHere(Card card, CardZone zone, Vector2? at)
+    // Asks the host to play it; on a player's machine the card stays where it was let go until the host has. A card whose
+    // effect chooses a target waits there, aimed, for the player to pick it first.
+    private void PlayHere(Card card, CardZone zone, Vector2? at, Entity? target = null)
     {
         Unpick();
+        if (target is null && zone is PlayZone && Chooses(card))
+        {
+            CancelAim();
+            (View.Aiming, View.AimZone, View.AimAt) = (card, zone, at);
+            View.Pending[card] = float.PositiveInfinity;
+            // The keys start on what the computer would pick.
+            var options = AimOptions(card);
+            var hand = card.Zone as Hand;
+            var pick = hand is null ? null : ChooseTarget(card, hand);
+            View.AimIndex = pick is null ? 0 : Math.Max(0, options.IndexOf(pick));
+            return;
+        }
+
         if (Game.Net.IsClient)
             View.Pending[card] = PendingFor;
-        SendPlay(card, zone, at);
+        else
+            View.Pending.Remove(card);
+        SendPlay(card, zone, at, target);
+    }
+
+    // The player picked what the card aimed is aimed at: it's played there.
+    private void Aimed(Card card, Entity target)
+    {
+        var (zone, at) = (View.AimZone, View.AimAt);
+        (View.Aiming, View.AimZone, View.AimAt) = (null, null, null);
+        if (zone is null)
+        {
+            View.Pending.Remove(card);
+            return;
+        }
+
+        PlayHere(card, zone, at, target);
+    }
+
+    // Stops aiming: the card eases back to its hand.
+    private void CancelAim()
+    {
+        if (View.Aiming is { } card)
+            View.Pending.Remove(card);
+        (View.Aiming, View.AimZone, View.AimAt) = (null, null, null);
+    }
+
+    // What a card can be aimed at, left to right (then bottom to top), for the keys to go through.
+    private List<Entity> AimOptions(Card card) =>
+        [.. Candidates(card).OrderBy(u => Center(u).X).ThenBy(u => Center(u).Y)];
+
+    // What the card can be aimed at under a point: the one drawn last (a card on the table over what's under it).
+    private Entity? UnitAt(Card card, Vector2 point)
+    {
+        Entity? found = null;
+        foreach (var unit in Candidates(card))
+        {
+            var (center, size) = BoxOf(unit);
+            if (MathF.Abs(point.X - center.X) <= size.X / 2 && MathF.Abs(point.Y - center.Y) <= size.Y / 2)
+                found = unit;
+        }
+
+        return found;
+    }
+
+    // Roughly where something is and how big: a card's face, a collider's bounds, a sprite, or a square at it.
+    private static (Vector2 Center, Vector2 Size) BoxOf(Entity entity)
+    {
+        if (entity.GetComponent<Card>() is { } card)
+            return (Center(entity), Vector2.Abs(card.Size));
+        if (entity.GetComponent<Collider>() is { } collider)
+        {
+            var box = collider.WorldBounds;
+            return (box.Center, box.HalfSize * 2);
+        }
+
+        var world = entity.Transform.WorldMatrix;
+        var scale = new Vector2(new Vector2(world.M11, world.M12).Length(), new Vector2(world.M21, world.M22).Length());
+        if (entity.GetComponent<Sprite>() is { } sprite)
+            return (Center(entity), Vector2.Abs(sprite.Size * scale));
+        return (Center(entity), Vector2.One);
     }
 
     // ----- Where things are -----
@@ -478,11 +613,15 @@ internal sealed partial class CardsSystem
         {
             var hand = card.Zone as Hand;
             if (hand is not null)
-                (card.LiftRise, card.LiftScale) = (hand.HoverRise, hand.HoverScale);
+            {
+                // The computer's card about to be played rises toward the table (down, from a hand along the top).
+                var rise = card.Readied && TableY(zones) is { } table && table < Center(hand.Entity!).Y ? -hand.HoverRise * 1.5f : hand.HoverRise;
+                (card.LiftRise, card.LiftScale) = (rise, hand.HoverScale);
+            }
             var pending = View.Pending.ContainsKey(card);
             var dragged = View.Dragging && View.Pressed == card;
             var lift = hand is null ? 0
-                : dragged || pending || View.Picked == card ? 1
+                : dragged || pending || View.Picked == card || card.Readied ? 1
                 : (View.Hovered == card && !View.Dragging && !View.Keys) || cursorCard == card ? 0.7f
                 : 0;
             card.Highlight = hand is not null && (View.Picked == card || cursorCard == card) ? hand.HighlightColor : NoHighlight;
@@ -524,6 +663,37 @@ internal sealed partial class CardsSystem
             }
         }
 
+        // A card being aimed: a line from it to the mouse (or what the keys are on), and what it can be aimed at outlined;
+        // the computer's, to what it's about to play its card at.
+        foreach (var hand in hands)
+        {
+            hand.Aim = null;
+            hand.AimMarks.Clear();
+        }
+
+        if (View.Aiming is { Zone: Hand aimer } aiming)
+        {
+            var options = AimOptions(aiming);
+            var on = View.Keys && options.Count > 0 ? options[Math.Clamp(View.AimIndex, 0, options.Count - 1)] : UnitAt(aiming, mouse);
+            foreach (var option in options)
+            {
+                var (center, size) = BoxOf(option);
+                aimer.AimMarks.Add((center, size, option == on));
+            }
+
+            aimer.Aim = (Visual(aiming), View.Keys && on is not null ? BoxOf(on).Center : mouse);
+        }
+
+        foreach (var card in cards)
+        {
+            if (card is { Readied: true, ReadiedAt.Length: > 0 } readied && readied.Zone is Hand shower && Scene.FindNamed(readied.ReadiedAt) is { } target)
+            {
+                var (center, size) = BoxOf(target);
+                shower.AimMarks.Add((center, size, true));
+                shower.Aim = (Visual(readied), center);
+            }
+        }
+
         foreach (var zone in zones)
         {
             var lit = held is null || heldHand is null || !CanGo(held, heldHand, zone) ? 0 : zone == aimed ? 2 : 1;
@@ -537,6 +707,23 @@ internal sealed partial class CardsSystem
                     break;
             }
         }
+    }
+
+    // How high the play zones are on average, or null with none.
+    private static float? TableY(ComponentList<CardZone> zones)
+    {
+        float sum = 0;
+        var count = 0;
+        foreach (var zone in zones)
+        {
+            if (zone is PlayZone)
+            {
+                sum += Center(zone.Entity!).Y;
+                count++;
+            }
+        }
+
+        return count == 0 ? null : sum / count;
     }
 
     private static void Ease(ref Smoothed<float> value, Card card, float to, float ease)
@@ -563,5 +750,8 @@ internal sealed partial class CardsSystem
             Unpick();
         if (View.Hovered == card)
             View.Hovered = null;
+        if (View.Aiming == card)
+            (View.Aiming, View.AimZone, View.AimAt) = (null, null, null);
+        (card.Readied, card.ReadiedAt) = (false, null);
     }
 }

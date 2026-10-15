@@ -391,7 +391,7 @@ public sealed class CardTests
     public void Its_actions_and_outputs_are_there_for_triggers_wires_and_counters()
     {
         Assert.Equal(["Draw", "Shuffle", "Restart"], ComponentActions.Of(typeof(Deck)).Select(a => a.Name));
-        Assert.Equal(["Draw", "Discard", "Focus"], ComponentActions.Of(typeof(Hand)).Select(a => a.Name));
+        Assert.Equal(["Draw", "Discard", "GainMana", "Focus"], ComponentActions.Of(typeof(Hand)).Select(a => a.Name));
         Assert.Equal(["Discard"], ComponentActions.Of(typeof(PlayZone)).Select(a => a.Name));
         Assert.Contains("Count", ComponentOutputs.Of(typeof(Deck)).Select(o => o.Name));
         Assert.Contains("Count", ComponentOutputs.Of(typeof(Hand)).Select(o => o.Name));

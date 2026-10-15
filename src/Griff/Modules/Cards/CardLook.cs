@@ -41,11 +41,24 @@ internal static class CardLook
             Text(drawing, card, world, card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), badge, 0.24f * unit, face, TextAlign.Center, font);
         }
 
+        if (card.Cost != 0)
+        {
+            // Its cost in a gem in the top-right corner, dimmed while its hand hasn't the mana.
+            var gem = new Vector2(w / 2 - 0.24f * unit, top - 0.15f * unit);
+            var color = card.Unaffordable ? Color.FromBytes(0x6A, 0x6E, 0x7A) : ManaColor;
+            Diamond(drawing, card, world, gem, 0.42f * unit, drawing.Tint(card, Scale(color, 0.6f)));
+            Diamond(drawing, card, world, gem, 0.34f * unit, drawing.Tint(card, color));
+            Text(drawing, card, world, card.Cost.ToString(System.Globalization.CultureInfo.InvariantCulture), gem, 0.24f * unit,
+                drawing.Tint(card, Color.White), TextAlign.Center, font);
+        }
+
         var title = card.ShownTitle;
         if (title.Length > 0)
         {
-            var titleSize = Math.Min(0.2f * unit, (w - 0.9f * unit) / Math.Max(1, title.Length * GlyphWidth));
-            Text(drawing, card, world, title, new Vector2(card.Value != 0 ? 0.12f * unit : 0, top - 0.15f * unit), titleSize, ink, TextAlign.Center, font);
+            var room = w - (card.Value != 0 ? 0.45f : 0.1f) * unit - (card.Cost != 0 ? 0.45f : 0.1f) * unit;
+            var titleSize = Math.Min(0.2f * unit, room / Math.Max(1, title.Length * GlyphWidth));
+            var shift = ((card.Value != 0 ? 0.35f : 0) - (card.Cost != 0 ? 0.35f : 0)) * unit / 2;
+            Text(drawing, card, world, title, new Vector2(shift, top - 0.15f * unit), titleSize, ink, TextAlign.Center, font);
         }
 
         var y = top - 0.42f * unit;
@@ -58,7 +71,7 @@ internal static class CardLook
                 drawing.Tint(card, Color.White));
             y -= art.Y + 0.12f * unit;
         }
-        else if (string.IsNullOrWhiteSpace(card.Text) && card.Value != 0)
+        else if (card.ShownText.Length == 0 && card.Value != 0)
         {
             Text(drawing, card, world, card.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), new Vector2(0, -0.05f * unit),
                 0.8f * unit, Scale(face, 0.55f), TextAlign.Center, font);
@@ -138,6 +151,46 @@ internal static class CardLook
         Text(drawing, owner, world, owner.Entity!.Name, Vector2.Zero, 0.3f, tint, TextAlign.Center, null);
     }
 
+    /// <summary>The color of mana: a card's cost, a hand's mana.</summary>
+    public static readonly Color ManaColor = Color.FromBytes(0x2F, 0x6F, 0xD8);
+
+    /// <summary>A hand's mana beside it: a gem with what it has and the most it fills to, "3/5".</summary>
+    public static void Mana(Drawing drawing, Component owner, Matrix4x4 world, Vector2 at, bool any, string text)
+    {
+        Diamond(drawing, owner, world, at, 0.95f, TintOf(drawing, owner, Scale(ManaColor, 0.55f)));
+        Diamond(drawing, owner, world, at, 0.8f, TintOf(drawing, owner, any ? ManaColor : Color.FromBytes(0x55, 0x5A, 0x66)));
+        Text(drawing, owner, world, text, at, text.Length > 3 ? 0.2f : 0.26f, TintOf(drawing, owner, Color.White), TextAlign.Center, null);
+    }
+
+    /// <summary>
+    /// A card being aimed: a dotted line from it to where it's aimed (in the world), and a box round each thing it can be
+    /// aimed at, the one it's on brighter.
+    /// </summary>
+    public static void Aim(Drawing drawing, Component owner, Vector2 from, Vector2 to, List<(Vector2 Center, Vector2 Size, bool On)> marks, Color color)
+    {
+        foreach (var (center, size, on) in marks)
+        {
+            var at = Matrix4x4.CreateTranslation(center.X, center.Y, 0);
+            OutlineIn(drawing, at, size + new Vector2(0.2f), on ? 0.1f : 0.05f, color with { A = color.A * (on ? 1 : 0.45f) });
+        }
+
+        var line = to - from;
+        var length = line.Length();
+        if (length < 0.05f)
+            return;
+        var angle = MathF.Atan2(line.Y, line.X);
+        var dots = Math.Max(1, (int)(length / 0.3f));
+        for (var i = 0; i <= dots; i++)
+        {
+            var p = from + line * (i / (float)dots);
+            var place = Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(p.X, p.Y, 0);
+            Rect(drawing, place, Vector2.Zero, new Vector2(0.16f, 0.08f), color);
+        }
+
+        // A diamond where it lands.
+        Diamond(drawing, owner, Matrix4x4.CreateTranslation(to.X, to.Y, 0), Vector2.Zero, 0.3f, color);
+    }
+
     /// <summary>The edges of a rectangle of <paramref name="size"/> centered in <paramref name="world"/>'s space.</summary>
     public static void Outline(Drawing drawing, Component owner, Matrix4x4 world, Vector2 size, float thickness, Color color) =>
         OutlineIn(drawing, world, size, thickness, color);
@@ -182,6 +235,16 @@ internal static class CardLook
     {
         if (color.A > 0)
             drawing.Add(Quads.Rect(drawing.Entity, center, size, color, world));
+    }
+
+    // A square turned on its corner, `size` from corner to corner.
+    private static void Diamond(Drawing drawing, Component owner, Matrix4x4 world, Vector2 center, float size, Color color)
+    {
+        if (color.A <= 0)
+            return;
+        var side = size / MathF.Sqrt(2);
+        drawing.Add(new SpriteDraw(Matrix4x4.CreateScale(side, side, 1) * Matrix4x4.CreateRotationZ(MathF.PI / 4) *
+                                   Matrix4x4.CreateTranslation(center.X, center.Y, 0) * world, null, color, owner.Entity!));
     }
 
     private static void OutlineIn(Drawing drawing, Matrix4x4 world, Vector2 size, float thickness, Color color)

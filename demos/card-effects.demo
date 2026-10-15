@@ -1,0 +1,108 @@
+title: Card effects and a computer opponent
+intro: Cards that deal damage, heal and cost mana, aimed at what you choose, and a computer that plays its hand against you, all with no code.
+project: Empty | Card Duel
+
+chapter: Cards that do things | Card Effect
+create: Deck
+select: Hand
+set: Hand.StartWith = 0
+set: Hand.MaxMana = 3
+explain: field:Hand.MaxMana | Mana | A hand has mana to pay for its cards, three here. It fills back up as each of its side's turns starts.
+create: Card
+rename: Fireball
+add: Card Effect
+set: CardEffect.Damage = 3
+set: Card.Cost = 2
+explain: component:CardEffect | Card Effect | A card effect says what a card does when it's played: damage, healing, drawing, making the opponent discard, mana, a buff, or any action in the scene. This one deals three damage to the opponent, and the card costs two mana.
+select: Hand
+create: Card
+rename: Zap
+add: Card Effect
+set: CardEffect.Target = Chosen
+set: CardEffect.Damage = 1
+set: Card.Cost = 1
+explain: field:CardEffect.Target | Target | Its target is the opponent, yourself, every foe, every friend, everyone, or one the player chooses as they play it. Zap hits whatever it's aimed at.
+select: Hand
+create: Card
+rename: Potion
+add: Card Effect
+set: CardEffect.Target = Self
+set: CardEffect.Heal = 4
+deselect
+create: Text
+rename: Enemy Hero
+set: Transform.Position.X = -6.5
+set: Transform.Position.Y = 3.4
+set: Text.Size = 0.45
+add: Health
+set: Health.Max = 20
+set: Text.Track = Enemy Hero
+set: Text.Output = Health
+set: Text.Value = Enemy {0}
+explain: component:Health | The opponent | The opponent is anything with health: here a text that shows how much it has left.
+
+chapter: Playing them | Drag, aim, pay
+play
+wait: 1
+gamedrag: Fireball > Play Zone
+wait: 0.6
+expectvalue: Enemy Hero.Health.Current = 17
+expectvalue: Hand.Hand.Mana = 1
+explain: game | Played | Fireball deals three damage and takes two of the hand's three mana. A card the hand can't pay for shows its cost dimmed and stays in the hand.
+gamedrag: Zap > Play Zone
+wait: 0.4
+say: Zap waits to be aimed: a line runs from it to the mouse. Click what it should hit.
+gameclick: Enemy Hero
+wait: 0.6
+expectvalue: Enemy Hero.Health.Current = 16
+expectvalue: Hand.Hand.Mana = 0
+expectvalue: Zap.Card.PlayedBy = Hand
+stop
+
+chapter: A computer opponent | Turn Order
+create: Text
+rename: Turns
+set: Transform.Position.X = 6.5
+set: Transform.Position.Y = 3.4
+set: Text.Size = 0.4
+add: Turn Order
+set: TurnOrder.ComputerTurnTime = 0
+explain: component:TurnOrder | Turns | A turn order: the player's turn, then the enemy's, which the computer plays.
+create: Text
+rename: Player Hero
+set: Transform.Position.X = -6.5
+set: Transform.Position.Y = -2.4
+set: Text.Size = 0.45
+add: Health
+set: Health.Max = 20
+set: Text.Track = Player Hero
+set: Text.Output = Health
+set: Text.Value = You {0}
+add: Turn Taker
+select: Enemy Hero
+add: Turn Taker
+set: TurnTaker.Side = Enemy
+select: Hand
+add: Turn Taker
+key: Ctrl+D
+rename: Enemy Hand
+set: Transform.Position.Y = 4.4
+set: TurnTaker.Side = Enemy
+set: Hand.Hidden = true
+explain: component:Hand | The computer's hand | A copy of the hand, on the enemy's side and hidden. A hand on a side the computer plays is played by the computer on its turn.
+explain: field:Hand.ThinkTime | Think Time | It thinks before each play, and shows the card it's about to play lifted out of its hand so you can follow. It finishes you off when it can, heals when its hero is low, and otherwise plays the most damage it can pay for, keeping its healing for later.
+play
+wait: 1
+gamedrag: Fireball > Play Zone
+wait: 0.6
+expectvalue: Enemy Hero.Health.Current = 17
+tap: Tab
+wait: 0.4
+explain: game | Its turn | Your turn ends with Tab. The computer shows its fireball, plays it at you, then aims its zap at you too, and keeps its potion.
+wait: 3
+expectvalue: Player Hero.Health.Current = 16
+expectvalue: Turns.TurnOrder.Current = Player
+expectvalue: Hand.Hand.Mana = 3
+say: Its mana spent and nothing it wants to play, it ends its turn, and your mana fills back up.
+stop
+say: That's card effects with no code: damage, healing, draws, discards, mana and any action, aimed where you choose, and a computer that plays its hand by a rule you can follow, the same way every time in a seeded game.

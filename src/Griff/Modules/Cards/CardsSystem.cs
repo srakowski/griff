@@ -79,7 +79,17 @@ internal sealed partial class CardsSystem : GameSystem
         foreach (var hand in hands)
         {
             if (Game.Runs(hand.Entity!) && !hand.Entity!.IsPaused)
+            {
                 RunRequests(hand, decks);
+                if (hand.TurnBegan)
+                    EachTurn(hand, tables);
+            }
+        }
+
+        foreach (var hand in hands)
+        {
+            if (Game.Runs(hand.Entity!) && !hand.Entity!.IsPaused)
+                RunComputer(hand, decks, tables);
         }
 
         foreach (var table in tables)
@@ -90,10 +100,12 @@ internal sealed partial class CardsSystem : GameSystem
                 if (PileOf(table.DiscardPile, decks) is { } pile)
                 {
                     foreach (var card in CardZone.CardsIn(table.Entity))
-                        Discard(card, pile);
+                        Discard(card, pile, HandNamed(card.PlayedBy));
                 }
             }
         }
+
+        BuryTheDead(tables, decks);
 
         foreach (var zone in zones)
             LayOut(zone);
@@ -222,14 +234,14 @@ internal sealed partial class CardsSystem : GameSystem
         {
             var requests = hand.Requests.ToList();
             hand.Requests.Clear();
-            foreach (var (card, zone) in requests)
+            foreach (var (card, zone, target) in requests)
             {
                 if (card is null)
                 {
                     if (PileOf(hand.DiscardPile, decks) is { } pile)
                     {
                         foreach (var held in CardZone.CardsIn(hand.Entity))
-                            Discard(held, pile);
+                            Discard(held, pile, hand);
                     }
                 }
                 else if (card.Zone == hand && card.Entity!.IsActive)
@@ -237,11 +249,11 @@ internal sealed partial class CardsSystem : GameSystem
                     if (zone is null)
                     {
                         if (PileOf(hand.DiscardPile, decks) is { } pile)
-                            Discard(card, pile);
+                            Discard(card, pile, hand);
                     }
                     else
                     {
-                        Play(card, hand, zone, null);
+                        Play(card, hand, zone, null, target);
                     }
                 }
             }
@@ -290,6 +302,7 @@ internal sealed partial class CardsSystem : GameSystem
         hand.RaiseDrew(card);
         foreach (var part in PartsOf(card))
             part.Drawn(card, hand);
+        RunEffects(card, hand, CardWhen.Drawn, null);
         return true;
     }
 
@@ -346,15 +359,22 @@ internal sealed partial class CardsSystem : GameSystem
     // ----- Playing -----
 
     // Plays a card from a hand onto a play zone (or drops it on a deck that takes drops), from where it was let go if
-    // that's known. False if the zone won't take it.
-    private bool Play(Card card, Hand hand, CardZone zone, Vector2? at)
+    // that's known, at the target chosen for it if it chooses one (the computer's pick without). False if the zone won't
+    // take it.
+    private bool Play(Card card, Hand hand, CardZone zone, Vector2? at, Entity? target)
     {
-        if (!CanGo(card, hand, zone))
+        var chooses = zone is PlayZone && Chooses(card);
+        if (chooses && target is null)
+            target = ChooseTarget(card, hand);
+        if (!CanGo(card, hand, zone) || (chooses && (target is null || !MayChoose(card, target))))
         {
             if (zone is PlayZone refused)
                 Game.PlayIfSet(refused.RefuseSound);
             return false;
         }
+
+        if (!chooses)
+            target = null;
 
         // On from where it was let go, upright.
         if (at is { } point && card.Entity!.Parent is { } parent && Matrix4x4.Invert(parent.Transform.WorldMatrix, out var toLocal))
@@ -369,12 +389,14 @@ internal sealed partial class CardsSystem : GameSystem
         ResetLook(card);
         if (zone is Deck pile)
         {
-            Discarded(card, pile);
+            Discarded(card, pile, hand);
             return true;
         }
 
         var table = (PlayZone)zone;
         table.Played++;
+        hand.Mana = Math.Max(0, hand.Mana - Math.Max(0, card.Cost));
+        card.PlayedBy = hand.Entity!.Name;
         Game.UseAction(hand.Entity!);
         Game.PlayIfSet(table.PlaySound);
         if (!string.IsNullOrWhiteSpace(table.PlayMessage))
@@ -383,12 +405,31 @@ internal sealed partial class CardsSystem : GameSystem
         table.RaisePlayed(card);
         foreach (var part in PartsOf(card))
             part.Played(card, table);
+        var did = RunEffects(card, hand, CardWhen.Played, target);
+        var on = target is null ? "" : $" on {Called(target)}";
+        hand.Said = did.Length == 0 ? $"{Called(hand)} plays {card.ShownTitle}{on}." : $"{Called(hand)} plays {card.ShownTitle}{on}: {did}.";
         return true;
     }
 
-    // Whether a card from a hand can go onto a zone: a play zone that takes its kind, has room, takes from that hand and
-    // whose card parts all say it can be played; or a deck that takes drops.
-    private static bool CanGo(Card card, Hand hand, CardZone zone)
+    // Its side's turn has begun: the cards played from it that are on the table with Each Turn effects go off.
+    private void EachTurn(Hand hand, List<PlayZone> tables)
+    {
+        hand.TurnBegan = false;
+        var name = hand.Entity!.Name;
+        foreach (var table in tables)
+        {
+            foreach (var card in CardZone.CardsIn(table.Entity))
+            {
+                if (string.Equals(card.PlayedBy?.Trim(), name, StringComparison.Ordinal) && card.Entity!.IsActive)
+                    RunEffects(card, hand, CardWhen.EachTurn, null);
+            }
+        }
+    }
+
+    // Whether a card from a hand can go onto a zone: a play zone that takes its kind, has room, takes from that hand, whose
+    // cost the hand can pay, with something to aim at if it chooses a target, and whose card parts all say it can be
+    // played; or a deck that takes drops.
+    private bool CanGo(Card card, Hand hand, CardZone zone)
     {
         if (!zone.Entity!.IsActive || zone.Entity.IsPaused || card.Zone == zone)
             return false;
@@ -397,6 +438,10 @@ internal sealed partial class CardsSystem : GameSystem
         if (zone is not PlayZone table || !table.AcceptsKind(card.Kind) || !table.TakesFrom(hand))
             return false;
         if (table.Limit > 0 && CardZone.CardsIn(table.Entity).Count >= table.Limit)
+            return false;
+        if (card.Cost > 0 && hand.Mana < card.Cost)
+            return false;
+        if (Chooses(card) && Candidates(card).Count == 0)
             return false;
         foreach (var part in PartsOf(card))
         {
@@ -407,18 +452,20 @@ internal sealed partial class CardsSystem : GameSystem
         return true;
     }
 
-    private void Discard(Card card, Deck pile)
+    // Onto a discard pile, from `hand` (the one it was in, or played from) if known.
+    private void Discard(Card card, Deck pile, Hand? hand)
     {
         MoveTo(card, pile);
         ResetLook(card);
-        Discarded(card, pile);
+        Discarded(card, pile, hand);
     }
 
-    private static void Discarded(Card card, Deck pile)
+    private void Discarded(Card card, Deck pile, Hand? hand)
     {
         card.RaiseDiscarded(pile);
         foreach (var part in PartsOf(card))
             part.Discarded(card, pile);
+        RunEffects(card, hand, CardWhen.Discarded, null);
     }
 
     // Into a zone, on top of (or after) what's there, staying where it is in the world to slide to its place from there,
@@ -536,7 +583,7 @@ internal sealed partial class CardsSystem : GameSystem
     // A play or a draw a player asked for, carried out where the game is run if it's theirs to make.
     internal void RunCommand(NetPlayer? player, object? args)
     {
-        if (args is not object?[] { Length: 5 } a || a[0] is not int kind || a[1] is not Entity first || a[2] is not Entity second ||
+        if (args is not object?[] { Length: 6 } a || a[0] is not int kind || a[1] is not Entity first || a[2] is not Entity second ||
             first.Scene != Scene || second.Scene != Scene || !Game.Runs(first))
             return;
         var decks = Game.Showing<Deck>().ToList();
@@ -544,7 +591,9 @@ internal sealed partial class CardsSystem : GameSystem
             MayPlay(hand, player, now: true) && !hand.Entity!.IsPaused)
         {
             Vector2? at = a[3] is float x && a[4] is float y && float.IsFinite(x) && float.IsFinite(y) ? new Vector2(x, y) : null;
-            Play(card, hand, zone, at);
+            var target = a[5] is Entity chosen && chosen.Scene == Scene ? chosen : null;
+            if (!Chooses(card) || target is not null)
+                Play(card, hand, zone, at, target);
         }
         else if (kind == DrawCommand && first.GetComponent<Deck>() is { ClickToDraw: true } deck && second.GetComponent<Hand>() is { } drawer &&
                  DeckOf(drawer, decks) == deck && MayPlay(drawer, player, now: true) && !drawer.Entity!.IsPaused)
@@ -553,9 +602,9 @@ internal sealed partial class CardsSystem : GameSystem
         }
     }
 
-    private void SendPlay(Card card, CardZone zone, Vector2? at) =>
-        Game.Net.SendCommand(CardsCommand, new object?[] { PlayCommand, card.Entity, zone.Entity, at?.X ?? float.NaN, at?.Y ?? float.NaN });
+    private void SendPlay(Card card, CardZone zone, Vector2? at, Entity? target) =>
+        Game.Net.SendCommand(CardsCommand, new object?[] { PlayCommand, card.Entity, zone.Entity, at?.X ?? float.NaN, at?.Y ?? float.NaN, target });
 
     private void SendDraw(Deck deck, Hand hand) =>
-        Game.Net.SendCommand(CardsCommand, new object?[] { DrawCommand, deck.Entity, hand.Entity, 0f, 0f });
+        Game.Net.SendCommand(CardsCommand, new object?[] { DrawCommand, deck.Entity, hand.Entity, 0f, 0f, null });
 }

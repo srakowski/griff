@@ -294,8 +294,12 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
 [WorksWith(typeof(PlayZone), Note = "where its cards are played")]
 [WorksWith(typeof(TurnTaker), Note = "its side: played on its side's turn", Back = "a Hand played on its side's turn")]
 [ComponentName("Griff.Hand")]
-public sealed class Hand : CardZone, IDrawable, IPlaytestReport
+public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlaytestReport
 {
+    private int _maxMana;
+    private string? _manaText;
+    private (int, int) _manaFor;
+
     /// <summary>The deck it draws from, by name. Empty draws from the scene's first face-down deck.</summary>
     [EntityName]
     public string? Deck { get; set; }
@@ -324,6 +328,54 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
     /// </summary>
     [Focus]
     public bool Controllable { get; set; } = true;
+
+    /// <summary>
+    /// The entity whose <see cref="Health"/> is this side's life, by name, e.g. "Blue Hero": what its cards' effects do
+    /// to "Self", and the other sides' to "Opponent". Empty: the hand itself if it has a Health, else the first entity
+    /// with a Health and a Turn Taker on its side.
+    /// </summary>
+    [EntityName]
+    public string? Hero { get; set; }
+
+    /// <summary>The mana it fills up to as each of its side's turns starts. Changing it while full keeps it full. 0 doesn't refill.</summary>
+    [Group("Mana")]
+    [Output]
+    public int MaxMana
+    {
+        get => _maxMana;
+        set
+        {
+            if (Mana == _maxMana)
+                Mana = value;
+            _maxMana = value;
+        }
+    }
+
+    // After Max Mana, so a scene loaded (a rewind) sets what's left after the most it fills to.
+
+    /// <summary>Mana it has to pay its cards' costs with: it fills up to <see cref="MaxMana"/> as each of its side's turns starts.</summary>
+    [Output(OutOf = nameof(MaxMana))]
+    public int Mana { get; set; }
+
+    /// <summary>How much <see cref="MaxMana"/> grows as each of its side's turns starts, up to <see cref="ManaLimit"/>: 1 adds a crystal a turn.</summary>
+    public int ManaGrowth { get; set; }
+
+    /// <summary>The most <see cref="MaxMana"/> grows to.</summary>
+    [ShownWhen(nameof(ManaGrowth))]
+    public int ManaLimit { get; set; } = 10;
+
+    /// <summary>
+    /// For the computer (a hand on one of its turn order's Computer Sides): seconds it thinks before each play, the last
+    /// part of it showing the card it's about to play lifted out of its hand, so the player can follow. 0 plays at once.
+    /// </summary>
+    [Group("Computer")]
+    public float ThinkTime { get; set; } = 0.8f;
+
+    /// <summary>For the computer: the share of its hero's health below which it plays its healing, e.g. 0.5 for under half. It keeps healing cards until then.</summary>
+    public float HealBelow { get; set; } = 0.5f;
+
+    /// <summary>For the computer: how many cards it keeps in its hand for later rather than play.</summary>
+    public int Keep { get; set; }
 
     /// <summary>How far apart its cards are, middle to middle, while there's room.</summary>
     [Group("Look")]
@@ -378,6 +430,10 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
     /// <summary>Cards still to draw, one a tenth of a second (Draw asks for them). Saved with the scene, so a rewind keeps them.</summary>
     public int ToDraw { get; set; }
 
+    /// <summary>What was last played from it, e.g. "Red plays Fireball on Blue Hero: 3 damage." The game sets it. Read as the "Said" output.</summary>
+    [Output]
+    public string? Said { get; set; }
+
     /// <summary>Its side: its Turn Taker's (on it or an entity it's inside), or empty with none.</summary>
     [DoNotSerialize]
     public string Side => Entity is { } entity && TurnTaker.Of(entity) is { } taker ? taker.Side?.Trim() ?? "" : "";
@@ -395,16 +451,22 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
 
     /// <summary>Puts every card in it on its discard pile at the start of the next frame.</summary>
     [Action]
-    public void Discard() => Requests.Add(new CardRequest(null, null));
+    public void Discard() => Requests.Add(new CardRequest(null, null, null));
 
     /// <summary>Puts <paramref name="card"/> (one of its cards) on its discard pile at the start of the next frame.</summary>
-    public void Discard(Card card) => Requests.Add(new CardRequest(card, null));
+    public void Discard(Card card) => Requests.Add(new CardRequest(card, null, null));
 
     /// <summary>
     /// Plays <paramref name="card"/> (one of its cards) onto <paramref name="zone"/> at the start of the next frame, if the zone
-    /// takes it, as a player dragging it there does: a play zone, or a deck that takes drops.
+    /// takes it, as a player dragging it there does: a play zone, or a deck that takes drops. A card with an effect whose
+    /// target is chosen goes for <paramref name="target"/> (a card on the table or something with a Health), or without
+    /// one, for what the computer would pick.
     /// </summary>
-    public void Play(Card card, CardZone zone) => Requests.Add(new CardRequest(card, zone));
+    public void Play(Card card, CardZone zone, Entity? target = null) => Requests.Add(new CardRequest(card, zone, target));
+
+    /// <summary>Gives it <paramref name="amount"/> more mana to pay its cards' costs with (less than 0 takes some away).</summary>
+    [Action]
+    public void GainMana(int amount = 1) => Mana = Math.Max(0, Mana + amount);
 
     public override bool Uses(string property) => property != nameof(Dealt);
 
@@ -412,6 +474,40 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
 
     // Seconds until the next card of ToDraw is drawn.
     internal float NextDraw { get; set; }
+
+    // Its side's turn has begun since the game last looked: its cards on the table with Each Turn effects go off.
+    internal bool TurnBegan { get; set; }
+
+    // The computer's play: seconds until its next move this turn (-1 starts afresh), the card it's showing and where it's
+    // going, and whether it has ended its turn. Kept where the game is run, not saved: a rewound game thinks afresh.
+    internal float ThinkLeft { get; set; } = -1;
+
+    internal Card? Readied { get; set; }
+
+    internal CardZone? ReadiedZone { get; set; }
+
+    internal Entity? ReadiedTarget { get; set; }
+
+    internal bool TurnDone { get; set; }
+
+    // Mana back up, and more of it, as its side's turn begins; the computer thinks afresh.
+    void ITurnReady.TurnBegins()
+    {
+        if (ManaGrowth != 0)
+            _maxMana = Math.Clamp(_maxMana + ManaGrowth, 0, Math.Max(_maxMana, ManaLimit));
+        if (_maxMana > 0)
+            Mana = _maxMana;
+        TurnBegan = true;
+        (ThinkLeft, TurnDone) = (-1, false);
+    }
+
+    // On this machine: a line from the card being aimed to where it's aimed, and the boxes round what it can be aimed at
+    // (the one it's on brighter). Drawn over everything.
+    internal (Vector2 From, Vector2 To)? Aim { get; set; }
+
+    internal List<(Vector2 Center, Vector2 Size, bool On)> AimMarks { get; } = [];
+
+    bool IDrawEffect.DrawsOnTop => Aim is not null;
 
     internal void RaiseDrew(Card card) => Drew?.Invoke(this, card);
 
@@ -457,6 +553,21 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
             return;
         }
 
+        if (MaxMana > 0 || Mana > 0)
+        {
+            var width = Math.Min(MaxWidth, Spacing * Math.Max(0, Count - 1) + card.X);
+            if (_manaText is null || _manaFor != (Mana, MaxMana))
+            {
+                _manaFor = (Mana, MaxMana);
+                _manaText = MaxMana > 0 ? $"{Mana}/{MaxMana}" : $"{Mana}";
+            }
+
+            CardLook.Mana(drawing, this, world, new Vector2(-Math.Max(width, card.X) / 2 - 0.8f, -0.5f), Mana > 0, _manaText);
+        }
+
+        if (Aim is { } aim)
+            CardLook.Aim(drawing, this, aim.From, aim.To, AimMarks, HighlightColor);
+
         for (var i = Shown; i < Count; i++)
         {
             var (at, angle) = Slot(i, Count, card);
@@ -470,14 +581,23 @@ public sealed class Hand : CardZone, IDrawable, IPlaytestReport
     {
         var cards = Cards;
         var text = cards.Count == 0 ? ", holds nothing" : $", holds {cards.Count}: {string.Join(", ", cards.Select(c => c.Entity!.Name))}";
+        if (MaxMana > 0 || Mana > 0)
+            text += $", mana {Mana}/{MaxMana}";
+        if (Computer)
+            return text + ", played by the computer" + (Readied is { Entity: { } next } ? $", about to play {next.Name}" : "");
         return text + (CanPlay ? "" : ", waiting for its turn");
     }
 
     string IPlaytestReport.MouseReport() =>
-        Picked is { Entity: { } picked } ? (Picked.Dragged ? $", dragging {picked.Name}" : $", picked {picked.Name}") : "";
+        Picked is { Entity: { } picked } ? (Picked.Dragged ? $", dragging {picked.Name}" : $", picked {picked.Name}") : Aiming is { Entity: { } aimed } ? $", aiming {aimed.Name}" : "";
 
-    // Whether this machine's player can play it now (it's theirs, it's its side's turn). Set by the game.
+    // Whether this machine's player can play it now (it's theirs, it's its side's turn), whether the computer plays it, and
+    // the card this machine's player is aiming from it. Set by the game.
     internal bool CanPlay { get; set; } = true;
+
+    internal bool Computer { get; set; }
+
+    internal Card? Aiming { get; set; }
 }
 
 /// <summary>
@@ -636,4 +756,4 @@ public sealed class PlayZone : CardZone, IDrawable, IPlaytestReport
 }
 
 // What a script asked of a hand: play a card onto a zone, or discard it (no zone), or discard them all (no card).
-internal sealed record CardRequest(Card? Card, CardZone? Zone);
+internal sealed record CardRequest(Card? Card, CardZone? Zone, Entity? Target);

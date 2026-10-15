@@ -179,7 +179,7 @@ public sealed partial class Game
     // scene called that); its own entity without any.
     private static void TargetsOf(Trigger trigger, List<Entity> into) => TargetsOf(trigger.Entity!, trigger.Targets, into);
 
-    private static void TargetsOf(Entity owner, string? targets, List<Entity> into)
+    internal static void TargetsOf(Entity owner, string? targets, List<Entity> into)
     {
         if (string.IsNullOrWhiteSpace(targets))
         {

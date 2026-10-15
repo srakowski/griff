@@ -52,12 +52,8 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
     /// <summary>Taken off each attack that hits it (never below 1). Spells and items go through it.</summary>
     public float Armor { get; set; }
 
-    /// <summary>Mana it has now, which spells cost. It starts full.</summary>
-    [Group("Mana")]
-    [Output(OutOf = nameof(MaxMana))]
-    public float Mana { get; set; }
-
     /// <summary>The most mana it can have. Changing it while full keeps it full.</summary>
+    [Group("Mana")]
     public float MaxMana
     {
         get => _maxMana;
@@ -68,6 +64,12 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
             _maxMana = value;
         }
     }
+
+    // After Max Mana, so a scene loaded (a rewind) sets what's left after the most it can have: all of it spent stays spent.
+
+    /// <summary>Mana it has now, which spells cost. It starts full.</summary>
+    [Output(OutOf = nameof(MaxMana))]
+    public float Mana { get; set; }
 
     /// <summary>Mana it gets back as each of its turns starts, never past <see cref="MaxMana"/>.</summary>
     public float ManaPerTurn { get; set; }

@@ -79,6 +79,20 @@ public sealed class BattlerTests
     }
 
     [Fact]
+    public void ManaAllSpent_StaysSpent_WhenTheSceneIsLoadedAgain()
+    {
+        var entity = Fighter("Hero", "Hero", "Enemy", 20);
+        var battler = entity.GetComponent<Battler>()!;
+        battler.MaxMana = 6;
+        battler.Mana = 0;
+        var scene = new Scene();
+        scene.Add(entity);
+        var serializer = new Griff.Scenes.Serialization.SceneSerializer(Griff.Scenes.Serialization.ComponentRegistry.CreateDefault());
+        var copy = serializer.LoadFromString(serializer.SaveToString(scene)).Entities.Single().GetComponent<Battler>()!;
+        Assert.Equal((0f, 6f), (copy.Mana, copy.MaxMana));
+    }
+
+    [Fact]
     public void ASpell_CostsMana_GoesThroughArmor_AndWithoutTheManaUsesNoTurn()
     {
         var (game, hero, enemy) = Duel(computer: "");

@@ -27,6 +27,9 @@ Every user-visible change gets a narrated demo, and the demos stay current:
 - When a change alters something an existing demo shows (menu text, component or field names, a flow), update
   that demo in the same change. Only check and play the demos for the current changes; never run other demos
   (`-All -Check`, the tour) unless asked, including before a commit.
+- The website's tutorials (`site/tutorials/*.demo`, `site/README.md`) are demos too, and their pages and screenshots come
+  from running them: a change that alters something one shows updates that script, and `npm run tutorials -- --only <name>`
+  in `site/` plays it and takes its pictures again.
 - The guided tour (`tools\demo.ps1 -Tour`, `Diagnostics/Demo/DemoScript.cs`) builds a whole game; keep it working
   when the features it uses change.
 

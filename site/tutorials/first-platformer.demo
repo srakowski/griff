@@ -1,0 +1,102 @@
+title: Your first platformer
+intro: A hero that runs and jumps, ground to stand on, a coin to grab and a slime to dodge, in a few minutes and with no code.
+summary: Build a small platformer from an empty project: a hero, a level, a coin that counts a score and a slime that hurts.
+project: Empty | My Platformer
+
+chapter: A hero | Entity > Create Platformer Player
+say: Start a new project from the Empty template (File, New Project). It opens on a scene with just a camera. The Entity menu makes ready-made things, and the first one a platformer needs is its hero.
+deselect
+create: Platformer Player
+expectcomponents: Player = Transform, Sprite, BoxCollider, Body, PlatformerMovement
+say: The hero is an orange box that already runs, jumps and falls: a Body gives it gravity and a collision shape, and Platformer Movement reads the arrow keys, WASD and Space. Its Inspector tunes how it feels, which you will try in a moment.
+shot: hero
+
+chapter: Ground to stand on | A sprite with a collider
+deselect
+create: Sprite
+rename: Ground
+set: Transform.Position = 0, -3, 0
+set: Sprite.Size = 16, 1
+set: Sprite.Tint = #484B55
+add: BoxCollider
+set: BoxCollider.Size = 16, 1
+say: A level is made of boxes. A Sprite draws one, and a Box Collider makes it solid. Without a Body it never moves, so it is the floor.
+expectcomponents: Ground = Transform, Sprite, BoxCollider
+deselect
+create: Sprite
+rename: Ledge
+set: Transform.Position = 4, -0.8, 0
+set: Sprite.Size = 4, 0.5
+set: Sprite.Tint = #6B707D
+add: BoxCollider
+set: BoxCollider.Size = 4, 0.5
+set: BoxCollider.One Way = true
+say: A second box makes a ledge. One Way lets the hero jump up through it and land on top.
+shot: level
+
+chapter: Try it | F5
+play
+wait: 0.8
+hold: Right 0.6
+tap: Space
+wait: 0.8
+say: Press F5 to play. Run with the arrow keys or A and D, and jump with Space. The game plays in the Game tab, and Shift+F5 stops it and puts everything back.
+stop
+
+chapter: Make it feel right | Tuning the jump
+select: Player
+set: PlatformerMovement.Jump Height = 3.2
+say: How the hero moves is a handful of numbers in the Inspector. Jump Height is how high a jump goes, in world units. Try 3.2 and play again: change a number, press F5, feel it.
+expectvalue: Player.PlatformerMovement.Jump Height = 3.2
+shot: tuning
+
+chapter: A coin and a score | Pickup and Counter
+deselect
+create: Sprite
+rename: Coin
+set: Transform.Position = 4, -1.8, 0
+set: Sprite.Size = 0.5, 0.5
+set: Sprite.Tint = #E3B341
+add: CircleCollider
+set: CircleCollider.Is Trigger = true
+add: Pickup
+set: Pickup.Layers = Player
+say: A coin is a sprite with a trigger collider, which detects touches without blocking, and a Pickup. Pickup collects it when something on the Player layer touches it, and sends a Score message.
+deselect
+create: Text
+rename: Score
+set: Transform.Position = -6, 4, 0
+set: Text.Value = Score: 0
+add: Counter
+say: A Text shows words in the world, and a Counter adds up Score messages into it. That is a whole scoring system without a line of code.
+expectcomponents: Score = Transform, Text, Counter
+shot: coin
+
+chapter: A slime to dodge | Patrol and Damage On Touch
+select: Player
+add: Health
+say: Enemies hurt, so the hero needs Health. Add Component finds what you type.
+deselect
+create: Sprite
+rename: Slime
+set: Transform.Position = -4, -2.1, 0
+set: Sprite.Size = 0.8, 0.8
+set: Sprite.Tint = #57AB5A
+add: Patrol
+add: DamageOnTouch
+set: DamageOnTouch.Layers = Player
+expectcomponents: Slime = Transform, Sprite, BoxCollider, Body, Patrol, DamageOnTouch
+say: Patrol walks back and forth and brings the collider and body it needs. Damage On Touch hurts anything on the Player layer it meets.
+shot: slime
+
+chapter: Play the finished level | Collect the coin
+play
+wait: 0.8
+hold: Right 1
+tap: Space
+wait: 1
+expectvalue: Score.Text.Value = Score: 1
+say: Run right along the ground and the coin is yours: the score counts up.
+shot: finished | game | 960
+stop
+say: That is a platformer. Save the scene with Ctrl+S, then build it into a single exe with Game, Build Game. Next steps: draw your own sprites with the Sprite Painter, paint a tilemap level, and add sounds from the Sound Maker.

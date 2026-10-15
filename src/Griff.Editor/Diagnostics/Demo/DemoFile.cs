@@ -55,6 +55,8 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
 
     private sealed record Line(int Number, string Command, string Argument);
 
+    private string _agentAnswer = "";
+
     private DemoInput Input => ui.Input;
     private DemoOverlay Overlay => ui.Overlay;
 
@@ -161,7 +163,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var a = line.Argument;
         switch (line.Command)
         {
-            case "title" or "intro":
+            case "title" or "intro" or "summary" or "step":
                 break;
             case "project":
                 await CreateProject(a);
@@ -998,6 +1000,33 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     ?.GetTile(int.Parse(tileMatch.Groups[2].Value, CultureInfo.InvariantCulture), int.Parse(tileMatch.Groups[3].Value, CultureInfo.InvariantCulture));
                 if (!await Until(() => TileNow() == wantTile, 3000))
                     throw new InvalidOperationException($"Expected {tileTarget} = {wantTile}, but it's {TileNow()?.ToString(CultureInfo.InvariantCulture) ?? "not a tilemap"}.");
+                break;
+            case "shot":
+                // "shot: name [| view [| width [| alt text]]]" saves (the alt text is for the page) a picture for the website's tutorials (the editor by default, or "game", "scene"
+                // or a window's title) as <name>.png in GRIFF_DEMO_SHOTS (%TEMP%\griff-demos\shots without it).
+                var shotParts = a.Split('|', 4, StringSplitOptions.TrimEntries);
+                await DemoUi.Settle(400);
+                var shotPng = await (options.Screenshot ?? throw new InvalidOperationException("This editor can't take pictures.")).Invoke(
+                    shotParts.Length > 1 && shotParts[1].Length > 0 ? shotParts[1] : "editor", shotParts.Length > 2 && shotParts[2].Length > 0 ? int.Parse(shotParts[2], CultureInfo.InvariantCulture) : 4096);
+                var shotFolder = Environment.GetEnvironmentVariable("GRIFF_DEMO_SHOTS") is { Length: > 0 } shots ? shots : Path.Combine(ProjectsRoot, "shots");
+                Directory.CreateDirectory(shotFolder);
+                await File.WriteAllBytesAsync(Path.Combine(shotFolder, shotParts[0] + ".png"), shotPng);
+                break;
+            case "agent":
+                // "agent: <tool> {json}" makes the call an agent would, through the MCP server's own dispatch, and fails if it fails.
+                var agentSplit = a.IndexOfAny([' ', '	']);
+                var agentTool = agentSplit < 0 ? a : a[..agentSplit];
+                var (agentFailed, agentText) = await (options.Agent ?? throw new InvalidOperationException("This editor has no MCP server.")).Invoke(agentTool, agentSplit < 0 ? "" : a[agentSplit..].Trim());
+                _agentAnswer = agentText;
+                options.Log($"agent: {agentTool} -> {(agentFailed ? "FAILED " : "")}{agentText}");
+                if (agentFailed)
+                    throw new InvalidOperationException($"{agentTool} failed: {agentText}");
+                await DemoUi.Settle(300);
+                break;
+            case "expectagent":
+                // "expectagent: text": the last agent: call's answer has to contain it.
+                if (!_agentAnswer.Contains(a, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Expected the agent's answer to contain \"{a}\", but it was: {_agentAnswer}");
                 break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.

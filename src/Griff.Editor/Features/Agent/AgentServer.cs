@@ -50,6 +50,31 @@ public sealed partial class AgentServer : ObservableObject, IHostedService
     /// <summary>The server's tools as they are now.</summary>
     public IReadOnlyDictionary<string, AgentTool> Tools => _server.Tools();
 
+    /// <summary>
+    /// Calls a tool the way an agent's request does (on the UI thread, answering the editor's questions from the call),
+    /// without needing the server to be listening: what the demo player's <c>agent:</c> command uses to show a call and check it works.
+    /// </summary>
+    public async Task<(bool Failed, string Text)> CallAsync(string tool, string argumentsJson)
+    {
+        var request = new System.Text.Json.Nodes.JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 1,
+            ["method"] = "tools/call",
+            ["params"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["name"] = tool,
+                ["arguments"] = System.Text.Json.Nodes.JsonNode.Parse(string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson),
+            },
+        };
+        var answer = System.Text.Json.Nodes.JsonNode.Parse(await _server.HandleAsync(request.ToJsonString()) ?? "{}")!;
+        if (answer["error"] is { } error)
+            return (true, (string?)error["message"] ?? "error");
+        var content = answer["result"]?["content"] as System.Text.Json.Nodes.JsonArray;
+        var text = string.Join(Environment.NewLine, (content ?? []).Where(c => (string?)c?["type"] == "text").Select(c => (string?)c!["text"]));
+        return ((bool?)answer["result"]?["isError"] == true, text);
+    }
+
     public bool IsRunning => _transport?.IsRunning == true;
 
     /// <summary>Where agents connect, while running.</summary>

@@ -12,7 +12,8 @@ src/data/releases.mjs   The releases, read from GitHub when the site is built, f
 src/styles/griff.css    Griff's colours in light and dark, the wordmark's font, the landing page's layout
 src/assets/screens/     The screenshots (made by scripts/screenshots.mjs; see Screenshots below)
 public/                 Served as they are: the logo, the wordmark's font and its license, CNAME
-scripts/                check-links.mjs and screenshots.mjs
+tutorials/              The tutorials: a .demo script each (and the files it writes into its project)
+scripts/                check-links.mjs, screenshots.mjs and tutorials.mjs
 ```
 
 The tool that writes `reference/` is `tools/docs.cs` in the repository's root.
@@ -82,6 +83,27 @@ pixel art and the editor's text stay sharp at a fraction of a PNG's size. To tak
 
 Which shots there are, and what each does first (the entity it selects, the keys it presses), is the `shots` list at
 the top of the script. A new shot needs a line there and a place on the landing page (`src/content/docs/index.mdx`).
+
+## Tutorials
+
+The tutorials (`tutorials/*.demo`, listed in the order in `scripts/tutorials.mjs`) are scripts in the format of the
+repository's demos (`demos/README.md`): the demo player runs each in the real editor, and the page for it and every
+picture on it come from that script and run, so a tutorial can't describe something the editor no longer does.
+
+- `say:`, `explain:` and `chapter:` are the page's paragraphs and headings; the commands in between (`menu`, `create`,
+  `select`, `set`, `add`, `key`, `play`...) become its numbered steps; `step: <words>` is a step the player ignores (for a
+  click only the player has an id for); `agent: <tool> {json}` makes a call through the editor's MCP server, shows it as a
+  code block and fails if it fails (`expectagent: <text>` checks the answer); `shot: <name> | <view> | <width> | <alt>`
+  saves a picture (`editor` by default, or `game`, `scene` or a window's title).
+- `npm run build` (and `dev`) first writes the pages, `src/content/docs/tutorials/*.mdx` (git-ignored), and fails if a
+  script names a menu item, component or property the generated reference doesn't have, or a picture is missing. That
+  runs in the Site workflow too, so a rename in the editor can't ship a stale tutorial.
+- `npm run tutorials` plays them all in the editor (`tools/demo.ps1 -Check`: silent, at speed, with the mouse
+  and keyboard driven for real, so leave them alone and give it a port of its own, `-- --port 7711`) and fails if one no
+  longer gets to its end. Each run replaces that tutorial's pictures in `src/assets/tutorials/` with new ones, shrunk
+  to 1600 wide at most and saved as lossless WebP. `-- --only first-platformer,puzzle` plays some. Commit the pictures.
+
+A change that alters what a tutorial shows (a menu item, a component or field, a flow) updates that script and plays it.
 
 ## Setting up griff.games (maintainer)
 

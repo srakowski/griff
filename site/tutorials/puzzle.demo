@@ -1,0 +1,113 @@
+title: A crate-pushing puzzle
+intro: Sokoban with no code: a worker pushes crates onto marks, takes moves back, and a panel opens when every mark is covered.
+summary: Build a Sokoban level from an empty project: a tilemap room, a grid player, crates, goals, an undo button and a Solved panel.
+project: Empty | Crate Push
+
+chapter: A room | A tilemap
+create: Tilemap
+rename: Level
+set: Tilemap.Tiles = 11111111\n1......1\n1.11...1\n1......1\n11111111
+select: Main Camera
+set: Transform.Position.X = 4
+set: Transform.Position.Y = -2.5
+look: 4, -2.5, 4
+deselect
+say: A tilemap is a grid of tiles, and each number in Tiles is one: 1 is a wall and a dot is empty floor. Typing the rows is the quickest way to lay out a small level. The camera is moved over the room.
+shot: room
+
+chapter: A worker | Create Grid Player
+create: Grid Player
+set: Transform.Position.X = 1.5
+set: Transform.Position.Y = -1.5
+say: A grid player steps from cell to cell, one press for one step, and the tilemap's walls stop it.
+deselect
+
+chapter: Crates and goals | Create Crate, Create Goal
+create: Crate
+rename: Crate A
+set: Transform.Position.X = 3.5
+set: Transform.Position.Y = -1.5
+deselect
+create: Crate
+rename: Crate B
+set: Transform.Position.X = 2.5
+set: Transform.Position.Y = -3.5
+deselect
+say: In a scene with a grid player, Create Crate makes a grid crate: a Pushable that slides one cell when the player steps into it, as long as the cell beyond is free.
+deselect
+create: Goal
+rename: Goal A
+set: Transform.Position.X = 5.5
+set: Transform.Position.Y = -1.5
+deselect
+create: Goal
+rename: Goal B
+set: Transform.Position.X = 4.5
+set: Transform.Position.Y = -3.5
+say: A goal is a mark on the floor. It is covered while a crate rests on it, and every goal with the same All Covered Message sends it once they are all covered. That message is the level solved.
+expectvalue: Goal A.Goal.All Covered Message = Solved
+shot: crates
+
+chapter: Counting | A Counter that counts goals
+create: Text
+rename: Crates
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = TopLeft
+set: ScreenAnchor.Offset = 3.5, -0.7
+add: Counter
+set: Counter.Count Goals = true
+set: Counter.Format = Crates: {0} / {2}
+say: A Counter can count covered goals instead of a message. {0} is how many are covered and {2} how many there are, and a Screen Anchor keeps it in the corner of the screen.
+deselect
+
+chapter: Solved | A Panel that opens by itself
+create: Panel
+rename: Solved
+set: Panel.Open Message = Solved
+create: Text
+rename: Well Done
+set: Text.Value = Solved!
+say: A Panel stays hidden until something opens it. Its Open Message is the message that does: when the goals send Solved, it appears, and the game behind it stops. The text was made with the panel selected, so it is inside it.
+deselect
+shot: panel
+
+chapter: Play it | Push, undo, solve
+play
+wait: 0.5
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.4
+expectat: Crate A = 4.5, -1.5
+tap: Right
+wait: 0.5
+expectat: Crate A = 5.5, -1.5
+expectvalue: Crates.Text.Value = Crates: 1 / 2
+say: Walk into a crate and it slides ahead of you. On its goal it turns green and the counter goes up.
+tap: Z
+wait: 0.4
+expectat: Crate A = 4.5, -1.5
+expectvalue: Crates.Text.Value = Crates: 0 / 2
+say: Z takes the last move back, crate and all, and R starts the level over. The first goal you create brings a Move History along to do that.
+tap: Right
+wait: 0.5
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Left
+wait: 0.3
+tap: Down
+wait: 0.3
+tap: Down
+wait: 0.3
+tap: Right
+wait: 0.4
+tap: Right
+wait: 0.5
+expectat: Crate B = 4.5, -3.5
+expectvalue: Crates.Text.Value = Crates: 2 / 2
+wait: 0.5
+shot: solved | game | 960
+stop
+say: Both crates are home, so the goals sent Solved and the panel opened. To make more levels, duplicate the scene and repaint the tilemap.

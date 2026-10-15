@@ -1140,5 +1140,12 @@ internal sealed class DemoScript(DemoUi ui, IWorkspace workspace, ISelection sel
     private static extern bool SetForegroundWindow(IntPtr hwnd);
 }
 
-internal sealed record DemoOptions(bool Fast, Action<string> Log, DemoControl Control);
+internal sealed record DemoOptions(bool Fast, Action<string> Log, DemoControl Control)
+{
+    /// <summary>Takes the picture <c>shot:</c> saves (a view and a most-pixels-wide), as a PNG.</summary>
+    public Func<string, int, Task<byte[]>>? Screenshot { get; init; }
+
+    /// <summary>Calls an MCP tool by name with a JSON object, as <c>agent:</c> does.</summary>
+    public Func<string, string, Task<(bool Failed, string Text)>>? Agent { get; init; }
+}
 #endif

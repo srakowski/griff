@@ -30,7 +30,6 @@ ends with the exact steps the user must do (push, repo settings, DNS), written i
 site says stays true by itself: reference pages are generated from the code, and screenshots and steps are checked
 like demos, so they can't silently go stale.
 
-- [ ] Add tutorials in one go: step-by-step tutorials (a first platformer, a top-down adventure, a puzzle, making a game with an agent over MCP, and balancing with data tables) whose steps and screenshots are produced by running them in the editor like demos, with a check that fails when one no longer matches the editor, so they stay current.
 - [ ] Put playable games on the site: every template playable in the browser on its own page and in a gallery on the landing page, using the web export, built by the site's Action so they always match main.
 
 ### Platforms
@@ -143,6 +142,8 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Add tutorials in one go: step-by-step tutorials (a first platformer, a top-down adventure, a puzzle, making a game with an agent over MCP, and balancing with data tables) whose steps and screenshots are produced by running them in the editor like demos, with a check that fails when one no longer matches the editor, so they stay current. (2026-10-15)
+  - Tutorials are `.demo` scripts in `site/tutorials/` run by the demo player (new `shot:`, `agent:`, `expectagent:`, `step:`, `summary:` commands); `site/scripts/tutorials.mjs` writes the pages and checks them against the generated reference at build, and `npm run tutorials` plays them and takes the pictures (lossless WebP in `site/src/assets/tutorials/`).
 - [x] Add an RPG Stats template: races, classes, items and spells in tables, a level curve, a small turn-based fight that reads them, and the balance simulations set up to show which class is too strong at which level. (2026-10-15)
   - `Griff.Modules.Battles`: a `Battler` (attack through Armor, a Spell paid in Mana with Mana Per Turn, an Item that heals, restores mana or hurts; dice for each via [RollsFor]; one move per TurnTaker action; the computer heals when under Heal Below, casts when the spell hits at least as hard, throws a harder item, else attacks; [Focus] Controllable with Attack/Spell/Item actions; outputs Title, Mana, Spell, Spell Cost, Item, Items, Said; actions Attack, Cast Spell, Use Item), `BattlesSystem` after Turns, `IActionReady` so a new `ButtonAction.Do` (Do, Targets, With, sent to the host as `griff.do`) fades while its targets can't; `TableValues.SavedRow` reads a row a menu's Choice saved.
   - The template (`RpgStatsTemplate`, `RpgStatsTables`, `RpgStatsArt`): Races, Items, Spells, Levels (XP, Health, Power, Mana from curves), Classes (row links + formulas) and Enemies tables; Main (class and foe Choices), Battle (Do buttons 1/2/3, bars, Said lines, Victory with the foe's Reward formula, Defeat, pause menu) and Arena scenes; `ProjectTemplate.Simulations()` writes `Simulations/Balance.sim` (Classes x Enemies, Level 1-10, 100 runs). Fireball's Dice Per Level 2 makes the mage win 81-100% at levels 5-8 (findings' first line); at 1 it's in line.

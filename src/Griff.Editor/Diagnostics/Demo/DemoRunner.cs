@@ -133,7 +133,13 @@ internal static class DemoRunner
             ui.ScriptTabs = services.GetRequiredService<Features.Scripts.ScriptTabs>();
             ui.Debugger = services.GetRequiredService<Features.Debugging.Debugger>();
             ui.Panels = services.GetRequiredService<PanelHost>();
-            var options = new DemoOptions(fast, Log, control);
+            var agentTools = services.GetRequiredService<IEnumerable<Griff.Agent.IAgentToolSource>>().OfType<Features.Agent.EditorTools>().First();
+            var agentServer = services.GetRequiredService<Features.Agent.AgentServer>();
+            var options = new DemoOptions(fast, Log, control)
+            {
+                Screenshot = async (view, width) => (await agentTools.CaptureAsync(view, width)).Png,
+                Agent = agentServer.CallAsync,
+            };
             var workspace = services.GetRequiredService<IWorkspace>();
             var selection = services.GetRequiredService<ISelection>();
             var sceneView = services.GetRequiredService<SceneViewControl>();

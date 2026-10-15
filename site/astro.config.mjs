@@ -55,6 +55,17 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Tutorials',
+					items: [
+						{ label: 'All tutorials', slug: 'tutorials' },
+						{ label: 'Your first platformer', slug: 'tutorials/first-platformer' },
+						{ label: 'A top-down adventure', slug: 'tutorials/top-down-adventure' },
+						{ label: 'A crate-pushing puzzle', slug: 'tutorials/puzzle' },
+						{ label: 'Making a game with an agent', slug: 'tutorials/making-a-game-with-an-agent' },
+						{ label: 'Balancing with data tables', slug: 'tutorials/balancing-with-tables' },
+					],
+				},
+				{
 					label: 'Guides',
 					items: [
 						{ label: 'The editor', slug: 'docs/editor' },

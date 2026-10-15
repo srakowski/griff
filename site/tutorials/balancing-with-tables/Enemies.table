@@ -1,0 +1,13 @@
+{
+  "columns": [
+    { "name": "Health", "type": "number" },
+    { "name": "Damage", "type": "dice" },
+    { "name": "Gold", "type": "whole number" },
+    { "name": "XP", "type": "whole number" }
+  ],
+  "rows": {
+    "Slime": { "Health": 6, "Damage": "1d3", "Gold": 2, "XP": 5 },
+    "Goblin": { "Health": 10, "Damage": "1d6", "Gold": 5, "XP": 12 },
+    "Ogre": { "Health": 30, "Damage": "2d6+2", "Gold": 25, "XP": 60 }
+  }
+}

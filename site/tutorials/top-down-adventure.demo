@@ -1,0 +1,137 @@
+title: A top-down adventure
+intro: A dark dungeon lit by your lantern, a key, a locked door and a treasure behind it, all built from the Entity menu and the Inspector.
+summary: Build a small top-down dungeon from an empty project: a hero with a lantern, walls that cast shadows, a key and a locked door, a treasure and a bat.
+project: Empty | Dungeon
+
+chapter: A hero with a lantern | Create Top-down Player
+say: A top-down game looks down on the world, so there is no gravity and the hero moves in eight directions. Start from the Empty template and make the hero.
+deselect
+create: Top-down Player
+expectcomponents: Player = Transform, Sprite, BoxCollider, Body, TopDownMovement
+say: The Body has Gravity Scale 0, and Top Down Movement reads the arrow keys, WASD or the stick. Now make the room dark and give the hero a light to see by.
+add: Light
+set: Light.Radius = 5
+set: Light.Shadows = true
+select: Main Camera
+set: Camera.Size = 6
+set: Camera.Ambient = #4A5270
+say: A camera's Ambient color is the light a scene has everywhere. A dark blue one makes the room dim, and any Light brightens the part it reaches. With Shadows on, walls block it.
+shot: lantern
+
+chapter: Walls | Sprites with colliders
+deselect
+create: Sprite
+rename: Wall
+set: Transform.Position = 0, 5, 0
+set: Sprite.Size = 20, 1
+set: Sprite.Tint = #484B55
+add: BoxCollider
+set: BoxCollider.Size = 20, 1
+say: A wall is a sprite with a box collider. Make one, then copy it with Ctrl+D and move and resize each copy.
+key: Ctrl+D
+set: Transform.Position = 0, -5, 0
+key: Ctrl+D
+set: Transform.Position = -10, 0, 0
+set: Sprite.Size = 1, 10
+set: BoxCollider.Size = 1, 10
+key: Ctrl+D
+set: Transform.Position = 10, 0, 0
+expectcount: Wall = 4
+say: Four walls make a room. Press F5 and walk into them: the hero stops, and the lantern's light stops at the walls too.
+shot: walls
+
+chapter: A locked door | A Switch that wants a key
+deselect
+create: Sprite
+rename: Divider Top
+set: Transform.Position = 3, 3.25, 0
+set: Sprite.Size = 0.5, 2.5
+set: Sprite.Tint = #484B55
+add: BoxCollider
+set: BoxCollider.Size = 0.5, 2.5
+key: Ctrl+D
+rename: Divider Bottom
+set: Transform.Position = 3, -3.25, 0
+deselect
+create: Sprite
+rename: Door
+set: Transform.Position = 3, 0, 0
+set: Sprite.Size = 0.5, 4
+set: Sprite.Tint = #E3B341
+add: BoxCollider
+set: BoxCollider.Size = 0.5, 4
+add: Switch
+set: Switch.Mode = Button
+set: Switch.Key = Key
+set: Switch.Hides = Door
+expectcomponents: Door = Transform, Sprite, BoxCollider, Switch
+say: A wall with a gap in it, closed by a door. A Switch in Button mode turns on when something touches it, and one that has a Key only turns on for someone carrying that item. While it is on, it hides everything it names in Hides, and here that is the door itself.
+shot: door
+
+chapter: The key and the treasure | Pickup with an Item
+deselect
+create: Sprite
+rename: Key
+set: Transform.Position = -3, 0, 0
+set: Sprite.Size = 0.35, 0.6
+set: Sprite.Tint = #E3B341
+add: CircleCollider
+set: CircleCollider.Is Trigger = true
+add: Pickup
+set: Pickup.Layers = Player
+set: Pickup.Item = Key
+deselect
+create: Sprite
+rename: Treasure
+set: Transform.Position = 5.5, 0, 0
+set: Sprite.Size = 0.5, 0.5
+set: Sprite.Tint = #57AB5A
+add: CircleCollider
+set: CircleCollider.Is Trigger = true
+add: Pickup
+set: Pickup.Layers = Player
+set: Pickup.Amount = 5
+say: A Pickup with an Item puts it in the hero's pockets when they touch it. The key is that item, so the door will open for whoever picked it up. The treasure is worth five points.
+deselect
+create: Text
+rename: Score
+set: Transform.Position = -8, 4, 0
+set: Text.Value = Score: 0
+add: Counter
+shot: pickups
+
+chapter: A bat | Chase
+deselect
+create: Sprite
+rename: Bat
+set: Transform.Position = 8, 3.5, 0
+set: Sprite.Size = 0.7, 0.5
+set: Sprite.Tint = #9B6BD6
+add: Chase
+set: Chase.Range = 3
+set: Chase.Needs Sight = true
+add: DamageOnTouch
+set: DamageOnTouch.Layers = Player
+select: Player
+add: Health
+say: A Chase follows the hero once it is near and can see them, and gives up when they get away. Needs Sight makes the walls hide the hero from it. The hero needs Health to be hurt, three hits by default.
+expectcomponents: Bat = Transform, Sprite, BoxCollider, Body, Chase, DamageOnTouch
+shot: bat
+
+chapter: Play it | Key, door, treasure
+play
+wait: 0.8
+wait: 1
+hold: Right 3
+expectat: Player = 2.35, 0
+say: Run for the door first and it stays shut: the hero has no key yet.
+hold: Left 6
+wait: 0.3
+say: Fetch the key from the left of the room.
+hold: Right 10
+wait: 1
+expectvalue: Score.Text.Value = Score: 6
+say: With the key the door opens as the hero touches it, and the treasure is theirs: one point for the key, which scores like any pickup, and five for the treasure.
+shot: playing | game | 960
+stop
+say: That is a small adventure. Add Dialogue Boxes for talking, portals between rooms, and more rooms of your own, each a scene.

@@ -1,0 +1,137 @@
+title: Balancing with data tables
+intro: Put a game's numbers in tables instead of in scattered Inspector fields: enemies by row, XP by level from a curve, totals by formula, all with a chart, and a game that follows every change while it plays.
+summary: Keep enemy stats and an XP curve in data tables, give an enemy its numbers from a row with no code, and try changes while the game runs.
+project: Platformer | Balance
+
+chapter: A table of enemies | Data > New Table
+menu: Data > New Table...
+prompt: Enemies
+step: In the Tables panel, click the heading of the one column (Value), then rename it to Health in the bar above the grid and set its type to whole number.
+click: tables:header:Value
+click: tables:column:name
+key: Ctrl+A
+type: Health\n
+columntype: Health = whole number
+step: Click the plus at the end of the headings to add a column, call it Damage and make it a dice column.
+click: tables:addcolumn
+prompt: Damage
+columntype: Damage = dice
+step: Double-click a cell to type into it, or select it and press F2. Name the first row Slime, with 6 Health and 1d4 Damage.
+cell: Row 1 > Name = Slime
+cell: Slime > Health = 6
+cell: Slime > Damage = 1d4
+expectcell: Slime > Health = 6
+expectcell: Slime > Damage = 1d4
+step: Add a row with the plus under the grid and fill in a Bat: 2 Health and 1 Damage.
+click: tables:addrow
+cell: Row 2 > Name = Bat
+cell: Bat > Health = 2
+cell: Bat > Damage = 1
+expecttable: 2 rows, 2 columns
+say: A table is a spreadsheet for game data. Each column holds one kind of thing: numbers, whole numbers, text, yes or no, a choice from a list, dice, a sprite, a sound, a prefab, or a row of another table. A cell that does not fit its column is refused, and the panel says what the column takes.
+shot: enemies
+expectfile: Tables/Enemies.table
+say: Every change is saved straight away, to a text file with a line for each row, so a change to one number is one line in git. Undo takes any change back.
+
+chapter: From a spreadsheet | Copy and paste, both ways
+clipboard: Ogre\t20\t2d6\nWisp\t3\t1d2
+step: Copy two rows from Excel or Google Sheets, select the next empty row's name cell and press Ctrl+V.
+click: tables:addrow
+click: tables:cell:Row 3 > Name
+key: Ctrl+V
+expecttable: 4 rows, 2 columns
+expectcell: Ogre > Health = 20
+say: Ctrl+V pastes the block at the selected cell, adding the rows it needs. Ctrl+C copies cells back out, headings too, ready to paste into a sheet, and Data, Import and Export CSV work with whole files.
+
+chapter: Enemies from a row | Table Values
+select: Slime
+add: TableValues
+pick: TableValues.Table = Enemies
+set: TableValues.Sets = Health.Max = Health\nDamageOnTouch.Amount = Damage
+say: A Table Values component gives an entity's other components their numbers from a row. Each line of Sets names a property and the column it takes from. With Row empty, it takes the row named like the entity, which is why the template's Slime gets the Slime row.
+shot: tablevalues
+play
+wait: 1
+expectvalue: Slime.Health.Max = 6
+cell: Slime > Health = 12
+expectvalue: Slime.Health.Max = 12
+say: Change a number in the table while the game runs and it reaches the game as its next step begins, so balancing is quick to try: tune, look, tune again. Stop puts the game back, and the table keeps what you typed.
+stop
+
+chapter: Levels from a curve | Curve, then Generate
+menu: Data > New Table...
+prompt: Levels
+click: tables:header:Value
+click: tables:column:name
+key: Ctrl+A
+type: XP\n
+columntype: XP = whole number
+click: tables:curve
+step: Click Curve. The curve editor opens beside the chart. XP to the next level usually grows by the same share each level, so it starts out exponential. Set the last value to 50000, the levels to 30 and Round To to 10.
+curve: last = 50000
+curve: levels = 30
+curve: roundto = 10
+say: The chart draws the curve it would make: 100 at level 1 to 50,000 at level 30, rounded to tens. Linear, power, exponential and S-shaped curves are there, and so are points you draw on the chart yourself.
+click: tables:generate
+expecttable: 30 rows, 1 column
+expectcell: 1 > XP = 100
+expectcell: 15 > XP = 2010
+expectcell: 30 > XP = 50000
+expectchart: 100 (1) to 50,000 (30), 8,626.67 on average.
+charthover: 20
+shot: curve
+say: Generate fills the column, a row for each level. It is one undo step, and the column keeps its curve so you can change it and generate again.
+
+chapter: Formulas | Worked out from the row and other tables
+click: tables:addcolumn
+prompt: Total
+columntype: Total = whole number
+step: Type a formula into any cell of the new column: =Prev(Total) + XP. It becomes the whole column's.
+cell: 1 > Total = =Prev(Total) + XP
+expectcell: 1 > Total = 100
+expectcell: 2 > Total = 220
+expectcell: 30 > Total = 258800
+say: A formula starts with an equals sign. It can use the other columns of its row, the rows around it, and other tables, with sums, lookups and dice. Total adds each level's XP to the total above it, and every machine works it out the same way, to the last digit.
+cell: 1 > XP = 200
+expectcell: 2 > Total = 320
+say: Change what a formula reads and it follows at once, here and in a running game. A name that is not there, or formulas that need each other in a loop, are flagged in the grid and said in the Output panel while the game runs. Nothing crashes.
+shot: formula
+
+chapter: Dice on the chart | Average, range and spread
+click: tables:addcolumn
+prompt: Hit
+columntype: Hit = dice
+click: tables:column:formula
+key: Ctrl+A
+type: =Dice(Floor(Row() / 5) + 1, 6, Row())\n
+expectcell: 1 > Hit = 1d6+1
+expectcell: 12 > Hit = 3d6+12
+expectchart: Rolls 2 (1) to 72 (30); 4.5 to 54.5 on average; spread up to 4.52 (30).
+charthover: 12
+shot: dice
+say: A dice column charts each level's average as a dot, its range as a line from the least it rolls to the most, and its spread as a box: how far a roll usually lands from the average. A level where the box is much taller than its neighbours is a swingy fight, and one where the line jumps is a spike, so the outliers stand out before anyone plays.
+say: Scripts read the same tables by row and column, and an agent edits them through the same panel and files with asset_write.
+
+chapter: Does it hold up? | Balance simulations
+step: Copy the tutorial's ready-made Classes.table and Enemies.table into the project's Assets/Tables folder, and Arena.scene into Assets/Scenes, then open the Arena scene. The Enemies table gains gold and XP columns, and the Classes table works out a hero's health from its level with a formula.
+write: Tables/Classes.table | balancing-with-tables/Classes.table
+write: Tables/Enemies.table | balancing-with-tables/Enemies.table
+write: Scenes/Arena.scene | balancing-with-tables/Arena.scene
+scene: Arena
+say: Numbers in a table are only half of balancing. The other half is what they do together. A simulation plays two sides of your game against each other thousands of times without drawing anything, by the game's own rules. The arena is a scene with a hero and an enemy that take turns, each getting its health and damage from a table row.
+menu: Data > New Simulation...
+prompt: Balance
+expectsim: arena = Arena
+expectsim: first:table = Classes
+expectsim: second:table = Enemies
+step: In the Simulations panel, set Runs to 300. Each class then plays each enemy 300 times, with random numbers from a seed, so the same seed plays the same fights on any machine.
+simset: runs = 300
+simrun
+expectfinding: Ogre is beaten in 0%
+shot: simulation
+say: Nine pairs, 2,700 fights, in about a second. The panel says what stands out: here, that nobody beats the ogre at level one. Results come as a table of every pair with win rates, turns, damage and the gold and XP earned.
+simtab: Matrix
+expectmatrix: Warrior > Slime = 100%
+expectmatrix: Mage > Ogre = 0%
+shot: matrix
+say: The matrix colours every pair by how one-sided it is: orange where the class wins, blue where the enemy does. A sweep changes a column by steps, such as each class's level from one to eight, and shows where each class starts beating the ogre and which levels change nothing. Fix what stands out in the tables, run it again, and keep going until nothing does. Agents run simulations and read the results through the editor's MCP.

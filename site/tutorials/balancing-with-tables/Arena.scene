@@ -1,0 +1,315 @@
+{
+  "formatVersion": 1,
+  "entities": [
+    {
+      "id": "340879f9-b28a-495d-ab22-d3e205aedac6",
+      "name": "Camera",
+      "components": [
+        {
+          "type": "Transform",
+          "position": [2.5, -1.5, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        {
+          "type": "Camera",
+          "size": 5,
+          "background": "#1E222BFF",
+          "sortByY": false,
+          "ambient": "#FFFFFFFF",
+          "transition": "Fade"
+        }
+      ]
+    },
+    {
+      "id": "ed9e6f70-244e-465a-b426-2c92cfcf711c",
+      "name": "Floor",
+      "components": [
+        {
+          "type": "Transform",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        {
+          "type": "Tilemap",
+          "image": null,
+          "columns": 1,
+          "rows": 1,
+          "moreTilesets": [],
+          "shape": "Square",
+          "tileSize": 1,
+          "tileHeight": 0.5,
+          "sortByY": false,
+          "tint": "#FFFFFFFF",
+          "order": 0,
+          "solid": true,
+          "backgroundTiles": null,
+          "oneWayTiles": null,
+          "animatedTiles": null,
+          "ladderTiles": null,
+          "slopeUpTiles": null,
+          "slopeDownTiles": null,
+          "autoTiles": null,
+          "layer": null,
+          "ignoreLayers": null,
+          "tiles": [
+            "11111",
+            "1...1",
+            "11111"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "d29b0e8b-5394-46b0-b223-4448e34473ef",
+      "name": "Hero",
+      "components": [
+        {
+          "type": "Transform",
+          "position": [1.5, -1.5, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        {
+          "type": "Sprite",
+          "image": null,
+          "tint": "#4C8DF0FF",
+          "size": [0.8, 0.8],
+          "flipX": false,
+          "flipY": false,
+          "order": 0,
+          "columns": 1,
+          "rows": 1,
+          "frame": 0,
+          "slice": 0,
+          "sliceSize": 0.25
+        },
+        {
+          "type": "BoxCollider",
+          "size": [0.8, 0.8],
+          "offset": [0, 0],
+          "isTrigger": false,
+          "oneWay": false,
+          "layer": "Player",
+          "ignoreLayers": null
+        },
+        {
+          "type": "Body",
+          "velocity": [0, 0],
+          "gravityScale": 0,
+          "bounciness": 0,
+          "friction": 0,
+          "frozen": false,
+          "mass": 1,
+          "rotates": false,
+          "spin": 0,
+          "grip": 0.6,
+          "rollingResistance": 0.1,
+          "asleep": false,
+          "stillFor": 0
+        },
+        {
+          "type": "Griff.GridMovement",
+          "map": null,
+          "stepTime": 0.1,
+          "repeat": true,
+          "repeatDelay": 0,
+          "diagonal": false,
+          "stayOnMap": true,
+          "controllable": false,
+          "flipSprite": true,
+          "stepSound": null,
+          "bumpSound": null
+        },
+        {
+          "type": "Griff.GridChase",
+          "target": "Enemy",
+          "range": 10,
+          "giveUp": 2,
+          "needsSight": false,
+          "stopDistance": 0
+        },
+        {
+          "type": "Griff.Health",
+          "max": 3,
+          "current": 3,
+          "invincibleTime": 0,
+          "flashOnHit": true,
+          "blinkWhileInvincible": true,
+          "destroyOnDeath": true,
+          "deathMessage": null,
+          "respawn": false,
+          "respawnDelay": 1,
+          "hurtSound": null,
+          "deathSound": null
+        },
+        {
+          "type": "Griff.BumpAttack",
+          "damage": 1,
+          "damageRoll": null,
+          "layers": "Enemy",
+          "sound": null,
+          "effect": null,
+          "hitStop": 0
+        },
+        {
+          "type": "Griff.TurnTaker",
+          "side": "Hero",
+          "actions": 1,
+          "actionsUsed": 0
+        },
+        {
+          "type": "Griff.TableValues",
+          "table": "Classes",
+          "row": null,
+          "sets": [
+            "Health.Max = Health",
+            "BumpAttack.Damage = Damage"
+          ],
+          "applied": null
+        }
+      ]
+    },
+    {
+      "id": "08b2b310-12aa-4e59-a325-548ea4b733fa",
+      "name": "Enemy",
+      "components": [
+        {
+          "type": "Transform",
+          "position": [2.5, -1.5, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        {
+          "type": "Sprite",
+          "image": null,
+          "tint": "#E84A4AFF",
+          "size": [0.8, 0.8],
+          "flipX": false,
+          "flipY": false,
+          "order": 0,
+          "columns": 1,
+          "rows": 1,
+          "frame": 0,
+          "slice": 0,
+          "sliceSize": 0.25
+        },
+        {
+          "type": "BoxCollider",
+          "size": [0.8, 0.8],
+          "offset": [0, 0],
+          "isTrigger": false,
+          "oneWay": false,
+          "layer": "Enemy",
+          "ignoreLayers": null
+        },
+        {
+          "type": "Body",
+          "velocity": [0, 0],
+          "gravityScale": 0,
+          "bounciness": 0,
+          "friction": 0,
+          "frozen": false,
+          "mass": 1,
+          "rotates": false,
+          "spin": 0,
+          "grip": 0.6,
+          "rollingResistance": 0.1,
+          "asleep": false,
+          "stillFor": 0
+        },
+        {
+          "type": "Griff.GridMovement",
+          "map": null,
+          "stepTime": 0.1,
+          "repeat": true,
+          "repeatDelay": 0,
+          "diagonal": false,
+          "stayOnMap": true,
+          "controllable": false,
+          "flipSprite": true,
+          "stepSound": null,
+          "bumpSound": null
+        },
+        {
+          "type": "Griff.GridChase",
+          "target": "Hero",
+          "range": 10,
+          "giveUp": 2,
+          "needsSight": false,
+          "stopDistance": 0
+        },
+        {
+          "type": "Griff.Health",
+          "max": 3,
+          "current": 3,
+          "invincibleTime": 0,
+          "flashOnHit": true,
+          "blinkWhileInvincible": true,
+          "destroyOnDeath": true,
+          "deathMessage": null,
+          "respawn": false,
+          "respawnDelay": 1,
+          "hurtSound": null,
+          "deathSound": null
+        },
+        {
+          "type": "Griff.BumpAttack",
+          "damage": 1,
+          "damageRoll": null,
+          "layers": "Player",
+          "sound": null,
+          "effect": null,
+          "hitStop": 0
+        },
+        {
+          "type": "Griff.TurnTaker",
+          "side": "Enemy",
+          "actions": 1,
+          "actionsUsed": 0
+        },
+        {
+          "type": "Griff.TableValues",
+          "table": "Enemies",
+          "row": null,
+          "sets": [
+            "Health.Max = Health",
+            "BumpAttack.Damage = Damage"
+          ],
+          "applied": null
+        }
+      ]
+    },
+    {
+      "id": "ec404f38-01d1-4481-a73e-5b50301db200",
+      "name": "Turns",
+      "components": [
+        {
+          "type": "Transform",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        {
+          "type": "Griff.TurnOrder",
+          "sides": "Hero, Enemy",
+          "computerSides": "Hero, Enemy",
+          "turnTime": 0,
+          "computerTurnTime": 2,
+          "between": 0,
+          "endAction": "EndTurn",
+          "format": "{0}\u0027s turn",
+          "message": "{0}Turn",
+          "sound": null,
+          "within": null,
+          "defeatMessage": "{0}Defeated",
+          "current": null,
+          "round": 0,
+          "timeLeft": 0,
+          "startsIn": 0
+        }
+      ]
+    }
+  ]
+}

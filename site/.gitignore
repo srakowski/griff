@@ -3,3 +3,5 @@ dist/
 .astro/
 # Written from the code by `npm run reference` (tools/docs.cs); see README.md.
 src/content/docs/reference/
+# Written from tutorials/*.demo by `npm run build` (scripts/tutorials.mjs); see README.md.
+src/content/docs/tutorials/

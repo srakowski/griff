@@ -11,7 +11,10 @@
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "check-links": "node scripts/check-links.mjs",
     "screenshots": "node scripts/screenshots.mjs",
-    "og": "node scripts/og.mjs"
+    "og": "node scripts/og.mjs",
+    "predev": "node scripts/tutorials.mjs pages",
+    "prebuild": "node scripts/tutorials.mjs pages",
+    "tutorials": "node scripts/tutorials.mjs run"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.6",

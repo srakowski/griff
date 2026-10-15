@@ -177,8 +177,15 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
 
     private async Task<ToolResult> ScreenshotAsync(ToolArgs args)
     {
-        var view = (args.OptionalString("view") ?? "game").Trim();
-        var maxWidth = Math.Clamp(args.Int("max_width", 1280), 64, 4096);
+        var (png, caption) = await CaptureAsync(args.OptionalString("view") ?? "game", args.Int("max_width", 1280));
+        return ToolResult.Image(png, caption);
+    }
+
+    /// <summary>The picture <c>editor_screenshot</c> gives for a view, as a PNG with its caption (also what the demo player's <c>shot:</c> saves for the tutorials).</summary>
+    internal async Task<(byte[] Png, string Caption)> CaptureAsync(string view, int maxWidth)
+    {
+        view = view.Trim();
+        maxWidth = Math.Clamp(maxWidth, 64, 4096);
         var main = (MainWindow)Application.Current.MainWindow;
         var timer = System.Diagnostics.Stopwatch.StartNew();
 
@@ -223,7 +230,7 @@ public sealed class EditorTools(IWorkspace workspace, ISelection selection, Play
         var png = Png(bitmap);
         if (timer.Elapsed > SlowPicture)
             log.Add(new LogEntry(DateTime.Now, LogLevel.Warning, "Agent", $"A {view} screenshot took {timer.Elapsed.TotalSeconds:0.0} s: {drawn.TotalSeconds:0.0} s to draw it (showing its tab, drawing the frame, reading the pixels back), {(timer.Elapsed - drawn).TotalSeconds:0.0} s to make the PNG."));
-        return ToolResult.Image(png, $"{caption} {bitmap.PixelWidth}x{bitmap.PixelHeight}.");
+        return (png, $"{caption} {bitmap.PixelWidth}x{bitmap.PixelHeight}.");
     }
 
     // A picture that takes longer than this says where the time went in the Output panel.

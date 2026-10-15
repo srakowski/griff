@@ -11,3 +11,5 @@ using System.Windows;
 )]
 
 [assembly: InternalsVisibleTo("Griff.Editor.Tests")]
+// tools/docs.cs (the website's generated reference) builds the editor's real services the way the tests do.
+[assembly: InternalsVisibleTo("docs")]

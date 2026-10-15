@@ -5,7 +5,9 @@
   "description": "griff.games: Griff's website, built with Astro Starlight and deployed to GitHub Pages.",
   "scripts": {
     "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "reference": "dotnet run -p:SkipPlayers=true ../tools/docs.cs -- --out src/content/docs/reference",
     "build": "astro build",
+    "build:all": "npm run reference && npm run build",
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "check-links": "node scripts/check-links.mjs",
     "screenshots": "node scripts/screenshots.mjs"

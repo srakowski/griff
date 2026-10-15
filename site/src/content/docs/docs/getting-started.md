@@ -52,4 +52,4 @@ While playing, Griff keeps the last 20 seconds: pause and drag the **Rewind** ba
 
 **Game → Build Game** (Ctrl+B) makes a single `.exe` that carries everything, .NET included: zip it and upload it to your jam's page. **Build Small Game** makes a 4 MB `.exe` for players who have the .NET Desktop Runtime.
 
-The full guide to the editor is in the [README](https://github.com/srakowski/griff#using-the-editor) for now.
+Next: [the editor](/docs/editor/) goes through everything it can do, and [scenes and components](/docs/scenes-and-components/) what a game is made of.

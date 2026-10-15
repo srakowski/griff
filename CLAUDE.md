@@ -1,11 +1,22 @@
 # Griff
 
-A game engine and editor for game jams, in C# (.NET 10, WPF editor). See README.md for what it does.
+A game engine and editor for game jams, in C# (.NET 10, WPF editor). README.md is short; the docs (griff.games) say
+what it does and how: pages in `site/src/content/docs/docs/`, a guide each for the editor, scenes and components,
+scripting, multiplayer, exporting and so on (see Docs below).
 
 - Build: `dotnet build src/Griff.Editor/Griff.Editor.csproj` (also publishes the game players). Tests:
   `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`.
 - `src/Griff.Editor/Diagnostics/` holds Debug-only tools: the snapshot runner (`GRIFF_SNAPSHOT_DIR`) and the demo
   player (`Diagnostics/Demo`).
+
+## Docs
+
+- The guides are Markdown in `site/src/content/docs/docs/`; a change updates the guide for its area (new pages go in the
+  sidebar in `site/astro.config.mjs`) and `docs/status.md`'s known gaps. `site/README.md` says how to build and preview.
+- The reference (every component with its properties, every editor command, the scripting API) is not written by hand:
+  `tools/docs.cs` writes it from the code (`ComponentRegistry`, `CommandRegistry` and the `///` docs) into
+  `site/src/content/docs/reference/` (git-ignored; `npm run reference` in `site/`). A new component or command appears
+  there by itself, so give it a `///` summary and describe its properties.
 
 ## Demos
 

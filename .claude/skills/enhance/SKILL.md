@@ -34,7 +34,7 @@ Other agents may be working in the main checkout at the same time, so never swit
 ## 2. Build it
 
 - Treat the item as the whole prompt, the way the user would have typed it. Read how the neighbouring features are
-  built first (git history, `README.md`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff/Projects/`)
+  built first (git history, the docs in `site/src/content/docs/docs/`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff/Projects/`)
   and follow the same shape: no-code components that work from the Inspector, scripting API where it helps, a
   playable (and audible) template when the item names one, multiplayer and rewind support like the existing
   components, and undo for everything in the editor.
@@ -42,8 +42,10 @@ Other agents may be working in the main checkout at the same time, so never swit
   the item for later, don't add follow-up items to the backlog, and don't leave known gaps in what the item covers.
   If something you find along the way is outside the item, fix it in this change when it's small; otherwise mention it
   in the report and leave the backlog alone.
-- Update `README.md`: the feature list and its own section, and the **Status** section's known gaps (remove gaps this
-  closes).
+- Update the docs (`site/src/content/docs/docs/`; the README only links to them): the guide for the item's area (add a
+  section, or a page and its sidebar entry in `site/astro.config.mjs`), and the known gaps in `docs/status.md` (remove
+  gaps this closes). The reference pages are generated from the code, so give new components and commands `///`
+  summaries instead of writing them up.
 - Add unit tests in `tests/Griff.Tests`, including playing any new template. Existing demos and the guided tour
   that show something this changes get updated (see `CLAUDE.md`).
 - `dotnet build src/Griff.Editor/Griff.Editor.csproj` and `dotnet test tests/Griff.Tests` both pass before going on.
@@ -52,7 +54,7 @@ Other agents may be working in the main checkout at the same time, so never swit
 
 Never launch anything while League of Legends is running (`Get-Process "League of Legends"`); wait until it's closed.
 
-1. Start the editor from the worktree's build with the MCP server on, the way `src/Griff/Agent/` and the README say
+1. Start the editor from the worktree's build with the MCP server on, the way `src/Griff/Agent/` and `docs/agents.md` say
    to. Use the Griff MCP tools if this session has them connected; otherwise talk to it over HTTP with JSON-RPC
    (`initialize`, then `tools/list` and `tools/call`) at `http://127.0.0.1:<port>/mcp` (7650 by default).
 2. Exercise the new feature the way an agent building a game would: create entities, add and set the new
@@ -72,7 +74,7 @@ the demo turns up before going on.
 ## 5. Commit, merge, tick it off
 
 1. In `backlog.md`, move the item from **Next** to **Done** as `- [x] <item> (YYYY-MM-DD)`.
-2. Commit everything in the worktree (code, tests, README, demos, `backlog.md`) as one commit on `enhance/<slug>`.
+2. Commit everything in the worktree (code, tests, docs, demos, `backlog.md`) as one commit on `enhance/<slug>`.
    Use the repo's message style, e.g. `Add grid movement: things that step tile by tile on a tilemap`.
 3. Bring it up to date with main and merge it:
    - In the worktree: `git rebase main`, then build and test again if main moved.
@@ -90,7 +92,7 @@ Say what was built, what the MCP testing and the demo turned up, anything found 
 
 When **Next** is empty, help the user plan the next round rather than building anything.
 
-1. Gather candidates: the **Status** gaps in `README.md`, the deferred notes under **Done**, genres or features the
+1. Gather candidates: the known gaps in `site/src/content/docs/docs/status.md`, the deferred notes under **Done**, genres or features the
    engine still handles poorly (read the components and templates to judge), and rough edges you saw while building
    the last items.
 2. Propose a short ordered list (foundations first, then what builds on them; the riskiest core changes last), each

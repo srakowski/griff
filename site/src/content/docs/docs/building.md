@@ -6,47 +6,22 @@ description: Build Griff from source, run its tests, and how the repository is l
 Building Griff takes the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows.
 
 ```sh
-dotnet build src/Griff.Editor/Griff.Editor.csproj
-dotnet test tests/Griff.Tests
-dotnet test tests/Griff.Editor.Tests
+dotnet build
+dotnet test
 dotnet run --project src/Griff.Editor
 ```
 
-Building the editor also publishes the game players it exports games with. Every project shares `Directory.Build.props` (nullable on, warnings are errors, the .NET analyzers' recommended rules), package versions live in `Directory.Packages.props`, and `.editorconfig` holds the code style. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw.
+Every project shares `Directory.Build.props` (nullable on, warnings are errors, the .NET analyzers' recommended rules), package versions live in `Directory.Packages.props`, and `.editorconfig` holds the code style. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw.
 
-## The repository
+## Quiet runs
 
-```
-src/
-  Griff                    Engine core: scenes, serialization, editing/undo, runtime, physics,
-                           render lists, audio, networking, projects and templates. No UI dependencies.
-    Modules/               The genres, each in a folder of its own
-  Griff.Scripting          Roslyn script compiler, hot reload, game exporter
-  Griff.Graphics           OpenGL 3.3 sprite and text renderer
-  Griff.Platform.Windows   WGL context, WPF game surface, frame pacing, input, sound output
-  Griff.Editor             WPF editor: modules, commands, panels, design system
-  Griff.Player             Runs exported games
-  Griff.Web                Runs games in a browser (a proof so far)
-tests/
-  Griff.Tests              Unit and integration tests, including playing every template
-  Griff.Editor.Tests       The editor's real services, the agent surface, and exported games run for real
-site/                      This website (Astro Starlight), deployed to griff.games
-```
+`GRIFF_MUTE=1` keeps anything Griff runs silent, never opening the sound device, while games run exactly as they would with sound: the editor (for that session, leaving its saved **Game → Mute** alone), the players it starts, exported games (or `--mute`) and BunnyMark (which passes it on to its game); BunnyBench never makes a sound. The editor's tests set it for themselves. Demo checks (`toolsdemo.ps1 -Check`) are silent; narrated playback speaks, unless the speaker on the demo's bar mutes the narration (kept for the next demo, in `%LOCALAPPDATA%Griffdemo.json`, apart from the editor's settings, which a demo never reads or writes) or `-Mute` (`GRIFF_MUTE_NARRATION=1`) plays that one in silence.
 
-Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything. **BunnyMark** (`tools\bunnymark.ps1`) measures how many bouncing bunnies an exported game keeps up at 60 frames a second.
+**BunnyMark** measures an exported game: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\bunnymark.ps1` builds the editor in Release, exports the BunnyMark template with the standalone player, plays it on screen until it has found its count and held it for ten seconds, and prints the count with the hold's frame rate, 1% low and garbage collections (`-Runs 3` prints the middle of three; `-Count 50000` holds that many instead of finding the count; `-NoBuild` skips the build). Close other programs first. It's a heuristic, not a test: the count varies by about a sixth from run to run, so look into a drop rather than trust one run. Changes to how the game runs record their count before and after. **BunnyBench** (`dotnet run -c Release tools\bunnybench.cs -- --count 50000`) measures the same bunnies with nothing on the screen, in seconds: it times each frame's steps, building the frame, OpenGL drawing it (into a hidden window) and the GPU's part, and counts the garbage collections and bytes allocated (`--steps 2` takes two steps a frame, as after a missed one; `--by-step` adds what each of the game's steps costs; `--profile` times the frames as the editor's Profiler does and prints its costs, the frame's build split by what's drawn; `--no-draw` leaves OpenGL out; `--timeline` keeps rewind snapshots as the editor does while playing and times them as Rewind, with the memory they take and how long copying them out and settling them take; `--workers 1` does everything on one thread, to compare; `--dark` puts the bunnies in the dark among walls of a tilemap without a tileset and crates, lit by a light that casts shadows and one that doesn't). On the RTX 3060 Ti PC (an i7-12700, 20 logical processors), 100,000 bunnies take 1.6 ms of steps, 2.9 ms to build and 2.8 ms to draw (7.4 ms of a 16.7 ms frame; 8.9 ms with two steps), with the GPU's 4.4 ms alongside, and allocate next to nothing a frame (4 bytes at 50,000; 724 before each frame was built into the objects of the one before); before the frame was built and the bunnies' scripts run across the cores, they took 4.4, 10.7 and 2.7 ms (18 ms; 22 ms with two steps, which is why 100,000 settled at 30 frames a second). 50,000 take 0.8, 1.3 and 1.4 ms (3.6 ms; 9.2 before), and before the BunnyMark work took 4.4, 13.8 and 6.9 ms, when drawing made 14 MB of garbage a frame. These are medians of runs alternating before and after, with other programs open: they moved by about 0.1 ms from run to run, the worst frames by a few. It counts the frames the screen shows, as it always did; since the game moves in fixed steps, a frame that falls behind takes two steps the next time, so past the count the frame rate drops off sharply rather than gently, and the count is where the game can no longer catch up after a missed frame: the frame after one takes two steps, and if those and drawing don't fit in a sixtieth of a second the game settles at 30 frames a second. Fixed steps cost the count about 7% (30,600 before, about 28,500 after); drawing between steps costs next to nothing (with one step a frame and the drawing still blended, it held 30,634).
 
-## This website
+**The website**, [griff.games](https://griff.games), is built from `site/` with Astro Starlight (Node 24: `npm ci`, then `npm run dev` serves it at `http://127.0.0.1:4321/`, `npm run build` builds it and `npm run check-links` checks the built site has no broken links; the reference pages are written from the code first by `npm run reference`, which runs `tools/docs.cs` with the .NET SDK, and `npm run build:all` does both). The Site workflow (`.github/workflows/site.yml`) writes the reference on a Windows runner, builds the site, checks its links and deploys it to GitHub Pages on every push to main. Its screenshots are taken from the editor over the MCP (`npm run screenshots`); `site/README.md` says how, and what to set up for the domain.
 
-The site lives in `site/` and is built with [Astro Starlight](https://starlight.astro.build). With Node 24:
+Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, with a breakpoint probe on each line (see [The script editor](/docs/scripting/#the-script-editor)), which makes saving a script take a little longer there (about 50 ms for the Arcade template's five scripts, against 15). Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
-```sh
-cd site
-npm ci
-npm run dev          # http://127.0.0.1:4321/
-npm run build        # into site/dist
-npm run check-links  # every link inside the built site has to lead somewhere
-```
 
-A GitHub Action builds it and deploys it to GitHub Pages on every push to main. [`site/README.md`](https://github.com/srakowski/griff/blob/main/site/README.md) has the rest, including how to take its screenshots again.
-
-The architecture is written up in the [README](https://github.com/srakowski/griff#architecture).
+Building the editor also publishes the game players it exports games with (`dotnet build src/Griff.Editor/Griff.Editor.csproj`), and the tests are `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw. How the repository is laid out is in [Architecture](/docs/architecture/).

@@ -14,7 +14,7 @@ namespace Griff.Scripting;
 /// </summary>
 /// <remarks>
 /// The browser draws sprites and text and reads the keyboard and mouse so far; lights, screen effects, sound, saves and
-/// controllers aren't there yet (see the README's Web section).
+/// controllers aren't there yet (see the exporting guide, site/src/content/docs/docs/exporting.md).
 /// </remarks>
 public static class WebExporter
 {

@@ -5,7 +5,8 @@ Griff's website: an [Astro Starlight](https://starlight.astro.build) site, built
 
 ```
 astro.config.mjs        The site: title, header, sidebar, the theme's CSS and component overrides
-src/content/docs/       The pages: index.mdx is the landing page, docs/ the docs (Markdown, one page a file)
+src/content/docs/       The pages: index.mdx is the landing page, docs/ the guides (Markdown, one page a file),
+                        reference/ the generated reference (git-ignored; see Reference below)
 src/components/         The header's logo and wordmark, the footer, the landing page's cards and screenshots
 src/styles/griff.css    Griff's colours in light and dark, the wordmark's font, the landing page's layout
 src/assets/screens/     The screenshots (made by scripts/screenshots.mjs; see Screenshots below)
@@ -13,18 +14,22 @@ public/                 Served as they are: the logo, the wordmark's font and it
 scripts/                check-links.mjs and screenshots.mjs
 ```
 
+The tool that writes `reference/` is `tools/docs.cs` in the repository's root.
+
 It depends on Astro and Starlight only (and what they bring: `sharp`, which Astro uses for images, makes the
 screenshots). The wordmark is JetBrains Mono ExtraBold, served from `public/fonts/` with its license
 (`JetBrainsMono-OFL.txt`, the SIL Open Font License); nothing is loaded from another site.
 
 ## Preview it
 
-With Node 24 (and npm 11), in this folder:
+With Node 24 (and npm 11) and the .NET SDK `global.json` pins (Windows), in this folder:
 
 ```sh
 npm ci                 # once, and after package-lock.json changes
+npm run reference      # the reference pages, written from the code (once, and when components or commands change)
 npm run dev            # http://127.0.0.1:4321/, reloading as you edit
-npm run build          # the site, into dist/
+npm run build          # the site, into dist/ (the reference has to be there: it says so if not)
+npm run build:all      # npm run reference, then npm run build
 npm run preview        # dist/ at http://127.0.0.1:4321/
 npm run check-links    # after a build: every link inside the site has to lead somewhere
 ```
@@ -34,7 +39,25 @@ that points inside the site (and `#fragments`), and fails if one leads nowhere; 
 deploying. `node scripts/check-links.mjs --external` also asks the servers of the links that leave the site (the
 GitHub links only answer once the repository is public).
 
-Docs are Markdown files in `src/content/docs/docs/`; a new one goes in the sidebar in `astro.config.mjs`.
+Guides are Markdown files in `src/content/docs/docs/`; a new one goes in the sidebar in `astro.config.mjs`.
+
+## Reference
+
+Three sets of pages are written from the code, so a new component or command shows up by itself and none of it is
+typed by hand or kept in git (`src/content/docs/reference/` is git-ignored):
+
+- `reference/components/`: every component, a page each, by category. A page is `component_describe`'s text for it
+  (`ComponentDescription` in `src/Griff/Agent`, from `ComponentRegistry` and the `///` comments), so the site and agents
+  read the same words.
+- `reference/commands.md`: every editor command by menu, with its id, shortcut and `///` summary (the
+  `CommandRegistry` the MCP server turns into tools).
+- `reference/api/`: the scripting API, a page a public type of the `Griff`, `Griff.Input`, `Griff.Runtime`,
+  `Griff.Scenes` and `Griff.Modules.*` namespaces, with its public and protected members and their `///` comments.
+
+`npm run reference` runs `tools/docs.cs` (`dotnet run -p:SkipPlayers=true tools/docs.cs -- --out <folder>`), which
+builds the editor's real services the way `tests/Griff.Editor.Tests` does, so it runs on Windows. The Site workflow
+does it in a `reference` job on a Windows runner (set up with `global.json`'s SDK), passes the pages on as an artifact
+to the `build` job, and the link check then covers them with the guides.
 
 ## Screenshots
 

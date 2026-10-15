@@ -115,7 +115,7 @@ public class ScriptHostTests
     [Fact]
     public void Scripts_CanUseSwitchesInventoriesAndTrails()
     {
-        // The README's puzzle examples, as a script would write them.
+        // The puzzles guide's examples, as a script would write them.
         const string source = """
             public class Vault : Behavior
             {

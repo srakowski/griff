@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths: ['site/**', '.github/workflows/site.yml']
+    paths: ['site/**', '.github/workflows/site.yml', 'tools/docs.cs', 'global.json', 'src/**']
   workflow_dispatch:
 
 # Only what deploying to Pages needs; the build job reads the repository and nothing else.
@@ -19,7 +19,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The reference pages (every component, editor command and scripting type) are written from the code by tools/docs.cs,
+  # which builds the editor's real services, so it needs Windows. The build job takes its output.
+  reference:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Write the reference
+        run: dotnet run -p:SkipPlayers=true tools/docs.cs -- --out site/src/content/docs/reference
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reference
+          path: site/src/content/docs/reference
+          if-no-files-found: error
+
   build:
+    needs: reference
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,6 +53,11 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: reference
+          path: site/src/content/docs/reference
 
       - name: Install
         run: npm ci

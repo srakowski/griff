@@ -1,3 +1,5 @@
 node_modules/
 dist/
 .astro/
+# Written from the code by `npm run reference` (tools/docs.cs); see README.md.
+src/content/docs/reference/

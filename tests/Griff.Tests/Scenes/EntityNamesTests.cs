@@ -118,7 +118,8 @@ public sealed partial class EntityNamesTests
         {
             var relative = Path.GetRelativePath(LayerTests.RepoRoot(), file).Replace(Path.DirectorySeparatorChar, '/');
             if (relative.EndsWith("Scenes/EntityNames.cs", StringComparison.Ordinal) || relative.Contains("/obj/") || relative.Contains("/Diagnostics/") ||
-                relative.StartsWith("src/Griff.Agent/", StringComparison.Ordinal) || relative.StartsWith("src/Griff.Editor/Features/Agent/", StringComparison.Ordinal))
+                relative.StartsWith("src/Griff.Agent/", StringComparison.Ordinal) || relative.StartsWith("src/Griff.Editor/Features/Agent/", StringComparison.Ordinal) ||
+                IsGenreDemoDriver(relative))
                 continue;
             found.AddRange(File.ReadLines(file).Select((line, i) => (line, i)).Where(l => lookup.IsMatch(l.line))
                 .Select(l => $"{relative}:{l.i + 1}: {l.line.Trim()}"));
@@ -126,6 +127,12 @@ public sealed partial class EntityNamesTests
 
         Assert.Empty(found);
     }
+
+    // The demo player's genre parts (Debug only) moved beside their genre's editor; like the rest of Diagnostics, they drive
+    // the editor as a person would, finding entities by the names a demo script gives.
+    private static bool IsGenreDemoDriver(string relative) =>
+        relative.StartsWith("src/Griff.Editor/Genres/", StringComparison.Ordinal) &&
+        (Path.GetFileName(relative).StartsWith("DemoUi.", StringComparison.Ordinal) || relative.EndsWith("Demo.cs", StringComparison.Ordinal));
 
     [GeneratedRegex(@"\b(e|entity|child)\s*=>\s*[a-z]+\.Name\s*(==\s*[a-z]\w*\b(?!\.)|\.Equals\([a-z]\w*\b(?!\.))|\b(entity|entities\[i\])\.Name\s*[!=]=\s*[a-z]\w*\b(?!\.)")]
     private static partial Regex LookupRegex();

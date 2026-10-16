@@ -359,7 +359,7 @@ public class GameModuleTests
     [Fact]
     public void Actions_AreFound_EachInItsModule()
     {
-        Assert.Equal(["Entity.GenerateDungeon"], EntityAction.All.Select(a => a.Id));
+        Assert.Equal(["Entity.GenerateDungeon", "Entity.AddBreakable"], EntityAction.All.Select(a => a.Id));
         Assert.All(EntityAction.All, a => Assert.NotNull(GameModule.Of(a.GetType())));
         Assert.All(EntityAction.All, a => Assert.False(DocComments.Summary(a.GetType()).IsEmpty));
     }

@@ -6,6 +6,15 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
+### Housekeeping
+
+At the user's request (2026-10-15), after a disk check found about 6 GB of builds and test leftovers piled up in
+`%TEMP%` in a few days. It touches only tests, tools and the enhance skill, so it can run beside any lane; it changes
+nothing a user sees, so it needs no demo.
+
+- [ ] Stop builds and tests filling the temp folder in one go: `PlayerSmokeTests`, and every test or tool that runs an exported player (`tools/bunnymark.cs`, `tools/bunnybench.cs`), points `DOTNET_BUNDLE_EXTRACT_BASE_DIR` at a temp folder of its own and deletes it afterwards, since each export's single-file player unpacks its native DLLs (about 8 MB) into a new `%TEMP%\.net\<game>\<hash>` folder (179 had piled up); `tools/web.cs` deletes its `griff-web-*` work folder once the browser it started has exited, retrying while the browser's profile is still locked, and says when it can't (167 were left behind by a silent delete that ran while the browser still held them); the file-based tools (`tools/*.cs` run with `dotnet run`) build inside the checkout (git-ignored) rather than in `%TEMP%\dotnet\runfile`, or the enhance skill's worktree removal clears their builds, so removing a worktree removes them (141 builds, 4 GB, had piled up); and every test that makes a temp folder deletes it, even when it fails.
+  - Check: running both test suites, the smoke test and `tools\web.ps1 -Check` leaves nothing new in `%TEMP%` (say so in the Done note).
+
 ### Architecture: second pass
 
 From the architecture audit of 2026-10-15; the user wants these done right away, ahead of everything else. The first

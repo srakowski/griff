@@ -62,7 +62,7 @@ public sealed class SimulationTests(ITestOutputHelper output)
         scene.Add(Fighter("Enemy", 2, "Enemy", "Player", "Enemy", "Enemies"));
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Hero, Enemy", "Hero, Enemy", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Hero, Enemy", "Hero, Enemy", 0);
         scene.Add(turns);
         return scene;
     }
@@ -82,7 +82,7 @@ public sealed class SimulationTests(ITestOutputHelper output)
         health.InvincibleTime = 0;
         entity.AddComponent<BumpAttack>().Layers = hurts;
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (target, 1);
+        (taker.Team, taker.Actions) = (target, 1);
         var values = entity.AddComponent<TableValues>();
         values.Table = table;
         values.Sets = ["Health.Max = Health", "BumpAttack.Damage = Damage"];

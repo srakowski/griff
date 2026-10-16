@@ -134,6 +134,7 @@ public sealed partial class FieldEditorAuditTests
         Card.Title: Text
         Card.Text: Text
         Card.Kind: Names:Kind(Card)
+        Card.Price: Rows:Counts
         Card.Image: Image
         Card.Font: Names:Font
         Card.Home: Entity
@@ -202,7 +203,7 @@ public sealed partial class FieldEditorAuditTests
         FightingCharacter.ComboOn: Text
         FightingCharacter.History: Text
         Hitboxes.Boxes: FrameBoxes
-        Hitboxes.Team: Names:Kind(Hitbox team)
+        Hitboxes.Team: Names:Kind(Team)
         Hitboxes.Layers: Names:Layer*
         Hitboxes.HitSound: Sound
         Hitboxes.Effect: Names:Prefab
@@ -334,14 +335,14 @@ public sealed partial class FieldEditorAuditTests
         Commander.OrderSound: Sound
         Commander.ReadySound: Sound
         Faction.Team: Names:Kind(Team)
-        Faction.Resources: Rows:Counts
+        Faction.Resources: ItemCounts
         Faction.DefeatMessage: Names:Message
         Fighter.Projectile: Names:Prefab
         Fighter.Sound: Sound
         Opponent.Builds: Names:Prefab*
         Opponent.Army: Names:Prefab*
         Producer.Trains: Names:Prefab*
-        Resource.Kind: Names:Kind(Resource)
+        Resource.Kind: Names:Item
         Unit.Team: Names:Kind(Team)
         Unit.Cost: Rows:Counts
         Unit.Hotkey: Choice

@@ -60,14 +60,14 @@ internal sealed class StrategyTemplate : ProjectTemplate
         var blue = player.AddComponent<Faction>();
         blue.Team = "Player";
         blue.Color = PlayerBlue;
-        blue.Resources = "Gold 400, Wood 150";
+        blue.Resources = ["Gold 400", "Wood 150"];
         scene.Add(player);
 
         var enemy = new Entity("Enemy Team");
         var red = enemy.AddComponent<Faction>();
         red.Team = "Enemy";
         red.Color = EnemyRed;
-        red.Resources = "Gold 400, Wood 150";
+        red.Resources = ["Gold 400", "Wood 150"];
         var opponent = enemy.AddComponent<Opponent>();
         opponent.Workers = 6;
         opponent.Builds = "Farm, Barracks, Tower";

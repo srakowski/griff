@@ -9,7 +9,7 @@ namespace Griff.Modules.Battles;
 /// <see cref="Spell"/> (paid for in <see cref="Mana"/>) or uses one of its <see cref="Items"/>, a potion that heals or a
 /// bomb that hurts. Attacks are softened by the foe's <see cref="Armor"/>; spells and items aren't. Each move uses an
 /// action of its <see cref="TurnTaker"/>, so the turns pass by themselves. The player's fighter moves when its actions
-/// are done (by buttons whose Action is Do, by a <see cref="Trigger"/>, or by its own keys); one on a side the
+/// are done (by buttons whose Action is Do, by a <see cref="Trigger"/>, or by its own keys); one on a team the
 /// <see cref="TurnOrder"/>'s computer plays picks its own moves: it heals when hurt, casts while it has the mana and the
 /// spell hits harder, throws an item that hits harder still, and otherwise attacks.
 /// </summary>
@@ -28,7 +28,8 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 {
     /// <summary>
     /// What it fights, by name, e.g. "Enemy" (or "Knight, Mage" for a party): it goes for the first still standing. Its
-    /// attacks, damaging spells and damaging items hit it.
+    /// attacks, damaging spells and damaging items hit it. Empty fights the first battler standing on another team (its
+    /// turn taker's, or a Team's; see <see cref="Teams"/>).
     /// </summary>
     [EntityName(Many = true)]
     public string? Foe { get; set; } = "Enemy";

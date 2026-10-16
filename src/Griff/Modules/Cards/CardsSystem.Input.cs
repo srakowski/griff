@@ -124,7 +124,7 @@ internal sealed partial class CardsSystem
             var home = !string.IsNullOrWhiteSpace(card.Home) && homes.TryGetValue(card.Home.Trim(), out var h) ? h : zone as Deck;
             (card.BackImage, card.BackColor) = home is null ? (null, CardLook.DefaultBack) : (home.Back, home.BackColor);
             card.HiddenHere = zone is Hand held && HiddenHere(held);
-            card.Unaffordable = zone is Hand from && card.Cost > from.Mana;
+            card.Unaffordable = zone is Hand from && (card.Cost > from.Mana || (!string.IsNullOrWhiteSpace(card.Price) && !Game.CanPay(from.Entity, card.Price)));
             Feel(card, seconds);
         }
 
@@ -162,19 +162,19 @@ internal sealed partial class CardsSystem
         card.HealthSeen = health.Current;
     }
 
-    // A hidden hand of a side this machine's player isn't on (online); at one screen, of a side the computer plays, or with
-    // several people taking turns, of a side whose turn it isn't.
+    // A hidden hand of a team this machine's player isn't on (online); at one screen, of a team the computer plays, or with
+    // several people taking turns, of a team whose turn it isn't.
     private bool HiddenHere(Hand hand)
     {
-        if (!hand.Hidden || hand.Side is not { Length: > 0 } side)
+        if (!hand.Hidden || hand.Team is not { Length: > 0 } side)
             return false;
         if (Game.Net.IsOnline)
-            return !TurnOrder.SameSide(side, Game.Net.LocalPlayer?.Team ?? "");
+            return !Teams.Same(side, Game.Net.LocalPlayer?.Team ?? "");
         if (Game.TurnOrderOf(hand.Entity) is not { } order)
             return false;
         if (order.IsComputer(side))
             return true;
-        return !order.IsTurn(side) && order.SideList.Count(s => !order.IsComputer(s)) > 1;
+        return !order.IsTurn(side) && order.TeamList.Count(s => !order.IsComputer(s)) > 1;
     }
 
     private void Control(List<Hand> hands, List<Deck> decks, List<PlayZone> tables)

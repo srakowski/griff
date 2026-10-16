@@ -63,7 +63,7 @@ public class GridTurnTests
         entity.AddComponent<Body>().GravityScale = 0;
         entity.AddComponent<GridMovement>().StepTime = stepTime;
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, actions);
+        (taker.Team, taker.Actions) = (side, actions);
         _scene.Add(entity);
         return entity;
     }
@@ -199,7 +199,7 @@ public class GridTurnTests
     public void A_press_during_another_persons_turn_is_not_kept_for_the_next()
     {
         AddMap("1111111111", "1........1", "1........1", "1111111111");
-        var order = AddTurns(o => (o.Sides, o.ComputerSides) = ("Blue, Red", ""));
+        var order = AddTurns(o => (o.Teams, o.ComputerTeams) = ("Blue, Red", ""));
         var blue = AddMover("Blue", 1, 1, "Blue");
         var red = AddMover("Red", 1, 2, "Red");
 
@@ -319,7 +319,7 @@ public class GridTurnTests
             entity.AddComponent<Body>().GravityScale = 0;
             entity.AddComponent<GridMovement>().StepTime = 0.1f;
             var taker = entity.AddComponent<TurnTaker>();
-            (taker.Side, taker.Actions) = (side, 1);
+            (taker.Team, taker.Actions) = (side, 1);
             return entity;
         }
 

@@ -3,17 +3,18 @@ using Griff.Scenes;
 namespace Griff.Modules.Tactics;
 
 /// <summary>
-/// A unit in a tactics game, with no code: on its side's turn you pick it, see the cells it can walk to (and the cells it
+/// A unit in a tactics game, with no code: on its team's turn you pick it, see the cells it can walk to (and the cells it
 /// can hit from them), then click one to walk there and click an enemy in reach to attack it. Each turn it moves up to
 /// <see cref="Move"/> cells, around walls and other units, then attacks something <see cref="MinRange"/> to
 /// <see cref="Range"/> steps away for <see cref="Damage"/>, or waits. Give it a <see cref="TurnTaker"/> with 1 action
-/// naming its side: attacking or waiting uses the action, so once every unit on a side has had its go, the turn passes.
-/// A <see cref="TacticsControls"/> in the scene does the picking and draws the ranges. On a side the computer plays (the
-/// turn order's Computer Sides), the computer takes each unit's go in turn, the way its <see cref="Stance"/> says: the
+/// naming its team: attacking or waiting uses the action, so once every unit on a team has had its go, the turn passes.
+/// A <see cref="TacticsControls"/> in the scene does the picking and draws the ranges. On a team the computer plays (the
+/// turn order's Computer Teams), the computer takes each unit's go in turn, the way its <see cref="Stance"/> says: the
 /// best attack it can make (a foe it can finish off first, then the weakest), or a walk toward the nearest foe.
 /// </summary>
 /// <remarks>
-/// Its enemies are the units on other sides (with no turn takers, every other unit), or whatever with <see cref="Health"/>
+/// Its enemies are the units on other teams (with no teams, every other unit) and anything else with a <see cref="Health"/>
+/// on another team (see <see cref="Teams"/>), or whatever with <see cref="Health"/>
 /// is on its <see cref="Layers"/>. Ranges are counted in steps and reach over walls. Units block each other, friend or
 /// foe. In a network game the host moves the units: a player's clicks are sent to it.
 /// </remarks>
@@ -56,7 +57,7 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
     public float RollDamage() => _roll.Roll(Damage);
 
     /// <summary>
-    /// The collision layers it attacks, e.g. "Enemy". Empty attacks the units on other sides (see <see cref="TurnTaker"/>).
+    /// The collision layers it attacks, e.g. "Enemy". Empty attacks the units on other teams (see <see cref="TurnTaker"/>).
     /// </summary>
     [Names(NameKind.Layer, Many = true)]
     public string? Layers { get; set; }
@@ -72,7 +73,7 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
     public float HitStop { get; set; } = 0.06f;
 
     /// <summary>
-    /// How it plays when the computer plays its side (see <see cref="TurnOrder.ComputerSides"/>): Charge goes after the
+    /// How it plays when the computer plays its team (see <see cref="TurnOrder.ComputerTeams"/>): Charge goes after the
     /// nearest foe, Guard stays put until a foe comes within a walk and a hit, Hold never walks and only attacks from
     /// where it stands.
     /// </summary>
@@ -81,18 +82,18 @@ public sealed class TacticsUnit : Component, IGridDriver, ITurnReady, IPlaytestR
 
     /// <summary>
     /// True once it has walked this go and has yet to attack or wait. The game clears it as its go ends and as each of its
-    /// side's turns starts.
+    /// team's turns starts.
     /// </summary>
     [Group("State")]
     [Output("Moved")]
     public bool HasMoved { get; set; }
 
-    /// <summary>True while it can take its go: it's its side's turn (if it takes turns) and it hasn't used its action.</summary>
+    /// <summary>True while it can take its go: it's its team's turn (if it takes turns) and it hasn't used its action.</summary>
     [DoNotSerialize]
     [Output]
     public bool CanAct { get; internal set; }
 
-    /// <summary>True on its side's turn once it has had its go: drawn dimmed until its side's next turn.</summary>
+    /// <summary>True on its team's turn once it has had its go: drawn dimmed until its team's next turn.</summary>
     [DoNotSerialize]
     [Output("Done")]
     public bool IsDone { get; internal set; }
@@ -239,7 +240,7 @@ internal sealed record TacticsRequest(TacticsOrder Order, (int X, int Y)? Cell, 
 
 /// <summary>
 /// Lets players command their <see cref="TacticsUnit"/>s with the mouse, or with a cursor moved by the arrow keys or the
-/// stick: click one of your units whose side's turn it is to pick it, and the cells it can walk to light up in
+/// stick: click one of your units whose team's turn it is to pick it, and the cells it can walk to light up in
 /// <see cref="MoveColor"/>, with the cells it can hit from them in <see cref="AttackColor"/>; hover a cell to see the way
 /// it would go. Click a lit cell to walk there, then an enemy in reach to attack it (or click an enemy straight away to
 /// walk up and hit it), or the unit itself to wait. Right-click (or Cancel) puts it back or lets it go. Hovering any unit

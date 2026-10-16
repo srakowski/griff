@@ -1552,7 +1552,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             sandbox += $"; tool {tools.Current}{(game.ToolFirst is { } first ? $" after {first.Name}" : "")}{(game.Grabbed is { } held ? $" holding {held.Name}" : "")}";
         if (game.Notice is { } notice)
             sandbox += $"; \"{notice}\"";
-        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {game.FactionOf(team)?.Resources}{sandbox}");
+        options.Log($"{line.Command}: {line.Argument} -> mouse {mouse.X:0.0}, {mouse.Y:0.0}; selected {game.Selected.Count} ({string.Join(", ", game.Selected.Select(e => e.Name).Distinct())}); {(game.FactionOf(team) is { } shown ? string.Join(", ", shown.Resources) : "")}{sandbox}");
     }
 
     private Griff.Runtime.Game RunningGame => CurrentGame ?? throw new InvalidOperationException("The game isn't playing.");
@@ -1783,7 +1783,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             var units = game.FindAll<Griff.Modules.Strategy.Unit>().Where(u => Mine(u.Team, f.Team)).ToList();
             var buildings = game.FindAll<Griff.Modules.Strategy.Building>().Count(b => Mine(b.Team, f.Team));
             return $"{f.Team}: {units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Fighter>() is not null)} fighters, " +
-                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Worker>() is not null)} workers, {buildings} buildings, {f.Resources}";
+                   $"{units.Count(u => u.Entity!.GetComponent<Griff.Modules.Strategy.Worker>() is not null)} workers, {buildings} buildings, {string.Join(", ", f.Resources)}";
         }));
 
     private static bool Mine(string? team, string? player) => string.Equals(team?.Trim(), player?.Trim(), StringComparison.OrdinalIgnoreCase);

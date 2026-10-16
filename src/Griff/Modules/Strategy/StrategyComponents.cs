@@ -5,21 +5,26 @@ using Griff.Scenes;
 namespace Griff.Modules.Strategy;
 
 /// <summary>
-/// A side in a strategy game: its name (the <see cref="Unit.Team"/> and <see cref="Building.Team"/> of everything it
-/// owns), its color, and the resources it has to spend. Teams with different names are enemies. A team is beaten when it
-/// has no buildings left.
+/// A team in a strategy game: its name (the <see cref="Unit.Team"/> and <see cref="Building.Team"/> of everything it
+/// owns, the same teams every genre shares, see <see cref="Teams"/>), its color, and the resources it has to spend. Teams
+/// with different names are enemies. A team is beaten when it has no buildings left.
 /// </summary>
 /// <remarks>
-/// Resources are kept as text, "Gold 200, Wood 100", so they show (and can be changed) in the Inspector while the game
-/// runs, and rewind with everything else. Any name works for a resource: whatever a <see cref="Resource"/>'s Kind says.
+/// Resources are items, the one idea every genre shares (see <see cref="Items"/>), kept a row each, "Gold 200", as an
+/// <see cref="Inventory"/> keeps its items, so they show (and can be changed) in the Inspector while the game runs, and
+/// rewind with everything else. They're the team's items: anything else on its team without items of its own (a
+/// platformer hero, a card hand) collects into them and pays from them. Any name works for a resource: whatever a
+/// <see cref="Resource"/>'s Kind or a pickup's Item says.
 /// </remarks>
 [Category("Strategy")]
 [WorksWith(typeof(Opponent), Note = "lets the computer play this team")]
 [ComponentName("Griff.Faction")]
-public sealed class Faction : Component
+[ComponentVersion(2)]
+public sealed class Faction : Component, ITeamMember, IHoldsItems
 {
-    private string? _resources = "Gold 250, Wood 100";
-    private Dictionary<string, int>? _parsed;
+    // Names in the order first added (kept at 0, so the resource bar still shows them), and the rows they read as.
+    private readonly List<(string Name, int Count)> _stock = [("Gold", 250), ("Wood", 100)];
+    private IReadOnlyList<string>? _rows;
 
     /// <summary>The team's name, e.g. "Player" or "Enemy". Units and buildings with this Team belong to it.</summary>
     [Names(NameKind.Kind, Scope = "Team", Defines = true)]
@@ -28,16 +33,38 @@ public sealed class Faction : Component
     /// <summary>The team's color: selection rings, its dots on the minimap.</summary>
     public Color Color { get; set; } = Color.FromBytes(0x4C, 0x9A, 0xFF);
 
-    /// <summary>What it has to spend, e.g. "Gold 250, Wood 100". Starts as what it starts with.</summary>
-    [Counts(NameKind.Kind, Scope = "Resource", Defines = true, What = "Resource")]
-    public string? Resources
+    /// <summary>What it has to spend, a row each, e.g. "Gold 250" and "Wood 100". Starts as what it starts with.</summary>
+    [ItemCounts]
+    public IReadOnlyList<string> Resources
     {
-        get => _resources;
+        get => _rows ??= _stock.Select(s => s.Name + " " + s.Count.ToString(CultureInfo.InvariantCulture)).ToList();
         set
         {
-            _resources = value;
-            _parsed = null;
+            _stock.Clear();
+            _rows = null;
+            foreach (var row in value ?? [])
+            {
+                var (item, count) = Items.ReadOne(row);
+                if (item.Length > 0)
+                    Put(item, Math.Max(0, count + Amount(item)));
+            }
         }
+    }
+
+    // Resources were text, "Gold 250, Wood 100", before they were items a row each.
+    [UpgradeFrom(1)]
+    private static void ResourcesAsRows(SavedData data)
+    {
+        if (data.Get<string>(nameof(Resources)) is not { } text)
+            return;
+        var rows = new List<string>();
+        foreach (var part in text.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (item, count) = Items.ReadOne(part);
+            rows.Add(item + " " + Math.Max(0, count).ToString(CultureInfo.InvariantCulture));
+        }
+
+        data.Set<IReadOnlyList<string>>(nameof(Resources), rows);
     }
 
     /// <summary>The most supply it can ever have, however many farms it builds.</summary>
@@ -57,7 +84,17 @@ public sealed class Faction : Component
 
     /// <summary>How much of <paramref name="kind"/> (e.g. "Gold") it has. Read as "Amount:Gold".</summary>
     [Output(Example = "Gold")]
-    public int Amount(string kind) => Stock().GetValueOrDefault(kind.Trim());
+    public int Amount(string kind)
+    {
+        var name = kind.AsSpan().Trim();
+        foreach (var (item, count) in _stock)
+        {
+            if (item.AsSpan().Equals(name, StringComparison.OrdinalIgnoreCase))
+                return count;
+        }
+
+        return 0;
+    }
 
     /// <summary>How many units its team has left in the scene.</summary>
     [DoNotSerialize]
@@ -73,36 +110,33 @@ public sealed class Faction : Component
     {
         if (Entity?.Scene is not { } scene)
             return 0;
-        var team = Team.AsSpan().Trim();
         var count = 0;
         foreach (var member in scene.ActiveNow<T>())
         {
-            if (teamOf(member).AsSpan().Trim().Equals(team, StringComparison.OrdinalIgnoreCase))
+            if (Teams.Same(teamOf(member), Team))
                 count++;
         }
 
         return count;
     }
 
-    /// <summary>Adds <paramref name="amount"/> of <paramref name="kind"/>, e.g. gold brought back to a town hall.</summary>
+    /// <summary>Adds <paramref name="amount"/> of <paramref name="kind"/>, e.g. gold brought back to a town hall (never below 0).</summary>
     public void Add(string kind, int amount)
     {
         if (string.IsNullOrWhiteSpace(kind) || amount == 0)
             return;
-        var stock = new Dictionary<string, int>(Stock(), StringComparer.OrdinalIgnoreCase);
-        stock[kind.Trim()] = Math.Max(0, stock.GetValueOrDefault(kind.Trim()) + amount);
-        Resources = Costs.Format(stock);
+        Put(kind.Trim(), Math.Max(0, Amount(kind) + amount));
     }
 
     /// <summary>True if it has everything a cost like "150 Gold, 50 Wood" asks for.</summary>
-    public bool CanAfford(string? cost) => Costs.Parse(cost).All(c => Amount(c.Key) >= c.Value);
+    public bool CanAfford(string? cost) => Lacking(cost) is null;
 
     /// <summary>Pays a cost like "150 Gold, 50 Wood" if it can afford it; returns whether it did.</summary>
     public bool Spend(string? cost)
     {
         if (!CanAfford(cost))
             return false;
-        foreach (var (kind, amount) in Costs.Parse(cost))
+        foreach (var (kind, amount) in Items.Totals(cost))
             Add(kind, -amount);
         return true;
     }
@@ -110,54 +144,83 @@ public sealed class Faction : Component
     /// <summary>Gives back a cost it paid, e.g. when training is cancelled.</summary>
     public void Refund(string? cost)
     {
-        foreach (var (kind, amount) in Costs.Parse(cost))
+        foreach (var (kind, amount) in Items.Totals(cost))
             Add(kind, amount);
     }
 
     /// <summary>What it's short of to pay <paramref name="cost"/>, e.g. "Wood", or null if it can pay.</summary>
-    public string? Lacking(string? cost) => Costs.Parse(cost).FirstOrDefault(c => Amount(c.Key) < c.Value).Key;
+    public string? Lacking(string? cost)
+    {
+        foreach (var (kind, amount) in Items.Totals(cost))
+        {
+            if (Amount(kind) < amount)
+                return kind;
+        }
 
-    internal IReadOnlyDictionary<string, int> Stock() => _parsed ??= Costs.Parse(_resources);
+        return null;
+    }
+
+    /// <summary>Its resources and how much of each, in the order it first had them.</summary>
+    public IReadOnlyList<(string Name, int Count)> Stock => _stock;
+
+    string? IHoldsItems.ForTeam => Team;
+
+    bool IHoldsItems.Keeps(string item) => true;
+
+    int IHoldsItems.Count(string item) => Amount(item);
+
+    void IHoldsItems.Add(string item, int count) => Add(item, count);
+
+    bool IHoldsItems.Take(string item, int count)
+    {
+        if (count <= 0 || Amount(item) < count)
+            return false;
+        Add(item, -count);
+        return true;
+    }
+
+    private void Put(string kind, int amount)
+    {
+        _rows = null;
+        for (var i = 0; i < _stock.Count; i++)
+        {
+            if (_stock[i].Name.Equals(kind, StringComparison.OrdinalIgnoreCase))
+            {
+                _stock[i] = (_stock[i].Name, amount);
+                return;
+            }
+        }
+
+        _stock.Add((kind, amount));
+    }
 
     internal void RaiseDefeated() => Defeated?.Invoke(this);
 }
 
-/// <summary>Reads and writes amounts of resources: "150 Gold, 50 Wood" (or "Gold 150").</summary>
+/// <summary>
+/// Hotkey letters, and resources read and written the way <see cref="Items"/> reads every genre's items: "150 Gold, 50
+/// Wood" (or "Gold 150").
+/// </summary>
 public static class Costs
 {
     /// <summary>The keys a unit's or building's Hotkey can be: the letters A to Z.</summary>
     public static IReadOnlyList<string> Letters { get; } = [.. Enumerable.Range('A', 26).Select(c => ((char)c).ToString())];
 
-    /// <summary>The amounts in <paramref name="text"/>, by resource; empty for nothing (or nothing readable).</summary>
+    /// <summary>The amounts in <paramref name="text"/>, by resource; empty for nothing (or nothing readable). See <see cref="Items.Totals"/>.</summary>
     public static Dictionary<string, int> Parse(string? text)
     {
         var amounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(text))
-            return amounts;
-        foreach (var part in text.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var words = part.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length != 2)
-                continue;
-            if (int.TryParse(words[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var first))
-                amounts[words[1]] = amounts.GetValueOrDefault(words[1]) + first;
-            else if (int.TryParse(words[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var second))
-                amounts[words[0]] = amounts.GetValueOrDefault(words[0]) + second;
-        }
-
+        foreach (var (item, count) in Items.Totals(text))
+            amounts[item] = count;
         return amounts;
     }
 
-    /// <summary>"Gold 150, Wood 50": the way a <see cref="Faction"/> keeps its resources.</summary>
+    /// <summary>"Gold 150, Wood 50".</summary>
     public static string Format(IEnumerable<KeyValuePair<string, int>> amounts) =>
         string.Join(", ", amounts.Select(a => $"{a.Key} {a.Value.ToString(CultureInfo.InvariantCulture)}"));
 
-    /// <summary>"150 Gold, 50 Wood": the way a price reads.</summary>
-    public static string Describe(string? cost)
-    {
-        var amounts = Parse(cost);
-        return amounts.Count == 0 ? "Free" : string.Join(", ", amounts.Select(a => $"{a.Value.ToString(CultureInfo.InvariantCulture)} {a.Key}"));
-    }
+    /// <summary>"150 Gold, 50 Wood": the way a price reads (see <see cref="Items.Describe"/>).</summary>
+    public static string Describe(string? cost) => Items.Describe(cost);
 }
 
 /// <summary>What a unit is doing.</summary>
@@ -204,7 +267,7 @@ public enum UnitOrder
 [WorksWith(typeof(Fighter), Note = "so it can fight")]
 [WorksWith(typeof(Worker), Note = "so it can gather and build")]
 [ComponentName("Griff.Unit")]
-public sealed class Unit : Component
+public sealed class Unit : Component, ITeamMember
 {
     // The strategy game that runs it this frame (see StrategySystem), if any.
     internal StrategyState? InGame { get; set; }
@@ -228,7 +291,7 @@ public sealed class Unit : Component
     public int Supply { get; set; } = 1;
 
     /// <summary>What training it costs, e.g. "50 Gold" or "60 Gold, 20 Wood".</summary>
-    [Counts(NameKind.Kind, Scope = "Resource", CountFirst = true, What = "Resource")]
+    [Counts(NameKind.Item, CountFirst = true, What = "Resource")]
     public string? Cost { get; set; } = "50 Gold";
 
     /// <summary>Seconds a <see cref="Producer"/> takes to train it.</summary>
@@ -326,7 +389,7 @@ public sealed class Unit : Component
 [WorksWith(typeof(Health), Note = "so it can be destroyed")]
 [WorksWith(typeof(Fighter), Note = "makes it a tower")]
 [ComponentName("Griff.Building")]
-public sealed class Building : Component, INetState
+public sealed class Building : Component, INetState, ITeamMember
 {
     // The strategy game that runs it this frame (see StrategySystem), if any.
     internal StrategyState? InGame { get; set; }
@@ -350,7 +413,7 @@ public sealed class Building : Component, INetState
 
     /// <summary>What it costs to build, e.g. "150 Gold, 50 Wood".</summary>
     [Group("Building It")]
-    [Counts(NameKind.Kind, Scope = "Resource", CountFirst = true, What = "Resource")]
+    [Counts(NameKind.Item, CountFirst = true, What = "Resource")]
     public string? Cost { get; set; } = "150 Gold";
 
     /// <summary>Seconds a worker takes to put it up.</summary>
@@ -546,8 +609,8 @@ public sealed class Worker : Component
 [ComponentName("Griff.Resource")]
 public sealed class Resource : Component
 {
-    /// <summary>What it gives, e.g. "Gold" or "Wood".</summary>
-    [Names(NameKind.Kind, Scope = "Resource", Defines = true)]
+    /// <summary>What it gives, e.g. "Gold" or "Wood": an item, the same as a pickup's or an inventory's (see <see cref="Items"/>).</summary>
+    [Names(NameKind.Item, Defines = true)]
     public string? Kind { get; set; } = "Gold";
 
     /// <summary>How much is left.</summary>

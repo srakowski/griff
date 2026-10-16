@@ -1,5 +1,5 @@
 title: Tactics units
-intro: Pick a unit, see how far it can walk and hit, then send it in. Two sides take turns, with no code.
+intro: Pick a unit, see how far it can walk and hit, then send it in. Two teams take turns, with no code.
 project: Empty | Skirmish
 
 chapter: Four units on a field | Entity > Genres > Tactics > Tactics Unit
@@ -19,7 +19,7 @@ explain: panel:Hierarchy | Turns and controls | The first unit also brings a tur
 create: Tactics Unit
 rename: Orc
 set: Transform.Position = 8.5, -2.5, 0
-say: The next unit goes on the Red side, so making units one after another makes two even teams.
+say: The next unit goes on the Red team, so making units one after another makes two even teams.
 create: Tactics Unit
 rename: Archer
 set: Transform.Position = 1.5, -3.5, 0
@@ -32,8 +32,8 @@ rename: Goblin
 set: Transform.Position = 8.5, -3.5, 0
 say: And a goblin for Red.
 select: Turns
-set: TurnOrder.ComputerSides =
-explain: field:TurnOrder.ComputerSides | Computer Sides | The computer plays Red to begin with. Clearing Computer Sides makes it two people taking turns at one keyboard.
+set: TurnOrder.ComputerTeams =
+explain: field:TurnOrder.ComputerTeams | Computer Teams | The computer plays Red to begin with. Clearing Computer Teams makes it two people taking turns at one keyboard.
 
 chapter: Blue's turn | Pick, look, walk
 play

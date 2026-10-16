@@ -28,6 +28,10 @@ The map's tiles are also plain text in the Inspector, one row per line and one c
 - **Ladder Tiles** never collide, and players climb them.
 - **Slope Up Tiles** (`/`) and **Slope Down Tiles** (`\`) are 45 degree slopes, solid below the line from corner to corner. Players and enemies walk up and down them without leaving the ground, land on them and jump from them; the tall side is a wall, and the flat bottom is a ceiling. Raycasts see them too, so patrolling enemies walk them.
 
+## Lining up with another map
+
+A tilemap's **Lines Up With** names another tilemap (`Level`) whose cells its own line up with: it takes that map's **Tile Size** and **Shape**, and its top left stays on a corner of that map's cells, moved to the nearest as it's set, as it's dragged in the Scene view and while the game runs (one spawned off the grid snaps onto it). Its tiles and tilesets stay its own. It's how a match-3 or falling-blocks board sits on a platformer level's squares, and with **Solid** ticked its pieces are part of the level (see [One grid](/docs/mashups/#one-grid)).
+
 ## Autotiles
 
 Set **Auto Tiles** to a run of 16 tiles in the tileset (`16-31`, or just `16`) and paint with any of them: each cell shows the piece that joins up with its neighbors from the same run, in the Scene view and the game, so grass edges and cave walls take care of themselves. The run's tiles go in order of which sides join, counting up as 1, right 2, down 4 and left 8: the first is a lone block, the second joins only above, and the last joins on every side.

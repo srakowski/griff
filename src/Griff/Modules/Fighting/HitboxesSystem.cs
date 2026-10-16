@@ -105,14 +105,11 @@ internal sealed class HitboxesSystem : GameSystem
         return false;
     }
 
-    // Teams apart (or no team), not inside one another, and allowed to in a network game.
+    // Not allies (see Teams), not inside one another, and allowed to in a network game.
     private bool Opposes(Hitboxes attacker, Hitboxes target)
     {
         var (a, b) = (attacker.Entity!, target.Entity!);
         if (b.IsPaused || a.IsSelfOrDescendantOf(b) || b.IsSelfOrDescendantOf(a))
-            return false;
-        if (!string.IsNullOrWhiteSpace(attacker.Team) && !string.IsNullOrWhiteSpace(target.Team) &&
-            string.Equals(attacker.Team.Trim(), target.Team.Trim(), StringComparison.OrdinalIgnoreCase))
             return false;
         return Game.CanHurt(a, b);
     }

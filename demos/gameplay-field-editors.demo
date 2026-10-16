@@ -13,19 +13,19 @@ explain: editor:Counter.Format:preview | Reads now | The best goes in after the 
 key: Ctrl+Z
 expectvalue: Score.Counter.Format = Score: {0}
 
-chapter: Names in order | Sides, and a side picked
+chapter: Names in order | Teams, and a team picked
 create: Turn Order
-explain: field:TurnOrder.Sides | Sides | A turn order's sides were names typed with commas between them. Each is a row now, to rename, move up or take out.
-click: editor:TurnOrder.Sides:add
-editorset: TurnOrder.Sides:name:3 = Pirates
-expectvalue: Turns.TurnOrder.Sides = Player, Enemy, Pirates
+explain: field:TurnOrder.Teams | Teams | A turn order's teams were names typed with commas between them. Each is a row now, to rename, move up or take out.
+click: editor:TurnOrder.Teams:add
+editorset: TurnOrder.Teams:name:3 = Pirates
+expectvalue: Turns.TurnOrder.Teams = Player, Enemy, Pirates
 create: Empty
 rename: Captain
 add: Turn Taker
-pick: TurnTaker.Side = Pirates
-expectvalue: Captain.TurnTaker.Side = Pirates
-expectflagged: TurnTaker.Side = none
-explain: field:TurnTaker.Side | Side | A turn taker's side is picked from the sides there are, and flagged when it names none.
+pick: TurnTaker.Team = Pirates
+expectvalue: Captain.TurnTaker.Team = Pirates
+expectflagged: TurnTaker.Team = none
+explain: field:TurnTaker.Team | Team | A turn taker's team is picked from the teams there are, and flagged when it names none.
 
 chapter: Items and what they do | An inventory
 add: Inventory

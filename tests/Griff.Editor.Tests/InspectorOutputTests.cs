@@ -17,7 +17,7 @@ public sealed class InspectorOutputTests
     {
         var scene = new Scene();
         var turns = new Entity("Turns");
-        turns.AddComponent(new TurnOrder { Sides = "Knights, Orcs" });
+        turns.AddComponent(new TurnOrder { Teams = "Knights, Orcs" });
         scene.Add(turns);
         var rounds = new Entity("Rounds");
         rounds.AddComponent(new Counter { Track = "Turns", Output = "Round" });
@@ -50,7 +50,7 @@ public sealed class InspectorOutputTests
 
         output.IsPickerOpen = true;
         Assert.Equal(["Round", "Time Left", "Left:Enemy"], output.Picker!.Matches.Select(c => c.Name));
-        Assert.Equal("Turn Order, a whole number for a side after the colon", output.Picker.Matches.Single(c => c.Name == "Left:Enemy").Detail);
+        Assert.Equal("Turn Order, a whole number for a team after the colon", output.Picker.Matches.Single(c => c.Name == "Left:Enemy").Detail);
         output.Picker.Pick("Time Left");
         Assert.Equal("Time Left", counter.Output);
 

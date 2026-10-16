@@ -35,10 +35,10 @@ create: Turn Order
 explain: menu:Entity | Entity, Gameplay, Turn Order | Turn Order makes the game turn-based. In a scene with grid movers, it sets up a roguelike.
 explain: field:TurnOrder.Between | Between | Turns follow straight on, with no gap between them, and its text counts the turns.
 select: Player
-explain: component:TurnTaker | Turn Taker | Every grid mover got a Turn Taker. The player is on the Player side.
+explain: component:TurnTaker | Turn Taker | Every grid mover got a Turn Taker. The player is on the Player team.
 explain: field:TurnTaker.Actions | Actions | With one action, each step the player takes is their whole turn.
 select: Slime
-explain: component:TurnTaker | Enemy side | The slime and the bat are on the Enemy side, also with one action each: one step, or one swing, a turn.
+explain: component:TurnTaker | Enemy team | The slime and the bat are on the Enemy team, also with one action each: one step, or one swing, a turn.
 
 chapter: Everything moves when you move | Step, and the dungeon answers
 play

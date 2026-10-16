@@ -283,7 +283,7 @@ public sealed partial class Game
     // What's in the cell it bumped into that it can hurt: a grid mover, or anything else with health standing there.
     private Entity? BumpTarget(BumpAttack bump, GridWalls walls, GridCells grid, (int X, int Y) cell)
     {
-        bool Hurtable(Entity e) => e != bump.Entity && Health.Of(e) is { IsDead: false } && bump.Hurts(e.GetComponent<Collider>()?.Layer);
+        bool Hurtable(Entity e) => e != bump.Entity && Health.Of(e) is { IsDead: false } && bump.Hurts(e.GetComponent<Collider>()?.Layer) && CanHurt(bump.Entity, e);
         if (walls.MoverIn(cell) is { } mover)
             return Hurtable(mover) ? mover : null;
         return Scene.Entities.Where(e => e.IsActive)
@@ -327,7 +327,7 @@ public sealed partial class Game
             return;
         var attacker = Scene.Entities.Where(e => e.IsActive)
             .FirstOrDefault(e => e.GetComponent<BumpAttack>() is not null && NetSession.OwnerIdOf(e) == player.Id);
-        if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer))
+        if (attacker?.GetComponent<BumpAttack>() is { } bump && bump.Hurts(victim.GetComponent<Collider>()?.Layer) && CanHurt(attacker, victim))
             HitWithBump(bump, victim);
     }
 

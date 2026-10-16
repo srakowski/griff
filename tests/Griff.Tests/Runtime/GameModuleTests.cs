@@ -104,7 +104,7 @@ public class GameModuleTests
 
         Assert.Equal("Blue Unit", unit.Name);
         Assert.NotNull(unit.GetComponent<TacticsUnit>());
-        Assert.Equal("Blue", unit.GetComponent<TurnTaker>()!.Side);
+        Assert.Equal("Blue", unit.GetComponent<TurnTaker>()!.Team);
         Assert.NotNull(_scene.FindNamed("Turns")?.GetComponent<TurnOrder>());
         Assert.NotNull(_scene.FindNamed("End Turn")?.GetComponent<Button>());
         Assert.NotNull(_scene.FindNamed("Tactics")?.GetComponent<TacticsControls>());
@@ -182,14 +182,14 @@ public class GameModuleTests
     {
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.Between) = ("Blue, Red", 0);
+        (order.Teams, order.Between) = ("Blue, Red", 0);
         _scene.Add(turns);
         var blue = new Entity("Blue");
-        blue.AddComponent<TurnTaker>().Side = "Blue";
+        blue.AddComponent<TurnTaker>().Team = "Blue";
         var ready = blue.AddComponent<TurnCounter>();
         _scene.Add(blue);
         var red = new Entity("Red");
-        red.AddComponent<TurnTaker>().Side = "Red";
+        red.AddComponent<TurnTaker>().Team = "Red";
         _scene.Add(red);
         var game = new Game(_scene, _input);
 

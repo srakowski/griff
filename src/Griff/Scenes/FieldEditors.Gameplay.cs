@@ -232,19 +232,11 @@ public sealed class ItemCountsAttribute : FieldEditorAttribute
     public override string Describe() =>
         "Items and how many of each, one a line: the item's name then how many, e.g. \"Key 2\" (just \"Key\" is one). The Inspector lists them a row each, the item picked from those the game gives.";
 
-    /// <summary>A line read: the item and how many.</summary>
-    public static (string Item, int Count) Read(string line)
-    {
-        var text = line.Trim();
-        var space = text.LastIndexOf(' ');
-        return space > 0 && int.TryParse(text[(space + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
-            ? (text[..space].Trim(), count)
-            : (text, 1);
-    }
+    /// <summary>A line read: the item and how many (see <see cref="Items.ReadOne"/>).</summary>
+    public static (string Item, int Count) Read(string line) => Items.ReadOne(line);
 
     /// <summary>A line written: "Key 2", or "Key" for one.</summary>
-    public static string Write(string item, int count) =>
-        count == 1 ? item.Trim() : string.Create(CultureInfo.InvariantCulture, $"{item.Trim()} {count}");
+    public static string Write(string item, int count) => Items.Write(item, count);
 }
 
 /// <summary>

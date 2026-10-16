@@ -173,7 +173,7 @@ internal sealed class RpgStatsTemplate : ProjectTemplate
         var turns = new Entity("Turns");
         turns.Transform.Position = new Vector3(0, 4.9f, 0);
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between, order.Format, order.EndAction) = ($"{Hero}, {Enemy}", Enemy, 0.5f, "Round {1}: {0}'s turn", null);
+        (order.Teams, order.ComputerTeams, order.Between, order.Format, order.EndAction) = ($"{Hero}, {Enemy}", Enemy, 0.5f, "Round {1}: {0}'s turn", null);
         var turnText = turns.AddComponent<Text>();
         (turnText.Value, turnText.Size, turnText.Color, turnText.Order) = ("Round 1: Hero's turn", 0.55f, Light, 150);
         scene.Add(turns);
@@ -216,7 +216,7 @@ internal sealed class RpgStatsTemplate : ProjectTemplate
         else
             battler.ThinkTime = 0;
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (name, 1);
+        (taker.Team, taker.Actions) = (name, 1);
 
         var values = entity.AddComponent<TableValues>();
         (values.Table, values.Row) = (table, row);
@@ -363,7 +363,7 @@ internal sealed class RpgStatsTemplate : ProjectTemplate
 
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ($"{Hero}, {Enemy}", $"{Hero}, {Enemy}", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ($"{Hero}, {Enemy}", $"{Hero}, {Enemy}", 0);
         scene.Add(turns);
 
         scene.Add(Label("Arena Note", new Vector2(0, 3.5f),

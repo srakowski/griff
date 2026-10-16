@@ -25,7 +25,7 @@ public sealed class BattlerTests
         var battler = entity.AddComponent<Battler>();
         (battler.Foe, battler.ThinkTime, battler.AttackAction) = (foe, 0, null);
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
+        (taker.Team, taker.Actions) = (side, 1);
         return entity;
     }
 
@@ -38,7 +38,7 @@ public sealed class BattlerTests
         scene.Add(enemy);
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Hero, Enemy", computer, 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Hero, Enemy", computer, 0);
         scene.Add(turns);
         var game = new Game(scene, _input);
         Run(game, Frame * 2);
@@ -55,6 +55,17 @@ public sealed class BattlerTests
     }
 
     private static Health HealthOf(Battler battler) => battler.Entity!.GetComponent<Health>()!;
+
+    // With no Foe named, a battler fights the first battler standing on another team.
+    [Fact]
+    public void WithNoFoe_ItFightsABattlerOnAnotherTeam()
+    {
+        var (game, hero, enemy) = Duel(computer: "");
+        (hero.Foe, hero.Damage) = ("", 5);
+        hero.Attack();
+        Run(game, Frame * 2);
+        Assert.Equal(15, HealthOf(enemy).Current);
+    }
 
     [Fact]
     public void AnAttack_IsSoftenedByArmor_AndPassesTheTurn()

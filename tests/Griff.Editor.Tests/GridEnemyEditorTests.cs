@@ -81,12 +81,12 @@ public sealed class GridEnemyEditorTests : IDisposable
         Assert.Equal(0, order.Between);
         Assert.Equal("Turn {1}", order.Format);
         Assert.Equal("Wait", Assert.Single(turns.Children).GetComponent<Text>()!.Value);
-        Assert.Equal(("Player", 1), (player.GetComponent<TurnTaker>()!.Side, player.GetComponent<TurnTaker>()!.Actions));
-        Assert.Equal(("Enemy", 1), (enemy.GetComponent<TurnTaker>()!.Side, enemy.GetComponent<TurnTaker>()!.Actions));
+        Assert.Equal(("Player", 1), (player.GetComponent<TurnTaker>()!.Team, player.GetComponent<TurnTaker>()!.Actions));
+        Assert.Equal(("Enemy", 1), (enemy.GetComponent<TurnTaker>()!.Team, enemy.GetComponent<TurnTaker>()!.Actions));
 
         // A grid enemy made now takes turns too.
         var another = Create("Entity.CreateGridEnemy");
-        Assert.Equal(("Enemy", 1), (another.GetComponent<TurnTaker>()!.Side, another.GetComponent<TurnTaker>()!.Actions));
+        Assert.Equal(("Enemy", 1), (another.GetComponent<TurnTaker>()!.Team, another.GetComponent<TurnTaker>()!.Actions));
 
         // Undoing the turn order takes the turn takers it gave out with it.
         document.History.Undo();

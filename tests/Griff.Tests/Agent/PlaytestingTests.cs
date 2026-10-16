@@ -190,7 +190,7 @@ public class PlaytestingTests
         scene.Add(level);
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides) = ("Blue, Red", "");
+        (order.Teams, order.ComputerTeams) = ("Blue, Red", "");
         scene.Add(turns);
         var controls = new Entity("Tactics").AddComponent<TacticsControls>();
         scene.Add(controls.Entity!);
@@ -204,7 +204,7 @@ public class PlaytestingTests
             unit.AddComponent<Health>();
             unit.AddComponent<TacticsUnit>().Move = 1;
             var taker = unit.AddComponent<TurnTaker>();
-            (taker.Side, taker.Actions) = (side, 1);
+            (taker.Team, taker.Actions) = (side, 1);
             scene.Add(unit);
             return unit;
         }

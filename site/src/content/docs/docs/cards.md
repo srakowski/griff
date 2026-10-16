@@ -45,7 +45,7 @@ A **Play Zone** is a place on the table, **Size** across, drawn in its **Color**
 
 ## Turns, focus and sides
 
-Give a hand a **Turn Taker** naming its side and it's played only on its side's turn: with **Actions** (`1`), each card played uses one, and once they're used the turn passes. A hand on a side the turn order's **Computer Sides** names isn't played with the mouse or keys. **Hidden** shows a hand's faces only to its own side: at one screen, the computer's hand is drawn face down, and with two people taking turns at one screen (`Blue, Red`, no Computer Sides) each hand is face down while it isn't its side's turn, so they can pass the keyboard without peeking. Untick a hand's **Controllable** (or **Focus** something else) and it ignores the mouse and keys while its actions and scripts still work, so a card game can sit in a corner of another game (see [Mixing genres](/docs/mashups/)).
+Give a hand a **Turn Taker** naming its team and it's played only on its team's turn: with **Actions** (`1`), each card played uses one, and once they're used the turn passes. A hand on a team the turn order's **Computer Teams** names isn't played with the mouse or keys. **Hidden** shows a hand's faces only to its own team: at one screen, the computer's hand is drawn face down, and with two people taking turns at one screen (`Blue, Red`, no Computer Teams) each hand is face down while it isn't its side's turn, so they can pass the keyboard without peeking. Untick a hand's **Controllable** (or **Focus** something else) and it ignores the mouse and keys while its actions and scripts still work, so a card game can sit in a corner of another game (see [Mixing genres](/docs/mashups/)).
 
 ## Card effects
 
@@ -60,7 +60,7 @@ A **Card Effect** on a card says what it does, with no code. Give a card one for
 
 Its **Target** is whom it's done to: the **Opponent** (the other side's hero, and their hand for a discard), **Self** (your own hero and hand), a **Chosen** card or character the player picks as they play it, **All Foes**, **All Friends** or **Everyone**. **When** it happens: as the card is **Played** (the usual), **Drawn** (a curse that hurts you as it comes), **Discarded**, or **Each Turn**: as each of its side's turns starts while it's on the table, a creature that strikes every turn (it lunges at what it strikes, and its hand's **Said** says what it did: "Wolf: 2 damage to Red Hero.").
 
-A side's life is its hero's Health: the entity the hand's **Hero** names, or with none, the hand itself if it has a Health, or the first character with a Health and a **Turn Taker** on the hand's side. A card on the table with a Health of its own is a creature: effects can target it, and when it dies it goes to its zone's discard pile, mended for the next time it's played (untick its Health's **Destroy On Death**, or it's gone for good). Damage from cards always lands, even while a Health can't be hurt after its last hit, so two quick cards both count. Whose side a creature is on is the hand it was played from (its **Played By**).
+A side's life is its hero's Health: the entity the hand's **Hero** names, or with none, the hand itself if it has a Health, or the first character with a Health on the hand's team (its **Turn Taker**'s, or a **Team**'s). A card on the table with a Health of its own is a creature: effects can target it, and when it dies it goes to its zone's discard pile, mended for the next time it's played (untick its Health's **Destroy On Death**, or it's gone for good). Damage from cards always lands, even while a Health can't be hurt after its last hit, so two quick cards both count. Whose side a creature is on is the hand it was played from (its **Played By**).
 
 ### Choosing a target
 
@@ -68,7 +68,7 @@ A card whose effect targets **Chosen** waits to be aimed once it's let go on a p
 
 ## Mana
 
-A hand's **Mana** pays its cards' costs: a card that costs more than it has left can't be played, and its cost is shown dimmed. The hand fills back up to its **Max Mana** as each of its side's turns starts (with a Turn Order), and **Mana Growth** adds to Max Mana each turn up to **Mana Limit**: Max Mana 0 and Mana Growth 1 starts at one and adds a crystal a turn. Max Mana 3 with no growth is the same three every turn. A hand with mana shows it in a blue gem beside it, "2/3", and its Mana and Max Mana are outputs for a Text or a Bar. Its **Gain Mana** action gives it more (picking up a coin in another part of the game).
+A hand's **Mana** pays its cards' costs: a card that costs more than it has left can't be played, and its cost is shown dimmed. A card's **Price** (`2 Gold`) is what else it costs, items paid from the hand's team's (an **Inventory** whose For Team is its team, or its strategy faction's gold; see [Items and resources](/docs/mashups/#items-and-resources)), and mana is an item too: `Mana` a teammate picks up goes into the hand. The hand fills back up to its **Max Mana** as each of its side's turns starts (with a Turn Order), and **Mana Growth** adds to Max Mana each turn up to **Mana Limit**: Max Mana 0 and Mana Growth 1 starts at one and adds a crystal a turn. Max Mana 3 with no growth is the same three every turn. A hand with mana shows it in a blue gem beside it, "2/3", and its Mana and Max Mana are outputs for a Text or a Bar. Its **Gain Mana** action gives it more (picking up a coin in another part of the game).
 
 ## Cards from a table
 
@@ -84,7 +84,7 @@ Creatures come from the same table with a **Prefab** column: a `Creature` prefab
 
 ## Playing against the computer
 
-A hand on a side its Turn Order's **Computer Sides** names is played by the computer on its turn, from its hidden hand. It takes its **Think Time** before each play, the last half of it showing the card it's about to play lifted out of its hand (and, for a chosen target, a line to what it's aiming at), so the player can follow what it does. It plays by a rule you can predict:
+A hand on a team its Turn Order's **Computer Teams** names is played by the computer on its turn, from its hidden hand. It takes its **Think Time** before each play, the last half of it showing the card it's about to play lifted out of its hand (and, for a chosen target, a line to what it's aiming at), so the player can follow what it does. It plays by a rule you can predict:
 
 1. a card that finishes off the opponent, if it has one;
 2. its healing, once its hero is below **Heal Below** of its health (it keeps its healing cards until then);

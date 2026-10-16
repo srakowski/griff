@@ -4,7 +4,7 @@ namespace Griff.Modules.Tactics;
 
 /// <summary>
 /// Turn-based tactics: units on a grid, picked and sent to a cell in reach or set on a foe, side by side in turns
-/// (<see cref="TacticsUnit"/>, <see cref="TacticsControls"/>), the computer playing a side, the Tactics template, and
+/// (<see cref="TacticsUnit"/>, <see cref="TacticsControls"/>), the computer playing a team, the Tactics template, and
 /// Create Tactics Unit in the Entity menu.
 /// </summary>
 public sealed class TacticsModule : GameModule

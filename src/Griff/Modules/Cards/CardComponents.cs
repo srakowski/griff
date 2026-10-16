@@ -57,11 +57,19 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     public string? Kind { get; set; }
 
     /// <summary>
-    /// Mana it costs to play, paid from the hand's Mana (which refills as each of its side's turns starts): a card that
+    /// Mana it costs to play, paid from the hand's Mana (which refills as each of its team's turns starts): a card that
     /// costs more than the hand has can't be played. Shown in its top-right corner. 0 is free.
     /// </summary>
     [Output]
     public int Cost { get; set; }
+
+    /// <summary>
+    /// What else it costs to play, beside its mana: items, e.g. "2 Gold", paid from the items of whoever plays it (an
+    /// <see cref="Inventory"/> on the hand or the entity it's inside, or its team's: a strategy faction's gold, coins a
+    /// teammate picked up; see <see cref="Items"/>). A card whose price can't be paid can't be played. Empty costs nothing more.
+    /// </summary>
+    [Counts(NameKind.Item, CountFirst = true)]
+    public string? Price { get; set; }
 
     /// <summary>The color of its face.</summary>
     [Group("Look")]
@@ -188,7 +196,7 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     // Drawn as part of its deck's pile rather than by itself.
     internal bool InPile { get; set; }
 
-    // Shown face down on this machine: in a hidden hand of a side this player isn't on.
+    // Shown face down on this machine: in a hidden hand of a team this player isn't on.
     internal bool HiddenHere { get; set; }
 
     // Lifted out of its hand by the computer, about to be played: sent, so every player sees what's coming.
@@ -220,7 +228,7 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     // Showing its back (here): face down, or hidden from this machine's player.
     internal bool ShowsBack => !FaceUp || HiddenHere;
 
-    // Each time its effects go off by themselves on the table (a creature striking as its side's turn starts), and at what
+    // Each time its effects go off by themselves on the table (a creature striking as its team's turn starts), and at what
     // (by name): sent, so every player sees it strike.
     [Sent]
     internal int Strikes { get; set; }
@@ -323,14 +331,14 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
 
     // ----- Networking and playtesting -----
 
-    // A card resting in a face-down deck is nobody's business; one in a hidden hand is only its side's.
+    // A card resting in a face-down deck is nobody's business; one in a hidden hand is only its team's.
     bool INetSecret.HiddenFrom(int player, string team)
     {
         if (Entity?.Parent is not { } parent)
             return false;
         if (parent.GetComponent<Deck>() is { FaceUp: false } && Resting)
             return true;
-        return parent.GetComponent<Hand>() is { Hidden: true } hand && hand.Side is { Length: > 0 } side && !TurnOrder.SameSide(side, team);
+        return parent.GetComponent<Hand>() is { Hidden: true } hand && hand.Team is { Length: > 0 } side && !Teams.Same(side, team);
     }
 
     // Where it is: ", in Hand (2 of 5)", ", in Deck (top)", ", on Table", and whether it's face down.

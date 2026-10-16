@@ -3,7 +3,7 @@ using Griff.Scenes;
 
 namespace Griff.Modules.Cards;
 
-// The computer playing a hand on its turn order's Computer Sides: it thinks, lifts the card it's going to play out of its
+// The computer playing a hand on its turn order's Computer Teams: it thinks, lifts the card it's going to play out of its
 // hand so the player can see it coming, plays it, and once it has nothing it wants to play, ends its turn. It picks by a
 // rule anyone can follow (see Choose), with nothing left to chance, so a seeded game plays the same every time.
 internal sealed partial class CardsSystem
@@ -24,7 +24,7 @@ internal sealed partial class CardsSystem
         }
 
         // On its turn only, once it's dealt and the turn has begun.
-        if (Game.Waiting(entity) || Game.TurnOrderOf(entity) is not { } order || !order.IsTurn(hand.Side) || hand.ToDraw > 0 || Time.Delta <= 0)
+        if (Game.Waiting(entity) || Game.TurnOrderOf(entity) is not { } order || !order.IsTurn(hand.Team) || hand.ToDraw > 0 || Time.Delta <= 0)
         {
             Unready(hand);
             hand.ThinkLeft = -1;
@@ -70,9 +70,9 @@ internal sealed partial class CardsSystem
         (hand.Readied, hand.ReadiedZone, hand.ReadiedTarget) = (null, null, null);
     }
 
-    // A hand on a side its turn order's computer plays.
+    // A hand on a team its turn order's computer plays.
     private bool ComputerPlays(Hand hand) =>
-        hand.Side is { Length: > 0 } side && Game.TurnOrderOf(hand.Entity) is { } order && order.IsComputer(side);
+        hand.Team is { Length: > 0 } side && Game.TurnOrderOf(hand.Entity) is { } order && order.IsComputer(side);
 
     /// <summary>
     /// The computer's play, by a rule anyone can follow: a card that finishes the opponent off; its healing when its hero is

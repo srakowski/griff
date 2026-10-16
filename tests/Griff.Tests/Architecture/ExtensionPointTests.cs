@@ -12,7 +12,9 @@ namespace Griff.Tests.Architecture;
 /// switches know nothing of what they set off: a component names its actions ([Action]) and what a switch powers
 /// ([Powered]), so the code that finds and does them names no component but the trigger and scope it runs. And counters,
 /// bars, texts and wires know nothing of what they read: a component names its outputs ([Output]), so the code that
-/// finds and reads them names none.
+/// finds and reads them names none. The ideas every genre shares know no genre either: a team is whatever a component
+/// says it's on (ITeamMember), items are whatever holds them (IHoldsItems), so the code that finds a team or pays a cost
+/// names no component but the core's own Team.
 /// </summary>
 public sealed class ExtensionPointTests
 {
@@ -27,6 +29,10 @@ public sealed class ExtensionPointTests
     [InlineData("Scenes/OutputReader.cs", new string[0])]
     [InlineData("Scenes/Readout.cs", new string[0])]
     [InlineData("Editing/OutputNames.cs", new string[0])]
+
+    [InlineData("Scenes/Teams.cs", new[] { "Team" })]
+    [InlineData("Scenes/Items.cs", new string[0])]
+    [InlineData("Scenes/Tilemap.Grid.cs", new[] { "Tilemap", "Transform" })]
 
     // A wire reads any output by name; only the wiring parts' own inputs are named.
     [InlineData("Modules/Contraptions/WirePorts.cs", new[] { "WireGate", "WireLamp", "Switch", "WireDisplay", "Light" })]

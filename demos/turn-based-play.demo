@@ -1,5 +1,5 @@
 title: Turn-based play
-intro: Sides that take turns, with no code, while the rest of the game runs in real time.
+intro: Teams that take turns, with no code, while the rest of the game runs in real time.
 project: Platformer | Taking Turns
 
 chapter: A turn order | Entity, Gameplay, Turn Order
@@ -7,21 +7,21 @@ deselect
 create: Turn Order
 explain: menu:Entity | Entity, Gameplay, Turn Order | The Entity menu makes a game turn-based: Turn Order, under Gameplay.
 explain: component:TurnOrder | Turn Order | It holds the turns. Its text in the corner says whose turn it is, and it comes with an End Turn button.
-explain: field:TurnOrder.Sides | Sides | The sides take turns in this order: the player, then the enemy. Two people at one keyboard could be blue and red.
-explain: field:TurnOrder.ComputerSides | Computer Sides | The computer plays the enemy, so its turn ends by itself, after its Computer Turn Time.
+explain: field:TurnOrder.Teams | Teams | The teams take turns in this order: the player, then the enemy. Two people at one keyboard could be blue and red.
+explain: field:TurnOrder.ComputerTeams | Computer Teams | The computer plays the enemy, so its turn ends by itself, after its Computer Turn Time.
 set: TurnOrder.ComputerTurnTime = 2
 
-chapter: Who takes turns | A Turn Taker on each side
+chapter: Who takes turns | A Turn Taker on each team
 select: Player
 browse: TurnTaker
-explain: catalog:docs | Turn Taker | Whatever acts gets a Turn Taker, naming its side.
+explain: catalog:docs | Turn Taker | Whatever acts gets a Turn Taker, naming its team.
 click: catalog:add
-explain: component:TurnTaker | Player | The player is on the Player side.
+explain: component:TurnTaker | Player | The player is on the Player team.
 select: Slime
 browse: TurnTaker
 click: catalog:add
-set: TurnTaker.Side = Enemy
-explain: field:TurnTaker.Side | Enemy | And the slime is on the Enemy side. Off its turn, its patrol holds still.
+set: TurnTaker.Team = Enemy
+explain: field:TurnTaker.Team | Enemy | And the slime is on the Enemy team. Off its turn, its patrol holds still.
 play
 wait: 0.5
 hold: Right 1

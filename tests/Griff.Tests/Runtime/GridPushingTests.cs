@@ -320,7 +320,7 @@ public class GridPushingTests
         var (crate, _) = AddCrate(2, 1);
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.Between) = ("Player, Enemy", 0);
+        (order.Teams, order.Between) = ("Player, Enemy", 0);
         _scene.Add(turns);
         Run(Frame);
         var round = order.Round;

@@ -307,7 +307,7 @@ internal static class StrategyDrawing
         yield return Quad(hud.TopBar.Center, new Vector2(hud.TopBar.Width, hud.TopBar.Height), HudBack);
         yield return Quad(new Vector2(hud.TopBar.Center.X, hud.TopBar.Y), new Vector2(hud.TopBar.Width, thickness), HudEdge);
         var faction = strategy.FactionOf(team);
-        var stock = faction is null ? "" : string.Join("     ", faction.Stock().Select(s => $"{s.Key} {s.Value.ToString(CultureInfo.InvariantCulture)}"));
+        var stock = faction is null ? "" : string.Join("     ", faction.Stock.Select(s => $"{s.Name} {s.Count.ToString(CultureInfo.InvariantCulture)}"));
         var supply = $"Supply {strategy.SupplyUsed(team)} / {strategy.SupplyProvided(team)}";
         yield return Label($"{stock}     {supply}", new Vector2(hud.TopBar.Right - 2 * u, hud.TopBar.Center.Y), 2.6f * u, HudText, TextAlign.Right);
         if (faction is not null)

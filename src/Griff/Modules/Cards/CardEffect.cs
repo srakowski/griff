@@ -28,7 +28,7 @@ namespace Griff.Modules.Cards;
 [ComponentName("Griff.CardEffect")]
 public sealed class CardEffect : Component, ICardPart
 {
-    /// <summary>When it happens: as the card is played (the usual), drawn or discarded, or as each of its side's turns starts while it's on the table.</summary>
+    /// <summary>When it happens: as the card is played (the usual), drawn or discarded, or as each of its team's turns starts while it's on the table.</summary>
     public CardWhen When { get; set; }
 
     /// <summary>
@@ -236,7 +236,7 @@ public enum CardWhen
     /// <summary>As it's put on a discard pile.</summary>
     Discarded,
 
-    /// <summary>As each of its side's turns starts, while it's on the table: a creature that strikes every turn.</summary>
+    /// <summary>As each of its team's turns starts, while it's on the table: a creature that strikes every turn.</summary>
     EachTurn,
 }
 
@@ -252,7 +252,7 @@ public enum CardTarget
     /// <summary>A card on the table or a character with a Health that the player picks as they play it (the computer picks its own).</summary>
     Chosen,
 
-    /// <summary>Every foe: the other sides' heroes, characters and cards on the table.</summary>
+    /// <summary>Every foe: the other teams' heroes, characters and cards on the table.</summary>
     AllFoes,
 
     /// <summary>Every friend: its own side's hero, characters and cards on the table.</summary>

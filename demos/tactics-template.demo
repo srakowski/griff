@@ -11,8 +11,8 @@ explain: component:TacticsUnit | An orc | Every fighter is a Tactics Unit: how f
 select: Goblin 2
 explain: field:TacticsUnit.Stance | Stance | This goblin archer holds its ground on the rocks, shooting whatever comes within three cells.
 select: Turns
-explain: field:TurnOrder.ComputerSides | The computer plays Red | The turn order has the computer play Red.
-explain: field:TurnOrder.DefeatMessage | Defeat Message | When a side loses its last unit, the turn order sends a message: Red Defeated opens the Victory panel, Blue Defeated the Defeat panel.
+explain: field:TurnOrder.ComputerTeams | The computer plays Red | The turn order has the computer play Red.
+explain: field:TurnOrder.DefeatMessage | Defeat Message | When a team loses its last unit, the turn order sends a message: Red Defeated opens the Victory panel, Blue Defeated the Defeat panel.
 
 chapter: A round | You, then the computer
 play

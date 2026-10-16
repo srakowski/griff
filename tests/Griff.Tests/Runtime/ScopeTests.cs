@@ -189,14 +189,14 @@ public sealed class ScopeTests
     {
         var room = Room(name, at, size);
         var order = room.AddComponent<TurnOrder>();
-        (order.Within, order.Between, order.ComputerSides, order.Sides) = (within, 0, "", "Red, Blue");
+        (order.Within, order.Between, order.ComputerTeams, order.Teams) = (within, 0, "", "Red, Blue");
         return order;
     }
 
     private TurnTaker Taker(string name, string side, Vector2 at)
     {
         var taker = Add(name, at).AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
+        (taker.Team, taker.Actions) = (side, 1);
         return taker;
     }
 
@@ -236,7 +236,7 @@ public sealed class ScopeTests
     {
         var west = Turns("West", "West", new Vector2(-10, 0), new Vector2(8, 8));
         var east = Turns("East", "East", new Vector2(10, 0), new Vector2(8, 8));
-        west.Sides = east.Sides = "Red, Blue";
+        west.Teams = east.Teams = "Red, Blue";
         Taker("West Red", "Red", new Vector2(-10, 0)).Actions = 0;
         Taker("West Blue", "Blue", new Vector2(-9, 0)).Actions = 0;
         Taker("East Red", "Red", new Vector2(10, 0)).Actions = 0;
@@ -261,7 +261,7 @@ public sealed class ScopeTests
         (west.TurnTime, west.Format) = (60, "{0}'s turn, round {1} ({2})");
         Turns("East", "East", new Vector2(10, 0), new Vector2(8, 8));
         var whole = Add("Whole").AddComponent<TurnOrder>();
-        (whole.Sides, whole.ComputerSides) = ("Player, Enemy", "Enemy");
+        (whole.Teams, whole.ComputerTeams) = ("Player, Enemy", "Enemy");
         for (var i = 0; i < 4; i++)
         {
             Taker($"West {i}", i % 2 == 0 ? "Red" : "Blue", new Vector2(-10 + i * 0.5f, 0)).Actions = 0;

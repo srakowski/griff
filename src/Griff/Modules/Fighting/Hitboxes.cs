@@ -27,7 +27,7 @@ namespace Griff.Modules.Fighting;
 [WorksWith(typeof(Body), Note = "knockback sends it flying")]
 [WorksWith(typeof(Attack), Note = "its action plays the Attack clip, whose frames hit")]
 [ComponentName("Griff.Hitboxes")]
-public sealed class Hitboxes : Component, IPlaytestReport
+public sealed class Hitboxes : Component, IPlaytestReport, ITeamMember
 {
     private IReadOnlyList<string> _boxes = [];
     private IReadOnlyList<FrameBox> _parsed = [];
@@ -53,8 +53,12 @@ public sealed class Hitboxes : Component, IPlaytestReport
         }
     }
 
-    /// <summary>Its side: its hitboxes hit the hurtboxes of other teams only, so teammates don't hit each other. Empty hits anyone else.</summary>
-    [Names(NameKind.Kind, Scope = "Hitbox team", Defines = true)]
+    /// <summary>
+    /// Its team, the one every genre shares (see <see cref="Teams"/>): its hitboxes hit only what isn't on its team, so
+    /// teammates don't hit each other. Empty takes the team of whatever else puts it on one (a <see cref="Scenes.Team"/>, a
+    /// turn taker), or with none hits anyone else.
+    /// </summary>
+    [Names(NameKind.Kind, Scope = "Team", Defines = true)]
     public string? Team { get; set; }
 
     /// <summary>

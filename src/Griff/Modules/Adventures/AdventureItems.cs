@@ -367,7 +367,7 @@ public sealed class UseWith : Component
     public string? Gives
     {
         get => _gives;
-        set => (_gives, Given) = (value, ItemCounts.Parse(value));
+        set => (_gives, Given) = (value, Items.Parse(value));
     }
 
     private string? _gives;
@@ -421,10 +421,10 @@ public sealed record Combination(string First, string Second, IReadOnlyList<(str
         var right = row[(equals + 1)..];
         var colon = right.IndexOf(':');
         var line = colon >= 0 ? right[(colon + 1)..].Trim() : null;
-        var takes = ItemCounts.Parse(colon >= 0 ? right[..colon] : right);
+        var takes = Items.Parse(colon >= 0 ? right[..colon] : right);
         if (takes.Count != 2 || takes.Any(t => t.Count != 1))
             return null;
-        return new Combination(takes[0].Item, takes[1].Item, ItemCounts.Parse(row[..equals]), string.IsNullOrEmpty(line) ? null : line);
+        return new Combination(takes[0].Item, takes[1].Item, Items.Parse(row[..equals]), string.IsNullOrEmpty(line) ? null : line);
     }
 }
 
@@ -453,38 +453,3 @@ public readonly record struct ItemIcon(string Image, Vector4 Source, float Aspec
     }
 }
 
-/// <summary>Lists of items: "Coin 3, Map" or "Rope + Hook", each a name and how many (1 if it doesn't say).</summary>
-internal static class ItemCounts
-{
-    public static List<(string Item, int Count)> Parse(string? text)
-    {
-        var items = new List<(string, int)>();
-        foreach (var part in (text ?? "").Split([',', '+'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            var space = part.LastIndexOf(' ');
-            if (space > 0 && int.TryParse(part[(space + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
-            {
-                if (count > 0)
-                    items.Add((part[..space].Trim(), count));
-            }
-            else
-            {
-                items.Add((part, 1));
-            }
-        }
-
-        return items;
-    }
-
-    /// <summary>True if <paramref name="text"/> names <paramref name="item"/>.</summary>
-    public static bool Names(string? text, string item)
-    {
-        foreach (var (name, _) in Parse(text))
-        {
-            if (name.Equals(item.Trim(), StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
-    }
-}

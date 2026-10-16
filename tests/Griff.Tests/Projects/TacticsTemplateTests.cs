@@ -69,7 +69,7 @@ public sealed class TacticsTemplateTests : IDisposable
     private static TurnOrder Turns(Game game) => game.Find("Turns")!.GetComponent<TurnOrder>()!;
 
     private static List<Entity> Side(Game game, string side) =>
-        game.Scene.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null && e.GetComponent<TurnTaker>()!.Side == side).ToList();
+        game.Scene.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null && e.GetComponent<TurnTaker>()!.Team == side).ToList();
 
     [Fact]
     public async Task Play_OpensABattle_OfKnightsAndArchersAgainstOrcsAndGoblins_WithTheComputerPlayingRed()
@@ -81,7 +81,7 @@ public sealed class TacticsTemplateTests : IDisposable
         Assert.Equal(["Archer", "Archer 2", "Knight", "Knight 2"], Side(game, "Blue").Select(e => e.Name).Order());
         Assert.Equal(["Goblin", "Goblin 2", "Orc", "Orc 2", "Orc 3"], Side(game, "Red").Select(e => e.Name).Order());
         var order = Turns(game);
-        Assert.Equal(("Blue, Red", "Red", "Blue"), (order.Sides, order.ComputerSides, order.Current));
+        Assert.Equal(("Blue, Red", "Red", "Blue"), (order.Teams, order.ComputerTeams, order.Current));
         Assert.Equal("Blue's turn  ·  Round 1", game.Find("Turns")!.GetComponent<Text>()!.Value);
         Assert.NotNull(game.Find("Tactics")!.GetComponent<TacticsControls>());
 

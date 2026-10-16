@@ -153,7 +153,7 @@ internal sealed class RoguelikeTemplate : ProjectTemplate
         var inventory = hero.AddComponent<Inventory>();
         inventory.ItemUses = ["Potion: heal 4"];
         var taker = hero.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = ("Player", 1);
+        (taker.Team, taker.Actions) = ("Player", 1);
         var lantern = hero.AddComponent<Light>();
         (lantern.Radius, lantern.Intensity, lantern.Color) = (6, 0.9f, Color.FromBytes(0xFF, 0xE2, 0xB0));
         return hero;
@@ -262,7 +262,7 @@ internal sealed class RoguelikeTemplate : ProjectTemplate
         (health.Max, health.Current, health.InvincibleTime) = (hitPoints, hitPoints, 0);
         monster.AddComponent<BumpAttack>().Layers = "Player";
         var taker = monster.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = ("Enemy", 1);
+        (taker.Team, taker.Actions) = ("Enemy", 1);
         return monster;
     }
 

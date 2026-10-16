@@ -167,10 +167,12 @@ public sealed class Switch : Component
 }
 
 /// <summary>
-/// What an entity is carrying: keys, potions, the parts of a machine. A <see cref="Pickup"/> with an
+/// What an entity is carrying: keys, potions, the parts of a machine, gold, blocks. A <see cref="Pickup"/> with an
 /// <see cref="Pickup.Item"/> puts things in the inventory of whoever collects it (adding one if they don't have one);
 /// locked <see cref="Door"/>s and <see cref="Switch"/>es use up its keys. A <see cref="Counter"/> with an
-/// <see cref="Counter.Item"/> shows how many there are.
+/// <see cref="Counter.Item"/> shows how many there are. Items are the one idea every genre shares (see
+/// <see cref="Scenes.Items"/>): what a recipe takes, a strategy unit or a card costs or a shop's pickup sells for is paid
+/// from it, and with <see cref="ForTeam"/> it holds a whole team's.
 /// </summary>
 /// <remarks>
 /// It's saved with the scene, so it rewinds with everything else and you can start a playtest holding a key; with
@@ -178,7 +180,7 @@ public sealed class Switch : Component
 /// </remarks>
 [Category("Gameplay")]
 [ComponentName("Griff.Inventory")]
-public sealed class Inventory : Component
+public sealed class Inventory : Component, IHoldsItems
 {
     // Names in the order first added, so the Inspector's list doesn't shuffle.
     private readonly List<(string Name, int Count)> _items = [];
@@ -198,12 +200,8 @@ public sealed class Inventory : Component
             Version++;
             foreach (var row in value ?? [])
             {
-                var text = row.Trim();
-                var space = text.LastIndexOf(' ');
-                if (space > 0 && int.TryParse(text[(space + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
-                    AddQuietly(text[..space], count);
-                else
-                    AddQuietly(text, 1);
+                var (item, count) = Scenes.Items.ReadOne(row);
+                AddQuietly(item, count);
             }
         }
     }
@@ -240,6 +238,15 @@ public sealed class Inventory : Component
     [Group("Saving")]
     [Names(NameKind.Saved, Defines = true)]
     public string? SaveAs { get; set; }
+
+    /// <summary>
+    /// Holds a team's items, e.g. "Player": anything on that team (see <see cref="Teams"/>) without an inventory of its
+    /// own collects into it and pays from it, so a platformer hero's coins buy a strategy army or pay for cards. Empty
+    /// holds only its own entity's.
+    /// </summary>
+    [Group("Team")]
+    [Names(NameKind.Kind, Scope = "Team")]
+    public string? ForTeam { get; set; }
 
     /// <summary>Set by the game once it has taken what it holds from the save data, so a rewind doesn't do it again. Leave it be.</summary>
     public bool Loaded { get; set; }
@@ -300,6 +307,27 @@ public sealed class Inventory : Component
         Changed?.Invoke(item.Trim());
         return true;
     }
+
+    /// <summary>Puts in the items listed, e.g. "Gold 50, Key": something won, bought or found.</summary>
+    [Action]
+    public void AddItems(string items)
+    {
+        foreach (var (item, count) in Scenes.Items.Parse(items))
+            Add(item, count);
+    }
+
+    /// <summary>Takes out the items listed, e.g. "Gold 50", if it holds them all; otherwise takes nothing.</summary>
+    [Action]
+    public void TakeItems(string items)
+    {
+        var wanted = Scenes.Items.Totals(items);
+        if (wanted.Any(w => !Has(w.Item, w.Count)))
+            return;
+        foreach (var (item, count) in wanted)
+            Take(item, count);
+    }
+
+    bool IHoldsItems.Keeps(string item) => true;
 
     /// <summary>Empties it.</summary>
     public void Clear()

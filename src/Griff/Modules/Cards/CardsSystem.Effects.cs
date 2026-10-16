@@ -7,7 +7,7 @@ using Griff.Scenes;
 namespace Griff.Modules.Cards;
 
 // What cards do (CardEffect): damage, healing, draws, discards, mana, buffs and any action, done to their targets where
-// the game is run; who those targets are (heroes, characters, creatures on the table, each on a side); and creatures that
+// the game is run; who those targets are (heroes, characters, creatures on the table, each on a team); and creatures that
 // die going to the discard pile.
 internal sealed partial class CardsSystem
 {
@@ -191,7 +191,7 @@ internal sealed partial class CardsSystem
     private List<Hand> HandsFor(CardTarget target, Hand? hand, Entity? chosen)
     {
         var hands = Game.Showing<Hand>().ToList();
-        var side = hand?.Side ?? "";
+        var side = hand?.Team ?? "";
         switch (target)
         {
             case CardTarget.Self:
@@ -201,9 +201,9 @@ internal sealed partial class CardsSystem
             case CardTarget.Chosen:
                 return chosen is null ? [] : [.. hands.Where(h => HeroOf(h) == chosen || (chosen.GetComponent<Card>() is { } c && c.PlayedBy?.Trim() == h.Entity!.Name))];
             case CardTarget.AllFriends:
-                return [.. hands.Where(h => h == hand || (side.Length > 0 && TurnOrder.SameSide(h.Side, side)))];
+                return [.. hands.Where(h => h == hand || (side.Length > 0 && Teams.Same(h.Team, side)))];
             case CardTarget.AllFoes:
-                return [.. hands.Where(h => h != hand && !(side.Length > 0 && TurnOrder.SameSide(h.Side, side)))];
+                return [.. hands.Where(h => h != hand && !(side.Length > 0 && Teams.Same(h.Team, side)))];
             default:
                 return hands;
         }
@@ -212,10 +212,10 @@ internal sealed partial class CardsSystem
     // The hand the opponent plays: the first on another side, or with no sides, the first other hand.
     private static Hand? OpponentHand(Hand? hand, List<Hand> hands)
     {
-        var side = hand?.Side ?? "";
+        var side = hand?.Team ?? "";
         foreach (var other in hands)
         {
-            if (other != hand && (side.Length == 0 || other.Side.Length == 0 || !TurnOrder.SameSide(other.Side, side)))
+            if (other != hand && (side.Length == 0 || other.Team.Length == 0 || !Teams.Same(other.Team, side)))
                 return other;
         }
 
@@ -224,7 +224,7 @@ internal sealed partial class CardsSystem
 
     /// <summary>
     /// A side's hero: the entity its Hero names, else the hand itself if it has a Health, else the first entity with a Health
-    /// and a turn taker on its side that isn't a card.
+    /// and a turn taker on its team that isn't a card.
     /// </summary>
     internal Entity? HeroOf(Hand hand)
     {
@@ -232,13 +232,13 @@ internal sealed partial class CardsSystem
             return Scene.FindNamed(hand.Hero.Trim()) is { IsActive: true } named ? named : null;
         if (hand.Entity!.GetComponent<Health>() is not null)
             return hand.Entity;
-        var side = hand.Side;
+        var side = hand.Team;
         if (side.Length == 0)
             return null;
         foreach (var health in Game.Showing<Health>())
         {
             var entity = health.Entity!;
-            if (entity.GetComponent<Card>() is null && TurnTaker.Of(entity) is { } taker && TurnOrder.SameSide(Game.SideOf(taker), side))
+            if (entity.GetComponent<Card>() is null && Teams.Same(Game.TeamOf(entity), side))
                 return entity;
         }
 
@@ -278,22 +278,22 @@ internal sealed partial class CardsSystem
         return _units;
     }
 
-    // On `hand`'s side: its hero, a card played from it, or something whose turn taker is on its side.
+    // On `hand`'s team: its hero, a card played from it, or anything else on its team (see Teams).
     private bool IsFriend(Entity unit, Hand? hand)
     {
         if (hand is null)
             return false;
         if (unit == HeroOf(hand))
             return true;
-        var side = hand.Side;
+        var side = hand.Team;
         if (unit.GetComponent<Card>() is { } card)
         {
             if (string.Equals(card.PlayedBy?.Trim(), hand.Entity!.Name, StringComparison.Ordinal))
                 return true;
-            return side.Length > 0 && HandNamed(card.PlayedBy) is { } from && TurnOrder.SameSide(from.Side, side);
+            return side.Length > 0 && HandNamed(card.PlayedBy) is { } from && Teams.Same(from.Team, side);
         }
 
-        return side.Length > 0 && TurnTaker.Of(unit) is { } taker && TurnOrder.SameSide(Game.SideOf(taker), side);
+        return side.Length > 0 && Teams.Same(Game.TeamOf(unit), side);
     }
 
     private Hand? HandNamed(string? name) =>
@@ -382,7 +382,7 @@ internal sealed partial class CardsSystem
 
     private static string Called(Entity entity) => entity.GetComponent<Card>()?.ShownTitle ?? entity.Name;
 
-    private static string Called(Hand hand) => hand.Side is { Length: > 0 } side ? side : hand.Entity!.Name;
+    private static string Called(Hand hand) => hand.Team is { Length: > 0 } side ? side : hand.Entity!.Name;
 
     private static string Amount(float value) => value.ToString("0.#", CultureInfo.InvariantCulture);
 }

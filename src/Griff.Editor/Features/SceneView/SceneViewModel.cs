@@ -470,17 +470,19 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
         /// <summary>
         /// Puts everything <paramref name="offset"/> world units from where it started (each in its parent's space, so
-        /// nested entities follow the cursor). <paramref name="snap"/> puts the anchor on the half-unit grid.
+        /// nested entities follow the cursor). <paramref name="snap"/> puts the anchor on the half-unit grid; a tilemap that
+        /// lines up with another (<see cref="Tilemap.LinesUpWith"/>) always lands on that map's cell corners.
         /// </summary>
         public void To(Vector2 offset, bool snap)
         {
             var targets = _moving.Select(m => m.Start + Vector3.TransformNormal(new Vector3(offset, 0), m.ParentInverse)).ToList();
-            if (snap)
+            var lined = _moving[_anchor].Transform.Entity?.GetComponent<Tilemap>() is { GridMap: not null } map;
+            if (snap || lined)
             {
                 // Snap the anchor in its parent's space, then shift everything by the same amount in the world.
                 var anchor = _moving[_anchor];
                 var local = targets[_anchor];
-                var snapped = new Vector3(Snap(local.X), Snap(local.Y), local.Z);
+                var snapped = lined ? anchor.Transform.Entity!.GetComponent<Tilemap>()!.LinedUp(local) : new Vector3(Snap(local.X), Snap(local.Y), local.Z);
                 Matrix4x4.Invert(anchor.ParentInverse, out var parentWorld);
                 var shift = Vector3.TransformNormal(snapped - local, parentWorld);
                 targets = _moving.Select((m, i) => targets[i] + Vector3.TransformNormal(shift, m.ParentInverse)).ToList();

@@ -6,7 +6,7 @@ namespace Griff.Modules.Battles;
 
 /// <summary>
 /// Runs turn-based battles with no code (<see cref="Battler"/>): each fighter's move on its turn, asked for by its actions
-/// or keys, or picked by the computer for a side it plays, carried out where the game is run and using an action of its
+/// or keys, or picked by the computer for a team it plays, carried out where the game is run and using an action of its
 /// turn taker so the turn passes on.
 /// </summary>
 internal sealed class BattlesSystem : GameSystem
@@ -65,7 +65,7 @@ internal sealed class BattlesSystem : GameSystem
 
     // A side its turn order's computer plays.
     private bool ComputerPlays(Entity entity) =>
-        Game.TurnOrderOf(entity) is { } order && TurnTaker.Of(entity) is { } taker && order.IsComputer(Game.SideOf(taker));
+        Game.TurnOrderOf(entity) is { } order && TurnTaker.Of(entity) is { } taker && order.IsComputer(Game.TeamOf(taker));
 
     /// <summary>
     /// The computer's move: heal when hurt (an item, or a spell that heals), cast while it has the mana and the spell hits
@@ -94,11 +94,25 @@ internal sealed class BattlesSystem : GameSystem
         return BattleMove.Attack;
     }
 
-    /// <summary>The first entity its Foe names that's still standing, if any.</summary>
+    /// <summary>
+    /// The first entity its Foe names that's still standing, if any; with no Foe, the first battler still standing on
+    /// another team (see <see cref="Teams"/>).
+    /// </summary>
     internal Entity? FoeOf(Battler battler)
     {
         if (string.IsNullOrWhiteSpace(battler.Foe))
+        {
+            var mine = Game.TeamOf(battler.Entity);
+            foreach (var other in Game.Showing<Battler>())
+            {
+                if (other.Entity is { IsActive: true } entity && entity != battler.Entity && Health.Of(entity) is not { IsDead: true } &&
+                    Teams.Foes(mine, Game.TeamOf(entity)))
+                    return entity;
+            }
+
             return null;
+        }
+
         foreach (var part in battler.Foe.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var entity in Game.Scene.EntitiesNow)

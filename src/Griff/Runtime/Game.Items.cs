@@ -5,9 +5,38 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 // Items used with no code: an inventory's number keys (or a script) use what it holds, as its Item Uses say: potions that
-// heal, bombs that spawn an explosion, scrolls that send a message. Taking turns, using one is an action.
+// heal, bombs that spawn an explosion, scrolls that send a message. Taking turns, using one is an action. And items given,
+// counted and paid for the way every genre does (see Items): from what holds them on an entity, or its team's.
 public sealed partial class Game
 {
+    /// <summary>
+    /// How many of <paramref name="item"/> <paramref name="entity"/> has to pay with: in what holds items on it or the
+    /// entity it's inside (an <see cref="Inventory"/>, a card hand's mana), else its team's (see <see cref="Items"/>).
+    /// </summary>
+    public int CountItems(Entity? entity, string item) => Items.Count(entity, item.Trim(), TeamOf(entity));
+
+    /// <summary>True if <paramref name="entity"/> can pay <paramref name="cost"/>, e.g. "150 Gold, 50 Wood" (see <see cref="CountItems"/>).</summary>
+    public bool CanPay(Entity? entity, string? cost) => Items.CanPay(entity, cost, TeamOf(entity));
+
+    /// <summary>Pays <paramref name="cost"/> from <paramref name="entity"/>'s items (or its team's) if it can; returns whether it did.</summary>
+    public bool Pay(Entity? entity, string? cost) => Items.Pay(entity, cost, TeamOf(entity));
+
+    /// <summary>
+    /// Gives <paramref name="entity"/> <paramref name="count"/> of <paramref name="item"/> (takes them, for less than 0): into
+    /// what holds that item for it or its team, or an <see cref="Inventory"/> added to it if nothing does.
+    /// </summary>
+    public void Give(Entity entity, string item, int count = 1)
+    {
+        item = item.Trim();
+        if (item.Length == 0 || count == 0)
+            return;
+        var holder = Items.HolderOf(entity, item, TeamOf(entity)) ?? entity.AddComponent<Inventory>();
+        if (count > 0)
+            holder.Add(item, count);
+        else
+            holder.Take(item, -count);
+    }
+
     private void RunItemUses()
     {
         foreach (var inventory in Active<Inventory>())

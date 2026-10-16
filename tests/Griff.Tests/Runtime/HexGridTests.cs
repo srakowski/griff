@@ -245,11 +245,11 @@ public class HexGridTests
         _scene.Add(turns);
         var (player, _) = AddPlayer(map, 1, 2);
         var playerTurns = player.AddComponent<TurnTaker>();
-        (playerTurns.Side, playerTurns.Actions) = ("Player", 1);
+        (playerTurns.Team, playerTurns.Actions) = ("Player", 1);
         var slime = Mover("Slime", map, 8, 2);
         slime.AddComponent<GridChase>().Range = 0;
         var slimeTurns = slime.AddComponent<TurnTaker>();
-        (slimeTurns.Side, slimeTurns.Actions) = ("Enemy", 1);
+        (slimeTurns.Team, slimeTurns.Actions) = ("Enemy", 1);
         _scene.Add(slime);
 
         Run(1);
@@ -273,7 +273,7 @@ public class HexGridTests
     {
         var entity = new Entity("Turns");
         var order = entity.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "", 0);
         _scene.Add(entity);
     }
 
@@ -293,7 +293,7 @@ public class HexGridTests
         var unit = entity.AddComponent<TacticsUnit>();
         (unit.Move, unit.Range, unit.MinRange) = (move, range, minRange);
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
+        (taker.Team, taker.Actions) = (side, 1);
         _scene.Add(entity);
         return entity;
     }

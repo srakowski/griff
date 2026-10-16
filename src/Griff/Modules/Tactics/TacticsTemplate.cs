@@ -132,7 +132,7 @@ internal sealed class TacticsTemplate : ProjectTemplate
         // Blue, then Red, which the computer plays for as long as it needs; whoever loses every unit is beaten.
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.ComputerTurnTime, order.Between) = ("Blue, Red", "Red", 0, 0.6f);
+        (order.Teams, order.ComputerTeams, order.ComputerTurnTime, order.Between) = ("Blue, Red", "Red", 0, 0.6f);
         order.Format = "{0}'s turn  ·  Round {1}";
         var turnText = turns.AddComponent<Text>();
         (turnText.Value, turnText.Size, turnText.Align, turnText.Color, turnText.Order) = ("Blue's turn  ·  Round 1", 0.5f, TextAlign.Right, TacticsLight, 150);
@@ -185,7 +185,7 @@ internal sealed class TacticsTemplate : ProjectTemplate
         return goblin;
     }
 
-    // A unit: steps across the field on its side's turn and fights what it can reach. Blue's are on the Player layer
+    // A unit: steps across the field on its team's turn and fights what it can reach. Blue's are on the Player layer
     // (they cry out when hurt) and face right; Red's on the Enemy layer, facing left.
     private static Entity TacticsFighter(string name, string image, string side, float hitPoints, float damage, int move, int range, int minRange)
     {
@@ -202,7 +202,7 @@ internal sealed class TacticsTemplate : ProjectTemplate
         var fighter = unit.AddComponent<TacticsUnit>();
         (fighter.Move, fighter.Range, fighter.MinRange, fighter.Damage, fighter.HitEffect) = (move, range, minRange, damage, "Sparkle");
         var taker = unit.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
+        (taker.Team, taker.Actions) = (side, 1);
         return unit;
     }
 

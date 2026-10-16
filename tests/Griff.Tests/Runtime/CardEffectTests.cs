@@ -75,7 +75,7 @@ public sealed class CardEffectTests
         entity.Transform.Position = new Vector3(-8, y, 0);
         var health = entity.AddComponent<Health>();
         health.Max = life;
-        entity.AddComponent<TurnTaker>().Side = side;
+        entity.AddComponent<TurnTaker>().Team = side;
         _scene.Add(entity);
         return health;
     }
@@ -86,7 +86,7 @@ public sealed class CardEffectTests
         entity.Transform.Position = new Vector3(0, y, 0);
         var hand = entity.AddComponent<Hand>();
         (hand.Deck, hand.StartWith, hand.DiscardPile) = (deck, 0, "Discard Pile");
-        entity.AddComponent<TurnTaker>().Side = side;
+        entity.AddComponent<TurnTaker>().Team = side;
         _scene.Add(entity);
         return hand;
     }
@@ -141,7 +141,7 @@ public sealed class CardEffectTests
     {
         var entity = new Entity("Turns");
         var order = entity.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between, order.ComputerTurnTime) = ("Blue, Red", computer, 0, 0);
+        (order.Teams, order.ComputerTeams, order.Between, order.ComputerTurnTime) = ("Blue, Red", computer, 0, 0);
         _scene.Add(entity);
         return order;
     }
@@ -504,12 +504,12 @@ public sealed class CardEffectTests
             var hero = new Entity(side + " Hero");
             hero.Transform.Position = new Vector3(-8, y, 0);
             hero.AddComponent<Health>().Max = 20;
-            hero.AddComponent<TurnTaker>().Side = side;
+            hero.AddComponent<TurnTaker>().Team = side;
             scene.Add(hero);
             var hand = new Entity(side + " Hand");
             hand.Transform.Position = new Vector3(0, y, 0);
             hand.AddComponent<Hand>().StartWith = 0;
-            hand.AddComponent<TurnTaker>().Side = side;
+            hand.AddComponent<TurnTaker>().Team = side;
             scene.Add(hand);
         }
 

@@ -183,7 +183,7 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
 
     /// <summary>
     /// Draws <paramref name="count"/> cards from it at the start of the next frame, into the hand that draws from it (the one
-    /// whose side's turn it is, if several do), a tenth of a second apart.
+    /// whose team's turn it is, if several do), a tenth of a second apart.
     /// </summary>
     [Action]
     public void Draw(int count = 1) => DrawRequests += Math.Max(0, count);
@@ -295,9 +295,11 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
 /// up, left and right choose where it goes and the Pick Action again plays it; the <see cref="CancelAction"/> puts it back.
 /// </summary>
 /// <remarks>
-/// Give it a <see cref="TurnTaker"/> naming its side and it's played only on its side's turn, each card played using one of
+/// Give it a <see cref="TurnTaker"/> naming its team and it's played only on its team's turn, each card played using one of
 /// the turn taker's actions (with Actions set), and in a network game only by the players on that team (the Multiplayer's
-/// Teams). With <see cref="Hidden"/>, only its own side sees its faces. Its Draw and Discard actions are there for a
+/// Teams). With <see cref="Hidden"/>, only its own team sees its faces. Its mana is an item like any other (see
+/// <see cref="Items"/>): "Mana" a teammate picks up or a trigger gives goes into it, and a card's
+/// <see cref="Card.Price"/> is paid from its team's other items. Its Draw and Discard actions are there for a
 /// <see cref="Trigger"/> (draw a card as each turn starts, discard the hand as it ends), a wire or a script, and its Count
 /// output for a Counter or a Text. Untick <see cref="Controllable"/> (or Focus something else) and it ignores the mouse and
 /// keys.
@@ -305,9 +307,9 @@ public sealed class Deck : CardZone, IDrawable, IDrawEffect, IPlaytestReport
 [Category("Cards")]
 [WorksWith(typeof(Deck), Note = "the deck it draws from")]
 [WorksWith(typeof(PlayZone), Note = "where its cards are played")]
-[WorksWith(typeof(TurnTaker), Note = "its side: played on its side's turn", Back = "a Hand played on its side's turn")]
+[WorksWith(typeof(TurnTaker), Note = "its team: played on its team's turn", Back = "a Hand played on its team's turn")]
 [ComponentName("Griff.Hand")]
-public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlaytestReport
+public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlaytestReport, IHoldsItems
 {
     private int _maxMana;
     private string? _manaText;
@@ -329,8 +331,8 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     /// <summary>
     /// Shows its cards' faces only to its own side (its Turn Taker's): in a network game, players on other teams see
-    /// their backs, and their machines aren't even sent which cards they are; at one screen, a side the computer plays
-    /// keeps its cards face down, and with several people taking turns, each hand is face down while it isn't its side's
+    /// their backs, and their machines aren't even sent which cards they are; at one screen, a team the computer plays
+    /// keeps its cards face down, and with several people taking turns, each hand is face down while it isn't its team's
     /// turn.
     /// </summary>
     public bool Hidden { get; set; }
@@ -344,13 +346,13 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     /// <summary>
     /// The entity whose <see cref="Health"/> is this side's life, by name, e.g. "Blue Hero": what its cards' effects do
-    /// to "Self", and the other sides' to "Opponent". Empty: the hand itself if it has a Health, else the first entity
-    /// with a Health and a Turn Taker on its side.
+    /// to "Self", and the other teams' to "Opponent". Empty: the hand itself if it has a Health, else the first entity
+    /// with a Health and a Turn Taker on its team.
     /// </summary>
     [EntityName]
     public string? Hero { get; set; }
 
-    /// <summary>The mana it fills up to as each of its side's turns starts. Changing it while full keeps it full. 0 doesn't refill.</summary>
+    /// <summary>The mana it fills up to as each of its team's turns starts. Changing it while full keeps it full. 0 doesn't refill.</summary>
     [Group("Mana")]
     [Output]
     public int MaxMana
@@ -366,11 +368,11 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     // After Max Mana, so a scene loaded (a rewind) sets what's left after the most it fills to.
 
-    /// <summary>Mana it has to pay its cards' costs with: it fills up to <see cref="MaxMana"/> as each of its side's turns starts.</summary>
+    /// <summary>Mana it has to pay its cards' costs with: it fills up to <see cref="MaxMana"/> as each of its team's turns starts.</summary>
     [Output(OutOf = nameof(MaxMana))]
     public int Mana { get; set; }
 
-    /// <summary>How much <see cref="MaxMana"/> grows as each of its side's turns starts, up to <see cref="ManaLimit"/>: 1 adds a crystal a turn.</summary>
+    /// <summary>How much <see cref="MaxMana"/> grows as each of its team's turns starts, up to <see cref="ManaLimit"/>: 1 adds a crystal a turn.</summary>
     public int ManaGrowth { get; set; }
 
     /// <summary>The most <see cref="MaxMana"/> grows to.</summary>
@@ -378,7 +380,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     public int ManaLimit { get; set; } = 10;
 
     /// <summary>
-    /// For the computer (a hand on one of its turn order's Computer Sides): seconds it thinks before each play, the last
+    /// For the computer (a hand on one of its turn order's Computer Teams): seconds it thinks before each play, the last
     /// part of it showing the card it's about to play lifted out of its hand, so the player can follow. 0 plays at once.
     /// </summary>
     [Group("Computer")]
@@ -445,15 +447,23 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     /// <summary>
     /// What was last played from it, e.g. "Red plays Fireball on Blue Hero: 3 damage.", or what one of its cards on the table did
-    /// as its side's turn began ("Wolf: 2 damage to Blue Hero."). The game sets it. Read as the "Said" output.
+    /// as its team's turn began ("Wolf: 2 damage to Blue Hero."). The game sets it. Read as the "Said" output.
     /// </summary>
     [Output]
     [PlainText("what was last played: the game sets it")]
     public string? Said { get; set; }
 
-    /// <summary>Its side: its Turn Taker's (on it or an entity it's inside), or empty with none.</summary>
+    /// <summary>
+    /// Its team: its Turn Taker's (on it or an entity it's inside) or whatever else puts it on a team (see
+    /// <see cref="Teams"/>), or empty with none. Hands on the same team are friends; on different teams, foes.
+    /// </summary>
     [DoNotSerialize]
-    public string Side => Entity is { } entity && TurnTaker.Of(entity) is { } taker ? taker.Side?.Trim() ?? "" : "";
+    public string Team => Teams.Of(Entity).Trim();
+
+    /// <summary>What <see cref="Team"/> was called before every genre's teams were one idea. Kept for scripts.</summary>
+    [DoNotSerialize]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public string Side => Team;
 
     /// <summary>The card this machine's player has taken up from it (clicked, or with the keys), or null.</summary>
     [DoNotSerialize]
@@ -485,6 +495,23 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     [Action]
     public void GainMana(int amount = 1) => Mana = Math.Max(0, Mana + amount);
 
+    // Its mana is the item "Mana", its team's.
+    string? IHoldsItems.ForTeam => Team;
+
+    bool IHoldsItems.Keeps(string item) => item.AsSpan().Trim().Equals("Mana", StringComparison.OrdinalIgnoreCase);
+
+    int IHoldsItems.Count(string item) => Mana;
+
+    void IHoldsItems.Add(string item, int count) => GainMana(count);
+
+    bool IHoldsItems.Take(string item, int count)
+    {
+        if (count < 0 || Mana < count)
+            return false;
+        Mana -= count;
+        return true;
+    }
+
     public override bool Uses(string property) => property != nameof(Dealt);
 
     internal List<CardRequest> Requests { get; } = [];
@@ -492,7 +519,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     // Seconds until the next card of ToDraw is drawn.
     internal float NextDraw { get; set; }
 
-    // Its side's turn has begun since the game last looked: its cards on the table with Each Turn effects go off.
+    // Its team's turn has begun since the game last looked: its cards on the table with Each Turn effects go off.
     internal bool TurnBegan { get; set; }
 
     // The computer's play: seconds until its next move this turn (-1 starts afresh), the card it's showing and where it's
@@ -507,7 +534,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     internal bool TurnDone { get; set; }
 
-    // Mana back up, and more of it, as its side's turn begins; the computer thinks afresh.
+    // Mana back up, and more of it, as its team's turn begins; the computer thinks afresh.
     void ITurnReady.TurnBegins()
     {
         if (ManaGrowth != 0)
@@ -546,7 +573,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
 
     // ----- Kept by the game while it runs, on each machine -----
 
-    // The cards it holds that this machine has (in a network game, other sides' hidden cards aren't sent), and their backs.
+    // The cards it holds that this machine has (in a network game, other teams' hidden cards aren't sent), and their backs.
     internal int Shown { get; set; }
 
     internal string? BackImage { get; set; }
@@ -608,7 +635,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     string IPlaytestReport.MouseReport() =>
         Picked is { Entity: { } picked } ? (Picked.Dragged ? $", dragging {picked.Name}" : $", picked {picked.Name}") : Aiming is { Entity: { } aimed } ? $", aiming {aimed.Name}" : "";
 
-    // Whether this machine's player can play it now (it's theirs, it's its side's turn), whether the computer plays it, and
+    // Whether this machine's player can play it now (it's theirs, it's its team's turn), whether the computer plays it, and
     // the card this machine's player is aiming from it. Set by the game.
     internal bool CanPlay { get; set; } = true;
 

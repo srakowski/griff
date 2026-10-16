@@ -58,7 +58,7 @@ public class TurnOrderTests
         player.AddComponent<Body>();
         player.AddComponent<TopDownMovement>();
         var taker = player.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, actions);
+        (taker.Team, taker.Actions) = (side, actions);
         _scene.Add(player);
         return player;
     }
@@ -72,7 +72,7 @@ public class TurnOrderTests
         enemy.AddComponent<Body>();
         enemy.AddComponent<Patrol>().Speed = 2;
         var taker = enemy.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = ("Enemy", actions);
+        (taker.Team, taker.Actions) = ("Enemy", actions);
         _scene.Add(enemy);
         return enemy;
     }
@@ -144,7 +144,7 @@ public class TurnOrderTests
     [Fact]
     public void Attacks_use_up_actions_and_the_turn_passes_once_everyone_on_the_side_has_used_theirs()
     {
-        var order = AddTurns(o => (o.Sides, o.ComputerSides, o.Between) = ("Blue, Red", "", 0.5f));
+        var order = AddTurns(o => (o.Teams, o.ComputerTeams, o.Between) = ("Blue, Red", "", 0.5f));
         var blue = AddPlayer(Vector2.Zero, "Blue", actions: 1);
         var attack = blue.AddComponent<Attack>();
         (attack.HitStop, attack.Windup, attack.ActiveTime, attack.Cooldown) = (0, 0, 0.1f, 0.1f);
@@ -194,7 +194,7 @@ public class TurnOrderTests
         var shooter = turret.AddComponent<Shooter>();
         (shooter.Prefab, shooter.Target, shooter.Range, shooter.Interval) = ("Bullet", "Player", 0, 0.2f);
         var taker = turret.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = ("Enemy", 1);
+        (taker.Team, taker.Actions) = ("Enemy", 1);
         _scene.Add(turret);
         var shots = 0;
         shooter.Fired += _ => shots++;
@@ -345,7 +345,7 @@ public class TurnOrderTests
             scene.Add(settings);
             var turns = new Entity("Turns");
             var order = turns.AddComponent<TurnOrder>();
-            (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "", 0);
+            (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "", 0);
             scene.Add(turns);
             var player = new Entity("Player");
             player.AddComponent<BoxCollider>().Layer = "Player";

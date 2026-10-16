@@ -321,11 +321,19 @@ public sealed class Pickup : Component
     public int Amount { get; set; } = 1;
 
     /// <summary>
-    /// An item it puts in the collector's <see cref="Inventory"/> (one is added if it has none), e.g. "Key". Empty puts
-    /// nothing there.
+    /// An item it puts in the collector's <see cref="Inventory"/> (one is added if it has none), e.g. "Key", or its team's
+    /// items if it has none of its own (see <see cref="Items"/>): coins a hero collects for a strategy faction's gold.
+    /// Empty puts nothing there.
     /// </summary>
     [Names(NameKind.Item, Defines = true)]
     public string? Item { get; set; }
+
+    /// <summary>
+    /// What it costs to collect, e.g. "10 Coin": a shop's wares. It stays where it is until whatever touches it can pay,
+    /// and is paid from the collector's items (or its team's, see <see cref="Items"/>) as it's collected. Empty is free.
+    /// </summary>
+    [Counts(NameKind.Item, CountFirst = true)]
+    public string? Price { get; set; }
 
     /// <summary>A sound played when it's collected, e.g. "Sounds/coin.wav".</summary>
     public string? Sound { get; set; }

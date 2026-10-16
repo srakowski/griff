@@ -44,12 +44,12 @@ public sealed class TacticsEditorTests : IDisposable
 
         var first = Create();
         Assert.Equal("Blue Unit", first.Name);
-        Assert.Equal(("Blue", 1), (first.GetComponent<TurnTaker>()!.Side, first.GetComponent<TurnTaker>()!.Actions));
+        Assert.Equal(("Blue", 1), (first.GetComponent<TurnTaker>()!.Team, first.GetComponent<TurnTaker>()!.Actions));
         Assert.NotNull(first.GetComponent<GridMovement>());
         Assert.Equal(0, first.GetComponent<Health>()!.InvincibleTime);
         Assert.NotNull(first.GetComponent<TacticsUnit>());
         var order = Assert.Single(document.Scene.Entities.Select(e => e.GetComponent<TurnOrder>()).OfType<TurnOrder>());
-        Assert.Equal(("Blue, Red", "Red", 0f), (order.Sides, order.ComputerSides, order.ComputerTurnTime));
+        Assert.Equal(("Blue, Red", "Red", 0f), (order.Teams, order.ComputerTeams, order.ComputerTurnTime));
         Assert.Contains(order.Entity!.Children, c => c.GetComponent<Griff.Scenes.Button>()?.Action == ButtonAction.EndTurn);
         Assert.Single(document.Scene.Entities, e => e.GetComponent<TacticsControls>() is not null);
 
@@ -60,8 +60,8 @@ public sealed class TacticsEditorTests : IDisposable
         var third = selection.Entity!;
         Assert.Null(second.Parent);
         Assert.Null(third.Parent);
-        Assert.Equal(("Red Unit", "Red"), (second.Name, second.GetComponent<TurnTaker>()!.Side));
-        Assert.Equal("Blue", third.GetComponent<TurnTaker>()!.Side);
+        Assert.Equal(("Red Unit", "Red"), (second.Name, second.GetComponent<TurnTaker>()!.Team));
+        Assert.Equal("Blue", third.GetComponent<TurnTaker>()!.Team);
         Assert.NotEqual(first.Transform.Position, third.Transform.Position);
         Assert.Single(document.Scene.Entities, e => e.GetComponent<TurnOrder>() is not null);
         Assert.Single(document.Scene.Entities, e => e.GetComponent<TacticsControls>() is not null);

@@ -11,7 +11,7 @@ namespace Griff.Modules.Cards;
 // The Cards template: a card duel against the computer with no code. A menu (Play, Quit), and a Duel scene on a card table:
 // the player's mage and the computer's lich, each with 20 health, draw from one deck made from the Cards table (creatures
 // and spells, effects and costs as columns) and play onto their own side of the table with mana that grows each turn.
-// Creatures stay and act as each of their side's turns starts; spells do what they do and go to the discard pile.
+// Creatures stay and act as each of their team's turns starts; spells do what they do and go to the discard pile.
 // Victory or Defeat when a hero falls.
 internal sealed class CardsTemplate : ProjectTemplate
 {
@@ -155,7 +155,7 @@ internal sealed class CardsTemplate : ProjectTemplate
         var turns = new Entity("Turns");
         turns.Transform.Position = new Vector3(9.0f, 0.3f, 0);
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.ComputerTurnTime, order.Between, order.Format) =
+        (order.Teams, order.ComputerTeams, order.ComputerTurnTime, order.Between, order.Format) =
             ($"{Player}, {Rival}", Rival, 0, 0.6f, "Round {1}\n{0}'s turn");
         var turnText = turns.AddComponent<Text>();
         (turnText.Value, turnText.Size, turnText.Color, turnText.Order) = ("Round 1\nPlayer's turn", 0.36f, Light, 150);
@@ -244,7 +244,7 @@ internal sealed class CardsTemplate : ProjectTemplate
         (sprite.Image, sprite.Size, sprite.Order) = (portrait, new Vector2(2.2f), 5);
         var health = entity.AddComponent<Health>();
         (health.Max, health.Current, health.InvincibleTime, health.DestroyOnDeath, health.DeathMessage) = (Life, Life, 0, false, falls);
-        entity.AddComponent<TurnTaker>().Side = side;
+        entity.AddComponent<TurnTaker>().Team = side;
 
         var title = Label("Name", new Vector2(0, 1.45f), name, 0.4f, Light);
         WithChild(entity, title);
@@ -280,8 +280,8 @@ internal sealed class CardsTemplate : ProjectTemplate
         (hand.MaxMana, hand.ManaGrowth, hand.ManaLimit) = (0, 1, 10);
         (hand.MaxWidth, hand.HoverRise, hand.HoverScale, hand.ThinkTime) = (10, hidden ? 0.6f : 1.1f, hidden ? 1.15f : 1.25f, 1.4f);
         hand.DrawAction = null;
-        entity.AddComponent<TurnTaker>().Side = side;
-        // A card more as each of its side's turns starts.
+        entity.AddComponent<TurnTaker>().Team = side;
+        // A card more as each of its team's turns starts.
         var draw = entity.AddComponent<Trigger>();
         (draw.Message, draw.Do) = ($"{side}Turn", "Draw");
         return entity;
@@ -319,7 +319,7 @@ internal sealed class CardsTemplate : ProjectTemplate
 
     // ----- The cards' prefabs -----
 
-    // A creature: a card with a health that stays on the table and acts as each of its side's turns starts (it strikes the
+    // A creature: a card with a health that stays on the table and acts as each of its team's turns starts (it strikes the
     // opponent's hero, or heals its own), going to the discard pile when it dies. Its row of the Cards table sets it.
     internal static Entity CreatureCard()
     {

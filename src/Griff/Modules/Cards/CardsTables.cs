@@ -3,7 +3,7 @@ using Griff.Data;
 namespace Griff.Modules.Cards;
 
 // The Cards template's card set, one table: a row for each card, what it costs, what it does and how many go in the deck.
-// Creatures (the Creature prefab, with a Health) stay on the table and act as each of their side's turns starts; spells
+// Creatures (the Creature prefab, with a Health) stay on the table and act as each of their team's turns starts; spells
 // (the Spell prefab) do what they do as they're played and go to the discard pile. A Card Effect on each prefab takes the
 // Damage, Heal, Draw, Gain Mana and Target columns, the card its Title, Kind, Cost, Color and Image, and a creature its
 // Health. Balancing the game is changing a cell.

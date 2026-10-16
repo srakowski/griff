@@ -191,25 +191,32 @@ public sealed partial class Game
         door.Key = null;
     }
 
-    // The collector carries the pickup's item from now on, in an inventory of its own if it had none.
-    private static void GiveItem(Pickup pickup, Entity collector)
+    // The collector carries the pickup's item from now on: in its items or its team's, or an inventory of its own if it
+    // had none.
+    private void GiveItem(Pickup pickup, Entity collector)
     {
         if (string.IsNullOrWhiteSpace(pickup.Item) || pickup.Amount == 0)
             return;
-        var inventory = collector.GetComponent<Inventory>() ?? collector.AddComponent<Inventory>();
-        if (pickup.Amount > 0)
-            inventory.Add(pickup.Item.Trim(), pickup.Amount);
-        else
-            inventory.Take(pickup.Item.Trim(), -pickup.Amount);
+        Give(collector, pickup.Item.Trim(), pickup.Amount);
     }
 
-    // The first inventory in the scene, the player's in practice, even while they're away respawning. In a network game,
-    // this machine's player's own.
+    // The first inventory in the scene, the player's in practice, even while they're away respawning, or else the first
+    // thing holding that item (a team's faction, a card hand's mana; see Items). In a network game, this machine's
+    // player's own.
     private int ItemCount(string item)
     {
+        item = item.Trim();
         var inventories = Scene.AllNow<Inventory>();
         var inventory = (Net.IsOnline ? inventories.FirstOrDefault(i => Net.IsMine(i.Entity) && NetSession.OwnerIdOf(i.Entity) != 0) : null) ?? inventories.FirstOrDefault();
-        return inventory?.Count(item.Trim()) ?? 0;
+        if (inventory is not null)
+            return inventory.Count(item);
+        foreach (var holder in Scene.AllNow<IHoldsItems>())
+        {
+            if (holder.Keeps(item))
+                return holder.Count(item);
+        }
+
+        return 0;
     }
 }
 

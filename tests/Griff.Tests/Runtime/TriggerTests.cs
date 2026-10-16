@@ -258,7 +258,7 @@ public sealed class TriggerTests
     {
         var turns = Add("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Between, order.ComputerSides) = (0, null);
+        (order.Between, order.ComputerTeams) = (0, null);
         AddTrigger(Add("Clock"), "Beat", "End Turn", targets: "Turns");
         Run(2);
         Assert.Equal("Player", order.Current);

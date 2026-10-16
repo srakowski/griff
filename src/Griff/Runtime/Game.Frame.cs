@@ -316,6 +316,7 @@ public sealed partial class Game
 
         Step(FramePhase.Logic, "Menus", UpdateMenus);
         Step(FramePhase.Logic, "Lobby", RunLobby);
+        Step(FramePhase.Logic, "Grids", LineUpGrids);
         Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _switches);
         Step(FramePhase.Logic, "Turns", RunTurns);
         Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
@@ -546,6 +547,16 @@ public sealed partial class Game
     {
         foreach (var trail in Scene.RunningNow<Trail>())
             trail.Advance(Time.Delta);
+    }
+
+    // Tilemaps that line up with another's cells (see Tilemap.LinesUpWith) stay on them: one spawned, or whose map moved.
+    private void LineUpGrids()
+    {
+        foreach (var map in Scene.ActiveNow<Tilemap>())
+        {
+            if (map.LinesUpWith is not null)
+                map.LineUp();
+        }
     }
 
     private void RunAnimatedTiles()

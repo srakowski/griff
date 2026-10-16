@@ -302,7 +302,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     public string? UseGives
     {
         get => _gives;
-        set => (_gives, Gives) = (value, ItemCounts.Parse(value));
+        set => (_gives, Gives) = (value, Items.Parse(value));
     }
 
     private string? _gives;

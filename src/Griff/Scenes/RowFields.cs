@@ -255,27 +255,16 @@ public sealed class CountsAttribute(NameKind kind) : RowsAttribute
     public override string Describe() =>
         $"{What}s and how many of each, separated by commas, e.g. {(CountFirst ? "\"150 Gold, 50 Wood\"" : "\"Coin 3, Map\" (one Map)")}. The Inspector lists them a row each, the {What.ToLowerInvariant()} picked from the project's and the count set.";
 
+    // Read and written the way every genre's items are (see Items): either way round reads, "Gold 150" in a field that
+    // writes "150 Gold", and the other way.
     public override IReadOnlyList<string>? Read(string row)
     {
-        var text = row.Trim();
-        var space = CountFirst ? text.IndexOf(' ') : text.LastIndexOf(' ');
-        if (space > 0 && CountFirst && int.TryParse(text[..space], NumberStyles.Integer, CultureInfo.InvariantCulture, out var before))
-            return [text[(space + 1)..].Trim(), before.ToString(CultureInfo.InvariantCulture)];
-        // Either way round reads: "Gold 150" in a field that writes "150 Gold", and the other way.
-        var (name, count) = NameCount(text);
-        if (count == 1 && !text.EndsWith(" 1", StringComparison.Ordinal) && text.IndexOf(' ') is > 0 and var first &&
-            int.TryParse(text[..first], NumberStyles.Integer, CultureInfo.InvariantCulture, out var leading))
-            (name, count) = (text[(first + 1)..].Trim(), leading);
+        var (name, count) = Items.ReadOne(row);
         return name.Length == 0 ? null : [name, count.ToString(CultureInfo.InvariantCulture)];
     }
 
-    public override string Write(IReadOnlyList<string> cells)
-    {
-        var name = cells[0].Trim();
-        var count = int.TryParse(cells[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 1;
-        return CountFirst ? $"{count.ToString(CultureInfo.InvariantCulture)} {name}"
-            : count == 1 ? name : $"{name} {count.ToString(CultureInfo.InvariantCulture)}";
-    }
+    public override string Write(IReadOnlyList<string> cells) =>
+        Items.Write(cells[0], int.TryParse(cells[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 1, CountFirst);
 }
 
 /// <summary>

@@ -7,7 +7,7 @@ create: Deck
 select: Hand
 set: Hand.StartWith = 0
 set: Hand.MaxMana = 3
-explain: field:Hand.MaxMana | Mana | A hand has mana to pay for its cards, three here. It fills back up as each of its side's turns starts.
+explain: field:Hand.MaxMana | Mana | A hand has mana to pay for its cards, three here. It fills back up as each of its team's turns starts.
 create: Card
 rename: Fireball
 add: Card Effect
@@ -81,15 +81,15 @@ set: Text.Value = You {0}
 add: Turn Taker
 select: Enemy Hero
 add: Turn Taker
-set: TurnTaker.Side = Enemy
+set: TurnTaker.Team = Enemy
 select: Hand
 add: Turn Taker
 key: Ctrl+D
 rename: Enemy Hand
 set: Transform.Position.Y = 4.4
-set: TurnTaker.Side = Enemy
+set: TurnTaker.Team = Enemy
 set: Hand.Hidden = true
-explain: component:Hand | The computer's hand | A copy of the hand, on the enemy's side and hidden. A hand on a side the computer plays is played by the computer on its turn.
+explain: component:Hand | The computer's hand | A copy of the hand, on the enemy's team and hidden. A hand on a team the computer plays is played by the computer on its turn.
 explain: field:Hand.ThinkTime | Think Time | It thinks before each play, and shows the card it's about to play lifted out of its hand so you can follow. It finishes you off when it can, heals when its hero is low, and otherwise plays the most damage it can pay for, keeping its healing for later.
 play
 wait: 1

@@ -3,7 +3,7 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Turn-based play: sides that take turns, and the turn takers that wait for theirs while the rest of the game runs on. A
+// Turn-based play: teams that take turns, and the turn takers that wait for theirs while the rest of the game runs on. A
 // scene can have several turn orders, each over its own part of it (its Within); a turn taker takes turns in the one that
 // covers it. Taking turns makes no garbage from frame to frame.
 public sealed partial class Game
@@ -38,7 +38,7 @@ public sealed partial class Game
 
         foreach (var order in orders)
         {
-            if (order.SideList.Count == 0)
+            if (order.TeamList.Count == 0)
                 continue;
             // A paused turn order (see PauseGroup) holds the turn where it is.
             if (Runs(order.Entity!) && !order.Entity!.IsPaused)
@@ -77,7 +77,7 @@ public sealed partial class Game
         TurnOrder? whole = null, found = null;
         foreach (var order in _turnOrders)
         {
-            if (order.Entity?.Scene != Scene || order.SideList.Count == 0)
+            if (order.Entity?.Scene != Scene || order.TeamList.Count == 0)
                 continue;
             var scope = order.ScopedFrame == Time.Frame ? order.ScopeNow : order.Covering();
             if (scope.IsWholeScene)
@@ -103,7 +103,7 @@ public sealed partial class Game
         TurnOrder? may = null, first = null;
         foreach (var order in _turnOrders)
         {
-            if (order.Entity?.Scene != Scene || order.SideList.Count == 0)
+            if (order.Entity?.Scene != Scene || order.TeamList.Count == 0)
                 continue;
             var scope = order.ScopedFrame == Time.Frame ? order.ScopeNow : order.Covering();
             if (!scope.IsWholeScene && scope.Covers(button.Entity))
@@ -130,7 +130,7 @@ public sealed partial class Game
             // A rewound or restored game: take up the turn where it was.
             order.Shown = order.Current;
         }
-        else if (!TurnOrder.SameSide(order.Shown, order.Current))
+        else if (!Teams.Same(order.Shown, order.Current))
         {
             // A script handed the turn to someone.
             BeginTurn(order, takers, order.Current?.Trim() ?? "", 0);
@@ -161,10 +161,10 @@ public sealed partial class Game
     // One of its sides by name, if it has it.
     private static string? SideNamed(TurnOrder order, string? name)
     {
-        var sides = order.SideList;
+        var sides = order.TeamList;
         for (var i = 0; i < sides.Count; i++)
         {
-            if (TurnOrder.SameSide(sides[i], name))
+            if (Teams.Same(sides[i], name))
                 return sides[i];
         }
 
@@ -174,7 +174,7 @@ public sealed partial class Game
     // A side that had turn takers and has none left is beaten: its Defeat Message goes out, once.
     private void SendDefeats(TurnOrder order, List<TurnTaker> takers)
     {
-        var sides = order.SideList;
+        var sides = order.TeamList;
         for (var i = 0; i < sides.Count; i++)
         {
             var side = sides[i];
@@ -193,7 +193,7 @@ public sealed partial class Game
         order.RaiseTurnEnded(ended);
         foreach (var taker in takers)
         {
-            if (TurnOrder.SameSide(SideOf(taker), ended))
+            if (Teams.Same(TeamOf(taker), ended))
                 taker.RaiseTurnEnded();
         }
 
@@ -207,7 +207,7 @@ public sealed partial class Game
     // past the last side to get there.
     private (string Side, bool Wrapped) NextSide(TurnOrder order, List<TurnTaker> takers, string? after)
     {
-        var sides = order.SideList;
+        var sides = order.TeamList;
         var at = after is null ? -1 : IndexOf(sides, after);
         var anyone = AnySideHasTakers(order, takers);
         for (var i = 1; i <= sides.Count; i++)
@@ -224,7 +224,7 @@ public sealed partial class Game
     {
         for (var i = 0; i < sides.Count; i++)
         {
-            if (TurnOrder.SameSide(sides[i], side))
+            if (Teams.Same(sides[i], side))
                 return i;
         }
 
@@ -239,7 +239,7 @@ public sealed partial class Game
         order.TimeLeft = Math.Max(0, TimeFor(order, side));
         foreach (var taker in takers)
         {
-            if (!TurnOrder.SameSide(SideOf(taker), side))
+            if (!Teams.Same(TeamOf(taker), side))
                 continue;
             taker.ActionsUsed = 0;
             var components = taker.Entity!.Components;
@@ -259,7 +259,7 @@ public sealed partial class Game
         order.RaiseTurnStarted(side);
         foreach (var taker in takers)
         {
-            if (!TurnOrder.SameSide(SideOf(taker), side))
+            if (!Teams.Same(TeamOf(taker), side))
                 continue;
             taker.IsTurn = Acts(order, taker);
             taker.RaiseTurnStarted();
@@ -297,7 +297,7 @@ public sealed partial class Game
 
     private static float TimeFor(TurnOrder order, string? side) => order.IsComputer(side) ? order.ComputerTurnTime : order.TurnTime;
 
-    // A side's turn is over by itself once it has nobody left to take it, or everyone on it has used their actions; a side
+    // A team's turn is over by itself once it has nobody left to take it, or everyone on it has used their actions; a side
     // with a turn taker that has no limit goes on until it's ended.
     private bool SideIsDone(TurnOrder order, List<TurnTaker> takers)
     {
@@ -305,7 +305,7 @@ public sealed partial class Game
             return false;
         foreach (var taker in takers)
         {
-            if (!TurnOrder.SameSide(SideOf(taker), order.Current))
+            if (!Teams.Same(TeamOf(taker), order.Current))
                 continue;
             if (!(taker.Actions > 0 && taker.ActionsUsed >= taker.Actions && !Swinging(taker.Entity!)))
                 return false;
@@ -316,7 +316,7 @@ public sealed partial class Game
 
     private bool AnySideHasTakers(TurnOrder order, List<TurnTaker> takers)
     {
-        var sides = order.SideList;
+        var sides = order.TeamList;
         for (var i = 0; i < sides.Count; i++)
         {
             if (HasTakers(takers, sides[i]))
@@ -401,23 +401,35 @@ public sealed partial class Game
     {
         foreach (var taker in takers)
         {
-            if (TurnOrder.SameSide(SideOf(taker), side))
+            if (Teams.Same(TeamOf(taker), side))
                 return true;
         }
 
         return false;
     }
 
-    // The side a turn taker acts for: its own, or in a network game with teams, its player's team.
-    internal string SideOf(TurnTaker taker)
+    // The team a turn taker acts for: its own, else the team it's on some other way (a Team on it or above it), or in a
+    // network game with teams, its player's team.
+    internal string TeamOf(TurnTaker taker)
     {
         if (Net.IsOnline && Net.PlayerById(NetSession.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
             return player.Team;
-        return taker.Side?.Trim() ?? "";
+        return (string.IsNullOrWhiteSpace(taker.Team) ? Teams.Of(taker.Entity) : taker.Team).Trim();
+    }
+
+    /// <summary>
+    /// The team <paramref name="entity"/> is on (see <see cref="Teams.Of"/>), or in a network game with teams, the team of
+    /// the player who plays it. Empty for none.
+    /// </summary>
+    public string TeamOf(Entity? entity)
+    {
+        if (entity is not null && Net.IsOnline && Net.PlayerById(NetSession.OwnerIdOf(entity)) is { Team.Length: > 0 } player)
+            return player.Team;
+        return Teams.Of(entity);
     }
 
     private bool Acts(TurnOrder order, TurnTaker taker) =>
-        order.IsTurn(SideOf(taker)) && !(taker.Actions > 0 && taker.ActionsUsed >= taker.Actions);
+        order.IsTurn(TeamOf(taker)) && !(taker.Actions > 0 && taker.ActionsUsed >= taker.Actions);
 
     /// <summary>True if <paramref name="entity"/> acts for a turn taker that has to wait: it isn't its turn, or it has used its actions.</summary>
     internal bool Waiting(Entity? entity)
@@ -449,7 +461,7 @@ public sealed partial class Game
         foreach (var taker in order.Takers)
         {
             var owner = NetSession.OwnerIdOf(taker.Entity);
-            if (owner == 0 || !TurnOrder.SameSide(SideOf(taker), order.Current))
+            if (owner == 0 || !Teams.Same(TeamOf(taker), order.Current))
                 continue;
             if (player is not null && owner == player.Id)
                 return true;

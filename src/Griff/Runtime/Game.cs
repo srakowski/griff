@@ -946,6 +946,8 @@ public sealed partial class Game : IGameContext
                 continue;
             if (pickup.Heal > 0 && string.IsNullOrWhiteSpace(pickup.Item) && Health.Of(collector) is { } health && health.Current >= health.Max)
                 continue;
+            if (!string.IsNullOrWhiteSpace(pickup.Price) && !Pay(collector, pickup.Price))
+                continue;
             Collect(pickup, collector);
         }
     }

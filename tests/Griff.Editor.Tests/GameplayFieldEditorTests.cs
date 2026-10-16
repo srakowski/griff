@@ -55,8 +55,8 @@ public sealed class GameplayFieldEditorTests : IDisposable
         }
 
         Add("Score", new Text(), new Counter { Value = 12, Format = "Score: {0}" });
-        Add("Turns", new Text(), new TurnOrder { Sides = "Player, Enemy", Format = "{0}'s turn" });
-        Add("Knight", new TurnTaker { Side = "Player" });
+        Add("Turns", new Text(), new TurnOrder { Teams = "Player, Enemy", Format = "{0}'s turn" });
+        Add("Knight", new TurnTaker { Team = "Player" });
         Add("Board", new FallingBoard());
         Add("Boss", new Health { Max = 10 });
         Add("Lever", new Trigger { Message = "Pulled", Do = "Damage", Targets = "Boss" });
@@ -159,33 +159,33 @@ public sealed class GameplayFieldEditorTests : IDisposable
         var (document, selection, inspector) = Open(services);
         var order = Named(document, "Turns").GetComponent<TurnOrder>()!;
         selection.Select(Named(document, "Turns"));
-        var sides = Editor<NameListEditor>(inspector, "Turn Order", "Sides");
+        var sides = Editor<NameListEditor>(inspector, "Turn Order", "Teams");
 
         Assert.Equal(["Player", "Enemy"], sides.Rows.Select(r => r.Name));
-        Assert.Equal("Add Side", sides.AddText);
+        Assert.Equal("Add Team", sides.AddText);
         sides.Add();
-        Assert.Equal("Player, Enemy, Side 3", order.Sides);
+        Assert.Equal("Player, Enemy, Team 3", order.Teams);
         sides.Rows[2].Name = "Neutral, Too";
-        Assert.Equal("Player, Enemy, Neutral Too", order.Sides);
+        Assert.Equal("Player, Enemy, Neutral Too", order.Teams);
         sides.MoveUp(3);
-        Assert.Equal("Player, Neutral Too, Enemy", order.Sides);
+        Assert.Equal("Player, Neutral Too, Enemy", order.Teams);
         sides.Remove(2);
         sides.Remove(2);
         Assert.Throws<InvalidOperationException>(() => sides.Remove(1));
         document.History.Undo();
-        Assert.Equal("Player, Enemy", order.Sides);
-        Field(inspector, "Turn Order", "Sides").TextValue = "Red, red";
-        Assert.Equal("\"Red\" is there twice: each side needs a name of its own", Field(inspector, "Turn Order", "Sides").ValueProblem);
+        Assert.Equal("Player, Enemy", order.Teams);
+        Field(inspector, "Turn Order", "Teams").TextValue = "Red, red";
+        Assert.Equal("\"Red\" is there twice: each team needs a name of its own", Field(inspector, "Turn Order", "Teams").ValueProblem);
 
-        // A turn taker's side is picked from the sides there are, and flagged when it's none.
-        Field(inspector, "Turn Order", "Sides").TextValue = "Player, Enemy";
+        // A turn taker's team is picked from the teams there are, and flagged when it's none.
+        Field(inspector, "Turn Order", "Teams").TextValue = "Player, Enemy";
         selection.Select(Named(document, "Knight"));
-        var side = Field(inspector, "Turn Taker", "Side");
+        var side = Field(inspector, "Turn Taker", "Team");
         side.IsPickerOpen = true;
         Assert.Equal(["Enemy", "Player"], side.Picker!.Matches.Select(m => m.Name));
         side.IsPickerOpen = false;
         side.TextValue = "Pirates";
-        Assert.Equal("There's no side called \"Pirates\" in a turn order's Sides", side.UnmatchedTip);
+        Assert.Equal("There's no team called \"Pirates\": name it in a turn order's Teams, a strategy faction, a Multiplayer's Teams or a Team", side.UnmatchedTip);
 
         // A choice's options are a list of their own.
         selection.Select(Named(document, "Difficulty"));

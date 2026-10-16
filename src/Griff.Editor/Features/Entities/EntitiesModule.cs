@@ -712,11 +712,11 @@ public sealed class CreateTurnOrderCommand(IWorkspace workspace, ISelection sele
     private static TurnTaker GridTurnTaker(Entity entity, TurnOrder? order)
     {
         var driven = entity.GetComponent<GridChase>() is not null || entity.GetComponent<GridPatrol>() is not null;
-        var sides = order?.SideList ?? [];
+        var sides = order?.TeamList ?? [];
         var side = driven
             ? sides.FirstOrDefault(s => order!.IsComputer(s)) ?? "Enemy"
             : sides.FirstOrDefault(s => !order!.IsComputer(s)) ?? "Player";
-        return new TurnTaker { Side = side, Actions = 1 };
+        return new TurnTaker { Team = side, Actions = 1 };
     }
 }
 

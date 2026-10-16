@@ -299,6 +299,7 @@ public sealed partial class KnownNames
                              "instead (Griff's free fonts go into Assets when picked, or with Art > Add Free Font)",
             NameKind.Item => $"Nothing gives the item {quoted}: no pickup's Item or script's Add",
             NameKind.Flag => $"Nothing sets the flag {string.Join(" or ", names.Select(n => $"\"{FlagOf(n)}\""))}: no trigger's Set Flag, dialogue's [set] or script's SetFlag",
+            NameKind.Kind when IsTeam(kind) => $"There's no team called {quoted}: name it in a turn order's Teams, a strategy faction, a Multiplayer's Teams or a Team",
             NameKind.Kind when kind.From is { } from => $"There's no {ScopeWord(kind)} called {quoted} in {from}",
             NameKind.Kind => $"No {ScopeWord(kind)} is of the kind {quoted}: give one that Kind",
             NameKind.Saved => $"Nothing keeps a value under {quoted} in the save data: no Save As field or script's SaveData.Set does",
@@ -320,11 +321,14 @@ public sealed partial class KnownNames
         NameKind.Column => "a column of a table",
         NameKind.Item => "an item",
         NameKind.Flag => "a flag",
-        NameKind.Kind when kind.From is not null => $"a {ScopeWord(kind)}",
+        NameKind.Kind when kind.From is not null || IsTeam(kind) => $"a {ScopeWord(kind)}",
         NameKind.Kind => $"a {ScopeWord(kind)} kind",
         NameKind.Saved => "a name in the save data",
         _ => "a message",
     };
+
+    // Every genre's teams are one list of names, whoever gives them (see Teams).
+    private static bool IsTeam(NamesAttribute kind) => string.Equals(kind.Scope?.Trim(), Teams.Scope, StringComparison.OrdinalIgnoreCase);
 
     // "crate" for a Crate kind, "thing" without a scope.
     private static string ScopeWord(NamesAttribute kind) => string.IsNullOrWhiteSpace(kind.Scope) ? "thing" : kind.Scope.Trim().ToLowerInvariant();

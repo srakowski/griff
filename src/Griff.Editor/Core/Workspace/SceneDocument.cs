@@ -18,6 +18,8 @@ public sealed class SceneDocument : ObservableObject
         IsRuntime = isRuntime;
         History.Changed += (_, e) =>
         {
+            // A tilemap lined up with another stays on its cells, however it was set, moved or undone.
+            Tilemap.LineUpAll(Scene);
             OnPropertyChanged(nameof(IsDirty));
             Changed?.Invoke(this, e);
         };

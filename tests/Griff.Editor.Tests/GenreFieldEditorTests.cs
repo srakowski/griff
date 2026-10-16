@@ -226,7 +226,7 @@ public sealed class GenreFieldEditorTests : IDisposable
     public void CostsTeamsAndHotkeys_ArePickedFromWhatTheFactionsHave() => EditorHost.Run(services =>
     {
         var (document, selection, inspector) = Open(services);
-        Add(document, "Player", new Faction { Team = "Player", Resources = "Gold 250, Wood 100" });
+        Add(document, "Player", new Faction { Team = "Player", Resources = ["Gold 250", "Wood 100"] });
         Add(document, "Mine", new Resource { Kind = "Stone" });
         var unit = new Unit { Team = "Player", Cost = "50 Gold" };
         var worker = Add(document, "Worker", unit);

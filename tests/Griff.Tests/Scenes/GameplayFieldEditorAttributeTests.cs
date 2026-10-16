@@ -63,7 +63,7 @@ public sealed class GameplayFieldEditorAttributeTests
         Assert.Equal("\"{when}\" isn't one of its holes: they're {slot}, {date}, {time}, {scene}, {line}", slot.Problem(new SaveSlot(), "{when}"));
         Assert.Equal("Slot 3: Ava: Shall we go?", slot.ReadsAs(new SaveSlot { Slot = "3" }, "Slot {slot}: {line}"));
 
-        var order = new TurnOrder { Sides = "Red, Blue", TurnTime = 10 };
+        var order = new TurnOrder { Teams = "Red, Blue", TurnTime = 10 };
         Assert.Equal("Red's turn, round 1 (10)", order.ReadsAs("{0}'s turn, round {1} ({2})"));
         Assert.Equal("Pick: Normal", new Choice { Index = 1 }.ReadsAs("Pick: {0}"));
         Assert.Equal("Costs 5", Assert.IsType<FormatAttribute>(_registry.Get(typeof(Shop)).Properties.Single(p => p.Name == "Label").Editor).ReadsAs(new Shop(), "Costs {0}"));
@@ -83,11 +83,11 @@ public sealed class GameplayFieldEditorAttributeTests
     [Fact]
     public void ListsOfNames_ReadFromTextOrLines_AndFlagANameGivenTwice()
     {
-        var sides = Assert.IsType<NameListAttribute>(Property<TurnOrder>("Sides").Editor);
+        var sides = Assert.IsType<NameListAttribute>(Property<TurnOrder>("Teams").Editor);
         Assert.Equal(1, sides.Least);
         Assert.Equal(["Red", "Blue"], NameListAttribute.Read(" Red , Blue,"));
         Assert.Equal(["Easy", "Hard"], NameListAttribute.Read((IReadOnlyList<string>)["Easy", " ", "Hard"]));
-        Assert.Equal("\"Red\" is there twice: each side needs a name of its own", sides.Problem(new TurnOrder(), "Red, Blue, red"));
+        Assert.Equal("\"Red\" is there twice: each team needs a name of its own", sides.Problem(new TurnOrder(), "Red, Blue, red"));
         Assert.IsType<NameListAttribute>(Property<Choice>("Options").Editor);
         Assert.IsType<NameListAttribute>(_registry.Get(typeof(Shop)).Properties.Single(p => p.Name == "Wares").Editor);
     }
@@ -213,28 +213,29 @@ public sealed class GameplayFieldEditorAttributeTests
     }
 
     [Fact]
-    public void SidesTeamsAndSlots_AreNamedWhereTheyreGiven()
+    public void TeamsAndSlots_AreNamedWhereTheyreGiven_EveryGenresTeamsOneList()
     {
         var found = KnownNames.Collect(
         [
-            With("Turns", new TurnOrder { Sides = "Hero, Monsters" }),
+            With("Turns", new TurnOrder { Teams = "Hero, Monsters" }),
             With("Lobby", new Multiplayer { Teams = "Blue, Red" }),
             With("Slot", new SaveSlot { Slot = "Chapter 2" }),
             With("Hero", new Inventory { Items = ["Brass Key 2"], ItemUses = ["Potion: heal 3, send Drank"] }),
         ], _registry);
         var names = new KnownNames([], [], [], [], found.Sent, [], items: found.Items, kinds: found.Kinds);
 
-        var side = Property<TurnTaker>("Side");
-        Assert.Equal(["Hero", "Monsters"], names.Choices(side.Names!).Select(c => c.Name));
-        Assert.Equal(["Pirates"], names.Unmatched(new TurnTaker { Side = "Pirates" }, side));
-        Assert.Equal("There's no side called \"Pirates\" in a turn order's Sides", KnownNames.Problem(side.Names!, ["Pirates"]));
-        Assert.Equal("a side", KnownNames.Noun(side.Names!));
-        Assert.Equal(["Blue", "Red"], names.Choices(Property<PlayerSpawn>("Team").Names!).Select(c => c.Name));
+        // A turn order's teams and a Multiplayer's are the same teams: either is offered to a turn taker or a spawn.
+        var team = Property<TurnTaker>("Team");
+        Assert.Equal(["Blue", "Hero", "Monsters", "Red"], names.Choices(team.Names!).Select(c => c.Name).Order());
+        Assert.Equal(["Pirates"], names.Unmatched(new TurnTaker { Team = "Pirates" }, team));
+        Assert.Equal("There's no team called \"Pirates\": name it in a turn order's Teams, a strategy faction, a Multiplayer's Teams or a Team", KnownNames.Problem(team.Names!, ["Pirates"]));
+        Assert.Equal("a team", KnownNames.Noun(team.Names!));
+        Assert.Equal(["Blue", "Hero", "Monsters", "Red"], names.Choices(Property<PlayerSpawn>("Team").Names!).Select(c => c.Name).Order());
         Assert.Contains("Chapter 2", names.Choices(Property<Button>("Slot").Names!).Select(c => c.Name));
         Assert.Empty(names.Unmatched(new Button { Slot = "9" }, Property<Button>("Slot")));
         Assert.Contains("Brass Key", names.Items);
         Assert.Contains("Drank", names.Sent);
-        Assert.Contains("(Names a side", ComponentDescription.Of(_registry, _registry.Get(typeof(TurnTaker)), null));
+        Assert.Contains("(Names a team", ComponentDescription.Of(_registry, _registry.Get(typeof(TurnTaker)), null));
     }
 
     [Fact]

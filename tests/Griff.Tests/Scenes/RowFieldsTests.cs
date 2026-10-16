@@ -38,8 +38,8 @@ public sealed class RowFieldsTests
         Assert.Equal(["Gold", "150"], cost.Read("150 Gold"));
         Assert.Equal(["Gold", "150"], cost.Read("Gold 150"));
         Assert.Equal("150 Gold", cost.Write(["Gold", "150"]));
-        var resources = Rows<Faction>(nameof(Faction.Resources));
-        Assert.Equal("Gold 250", resources.Write(resources.Read("250 Gold")!));
+        Assert.Equal(("Gold", 250), Items.ReadOne("250 Gold"));
+        Assert.Equal(("Iron Ore", 5), Items.ReadOne("Iron Ore 5"));
     }
 
     [Fact]

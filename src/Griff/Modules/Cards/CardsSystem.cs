@@ -406,6 +406,7 @@ internal sealed partial class CardsSystem : GameSystem
         var table = (PlayZone)zone;
         table.Played++;
         hand.Mana = Math.Max(0, hand.Mana - Math.Max(0, card.Cost));
+        Game.Pay(hand.Entity, card.Price);
         card.PlayedBy = hand.Entity!.Name;
         Game.UseAction(hand.Entity!);
         Game.PlayIfSet(table.PlaySound);
@@ -421,7 +422,7 @@ internal sealed partial class CardsSystem : GameSystem
         return true;
     }
 
-    // Its side's turn has begun: the cards played from it that are on the table with Each Turn effects go off.
+    // Its team's turn has begun: the cards played from it that are on the table with Each Turn effects go off.
     private void EachTurn(Hand hand, List<PlayZone> tables)
     {
         hand.TurnBegan = false;
@@ -457,6 +458,8 @@ internal sealed partial class CardsSystem : GameSystem
         if (table.Limit > 0 && CardZone.CardsIn(table.Entity).Count >= table.Limit)
             return false;
         if (card.Cost > 0 && hand.Mana < card.Cost)
+            return false;
+        if (!string.IsNullOrWhiteSpace(card.Price) && !Game.CanPay(hand.Entity, card.Price))
             return false;
         if (Chooses(card) && Candidates(card).Count == 0)
             return false;
@@ -596,7 +599,7 @@ internal sealed partial class CardsSystem : GameSystem
         return decks.FirstOrDefault(d => d.Entity!.Name == name) ?? Scene.FindNamed(name)?.GetComponent<Deck>();
     }
 
-    // The hand a deck's Draw action draws into: of those that draw from it, the first whose side's turn it is, else the first.
+    // The hand a deck's Draw action draws into: of those that draw from it, the first whose team's turn it is, else the first.
     private Hand? HandFor(Deck deck, List<Deck> decks, List<Hand> hands)
     {
         Hand? first = null;
@@ -604,7 +607,7 @@ internal sealed partial class CardsSystem : GameSystem
         {
             if (DeckOf(hand, decks) != deck)
                 continue;
-            if (hand.Side.Length > 0 && Game.TurnOrderOf(hand.Entity) is { } order && order.IsTurn(hand.Side))
+            if (hand.Team.Length > 0 && Game.TurnOrderOf(hand.Entity) is { } order && order.IsTurn(hand.Team))
                 return hand;
             first ??= hand;
         }
@@ -612,14 +615,14 @@ internal sealed partial class CardsSystem : GameSystem
         return first;
     }
 
-    // Whether a player may play a hand: not one the computer plays, and in a network game with teams only their side's;
-    // and, with `now`, only on its side's turn (with actions left).
+    // Whether a player may play a hand: not one the computer plays, and in a network game with teams only their team's;
+    // and, with `now`, only on its team's turn (with actions left).
     private bool MayPlay(Hand hand, NetPlayer? player, bool now)
     {
-        var side = hand.Side;
+        var side = hand.Team;
         if (side.Length > 0 && Game.TurnOrderOf(hand.Entity) is { } order && order.IsComputer(side))
             return false;
-        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !TurnOrder.SameSide(side, player.Team))
+        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
             return false;
         return !now || !Game.Waiting(hand.Entity);
     }

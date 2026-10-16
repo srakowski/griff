@@ -583,18 +583,8 @@ public sealed record Recipe(string Item, int Count, IReadOnlyList<(string Item, 
         return needs.Count == 0 ? null : new Recipe(item, count, needs, station);
     }
 
-    /// <summary>"Torch 4", "4 Torch" or "Torch": a name and how many.</summary>
-    private static (string Item, int Count) Amount(string text)
-    {
-        text = text.Trim();
-        var space = text.LastIndexOf(' ');
-        if (space > 0 && int.TryParse(text[(space + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var after))
-            return (text[..space].Trim(), after);
-        space = text.IndexOf(' ');
-        if (space > 0 && int.TryParse(text[..space], NumberStyles.Integer, CultureInfo.InvariantCulture, out var before))
-            return (text[(space + 1)..].Trim(), before);
-        return (text, 1);
-    }
+    /// <summary>"Torch 4", "4 Torch" or "Torch": a name and how many, read as every genre reads items (see <see cref="Items"/>).</summary>
+    private static (string Item, int Count) Amount(string text) => Items.ReadOne(text);
 
     /// <summary>"Wood 1 + Coal 1", for showing.</summary>
     public string NeedsText => string.Join(" + ", Needs.Select(n => $"{n.Item} {n.Count.ToString(CultureInfo.InvariantCulture)}"));

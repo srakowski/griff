@@ -272,15 +272,15 @@ internal sealed class SlingshotSystem : GameSystem
         slingshot.RaiseLaunched(shot);
     }
 
-    // Whether a player may pull a slingshot: not one the computer plays, in a network game with teams only their side's;
-    // and, with `now`, only on its side's turn (with actions left).
+    // Whether a player may pull a slingshot: not one the computer plays, in a network game with teams only their team's;
+    // and, with `now`, only on its team's turn (with actions left).
     private bool MayUse(Slingshot slingshot, NetPlayer? player, bool now)
     {
         var entity = slingshot.Entity!;
-        var side = TurnTaker.Of(entity)?.Side?.Trim() ?? "";
+        var side = TurnTaker.Of(entity)?.Team?.Trim() ?? "";
         if (side.Length > 0 && Game.TurnOrderOf(entity) is { } order && order.IsComputer(side))
             return false;
-        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !TurnOrder.SameSide(side, player.Team))
+        if (Game.Net.IsOnline && player is { Team.Length: > 0 } && side.Length > 0 && !Teams.Same(side, player.Team))
             return false;
         return !now || !Game.Waiting(entity);
     }

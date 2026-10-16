@@ -1,0 +1,72 @@
+title: One team, one kind of item, one grid
+intro: Every genre shares its core ideas now: teams any genre's pieces are on, items any genre collects and pays with, and boards on a level's squares. No code.
+project: Empty | Shared Ideas
+select: Main Camera
+set: Camera.Size = 7
+deselect
+
+chapter: One grid | A falling-blocks board on a level's squares
+create: Tilemap
+rename: Level
+set: Transform.Position = -10, -4, 0
+set: Tilemap.Tiles = 00000000000000000000
+say: A level's floor, painted on a tilemap.
+deselect
+create: Falling Board
+explain: field:Tilemap.LinesUpWith | Lines Up With | Made in a scene with a level, the board lines up with it: it takes the level's tile size, and its top left sits on a corner of the level's cells.
+expectvalue: Board.Tilemap.LinesUpWith = Level
+set: FallingBoard.Columns = 4
+set: FallingBoard.Rows = 8
+set: FallingBoard.Paused = true
+set: Transform.Position = 0, 4, 0
+set: Tilemap.Tiles = ....\n....\n....\n....\n.33.\n.33.\n.33.\n.33.
+set: Tilemap.Solid = true
+explain: field:Tilemap.Solid | Solid | Ticked, the blocks that have landed are walls and floors, like the level's own tiles. Here a stack is already there, four blocks tall.
+deselect
+create: Platformer Player
+set: Transform.Position = 2, 6, 0
+
+chapter: One team | Any genre's pieces on any genre's teams
+add: Team
+explain: field:Team.Name | Team | A Team puts anything on a team: the same teams a turn order takes turns with, a strategy faction plays, a fighter's hitboxes or a network game's players are on.
+say: Allies don't hurt each other, take their team's turns, are friends to their team's tactics units and card hands, and share their team's items.
+
+chapter: One kind of item | Coins in a team's purse, and a shop
+deselect
+create: Empty
+rename: Purse
+add: Inventory
+set: Inventory.Items = Coin
+editorset: Inventory.Items:count:1 = 7
+pick: Inventory.ForTeam = Player
+expectvalue: Purse.Inventory.ForTeam = Player
+explain: field:Inventory.ForTeam | For Team | This inventory holds the Player team's items. Anything on the team without items of its own collects into it and pays from it, as a strategy faction's gold is its team's.
+deselect
+create: Sprite
+rename: Sword
+set: Transform.Position = 2, 3, 0
+add: Pickup
+set: BoxCollider.IsTrigger = true
+set: Pickup.Item = Sword
+click: editor:Pickup.Price:add
+choose: Pickup.Price:item:1:pick = Coin
+editorset: Pickup.Price:count:1 = 5
+expectvalue: Sword.Pickup.Price = 5 Coin
+explain: field:Pickup.Price | Price | A pickup with a price is a shop's ware: it waits until whoever touches it can pay, and takes the price as it's collected.
+
+chapter: Play it | Land on the stack, buy the sword
+expectat: Board = 0, 4
+expectvalue: Board.Tilemap.Solid = true
+expectvalue: Board.Tilemap.TileSize = 1
+expectat: Player = 2, 6
+play
+wait: 1.5
+expectat: Board = 0, 4
+expectvalue: Board.Tilemap.Tiles = ....\n....\n....\n....\n.33.\n.33.\n.33.\n.33.
+expectat: Player = 2, 0.5
+expectvalue: Player.Body.IsGrounded = true
+expectvalue: Player.Transform.Position.Y = 0.5 ~ 0.15
+explain: game | On the stack | The player fell past the sword, paying five of the team's coins, and landed on the falling-blocks stack, on the level's squares.
+expectvalue: Purse.Inventory.Items = Coin 2\nSword
+stop
+say: One idea of a team, one of items and resources, and one grid, shared by every genre.

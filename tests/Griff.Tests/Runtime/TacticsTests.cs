@@ -61,7 +61,7 @@ public class TacticsTests
     {
         var entity = new Entity("Turns");
         var order = entity.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = (sides, computer, 0);
+        (order.Teams, order.ComputerTeams, order.Between) = (sides, computer, 0);
         _scene.Add(entity);
         return order;
     }
@@ -88,7 +88,7 @@ public class TacticsTests
         if (side is not null)
         {
             var taker = entity.AddComponent<TurnTaker>();
-            (taker.Side, taker.Actions) = (side, 1);
+            (taker.Team, taker.Actions) = (side, 1);
         }
 
         _scene.Add(entity);
@@ -514,6 +514,34 @@ public class TacticsTests
         Assert.Equal(2, health.Current);
     }
 
+    // Teams are every genre's: a platformer's hero who joined the Red team (no tactics unit, no turn taker) is a foe of
+    // Blue's units, and one on Blue isn't.
+    [Fact]
+    public void Anything_with_health_on_another_team_is_a_foe()
+    {
+        AddMap();
+        AddTurns();
+        AddControls();
+        var knight = AddUnit("Knight", 1, 1, "Blue");
+        Entity Hero(string name, int x, int y, string team)
+        {
+            var hero = new Entity(name);
+            hero.Transform.Position = new Vector3(CellAt(x, y), 0);
+            hero.AddComponent<BoxCollider>();
+            hero.AddComponent(new Team { Name = team });
+            hero.AddComponent(new Health { InvincibleTime = 0 });
+            _scene.Add(hero);
+            return hero;
+        }
+
+        var foe = Hero("Rogue", 2, 1, "Red");
+        Hero("Squire", 1, 2, "Blue");
+        AddUnit("Orc", 5, 4, "Red");
+        Run(Frame);
+
+        Assert.Equal([foe], UnitOf(knight).Targets);
+    }
+
     [Fact]
     public void A_unit_saves_its_settings_and_whether_it_has_moved()
     {
@@ -538,7 +566,7 @@ public class TacticsTests
             scene.Add(level);
             var turns = new Entity("Turns");
             var order = turns.AddComponent<TurnOrder>();
-            (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "", 0);
+            (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "", 0);
             scene.Add(turns);
             var tactics = new Entity("Tactics");
             tactics.AddComponent<TacticsControls>();
@@ -553,7 +581,7 @@ public class TacticsTests
                 unit.AddComponent<Health>().InvincibleTime = 0;
                 unit.AddComponent<TacticsUnit>();
                 var taker = unit.AddComponent<TurnTaker>();
-                (taker.Side, taker.Actions) = (side, 1);
+                (taker.Team, taker.Actions) = (side, 1);
                 scene.Add(unit);
             }
 

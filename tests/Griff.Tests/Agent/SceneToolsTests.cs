@@ -296,9 +296,9 @@ public class SceneToolsTests
 
         var board = Run("component_describe", """{"component": "TurnOrder"}""").Text;
         Assert.Contains("Outputs (what anything can read with no code", board);
-        Assert.Contains("- Turn (a name). The side whose turn it is", board);
+        Assert.Contains("- Turn (a name). The team whose turn it is", board);
         Assert.Contains("- Round (a whole number). How many times the turns have come round", board);
-        Assert.Contains("- Left (a whole number, read by a side after a colon, e.g. \"Left:Enemy\")", board);
+        Assert.Contains("- Left (a whole number, read by a team after a colon, e.g. \"Left:Enemy\")", board);
         var ship = Run("component_describe", """{"component": "Ship"}""").Text;
         Assert.Contains("- Fuel (a number, out of its tank)", ship);
         Assert.Contains("- Crates (a whole number, read by a kind after a colon, e.g. \"Crates:Ore\")", ship);

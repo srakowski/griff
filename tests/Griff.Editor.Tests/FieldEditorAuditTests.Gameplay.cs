@@ -84,6 +84,7 @@ public sealed partial class FieldEditorAuditTests
         Inventory.ItemUses: ItemUses
         Inventory.UseSound: Sound
         Inventory.SaveAs: Names:Saved
+        Inventory.ForTeam: Names:Kind
         MatchBoard.Gems: TileNumbers
         MatchBoard.Collect: TileCounts
         MatchBoard.Cleared: Text
@@ -107,6 +108,7 @@ public sealed partial class FieldEditorAuditTests
         Pickup.Layers: Names:Layer*
         Pickup.Message: Names:Message
         Pickup.Item: Names:Item
+        Pickup.Price: Rows
         Pickup.Sound: Sound
         Pickup.Effect: Names:Prefab
         Spawner.Prefab: Names:Prefab
@@ -120,13 +122,14 @@ public sealed partial class FieldEditorAuditTests
         TacticsUnit.Layers: Names:Layer*
         TacticsUnit.AttackSound: Sound
         TacticsUnit.HitEffect: Names:Prefab
+        Team.Name: Names:Kind
         Trigger.Message: Names:Message
         Trigger.From: Entity
         Trigger.Do: Action
         Trigger.Targets: Entities
         Trigger.With: ActionValue
-        TurnOrder.Sides: NameList
-        TurnOrder.ComputerSides: Names:Kind*
+        TurnOrder.Teams: NameList
+        TurnOrder.ComputerTeams: Names:Kind*
         TurnOrder.EndAction: Names:Action
         TurnOrder.Format: Format
         TurnOrder.Message: Names:Message
@@ -134,7 +137,7 @@ public sealed partial class FieldEditorAuditTests
         TurnOrder.Within: Entity
         TurnOrder.DefeatMessage: Names:Message
         TurnOrder.Current: Names:Kind
-        TurnTaker.Side: Names:Kind
+        TurnTaker.Team: Names:Kind
         Multiplayer.Player: Entity
         Multiplayer.Teams: NameList
         Multiplayer.ExitScene: Names:Scene

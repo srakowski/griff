@@ -668,7 +668,7 @@ internal sealed class FightersSystem : GameSystem
         var entity = f.Entity!;
         if (!string.IsNullOrWhiteSpace(f.Opponent))
             return Game.Scene.FindNamed(f.Opponent.Trim(), activeOnly: true);
-        var team = entity.GetComponent<Hitboxes>()?.Team;
+        var team = Game.TeamOf(entity);
         var at = entity.Transform.WorldPosition;
         Entity? nearest = null;
         var best = float.MaxValue;
@@ -677,8 +677,7 @@ internal sealed class FightersSystem : GameSystem
             var other = fighters[i].Entity!;
             if (other == entity)
                 continue;
-            var theirs = other.GetComponent<Hitboxes>()?.Team;
-            if (!string.IsNullOrWhiteSpace(team) && string.Equals(team.Trim(), theirs?.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (Teams.Allies(team, Game.TeamOf(other)))
                 continue;
             var distance = Vector3.DistanceSquared(other.Transform.WorldPosition, at);
             if (distance < best)

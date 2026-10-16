@@ -18,7 +18,7 @@ public sealed class StrategyTests
         var entity = new Entity(team + " Team");
         var faction = entity.AddComponent<Faction>();
         faction.Team = team;
-        faction.Resources = resources;
+        faction.Resources = [.. resources.Split(",", StringSplitOptions.TrimEntries)];
         scene.Add(entity);
         return entity;
     }
@@ -127,14 +127,14 @@ public sealed class StrategyTests
         Assert.Equal("150 Gold, 50 Wood", Costs.Describe("Gold 150, 50 Wood"));
         Assert.Equal("Free", Costs.Describe(""));
 
-        var faction = new Faction { Resources = "Gold 100, Wood 20" };
+        var faction = new Faction { Resources = ["Gold 100", "Wood 20"] };
         Assert.True(faction.CanAfford("60 Gold"));
         Assert.Equal("Wood", faction.Lacking("60 Gold, 30 Wood"));
         Assert.True(faction.Spend("60 Gold, 10 Wood"));
         Assert.Equal(40, faction.Amount("Gold"));
         Assert.False(faction.Spend("50 Gold"));
         faction.Add("Gold", 25);
-        Assert.Equal("Gold 65, Wood 10", faction.Resources);
+        Assert.Equal(["Gold 65", "Wood 10"], faction.Resources);
     }
 
     [Fact]
@@ -232,6 +232,33 @@ public sealed class StrategyTests
         Assert.Null(weak.Scene);
         Assert.NotNull(strong.Scene);
         Assert.True(strong.GetComponent<Health>()!.Current < 40);
+    }
+
+    // Teams are every genre's: a platformer's hero on the Enemy team (no unit, no building) is fought like any enemy,
+    // and one on the Player team is left alone.
+    [Fact]
+    public void Units_Fight_AnythingWithHealth_OnAnotherTeam()
+    {
+        var scene = new Scene();
+        scene.Add(At(Soldier("Player", damage: 10), 0, 0));
+        Entity Hero(string name, string team, float x)
+        {
+            var hero = At(new Entity(name), x, 0);
+            hero.AddComponent(new Team { Name = team });
+            hero.AddComponent(new Health { Max = 10, DestroyOnDeath = false });
+            scene.Add(hero);
+            return hero;
+        }
+
+        var foe = Hero("Rogue", "Enemy", 3);
+        var friend = Hero("Squire", "Player", -2);
+        var input = new InputState();
+        var game = NewGame(scene, input);
+
+        Run(game, input, 4);
+
+        Assert.True(foe.GetComponent<Health>()!.IsDead);
+        Assert.Equal(10, friend.GetComponent<Health>()!.Current);
     }
 
     [Fact]

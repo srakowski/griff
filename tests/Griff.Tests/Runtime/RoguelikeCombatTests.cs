@@ -59,7 +59,7 @@ public class RoguelikeCombatTests
         if (side is not null)
         {
             var taker = entity.AddComponent<TurnTaker>();
-            (taker.Side, taker.Actions) = (side, 1);
+            (taker.Team, taker.Actions) = (side, 1);
         }
 
         _scene.Add(entity);

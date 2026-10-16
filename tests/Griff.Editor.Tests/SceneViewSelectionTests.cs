@@ -122,6 +122,38 @@ public class SceneViewSelectionTests
         Assert.False(document.History.CanUndo);
     });
 
+    // A tilemap lined up with another (a board on a level) lands on that map's cell corners however it's dragged.
+    [Fact]
+    public void Dragging_ABoardLinedUpWithALevel_KeepsItOnTheLevelsCells() => EditorHost.Run(services =>
+    {
+        var (document, selection, model) = Open(services);
+        var level = new Entity("Level");
+        level.Transform.Position = new Vector3(0.25f, 0, 0);
+        level.AddComponent(new Tilemap { Tiles = ["0000"], TileSize = 2 });
+        document.Scene.Add(level);
+        var board = new Entity("Board");
+        board.Transform.Position = new Vector3(4.25f, 2, 0);
+        var map = board.AddComponent<Tilemap>();
+        document.Scene.Add(board);
+        map.LinesUpWith = "Level";
+        selection.SelectEntities([board]);
+
+        var move = model.BeginMove()!;
+        move.To(new Vector2(1.3f, -0.7f), snap: false);
+        Assert.Equal(new Vector3(6.25f, 2, 0), board.Transform.Position);
+        move.To(new Vector2(-3.2f, 1.2f), snap: true);
+        move.End();
+
+        Assert.Equal(new Vector3(0.25f, 4, 0), board.Transform.Position);
+        document.History.Undo();
+        Assert.Equal(new Vector3(4.25f, 2, 0), board.Transform.Position);
+
+        // Typed into the Inspector (or set by an agent), it lands on the level's cells too.
+        var position = services.GetRequiredService<IWorkspace>().Components.Get(typeof(Transform)).Properties.Single(p => p.Name == "Position");
+        document.Execute(new Griff.Editing.SetPropertyEdit(board.Transform, position, new Vector3(1.1f, 0.7f, 0)));
+        Assert.Equal(new Vector3(0.25f, 0, 0), board.Transform.Position);
+    });
+
     [Fact]
     public void Agents_ReachBoxSelectionAndMoving() => EditorHost.Run(services =>
     {

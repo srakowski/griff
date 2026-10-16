@@ -296,14 +296,14 @@ public sealed class SlingshotTests
     {
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "", 0);
         _scene.Add(turns);
         var blue = new Entity("Blue Slingshot");
-        blue.AddComponent<TurnTaker>().Side = "Blue";
+        blue.AddComponent<TurnTaker>().Team = "Blue";
         _scene.Add(blue);
         var slingshot = AddSlingshot();
         var taker = slingshot.Entity!.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = ("Red", 1);
+        (taker.Team, taker.Actions) = ("Red", 1);
         Run(0.3f);
 
         // Blue's turn: it won't be pulled.

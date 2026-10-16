@@ -299,7 +299,7 @@ internal sealed partial class AdventuresSystem
                     continue;
                 }
 
-                var two = ItemCounts.Parse(what);
+                var two = Items.Parse(what);
                 if (two.Count == 2)
                     Combine(walker, bar, two[0].Item, two[1].Item);
             }

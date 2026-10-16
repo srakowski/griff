@@ -95,7 +95,7 @@ internal sealed partial class TacticsSystem : GameSystem
         var m = entity.GetComponent<GridMovement>()!;
         unit.CanAct = !Game.Waiting(entity) && Health.Of(entity) is not { IsDead: true } && !entity.IsPaused;
         unit.IsDone = TurnTaker.Of(entity) is { Actions: > 0 } taker && taker.ActionsUsed >= taker.Actions && Game.TurnOrderOf(entity) is { } order &&
-                      order.IsTurn(Game.SideOf(taker));
+                      order.IsTurn(Game.TeamOf(taker));
         if (!unit.CanAct || unit.IsWalking)
         {
             (unit.Reachable, unit.Targets) = ([], []);
@@ -244,11 +244,11 @@ internal sealed partial class TacticsSystem : GameSystem
     {
         if (TurnTaker.Of(unit.Entity!) is not { } taker || Game.TurnOrderOf(unit.Entity) is not { } order)
             return true;
-        var side = Game.SideOf(taker);
+        var side = Game.TeamOf(taker);
         if (order.IsComputer(side))
             return false;
-        return !(Game.Net.IsOnline && player is { Team.Length: > 0 } && order.SideList.Any(s => TurnOrder.SameSide(s, player.Team)) &&
-                 !TurnOrder.SameSide(side, player.Team));
+        return !(Game.Net.IsOnline && player is { Team.Length: > 0 } && order.TeamList.Any(s => Teams.Same(s, player.Team)) &&
+                 !Teams.Same(side, player.Team));
     }
 
     // ----- Reach -----
@@ -323,8 +323,9 @@ internal sealed partial class TacticsSystem : GameSystem
         }
     }
 
-    // A unit's foes, wherever they are, with their cells: units on other sides (any other unit, with no sides), or whatever
-    // with health is on the layers it attacks.
+    // A unit's foes, wherever they are, with their cells: units on other teams (any other unit, with no teams), anything
+    // else with health on another team (a platformer's hero who joined a side), or whatever with health is on the layers
+    // it attacks.
     private IEnumerable<(Entity Entity, (int X, int Y) Cell)> Foes(TacticsUnit unit, GridCells grid) =>
         Game.Showing<Health>().Select(h => h.Entity!).Where(e => IsFoe(unit, e)).Select(e => (e, CellOf(e, grid)));
 
@@ -334,9 +335,10 @@ internal sealed partial class TacticsSystem : GameSystem
             return false;
         if (CollisionLayers.Parse(unit.Layers).Length > 0)
             return unit.AttacksLayer(other.GetComponent<Collider>()?.Layer);
+        var (mine, theirs) = (Game.TeamOf(unit.Entity), Game.TeamOf(other));
         if (other.GetComponent<TacticsUnit>() is null)
-            return false;
-        return TurnTaker.Of(unit.Entity!) is not { } mine || TurnTaker.Of(other) is not { } theirs || !TurnOrder.SameSide(Game.SideOf(mine), Game.SideOf(theirs));
+            return Teams.Foes(mine, theirs);
+        return mine.Length == 0 || theirs.Length == 0 || !Teams.Same(mine, theirs);
     }
 
     private IEnumerable<(Entity Entity, (int X, int Y) Cell)> TargetsFrom(TacticsUnit unit, GridCells grid, (int X, int Y) from)

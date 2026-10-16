@@ -299,6 +299,10 @@ public sealed partial class Game
     /// <summary>In a network game, marks what <paramref name="by"/> fired or made as its player's: what it hits counts for them.</summary>
     internal void Claim(Entity spawned, Entity by)
     {
+        // A shot is on its shooter's team, so it doesn't hurt the shooter's allies.
+        if (Teams.Of(spawned).Length == 0 && Teams.Of(by) is { Length: > 0 } team)
+            spawned.AddComponent(new Team { Name = team });
+
         var owner = Net.IsOnline ? NetSession.OwnerIdOf(by) : 0;
         if (owner == 0)
             return;
@@ -314,20 +318,22 @@ public sealed partial class Game
     }
 
     /// <summary>
-    /// False when <paramref name="source"/> mustn't hurt <paramref name="target"/> in a network game: a player's own shots
-    /// don't hurt them, and teammates don't hurt each other (unless <see cref="Multiplayer.FriendlyFire"/>).
+    /// False when <paramref name="source"/> mustn't hurt <paramref name="target"/>: allies (on the same team, see
+    /// <see cref="TeamOf(Entity)"/>) don't hurt each other (in a network game, unless <see cref="Multiplayer.FriendlyFire"/>),
+    /// and in a network game a player's own shots don't hurt them.
     /// </summary>
     internal bool CanHurt(Entity? source, Entity target)
     {
-        if (!Net.IsOnline || source is null)
+        if (source is null)
+            return true;
+        var friendlyFire = Net.IsOnline && Net.Settings is { FriendlyFire: true };
+        if (!friendlyFire && Teams.Allies(TeamOf(source), TeamOf(target)))
+            return false;
+        if (!Net.IsOnline)
             return true;
         var by = Net.OwnerOf(source);
         var hurt = Net.OwnerOf(target);
-        if (by is null || hurt is null)
-            return true;
-        if (by == hurt)
-            return false;
-        return Net.Settings is { FriendlyFire: true } || by.Team.Length == 0 || !by.Team.Equals(hurt.Team, StringComparison.OrdinalIgnoreCase);
+        return by is null || hurt is null || by != hurt;
     }
 
     /// <summary>Plays a sound here and, on the host of a network game, for everyone.</summary>

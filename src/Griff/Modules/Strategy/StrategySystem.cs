@@ -216,6 +216,17 @@ internal sealed partial class StrategySystem : GameSystem
     }
 
     // On the map of the game in hand (the game without a commander has everything on its map).
+    // What else on its map is on a team with a health: a platformer's hero who joined a side (teams are every genre's).
+    private IEnumerable<Entity> Outsiders()
+    {
+        foreach (var health in Game.Showing<Health>())
+        {
+            var entity = health.Entity!;
+            if (entity.GetComponent<Unit>() is null && entity.GetComponent<Building>() is null && TeamOf(entity) is not null && OnMap(entity))
+                yield return entity;
+        }
+    }
+
     private bool OnMap(Entity entity) => Rts.Commander is not { } commander || commander.MapArea.Contains(Game.Flat(entity.Transform.WorldPosition));
 
     /// <summary>True if the player's team can see <paramref name="point"/> through the fog of war (always, with no fog).</summary>
@@ -490,18 +501,13 @@ internal sealed partial class StrategySystem : GameSystem
 
     // ----- Teams -----
 
-    internal static bool SameTeam(string? a, string? b) =>
-        string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
+    // Teams are the ones every genre shares (see Teams): a unit's, a building's, or a Team's on anything else.
+    internal static bool SameTeam(string? a, string? b) => Teams.Same(a, b);
 
-    /// <summary>The team a unit or building is on, or null for neither (a resource, a rock).</summary>
-    internal static string? TeamOf(Entity entity) =>
-        entity.GetComponent<Unit>()?.Team ?? entity.GetComponent<Building>()?.Team;
+    /// <summary>The team a unit, a building or anything else is on (see <see cref="Teams.Of"/>), or null for none (a resource, a rock).</summary>
+    internal static string? TeamOf(Entity entity) => Teams.Of(entity) is { Length: > 0 } team ? team : null;
 
-    private static bool IsEnemy(Entity a, Entity b)
-    {
-        var (teamA, teamB) = (TeamOf(a), TeamOf(b));
-        return !string.IsNullOrWhiteSpace(teamA) && !string.IsNullOrWhiteSpace(teamB) && !SameTeam(teamA, teamB);
-    }
+    private static bool IsEnemy(Entity a, Entity b) => Teams.Foes(a, b);
 
     private bool IsAlive(Entity entity) =>
         entity.Scene == Scene && !Game.IsDestroying(entity) && Health.Of(entity) is not { IsDead: true };
@@ -925,7 +931,7 @@ internal sealed partial class StrategySystem : GameSystem
     {
         Entity? best = null;
         var bestScore = float.PositiveInfinity;
-        foreach (var other in Rts.Units.Select(u => u.Entity!).Concat(Rts.Buildings.Select(b => b.Entity!)))
+        foreach (var other in Rts.Units.Select(u => u.Entity!).Concat(Rts.Buildings.Select(b => b.Entity!)).Concat(Outsiders()))
         {
             if (other == skip || !IsEnemy(looker, other) || !IsAlive(other))
                 continue;

@@ -6,7 +6,8 @@ namespace Griff.Modules.Match3;
 
 /// <summary>
 /// Creates a match-3 board: an 8 by 8 <see cref="Tilemap"/> of six kinds of gem with a <see cref="MatchBoard"/>, centered
-/// on the scene's middle and dealt already so it shows; each game deals it afresh. Swap gems to line up three of a kind.
+/// on the scene's middle (its cells lined up with the scene's level if it has one, see <see cref="Tilemap.LinesUpWith"/>)
+/// and dealt already so it shows; each game deals it afresh. Swap gems to line up three of a kind.
 /// </summary>
 [Category("Match-3")]
 public sealed class MatchBoardPreset : EntityPreset
@@ -26,7 +27,7 @@ public sealed class MatchBoardPreset : EntityPreset
         var map = entity.AddComponent<Tilemap>();
         map.Solid = false;
         var board = entity.AddComponent<MatchBoard>();
-        entity.Transform.Position = new Vector3(-board.Columns / 2f, board.Rows / 2f, 0);
+        Tilemap.LineUpWithLevel(entity, scene, new Vector3(-board.Columns / 2f, board.Rows / 2f, 0));
         board.DealInto(map, new Random());
     }
 }

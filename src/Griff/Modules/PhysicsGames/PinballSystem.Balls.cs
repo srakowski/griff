@@ -438,7 +438,7 @@ internal sealed partial class PinballSystem
 
     // The controls that work `entity`, into _inputs: its owner's (a player's own table), or with nobody owning it, this
     // machine's player's and, on the host of a network game, every other player's whose side it is (by its turn taker and
-    // their team). None while it waits for its side's turn.
+    // their team). None while it waits for its team's turn.
     private void Controls(Entity entity)
     {
         _inputs.Clear();
@@ -462,15 +462,15 @@ internal sealed partial class PinballSystem
         }
     }
 
-    // Whether a player may play a table nobody owns: not one the computer plays, and with teams only their side's.
+    // Whether a player may play a table nobody owns: not one the computer plays, and with teams only their team's.
     private bool Allowed(Entity entity, NetPlayer? player)
     {
-        var side = TurnTaker.Of(entity)?.Side?.Trim() ?? "";
+        var side = TurnTaker.Of(entity)?.Team?.Trim() ?? "";
         if (side.Length == 0)
             return true;
         if (Game.TurnOrderOf(entity) is { } order && order.IsComputer(side))
             return false;
-        return player is not { Team.Length: > 0 } || TurnOrder.SameSide(side, player.Team);
+        return player is not { Team.Length: > 0 } || Teams.Same(side, player.Team);
     }
 
     // Whether those who play `entity` hold `action` down.

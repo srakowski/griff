@@ -23,7 +23,7 @@ internal sealed partial class TacticsSystem
             if (order is not { Round: > 0, IsBetweenTurns: false } || order.Entity?.Scene != Scene || !Game.Runs(order.Entity) || !order.IsComputer(order.Current))
                 continue;
             mine = units.Where(u => Game.Runs(u.Entity!) && TurnTaker.Of(u.Entity!) is { } taker && Game.TurnOrderOf(u.Entity) == order &&
-                                    TurnOrder.SameSide(Game.SideOf(taker), order.Current)).ToList();
+                                    Teams.Same(Game.TeamOf(taker), order.Current)).ToList();
             if (mine.Count > 0)
                 break;
         }

@@ -125,7 +125,7 @@ public sealed class OutputTests
         (wire.From, wire.Output, wire.Input) = ("Button", "On", "On");
 
         var faction = Add("Red").AddComponent<Faction>();
-        faction.Resources = "Gold 40";
+        faction.Resources = ["Gold 40"];
         var display = Add("Display").AddComponent<WireDisplay>();
         var gold = display.Entity!.AddComponent<Wire>();
         (gold.From, gold.Output, gold.Input) = ("Red", "Amount:Gold", "Value");
@@ -359,7 +359,7 @@ public sealed class OutputTests
         var bar = Add("Progress").AddComponent<Bar>();
         (bar.Track, bar.Output) = ("Board", "Score");
         var faction = Add("Blue").AddComponent<Faction>();
-        faction.Resources = "Wood 30";
+        faction.Resources = ["Wood 30"];
         var wood = Add("Wood").AddComponent<Bar>();
         (wood.Track, wood.Output, wood.Max) = ("Blue", "Amount:Wood", 60);
         Run();
@@ -372,7 +372,7 @@ public sealed class OutputTests
     public void ATextShowsAnOutput_FilledIntoWhatItSays_NamesToo()
     {
         var turns = Add("Turns").AddComponent<TurnOrder>();
-        turns.Sides = "Knights, Orcs";
+        turns.Teams = "Knights, Orcs";
         var label = Add("Turn Label").AddComponent<Text>();
         (label.Track, label.Output, label.Value) = ("Turns", "Turn", "{0}'s turn, round {1}");
         var round = Add("Round Label").AddComponent<Text>();
@@ -456,7 +456,7 @@ public sealed class OutputTests
         var gauge = Add("Gauge").AddComponent<Gauge>();
         (gauge.Lives, gauge.Pilot) = (3, "Ada");
         var faction = Add("Red").AddComponent<Faction>();
-        faction.Resources = "Gold 40";
+        faction.Resources = ["Gold 40"];
         for (var i = 0; i < 5; i++)
         {
             var counter = Add($"Counter {i}").AddComponent<Counter>();

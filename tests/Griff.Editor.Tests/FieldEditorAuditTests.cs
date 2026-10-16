@@ -200,6 +200,7 @@ public sealed partial class FieldEditorAuditTests
         Tilemap.Layer: Names:Layer
         Tilemap.IgnoreLayers: Names:Layer*
         Tilemap.Tiles: Lines
+        Tilemap.LinesUpWith: Entity
         Weather.ThunderSound: Sound
         """;
 }

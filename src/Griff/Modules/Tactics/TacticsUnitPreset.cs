@@ -6,10 +6,10 @@ namespace Griff.Modules.Tactics;
 
 /// <summary>
 /// Creates a tactics unit that walks up to four cells a turn and hits whatever is next to it. It's a box sprite in its
-/// side's color with a collider, a <see cref="Body"/> without gravity, a
+/// team's color with a collider, a <see cref="Body"/> without gravity, a
 /// <see cref="GridMovement"/>, a <see cref="Health"/> of 3, a <see cref="TacticsUnit"/> and a <see cref="TurnTaker"/> with
-/// one action, on whichever side has the fewest units so far, so creating a few makes two even teams facing each other.
-/// A scene with no turn order gets one (Blue, played by you, and Red, played by the computer; clear its Computer Sides for
+/// one action, on whichever team has the fewest units so far, so creating a few makes two even teams facing each other.
+/// A scene with no turn order gets one (Blue, played by you, and Red, played by the computer; clear its Computer Teams for
 /// two people taking turns at one keyboard) with an End Turn button, and one with no <see cref="TacticsControls"/> gets
 /// those, to pick units with the mouse. All in one undo step.
 /// </summary>
@@ -48,9 +48,9 @@ public sealed class TacticsUnitPreset : EntityPreset
     // The side with the fewest units (the first, of those), where it comes in the turn order, and how many it has.
     private static (string Name, int Index, int Count) Side(Scene scene)
     {
-        var sides = OrderIn(scene)?.SideList is { Count: > 0 } list ? list : ["Blue", "Red"];
-        var units = scene.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null).Select(e => e.GetComponent<TurnTaker>()?.Side).ToList();
-        return sides.Select((side, i) => (side, i, units.Count(u => TurnOrder.SameSide(u, side)))).MinBy(s => s.Item3);
+        var sides = OrderIn(scene)?.TeamList is { Count: > 0 } list ? list : ["Blue", "Red"];
+        var units = scene.Entities.Where(e => e.GetComponent<TacticsUnit>() is not null).Select(e => e.GetComponent<TurnTaker>()?.Team).ToList();
+        return sides.Select((side, i) => (side, i, units.Count(u => Teams.Same(u, side)))).MinBy(s => s.Item3);
     }
 
     public override void Configure(Entity entity, Scene scene)
@@ -65,7 +65,7 @@ public sealed class TacticsUnitPreset : EntityPreset
         entity.AddComponent<Health>().InvincibleTime = 0;
         entity.AddComponent<TacticsUnit>();
         var taker = entity.AddComponent<TurnTaker>();
-        (taker.Side, taker.Actions) = (side, 1);
+        (taker.Team, taker.Actions) = (side, 1);
 
         // The first side down the left, the second down the right, a cell apart.
         var x = index % 2 == 0 ? -2.5f : 2.5f;
@@ -83,7 +83,7 @@ public sealed class TacticsUnitPreset : EntityPreset
             (text.Value, text.Size, text.Align, text.Order) = ("Blue's turn", 0.6f, TextAlign.Right, 150);
             var order = turns.AddComponent<TurnOrder>();
             // The computer plays Red, taking as long as its units need.
-            (order.Sides, order.ComputerSides, order.ComputerTurnTime) = ("Blue, Red", "Red", 0);
+            (order.Teams, order.ComputerTeams, order.ComputerTurnTime) = ("Blue, Red", "Red", 0);
             yield return new AddEntityEdit(scene, turns);
 
             var size = new Vector2(3, 0.9f);

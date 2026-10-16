@@ -18,7 +18,7 @@ public class FrameTests
             "Begin: Panels", "Begin: Pauses", "Begin: Time", "Begin: Input", "Begin: Debug Drawing", "Begin: Network", "Begin: Tables",
             "Begin: Dungeons",
             "Begin: Script Start",
-            "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
+            "Logic: Worlds", "Logic: Menus", "Logic: Lobby", "Logic: Grids", "Logic: Switch Targets", "Logic: Turns", "Logic: Battles", "Logic: Tactics",
             "Logic: Beat Clocks", "Logic: Calibrations", "Logic: Note Lanes", "Logic: Song Select", "Logic: Move History", "Logic: Enemies", "Logic: Movement", "Logic: Walkers", "Logic: Character Select", "Logic: Versus", "Logic: Fighters", "Logic: First Person",
             "Logic: Item Uses",
             "Scripts: Scripts",

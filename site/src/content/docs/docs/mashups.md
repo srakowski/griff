@@ -1,9 +1,9 @@
 ---
 title: "Mixing genres"
-description: "Genres sharing one scene: who has the input, what works on part of the scene, pausing part of it, viewports, genres driving each other, and what each genre offers."
+description: "Genres sharing one scene: who has the input, what works on part of the scene, pausing part of it, viewports, genres driving each other, what each genre offers, and the teams, items and grid every genre shares."
 ---
 
-A jam themed "combine two genres" wants a match-3 board inside a platformer, a strategy map in one corner of a shooter, or a Sokoban room in an RPG. Griff's genre pieces share a scene without code: each takes input only while it has focus, works on its own part of the scene, pauses on its own, and can be seen through a camera of its own, while triggers and outputs let them drive and read each other.
+A jam themed "combine two genres" wants a match-3 board inside a platformer, a strategy map in one corner of a shooter, or a Sokoban room in an RPG. Griff's genre pieces share a scene without code: each takes input only while it has focus, works on its own part of the scene, pauses on its own, and can be seen through a camera of its own, while triggers and outputs let them drive and read each other, and they share one idea of a team, of items and of a grid.
 
 ## Who has the input
 
@@ -63,3 +63,33 @@ Every genre names what it does (its actions, for a **Trigger**, a card's **Do**,
 | [RPG battles](/docs/turns/#rpg-battles) | Battler | Battler: Attack, Cast Spell, Use Item | Battler: Mana, Spell, Spell Cost, Item, Items, Title, Said | |
 
 The platformer's and top-down game's own pieces (movements, Health, Spawner, Shooter, Door, Switch, Counter) have theirs too (see [Triggers](/docs/story/#triggers) and [Outputs](/docs/story/#outputs)), and `component_describe` lists every component's for agents. A script's own component joins in the same way: `[Action]` on a method, `[Output]` on a property, and `[Focus]` on its Controllable or `[FocusFrom(typeof(...))]` on the class (see [Scripting](/docs/scripting/)).
+
+## Teams
+
+Every genre's teams are one idea: a name, `Blue` or `Player`, given by a turn order's **Teams**, a strategy **Faction**, a network game's Multiplayer **Teams** or a **Team** component, and carried by anything on that team: a **Turn Taker**'s **Team**, a strategy **Unit**'s or **Building**'s, a fighter's **Hitboxes**' **Team**, or a **Team** on anything else (**Entity → Add Component → Team**). An entity is on the first team named on it, or on the entity it's inside (a sword's hitbox is on its wielder's team); in a network game with teams, a player's character is on its player's. Names ignore case, and every field that names a team picks from all of them, flagged when no one gives that name.
+
+Things on the same team are allies and things on different teams are foes, in every genre at once:
+
+- Allies don't hurt each other: a **Damage On Touch**, a **Bump Attack**, a fighter's hitboxes and a first-person weapon pass over their own team (in a network game, unless the Multiplayer has **Friendly Fire**). A shot is on its shooter's team.
+- A turn order's teams take turns, so a platformer hero with a **Team** of `Red` (and a Turn Taker with its Team left empty) moves on Red's turn.
+- A tactics unit's foes are the units of other teams and anything else with health on another team; a strategy unit fights units and buildings of other teams and anything else with health on another team on its map; a card effect's friends are its hand's team; a **Battler** with no **Foe** named fights the first battler standing on another team; a fighter's opponent is the nearest fighter not on its team.
+- A team's items are shared (see below).
+
+Scenes saved when a turn order had **Sides**, a turn taker a **Side**, and fighters their own hitbox teams still load: the values move across to the new names. Scripts ask `Teams.Of(entity)`, `Teams.Allies(a, b)` and `Teams.Foes(a, b)`, and `Game.TeamOf(entity)` (the network player's team in a network game); a script's own component joins in by implementing `ITeamMember`.
+
+## Items and resources
+
+Every genre's items and resources are one idea too: a name and how many, `Key`, `Gold 250`, `Dirt 12`, `Mana 3`, held by whatever holds items: an **Inventory** (a hero's, a block world's player's), a strategy **Faction**'s **Resources** (a row each, as an inventory's items), or a card **Hand**'s mana (the item `Mana`). Lists of them read the same everywhere, `Coin 3, Map` or `150 Gold, 50 Wood`, the count before or after the name, and every field that names an item picks from the same list: what pickups give, inventories hold, resources are called and recipes make.
+
+Something collects into and pays from the items on it or the entity it's inside, else its team's: an **Inventory** whose **For Team** is its team, or its team's strategy faction. So:
+
+- A platformer hero on the `Player` team with no inventory of its own collects coins (a **Pickup** with an **Item**) into the Player faction's gold, and the faction trains soldiers with them.
+- A **Pickup**'s **Price** (`5 Coin`) makes it a shop's ware: it stays until whoever touches it can pay, and takes the price as it's collected.
+- A card's **Price** (`2 Gold`) is what it costs beside its mana, paid from its hand's team's items; a card that can't be paid for is dimmed and can't be played. `Mana` a teammate picks up goes into the hand.
+- An inventory's **Add Items** and **Take Items** actions (`Gold 50`) let a trigger pay out a prize or charge a toll: "when `Won` arrives from the match-3 board, Add Items `Gold 50`".
+
+A strategy unit's or building's **Cost** is paid from its team's resources as before. Scenes saved when a faction's resources were one line of text (`Gold 250, Wood 100`) still load, a row each. Scripts use `Game.CountItems(entity, "Gold")`, `Game.CanPay(entity, "150 Gold")`, `Game.Pay(entity, "150 Gold")` and `Game.Give(entity, "Key", 1)`, and `Items.Parse` reads a list; a script's own component holds items by implementing `IHoldsItems`.
+
+## One grid
+
+A match-3 or falling-blocks board keeps its pieces in a tilemap of its own, and that tilemap can line up with a level's: set its **Lines Up With** to the level's tilemap (`Level`), and it takes the level's tile size and shape and keeps its top left on a corner of the level's cells (moved to the nearest as it's set, dragged in the Scene view, or while the game runs). A board made with **Create Falling Board** or **Create Match Board** in a scene with a square tilemap lines up with it by itself. Tick the board's tilemap's **Solid** and its settled pieces are walls and floors like the level's tiles: a platformer hero climbs a falling-blocks stack on the level's squares, and falls when a row clears under it (the piece still falling isn't solid).

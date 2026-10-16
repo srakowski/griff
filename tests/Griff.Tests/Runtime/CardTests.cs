@@ -68,7 +68,7 @@ public sealed class CardTests
         if (side is not null)
         {
             var taker = entity.AddComponent<TurnTaker>();
-            (taker.Side, taker.Actions) = (side, 1);
+            (taker.Team, taker.Actions) = (side, 1);
         }
 
         _scene.Add(entity);
@@ -475,7 +475,7 @@ public sealed class CardTests
     {
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "Red", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "Red", 0);
         _scene.Add(turns);
         AddDeck();
         AddDeck("Red Deck", kind: "Black", x: 6);
@@ -568,6 +568,31 @@ public sealed class CardTests
         Assert.Equal(1, pile.Count);
     }
 
+    // A card's price beside its mana is items, paid from its team's: here a bank of coins for the Blue team.
+    [Fact]
+    public void A_cards_price_is_paid_from_its_teams_items_and_one_it_cant_pay_isnt_played()
+    {
+        var deck = AddDeck(cards: 1);
+        deck.Cards[0].Price = "2 Coin";
+        var hand = AddHand(startWith: 1);
+        hand.Entity!.AddComponent(new Team { Name = "Blue" });
+        var zone = AddZone();
+        var bank = new Entity("Bank");
+        var coins = (Inventory)bank.AddComponent(new Inventory { ForTeam = "Blue", Items = ["Coin 1"] });
+        _scene.Add(bank);
+        Run(1);
+
+        Drag(At(hand.Cards[0].Entity!), new Vector2(0, 1));
+        Assert.Equal(0, zone.Count);
+        Assert.True(hand.Cards[0].Unaffordable);
+        coins.Add("Coin", 2);
+        Run(Frame);
+        Assert.False(hand.Cards[0].Unaffordable);
+        Drag(At(hand.Cards[0].Entity!), new Vector2(0, 1));
+        Assert.Equal(1, zone.Count);
+        Assert.Equal(1, coins.Count("Coin"));
+    }
+
     // Two players, Blue (the host) and Red, each with a hidden hand drawn from one deck, and a table between them.
     private static Scene CardTable()
     {
@@ -587,7 +612,7 @@ public sealed class CardTests
             hand.Transform.Position = new Vector3(0, y, 0);
             var h = hand.AddComponent<Hand>();
             (h.StartWith, h.Hidden) = (3, true);
-            hand.AddComponent<TurnTaker>().Side = side;
+            hand.AddComponent<TurnTaker>().Team = side;
             scene.Add(hand);
         }
 
@@ -652,7 +677,7 @@ public sealed class CardTests
     {
         var turns = new Entity("Turns");
         var order = turns.AddComponent<TurnOrder>();
-        (order.Sides, order.ComputerSides, order.Between) = ("Blue, Red", "", 0);
+        (order.Teams, order.ComputerTeams, order.Between) = ("Blue, Red", "", 0);
         _scene.Add(turns);
         AddDeck(cards: 12);
         var blue = AddHand(startWith: 3, side: "Blue");

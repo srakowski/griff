@@ -178,7 +178,7 @@ public sealed partial class NetSession
         if (!IsHost || Settings is not { ScoreKills: true } || by is null || OwnerOf(by) is not { } scorer)
             return;
         var victim = OwnerOf(defeated);
-        if (victim == scorer || (victim is not null && victim.Team.Length > 0 && victim.Team.Equals(scorer.Team, StringComparison.OrdinalIgnoreCase)))
+        if (victim == scorer || (victim is not null && Teams.Allies(victim.Team, scorer.Team)))
             return;
         AddScore(scorer, 1);
     }
@@ -385,7 +385,7 @@ public sealed partial class NetSession
     private void Place(Entity avatar, NetPlayer player)
     {
         var spawns = _game.Scene.ActiveNow<PlayerSpawn>()
-            .Where(s => string.IsNullOrWhiteSpace(s.Team) || s.Team.Trim().Equals(player.Team, StringComparison.OrdinalIgnoreCase))
+            .Where(s => string.IsNullOrWhiteSpace(s.Team) || Teams.Same(s.Team, player.Team))
             .ToList();
         var others = _players.Where(p => p != player && p.Avatar?.Scene == _game.Scene).Select(p => Flat(p.Avatar!.Transform.WorldPosition)).ToList();
         Vector2 at;
@@ -423,7 +423,7 @@ public sealed partial class NetSession
         var teams = TeamNames();
         if (teams.Count > 0)
         {
-            player.Team = teams.OrderBy(t => _players.Count(p => p != player && p.Team.Equals(t, StringComparison.OrdinalIgnoreCase)))
+            player.Team = teams.OrderBy(t => _players.Count(p => p != player && Teams.Same(p.Team, t)))
                 .ThenBy(teams.IndexOf).First();
         }
 
@@ -446,7 +446,7 @@ public sealed partial class NetSession
     private Color ColorFor(NetPlayer player)
     {
         var teams = TeamNames();
-        var index = teams.FindIndex(t => t.Equals(player.Team, StringComparison.OrdinalIgnoreCase));
+        var index = teams.FindIndex(t => Teams.Same(t, player.Team));
         return index >= 0 ? PlayerColors[index % PlayerColors.Length] : PlayerColors[(player.Id - 1) % PlayerColors.Length];
     }
 

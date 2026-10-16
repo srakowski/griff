@@ -46,6 +46,9 @@ public interface IAgentScene
     /// </summary>
     KnownNames? Names => null;
 
+    /// <summary>What the running game found wrong in its data, each once (see <see cref="ProblemLog"/>); null when nothing runs.</summary>
+    ProblemLog? RunProblems => null;
+
     /// <summary>True while a prefab is open on its own (in its tab) in place of the scene: <see cref="ScenePath"/> is the prefab's.</summary>
     bool IsPrefab => ScenePath?.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -244,6 +247,12 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             foreach (var (reference, names) in unmatched)
                 text.Append(CultureInfo.InvariantCulture, $"- {reference.Component.Entity!.Name} #{AgentValues.ShortId(reference.Component.Entity.Id)} {reference.Label}: ")
                     .AppendLine(string.Join(", ", names.Select(n => $"\"{n}\"")));
+        }
+        if (host.RunProblems is { Count: > 0 } found)
+        {
+            text.AppendLine("Problems the running game found in its data (said once each, flagged on the component in the Inspector):");
+            foreach (var problem in found.Problems)
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {problem.Message}{(problem.EntityName is null ? "" : $" [{problem.EntityName}.{problem.ComponentType}]")}");
         }
         var unknown = UnmatchedKnown(scene.Entities.SelectMany(e => e.Components)).ToList();
         if (unknown.Count > 0)

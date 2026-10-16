@@ -19,6 +19,8 @@ public sealed class EditorAgentScene(IProjectSession projectSession, ISceneDocum
 
     public bool IsPlaying => playSession.IsPlaying;
 
+    public ProblemLog? RunProblems => playSession.IsPlaying ? playSession.Problems : null;
+
     public Entity? TopParent => sceneDocuments.Scene?.ParentFor(null);
 
     public ComponentRegistry Components => projectSession.Components;

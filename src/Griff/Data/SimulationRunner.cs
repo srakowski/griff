@@ -199,22 +199,9 @@ public static class SimulationRunner
             : label;
 
         // What the games said as they played (a Table Values naming a column that isn't there), each once.
-        private readonly HashSet<string> _warnings = [];
+        public ProblemLog Problems { get; } = new();
 
-        public void Warn(string warning)
-        {
-            lock (_warnings)
-                _warnings.Add(warning);
-        }
-
-        public IReadOnlyList<string> Warnings
-        {
-            get
-            {
-                lock (_warnings)
-                    return [.. _warnings.Order(StringComparer.Ordinal)];
-            }
-        }
+        public IReadOnlyList<string> Warnings => [.. Problems.Lines.Order(StringComparer.Ordinal)];
     }
 
     internal sealed class Step(int index, double? value, TableSet tables)
@@ -508,7 +495,7 @@ public static class SimulationRunner
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    plan.Warn($"{type.Name} threw in a run of {first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}: {ex.GetType().Name}: {ex.Message}");
+                    plan.Problems.Report($"{type.Name} threw in a run of {first?.Name ?? plan.FirstLabel} against {second?.Name ?? plan.SecondLabel}: {ex.GetType().Name}: {ex.Message}");
                     run.Draw();
                 }
             }
@@ -568,7 +555,7 @@ public static class SimulationRunner
             SceneName = simulation.Arena,
         };
         game.Time.StepRate = host.StepRate;
-        game.Warning += (_, warning) => plan.Warn(warning);
+        game.Problems.Reported += plan.Problems.Report;
 
         double dealt = 0, taken = 0;
         var firstHealth = firsts.Select(e => e.GetComponent<Health>()).OfType<Health>().ToList();

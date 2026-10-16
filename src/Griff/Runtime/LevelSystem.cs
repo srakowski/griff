@@ -304,7 +304,8 @@ internal sealed class LevelSystem : GameSystem
         aim = aim.LengthSquared() > 1e-8f ? Vector2.Normalize(aim) : Vector2.UnitX;
         foreach (var direction in shooter.VolleyAround(aim))
         {
-            var shot = Game.Spawn(shooter.Prefab!.Trim(), here + shooter.Offset);
+            if (Game.TrySpawn(shooter.Prefab!, shooter, "its Prefab", here + shooter.Offset) is not { } shot)
+                continue;
             Game.Claim(shot, entity);
             if (shot.GetComponent<Body>() is { } body)
                 body.Velocity = direction * shooter.Speed;

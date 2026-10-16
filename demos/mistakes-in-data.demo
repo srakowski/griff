@@ -1,0 +1,16 @@
+title: Mistakes in a game's data
+intro: A mistake in a game's data, such as a prefab that isn't there, warns once and the game goes on. The warning names the entity and component, and the Inspector flags it while the game plays.
+project: Platformer | Mistakes
+
+chapter: A shot that isn't there | The game goes on
+create: Empty
+rename: Launcher
+add: Slingshot
+set: Slingshot.Shot = Nowhere
+say: This slingshot loads a shot from a prefab called Nowhere, and the project has no such prefab. In code that would be a bug. Here it is a mistake in the game's data, so the game doesn't stop.
+play
+expectproblem: Slingshot = Nowhere
+explain: component:Slingshot | The flag | While the game plays, the Inspector flags the Slingshot with what the game found wrong, said once. Output says it too, and scene_tree lists it for agents with the entity and component it was found on.
+stop
+expectproblem: Slingshot = none
+say: Stopped, the flag goes away. Fix the name, and the next run says nothing.

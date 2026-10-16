@@ -106,7 +106,7 @@ public sealed class GameExporterTests : IDisposable
         var result = GameExporter.Export(project, _player, _output);
         Assert.True(result.Success, result.Error);
         var loaded = await GameLoader.LoadAsync(GamePackage.Extract(result.Executable!, _cache, "Arcade Export")!);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         Assert.Equal(Project.DefaultSceneName, loaded.SceneName);
 
         // As the player sets it up: Enter on the menu clicks Play, which loads the game scene.

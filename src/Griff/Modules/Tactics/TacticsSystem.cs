@@ -203,7 +203,7 @@ internal sealed partial class TacticsSystem : GameSystem
         {
             Game.PlayIfSet(unit.AttackSound);
             if (!string.IsNullOrWhiteSpace(unit.HitEffect))
-                Game.Spawn(unit.HitEffect.Trim(), Game.Flat(target.Transform.WorldPosition));
+                Game.TrySpawn(unit.HitEffect, unit, "its Hit Effect", Game.Flat(target.Transform.WorldPosition));
             if (unit.HitStop > 0)
                 Game.HitStop(unit.HitStop);
         }

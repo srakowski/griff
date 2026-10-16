@@ -235,7 +235,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             case SandboxTool.Grab:
                 RunGrab(tools, click, rightClick);
                 break;
-            case SandboxTool.Spawn when click && tools.CurrentProp is { } prop && Game.PrefabLoader is not null:
+            case SandboxTool.Spawn when click && tools.CurrentProp is { } prop:
                 SpawnProp(tools, prop, mouse, scope);
                 break;
             case SandboxTool.Weld or SandboxTool.Rope:
@@ -317,12 +317,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
             return;
         }
 
-        Entity entity;
-        try
-        {
-            entity = Game.PrefabLoader!(prop);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or KeyNotFoundException or InvalidOperationException or IOException)
+        if (Game.TryLoadPrefab(prop, tools, "its prop") is not { } entity)
         {
             SandboxNote($"No prefab called {prop}");
             return;

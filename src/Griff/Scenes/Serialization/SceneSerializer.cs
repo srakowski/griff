@@ -232,7 +232,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             throw new ArgumentException("Transforms belong to their entity and can't be created separately.", nameof(data));
 
         var component = descriptor.CreateInstance();
-        ReadProperties(component, descriptor, data, descriptor.DisplayName, new LoadContext(warnings));
+        ReadProperties(component, descriptor, data, descriptor.DisplayName, new LoadContext(warnings), null);
         return component;
     }
 
@@ -314,7 +314,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         else if (!element.TryGetProperty("id", out var idElement) || !idElement.TryGetGuid(out id) || !context.SeenIds.Add(id))
         {
             id = Guid.NewGuid();
-            context.Warn($"\"{name}\" had a missing or duplicate id; it was given a new one.");
+            context.Warn($"\"{name}\" had a missing or duplicate id; it was given a new one.", name);
         }
 
         var transform = new Transform();
@@ -357,7 +357,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         var typeName = data.TryGetProperty("type", out var t) ? t.GetString() : null;
         if (typeName is null)
         {
-            context.Warn($"A component on \"{entity.Name}\" has no type and was skipped.");
+            context.Warn($"A component on \"{entity.Name}\" has no type and was skipped.", entity.Name);
             return;
         }
 
@@ -365,12 +365,12 @@ public sealed class SceneSerializer(ComponentRegistry registry)
         if (descriptor is null)
         {
             entity.AddComponent(new MissingComponent(typeName, data));
-            context.Warn($"\"{entity.Name}\" uses unknown component \"{typeName}\"; its data was kept.");
+            context.Warn($"\"{entity.Name}\" uses unknown component \"{typeName}\"; its data was kept.", entity.Name, typeName);
             return;
         }
 
         var component = descriptor.Type == typeof(Transform) ? entity.Transform : descriptor.CreateInstance();
-        ReadProperties(component, descriptor, data, $"{entity.Name}.{descriptor.DisplayName}", context);
+        ReadProperties(component, descriptor, data, $"{entity.Name}.{descriptor.DisplayName}", context, entity.Name);
 
         if (component != entity.Transform)
             entity.AddComponent(component);
@@ -379,12 +379,12 @@ public sealed class SceneSerializer(ComponentRegistry registry)
     // Brings older data up to the type's version, reads each property (under its name now or a former one), and keeps
     // whatever is left over on the component so saving writes it back. Upgrade steps see properties under the names
     // they have now, whatever they were saved as.
-    private static void ReadProperties(Component component, ComponentDescriptor descriptor, JsonElement data, string label, LoadContext context)
+    private static void ReadProperties(Component component, ComponentDescriptor descriptor, JsonElement data, string label, LoadContext context, string? entityName)
     {
         var version = data.TryGetProperty("version", out var v) && v.TryGetInt32(out var saved) ? saved : 1;
         if (version > descriptor.Version)
         {
-            context.Warn($"{label} was saved by a newer version of it ({version}, this is {descriptor.Version}); values it doesn't know were kept.");
+            context.Warn($"{label} was saved by a newer version of it ({version}, this is {descriptor.Version}); values it doesn't know were kept.", entityName, descriptor.Type.Name);
         }
         else if (version < descriptor.Version)
         {
@@ -402,7 +402,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             }
             catch (Exception ex)
             {
-                context.Warn($"{label} couldn't be upgraded from version {version}: {ex.Message} Its values were read as saved.");
+                context.Warn($"{label} couldn't be upgraded from version {version}: {ex.Message} Its values were read as saved.", entityName, descriptor.Type.Name);
             }
         }
 
@@ -420,7 +420,7 @@ public sealed class SceneSerializer(ComponentRegistry registry)
             }
             catch (FormatException ex)
             {
-                context.Warn($"{label}.{property.Name}: {ex.Message} Kept the default.");
+                context.Warn($"{label}.{property.Name}: {ex.Message} Kept the default.", entityName, descriptor.Type.Name);
             }
         }
 
@@ -448,6 +448,14 @@ public sealed class SceneSerializer(ComponentRegistry registry)
 
         public HashSet<Guid> SeenIds { get; } = [];
 
-        public void Warn(string message) => warnings?.Add(message);
+        // A mistake in the data being read, said once to whoever is listening (a game's ProblemLog also learns which entity and
+        // component it was found on).
+        public void Warn(string message, string? entity = null, string? component = null)
+        {
+            if (warnings is ProblemLog log)
+                log.Report(new Problem(message, entity, component));
+            else
+                warnings?.Add(message);
+        }
     }
 }

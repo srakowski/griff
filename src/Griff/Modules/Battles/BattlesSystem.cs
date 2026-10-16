@@ -236,8 +236,8 @@ internal sealed class BattlesSystem : GameSystem
 
     private void SpawnEffect(Battler by, Entity on)
     {
-        if (!string.IsNullOrWhiteSpace(by.Effect) && Game.PrefabLoader is not null)
-            Game.Spawn(by.Effect.Trim(), new System.Numerics.Vector2(on.Transform.WorldPosition.X, on.Transform.WorldPosition.Y));
+        if (!string.IsNullOrWhiteSpace(by.Effect))
+            Game.TrySpawn(by.Effect, by, "its Effect", new System.Numerics.Vector2(on.Transform.WorldPosition.X, on.Transform.WorldPosition.Y));
     }
 
     private static string Called(Entity entity) => entity.GetComponent<Battler>()?.Called ?? entity.Name;

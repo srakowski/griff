@@ -87,7 +87,7 @@ internal sealed class DungeonsSystem : GameSystem
         foreach (var child in holder.Children.ToList())
             Game.Destroy(child);
         foreach (var (prefab, x, y) in layout.Spawns)
-            Game.Spawn(prefab, map.CellCenter(x, y), holder);
+            Game.TrySpawn(prefab, dungeon, "its spawn", map.CellCenter(x, y), holder);
 
         var players = PlayersOf(dungeon).ToList();
         for (var i = 0; i < players.Count; i++)

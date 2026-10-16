@@ -309,7 +309,7 @@ internal sealed class GridSystem : GameSystem
             return;
         Game.PlayIfSet(bump.Sound);
         if (!string.IsNullOrWhiteSpace(bump.Effect))
-            Game.Spawn(bump.Effect.Trim(), Game.Flat(victim.Transform.WorldPosition));
+            Game.TrySpawn(bump.Effect, bump, "its Effect", Game.Flat(victim.Transform.WorldPosition));
         if (bump.HitStop > 0)
             Game.HitStop(bump.HitStop);
         bump.RaiseHit(victim);

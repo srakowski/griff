@@ -84,7 +84,7 @@ internal sealed class ItemSystem : GameSystem
                     health.Heal(amount);
                     break;
                 case "spawn":
-                    Game.Spawn(argument, at);
+                    Game.TrySpawn(argument, inventory, $"its {item} item's spawn effect", at);
                     break;
                 case "send":
                     Game.Send(argument, entity, from: entity);
@@ -137,8 +137,8 @@ internal sealed class ItemSystem : GameSystem
 
         if (!string.IsNullOrWhiteSpace(pickup.Effect))
         {
-            var effect = Game.Spawn(pickup.Effect.Trim(), new Vector2(position.X, position.Y));
-            if (pickup.TintEffect && entity.GetComponent<Sprite>() is { } sprite)
+            var effect = Game.TrySpawn(pickup.Effect, pickup, "its Effect", new Vector2(position.X, position.Y));
+            if (effect is not null && pickup.TintEffect && entity.GetComponent<Sprite>() is { } sprite)
             {
                 foreach (var emitter in effect.SelfAndDescendants().SelectMany(e => e.GetComponents<ParticleEmitter>()))
                 {

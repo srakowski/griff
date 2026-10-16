@@ -519,8 +519,8 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
 
         if (!string.IsNullOrWhiteSpace(blocks.BreakSound))
             Game.PlaySoundAt(blocks.BreakSound.Trim(), at);
-        if (!string.IsNullOrWhiteSpace(blocks.BreakEffect) && Game.PrefabLoader is not null)
-            Game.Spawn(blocks.BreakEffect.Trim(), at);
+        if (!string.IsNullOrWhiteSpace(blocks.BreakEffect))
+            Game.TrySpawn(blocks.BreakEffect, blocks, "its Break Effect", at);
     }
 
     // Sand and the like drop a cell at a time while there's nothing under them, settling one another as they go.

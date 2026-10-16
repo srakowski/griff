@@ -127,6 +127,18 @@ public sealed class ComponentSection : ObservableObject
 
     public bool IsMissing { get; }
 
+    /// <summary>What the running game found wrong on this component (a prefab that won't load, a name that finds nothing), one per line; null when nothing.</summary>
+    public string? RunProblems => _components.SelectMany(_owner.RunProblemsOf).Distinct().ToList() is { Count: > 0 } lines ? string.Join("\n", lines) : null;
+
+    /// <summary>True while <see cref="RunProblems"/> says something.</summary>
+    public bool HasRunProblems => RunProblems is not null;
+
+    internal void RefreshRunProblems()
+    {
+        OnPropertyChanged(nameof(RunProblems));
+        OnPropertyChanged(nameof(HasRunProblems));
+    }
+
     public bool CanRemove => Component is not Transform;
 
     /// <summary>True for components from the project's scripts, which can be opened in the script editor.</summary>
@@ -289,6 +301,7 @@ public sealed class ComponentSection : ObservableObject
 
     public void Refresh()
     {
+        RefreshRunProblems();
         OnPropertyChanged(nameof(IsExpanded));
         OnPropertyChanged(nameof(ShowsFields));
         foreach (var group in Groups)

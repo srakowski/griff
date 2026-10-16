@@ -135,7 +135,7 @@ internal sealed class SaveSystem : GameSystem
             return false;
 
         Scene scene;
-        var warnings = new List<string>();
+        var warnings = new ProblemLog();
         try
         {
             scene = new SceneSerializer(Game.Components ?? ComponentRegistry.CreateDefault()).LoadFromString(Unpack(packed), warnings);
@@ -146,8 +146,8 @@ internal sealed class SaveSystem : GameSystem
             return false;
         }
 
-        foreach (var warning in warnings)
-            Game.Warn($"Loading the game saved in \"{slot}\": {warning}");
+        foreach (var problem in warnings.Problems)
+            Game.Problems.Report(problem with { Message = $"Loading the game saved in \"{slot}\": {problem.Message}" });
         var header = ParseHeader(text);
         var load = new PendingLoad(scene, header?["scene"]?.GetValue<string>() ?? Game.SceneName, FlagsIn(header), slot, header);
         if (fade > 0)

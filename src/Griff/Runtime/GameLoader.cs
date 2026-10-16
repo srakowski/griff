@@ -25,7 +25,7 @@ public static class ExportLayout
 }
 
 /// <summary>Everything needed to start a game: project, component types and the start scene.</summary>
-public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, IReadOnlyList<string> Warnings)
+public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, ProblemLog Problems)
 {
     private PrefabLibrary? _prefabs;
 
@@ -54,7 +54,7 @@ public sealed record LoadedGame(Project Project, ComponentRegistry Components, S
             Components = Components,
         };
         game.UseProjectSettings(Project);
-        game.AlreadySaid(Warnings);
+        game.AlreadySaid(Problems.Lines);
         return game;
     }
 }
@@ -80,7 +80,7 @@ public static class GameLoader
     {
         var project = await Project.LoadAsync(gameFolder);
         var components = ComponentRegistry.CreateDefault();
-        var warnings = new List<string>();
+        var warnings = new ProblemLog();
 
         var scripts = Path.Combine(project.RootPath, ExportLayout.ScriptsAssembly);
         // Loaded from bytes so the file isn't locked while the game runs.
@@ -96,7 +96,7 @@ public static class GameLoader
         var scene = new SceneSerializer(components).Load(stream, warnings);
         // A trigger, counter or wire naming an action or output nothing has: said now, not left to do nothing.
         foreach (var line in Griff.Editing.NameChecks.Lines(scene, components))
-            warnings.Add(line);
+            warnings.Report(line);
         return new LoadedGame(project, components, scene, warnings) { SceneName = Path.GetFileNameWithoutExtension(scenePath) };
     }
 

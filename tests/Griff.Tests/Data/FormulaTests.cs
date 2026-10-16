@@ -268,7 +268,7 @@ public sealed class FormulaTests
         scene.Add(ann);
         var game = new Game(scene, new InputState()) { Tables = tables };
         var warnings = new List<string>();
-        game.Warning += (_, w) => warnings.Add(w);
+        game.Problems.Reported += p => warnings.Add(p.Message);
 
         Assert.Equal(132, (int)tables.Get("Levels", "3")["XP"]);
         game.Tick(1 / 60.0);

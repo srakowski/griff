@@ -41,7 +41,7 @@ public sealed class VisualNovelTemplateTests : IDisposable
             Components = _registry,
             ViewAspect = 16 / 9f,
         };
-        game.Warning += (_, w) => _warnings.Add(w);
+        game.Problems.Reported += p => _warnings.Add(p.Message);
         game.UseProjectSettings(project);
         // Off the buttons and the choices, until a test points it somewhere.
         _input.MouseWorld = new Vector2(0, 1.5f);
@@ -417,7 +417,7 @@ public sealed class VisualNovelTemplateTests : IDisposable
         var extracted = GamePackage.Extract(desktop.Executable!, Path.Combine(_root, "cache"), "Starfall")!;
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         var game = new Game(loaded.LoadScene(VisualNovelTemplate.StoryScene), new InputState())
         {
             SceneLoader = loaded.LoadScene, SceneName = VisualNovelTemplate.StoryScene,

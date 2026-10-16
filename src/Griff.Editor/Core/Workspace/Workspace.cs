@@ -165,6 +165,8 @@ public sealed class Workspace(
 
     public bool IsPlaying => _editScene is not null;
 
+    public ProblemLog Problems { get; } = new();
+
     public SceneDocument? EditScene => _editScene ?? _scene;
 
     // Playing plays the scene, so a prefab showing gives way to it.

@@ -47,11 +47,26 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     private int[] _componentCounts = [];
 
     private readonly PrefabFiles _prefabFiles;
+    private readonly ProblemLog? _runProblems;
+    private readonly Core.Workspace.IPlaySession? _playSession;
 
     public InspectorPanel(ISceneDocuments sceneDocuments, IScriptSession scriptSession, IProjectSession projectSession, ISelection selection, Scripts.ScriptEditors scripts, Art.EditorArt art,
         Audio.EditorAudio audio, Core.Dialogs.IDialogService dialogs, Core.Status.IStatusService status, Core.Settings.ISettingsStore settings,
-        Lazy<Core.Commands.CommandRegistry> commands, PrefabFiles prefabFiles)
+        Lazy<Core.Commands.CommandRegistry> commands, PrefabFiles prefabFiles, Core.Workspace.IPlaySession? playSession = null)
     {
+        if (playSession is not null)
+        {
+            // What the running game finds wrong in its data is flagged on the component it was found on.
+            _playSession = playSession;
+            _runProblems = playSession.Problems;
+            _runProblems.Reported += _ => RunProblemsChanged();
+            playSession.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(Core.Workspace.IPlaySession.IsPlaying))
+                    RunProblemsChanged();
+            };
+        }
+
         _prefabFiles = prefabFiles;
         _commands = commands;
         _settings = settings;
@@ -635,6 +650,23 @@ public sealed partial class InspectorPanel : ToolPanel, IPropertyHost
     {
         if (ComponentEdits.AddCopies(_projectSession.Components, source, lacking) is { } edit)
             Execute(edit);
+    }
+
+    /// <summary>The words of what the running game found wrong on <paramref name="component"/>, each once.</summary>
+    internal IReadOnlyList<string> RunProblemsOf(Component component) => _runProblems is null || _playSession is not { IsPlaying: true } ? [] : [.. _runProblems.On(component).Select(p => p.Message)];
+
+    private void RunProblemsChanged()
+    {
+        void Notify()
+        {
+            foreach (var section in Components)
+                section.RefreshRunProblems();
+        }
+
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            dispatcher.BeginInvoke(Notify);
+        else
+            Notify();
     }
 
     private void Refresh()

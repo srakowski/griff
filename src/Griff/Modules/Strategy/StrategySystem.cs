@@ -185,8 +185,10 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
             return null;
         }
 
+        var site = Game.TrySpawn(PrefabName(building, worker.Options()), worker, "the building to put up", center);
+        if (site is null)
+            return null;
         faction?.Spend(info.Cost);
-        var site = Game.Spawn(PrefabName(building, worker.Options()), center);
         var placed = site.GetComponent<Building>()!;
         placed.Team = team;
         placed.Progress = 0;
@@ -528,15 +530,7 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
         name = name.Trim();
         if (Rts.Prefabs.TryGetValue(name, out var cached))
             return cached;
-        Entity? entity = null;
-        try
-        {
-            entity = Game.PrefabLoader?.Invoke(name);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException or KeyNotFoundException or UnauthorizedAccessException)
-        {
-        }
-
+        var entity = Game.TryLoadPrefab(name, null, "The strategy game lists a unit or building whose prefab");
         Rts.Prefabs[name] = entity;
         return entity;
     }
@@ -997,10 +991,10 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
             Game.PlaySoundAt(fighter.Sound.Trim(), from);
         fighter.RaiseSwung(target);
 
-        if (!string.IsNullOrWhiteSpace(fighter.Projectile) && Game.PrefabLoader is not null)
+        if (!string.IsNullOrWhiteSpace(fighter.Projectile))
         {
-            var shot = Game.Spawn(fighter.Projectile.Trim(), from);
-            Rts.Shots.Add(new Shot(shot, target, attacker, fighter.Damage, Math.Max(0.5f, fighter.ProjectileSpeed), Game.Flat(target.Transform.WorldPosition)));
+            if (Game.TrySpawn(fighter.Projectile, fighter, "its Projectile", from) is { } shot)
+                Rts.Shots.Add(new Shot(shot, target, attacker, fighter.Damage, Math.Max(0.5f, fighter.ProjectileSpeed), Game.Flat(target.Transform.WorldPosition)));
             return;
         }
 
@@ -1209,9 +1203,6 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
         producer.Progress = 0;
         producer.QueueList.RemoveAt(0);
         producer.Paid.RemoveAt(0);
-        if (Game.PrefabLoader is null)
-            return;
-
         var team = TeamOf(entity);
         var building = entity.GetComponent<Building>();
         var here = Game.Flat(entity.Transform.WorldPosition);
@@ -1224,7 +1215,8 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
             door = new Vector2(here.X, exit.Min.Y);
         var spot = Nav().NearestOpen(door) ?? door;
 
-        var spawned = Game.Spawn(name, spot);
+        if (Game.TrySpawn(name, null, "A unit a building trains: the prefab", spot) is not { } spawned)
+            return;
         if (spawned.GetComponent<Unit>() is { } unit)
         {
             unit.Team = team;

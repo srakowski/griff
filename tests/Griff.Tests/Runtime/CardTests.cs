@@ -465,7 +465,7 @@ public sealed class CardTests
         deck.Table = "Missing";
         deck.Started = false;
         var warnings = new List<string>();
-        _game.Warning += (_, w) => warnings.Add(w);
+        _game.Problems.Reported += p => warnings.Add(p.Message);
         Run(Frame);
         Assert.Contains(warnings, w => w.Contains("Deck Deck", StringComparison.Ordinal));
     }

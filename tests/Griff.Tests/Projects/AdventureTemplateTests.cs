@@ -392,7 +392,7 @@ public sealed class AdventureTemplateTests : IDisposable
         var extracted = GamePackage.Extract(desktop.Executable!, Path.Combine(_root, "cache"), "Pip")!;
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         var game = new Game(loaded.LoadScene("Garden"), _input) { SceneLoader = loaded.LoadScene, SceneName = "Garden" };
         Run(game, 0.2);
         Assert.NotNull(game.Find("Mabel")!.GetComponent<Dialogue>());

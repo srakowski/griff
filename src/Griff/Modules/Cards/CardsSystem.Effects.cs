@@ -121,12 +121,12 @@ internal sealed partial class CardsSystem
         }
 
         Game.PlayIfSet(effect.Sound);
-        if (!string.IsNullOrWhiteSpace(effect.Effect) && Game.PrefabLoader is not null)
+        if (!string.IsNullOrWhiteSpace(effect.Effect))
         {
             foreach (var target in targets.Count > 0 ? targets : [source])
             {
                 var at = target.Transform.WorldPosition;
-                Game.Spawn(effect.Effect.Trim(), new Vector2(at.X, at.Y));
+                Game.TrySpawn(effect.Effect, effect, "its Effect", new Vector2(at.X, at.Y));
             }
         }
     }

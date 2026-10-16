@@ -280,19 +280,11 @@ internal sealed class VersusSystem : GameSystem
             return;
         if (preview.IsEnabled != visible)
             preview.IsEnabled = visible;
-        if (_previewOf.TryGetValue(preview, out var shown) && shown == character || Game.PrefabLoader is not { } load)
+        if (_previewOf.TryGetValue(preview, out var shown) && shown == character)
             return;
         _previewOf[preview] = character;
-        Entity fighter;
-        try
-        {
-            fighter = load(character);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or ArgumentException or InvalidOperationException)
-        {
-            Game.Warn($"Character Select: there's no prefab \"{character}\" to show.");
+        if (Game.TryLoadPrefab(character, null, "Character Select: the fighter prefab") is not { } fighter)
             return;
-        }
 
         if (fighter.GetComponent<Sprite>() is { } from && preview.GetComponent<Sprite>() is { } sprite)
         {
@@ -491,19 +483,11 @@ internal sealed class VersusSystem : GameSystem
     // one if it's already that character or none was picked; and the character's name, as shown.
     private (Entity? Fighter, string Name) PutIn(Entity? placed, string? character)
     {
-        if (placed is null || string.IsNullOrWhiteSpace(character) || Game.PrefabLoader is null ||
+        if (placed is null || string.IsNullOrWhiteSpace(character) ||
             string.Equals(CharacterSelect.CharacterName(placed.Prefab), CharacterSelect.CharacterName(character), StringComparison.OrdinalIgnoreCase))
             return (placed, DisplayName(placed));
-        Entity picked;
-        try
-        {
-            picked = Game.PrefabLoader(character.Trim());
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or ArgumentException or InvalidOperationException)
-        {
-            Game.Warn($"Versus Match: there's no fighter \"{character}\" to put in; {placed.Name} fights instead.");
+        if (Game.TryLoadPrefab(character, null, $"Versus Match: the fighter to put in for {placed.Name}") is not { } picked)
             return (placed, DisplayName(placed));
-        }
 
         picked.Name = placed.Name;
         var at = placed.Transform.Position;

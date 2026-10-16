@@ -211,7 +211,11 @@ public sealed class PlayMode : ObservableObject, IDisposable
     }
 
     // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to Output.
-    private void OnGameWarning(object? sender, string message) => _logger.LogWarning("{Warning}", message);
+    private void OnGameProblem(Problem problem)
+    {
+        _logger.LogWarning("{Warning}", problem.Message);
+        _playSession.Problems.Report(problem);
+    }
 
     private IEnumerable<Game> AllGames()
     {
@@ -459,7 +463,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
                 _runner.Game.Tables = _tables;
         }
 
-        _runner.Game.Warning += OnGameWarning;
+        _playSession.Problems.Clear();
+        _runner.Game.Problems.Reported += OnGameProblem;
         _runner.Game.SceneName = _sceneName;
         _runner.Game.Profiler = _profiler;
         _runner.Game.ShowHitboxes = _showHitboxes;
@@ -679,7 +684,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         game.Net.PlayerName = $"Player {number}";
         game.ShowHitboxes = _showHitboxes;
         game.UseProjectSettings(project);
-        game.Warning += OnGameWarning;
+        game.Problems.Reported += OnGameProblem;
         game.Net.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Faulted += OnFaulted;
         runner.Start();

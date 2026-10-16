@@ -297,10 +297,10 @@ internal sealed class MovementSystem : GameSystem
     // A puff at its feet.
     private void SpawnDust(PlatformerMovement m, Entity entity)
     {
-        if (string.IsNullOrWhiteSpace(m.DustEffect) || Game.PrefabLoader is null)
+        if (string.IsNullOrWhiteSpace(m.DustEffect))
             return;
         var bounds = entity.GetComponent<Collider>() is { } collider ? Physics.BoundsOf(collider) : new Box(Game.Flat(entity.Transform.WorldPosition), Vector2.Zero);
-        Game.Spawn(m.DustEffect.Trim(), new Vector2(bounds.Center.X, bounds.Min.Y));
+        Game.TrySpawn(m.DustEffect, m, "its Dust Effect", new Vector2(bounds.Center.X, bounds.Min.Y));
     }
 
     private void RunTopDown(TopDownMovement m)
@@ -546,8 +546,8 @@ internal sealed class MovementSystem : GameSystem
             crumble.ShakeOffset = Vector2.Zero;
             entity.IsEnabled = false;
             Game.PlayIfSet(crumble.Sound);
-            if (!string.IsNullOrWhiteSpace(crumble.Effect) && Game.PrefabLoader is not null)
-                Game.Spawn(crumble.Effect.Trim(), Game.Flat(entity.Transform.WorldPosition));
+            if (!string.IsNullOrWhiteSpace(crumble.Effect))
+                Game.TrySpawn(crumble.Effect, crumble, "its Effect", Game.Flat(entity.Transform.WorldPosition));
             crumble.RaiseFell();
         }
     }

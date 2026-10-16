@@ -118,6 +118,9 @@ A few more things scripts often do:
 // Spawn a prefab (Assets/Prefabs/Bullet.prefab) where the player is.
 var bullet = Game.Spawn("Bullet", new Vector2(Transform.Position.X, Transform.Position.Y));
 
+// A prefab your data names (a field you made) may be missing: TrySpawn warns once and gives null, instead of stopping the game.
+var spark = Game.TrySpawn(Effect, this, "its Effect", new Vector2(Transform.Position.X, Transform.Position.Y));
+
 // Do something later, or repeatedly. Timers belong to this entity and stop if it's destroyed.
 After(0.5f, () => Game.Destroy(bullet));
 Every(2f, () => Game.Spawn("Enemy", new Vector2(10, 0)));

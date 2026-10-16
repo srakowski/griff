@@ -1024,6 +1024,15 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 if (!await Until(() => Flagged() == wantFlagged, 3000))
                     throw new InvalidOperationException($"Expected {flagTarget} to flag \"{wantFlagged}\", but it flags \"{Flagged()}\".");
                 break;
+            case "expectproblem":
+                // "expectproblem: Slingshot = Nowhere": while the game plays, the Inspector flags the component with what the
+                // game found wrong in its data, and that has this in it; "= none" when it shouldn't say anything.
+                var (problemComponent, problemText) = Split2(a, '=');
+                var wantNone = problemText.Equals("none", StringComparison.OrdinalIgnoreCase);
+                string? RunProblem() => DemoUi.InspectorSection(problemComponent)?.RunProblems;
+                if (!await Until(() => wantNone ? RunProblem() is null : RunProblem()?.Contains(problemText, StringComparison.OrdinalIgnoreCase) == true, 5000))
+                    throw new InvalidOperationException($"Expected {problemComponent} to be flagged with \"{problemText}\" by the running game, but it says \"{RunProblem() ?? "nothing"}\".");
+                break;
             case "expectlink":
                 // "expectlink: Lever > Bridge = Switch Targets": the Scene view draws an arrow from one to the other,
                 // labelled with those fields; "= none" when it shouldn't.

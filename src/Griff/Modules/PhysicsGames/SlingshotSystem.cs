@@ -140,16 +140,9 @@ internal sealed class SlingshotSystem : GameSystem
         if (slingshot.FirstShot is null && !string.IsNullOrWhiteSpace(slingshot.Shot) && slingshot.Made < slingshot.Shots)
         {
             var name = slingshot.Shot.Trim();
-            try
-            {
-                var shot = Game.Spawn(name, slingshot.Entity);
-                if (shot.GetComponent<Body>() is null)
-                    Game.Warn($"Slingshot {slingshot.Entity!.Name}: its Shot \"{name}\" has no Body, so it can't be launched.");
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException or KeyNotFoundException or ArgumentException)
-            {
-                Game.Warn($"Slingshot {slingshot.Entity!.Name}: its Shot \"{name}\" won't load ({ex.Message}).");
-            }
+            var shot = Game.TrySpawn(name, slingshot, "its Shot", slingshot.Entity);
+            if (shot is not null && shot.GetComponent<Body>() is null)
+                Game.Warn(slingshot, $"Slingshot {slingshot.Entity!.Name}: its Shot \"{name}\" has no Body, so it can't be launched.");
 
             slingshot.Made++;
         }

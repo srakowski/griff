@@ -191,7 +191,20 @@
                                                TextWrapping="Wrap" />
                                 </DockPanel>
 
-                                <!-- What it needs and the entity doesn't have, each with a button that adds it -->
+                                <!-- What the running game found wrong in this component's data -->
+                                <DockPanel Margin="12,8" Tag="run-problems" Visibility="{Binding HasRunProblems, Converter={StaticResource Visible}}">
+                                    <TextBlock Margin="0,1,8,0"
+                                               VerticalAlignment="Top"
+                                               DockPanel.Dock="Left"
+                                               Foreground="{DynamicResource Brush.Status.Warning}"
+                                               Style="{StaticResource Style.Icon}"
+                                               Text="{x:Static theme:Icons.Warning}" />
+                                    <TextBlock Style="{StaticResource Style.Text.Secondary}"
+                                               Text="{Binding RunProblems}"
+                                               TextWrapping="Wrap" />
+                                </DockPanel>
+
+                <!-- What it needs and the entity doesn't have, each with a button that adds it -->
                                 <ItemsControl Margin="12,8,10,0"
                                               ItemsSource="{Binding Needs}"
                                               Visibility="{Binding HasNeeds, Converter={StaticResource Visible}}">

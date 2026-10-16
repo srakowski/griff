@@ -43,7 +43,7 @@ public sealed class CardsTemplateTests(ITestOutputHelper output) : IDisposable
             ViewAspect = 16 / 9f,
         };
         if (warnings is not null)
-            game.Warning += (_, w) => warnings.Add(w);
+            game.Problems.Reported += p => warnings.Add(p.Message);
         game.UseProjectSettings(project);
         return game;
     }
@@ -387,7 +387,7 @@ public sealed class CardsTemplateTests(ITestOutputHelper output) : IDisposable
         var extracted = GamePackage.Extract(desktop.Executable!, Path.Combine(_root, "cache"), "Duel")!;
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         var game = new Game(loaded.LoadScene(CardsTemplate.DuelScene), new InputState())
         {
             SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = CardsTemplate.DuelScene,

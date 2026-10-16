@@ -337,7 +337,7 @@ public sealed partial class NetSession
             {
                 avatar = remembered is not null ? Serializer.DeserializeEntity(remembered)
                     : _templateJson is not null ? Serializer.DeserializeEntity(_templateJson)
-                    : _game.PrefabLoader?.Invoke(name);
+                    : _game.TryLoadPrefab(name, null, "The prefab of the network game's player avatar");
             }
             catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or JsonException)
             {

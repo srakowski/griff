@@ -26,7 +26,7 @@ public sealed class VisualNovelReadingTests : IDisposable
     public VisualNovelReadingTests()
     {
         _game = new Game(_scene, _input) { SceneName = "Story" };
-        _game.Warning += (_, message) => _warnings.Add(message);
+        _game.Problems.Reported += p => _warnings.Add(p.Message);
     }
 
     public void Dispose()
@@ -402,7 +402,7 @@ public sealed class VisualNovelReadingTests : IDisposable
             return scene;
         });
         var warnings = new List<string>();
-        world.Client.Warning += (_, w) => warnings.Add(w);
+        world.Client.Problems.Reported += p => warnings.Add(p.Message);
         world.Run(0.2);
         Assert.False(world.Client.SaveGame("1"));
         Assert.False(world.Host.SaveGame("1"));

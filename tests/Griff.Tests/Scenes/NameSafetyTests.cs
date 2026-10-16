@@ -118,7 +118,7 @@ public sealed class NameSafetyTests
 
         var game = new Game(scene, new InputState()) { Components = registry };
         var said = new List<string>();
-        game.Warning += (_, message) => said.Add(message);
+        game.Problems.Reported += p => said.Add(p.Message);
         game.Advance(1 / 60.0);
         game.Advance(1 / 60.0);
 
@@ -134,7 +134,7 @@ public sealed class NameSafetyTests
         var game = new Game(scene, new InputState()) { Components = registry };
         game.AlreadySaid(warnings);
         var said = new List<string>();
-        game.Warning += (_, message) => said.Add(message);
+        game.Problems.Reported += p => said.Add(p.Message);
         game.Advance(1 / 60.0);
 
         Assert.Single(warnings);

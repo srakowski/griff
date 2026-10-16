@@ -316,7 +316,7 @@ internal sealed class FirstPersonSystem : GameSystem, IViewDrawer, ISeesThroughE
             if (Game.Physics.Raycast(Scene, origin, direction, weapon.Range, ignore: owner) is not { } hit)
                 continue;
             if (!string.IsNullOrWhiteSpace(weapon.ImpactEffect))
-                Game.Spawn(weapon.ImpactEffect.Trim(), hit.Point - direction * 0.1f);
+                Game.TrySpawn(weapon.ImpactEffect, weapon, "its Impact Effect", hit.Point - direction * 0.1f);
             weapon.RaiseHit(hit.Entity);
             if (Health.Of(hit.Entity) is { } health && health.Entity != owner && Game.CanHurt(owner, health.Entity!))
             {
@@ -338,7 +338,8 @@ internal sealed class FirstPersonSystem : GameSystem, IViewDrawer, ISeesThroughE
 
     private void Launch(Weapon weapon, Entity owner, Vector2 origin, Vector2 direction)
     {
-        var shot = Game.Spawn(weapon.Projectile!.Trim(), origin + direction * 0.45f);
+        if (Game.TrySpawn(weapon.Projectile!, weapon, "its Projectile", origin + direction * 0.45f) is not { } shot)
+            return;
         Game.Claim(shot, owner);
         if (shot.GetComponent<Body>() is { } body)
             body.Velocity = direction * weapon.ProjectileSpeed;

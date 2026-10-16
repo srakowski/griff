@@ -24,7 +24,7 @@ public sealed class VisualNovelTests
     public VisualNovelTests()
     {
         _game = new Game(_scene, _input);
-        _game.Warning += (_, message) => _warnings.Add(message);
+        _game.Problems.Reported += p => _warnings.Add(p.Message);
     }
 
     private void Run(float seconds)

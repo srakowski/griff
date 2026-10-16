@@ -23,4 +23,11 @@ public interface IPlaySession : INotifyPropertyChanged
 
     /// <summary>Replaces the play-mode copy (e.g. after rewinding) without leaving play mode.</summary>
     void ReplacePlayScene(SceneDocument runtime);
+
+    /// <summary>
+    /// What the running game found wrong in its data (a prefab that won't load, a name that finds nothing), each once, with the
+    /// entity and component it was found on: Output says it, the Inspector flags the component and agents read it. Empty when
+    /// nothing is playing; a new run starts it afresh.
+    /// </summary>
+    ProblemLog Problems { get; }
 }

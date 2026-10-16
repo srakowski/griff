@@ -233,8 +233,8 @@ internal sealed class HitboxesSystem : GameSystem
             game.Send(attacker.HitMessage.Trim(), damage, from: from);
         if (!string.IsNullOrWhiteSpace(attacker.HitSound))
             game.PlaySoundAt(attacker.HitSound.Trim(), point);
-        if (!string.IsNullOrWhiteSpace(attacker.Effect) && game.PrefabLoader is not null)
-            game.Spawn(attacker.Effect.Trim(), point);
+        if (!string.IsNullOrWhiteSpace(attacker.Effect))
+            game.TrySpawn(attacker.Effect, attacker, "its Effect", point);
         if (attacker.HitStop > 0)
             game.HitStop(attacker.HitStop);
         attacker.RaiseHit(hit);
@@ -265,8 +265,8 @@ internal sealed class HitboxesSystem : GameSystem
             game.Send(guard.BlockMessage.Trim(), chip, from: target);
         if (!string.IsNullOrWhiteSpace(guard.BlockSound))
             game.PlaySoundAt(guard.BlockSound.Trim(), point);
-        if (!string.IsNullOrWhiteSpace(guard.BlockEffect) && game.PrefabLoader is not null)
-            game.Spawn(guard.BlockEffect.Trim(), point);
+        if (!string.IsNullOrWhiteSpace(guard.BlockEffect))
+            game.TrySpawn(guard.BlockEffect, guard, "its Block Effect", point);
         if (attacker.HitStop > 0)
             game.HitStop(attacker.HitStop / 2);
         guard.RaiseBlocked(new HitInfo(from, target, chip, new Vector2(push, 0), blockstun, box.Group, point));

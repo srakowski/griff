@@ -602,7 +602,7 @@ public sealed class RhythmTemplateTests : IDisposable
         var extracted = GamePackage.Extract(desktop.Executable!, Path.Combine(_root, "cache"), "Neon")!;
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         var saves = new SaveData();
         saves.Set(RhythmTemplate.SavedSong, RhythmTemplate.SongPath("Overdrive"));
         saves.Set(RhythmTemplate.SavedDifficulty, "Easy");

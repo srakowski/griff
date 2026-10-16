@@ -602,7 +602,7 @@ public class NoteLanesTests
         var audio = new SilentAudio();
         var game = new Game(scene, input) { Audio = audio, Tables = new TableSet([chart]) };
         if (warnings is not null)
-            game.Warning += (_, w) => warnings.Add(w);
+            game.Problems.Reported += p => warnings.Add(p.Message);
         Tick(game, input);
         return (game, input, audio, lanes, clock);
     }

@@ -251,14 +251,12 @@ public sealed partial class Game : IGameContext
         entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;
 
     /// <summary>
-    /// Raised when something set up without code can't do its job as the game runs: a Table Values component naming a
-    /// table, row or column that isn't there, or a table's formula naming one, or working itself out in a loop (see
-    /// <see cref="TableSet.Problems"/>). The editor shows it in Output; it doesn't stop the game.
+    /// Where a mistake in the game's data goes, once each: a prefab that won't load, a name that finds nothing, a Table
+    /// Values naming a row that isn't there. The editor shows it in Output and the Inspector, agents read it, and the game
+    /// goes on; a mistake in code throws instead (see <see cref="ProblemLog"/>).
     /// </summary>
-    [field: NotState("the host's")]
-    public event EventHandler<string>? Warning;
-
-    private readonly HashSet<string> _warned = [];
+    [field: NotState("the host's, and a rewound game doesn't say a problem twice: each is said once a game")]
+    public ProblemLog Problems { get; } = new();
 
     // The scene whose names (actions, outputs, wires' inputs) have been checked: each scene says once, as it starts, what
     // it names that nothing answers to.
@@ -266,7 +264,7 @@ public sealed partial class Game : IGameContext
     private Scene? _namesChecked;
 
     /// <summary>Problems the host has already said (the loader's warnings), so the game doesn't say them again.</summary>
-    internal void AlreadySaid(IEnumerable<string> messages) => _warned.UnionWith(messages);
+    internal void AlreadySaid(IEnumerable<string> messages) => Problems.MarkSaid(messages);
 
     private void CheckNames()
     {
@@ -280,10 +278,51 @@ public sealed partial class Game : IGameContext
     /// <summary>
     /// Each problem once a game, so one that comes up every step isn't said every step.
     /// </summary>
-    public void Warn(string message)
+    public void Warn(string message) => Problems.Report(message);
+
+    /// <summary>
+    /// Says a mistake in the data of <paramref name="component"/>, once, naming it and its entity so the Inspector can
+    /// flag it. The game goes on.
+    /// </summary>
+    public void Warn(Component component, string message) => Problems.Report(message, component);
+
+    /// <summary>
+    /// A new copy of a prefab for <paramref name="by"/>'s field, or null, with a warning (once), if it won't load: no such
+    /// prefab, a file that doesn't read, or a game with no prefabs. A prefab named in the game's data is data, so a
+    /// missing one never stops the game. <paramref name="what"/> says what the prefab is for in the warning ("its Effect").
+    /// </summary>
+    public Entity? TryLoadPrefab(string prefab, Component? by, string what)
     {
-        if (_warned.Add(message))
-            Warning?.Invoke(this, message);
+        var name = prefab.Trim();
+        try
+        {
+            if (PrefabLoader is null)
+                throw new InvalidOperationException("this game can't load prefabs");
+            return PrefabLoader(name);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException or KeyNotFoundException or ArgumentException or System.Text.Json.JsonException)
+        {
+            var label = by?.Entity is { } entity ? $"{by.GetType().Name} {entity.Name}: " : "";
+            Problems.Report(new Problem($"{label}{what} \"{name}\" won't load ({ex.Message}).", by?.Entity?.Name, by?.GetType().Name));
+            return null;
+        }
+    }
+
+    /// <summary>Adds a new copy of a prefab to the scene as <see cref="Spawn(string, Entity?)"/> does, or warns and returns null if it won't load (see <see cref="TryLoadPrefab"/>).</summary>
+    public Entity? TrySpawn(string prefab, Component? by, string what, Entity? parent = null)
+    {
+        Crowds.ThrowIfRunning("spawn");
+        return TryLoadPrefab(prefab, by, what) is { } entity ? Spawn(entity, parent) : null;
+    }
+
+    /// <summary>Adds a new copy of a prefab at <paramref name="position"/> as <see cref="Spawn(string, Vector2, Entity?)"/> does, or warns and returns null if it won't load.</summary>
+    public Entity? TrySpawn(string prefab, Component? by, string what, Vector2 position, Entity? parent = null)
+    {
+        Crowds.ThrowIfRunning("spawn");
+        if (TryLoadPrefab(prefab, by, what) is not { } entity)
+            return null;
+        entity.Transform.Position = new Vector3(position, entity.Transform.Position.Z);
+        return Spawn(entity, parent);
     }
 
     internal void Notify(Entity entity, Action<Behavior> action)

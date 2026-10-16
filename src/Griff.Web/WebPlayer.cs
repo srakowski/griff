@@ -104,8 +104,8 @@ public static partial class WebPlayer
 
         var game = s_game = start.NewGame(s_input);
         // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
-        game.Warning += (_, message) => Console.WriteLine(message);
-        foreach (var warning in loaded.Warnings)
+        game.Problems.Reported += p => Console.WriteLine(p.Message);
+        foreach (var warning in loaded.Problems.Lines)
             Console.WriteLine(warning);
 
         var mixer = new Mixer();

@@ -275,7 +275,7 @@ public sealed class RpgStatsTemplateTests(ITestOutputHelper output) : IDisposabl
         var extracted = GamePackage.Extract(desktop.Executable!, Path.Combine(_root, "cache"), "Quest")!;
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
-        Assert.Empty(loaded.Warnings);
+        Assert.Empty(loaded.Problems);
         var game = new Game(loaded.Scene, new InputState()) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = loaded.SceneName };
         game.UseProjectSettings(loaded.Project);
         Assert.Equal("Fireball", game.Tables.Get("Spells", "Fireball").Name);

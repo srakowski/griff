@@ -170,7 +170,7 @@ internal sealed partial class CardsSystem : GameSystem
             for (var i = 0; i < copies; i++)
             {
                 // A prefab that won't load makes none of its row's cards (said once in Output).
-                if (MakeCard(prefab, row.Name, where) is not { } entity)
+                if (MakeCard(prefab, row.Name, deck) is not { } entity)
                     break;
                 var values = entity.GetComponent<TableValues>() ?? entity.AddComponent<TableValues>();
                 (values.Table, values.Row) = (deck.Table!.Trim(), row.Name);
@@ -186,7 +186,7 @@ internal sealed partial class CardsSystem : GameSystem
 
     // A copy of a card prefab (the row's, else the deck's) or a plain card, named after a row, or null (said in Output) if
     // the prefab won't load.
-    private Entity? MakeCard(string? prefab, string name, string where)
+    private Entity? MakeCard(string? prefab, string name, Deck deck)
     {
         Entity entity;
         if (string.IsNullOrWhiteSpace(prefab))
@@ -195,16 +195,9 @@ internal sealed partial class CardsSystem : GameSystem
         }
         else
         {
-            try
-            {
-                entity = Game.PrefabLoader?.Invoke(prefab.Trim()) ?? throw new InvalidOperationException("this game can't load prefabs");
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException or KeyNotFoundException or ArgumentException)
-            {
-                Game.Warn($"{where}: {name}'s prefab \"{prefab.Trim()}\" won't load ({ex.Message}).");
+            if (Game.TryLoadPrefab(prefab, deck, $"{name}'s prefab") is not { } made)
                 return null;
-            }
-
+            entity = made;
             entity.Name = name;
         }
 

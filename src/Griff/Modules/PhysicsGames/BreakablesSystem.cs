@@ -264,14 +264,6 @@ internal sealed class BreakablesSystem : GameSystem
     // Its Effect prefab where it broke.
     private void SpawnEffect(Breakable breakable, Vector2 at)
     {
-        var name = breakable.Effect!.Trim();
-        try
-        {
-            Game.Spawn(name, at);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException or KeyNotFoundException or ArgumentException)
-        {
-            Game.Warn($"Breakable {breakable.Entity!.Name}: its Effect \"{name}\" won't load ({ex.Message}).");
-        }
+        Game.TrySpawn(breakable.Effect!, breakable, "its Effect", at);
     }
 }

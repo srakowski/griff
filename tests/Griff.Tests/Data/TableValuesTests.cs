@@ -130,7 +130,7 @@ public sealed class TableValuesTests : IDisposable
         Rand.Seed(7);
         var warnings = new List<string>();
         var game = new Game(_scene, new InputState()) { Tables = new TableSet([Enemies()]) };
-        game.Warning += (_, w) => warnings.Add(w);
+        game.Problems.Reported += p => warnings.Add(p.Message);
         slime.GetComponent<Health>()!.Max = 0.5f;
 
         Step(game, 10);
@@ -236,7 +236,7 @@ public sealed class TableValuesTests : IDisposable
         _scene.Add(ghost);
         var warnings = new List<string>();
         var game = new Game(_scene, new InputState()) { Tables = new TableSet([Enemies()]) };
-        game.Warning += (_, w) => warnings.Add(w);
+        game.Problems.Reported += p => warnings.Add(p.Message);
 
         Step(game, 3);
 

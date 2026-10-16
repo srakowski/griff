@@ -593,7 +593,7 @@ public sealed class CardEffectTests
             return entity;
         };
         var warnings = new List<string>();
-        _game.Warning += (_, w) => warnings.Add(w);
+        _game.Problems.Reported += p => warnings.Add(p.Message);
         var entity = new Entity("Deck");
         var deck = entity.AddComponent<Deck>();
         (deck.Table, deck.Prefab, deck.ShuffleOnStart) = ("Cards", "Spell", false);

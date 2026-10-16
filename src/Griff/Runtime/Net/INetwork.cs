@@ -65,6 +65,15 @@ public interface INetwork : IGameService
     /// </summary>
     string? Unavailable { get; set; }
 
+    /// <summary>
+    /// Whether this game's network play reaches other machines. Off, as a game starts, it stays on this one: the sockets
+    /// it hosts and joins on are reachable only from here (so Windows never asks about the firewall) and
+    /// <see cref="Status"/> gives 127.0.0.1 as the address to join. The host's to choose, for this game alone: the
+    /// player and the editor's Play turn it on for the game they run; a test, a simulation or a tool leaves it off, so
+    /// one that hosts never opens a port to the network.
+    /// </summary>
+    bool OverNetwork { get; set; }
+
     /// <summary>Pretend network trouble (lag, lost packets) on what this machine sends, to try the game on a bad connection.</summary>
     NetConditions FakeLag { get; set; }
 

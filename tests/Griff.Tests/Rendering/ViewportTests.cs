@@ -3,7 +3,6 @@ using Griff.Modules.FirstPerson;
 using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
-using Griff.Tests.Runtime;
 
 namespace Griff.Tests.Rendering;
 
@@ -11,7 +10,6 @@ namespace Griff.Tests.Rendering;
 /// Viewports: cameras drawn into parts of the screen over the main view (split screens, minimaps, a first-person window
 /// in a 2D game), each its own frame with its own HUD, built across cores and into the last frame without garbage.
 /// </summary>
-[Collection(nameof(CoresCollection))]
 public sealed class ViewportTests
 {
     private const float Aspect = 16f / 9f;
@@ -292,44 +290,36 @@ public sealed class ViewportTests
         for (var i = 0; i < 5; i++)
             game.Tick(1 / 60.0);
 
-        var wereWorkers = Workers.Count;
-        try
-        {
-            game.ChunkedFrom = int.MaxValue;
-            Workers.Count = 1;
-            var one = SceneRenderer.Build(game, Aspect);
-            game.ChunkedFrom = 0;
-            Workers.Count = 8;
-            var chunked = SceneRenderer.Build(game, Aspect);
-            Assert.Equal(Describe(one), Describe(chunked));
-            Assert.True(one.Views[1].Frame.IsDark);
-            Assert.Single(one.Views[1].Frame.Lights);
+        game.ChunkedFrom = int.MaxValue;
+        game.WorkerCount = 1;
+        var one = SceneRenderer.Build(game, Aspect);
+        game.ChunkedFrom = 0;
+        game.WorkerCount = 8;
+        var chunked = SceneRenderer.Build(game, Aspect);
+        Assert.Equal(Describe(one), Describe(chunked));
+        Assert.True(one.Views[1].Frame.IsDark);
+        Assert.Single(one.Views[1].Frame.Lights);
 
-            RenderFrame? frame = null;
+        RenderFrame? frame = null;
+        for (var i = 0; i < 10; i++)
+        {
+            game.Tick(1 / 60.0);
+            frame = SceneRenderer.Build(game, Aspect, frame);
+        }
+
+        var least = long.MaxValue;
+        for (var attempt = 0; attempt < 40 && least > 0; attempt++)
+        {
+            if (attempt > 0)
+                Thread.Sleep(50);
+            var before = Workers.AllocatedBytes();
             for (var i = 0; i < 10; i++)
-            {
-                game.Tick(1 / 60.0);
                 frame = SceneRenderer.Build(game, Aspect, frame);
-            }
-
-            var least = long.MaxValue;
-            for (var attempt = 0; attempt < 40 && least > 0; attempt++)
-            {
-                if (attempt > 0)
-                    Thread.Sleep(50);
-                var before = Workers.AllocatedBytes();
-                for (var i = 0; i < 10; i++)
-                    frame = SceneRenderer.Build(game, Aspect, frame);
-                least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
-            }
-
-            Assert.True(least == 0, $"A frame with viewports allocated {least:N0} bytes.");
-            Assert.Equal(2, frame!.Views.Count);
+            least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
         }
-        finally
-        {
-            Workers.Count = wereWorkers;
-        }
+
+        Assert.True(least == 0, $"A frame with viewports allocated {least:N0} bytes.");
+        Assert.Equal(2, frame!.Views.Count);
 
         static string Describe(RenderFrame frame) =>
             string.Join("|", frame.Sprites.Select(d => $"{d.Entity.Name}{d.World}")) + $"@{frame.ViewsAt}/{frame.LitCount}" +

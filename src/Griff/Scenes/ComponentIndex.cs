@@ -16,8 +16,9 @@ public readonly struct ComponentList<T> : IReadOnlyList<T>
     // The snapshot itself.
     internal T[] Items => _items ?? [];
 
-    // Which snapshot it is: the same as long as nothing has changed, so a caller can tell nothing has (an array can be
-    // filled again, so it can't go by that). 0 for a list made apart from the scene's, which is never taken as the same.
+    // Which snapshot of its scene's it is: the same as long as nothing has changed, so a caller can tell nothing has (an
+    // array can be filled again, so it can't go by that). Each scene numbers its own, so a caller keeps which scene too.
+    // 0 for a list made apart from the scene's, which is never taken as the same.
     internal long Serial { get; }
 
     public int Count => _items?.Length ?? 0;
@@ -118,7 +119,7 @@ internal sealed class ComponentIndex<T>(Scene scene) : ComponentIndex(scene, typ
             var all = _pool.Rent(Items.Count, Scene.Steps);
             for (var i = 0; i < all.Length; i++)
                 all[i] = (T)(object)Items[i];
-            (_all, _allSerial) = (all, Snapshots.Next());
+            (_all, _allSerial) = (all, Scene.NextSnapshot());
         }
 
         if (keep)
@@ -188,7 +189,7 @@ internal sealed class ComponentIndex<T>(Scene scene) : ComponentIndex(scene, typ
                 only[count++] = item;
         }
 
-        return (only, Snapshots.Next());
+        return (only, Scene.NextSnapshot());
     }
 
     private void Keep(T[] array)

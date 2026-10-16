@@ -28,18 +28,11 @@ public sealed class UdpNetSocket : INetSocket
     private readonly Socket _socket;
     private readonly byte[] _receive = new byte[65536];
 
-    /// <summary>
-    /// Makes every socket loopback-only, whatever it's asked for, and <see cref="Griff.Runtime.NetSession.LocalAddress"/>
-    /// 127.0.0.1. The test projects turn it on before any test runs, so a test that hosts or joins (or presses a menu's
-    /// Host Game) never makes Windows ask about the firewall; a game leaves it off and plays over the network.
-    /// </summary>
-    public static bool ForceLoopback { get; set; }
-
     /// <param name="port">The port to listen on; 0 picks any free one (for joining).</param>
-    /// <param name="loopbackOnly">Only reachable from this machine: no firewall question for local play.</param>
+    /// <param name="loopbackOnly">Only reachable from this machine: no firewall question for local play (a game's sockets
+    /// are, unless its host lets it play over the network: see <see cref="Griff.Runtime.INetwork.OverNetwork"/>).</param>
     public UdpNetSocket(int port = 0, bool loopbackOnly = false)
     {
-        loopbackOnly |= ForceLoopback;
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp) { Blocking = false, EnableBroadcast = !loopbackOnly };
         if (OperatingSystem.IsWindows())
         {

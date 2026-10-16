@@ -115,6 +115,8 @@ public partial class App : Application, IDisposable
         _runner.Game.Problems.Reported += p => Trace.TraceWarning(p.Message);
         _runner.Game.QuitRequested += (_, _) => Dispatcher.BeginInvoke(window.Close);
         _runner.Game.FullscreenChanged += (_, _) => SetFullscreen(window, _runner.Game.Fullscreen);
+        // The player's game plays over the network (a smoke test's stays on this machine, as it keeps its saves to itself).
+        _runner.Game.Network.OverNetwork = smokeOutput is null;
         if (smokeOutput is null)
             _runner.Game.SaveData = new SaveData(SaveData.PlayerPath(game.Project.Name));
         _runner.Faulted += (_, ex) =>
@@ -205,6 +207,7 @@ public partial class App : Application, IDisposable
         };
         game.UseProjectSettings(loaded.Project);
         game.Problems.Reported += p => Console.Error.WriteLine(p.Message);
+        game.Network.OverNetwork = true;
         if (!game.Network.HostServer(port))
         {
             Console.Error.WriteLine(game.Network.Status);

@@ -57,11 +57,3 @@ internal sealed class SnapshotPool<T>
         _arrays[_count] = null;
     }
 }
-
-// Numbers each snapshot made, so what's worked out from one can tell it's still the same (an array filled again isn't).
-internal static class Snapshots
-{
-    private static long s_last;
-
-    public static long Next() => Interlocked.Increment(ref s_last);
-}

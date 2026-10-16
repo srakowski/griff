@@ -17,6 +17,9 @@ internal sealed class TableSystem : GameSystem
     [NotState("worked out again from the scene")]
     private long _tableValuesSeen = -1;
 
+    [NotState("worked out again from the scene")]
+    private Scene? _tableValuesIn;
+
     // The Table Values that have set their values since the tables last changed: one new to the game sets its own, and a
     // block broken away (its Table Values gone) sets nobody's again.
     private readonly HashSet<TableValues> _tableValuesApplied = [];
@@ -50,10 +53,10 @@ internal sealed class TableSystem : GameSystem
 
         var list = Game.Scene.AllNow<TableValues>();
         var (all, serial) = (list.Items, list.Serial);
-        if (!changed && serial == _tableValuesSeen)
+        if (!changed && serial == _tableValuesSeen && Game.Scene == _tableValuesIn)
             return;
         _tablesSeen = _tables.Version;
-        _tableValuesSeen = serial;
+        (_tableValuesSeen, _tableValuesIn) = (serial, Game.Scene);
         if (changed || _tableValuesApplied.Count > all.Length * 2 + 16)
             _tableValuesApplied.Clear();
         foreach (var values in all)

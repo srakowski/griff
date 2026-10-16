@@ -126,8 +126,8 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   desktop does. Roslyn doesn't run in the browser; compiling at export means it needn't.
 - **The main loop is the browser's.** `griff.js` calls `WebPlayer.Frame` (a `[JSExport]`) on each
   `requestAnimationFrame`, which takes the game's fixed steps that frame's time holds (`Game.Advance`, as on the desktop),
-  builds its `RenderFrame`, and hands it back. The browser build is single-threaded, so the player sets `Workers.Count`
-  to 1 and a big scene's work is done on the page's thread.
+  builds its `RenderFrame`, and hands it back. The browser build is single-threaded, so a game's `WorkerCount` starts
+  at 1 there (`Workers.Default`) and a big scene's work is done on the page's thread.
 - **Drawing is WebGL 2.** `WebGLRenderer`, like the desktop's `OpenGLRenderer`, turns each frame into a `DrawList`
   (`Griff.Graphics`: the quads in clip space, and the passes that draw them), and one `[JSImport]` call a frame hands the
   page its quads, passes and values, which `griff.js` runs with WebGL 2 with the desktop's shaders (`Shaders`, in GLSL ES

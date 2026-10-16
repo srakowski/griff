@@ -87,8 +87,6 @@ public static partial class WebPlayer
     {
         var query = Browser.Query();
         s_renderer = new WebGLRenderer(loaded.Project.AssetsPath);
-        // The browser build has one thread (the page's): a big scene's work is done on it rather than shared out.
-        Workers.Count = 1;
         var sounds = new WebSoundLibrary(loaded.Project.AssetsPath);
         await DecodeMp3Async(loaded.Project.AssetsPath, sounds);
 

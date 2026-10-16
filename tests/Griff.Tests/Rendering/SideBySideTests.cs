@@ -11,7 +11,6 @@ namespace Griff.Tests.Rendering;
 /// scene's), so each window draws the frames its game would alone, whatever the others draw meanwhile: big scenes built
 /// in chunks or not, drawn between steps, in the dark, and pictures of a game for its saved games.
 /// </summary>
-[Collection(nameof(Runtime.CoresCollection))]
 public sealed class SideBySideTests
 {
     private const int Frames = 40;

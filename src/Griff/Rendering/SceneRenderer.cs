@@ -20,9 +20,9 @@ public static partial class SceneRenderer
     /// <param name="aspect">Viewport width divided by height.</param>
     public static RenderFrame Build(Scene scene, float aspect) => Build(scene, aspect, null);
 
-    // A scene that isn't running, built in chunks from `chunkedFrom` entities on (tests compare the two ways).
-    internal static RenderFrame Build(Scene scene, float aspect, int chunkedFrom) =>
-        Build(scene, aspect, null, new Request(null, false, chunkedFrom));
+    // A scene that isn't running, built in chunks from `chunkedFrom` entities on over `workers` threads (tests compare the ways).
+    internal static RenderFrame Build(Scene scene, float aspect, int chunkedFrom, int workers) =>
+        Build(scene, aspect, null, new Request(null, false, new Chunking(chunkedFrom, workers)));
 
     /// <summary>
     /// Builds a running game's frame: its scene, with what its systems draw, any <see cref="Runtime.Game.FlashScreen"/>
@@ -115,11 +115,11 @@ public static partial class SceneRenderer
         Build(game.Scene, aspect, game, Request.For(game, null) with { Picture = true });
 
     // What a build is for: a frame the caller is done with, to fill again (its lists of draws and of lights, with their
-    // shadows' lists, too); whether it's a picture of the game (see BuildPicture); and from how many entities its scene is
-    // built in chunks (see Game.ChunkedFrom).
-    private readonly record struct Request(RenderFrame? Frame, bool Picture, int ChunkedFrom)
+    // shadows' lists, too); whether it's a picture of the game (see BuildPicture); and how its scene is built in chunks
+    // (see Chunking).
+    private readonly record struct Request(RenderFrame? Frame, bool Picture, Chunking Chunking)
     {
-        public static Request For(Runtime.Game? game, RenderFrame? recycle) => new(recycle, false, game?.ChunkedFrom ?? DefaultChunkedFrom);
+        public static Request For(Runtime.Game? game, RenderFrame? recycle) => new(recycle, false, Chunking.Of(game));
 
         public List<SpriteDraw>? Sprites => Frame?.Sprites as List<SpriteDraw>;
 
@@ -213,7 +213,7 @@ public static partial class SceneRenderer
             leaveOut = e => !panels.Any(p => p.Entity is { } owner && e.IsSelfOrDescendantOf(owner));
         }
 
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, leaveOut, overWorld: true, timer, reuse: true, filter, reuse.ChunkedFrom);
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, leaveOut, overWorld: true, timer, reuse: true, filter, reuse.Chunking);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
@@ -433,16 +433,17 @@ public static partial class SceneRenderer
     /// goes over the world (ropes, wires) between them and what's pinned to the screen. Returns how many draws at the
     /// end are pinned to the screen when it had to split them for that, or -1. With <paramref name="reuse"/>,
     /// <paramref name="sprites"/> holds last frame's draws, to be replaced; otherwise the draws are added after what it holds.
-    /// A scene of <paramref name="chunkedFrom"/> entities or more is drawn in chunks across the cores (all of it only).
+    /// A scene of <paramref name="chunking"/>'s entities or more is drawn in chunks across its threads (all of it only;
+    /// <see cref="Chunking.Default"/> when not given).
     /// </summary>
     internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld,
-        BuildTimer? timer = null, bool reuse = false, ViewFilter filter = default, int chunkedFrom = DefaultChunkedFrom)
+        BuildTimer? timer = null, bool reuse = false, ViewFilter filter = default, Chunking? chunking = null)
     {
         var scratch = t_scratch ?? new Scratch();
         t_scratch = null;
         try
         {
-            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse, filter, chunkedFrom);
+            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse, filter, chunking ?? Chunking.Default);
         }
         finally
         {
@@ -507,13 +508,13 @@ public static partial class SceneRenderer
     // With a timer (a profiler's), each entity's own work counts to the kind of thing it draws first, and each drawable's
     // drawing to its own kind.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse, in ViewFilter filter, int chunkedFrom)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse, in ViewFilter filter, Chunking chunking)
     {
         var camera = filter.Camera ?? FindCamera(scene);
         var sortByY = camera?.GetComponent<Camera>()?.SortByY == true;
-        if (include is null && scene.EntitiesNow.Length >= chunkedFrom)
+        if (include is null && scene.EntitiesNow.Length >= chunking.From)
         {
-            DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY, filter);
+            DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY, filter, chunking.Workers);
         }
         else
         {

@@ -49,6 +49,9 @@ internal sealed class ScriptSystem : GameSystem, IHealthNews
     private long _hooksFor = -1;
 
     [NotState("worked out again from the scene's scripts")]
+    private Scene? _hooksIn;
+
+    [NotState("worked out again from the scene's scripts")]
     private Behavior[] _hooksFrom = [];
 
     [NotState("worked out again from the scene's scripts")]
@@ -175,7 +178,7 @@ internal sealed class ScriptSystem : GameSystem, IHealthNews
             if (paused || Debugging.ScriptProbes.Armed)
                 job.RunAll();
             else
-                Workers.Run(job, job.Chunks);
+                Workers.Run(job, job.Chunks, Game.WorkerCount);
             job.RunInsideOthers();
         }
         finally
@@ -283,7 +286,7 @@ internal sealed class ScriptSystem : GameSystem, IHealthNews
         _running = Game.Active<Behavior>();
         var running = _running.Items;
         var serial = _running.Serial;
-        if (serial == 0 || serial != _hooksFor)
+        if (serial == 0 || serial != _hooksFor || Game.Scene != _hooksIn)
         {
             var (updating, fixedUpdating, lateUpdating) = (_updating, _fixedUpdating, _lateUpdating);
             var (updatingRuns, fixedUpdatingRuns, lateUpdatingRuns) = (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns);
@@ -300,7 +303,7 @@ internal sealed class ScriptSystem : GameSystem, IHealthNews
             _runLists.Retire(updatingRuns, Game.StepCount);
             _runLists.Retire(fixedUpdatingRuns, Game.StepCount);
             _runLists.Retire(lateUpdatingRuns, Game.StepCount);
-            (_hooksFor, _hooksFrom) = (serial, running);
+            (_hooksFor, _hooksIn, _hooksFrom) = (serial, Game.Scene, running);
         }
 
         // A big scene's scripts started long ago: unless it's changed, there's nothing to look for.

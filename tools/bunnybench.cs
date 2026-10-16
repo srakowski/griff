@@ -16,7 +16,7 @@
 // rewind snapshots as the editor does while playing (Timeline.Record each step), timed apart as Rewind (the settling
 // that follows each, on another thread, is reported after); --profile times the frames as the editor's Profiler does
 // (Game.Profiler set: each step, kind of script and part of the build timed, which costs a little) and prints its costs;
-// --workers sets how many threads share a big scene's work (Workers.Count; 1 does it all on the game's thread); --dark
+// --workers sets how many threads share a big scene's work (the game's WorkerCount; 1 does it all on the game's thread); --dark
 // puts the bunnies in the dark, among walls (a tilemap without a tileset) and crates, lit by a light that casts shadows
 // and one that doesn't.
 using System.Diagnostics;
@@ -37,7 +37,7 @@ var draw = !args.Contains("--no-draw");
 var rewind = args.Contains("--timeline");
 var profile = args.Contains("--profile");
 var dark = args.Contains("--dark");
-Workers.Count = Arg("--workers", Workers.Count);
+var workers = Arg("--workers", Workers.Default);
 
 var root = Path.Combine(Path.GetTempPath(), "griff-bunnybench-" + Guid.NewGuid().ToString("N")[..8]);
 try
@@ -58,6 +58,7 @@ try
         SceneLoader = loaded.LoadScene,
         Components = loaded.Components,
         ViewAspect = 16 / 9f,
+        WorkerCount = workers,
     };
     game.UseProjectSettings(loaded.Project);
     for (var i = 0; i < count; i++)

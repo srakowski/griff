@@ -33,6 +33,9 @@ internal sealed class NetworkSystem : GameSystem, INetwork
     [NotState("the host's")]
     private string? _unavailable = OperatingSystem.IsBrowser() ? NetSession.BrowserUnavailable : null;
 
+    [NotState("the host's")]
+    private bool _overNetwork;
+
     [NotState("worked out again from the scene")]
     private (Scene? Scene, long Version, Multiplayer? Settings) _settings = (null, -1, null);
 
@@ -96,6 +99,12 @@ internal sealed class NetworkSystem : GameSystem, INetwork
     {
         get => _unavailable;
         set => _unavailable = value;
+    }
+
+    public bool OverNetwork
+    {
+        get => _overNetwork;
+        set => _overNetwork = value;
     }
 
     public NetConditions FakeLag

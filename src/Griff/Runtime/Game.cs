@@ -111,6 +111,19 @@ public sealed partial class Game
     public FrameProfiler? Profiler { get; set; }
 
     /// <summary>
+    /// How many threads share this game's big jobs (building a frame of thousands of sprites, running a crowd of scripts),
+    /// its own included: <see cref="Workers.Default"/> to start with, from 1 (everything on the game's thread) to 64. The
+    /// host's to choose (the web player keeps to 1), and this game's alone: another game in the same process (Play with
+    /// Players, a simulation, a test alongside) keeps its own. What the game does is the same whatever it is.
+    /// </summary>
+    [field: NotState("the host's")]
+    public int WorkerCount
+    {
+        get;
+        set => field = Math.Clamp(value, 1, Workers.Most);
+    } = Workers.Default;
+
+    /// <summary>
     /// How many entities a scene of this game has before its frames are built in chunks across the cores (see
     /// <see cref="Workers"/>), or null for the renderer's own choice. Tests set it to compare the two ways.
     /// </summary>

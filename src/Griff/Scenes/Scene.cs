@@ -133,6 +133,13 @@ public sealed class Scene
     // How many steps the game has taken on this scene: arrays replaced two steps ago can be filled again (see SnapshotPool).
     internal long Steps;
 
+    // Numbers each snapshot of this scene's components, so what's worked out from one can tell it's still the same (an
+    // array filled again isn't): the scene's own count, so no other scene or game shares it. What keeps a number keeps
+    // the scene it's of too (another scene's numbers are its own).
+    private long _snapshots;
+
+    internal long NextSnapshot() => Interlocked.Increment(ref _snapshots);
+
     // Depth first, numbering them as it goes.
     private static void Collect(Entity entity, Entity[] into, ref int count)
     {

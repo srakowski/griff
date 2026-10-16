@@ -178,7 +178,7 @@ public sealed partial class NetSession : IDisposable
             ChooseTeam(LocalPlayer);
         }
 
-        Status = $"Hosting on {LocalAddress()}:{_port}";
+        Status = $"Hosting on {(_network.OverNetwork ? LocalAddress() : "127.0.0.1")}:{_port}";
         StartHostScene();
         if (LocalPlayer is not null)
             Joined(LocalPlayer);
@@ -196,7 +196,7 @@ public sealed partial class NetSession : IDisposable
         INetSocket socket;
         try
         {
-            socket = new UdpNetSocket(chosen);
+            socket = new UdpNetSocket(chosen, loopbackOnly: !_network.OverNetwork);
         }
         catch (SocketException ex)
         {
@@ -231,7 +231,7 @@ public sealed partial class NetSession : IDisposable
         UdpNetSocket socket;
         try
         {
-            socket = new UdpNetSocket();
+            socket = new UdpNetSocket(loopbackOnly: !_network.OverNetwork);
         }
         catch (SocketException ex)
         {
@@ -432,9 +432,6 @@ public sealed partial class NetSession : IDisposable
     /// <summary>This machine's address on the local network, for others to join.</summary>
     public static string LocalAddress()
     {
-        // Finding it binds a socket to the network's address, which tests mustn't (see UdpNetSocket.ForceLoopback).
-        if (UdpNetSocket.ForceLoopback)
-            return "127.0.0.1";
         try
         {
             using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);

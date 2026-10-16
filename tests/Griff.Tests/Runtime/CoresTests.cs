@@ -10,48 +10,54 @@ using Griff.Scripting;
 
 namespace Griff.Tests.Runtime;
 
-// These change how many threads Griff uses and when a frame is built in chunks, for everything running: alone.
-[CollectionDefinition(nameof(CoresCollection), DisableParallelization = true)]
-public sealed class CoresCollection;
-
 /// <summary>
 /// A big scene's work spread across cores (see <see cref="Workers"/>): a frame built in chunks is the frame built on one
 /// thread, draw for draw and bit for bit, on any number of threads; a crowd of scripts (see <see cref="CrowdAttribute"/>)
 /// plays out the same on any number of threads, keeps its place among the other scripts, and can't change what isn't its own.
+/// How many threads and when a frame is built in chunks are each game's own, so these run alongside other tests.
 /// </summary>
-[Collection(nameof(CoresCollection))]
 public sealed class CoresTests
 {
-    // Runs `run` with `workers` threads, building frames (with Build) in chunks (from any size of scene) or not at all.
+    // Runs `run` with the games it plays and builds (through Use and Build) on `workers` threads, building frames in
+    // chunks (from any size of scene) or not at all.
     private static T With<T>(int workers, bool chunked, Func<T> run)
     {
-        var (wereWorkers, wereChunked) = (Workers.Count, t_chunkedFrom);
+        var (wereWorkers, wereChunked) = (t_workers, t_chunkedFrom);
         try
         {
-            Workers.Count = workers;
+            t_workers = workers;
             t_chunkedFrom = chunked ? 0 : int.MaxValue;
             return run();
         }
         finally
         {
-            (Workers.Count, t_chunkedFrom) = (wereWorkers, wereChunked);
+            (t_workers, t_chunkedFrom) = (wereWorkers, wereChunked);
         }
     }
 
-    // From how many entities With builds frames in chunks; null outside it (the renderer's own choice).
+    // How many threads With's games use, and from how many entities they build frames in chunks; null outside it (the
+    // game's own choices).
+    [ThreadStatic]
+    private static int? t_workers;
+
     [ThreadStatic]
     private static int? t_chunkedFrom;
 
-    // A game's frame, built in chunks or not as With says (each game says for its own frames).
-    private static RenderFrame Build(Game game, float aspect, RenderFrame? recycle = null)
+    // A game, set to play as With says (each game says for its own work).
+    private static Game Use(Game game)
     {
+        game.WorkerCount = t_workers ?? Workers.Default;
         game.ChunkedFrom = t_chunkedFrom;
-        return SceneRenderer.Build(game, aspect, recycle);
+        return game;
     }
+
+    // A game's frame, built as With says.
+    private static RenderFrame Build(Game game, float aspect, RenderFrame? recycle = null) =>
+        SceneRenderer.Build(Use(game), aspect, recycle);
 
     // A scene's frame in the editor, built in chunks or not as With says.
     private static RenderFrame Build(Scene scene, float aspect) =>
-        t_chunkedFrom is { } from ? SceneRenderer.Build(scene, aspect, from) : SceneRenderer.Build(scene, aspect);
+        t_chunkedFrom is { } from ? SceneRenderer.Build(scene, aspect, from, t_workers ?? Workers.Default) : SceneRenderer.Build(scene, aspect);
 
     private static bool SameBits<T>(T a, T b) where T : unmanaged =>
         MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in b)));
@@ -124,7 +130,7 @@ public sealed class CoresTests
                         input.SetKey(key, random.Next(2) == 0);
                 }
 
-                game.Advance(0.004 + random.NextDouble() * 0.03);
+                Use(game).Advance(0.004 + random.NextDouble() * 0.03);
                 var one = With(1, chunked: false, () => Build(game, 16 / 9f));
                 AssertSameFrame(one, With(1, chunked: true, () => Build(game, 16 / 9f)), $"frame {frame} played");
                 var many = With(8, chunked: true, () => Build(game, 16 / 9f, last));
@@ -274,7 +280,7 @@ public sealed class CoresTests
         RenderFrame? last = null;
         for (var frame = 0; frame < 60; frame++)
         {
-            game.Advance(1 / 144.0 + frame % 3 * 0.005);
+            Use(game).Advance(1 / 144.0 + frame % 3 * 0.005);
             var played = With(1, chunked: false, () => Build(game, 16 / 9f));
             last = With(16, chunked: true, () => Build(game, 16 / 9f, last));
             AssertSameFrame(played, last, $"frame {frame} played, on 16 threads");
@@ -357,7 +363,7 @@ public sealed class CoresTests
             RenderFrame? frame = null;
             for (var i = 0; i < 30; i++)
             {
-                game.Advance(1 / 60.0);
+                Use(game).Advance(1 / 60.0);
                 frame = Build(game, 16 / 9f, frame);
             }
 
@@ -383,7 +389,7 @@ public sealed class CoresTests
     {
         var game = Rendering.DarkFrameTests.DarkWorld(3000);
         for (var i = 0; i < 5; i++)
-            game.Tick(1 / 60.0);
+            Use(game).Tick(1 / 60.0);
 
         var one = With(1, chunked: false, () => Build(game, 16 / 9f));
         Assert.True(one.IsDark);
@@ -400,7 +406,7 @@ public sealed class CoresTests
             RenderFrame? frame = null;
             for (var i = 0; i < 20; i++)
             {
-                game.Tick(1 / 60.0);
+                Use(game).Tick(1 / 60.0);
                 frame = Build(game, 16 / 9f, frame);
             }
 
@@ -508,7 +514,7 @@ public sealed class CoresTests
         var (game, _) = Hoppers(seed);
         for (var i = 0; i < steps; i++)
         {
-            game.Advance(1 / 60.0);
+            Use(game).Advance(1 / 60.0);
             Build(game, 16 / 9f);
         }
 
@@ -553,7 +559,7 @@ public sealed class CoresTests
             var game = new Game(scene, new InputState());
             With(16, chunked: true, () =>
             {
-                game.Tick(1 / 60.0);
+                Use(game).Tick(1 / 60.0);
                 return 0;
             });
             Assert.All(scene.Active<ThreadSpy>(), s => Assert.Equal(Environment.CurrentManagedThreadId, s.Thread));
@@ -564,12 +570,47 @@ public sealed class CoresTests
         }
     }
 
+    // How many threads share a game's work is the game's: setting one game's changes no other's, and a game kept to one
+    // thread runs its crowd there while another spreads its own.
+    [Fact]
+    public void Each_game_has_a_worker_count_of_its_own()
+    {
+        Game Spies()
+        {
+            var scene = new Scene();
+            for (var i = 0; i < 4000; i++)
+            {
+                var spy = new Entity($"Spy {i}");
+                spy.AddComponent<ThreadSpy>();
+                scene.Add(spy);
+            }
+
+            return new Game(scene, new InputState());
+        }
+
+        var (alone, spread) = (Spies(), Spies());
+        Assert.Equal(Workers.Default, alone.WorkerCount);
+        alone.WorkerCount = 1;
+        spread.WorkerCount = 16;
+        Assert.Equal(1, alone.WorkerCount);
+        Assert.Equal(16, spread.WorkerCount);
+        Assert.Equal(Workers.Default, new Game(new Scene(), new InputState()).WorkerCount);
+
+        Parallel.Invoke(() => spread.Tick(1 / 60.0), () => alone.Tick(1 / 60.0));
+        Assert.Single(alone.Scene.Active<ThreadSpy>().Select(s => s.Thread).Distinct());
+        Assert.Equal(16, spread.WorkerCount);
+
+        spread.WorkerCount = 1000;
+        alone.WorkerCount = 0;
+        Assert.Equal((64, 1), (spread.WorkerCount, alone.WorkerCount));
+    }
+
     [Fact]
     public void Each_script_of_a_crowd_gets_numbers_of_its_own()
     {
         var (game, _) = Hoppers(8);
         for (var i = 0; i < 120; i++)
-            game.Tick(1 / 60.0);
+            Use(game).Tick(1 / 60.0);
         var rolled = game.Scene.Active<Hopper>().Select(h => h.Rolled).ToList();
         Assert.True(rolled.Distinct().Count() > rolled.Count * 9 / 10, "The hoppers rolled the same numbers.");
     }
@@ -582,7 +623,7 @@ public sealed class CoresTests
         With(16, chunked: true, () =>
         {
             for (var i = 0; i < 3; i++)
-                game.Tick(1 / 60.0);
+                Use(game).Tick(1 / 60.0);
             return 0;
         });
 
@@ -667,7 +708,7 @@ public sealed class CoresTests
         var game = new Game(scene, new InputState());
         var thrown = Assert.Throws<InvalidOperationException>(() => With(8, chunked: true, () =>
         {
-            game.Tick(1 / 60.0);
+            Use(game).Tick(1 / 60.0);
             return 0;
         }));
 
@@ -703,7 +744,7 @@ public sealed class CoresTests
         var game = new Game(scene, new InputState());
         var thrown = Assert.Throws<InvalidOperationException>(() => With(16, chunked: true, () =>
         {
-            game.Tick(1 / 60.0);
+            Use(game).Tick(1 / 60.0);
             return 0;
         }));
         Assert.Equal("Fault at 1600", thrown.Message);
@@ -716,14 +757,14 @@ public sealed class CoresTests
         With(8, chunked: true, () =>
         {
             for (var i = 0; i < 10; i++)
-                game.Tick(1 / 60.0);
+                Use(game).Tick(1 / 60.0);
             watcher.Seen.Capacity = 10000;
             var least = long.MaxValue;
             for (var attempt = 0; attempt < 20 && least > 0; attempt++)
             {
                 var before = Workers.AllocatedBytes();
                 for (var i = 0; i < 10; i++)
-                    game.Tick(1 / 60.0);
+                    Use(game).Tick(1 / 60.0);
                 least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
             }
 
@@ -741,7 +782,7 @@ public sealed class CoresTests
         With(8, chunked: true, () =>
         {
             profiler.BeginFrame();
-            game.Tick(1 / 60.0);
+            Use(game).Tick(1 / 60.0);
             profiler.Add(new FrameSample(16, 1, 1, 1, 1, 0));
             return 0;
         });
@@ -773,7 +814,7 @@ public sealed class CoresTests
             var other = new Thread(() =>
             {
                 for (var job = 0; job < 20; job++)
-                    Workers.Run(new Littering(), 64);
+                    Workers.Run(new Littering(), 64, 16);
             });
             // (The first look makes this thread's own count of them, which allocates.)
             _ = WorkersPart();
@@ -785,7 +826,7 @@ public sealed class CoresTests
             // Our own job's garbage counts all of it, whichever thread each chunk ran on.
             var work = new Littering();
             var all = Workers.AllocatedBytes();
-            Workers.Run(work, 64);
+            Workers.Run(work, 64, 16);
             Assert.True(Workers.AllocatedBytes() - all >= 64 * 1000, $"{Workers.AllocatedBytes() - all}");
             return 0;
         });
@@ -812,12 +853,12 @@ public sealed class CoresTests
             for (var job = 0; job < 200; job++)
             {
                 var work = new Counting(1 + job % 37);
-                Workers.Run(work, work.Runs.Length);
+                Workers.Run(work, work.Runs.Length, 16);
                 Assert.All(work.Runs, runs => Assert.Equal(1, runs));
             }
 
             var faulty = new Counting(100, chunk => chunk is 40 or 70);
-            var thrown = Assert.Throws<InvalidOperationException>(() => Workers.Run(faulty, 100));
+            var thrown = Assert.Throws<InvalidOperationException>(() => Workers.Run(faulty, 100, 16));
             Assert.Equal("Chunk 40", thrown.Message);
             Assert.All(faulty.Runs, runs => Assert.Equal(1, runs));
 
@@ -827,7 +868,7 @@ public sealed class CoresTests
                 for (var job = 0; job < 50; job++)
                 {
                     var work = new Counting(64);
-                    Workers.Run(work, 64);
+                    Workers.Run(work, 64, 16);
                     Assert.All(work.Runs, runs => Assert.Equal(1, runs));
                 }
             });

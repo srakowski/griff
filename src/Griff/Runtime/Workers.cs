@@ -10,17 +10,16 @@ namespace Griff.Runtime;
 /// </summary>
 public static class Workers
 {
-    private static int s_count = Math.Clamp(Environment.ProcessorCount, 1, 16);
-
     /// <summary>
-    /// How many threads share the work, the game's own included: one for each of the computer's logical processors, up
-    /// to 16, by default. 1 does everything on the game's thread.
+    /// How many threads a game shares its work over unless its host says otherwise (<see cref="Game.WorkerCount"/>): one
+    /// for each of the computer's logical processors, up to 16, and 1 in a browser (the web player has the page's thread
+    /// only). The threads themselves are the process's, shared by every game in it; how many of them a game's work takes
+    /// is the game's.
     /// </summary>
-    public static int Count
-    {
-        get => s_count;
-        set => s_count = Math.Clamp(value, 1, 64);
-    }
+    public static int Default { get; } = OperatingSystem.IsBrowser() ? 1 : Math.Clamp(Environment.ProcessorCount, 1, 16);
+
+    // The most threads a game can ask for.
+    internal const int Most = 64;
 
     // The bytes the workers have allocated doing this thread's jobs: a profiler adds them to the thread's own, so garbage
     // made on the workers is counted, and only against the game that made it (another game, or another test, running
@@ -54,15 +53,16 @@ public static class Workers
     private static int s_running;
 
     /// <summary>
-    /// Runs <paramref name="work"/>'s chunks 0 to <paramref name="chunks"/> - 1, each once, on up to <see cref="Count"/>
-    /// threads (this one too), and returns once all are done. If chunks throw, the lowest chunk's exception is thrown
+    /// Runs <paramref name="work"/>'s chunks 0 to <paramref name="chunks"/> - 1, each once, on up to
+    /// <paramref name="threads"/> threads (this one too; a game passes its <see cref="Game.WorkerCount"/>), and returns
+    /// once all are done. If chunks throw, the lowest chunk's exception is thrown
     /// (each chunk stops at its first) after the others have finished.
     /// </summary>
-    internal static void Run(IChunked work, int chunks)
+    internal static void Run(IChunked work, int chunks, int threads)
     {
         if (chunks <= 0)
             return;
-        var threads = Math.Min(Count, chunks);
+        threads = Math.Min(Math.Min(threads, Most), chunks);
         if (threads <= 1 || Interlocked.CompareExchange(ref s_running, 1, 0) != 0)
         {
             RunHere(work, chunks);

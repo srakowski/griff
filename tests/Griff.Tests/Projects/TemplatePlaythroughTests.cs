@@ -13,9 +13,7 @@ namespace Griff.Tests.Projects;
 /// it's in, every entity's components' values to the last bit (<see cref="GameFingerprint"/>). A change to how the game is
 /// put together (which system does what, in what order) that changes how a game plays fails here; a change meant to change
 /// it updates the fingerprint below.
-/// Played on its own, as the process-wide settings other tests change (worker threads, network sockets) are the game's too.
 /// </summary>
-[Collection(nameof(Runtime.CoresCollection))]
 public sealed class TemplatePlaythroughTests
 {
     // Each template's fingerprint after the playthrough (GameFingerprint: what the game holds, not how a file writes it), as

@@ -156,7 +156,7 @@ public static class SimulationRunner
 
         var total = blocks.Count == 0 ? 0 : plan.Steps.Sum(s => s.First.Count * s.Second.Count) * simulation.Runs;
         var work = new Work(plan, blocks, total, progress, cancel);
-        var used = Math.Max(1, Math.Min(threads ?? Workers.Count, Workers.Count));
+        var used = Math.Clamp(threads ?? Workers.Default, 1, Workers.Default);
         if (used == 1)
         {
             for (var i = 0; i < blocks.Count; i++)
@@ -164,7 +164,7 @@ public static class SimulationRunner
         }
         else
         {
-            Workers.Run(work, blocks.Count);
+            Workers.Run(work, blocks.Count, used);
         }
 
         cancel.ThrowIfCancellationRequested();

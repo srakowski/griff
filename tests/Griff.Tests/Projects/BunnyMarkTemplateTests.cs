@@ -150,26 +150,18 @@ public sealed class BunnyMarkTemplateTests : IDisposable
     {
         string Bounce(int workers)
         {
-            var count = Workers.Count;
-            try
-            {
-                Workers.Count = workers;
-                Rand.Seed(12);
-                var (game, bunnyMark) = Create(Path.Combine(_root, $"On {workers}")).GetAwaiter().GetResult();
-                Set(bunnyMark, "HoldCount", 5000);
-                Set(bunnyMark, "HoldSeconds", 60f);
+            Rand.Seed(12);
+            var (game, bunnyMark) = Create(Path.Combine(_root, $"On {workers}")).GetAwaiter().GetResult();
+            game.WorkerCount = workers;
+            Set(bunnyMark, "HoldCount", 5000);
+            Set(bunnyMark, "HoldSeconds", 60f);
+            Run(game, 1 / 60.0);
+            for (var i = 0; i < 120; i++)
                 Run(game, 1 / 60.0);
-                for (var i = 0; i < 120; i++)
-                    Run(game, 1 / 60.0);
-                var bunnies = game.FindAll("Bunny");
-                Assert.True(bunnies.All(b => b.Components.Any(c => c.GetType().IsDefined(typeof(CrowdAttribute), true))));
-                Assert.All(bunnies, b => Assert.InRange(b.Transform.Position.Y, -4.75f, 4.75f));
-                return string.Join(";", bunnies.Select(b => $"{b.Transform.Position.X:R},{b.Transform.Position.Y:R}"));
-            }
-            finally
-            {
-                Workers.Count = count;
-            }
+            var bunnies = game.FindAll("Bunny");
+            Assert.True(bunnies.All(b => b.Components.Any(c => c.GetType().IsDefined(typeof(CrowdAttribute), true))));
+            Assert.All(bunnies, b => Assert.InRange(b.Transform.Position.Y, -4.75f, 4.75f));
+            return string.Join(";", bunnies.Select(b => $"{b.Transform.Position.X:R},{b.Transform.Position.Y:R}"));
         }
 
         await Task.Yield();

@@ -19,6 +19,16 @@ public static partial class SceneRenderer
     internal const int ChunkSize = 1024;
     internal const int DefaultChunkedFrom = 2 * ChunkSize;
 
+    // How a frame is built in chunks: from how many entities on (see Game.ChunkedFrom), and over how many threads (the
+    // game's Game.WorkerCount; Workers.Default for a scene that isn't being played). It goes along the build, the game's own.
+    internal readonly record struct Chunking(int From, int Workers)
+    {
+        public static Chunking Default => new(DefaultChunkedFrom, Runtime.Workers.Default);
+
+        public static Chunking Of(Runtime.Game? game) =>
+            game is null ? Default : new(game.ChunkedFrom ?? DefaultChunkedFrom, game.WorkerCount);
+    }
+
     // Past this many stretches a run (and 64 in all), the runs are sorted as one by key rather than merged: they're mixed
     // through each other (sorting by Y, say), and merging would go an entry or two at a time.
     private const int MergedStretchesPerRun = 8;
@@ -255,7 +265,7 @@ public static partial class SceneRenderer
     // The chunked build of DrawScene (see above), with the same result: draws into `sprites` from `first` on, overwriting
     // what's there (last frame's draws) rather than clearing it first.
     private static void DrawChunked(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, int first, List<IDrawable>? overs,
-        Scratch scratch, BuildTimer? timer, bool sortByY, in ViewFilter filter)
+        Scratch scratch, BuildTimer? timer, bool sortByY, in ViewFilter filter, int workers)
     {
         var chunked = scratch.Chunked ??= new ChunkedScratch();
         chunked.Holding = true;
@@ -282,7 +292,7 @@ public static partial class SceneRenderer
         timer?.Mark(typeof(Sprite));
         try
         {
-            Workers.Run(job, count);
+            Workers.Run(job, count, workers);
         }
         finally
         {
@@ -310,7 +320,7 @@ public static partial class SceneRenderer
         placing.PerChunk = Math.Max(1, stretches.Count / 64);
         try
         {
-            Workers.Run(placing, (stretches.Count + placing.PerChunk - 1) / placing.PerChunk);
+            Workers.Run(placing, (stretches.Count + placing.PerChunk - 1) / placing.PerChunk, workers);
         }
         finally
         {

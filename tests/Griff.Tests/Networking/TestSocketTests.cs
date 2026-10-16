@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Griff.Input;
 using Griff.Networking;
@@ -10,31 +9,27 @@ using Griff.Tests.Architecture;
 
 namespace Griff.Tests.Networking;
 
-/// <summary>Turns <see cref="UdpNetSocket.ForceLoopback"/> on before any test runs.</summary>
-internal static class TestSockets
-{
-    [ModuleInitializer]
-    internal static void KeepOnThisMachine() => UdpNetSocket.ForceLoopback = true;
-}
-
 /// <summary>
 /// Tests keep their sockets on this machine. One bound to the network (a template's Host Game pressed by a test, say)
 /// makes Windows ask whether testhost may use it, again for each new path it runs from, and the question takes the
-/// screen. These fail if the switch that prevents it is off, or if code binds a socket where the switch can't reach it.
+/// screen. Nothing is set for the whole run: a game plays over the network only when its host says so
+/// (<see cref="INetwork.OverNetwork"/>, the game's own), and only the player and the editor's Play do. These fail if a
+/// game hosts or joins where the network can reach it, or if code binds a socket where the game's choice can't reach it.
 /// </summary>
 public sealed partial class TestSocketTests
 {
     [Fact]
-    public void Hosting_and_joining_in_a_test_only_bind_loopback()
+    public void A_game_hosts_and_joins_on_this_machine_unless_its_host_says_otherwise()
     {
-        Assert.True(UdpNetSocket.ForceLoopback, "The module initializer turns it on for every test.");
-        using (var socket = new UdpNetSocket())
-            Assert.True(IPAddress.IsLoopback(((IPEndPoint)socket.LocalEndPoint).Address), $"Bound to {socket.LocalEndPoint}.");
+        // Another game in the process that may play over the network (it doesn't host here) changes nothing for this one.
+        var other = new Game(new Scene(), new InputState());
+        other.Network.OverNetwork = true;
 
         int port;
-        using (var free = new UdpNetSocket())
+        using (var free = new UdpNetSocket(loopbackOnly: true))
             port = ((IPEndPoint)free.LocalEndPoint).Port;
         var host = new Game(new Scene(), new InputState());
+        Assert.False(host.Network.OverNetwork);
         try
         {
             Assert.True(host.Network.Host(port), host.Network.Status);
@@ -51,9 +46,46 @@ public sealed partial class TestSocketTests
         var guest = new Game(new Scene(), new InputState());
         guest.Network.Join("lan");
         guest.Network.Leave();
+        Assert.True(other.Network.OverNetwork);
     }
 
-    // Everything that binds a socket goes through UdpNetSocket, which the switch keeps on loopback; anything else must
+    // Only the hosts that run a game for its players let it play over the network: the player (a dedicated server too)
+    // and the editor's Play. Nothing else turns it on, tests least of all (this file's game above doesn't host).
+    [Fact]
+    public void Only_the_players_hosts_let_a_game_play_over_the_network()
+    {
+        var root = LayerTests.RepoRoot();
+        var allowed = new[]
+        {
+            Path.Combine("src", "Griff.Player", "App.xaml.cs"), Path.Combine("src", "Griff.Editor", "Features", "Play", "PlayMode.cs"),
+            Path.Combine("tests", "Griff.Tests", "Networking", "TestSocketTests.cs"),
+        };
+        var found = new List<string>();
+        foreach (var folder in new[] { "src", "tests", "tools" })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, folder), "*.cs", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(root, file);
+                if (allowed.Contains(relative) || relative.Split(Path.DirectorySeparatorChar).Any(part => part is "bin" or "obj"))
+                    continue;
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    if (TurnsOnNetwork().IsMatch(lines[i]))
+                        found.Add($"{relative}:{i + 1}: {lines[i].Trim()}");
+                }
+            }
+        }
+
+        Assert.True(found.Count == 0,
+            "Only the player and the editor's Play let a game play over the network; a test, simulation or tool keeps it on " +
+            "this machine (a socket the network can reach makes Windows ask about the firewall):\n" + string.Join("\n", found));
+    }
+
+    [GeneratedRegex(@"OverNetwork\s*=(?!=)")]
+    private static partial Regex TurnsOnNetwork();
+
+    // Everything that binds a socket goes through UdpNetSocket, which a game keeps on loopback; anything else must
     // say Loopback on the line that binds it (as the agent server's listener does).
     [Fact]
     public void Only_the_network_socket_binds_to_the_network()

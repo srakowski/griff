@@ -448,6 +448,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
         _runner.FrameEnded += OnFrameEnded;
+        // Played in the editor's window, a game can host and join over the network (to try it with another computer);
+        // with no window (tests) it stays on this machine.
+        _runner.Game.Network.OverNetwork = _editorWindow.Main is not null;
         if (_projectSession.Project is { } project)
         {
             _runner.Game.SceneLoader = name => LoadScene(project, name);

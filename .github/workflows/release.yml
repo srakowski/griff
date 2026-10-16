@@ -66,12 +66,13 @@ jobs:
           $version = $env:TAG.Substring(1)
           ./tools/release.ps1 -Version $version
 
+      # The tests run as CI runs them (Debug): in Release on the runner, Mesa refuses the Scene view tests' offscreen contexts.
       - name: Engine tests
-        run: dotnet test tests/Griff.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
+        run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Editor tests
         if: ${{ !cancelled() }}
-        run: dotnet test tests/Griff.Editor.Tests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
+        run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Write the release notes
         shell: pwsh

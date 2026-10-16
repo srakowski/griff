@@ -72,8 +72,9 @@ public sealed partial class Physics
     /// Lays out the scene's ropes that haven't been yet (as they hang at rest, or as the scene's contact memory has them
     /// after a rewind), so what reads them before physics steps (a player grabbing one) finds them where they are.
     /// </summary>
-    internal void ReadyRopes(Scene scene)
+    internal void ReadyRopes()
     {
+        var scene = Scene;
         var ropes = scene.ActiveNow<Rope>();
         for (var i = 0; i < ropes.Count; i++)
         {
@@ -142,11 +143,11 @@ public sealed partial class Physics
     /// The point on a climbable rope nearest <paramref name="point"/> within <paramref name="reach"/> of it, as it is now: the
     /// rope, and how far along it from its start; null if there's none.
     /// </summary>
-    internal static (Rope Rope, float At, Vector2 Point)? RopeNear(Scene scene, Vector2 point, float reach, Body except)
+    internal (Rope Rope, float At, Vector2 Point)? RopeNear(Vector2 point, float reach, Body except)
     {
         (Rope Rope, float At, Vector2 Point)? best = null;
         var bestDistance = reach * reach;
-        foreach (var rope in scene.ActiveNow<Rope>())
+        foreach (var rope in Scene.ActiveNow<Rope>())
         {
             if (!rope.Climbable || rope.Points is not { } points || rope.Entity == except.Entity || rope.OtherEntity == except.Entity)
                 continue;
@@ -521,7 +522,7 @@ public sealed partial class Physics
         for (var n = _ropeNear.Count - 1; n >= 0; n--)
         {
             var entity = solids.All[_ropeNear[n]].Entity;
-            if (IsPlayer(entity))
+            if (HoldsRopes(entity))
                 _ropeNear.RemoveAt(n);
         }
 
@@ -581,9 +582,10 @@ public sealed partial class Physics
                     AddTouch(movers, i, ref manifold, null);
             }
 
-            foreach (var walls in _hex)
+            // Walls met by bodies' own shapes (a hex map's): those met by footprints are on the ground, which a rope hangs over.
+            foreach (var (walls, _) in _walls)
             {
-                if (!walls.Bounds.Overlaps(near))
+                if (walls.MetByFootprints || !walls.Bounds.Overlaps(near))
                     continue;
                 var (x0, y0, x1, y1) = walls.CellsNear(near);
                 for (var y = y0; y <= y1; y++)
@@ -592,7 +594,7 @@ public sealed partial class Physics
                     {
                         if (!walls.Blocked(x, y))
                             continue;
-                        walls.HexagonHull(ref solid, x, y);
+                        CellHull(walls, x, y, ref solid);
                         if (Collide(ref self, ref solid, reach, out var manifold) && !walls.SharedSide(x, y, manifold.Normal))
                             AddTouch(movers, i, ref manifold, null);
                     }
@@ -607,12 +609,12 @@ public sealed partial class Physics
     private static float ClearOf(Entity entity, float radius) =>
         entity.GetComponent<Collider>() is { } collider ? BoundsOf(collider).HalfSize.Length() + radius : 0;
 
-    // Whether an entity is (or is inside) a player: a body moved by player movement.
-    private static bool IsPlayer(Entity entity)
+    // Whether an entity is (or is inside) a body that holds ropes (a player's, as its movement says: see Body.HoldsRopes).
+    private static bool HoldsRopes(Entity entity)
     {
         for (var e = entity; e is not null; e = e.Parent)
         {
-            if (e.GetComponent<PlatformerMovement>() is not null || e.GetComponent<TopDownMovement>() is not null)
+            if (e.GetComponent<Body>() is { HoldsRopes: true })
                 return true;
         }
 

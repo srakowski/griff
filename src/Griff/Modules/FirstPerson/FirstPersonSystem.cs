@@ -313,7 +313,7 @@ internal sealed class FirstPersonSystem : GameSystem, IViewDrawer, ISeesThroughE
                 continue;
             }
 
-            if (Game.Physics.Raycast(Scene, origin, direction, weapon.Range, ignore: owner) is not { } hit)
+            if (Game.Physics.Raycast(origin, direction, weapon.Range, ignore: owner) is not { } hit)
                 continue;
             if (!string.IsNullOrWhiteSpace(weapon.ImpactEffect))
                 Game.TrySpawn(weapon.ImpactEffect, weapon, "its Impact Effect", hit.Point - direction * 0.1f);

@@ -212,8 +212,7 @@ public class HexTilemapTests
         scene.Add(level);
 
         Assert.Empty(Physics.TileShapes(map));
-        Assert.Empty(Physics.IsometricShapes(map));
-        Assert.Equal(2, Physics.HexShapes(map).Count());
+        Assert.Equal(2, Physics.WallShapes(map).Count());
         Assert.Equal(14, Shadows.Edges(scene).Count);
     }
 

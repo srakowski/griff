@@ -217,7 +217,7 @@ public class IsometricTilemapTests
         var (scene, _, map) = SceneWithMap(Map("11", "11"));
 
         Assert.Empty(Physics.TileShapes(map));
-        Assert.Equal(2, Physics.IsometricShapes(map).Count());
+        Assert.Equal(2, Physics.WallShapes(map).Count());
         Assert.Empty(Shadows.Edges(scene));
         map.Shape = TileShape.Square;
         Assert.NotEmpty(Physics.TileShapes(map));

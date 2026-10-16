@@ -189,7 +189,6 @@ internal sealed class SceneSystem : GameSystem
         foreach (var behavior in Game.Scene.Entities.Where(e => !staying.Contains(e)).SelectMany(e => e.GetComponents<Behavior>()))
             behavior.RunDestroy();
         Game.LifetimeSystem.ForgetDestroys();
-        Game.Physics.Reset();
 
         foreach (var entity in moving)
         {
@@ -209,7 +208,6 @@ internal sealed class SceneSystem : GameSystem
         if (arrived is not null)
             Game.LevelSystem.ArrivedThroughDoors(arrived);
         LoadCarried(null);
-        Game.Physics.Groups = [];
         Game.AtmosphereSystem.StopSoundSources();
         Game.MenuSystem.SetFocus(null);
         Game.PanelSystem.SyncPanels();

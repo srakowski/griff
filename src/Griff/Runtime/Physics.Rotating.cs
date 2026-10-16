@@ -1605,35 +1605,36 @@ public sealed partial class Physics
 
         solids.Return(near);
 
-        // On an isometric map, the diamond under it meets the walls, as everything's does there.
-        if (_isometric.Count > 0)
+        // The walls of maps whose cells aren't boxes: met by what stands under it where they're on the ground (on an
+        // isometric map, the diamond under it, as everything's is there), and by its own shape elsewhere (a hex map's).
+        Hull foot = default;
+        foreach (var (walls, wallFilter) in _walls)
         {
-            Hull foot = default;
-            foreach (var walls in _isometric)
+            var map = walls.Map.Entity!;
+            if (filter.IgnoresEachOther(wallFilter) || map.IsSelfOrDescendantOf(entity))
+                continue;
+            if (walls.MetByFootprints)
             {
-                var map = walls.Map.Entity!;
-                if (filter.IgnoresEachOther(walls.Filter) || map.IsSelfOrDescendantOf(entity))
-                    continue;
-                walls.FootprintHull(ref foot, middle, footprint);
-                var (x0, y0, x1, y1) = walls.CellRange(Grow(HullBounds(ref foot), Math.Max(0, margin) + Margin));
-                for (var y = y0; y <= y1; y++)
+                foot.Count = walls.Footprint(middle, footprint, foot.Points);
+                FinishPolygon(ref foot);
+                foot.Center = middle;
+                var (fx0, fy0, fx1, fy1) = walls.CellsNear(Grow(HullBounds(ref foot), Math.Max(0, margin) + Margin));
+                for (var y = fy0; y <= fy1; y++)
                 {
-                    for (var x = x0; x <= x1; x++)
+                    for (var x = fx0; x <= fx1; x++)
                     {
                         if (!walls.Blocked(x, y))
                             continue;
-                        walls.DiamondHull(ref other, x, y);
+                        CellHull(walls, x, y, ref other);
                         if (Collide(ref foot, ref other, margin, out var manifold))
                             Add(ref manifold, map, null, 2 << 28 | (y & 0x3FFF) << 14 | (x & 0x3FFF), underfoot: true);
                     }
                 }
-            }
-        }
 
-        foreach (var walls in _hex)
-        {
-            var map = walls.Map.Entity!;
-            if (filter.IgnoresEachOther(walls.Filter) || map.IsSelfOrDescendantOf(entity) || !walls.Bounds.Overlaps(region))
+                continue;
+            }
+
+            if (!walls.Bounds.Overlaps(region))
                 continue;
             for (var piece = 0; piece < pieces; piece++)
             {
@@ -1651,8 +1652,8 @@ public sealed partial class Physics
                     {
                         if (!walls.Blocked(x, y))
                             continue;
-                        walls.HexagonHull(ref other, x, y);
-                        // A side shared with another solid hexagon is inside the wall, not its surface.
+                        CellHull(walls, x, y, ref other);
+                        // A side shared with another solid cell is inside the wall, not its surface.
                         if (Collide(ref self, ref other, margin, out var manifold) && !walls.SharedSide(x, y, manifold.Normal))
                             Add(ref manifold, map, null, 3 << 28 | (y & 0x3FFF) << 14 | (x & 0x3FFF), feature: piece << PieceShift);
                     }
@@ -2051,6 +2052,13 @@ public sealed partial class Physics
             return;
         for (var (i, j) = (0, hull.Count - 1); i < j; i++, j--)
             (hull.Points[i], hull.Points[j]) = (hull.Points[j], hull.Points[i]);
+    }
+
+    // A solid cell of a map's walls (see TileWalls), as a turning body's shapes or a rope's points meet it.
+    private static void CellHull(TileWalls walls, int x, int y, ref Hull hull)
+    {
+        hull.Count = walls.Cell(x, y, hull.Points);
+        FinishPolygon(ref hull);
     }
 
     private static Box HullBounds(ref Hull hull)

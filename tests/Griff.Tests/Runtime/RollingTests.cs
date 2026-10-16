@@ -224,7 +224,7 @@ public class RollingTests
         Assert.True(ball.Asleep);
         Assert.True(At(ball).X > start.X + 0.5f, $"Only got from {start} to {At(ball)}.");
         Assert.True(ball.Entity!.Transform.Rotation.Z < -30, $"Turned only {ball.Entity.Transform.Rotation.Z} degrees.");
-        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(_scene, At(ball) - new Vector2(0, 0.35f)));
+        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(At(ball) - new Vector2(0, 0.35f)));
     }
 
     [Fact]
@@ -270,7 +270,7 @@ public class RollingTests
 
         Assert.True(ball.Asleep);
         Assert.True(Vector2.Distance(floor, At(ball)) > 1, $"Stayed at {At(ball)}.");
-        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(_scene, At(ball)));
+        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(At(ball)));
     }
 
     [Fact]

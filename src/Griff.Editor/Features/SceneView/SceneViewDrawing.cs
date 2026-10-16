@@ -237,17 +237,12 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     dc.DrawEllipse(null, solid, viewport.ToScreen(rope.WorldOtherAnchor), 3.5, 3.5);
             }
 
-            // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons. A map's
-            // walls show once its tiles are big enough on the screen to tell apart.
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric && TilesShow(t)))
+            // The walls of a map whose cells aren't square: a run of solid diamonds along each row of an isometric map, of
+            // solid hexagons along each row of a hex map. A map's walls show once its tiles are big enough on the screen to
+            // tell apart.
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape != TileShape.Square && TilesShow(t)))
             {
-                foreach (var outline in Griff.Runtime.Physics.IsometricShapes(tilemap))
-                    DrawOutline(outline, solid);
-            }
-
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Hex && TilesShow(t)))
-            {
-                foreach (var outline in Griff.Runtime.Physics.HexShapes(tilemap))
+                foreach (var outline in Griff.Runtime.Physics.WallShapes(tilemap))
                     DrawOutline(outline, solid);
             }
 

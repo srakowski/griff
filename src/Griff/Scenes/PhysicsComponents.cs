@@ -99,6 +99,20 @@ public static class CollisionLayers
 }
 
 /// <summary>
+/// How a body gives way to what runs into it (see <see cref="Body.GivesWay"/>): to things on its <see cref="Layers"/> (all,
+/// when there are none), at <see cref="Speed"/> times the speed they push it (0 to 1).
+/// </summary>
+internal readonly record struct Shove(string? Layers, float Speed)
+{
+    /// <summary>True if something on collision layer <paramref name="layer"/> can push it.</summary>
+    public bool Admits(string? layer)
+    {
+        var layers = CollisionLayers.Parse(Layers);
+        return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
+    }
+}
+
+/// <summary>
 /// A box for collisions, centered on the entity (plus <see cref="Offset"/>) and scaled by its transform. It stays upright
 /// whatever the entity's rotation, unless its <see cref="Body"/> <see cref="Body.Rotates"/>: then it turns with the entity.
 /// Without a <see cref="Body"/> the box is static: walls, floors, platforms.
@@ -762,6 +776,20 @@ public sealed class Body : Component
     }
 
     internal bool PassOneWayThisStep { get; set; }
+
+    // What the game's systems make of the body, set before each physics step by the one that owns what it is (not saved):
+    // physics knows bodies and colliders, not crates or players.
+
+    /// <summary>
+    /// How it gives way when something runs into it, or null if it's in the way like anything else: a crate's (see
+    /// <see cref="Pushable"/>), shoved along by its share of the move.
+    /// </summary>
+    [field: NotState("set again before each step")]
+    internal Shove? GivesWay { get; set; }
+
+    /// <summary>A player's: it can take hold of ropes, so a rope hangs in front of it (and anything inside it), for it to grab.</summary>
+    [field: NotState("set again before each step")]
+    internal bool HoldsRopes { get; set; }
 
     /// <summary>
     /// Falls through the one-way platforms it's standing on (and any it meets) for <paramref name="seconds"/>: down and Jump

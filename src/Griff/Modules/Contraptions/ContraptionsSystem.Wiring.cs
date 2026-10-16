@@ -233,7 +233,7 @@ internal sealed partial class ContraptionsSystem
     private void RunWireButtons(ComponentList<WireButton> buttons)
     {
         // Every player can press buttons: with the mouse over one, or touching it.
-        var players = Game.PlayerInputs().Select(i => (Input: i, Mouse: i.IsMouseInView ? Physics.OverlapPoint(Scene, i.MouseWorld).ToHashSet() : [])).ToList();
+        var players = Game.PlayerInputs().Select(i => (Input: i, Mouse: i.IsMouseInView ? Physics.OverlapPoint(i.MouseWorld).ToHashSet() : [])).ToList();
         var held = players.Any(p => p.Input.IsDown("Interact"));
         foreach (var button in buttons)
         {

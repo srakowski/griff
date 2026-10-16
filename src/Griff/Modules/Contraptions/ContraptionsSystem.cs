@@ -516,7 +516,7 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
     // What's under a point: something with a body first, then any other collider, then a solid tile. Never the tool user.
     private Entity? ThingAt(Vector2 point, Entity user, Scope scope)
     {
-        var found = Physics.OverlapPoint(Scene, point).Where(e => !e.IsSelfOrDescendantOf(user) && scope.Covers(e)).ToList();
+        var found = Physics.OverlapPoint(point).Where(e => !e.IsSelfOrDescendantOf(user) && scope.Covers(e)).ToList();
         return found.FirstOrDefault(e => e.GetComponent<Body>() is not null)
                ?? found.FirstOrDefault(e => e.GetComponent<Collider>() is not null)
                ?? found.FirstOrDefault();

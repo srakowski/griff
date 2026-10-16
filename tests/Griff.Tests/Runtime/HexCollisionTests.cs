@@ -222,14 +222,14 @@ public class HexCollisionTests
         var map = AddRoom();
         var physics = _game.Physics;
 
-        Assert.Contains(map.Entity!, physics.OverlapPoint(_scene, map.CellCenter(0, 3)));
-        Assert.DoesNotContain(map.Entity!, physics.OverlapPoint(_scene, map.CellCenter(1, 3)));
+        Assert.Contains(map.Entity!, physics.OverlapPoint(map.CellCenter(0, 3)));
+        Assert.DoesNotContain(map.Entity!, physics.OverlapPoint(map.CellCenter(1, 3)));
 
         // A box in the middle of a floor hexagon touches nothing; one over the wall's side does.
-        Assert.Empty(physics.OverlapBox(_scene, map.CellCenter(2, 3), new Vector2(0.4f)));
-        Assert.Contains(map.Entity!, physics.OverlapBox(_scene, new Vector2(6.4f, -2.75f), new Vector2(0.4f)));
-        Assert.Empty(physics.OverlapCircle(_scene, map.CellCenter(2, 3), 0.3f));
-        Assert.Contains(map.Entity!, physics.OverlapCircle(_scene, new Vector2(2, -1), 0.3f));
+        Assert.Empty(physics.OverlapBox(map.CellCenter(2, 3), new Vector2(0.4f)));
+        Assert.Contains(map.Entity!, physics.OverlapBox(new Vector2(6.4f, -2.75f), new Vector2(0.4f)));
+        Assert.Empty(physics.OverlapCircle(map.CellCenter(2, 3), 0.3f));
+        Assert.Contains(map.Entity!, physics.OverlapCircle(new Vector2(2, -1), 0.3f));
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public class HexCollisionTests
         var map = AddRoom();
         var from = map.CellCenter(3, 3);
 
-        var hit = _game.Physics.Raycast(_scene, from, Vector2.UnitX);
+        var hit = _game.Physics.Raycast(from, Vector2.UnitX);
 
         Assert.NotNull(hit);
         Assert.Equal(map.Entity, hit.Value.Entity);
@@ -246,26 +246,26 @@ public class HexCollisionTests
         Near(-Vector2.UnitX, hit.Value.Normal);
 
         // Not as far as the wall: nothing.
-        Assert.Null(_game.Physics.Raycast(_scene, from, Vector2.UnitX, 2.49f));
+        Assert.Null(_game.Physics.Raycast(from, Vector2.UnitX, 2.49f));
 
         // Up into a slanted side: it faces down to the left.
-        var up = _game.Physics.Raycast(_scene, new Vector2(2.25f, -2.75f), Vector2.UnitY);
+        var up = _game.Physics.Raycast(new Vector2(2.25f, -2.75f), Vector2.UnitY);
         Near(new Vector2(2.25f, -0.875f), up!.Value.Point);
         Near(Vector2.Normalize(new Vector2(-1, -2)), up.Value.Normal);
 
         // From off the map, it meets the outside wall.
-        var outside = _game.Physics.Raycast(_scene, new Vector2(-2, -2.75f), Vector2.UnitX);
+        var outside = _game.Physics.Raycast(new Vector2(-2, -2.75f), Vector2.UnitX);
         Near(new Vector2(0.5f, -2.75f), outside!.Value.Point);
 
         // Starting inside a wall, it passes through to the wall across the room.
-        var through = _game.Physics.Raycast(_scene, new Vector2(1, -2.75f), Vector2.UnitX);
+        var through = _game.Physics.Raycast(new Vector2(1, -2.75f), Vector2.UnitX);
         Near(new Vector2(6.5f, -2.75f), through!.Value.Point);
 
         // A long way round the room, every way out, it always stops at the walls.
         for (var angle = 0; angle < 360; angle += 7)
         {
             var way = new Vector2(MathF.Cos(angle * MathF.PI / 180), MathF.Sin(angle * MathF.PI / 180));
-            var wall = _game.Physics.Raycast(_scene, from, way, 100);
+            var wall = _game.Physics.Raycast(from, way, 100);
             Assert.NotNull(wall);
             Assert.True(map.IsBlocked(map.CellAt(wall.Value.Point + way * 0.01f).X, map.CellAt(wall.Value.Point + way * 0.01f).Y),
                 $"At {angle} degrees the ray stopped at {wall.Value.Point}, not a wall.");
@@ -303,17 +303,17 @@ public class HexCollisionTests
     }
 
     [Fact]
-    public void HexShapes_OutlineEachRunOfSolidHexagons_LeavingOutTheRest()
+    public void WallShapes_OutlineEachRunOfSolidHexagons_LeavingOutTheRest()
     {
         var map = AddRoom("1.11", "....");
 
-        var shapes = Physics.HexShapes(map).ToList();
+        var shapes = Physics.WallShapes(map).ToList();
 
         Assert.Equal(2, shapes.Count);
         Assert.Equal(6, shapes[0].Length);
         Assert.Equal(map.OutlineOf(2, 0, 3, 0).Length, shapes[1].Length);
         map.Solid = false;
-        Assert.Empty(Physics.HexShapes(map));
+        Assert.Empty(Physics.WallShapes(map));
         Assert.Empty(Physics.TileShapes(map));
     }
 

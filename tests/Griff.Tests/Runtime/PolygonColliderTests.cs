@@ -357,7 +357,7 @@ public class PolygonColliderTests
         Assert.Equal("Level", rock.Ground?.Name);
         var rockShape = rock.Entity!.GetComponent<PolygonCollider>()!;
         Assert.Equal(1, rockShape.WorldBounds.Min.Y, 1);
-        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(_scene, rockShape.WorldCentroid));
+        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(rockShape.WorldCentroid));
         // The wedge slid down the slope tile onto the floor, or rests on it, but never in it.
         Assert.True(wedge.Entity!.GetComponent<PolygonCollider>()!.WorldBounds.Min.Y > 0.95f);
     }
@@ -378,7 +378,7 @@ public class PolygonColliderTests
         var shape = pentagon.Entity!.GetComponent<PolygonCollider>()!;
         // Row 3's hexagons' points reach up to y = -2.25: it rests on them (or in the notch between two), not in them.
         Assert.InRange(shape.WorldBounds.Min.Y, -2.75f, -2.2f);
-        Assert.DoesNotContain(hex, _game.Physics.OverlapPoint(_scene, shape.WorldCentroid - new Vector2(0, 0.25f)));
+        Assert.DoesNotContain(hex, _game.Physics.OverlapPoint(shape.WorldCentroid - new Vector2(0, 0.25f)));
     }
 
     [Fact]
@@ -398,7 +398,7 @@ public class PolygonColliderTests
         Run(2);
 
         Assert.InRange(Vector2.Distance(floor, rock.CenterOfMass), 0.3f, 2);
-        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(_scene, rock.CenterOfMass));
+        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(rock.CenterOfMass));
         Assert.Equal(0, rock.Velocity.X, 2);
     }
 
@@ -554,21 +554,21 @@ public class PolygonColliderTests
         var cup = AddShape("Cup", Vector2.Zero, "-2 0; 2 0; 2 2; 1.6 2; 1.6 0.4; -1.6 0.4; -1.6 2; -2 2");
         _game.Tick(Frame);
 
-        var down = _game.Physics.Raycast(_scene, new Vector2(0, 5), -Vector2.UnitY);
+        var down = _game.Physics.Raycast(new Vector2(0, 5), -Vector2.UnitY);
         Assert.NotNull(down);
         Assert.Equal(0.4f, down.Value.Point.Y, 4);
         Assert.Equal(Vector2.UnitY, down.Value.Normal);
-        var across = _game.Physics.Raycast(_scene, new Vector2(-5, 1), Vector2.UnitX);
+        var across = _game.Physics.Raycast(new Vector2(-5, 1), Vector2.UnitX);
         Assert.Equal(-2, across!.Value.Point.X, 4);
         Assert.Equal(-Vector2.UnitX, across.Value.Normal);
-        Assert.Null(_game.Physics.Raycast(_scene, new Vector2(0, 0.2f), Vector2.UnitX));
+        Assert.Null(_game.Physics.Raycast(new Vector2(0, 0.2f), Vector2.UnitX));
 
-        Assert.Empty(_game.Physics.OverlapPoint(_scene, new Vector2(0, 1)));
-        Assert.Single(_game.Physics.OverlapPoint(_scene, new Vector2(1.8f, 1.9f)));
-        Assert.Empty(_game.Physics.OverlapBox(_scene, new Vector2(0, 1.2f), new Vector2(3, 1)));
-        Assert.Single(_game.Physics.OverlapBox(_scene, new Vector2(0, 0.5f), new Vector2(3, 0.4f)));
-        Assert.Empty(_game.Physics.OverlapCircle(_scene, new Vector2(0, 1.2f), 0.7f));
-        Assert.Single(_game.Physics.OverlapCircle(_scene, new Vector2(2.5f, 1), 0.6f));
+        Assert.Empty(_game.Physics.OverlapPoint(new Vector2(0, 1)));
+        Assert.Single(_game.Physics.OverlapPoint(new Vector2(1.8f, 1.9f)));
+        Assert.Empty(_game.Physics.OverlapBox(new Vector2(0, 1.2f), new Vector2(3, 1)));
+        Assert.Single(_game.Physics.OverlapBox(new Vector2(0, 0.5f), new Vector2(3, 0.4f)));
+        Assert.Empty(_game.Physics.OverlapCircle(new Vector2(0, 1.2f), 0.7f));
+        Assert.Single(_game.Physics.OverlapCircle(new Vector2(2.5f, 1), 0.6f));
 
         // A polygon trigger tells what comes into it.
         var zone = AddShape("Zone", new Vector2(10, 0), "0 0; 2 0; 1 2");

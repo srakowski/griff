@@ -3,10 +3,16 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// Steps the physics world (Game.Physics) and tells scripts what collided and what came into or left a trigger.
+/// Owns the physics world of the scene the game is playing (Game.Physics): steps it, starts it afresh when the scene changes,
+/// and tells scripts what collided and what came into or left a trigger.
 /// </summary>
 internal sealed class PhysicsSystem : GameSystem
 {
+    // The world, made as the game first asks for it, of whichever scene the game is playing. Its fields are kept apart, as a
+    // part of the game of its own (see Game.KeptParts).
+    [NotState("a part of its own, kept apart")]
+    private Physics? _world;
+
     // What physics calls back, made once rather than every frame.
     [NotState("made once")]
     private Action<Entity, Entity>? _onCollision;
@@ -15,6 +21,16 @@ internal sealed class PhysicsSystem : GameSystem
     private Action<Entity, Entity, bool>? _onTrigger;
 
     public override string Name => "Physics";
+
+    /// <summary>The physics world of the game's scene.</summary>
+    internal Physics World => _world ??= new Physics(() => Game.Scene);
+
+    // A new scene starts with nothing in its triggers, nothing stood on and nothing welded.
+    protected override void SceneChanged()
+    {
+        World.Reset();
+        World.Groups = [];
+    }
 
     private void OnCollision(Entity a, Entity b)
     {
@@ -56,19 +72,20 @@ internal sealed class PhysicsSystem : GameSystem
     {
         if (Game.Time.Delta <= 0)
             return;
-        Game.Physics.Step(Game.Scene, Game.Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
+        var world = World;
+        world.Step(Game.Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
 
         // Room for what a heap of bodies that turn bump into, all awake at once, so a collapse doesn't grow it as it goes.
-        Game.Touches.EnsureCapacity(Game.Physics.TouchRoom);
+        Game.Touches.EnsureCapacity(world.TouchRoom);
 
         // Ropes that snapped say so.
-        foreach (var rope in Game.Physics.Snapped)
+        foreach (var rope in world.Snapped)
         {
             if (!string.IsNullOrWhiteSpace(rope.BreakMessage) && rope.Entity is { } entity)
                 Game.Send(rope.BreakMessage.Trim(), entity, from: entity);
         }
 
-        foreach (var (trigger, other) in Game.Physics.TriggerPairs)
+        foreach (var (trigger, other) in world.TriggerPairs)
         {
             Game.Touches.Add((trigger, other));
             Game.Touches.Add((other, trigger));

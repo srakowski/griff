@@ -12,7 +12,6 @@ public class SlopeTests
     private const float Step = 1 / 60f;
     private readonly Scene _scene = new();
     private readonly Game _game;
-    private readonly Physics _physics = new();
 
     public SlopeTests() => _game = new Game(_scene, new InputState());
 
@@ -160,8 +159,8 @@ public class SlopeTests
             "....1...",
             "00000000");
 
-        var down = _physics.Raycast(_scene, new Vector2(4.25f, 0), -Vector2.UnitY);
-        var side = _physics.Raycast(_scene, new Vector2(8, -2.5f), -Vector2.UnitX);
+        var down = _game.Physics.Raycast(new Vector2(4.25f, 0), -Vector2.UnitY);
+        var side = _game.Physics.Raycast(new Vector2(8, -2.5f), -Vector2.UnitX);
 
         Assert.NotNull(down);
         Assert.Equal(-2.75f, down.Value.Point.Y, 3);

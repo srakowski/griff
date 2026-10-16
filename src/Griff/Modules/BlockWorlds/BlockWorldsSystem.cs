@@ -499,7 +499,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         if (cell.X < 0 || cell.Y < 0 || map.GetTile(cell.X, cell.Y) >= 0)
             return false;
         var size = map.TileSize * ScaleOf(map.Entity!) * 0.96f;
-        return !Physics.OverlapBox(Scene, CellWorld(map, cell.X, cell.Y), new Vector2(size))
+        return !Physics.OverlapBox(CellWorld(map, cell.X, cell.Y), new Vector2(size))
             .Any(e => e.GetComponents<Collider>().Any(c => !c.IsTrigger) && e.GetComponent<Tilemap>() is null);
     }
 

@@ -29,7 +29,7 @@ public class FrameTests
             "Simulate: Tweens", "Simulate: Lifetimes", "Simulate: Spawners", "Simulate: Shooters", "Simulate: Movers",
             "Simulate: Animations", "Simulate: Animated Tiles", "Simulate: Particles", "Simulate: Camera Shake",
             "Simulate: Sprite Effects", "Simulate: Prompts", "Simulate: Typewriters", "Simulate: Pickup Spin",
-            "Physics: Fixed Scripts", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
+            "Physics: Fixed Scripts", "Physics: Body Roles", "Physics: Thrusters", "Physics: Welds", "Physics: Physics",
             "Physics: Fighters Landing", "Physics: Breakables", "Physics: Level Goals", "Physics: Pinball", "Physics: Carrying",
             "Resolve: Pickups", "Resolve: Checkpoints", "Resolve: Doors", "Resolve: Stage Input", "Resolve: Dialogues", "Resolve: Stages", "Resolve: Switches",
             "Resolve: Goals", "Resolve: Wiring", "Resolve: Bouncers", "Resolve: Crumbles", "Resolve: Hitboxes", "Resolve: Touch Damage",

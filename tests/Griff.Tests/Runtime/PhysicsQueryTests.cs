@@ -86,7 +86,7 @@ public class PhysicsQueryTests
         Run(1);
 
         Assert.True(player.Transform.Position.Y < -3);
-        Assert.Empty(_game.Physics.OverlapPoint(_scene, new Vector2(0, -3.5f)));
+        Assert.Empty(_game.Physics.OverlapPoint(new Vector2(0, -3.5f)));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class PhysicsQueryTests
         AddBox("Far", new Vector2(10, 0), Vector2.One);
         var near = AddBox("Near", new Vector2(5, 0), Vector2.One);
 
-        var hit = _game.Physics.Raycast(_scene, Vector2.Zero, new Vector2(3, 0));
+        var hit = _game.Physics.Raycast(Vector2.Zero, new Vector2(3, 0));
 
         Assert.NotNull(hit);
         Assert.Same(near, hit.Value.Entity);
@@ -121,7 +121,7 @@ public class PhysicsQueryTests
     {
         var level = AddTilemap(new Vector2(-5, 0), "0000000000");
 
-        var hit = _game.Physics.Raycast(_scene, new Vector2(0.3f, 3), -Vector2.UnitY);
+        var hit = _game.Physics.Raycast(new Vector2(0.3f, 3), -Vector2.UnitY);
 
         Assert.NotNull(hit);
         Assert.Same(level, hit.Value.Entity);
@@ -137,13 +137,13 @@ public class PhysicsQueryTests
         var wall = AddBox("Wall", new Vector2(6, 0), Vector2.One);
 
         // The ray starts inside the player, which is skipped anyway; the trigger is skipped by default.
-        Assert.Same(wall, _game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX)?.Entity);
-        Assert.Null(_game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX, maxDistance: 5));
-        Assert.Equal("Coin", _game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX, includeTriggers: true)?.Entity.Name);
+        Assert.Same(wall, _game.Physics.Raycast(Vector2.Zero, Vector2.UnitX)?.Entity);
+        Assert.Null(_game.Physics.Raycast(Vector2.Zero, Vector2.UnitX, maxDistance: 5));
+        Assert.Equal("Coin", _game.Physics.Raycast(Vector2.Zero, Vector2.UnitX, includeTriggers: true)?.Entity.Name);
 
         // Ignoring an entity skips it even when the ray starts outside it.
-        Assert.Same(wall, _game.Physics.Raycast(_scene, new Vector2(-3, 0), Vector2.UnitX, ignore: player)?.Entity);
-        Assert.Same(player, _game.Physics.Raycast(_scene, new Vector2(-3, 0), Vector2.UnitX)?.Entity);
+        Assert.Same(wall, _game.Physics.Raycast(new Vector2(-3, 0), Vector2.UnitX, ignore: player)?.Entity);
+        Assert.Same(player, _game.Physics.Raycast(new Vector2(-3, 0), Vector2.UnitX)?.Entity);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class PhysicsQueryTests
     {
         AddBox("Ground", new Vector2(0, -0.5f), new Vector2(10, 1));
 
-        var hit = _game.Physics.Raycast(_scene, Vector2.Zero, -Vector2.UnitY, 0.1f);
+        var hit = _game.Physics.Raycast(Vector2.Zero, -Vector2.UnitY, 0.1f);
 
         Assert.Equal(0f, hit?.Distance);
     }
@@ -161,9 +161,9 @@ public class PhysicsQueryTests
     {
         AddBox("Box", new Vector2(5, 0), Vector2.One);
 
-        Assert.Null(_game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitY));
-        Assert.Null(_game.Physics.Raycast(_scene, Vector2.Zero, -Vector2.UnitX));
-        Assert.Null(_game.Physics.Raycast(_scene, Vector2.Zero, Vector2.Zero));
+        Assert.Null(_game.Physics.Raycast(Vector2.Zero, Vector2.UnitY));
+        Assert.Null(_game.Physics.Raycast(Vector2.Zero, -Vector2.UnitX));
+        Assert.Null(_game.Physics.Raycast(Vector2.Zero, Vector2.Zero));
     }
 
     [Fact]
@@ -173,9 +173,40 @@ public class PhysicsQueryTests
         AddBox("Far Crate", new Vector2(3, 3), Vector2.One);
         AddTilemap(new Vector2(-1, -2), "000");
 
-        var hits = _game.Physics.OverlapCircle(_scene, Vector2.Zero, 2.6f).Select(e => e.Name).Order().ToList();
+        var hits = _game.Physics.OverlapCircle(Vector2.Zero, 2.6f).Select(e => e.Name).Order().ToList();
 
         // The far crate's nearest corner is (2.5, 2.5), about 3.5 away.
         Assert.Equal(["Crate", "Level"], hits);
+    }
+
+    // The world belongs to the scene its game is playing: its questions are about that scene, and a new scene starts it
+    // afresh, with nothing left in its triggers, rather than the game resetting it.
+    [Fact]
+    public void TheWorld_BelongsToTheGamesScene_AndStartsAfreshInTheNext()
+    {
+        AddBox("Wall", new Vector2(3, 0), Vector2.One);
+        AddBox("Zone", new Vector2(0, 0), new Vector2(2, 2), trigger: true);
+        AddBox("Crate", new Vector2(0, 0), new Vector2(0.5f, 0.5f)).AddComponent<Body>().GravityScale = 0;
+        var next = new Scene();
+        var far = new Entity("Far Wall");
+        far.Transform.Position = new Vector3(-4, 0, 0);
+        far.AddComponent<BoxCollider>();
+        next.Add(far);
+        _game.SceneLoader = _ => next;
+
+        _game.Tick(Step);
+        var world = _game.Physics;
+        Assert.Same(_scene, world.Scene);
+        Assert.NotEmpty(world.TriggerPairs);
+        Assert.Equal("Wall", world.Raycast(Vector2.Zero, Vector2.UnitX)?.Entity.Name);
+
+        _game.LoadScene("Next");
+        _game.Tick(Step);
+
+        Assert.Same(world, _game.Physics);
+        Assert.Same(next, world.Scene);
+        Assert.Empty(world.TriggerPairs);
+        Assert.Null(world.Raycast(Vector2.Zero, Vector2.UnitX));
+        Assert.Equal("Far Wall", world.Raycast(Vector2.Zero, -Vector2.UnitX)?.Entity.Name);
     }
 }

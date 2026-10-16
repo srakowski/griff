@@ -484,6 +484,8 @@ public sealed partial class Game
 
         // Scripts push bodies just before they move.
         Step(Steps.FixedScripts, _scriptSystem.FixedUpdateScripts, timesItself: true);
+        // What crates and players are to physics, which knows only bodies and colliders, as they are just before it steps.
+        Step(Steps.BodyRoles, _movement.ReadyBodies);
         Step(Steps.Physics, _physicsSystem.StepPhysics);
         Step(Steps.Carrying, _drags.CarryHeld);
 
@@ -599,13 +601,13 @@ public sealed partial class Game : IKeepsState
     [NotState("reused to write each snapshot's state")]
     private readonly StateWriter _stateWriter = new();
 
-    // The parts whose fields are kept, in order: the game, its clock and physics, then each system running. (Its random
-    // numbers are kept apart: they start as the game first takes a step.)
+    // The parts whose fields are kept, in order: the game, its clock and its physics system's world, then each system
+    // running. (Its random numbers are kept apart: they start as the game first takes a step.)
     private IEnumerable<object> KeptParts()
     {
         yield return this;
         yield return Time;
-        yield return Physics;
+        yield return _physicsSystem.World;
         foreach (var system in _systems)
             yield return system;
     }

@@ -979,6 +979,23 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public bool IsBlocked(int x, int y) => Solid && GetTile(x, y) is var tile and >= 0 && CollisionOf(tile) == 0;
 
     /// <summary>
+    /// Whether bodies meet its cells as boxes, as they meet colliders (with one-way and slope tiles): a square map's. Other
+    /// shapes' cells are walls of their own (see <see cref="Walls"/>).
+    /// </summary>
+    internal bool TilesAreBoxes => Shape == TileShape.Square;
+
+    /// <summary>
+    /// The walls its solid cells make for bodies when they aren't boxes, from its <see cref="Shape"/>, as it's placed now:
+    /// an isometric map's diamonds, a hex map's hexagons. Null for a square map, or one that can't be placed.
+    /// </summary>
+    internal TileWalls? Walls() => Shape switch
+    {
+        TileShape.Isometric => IsometricWalls.Of(this),
+        TileShape.Hex => HexWalls.Of(this),
+        _ => null,
+    };
+
+    /// <summary>
     /// The shortest way from <paramref name="from"/> to <paramref name="to"/> (world positions) that doesn't go through
     /// walls, as world positions to head for one after another, ending at the center of <paramref name="to"/>'s cell.
     /// Straight stretches are one waypoint. Empty if there's no way there, or either end is inside a wall. Moves

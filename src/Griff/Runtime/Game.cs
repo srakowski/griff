@@ -117,8 +117,12 @@ public sealed partial class Game : IGameContext
 
     public Time Time { get; } = new();
 
-    [field: NotState("a part of its own, put back in place")]
-    public Physics Physics { get; } = new();
+    /// <summary>
+    /// The physics world of the scene the game is playing: what its bodies touched, knocked and shoved, gravity, and
+    /// questions about the scene (<see cref="Physics.Raycast"/>, <see cref="Physics.OverlapBox"/>...). Owned and stepped by
+    /// the game's physics system, which starts it afresh for each scene.
+    /// </summary>
+    public Physics Physics => _physicsSystem.World;
 
     /// <summary>Lines, boxes, circles and text drawn over the game for a frame, to see what code is doing.</summary>
     [field: NotState("what code draws to debug, for a while")]

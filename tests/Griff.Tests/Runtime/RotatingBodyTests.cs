@@ -328,15 +328,15 @@ public class RotatingBodyTests
         body.Frozen = true;
         _game.Tick(Frame);
 
-        var hit = _game.Physics.Raycast(_scene, new Vector2(-3, 0.5f), Vector2.UnitX);
+        var hit = _game.Physics.Raycast(new Vector2(-3, 0.5f), Vector2.UnitX);
         Assert.NotNull(hit);
         Assert.Equal(-0.5f, hit.Value.Point.X, 3);
         Assert.True(Vector2.Distance(Vector2.Normalize(new Vector2(-1, 1)), hit.Value.Normal) < 1e-3f, $"{hit.Value.Normal}");
 
-        Assert.Empty(_game.Physics.OverlapPoint(_scene, new Vector2(0.8f, 0.8f)));
-        Assert.Single(_game.Physics.OverlapPoint(_scene, new Vector2(0, 0.9f)));
-        Assert.Empty(_game.Physics.OverlapBox(_scene, new Vector2(0.9f, 0.9f), new Vector2(0.4f, 0.4f)));
-        Assert.Single(_game.Physics.OverlapCircle(_scene, new Vector2(0.9f, 0), 0.25f));
+        Assert.Empty(_game.Physics.OverlapPoint(new Vector2(0.8f, 0.8f)));
+        Assert.Single(_game.Physics.OverlapPoint(new Vector2(0, 0.9f)));
+        Assert.Empty(_game.Physics.OverlapBox(new Vector2(0.9f, 0.9f), new Vector2(0.4f, 0.4f)));
+        Assert.Single(_game.Physics.OverlapCircle(new Vector2(0.9f, 0), 0.25f));
 
         var edges = Shadows.Edges(_scene);
         Assert.Equal(4, edges.Count);
@@ -379,7 +379,7 @@ public class RotatingBodyTests
         // Row 3's hexagons' points reach up to y = -2.25; it rests on them, not in them.
         Assert.True(body.IsGrounded);
         Assert.InRange(crate.Transform.Position.Y, -2.25f, -1.6f);
-        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(_scene, At(crate) - new Vector2(0, 0.25f)));
+        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(At(crate) - new Vector2(0, 0.25f)));
     }
 
     [Fact]
@@ -399,7 +399,7 @@ public class RotatingBodyTests
         Run(2);
 
         Assert.InRange(Vector2.Distance(floor, At(crate)), 0.5f, 2);
-        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(_scene, At(crate)));
+        Assert.DoesNotContain(level, _game.Physics.OverlapPoint(At(crate)));
         Assert.Equal(0, body.Velocity.X, 2);
     }
 

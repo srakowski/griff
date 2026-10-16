@@ -117,6 +117,33 @@ public class LevelPieceTests
         Assert.Equal(1, second.Transform.Position.X - first.Transform.Position.X, 2);
     }
 
+    // Physics shoves what gives way and says so: each step's Pushes are what shoved what, the crate shoved on in turn with the
+    // crate that shoved it, and a crate that stops being Pushable stops giving way.
+    [Fact]
+    public void Pushes_SayWhatShovedWhat_AndACrateGivesWayOnlyWhileItsPushable()
+    {
+        AddFloor();
+        var (player, _) = AddPlayer(new Vector2(0, 0.5f));
+        var (first, _) = AddCrate(new Vector2(2, 0.5f));
+        var (second, _) = AddCrate(new Vector2(3, 0.5f));
+        Run(0.2f);
+        Assert.Empty(_game.Physics.Pushes);
+
+        _input.SetKey(Key.D, true);
+        Run(0.5f);
+        Assert.Contains((player, first), _game.Physics.Pushes);
+        Assert.Contains((first, second), _game.Physics.Pushes);
+        Assert.True(first.GetComponent<Body>()!.GivesWay is { Layers: "Player" });
+        Assert.True(player.GetComponent<Body>()!.HoldsRopes);
+
+        first.RemoveComponent(first.GetComponent<Pushable>()!);
+        var at = first.Transform.Position.X;
+        Run(0.5f);
+        Assert.Null(first.GetComponent<Body>()!.GivesWay);
+        Assert.Empty(_game.Physics.Pushes);
+        Assert.Equal(at, first.Transform.Position.X, 2);
+    }
+
     [Fact]
     public void Pushable_InAPlatformer_CanBeStoodOn_NotPushedDown()
     {

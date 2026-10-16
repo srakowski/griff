@@ -157,8 +157,8 @@ public class CollisionLayerTests
         AddBox("Crate", new Vector2(2, 0), layer: "Crate");
         AddBox("Enemy", new Vector2(4, 0), layer: "Enemy");
 
-        var any = _game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX);
-        var enemy = _game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX, layers: "Enemy");
+        var any = _game.Physics.Raycast(Vector2.Zero, Vector2.UnitX);
+        var enemy = _game.Physics.Raycast(Vector2.Zero, Vector2.UnitX, layers: "Enemy");
 
         Assert.Equal("Crate", any?.Entity.Name);
         Assert.Equal("Enemy", enemy?.Entity.Name);
@@ -170,9 +170,9 @@ public class CollisionLayerTests
         AddBox("Wall", Vector2.Zero);
         AddBox("Enemy", Vector2.Zero, layer: "Enemy");
 
-        Assert.Equal(["Enemy"], _game.Physics.OverlapPoint(_scene, Vector2.Zero, layers: "enemy").Select(e => e.Name));
-        Assert.Equal(["Wall"], _game.Physics.OverlapBox(_scene, Vector2.Zero, Vector2.One, layers: "Default").Select(e => e.Name));
-        Assert.Equal(2, _game.Physics.OverlapCircle(_scene, Vector2.Zero, 1, layers: "Default; Enemy").Count());
+        Assert.Equal(["Enemy"], _game.Physics.OverlapPoint(Vector2.Zero, layers: "enemy").Select(e => e.Name));
+        Assert.Equal(["Wall"], _game.Physics.OverlapBox(Vector2.Zero, Vector2.One, layers: "Default").Select(e => e.Name));
+        Assert.Equal(2, _game.Physics.OverlapCircle(Vector2.Zero, 1, layers: "Default; Enemy").Count());
     }
 
     [Fact]

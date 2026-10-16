@@ -152,6 +152,9 @@ public static class Steps
     /// <summary>The "Fixed Scripts" step of the Physics phase.</summary>
     public static readonly StepId FixedScripts = new(FramePhase.Physics, "Fixed Scripts");
 
+    /// <summary>The "Body Roles" step of the Physics phase.</summary>
+    public static readonly StepId BodyRoles = new(FramePhase.Physics, "Body Roles");
+
     /// <summary>The "Physics" step of the Physics phase.</summary>
     public static readonly StepId Physics = new(FramePhase.Physics, "Physics");
 

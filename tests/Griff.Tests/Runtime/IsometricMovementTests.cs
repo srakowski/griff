@@ -191,14 +191,14 @@ public class IsometricMovementTests
         var map = AddRoom();
         var physics = _game.Physics;
 
-        Assert.Contains(map.Entity!, physics.OverlapPoint(_scene, map.CellCenter(3, 1)));
-        Assert.DoesNotContain(map.Entity!, physics.OverlapPoint(_scene, map.CellCenter(1, 1)));
+        Assert.Contains(map.Entity!, physics.OverlapPoint(map.CellCenter(3, 1)));
+        Assert.DoesNotContain(map.Entity!, physics.OverlapPoint(map.CellCenter(1, 1)));
 
         // A box between the floor's cells touches nothing; one over a wall's corner does.
-        Assert.Empty(physics.OverlapBox(_scene, map.PointAt(2, 2), new Vector2(0.5f, 0.25f)));
-        Assert.Contains(map.Entity!, physics.OverlapBox(_scene, map.PointAt(2.9f, 2), new Vector2(0.5f, 0.25f)));
-        Assert.Empty(physics.OverlapCircle(_scene, map.PointAt(2, 2), 0.3f));
-        Assert.Contains(map.Entity!, physics.OverlapCircle(_scene, map.PointAt(2.8f, 2), 0.3f));
+        Assert.Empty(physics.OverlapBox(map.PointAt(2, 2), new Vector2(0.5f, 0.25f)));
+        Assert.Contains(map.Entity!, physics.OverlapBox(map.PointAt(2.9f, 2), new Vector2(0.5f, 0.25f)));
+        Assert.Empty(physics.OverlapCircle(map.PointAt(2, 2), 0.3f));
+        Assert.Contains(map.Entity!, physics.OverlapCircle(map.PointAt(2.8f, 2), 0.3f));
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class IsometricMovementTests
         var from = map.PointAt(1.5f, 1.5f);
         var direction = Vector2.Normalize(map.PointAt(1, 0));
 
-        var hit = _game.Physics.Raycast(_scene, from, direction);
+        var hit = _game.Physics.Raycast(from, direction);
 
         Assert.NotNull(hit);
         Assert.Equal(map.Entity, hit.Value.Entity);
@@ -217,31 +217,31 @@ public class IsometricMovementTests
         Assert.Equal(0, Vector2.Dot(hit.Value.Normal, map.PointAt(0, 1)), 3);
 
         // Not as far as the wall: nothing.
-        Assert.Null(_game.Physics.Raycast(_scene, from, direction, Vector2.Distance(from, hit.Value.Point) - 0.01f));
+        Assert.Null(_game.Physics.Raycast(from, direction, Vector2.Distance(from, hit.Value.Point) - 0.01f));
 
         // From off the map, it meets the outside wall.
-        var outside = _game.Physics.Raycast(_scene, map.PointAt(-2, 1.5f), direction);
+        var outside = _game.Physics.Raycast(map.PointAt(-2, 1.5f), direction);
         Near(map.PointAt(0, 1.5f), outside!.Value.Point);
 
         // Starting inside a wall, it passes through to the wall across the room.
-        var through = _game.Physics.Raycast(_scene, map.PointAt(0.5f, 1.5f), direction);
+        var through = _game.Physics.Raycast(map.PointAt(0.5f, 1.5f), direction);
         Near(map.PointAt(3, 1.5f), through!.Value.Point);
     }
 
     [Fact]
-    public void IsometricShapes_OutlineEachRunOfSolidDiamonds_LeavingOutTheRest()
+    public void WallShapes_OutlineEachRunOfSolidDiamonds_LeavingOutTheRest()
     {
         var map = AddRoom("11", "2.");
         map.BackgroundTiles = "2";
 
-        var shapes = Physics.IsometricShapes(map).ToList();
+        var shapes = Physics.WallShapes(map).ToList();
 
         Assert.Single(shapes);
         Assert.Equal(map.OutlineOf(0, 0, 1, 0), shapes[0]);
         Assert.Empty(Physics.TileShapes(map));
         Assert.Empty(Shadows.Edges(_scene));
         map.Solid = false;
-        Assert.Empty(Physics.IsometricShapes(map));
+        Assert.Empty(Physics.WallShapes(map));
     }
 
     [Fact]

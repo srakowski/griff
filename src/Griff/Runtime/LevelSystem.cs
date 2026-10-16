@@ -130,8 +130,8 @@ internal sealed class LevelSystem : GameSystem
         var x = direction > 0 ? bounds.Max.X + 0.05f : bounds.Min.X - 0.05f;
         var rise = Math.Min(0.3f, bounds.HalfSize.Y);
         var origin = new Vector2(x, bounds.Min.Y + rise);
-        var drop = Game.Physics.IsOnSlope(Game.Scene, collider) ? bounds.HalfSize.X * 2 + 0.1f : 0;
-        return Game.Physics.Raycast(Game.Scene, origin, -Vector2.UnitY, rise + 0.25f + drop, ignore: entity) is not null;
+        var drop = Game.Physics.IsOnSlope(collider) ? bounds.HalfSize.X * 2 + 0.1f : 0;
+        return Game.Physics.Raycast(origin, -Vector2.UnitY, rise + 0.25f + drop, ignore: entity) is not null;
     }
 
     private void RunChase(Chase chase)
@@ -227,7 +227,7 @@ internal sealed class LevelSystem : GameSystem
     {
         var from = Game.Flat(looker.Transform.WorldPosition);
         var toTarget = Game.Flat(target.Transform.WorldPosition) - from;
-        var hit = Game.Physics.Raycast(Game.Scene, from, toTarget, toTarget.Length(), ignore: looker);
+        var hit = Game.Physics.Raycast(from, toTarget, toTarget.Length(), ignore: looker);
         return hit is null || hit.Value.Entity.IsSelfOrDescendantOf(target);
     }
 

@@ -190,7 +190,7 @@ public class WeldedTurningTests
             var box = body.Entity!.GetComponent<BoxCollider>()!;
             var (a, b, c, d) = box.WorldCorners;
             foreach (var corner in new[] { a, b, c, d })
-                Assert.DoesNotContain(hex, _game.Physics.OverlapPoint(_scene, Vector2.Lerp(corner, box.WorldShape.Center, 0.2f)));
+                Assert.DoesNotContain(hex, _game.Physics.OverlapPoint(Vector2.Lerp(corner, box.WorldShape.Center, 0.2f)));
         }
 
         Assert.True(At(plank).X < 9.5f, $"It went through the wall to {At(plank)}.");
@@ -215,8 +215,8 @@ public class WeldedTurningTests
         Run(2);
 
         Assert.InRange(Vector2.Distance(floor, cart.CenterOfMass), 0.2f, 2);
-        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(_scene, cart.CenterOfMass));
-        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(_scene, load.CenterOfMass));
+        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(cart.CenterOfMass));
+        Assert.DoesNotContain(iso, _game.Physics.OverlapPoint(load.CenterOfMass));
         Assert.Equal(0, cart.Velocity.X, 1);
     }
 

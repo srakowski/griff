@@ -152,9 +152,9 @@ public class PhysicsTests
     {
         var crate = AddBox("Crate", new Vector2(5, 5), new Vector2(2, 2));
 
-        Assert.Equal([crate], _game.Physics.OverlapPoint(_scene, new Vector2(5.5f, 4.5f)));
-        Assert.Empty(_game.Physics.OverlapPoint(_scene, Vector2.Zero));
-        Assert.Equal([crate], _game.Physics.OverlapBox(_scene, new Vector2(3.8f, 5), Vector2.One));
+        Assert.Equal([crate], _game.Physics.OverlapPoint(new Vector2(5.5f, 4.5f)));
+        Assert.Empty(_game.Physics.OverlapPoint(Vector2.Zero));
+        Assert.Equal([crate], _game.Physics.OverlapBox(new Vector2(3.8f, 5), Vector2.One));
     }
 
     [Fact]

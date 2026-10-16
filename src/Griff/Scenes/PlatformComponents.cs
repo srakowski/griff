@@ -65,11 +65,7 @@ public sealed class Pushable : Component, IDrawEffect, IGridDriver
     public event Action<Entity, Vector2>? Pushed;
 
     /// <summary>True if something on collision layer <paramref name="layer"/> can push it.</summary>
-    public bool AcceptsLayer(string? layer)
-    {
-        var layers = CollisionLayers.Parse(Layers);
-        return layers.Length == 0 || CollisionLayers.Contains(layers, layer);
-    }
+    public bool AcceptsLayer(string? layer) => new Shove(Layers, Speed).Admits(layer);
 
     // The color the goal it rests on turns it, drawn instead of its sprite's own (not saved, so a rewind never keeps it).
     internal Color? GoalTint { get; set; }

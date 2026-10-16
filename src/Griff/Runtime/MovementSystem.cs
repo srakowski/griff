@@ -5,7 +5,8 @@ namespace Griff.Runtime;
 
 /// <summary>
 /// Players with no code (platformer and top-down movement, ladders; grid movers step through GridSystem) and the level
-/// pieces they play with: bouncers and crumbling platforms. Pushable crates are physics.
+/// pieces they play with: bouncers, crumbling platforms and pushable crates (which physics shoves along as their bodies
+/// say: see ReadyBodies).
 /// </summary>
 internal sealed class MovementSystem : GameSystem
 {
@@ -23,6 +24,44 @@ internal sealed class MovementSystem : GameSystem
     // Falling faster than this (units per second) when it lands counts as a landing, with its sound and dust.
     private const float LandingSpeed = 2;
 
+    // The bodies given a role last step, to take it back from any no longer playing it.
+    [NotState("set again before each step")]
+    private readonly List<Body> _roles = [];
+
+    // Says what crates and players are to physics, which knows only bodies and colliders, just before it steps: a Pushable
+    // crate's body gives way to what pushes it (one on a grid is pushed a cell at a time by grid movers, not by physics), and a
+    // player's body holds ropes, so they hang in front of it for it to grab.
+    internal void ReadyBodies()
+    {
+        foreach (var body in _roles)
+            (body.GivesWay, body.HoldsRopes) = (null, false);
+        _roles.Clear();
+
+        var scene = Game.Scene;
+        foreach (var crate in scene.ActiveNow<Pushable>())
+        {
+            var entity = crate.Entity!;
+            if (entity.GetComponent<Pushable>() != crate || entity.GetComponent<Body>() is not { } body || entity.GetComponent<GridMovement>() is not null)
+                continue;
+            body.GivesWay = new Shove(crate.Layers, crate.Speed);
+            _roles.Add(body);
+        }
+
+        HoldRopes(scene.ActiveNow<PlatformerMovement>());
+        HoldRopes(scene.ActiveNow<TopDownMovement>());
+    }
+
+    private void HoldRopes<T>(ComponentList<T> players) where T : Component
+    {
+        foreach (var player in players)
+        {
+            if (player.Entity!.GetComponent<Body>() is not { } body)
+                continue;
+            body.HoldsRopes = true;
+            _roles.Add(body);
+        }
+    }
+
     // Like enemies, players move before scripts run, so a script can still take over the body this frame.
     internal void RunMovement()
     {
@@ -31,7 +70,7 @@ internal sealed class MovementSystem : GameSystem
 
         // Ropes laid out (or brought back from a rewind) before anyone grabs one.
         if (Game.Scene.ActiveNow<Rope>().Count > 0)
-            Game.Physics.ReadyRopes(Game.Scene);
+            Game.Physics.ReadyRopes();
         foreach (var movement in Game.Moving<PlatformerMovement>())
             RunPlatformer(movement);
         foreach (var movement in Game.Moving<TopDownMovement>())
@@ -98,7 +137,7 @@ internal sealed class MovementSystem : GameSystem
         if (body.Climbing is null && y > 0.5f && !m.IsDashing && m.RegrabLeft <= 0 && bounds.HalfSize != Vector2.Zero && !body.Rotates)
         {
             var hands = bounds.Center + new Vector2(0, bounds.HalfSize.Y * 0.6f);
-            if (Physics.RopeNear(Game.Scene, hands, bounds.HalfSize.X + 0.25f, body) is { } grab)
+            if (Game.Physics.RopeNear(hands, bounds.HalfSize.X + 0.25f, body) is { } grab)
             {
                 Physics.Hold(grab.Rope, body, grab.At);
                 Shift(entity, grab.Point - hands);
@@ -132,11 +171,11 @@ internal sealed class MovementSystem : GameSystem
 
         // Ladders: up grabs one it's in front of, down one under its feet (below the one-way floor it stands on, if that's
         // what it's on). It stays on while any of it is on the ladder, or it's still climbing up through the floor at the top.
-        var oneWayFloor = grounded ? Physics.OneWayFloorBottom(Game.Scene, body) : null;
+        var oneWayFloor = grounded ? Game.Physics.OneWayFloorBottom(body) : null;
         var reach = bounds.HalfSize.X / 2;
         var front = LadderAt(bounds.Center, reach);
         var under = LadderAt(new Vector2(bounds.Center.X, (oneWayFloor ?? bounds.Min.Y) - 0.05f), reach);
-        if (m.IsClimbing && front is null && under is null && !Physics.FeetInOneWay(Game.Scene, body))
+        if (m.IsClimbing && front is null && under is null && !Game.Physics.FeetInOneWay(body))
             m.IsClimbing = false;
         if (m.IsClimbing && grounded && y < -0.5f && under is null)
             m.IsClimbing = false;
@@ -562,7 +601,7 @@ internal sealed class MovementSystem : GameSystem
         entity.SelfAndDescendants().SelectMany(e => e.GetComponents<Collider>()).Where(c => !c.IsTrigger).Any(c =>
         {
             var box = Physics.BoundsOf(c);
-            return Game.Physics.OverlapBox(Game.Scene, box.Center, box.HalfSize * 2).Any(e => Game.BodyOwner(e) is { } owner && !owner.IsSelfOrDescendantOf(entity));
+            return Game.Physics.OverlapBox(box.Center, box.HalfSize * 2).Any(e => Game.BodyOwner(e) is { } owner && !owner.IsSelfOrDescendantOf(entity));
         });
 
     private readonly record struct LadderSpot(float? SnapX);

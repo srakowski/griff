@@ -178,11 +178,11 @@ public class CircleColliderTests
     {
         var ball = AddCircle("Ball", new Vector2(5, 0), 1);
 
-        Assert.Equal([ball], _game.Physics.OverlapPoint(_scene, new Vector2(5.9f, 0)));
+        Assert.Equal([ball], _game.Physics.OverlapPoint(new Vector2(5.9f, 0)));
         // Inside the bounding box but outside the circle.
-        Assert.Empty(_game.Physics.OverlapPoint(_scene, new Vector2(5.9f, 0.9f)));
-        Assert.Equal([ball], _game.Physics.OverlapBox(_scene, new Vector2(3.6f, 0), Vector2.One));
-        Assert.Equal([ball], _game.Physics.OverlapCircle(_scene, new Vector2(5, 1.5f), 0.6f));
+        Assert.Empty(_game.Physics.OverlapPoint(new Vector2(5.9f, 0.9f)));
+        Assert.Equal([ball], _game.Physics.OverlapBox(new Vector2(3.6f, 0), Vector2.One));
+        Assert.Equal([ball], _game.Physics.OverlapCircle(new Vector2(5, 1.5f), 0.6f));
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class CircleColliderTests
     {
         AddCircle("Ball", new Vector2(5, 0), 1);
 
-        var hit = _game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX);
+        var hit = _game.Physics.Raycast(Vector2.Zero, Vector2.UnitX);
 
         Assert.NotNull(hit);
         Assert.Equal(4f, hit.Value.Distance, 4);
@@ -204,7 +204,7 @@ public class CircleColliderTests
         AddCircle("Beside", new Vector2(5, 1.1f), 1);
         AddCircle("Behind", new Vector2(-5, 0), 1);
 
-        Assert.Null(_game.Physics.Raycast(_scene, Vector2.Zero, Vector2.UnitX));
+        Assert.Null(_game.Physics.Raycast(Vector2.Zero, Vector2.UnitX));
     }
 
     [Fact]

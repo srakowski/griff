@@ -31,7 +31,7 @@ public sealed class GameSystemsTests
         { "Coroutines", "Timers" }, { "Tweens", "Timers" }, { "Lifetimes", "Lifetimes" }, { "Spawners", "Lifetimes" },
         { "Shooters", "Levels" }, { "Movers", "Levels" }, { "Animations", "Effects" }, { "AnimatedTiles", "Tilemaps" },
         { "Particles", "Effects" }, { "CameraShake", "Effects" }, { "SpriteEffects", "Effects" }, { "SimulatePrompts", "Panels" },
-        { "Typewriters", "HUD" }, { "PickupSpin", "Items" }, { "FixedScripts", "Scripts" }, { "Physics", "Physics" },
+        { "Typewriters", "HUD" }, { "PickupSpin", "Items" }, { "FixedScripts", "Scripts" }, { "BodyRoles", "Movement" }, { "Physics", "Physics" },
         { "Carrying", "Dragging" }, { "Pickups", "Items" }, { "Checkpoints", "Levels" }, { "Doors", "Levels" },
         { "Dialogues", "Levels" }, { "Switches", "Switches" }, { "Bouncers", "Movement" }, { "Crumbles", "Movement" },
         { "TouchDamage", "Combat" }, { "Health", "Combat" }, { "Respawns", "Levels" }, { "Bars", "HUD" }, { "Stars", "HUD" },

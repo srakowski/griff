@@ -11,15 +11,30 @@ public readonly record struct RaycastHit(Entity Entity, Vector2 Point, Vector2 N
 /// <summary>
 /// Simple, predictable 2D physics for jam games. Bodies move one axis at a time and are pushed out of
 /// solid colliders and solid tilemaps, which gives tight platformer and top-down movement without tunnelling
-/// at normal speeds. Boxes, circles and polygons collide with each other in any combination. On an isometric tilemap a body
-/// stands on the diamond under its collider and slides along the solid diamonds' edges (see <see cref="IsometricShapes"/>);
-/// on a hex tilemap its collider meets the solid hexagons' six sides and slides along them (see <see cref="HexShapes"/>).
+/// at normal speeds. Boxes, circles and polygons collide with each other in any combination. A tilemap whose cells aren't
+/// square makes walls of its own shape (see <see cref="WallShapes"/>): on an isometric map a body stands on the diamond under
+/// its collider and slides along the solid diamonds' edges, and on a hex map its collider meets the solid hexagons' six
+/// sides and slides along them.
 /// A body that <see cref="Body.Rotates"/> is a rigid shape instead: it's pushed apart from what it touches at the points
 /// where they touch, so it spins, tips over and falls flat, and its box or polygon turns with it; everything else meets it
 /// turned, walks up its slant, and knocks it about.
+/// It knows bodies, colliders, hinges, ropes and the tilemaps they meet, and nothing of what they are to the game: what
+/// it moves reports what it touched (<see cref="Game.Touches"/>), knocked (<see cref="Impacts"/>) and shoved
+/// (<see cref="Pushes"/>), and the systems that own crates and players say how their bodies meet others (a crate gives way
+/// to what pushes it; a rope hangs in front of a player, to grab). The world belongs to the scene its game is playing: the
+/// game's physics system owns it, steps it and starts it afresh for each scene, and its questions (<see cref="Raycast"/>,
+/// <see cref="OverlapBox"/> and the rest) are about that scene.
 /// </summary>
 public sealed partial class Physics : IKeepsState
 {
+    [NotState("the game's scene, whichever it is")]
+    private readonly Func<Scene> _scene;
+
+    internal Physics(Func<Scene> scene) => _scene = scene;
+
+    /// <summary>The scene the world is of: the one its game is playing.</summary>
+    public Scene Scene => _scene();
+
     // Bounces slower than this (world units per second) settle to a stop, so resting bodies don't jitter.
     private const float SettleSpeed = 1f;
 
@@ -40,6 +55,19 @@ public sealed partial class Physics : IKeepsState
     // The slope tiles bodies walk on during a step.
     [NotState("gathered again each step")]
     private readonly List<Slope> _slopes = [];
+
+    // The walls of the step's solid maps whose cells aren't boxes (isometric diamonds, hexagons).
+    [NotState("gathered again each step")]
+    private readonly List<MapWalls> _walls = [];
+
+    private readonly EntityPairSet _pushes = new();
+
+    /// <summary>
+    /// What shoved what along in the last step, in the order it happened: each body that ran into one that gives way to it
+    /// (a <see cref="Pushable"/> crate, as its system says) and moved it, then what it moved. Crates shoved on in turn are
+    /// there too, with the crate that shoved them.
+    /// </summary>
+    public EntityPairSet Pushes => _pushes;
 
     // What a step works with, kept from one to the next so a step allocates as little as it can.
     [NotState("gathered again each step")]
@@ -66,12 +94,15 @@ public sealed partial class Physics : IKeepsState
     /// <summary>World units per second squared. Negative Y is down.</summary>
     public Vector2 Gravity { get; set; } = DefaultGravity;
 
-    /// <summary>Forgets trigger overlaps, e.g. when the scene changes.</summary>
+    /// <summary>
+    /// Forgets trigger overlaps and what bodies stood on, as the game's physics system does when the scene changes.
+    /// </summary>
     public void Reset()
     {
         _triggerPairs = new();
         _lastTriggerPairs = new();
         _grounds.Clear();
+        _pushes.Clear();
     }
 
     /// <summary>
@@ -100,13 +131,12 @@ public sealed partial class Physics : IKeepsState
 
     /// <summary>
     /// Like <see cref="BoundsOf(Tilemap)"/>, also saying which runs are one-way platforms. Empty unless the map is
-    /// <see cref="Tilemap.Solid"/> and square (an isometric map's are diamonds: see <see cref="IsometricShapes"/>, and a hex
-    /// map's hexagons: see <see cref="HexShapes"/>);
+    /// <see cref="Tilemap.Solid"/> and square (other shapes' cells are walls of their own: see <see cref="WallShapes"/>);
     /// background tiles are left out.
     /// </summary>
     public static IEnumerable<(Box Box, bool OneWay)> TileShapes(Tilemap tilemap)
     {
-        if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
+        if (!tilemap.Solid || !tilemap.TilesAreBoxes)
             yield break;
 
         var placing = TilePlacing.Of(tilemap);
@@ -115,12 +145,36 @@ public sealed partial class Physics : IKeepsState
     }
 
     /// <summary>
+    /// World-space outlines of the walls a tilemap's solid cells make where they aren't square (an isometric map's diamonds,
+    /// a hex map's hexagons), one per run along a row: the four corners of a run of diamonds, round from its top, or the
+    /// hexagons' edges all the way round, clockwise from the top left corner. What bodies meet on such a map; empty unless
+    /// it's <see cref="Tilemap.Solid"/> and not square. Background, one-way, ladder and slope tiles are left out (see
+    /// <see cref="Tilemap.IsBlocked"/>).
+    /// </summary>
+    public static IEnumerable<Vector2[]> WallShapes(Tilemap tilemap)
+    {
+        if (!tilemap.Solid || tilemap.TilesAreBoxes || tilemap.Entity is null)
+            yield break;
+
+        var world = tilemap.Entity.Transform.WorldMatrix;
+        foreach (var (x, y, length, oneWay) in tilemap.CollisionRuns())
+        {
+            if (oneWay)
+                continue;
+            var outline = tilemap.OutlineOf(x, y, x + length - 1, y);
+            for (var i = 0; i < outline.Length; i++)
+                outline[i] = Vector2.Transform(outline[i], world);
+            yield return outline;
+        }
+    }
+
+    /// <summary>
     /// World-space cells of a tilemap's slope tiles and which way each rises (see <see cref="Tilemap.SlopeUpTiles"/>);
     /// each is solid below the line across it. Empty unless the map is <see cref="Tilemap.Solid"/> (and square).
     /// </summary>
     public static IEnumerable<(Box Cell, bool Rising)> SlopeShapes(Tilemap tilemap)
     {
-        if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
+        if (!tilemap.Solid || !tilemap.TilesAreBoxes)
             yield break;
 
         var placing = TilePlacing.Of(tilemap);
@@ -157,28 +211,14 @@ public sealed partial class Physics : IKeepsState
     /// Entities whose colliders (or solid tiles) contain <paramref name="point"/>. With <paramref name="layers"/>
     /// (e.g. "Enemy, Crate"), only colliders and tiles on those layers count.
     /// </summary>
-    public IEnumerable<Entity> OverlapPoint(Scene scene, Vector2 point, string? layers = null) =>
-        Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Contains(point)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!))
-            .Concat(Hex(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!)).Distinct();
+    public IEnumerable<Entity> OverlapPoint(Vector2 point, string? layers = null) => PointIn(Scene, point, layers);
 
     /// <summary>Entities whose colliders (or solid tiles) overlap the box centered on <paramref name="center"/>.</summary>
-    public IEnumerable<Entity> OverlapBox(Scene scene, Vector2 center, Vector2 size, string? layers = null)
-    {
-        var box = Area.Of(new Box(center, size / 2));
-        return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(box)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!))
-            .Concat(Hex(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!)).Distinct();
-    }
+    public IEnumerable<Entity> OverlapBox(Vector2 center, Vector2 size, string? layers = null) => BoxIn(Scene, center, size, layers);
 
     /// <summary>Entities whose colliders (or solid tiles) overlap the circle, e.g. for an explosion's reach.</summary>
-    public IEnumerable<Entity> OverlapCircle(Scene scene, Vector2 center, float radius, string? layers = null)
-    {
-        var circle = Area.Of(new Circle(center, radius));
-        return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(circle)).Select(s => s.Entity)
-            .Concat(Isometric(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!))
-            .Concat(Hex(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!)).Distinct();
-    }
+    public IEnumerable<Entity> OverlapCircle(Vector2 center, float radius, string? layers = null) =>
+        CircleIn(Scene, center, radius, layers);
 
     /// <summary>
     /// The first solid collider or tile along a ray, or null if nothing is within <paramref name="maxDistance"/>.
@@ -186,8 +226,54 @@ public sealed partial class Physics : IKeepsState
     /// (typically the entity casting the ray). Triggers are skipped unless <paramref name="includeTriggers"/> is set.
     /// With <paramref name="layers"/> (e.g. "Default, Player" for an enemy's line of sight), only those layers are hit.
     /// </summary>
+    public RaycastHit? Raycast(Vector2 origin, Vector2 direction, float maxDistance = float.PositiveInfinity, Entity? ignore = null,
+        bool includeTriggers = false, string? layers = null) =>
+        RayIn(Scene, origin, direction, maxDistance, ignore, includeTriggers, layers);
+
+    /// <summary>Like <see cref="OverlapPoint(Vector2, string?)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public IEnumerable<Entity> OverlapPoint(Scene scene, Vector2 point, string? layers = null) => PointIn(scene, point, layers);
+
+    /// <summary>Like <see cref="OverlapBox(Vector2, Vector2, string?)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public IEnumerable<Entity> OverlapBox(Scene scene, Vector2 center, Vector2 size, string? layers = null) =>
+        BoxIn(scene, center, size, layers);
+
+    /// <summary>Like <see cref="OverlapCircle(Vector2, float, string?)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public IEnumerable<Entity> OverlapCircle(Scene scene, Vector2 center, float radius, string? layers = null) =>
+        CircleIn(scene, center, radius, layers);
+
+    /// <summary>Like <see cref="Raycast(Vector2, Vector2, float, Entity?, bool, string?)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public RaycastHit? Raycast(Scene scene, Vector2 origin, Vector2 direction, float maxDistance = float.PositiveInfinity,
-        Entity? ignore = null, bool includeTriggers = false, string? layers = null)
+        Entity? ignore = null, bool includeTriggers = false, string? layers = null) =>
+        RayIn(scene, origin, direction, maxDistance, ignore, includeTriggers, layers);
+
+    private static IEnumerable<Entity> PointIn(Scene scene, Vector2 point, string? layers) =>
+        Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Contains(point)).Select(s => s.Entity)
+            .Concat(Walls(scene, layers).Where(w => w.BlockedAt(point)).Select(w => w.Map.Entity!)).Distinct();
+
+    private static IEnumerable<Entity> BoxIn(Scene scene, Vector2 center, Vector2 size, string? layers)
+    {
+        var box = Area.Of(new Box(center, size / 2));
+        return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(box)).Select(s => s.Entity)
+            .Concat(Walls(scene, layers).Where(w => w.Overlaps(box.Bounds)).Select(w => w.Map.Entity!)).Distinct();
+    }
+
+    private static IEnumerable<Entity> CircleIn(Scene scene, Vector2 center, float radius, string? layers)
+    {
+        var circle = Area.Of(new Circle(center, radius));
+        return Shapes(scene, includeTriggers: true, layers).Where(s => s.Area.Overlaps(circle)).Select(s => s.Entity)
+            .Concat(Walls(scene, layers).Where(w => w.Overlaps(circle.Circle)).Select(w => w.Map.Entity!)).Distinct();
+    }
+
+    private static RaycastHit? RayIn(Scene scene, Vector2 origin, Vector2 direction, float maxDistance, Entity? ignore,
+        bool includeTriggers, string? layers)
     {
         if (direction == Vector2.Zero || !(maxDistance >= 0))
             return null;
@@ -214,18 +300,7 @@ public sealed partial class Physics : IKeepsState
                 best = new RaycastHit(slope.Entity, origin + direction * distance, normal, distance);
         }
 
-        foreach (var walls in Isometric(scene, layers))
-        {
-            if (ignore is not null && walls.Map.Entity!.IsSelfOrDescendantOf(ignore))
-                continue;
-            var reach = best is { } nearest ? Math.Min(maxDistance, nearest.Distance) : maxDistance;
-            if (walls.Raycast(origin, direction, reach) is not var (distance, normal))
-                continue;
-            if (best is null || distance < best.Value.Distance)
-                best = new RaycastHit(walls.Map.Entity!, origin + direction * distance, normal, distance);
-        }
-
-        foreach (var walls in Hex(scene, layers))
+        foreach (var walls in Walls(scene, layers))
         {
             if (ignore is not null && walls.Map.Entity!.IsSelfOrDescendantOf(ignore))
                 continue;
@@ -239,6 +314,75 @@ public sealed partial class Physics : IKeepsState
         return best;
     }
 
+    // The walls of a scene's solid maps whose cells aren't boxes (see Tilemap.Walls), each placed as it is now. With layers,
+    // only maps on those layers.
+    private static List<TileWalls> Walls(Scene scene, string? layers)
+    {
+        var list = new List<TileWalls>();
+        var only = layers is null ? null : CollisionLayers.Parse(layers);
+        foreach (var tilemap in scene.ActiveNow<Tilemap>())
+        {
+            if (!tilemap.Solid || tilemap.TilesAreBoxes || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
+                continue;
+            if (tilemap.Walls() is { } walls)
+                list.Add(walls);
+        }
+
+        return list;
+    }
+
+    // A step's walls of maps whose cells aren't boxes, each with the layers it's on.
+    private void CollectWalls(Scene scene)
+    {
+        foreach (var tilemap in scene.ActiveNow<Tilemap>())
+        {
+            if (tilemap.Solid && !tilemap.TilesAreBoxes && tilemap.Walls() is { } walls)
+                _walls.Add(new MapWalls(walls, new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers))));
+        }
+    }
+
+    // A solid map's walls as a step meets them: what they are, and the layers they're on.
+    private readonly record struct MapWalls(TileWalls Walls, LayerFilter Filter);
+
+    // Keeps a body off the walls of maps whose cells aren't boxes, from where its collider's middle was (`from`) to where it
+    // is now: each map's walls work out where it gets to (on an isometric map, its footprint slid along the diamonds; on a
+    // hex map, its collider pushed back out of the hexagons), and it's moved there. Velocity into a wall stops (or bounces),
+    // and the wall's map is reported as touched, unless it's being carried.
+    private void KeepOffWalls(Body body, Collider collider, Solids solids, Vector2 from, Action<Entity, Entity> onCollision,
+        Entity? carrier, Entity? pusher)
+    {
+        var entity = body.Entity!;
+        var filter = LayerFilter.Of(collider);
+        var area = Area.Of(collider);
+        var to = area.Center;
+        var half = area.Bounds.HalfSize;
+        float? radius = area.IsCircle ? area.Radius : null;
+        foreach (var (walls, wallFilter) in _walls)
+        {
+            var map = walls.Map.Entity!;
+            if (filter.IgnoresEachOther(wallFilter) || map.IsSelfOrDescendantOf(entity) || map == carrier || map == pusher)
+                continue;
+            if (walls.KeepOff(from, to, half, radius, body.Velocity, body.Bounciness, SettleSpeed) is not { } move)
+                continue;
+
+            Translate(solids, entity, move.At - to);
+            to = move.At;
+            if (carrier is not null)
+                continue;
+
+            body.Velocity = move.Velocity;
+            if (move.Grounded)
+            {
+                body.IsGrounded = true;
+                body.Ground = map;
+            }
+
+            if (move.WallSide != 0)
+                body.WallSide = move.WallSide;
+            onCollision(entity, map);
+        }
+    }
+
     /// <summary>
     /// Bodies welded together (a contraption's Welds), set by the game before each step: each group is one rigid body, worked
     /// out with the bodies that turn (it turns as one when all its members rotate, round where its weight balances), and its
@@ -247,19 +391,19 @@ public sealed partial class Physics : IKeepsState
     /// </summary>
     public IReadOnlyList<BodyGroup> Groups { get; internal set; } = [];
 
-    internal void Step(Scene scene, float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
+    internal void Step(float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
     {
+        var scene = Scene;
         var solids = _solids;
         solids.Fill(scene);
         _impacts.Clear();
         _slopes.Clear();
-        _isometric.Clear();
-        _hex.Clear();
+        _walls.Clear();
+        _pushes.Clear();
         if (scene.ActiveNow<Tilemap>().Count > 0)
         {
             CollectSlopes(scene, _slopes);
-            CollectIsometric(scene, null, _isometric);
-            CollectHex(scene, null, _hex);
+            CollectWalls(scene);
         }
         _groupOf.Clear();
         var groups = Groups;
@@ -356,7 +500,7 @@ public sealed partial class Physics : IKeepsState
             }
 
             // Where it started, for keeping it off isometric and hex maps' walls once it has moved.
-            var from = _isometric.Count > 0 || _hex.Count > 0 ? Area.Of(collider).Bounds.Center : default;
+            var from = _walls.Count > 0 ? Area.Of(collider).Bounds.Center : default;
 
             // Ride along with whatever it stood on, if that has moved since (a moving platform).
             if (_grounds.TryGetValue(body, out var ground) && ground.Ground.Scene == scene && ground.Ground.IsActive)
@@ -388,10 +532,8 @@ public sealed partial class Physics : IKeepsState
                     Translate(solids, body.Entity, new Vector2(0, reach));
             }
 
-            if (_isometric.Count > 0)
-                KeepOffIsometricWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
-            if (_hex.Count > 0)
-                KeepOffHexWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
+            if (_walls.Count > 0)
+                KeepOffWalls(body, collider, solids, from, onCollision, carrier: null, pusher: null);
             EndStep(body, dt);
         }
 
@@ -470,68 +612,6 @@ public sealed partial class Physics : IKeepsState
         body.Velocity = body.Velocity with { X = MathF.Sign(x) * Math.Max(0, MathF.Abs(x) - friction * dt) };
     }
 
-    /// <summary>
-    /// Moves <paramref name="bodies"/> together by a world-space delta, stopping where the first of them meets something
-    /// solid (not each other). Velocities are left alone and nothing is reported: for pulling things along a rope.
-    /// </summary>
-    internal static void Nudge(Scene scene, IReadOnlyList<Body> bodies, Vector2 delta)
-    {
-        if (delta == Vector2.Zero || bodies.Count == 0)
-            return;
-        var solids = new Solids();
-        solids.Fill(scene);
-        NudgeAxis(bodies, solids, new Vector2(delta.X, 0));
-        NudgeAxis(bodies, solids, new Vector2(0, delta.Y));
-    }
-
-    // Like MoveAxis for a group, without bumping into anything: everyone moves, then everyone is pushed back by the deepest
-    // overlap any of them made.
-    private static void NudgeAxis(IReadOnlyList<Body> members, Solids solids, Vector2 delta)
-    {
-        if (delta == Vector2.Zero)
-            return;
-        var axis = delta.X != 0 ? 0 : 1;
-        var sign = MathF.Sign(axis == 0 ? delta.X : delta.Y);
-        foreach (var body in members)
-            Translate(solids, body.Entity!, delta);
-
-        var push = 0f;
-        foreach (var body in members)
-        {
-            if (body.Entity!.GetComponent<Collider>() is not { IsTrigger: false } collider)
-                continue;
-            var area = Area.Of(collider);
-            var bottomBefore = area.Bounds.Min.Y - delta.Y;
-            var filter = LayerFilter.Of(collider);
-            var near = solids.Near(Grow(Union(area.Bounds, Offset(area.Bounds, -delta)), Margin));
-            foreach (var index in near)
-            {
-                var solid = solids.All[index];
-                if (IsInside(solid.Entity, members) || filter.IgnoresEachOther(solid.Filter))
-                    continue;
-                var other = solid.Area;
-                if (!area.Overlaps(other, CircleSkin))
-                    continue;
-                if (solid.OneWay && (delta.Y >= 0 || bottomBefore < other.Bounds.Max.Y - 0.001f || body.IsDroppingThrough))
-                    continue;
-                var target = Component(other.Center, axis) - sign * area.ContactDistance(other, axis, sign);
-                var back = target - Component(area.Center, axis);
-                if (back * sign > 0)
-                    continue; // Already overlapping from the far side: not something this move ran into.
-                if (MathF.Abs(back) > MathF.Abs(push))
-                    push = back;
-            }
-
-            solids.Return(near);
-        }
-
-        if (push != 0)
-        {
-            foreach (var body in members)
-                Translate(solids, body.Entity!, axis == 0 ? new Vector2(push, 0) : new Vector2(0, push));
-        }
-    }
-
     // Movement's requests last one step; dropping through platforms lasts its time.
     // A welded group holds still while any of it is paused (see Entity.IsPaused).
     private static bool AnyPaused(BodyGroup group)
@@ -580,7 +660,7 @@ public sealed partial class Physics : IKeepsState
     /// just stops the carry without touching the body's velocity or reporting a collision.
     /// </param>
     /// <param name="pusher">
-    /// When set, the body is being shoved out of the way by this entity (see <see cref="Pushable"/>): it doesn't collide
+    /// When set, the body is being shoved out of the way by this entity (see <see cref="Body.GivesWay"/>): it doesn't collide
     /// with it, and its layer is <paramref name="pusherLayer"/>'s for any crates it pushes in turn.
     /// </param>
     private void MoveAxis(Body body, Collider collider, Solids solids, Vector2 delta, Action<Entity, Entity> onCollision,
@@ -599,10 +679,8 @@ public sealed partial class Physics : IKeepsState
         Translate(solids, entity, delta);
 
         // A crate shoved along is kept off isometric and hex maps' walls straight away, so whatever shoved it is stopped by it.
-        if (pusher is not null && _isometric.Count > 0)
-            KeepOffIsometricWalls(body, collider, solids, boundsBefore.Center, onCollision, carrier, pusher);
-        if (pusher is not null && _hex.Count > 0)
-            KeepOffHexWalls(body, collider, solids, boundsBefore.Center, onCollision, carrier, pusher);
+        if (pusher is not null && _walls.Count > 0)
+            KeepOffWalls(body, collider, solids, boundsBefore.Center, onCollision, carrier, pusher);
         var hit = _slopes.Count > 0 && (axis == 0 || sign < 0 || delta.Y > 0) && MoveOnSlopes(body, collider, solids, delta, filter, carrier);
         var area = Area.Of(collider);
 
@@ -646,15 +724,17 @@ public sealed partial class Physics : IKeepsState
             // A crate in the way is shoved along first, by its share of the move; whatever's left of the overlap blocks as
             // usual, but a crate that gave way doesn't stop the pusher dead (it keeps leaning into it at its own speed).
             var gaveWay = false;
-            if (carrier is null && depth < MaxPushChain && CanPush(solid, axis, pusherLayer) is var (pushed, crate, pushable))
+            if (carrier is null && depth < MaxPushChain && CanPush(solid, axis, pusherLayer) is var (pushed, crate, speed))
             {
                 var before = Component(other.Center, axis);
                 var overlap = Component(area.Center, axis) + sign * area.ContactDistance(other, axis, sign) - before;
-                var shove = overlap * Math.Clamp(pushable.Speed, 0, 1);
+                var shove = overlap * Math.Clamp(speed, 0, 1);
                 MoveAxis(pushed, crate, solids, axis == 0 ? new Vector2(shove, 0) : new Vector2(0, shove), onCollision,
                     pusher: entity, pusherLayer: pusherLayer, depth: depth + 1);
                 other = solid.Area;
                 gaveWay = MathF.Abs(Component(other.Center, axis) - before) > 1e-5f;
+                if (gaveWay)
+                    _pushes.Add((entity, solid.Entity));
                 if (!area.Overlaps(other, CircleSkin))
                 {
                     onCollision(entity, solid.Entity);
@@ -795,7 +875,14 @@ public sealed partial class Physics : IKeepsState
     }
 
     /// <summary>True if <paramref name="collider"/> is standing on (or touching) a slope tile.</summary>
-    public bool IsOnSlope(Scene scene, Collider collider)
+    public bool IsOnSlope(Collider collider) => OnSlope(Scene, collider);
+
+    /// <summary>Like <see cref="IsOnSlope(Collider)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public bool IsOnSlope(Scene scene, Collider collider) => OnSlope(scene, collider);
+
+    private static bool OnSlope(Scene scene, Collider collider)
     {
         var bounds = Area.Of(collider).Bounds;
         var feet = new Box(bounds.Center - new Vector2(0, 0.05f), bounds.HalfSize);
@@ -827,7 +914,7 @@ public sealed partial class Physics : IKeepsState
     {
         foreach (var tilemap in scene.ActiveNow<Tilemap>())
         {
-            if (!tilemap.Solid || tilemap.Shape != TileShape.Square)
+            if (!tilemap.Solid || !tilemap.TilesAreBoxes)
                 continue;
             var cells = tilemap.SlopeCells();
             if (cells.Count == 0)
@@ -916,31 +1003,37 @@ public sealed partial class Physics : IKeepsState
         return MathF.Abs(push) > MathF.Abs(Component(delta, axis)) + 0.05f;
     }
 
-    // A pushable crate's body and collider, if the solid is one that something on this layer can shove along this axis:
-    // sideways always, up and down only where it doesn't fall (top-down), so landing on a crate doesn't drive it into the floor.
-    // A crate on a grid is only pushed a cell at a time, by grid movers.
-    private (Body Body, Collider Collider, Pushable Pushable)? CanPush(Shape solid, int axis, string? layer)
+    // The body and collider of a solid that gives way to something on this layer (see Body.GivesWay), and how fast it goes,
+    // if it can be shoved along this axis: sideways always, up and down only where it doesn't fall (top-down), so landing on
+    // a crate doesn't drive it into the floor.
+    private (Body Body, Collider Collider, float Speed)? CanPush(Shape solid, int axis, string? layer)
     {
-        if (solid.Collider is not { } collider || solid.Entity.GetComponent<Pushable>() is not { } pushable ||
-            solid.Entity.GetComponent<Body>() is not { } body || Solves(body) || !pushable.AcceptsLayer(layer) ||
-            solid.Entity.GetComponent<GridMovement>() is not null)
+        if (solid.Collider is not { } collider || solid.Entity.GetComponent<Body>() is not { GivesWay: { } way } body || Solves(body) ||
+            !way.Admits(layer))
             return null;
         if (axis == 1 && body.GravityScale != 0 && Gravity != Vector2.Zero)
             return null;
-        return (body, collider, pushable);
+        return (body, collider, way.Speed);
     }
 
     /// <summary>
     /// True if what <paramref name="body"/> stands on is only one-way platforms, so dropping through them would fall:
     /// for drop-through on down and Jump.
     /// </summary>
+    public bool OnlyOneWayBelow(Body body) => OneWayFloorBottom(body) is not null;
+
+    /// <summary>Like <see cref="OnlyOneWayBelow(Body)"/>, in a scene of its own.</summary>
+    [Obsolete("The physics world knows its scene: leave the scene out.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public bool OnlyOneWayBelow(Scene scene, Body body) => OneWayFloorBottom(scene, body) is not null;
 
     /// <summary>
     /// When <paramref name="body"/> stands only on one-way platforms, the lowest of their bottoms (what's under the floor
     /// it's on, for climbing down a ladder below it); otherwise null.
     /// </summary>
-    internal static float? OneWayFloorBottom(Scene scene, Body body)
+    internal float? OneWayFloorBottom(Body body) => OneWayFloorBottom(Scene, body);
+
+    private static float? OneWayFloorBottom(Scene scene, Body body)
     {
         if (!body.IsGrounded || body.Entity?.GetComponent<Collider>() is not { } collider)
             return null;
@@ -958,8 +1051,9 @@ public sealed partial class Physics : IKeepsState
     }
 
     /// <summary>True if the bottom edge of <paramref name="body"/>'s collider is inside a one-way platform (climbing up through it).</summary>
-    internal static bool FeetInOneWay(Scene scene, Body body)
+    internal bool FeetInOneWay(Body body)
     {
+        var scene = Scene;
         if (body.Entity?.GetComponent<Collider>() is not { } collider)
             return false;
         var bounds = BoundsOf(collider);
@@ -1054,7 +1148,7 @@ public sealed partial class Physics : IKeepsState
             }
 
             var tilemap = tilemaps[t++];
-            if (!tilemap.Solid || tilemap.Shape != TileShape.Square || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
+            if (!tilemap.Solid || !tilemap.TilesAreBoxes || (only is not null && !CollisionLayers.Contains(only, tilemap.Layer)))
                 continue;
             var filter = new LayerFilter(tilemap.Layer, CollisionLayers.Parse(tilemap.IgnoreLayers));
             var placing = TilePlacing.Of(tilemap);
@@ -1085,8 +1179,6 @@ public sealed partial class Physics : IKeepsState
 
     private static Box Grow(Box box, float by) => new(box.Center, box.HalfSize + new Vector2(by));
 
-    private static Box Offset(Box box, Vector2 by) => new(box.Center + by, box.HalfSize);
-
     private static Box Union(Box a, Box b)
     {
         var min = Vector2.Min(a.Min, b.Min);
@@ -1096,17 +1188,6 @@ public sealed partial class Physics : IKeepsState
 
     private static bool Contains(Box outer, Box inner) =>
         inner.Min.X >= outer.Min.X && inner.Min.Y >= outer.Min.Y && inner.Max.X <= outer.Max.X && inner.Max.Y <= outer.Max.Y;
-
-    private static bool IsInside(Entity entity, IReadOnlyList<Body> members)
-    {
-        foreach (var member in members)
-        {
-            if (entity.IsSelfOrDescendantOf(member.Entity!))
-                return true;
-        }
-
-        return false;
-    }
 
     private static Vector2 ScaleOf(Matrix4x4 world) => new(
         new Vector2(world.M11, world.M12).Length(),

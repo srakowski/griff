@@ -4,42 +4,39 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
-using Griff.Debugging;
-using Griff.Rendering;
+using Griff.Hosting;
 using Griff.Runtime;
-using Griff.Scenes;
 
 namespace Griff.Platform.Windows;
 
 /// <summary>
-/// Runs a <see cref="Game"/> on the WPF UI thread: advances it once per frame the screen shows (see
-/// <see cref="FramePacer"/>), which takes the game's fixed steps that frame's time holds, renders it to a
-/// <see cref="GameSurface"/> between its last two steps, and feeds keyboard input from <paramref name="keySource"/> and
-/// mouse input from the surface.
+/// Plays a <see cref="Game"/> its host made (<see cref="LoadedGame.NewGame"/>) in a WPF window: the core's
+/// <see cref="GameLoop"/> takes a frame each time the screen shows one (see <see cref="FramePacer"/>) and draws it on the
+/// <see cref="GameSurface"/>; this hands it keyboard input from <c>keySource</c>, the mouse and touch from the surface and
+/// the controllers, holds the mouse for a first-person game and shows the pointer the game asks for. The game's sound is
+/// its host's (a <see cref="SoundOutput"/>'s mixer, see <see cref="WindowsAudio.Create"/>).
 /// </summary>
 public sealed class GameRunner : IDisposable
 {
     private readonly GameSurface _surface;
     private readonly UIElement _keySource;
-    private readonly InputState _input = new();
+    private readonly InputState _input;
     // When the compositor let the last frame go (a Stopwatch timestamp): frames are timed from one to the next.
     private long _lastShown;
-    private bool _shownAny;
-    private RenderFrame? _lastFrame;
-    private Vector2 _mouseNdc;
     private Point? _mousePixel;
     private FramePacer? _pacer;
     // While the game has the mouse (see IInput.WantsMouseLock): the screen point the cursor is held at.
     private (int X, int Y)? _lockCenter;
 
-    public GameRunner(Scene scene, GameSurface surface, UIElement keySource)
+    /// <param name="game">The game, made by its host with an <see cref="InputState"/> this feeds.</param>
+    /// <param name="surface">What it's drawn on, whose mouse and touch it reads.</param>
+    /// <param name="keySource">Where its keys come from (its window, or the editor's).</param>
+    public GameRunner(Game game, GameSurface surface, UIElement keySource)
     {
         _surface = surface;
         _keySource = keySource;
-        Game = new Game(scene, _input);
-        if (surface.AssetRoot is { } assets)
-            Game.Audio = WindowsAudio.Create(assets);
+        Loop = new GameLoop(game, surface) { BeforeSteps = Poll };
+        _input = Loop.Input;
 
         _keySource.PreviewKeyDown += OnKeyDown;
         _keySource.PreviewKeyUp += OnKeyUp;
@@ -55,55 +52,25 @@ public sealed class GameRunner : IDisposable
         _input.IsMouseInView = false;
     }
 
-    /// <summary>
-    /// Raised after every frame in which the game took a step (and after <see cref="Step"/>), e.g. so the editor can
-    /// refresh its panels. <see cref="Game.Stepped"/> is raised for each step.
-    /// </summary>
-    public event EventHandler? Ticked;
+    /// <summary>The loop playing the game: its frames, pausing and faults, and the events they raise.</summary>
+    public GameLoop Loop { get; }
 
-    /// <summary>
-    /// Raised once a frame the game played is over, its steps taken and its picture built (after each of
-    /// <see cref="Step"/> too): the debugger ends a step there that didn't come to a line of script.
-    /// </summary>
-    public event EventHandler? FrameEnded;
+    public Game Game => Loop.Game;
 
-    /// <summary>
-    /// Raised when gameplay code throws, ending the frame. The game pauses so the error can be fixed (unless the editor's
-    /// debugger held it where it was thrown and let it play on: see <see cref="ScriptProbes.Fault"/>).
-    /// </summary>
-    public event EventHandler<Exception>? Faulted;
+    public bool IsRunning => Loop.IsRunning;
 
-    public Game Game { get; }
-
-    /// <summary>
-    /// The runner whose game is taking its steps or building its picture on this thread right now, if any: what a
-    /// breakpoint reached on it stops (see <see cref="ScriptProbes"/>), rather than code the editor runs between frames.
-    /// </summary>
-    public static GameRunner? Running => t_running;
-
-    [ThreadStatic]
-    private static GameRunner? t_running;
-
-    public bool IsRunning { get; private set; }
-
-    /// <summary>Holds the game still (the editor's pause), drawn as it is rather than between steps.</summary>
+    /// <summary>Holds the game still (the editor's pause), drawn as it is rather than between steps; it gives the mouse back.</summary>
     public bool IsPaused
     {
-        get => _isPaused;
+        get => Loop.IsPaused;
         set
         {
-            _isPaused = value;
-            if (!value)
-                return;
-            Game.ShowAsIs();
+            Loop.IsPaused = value;
             // A paused game gives the mouse back, so the editor can be used (also when it's held at a breakpoint, mid-frame).
-            ReleaseMouse();
+            if (value)
+                ReleaseMouse();
         }
     }
-
-    private bool _isPaused;
-
-    private bool _drawFaulted;
 
     /// <summary>
     /// Whether a key pressed now is the game's, asked as each is pressed (null: always, unless typing into a text box or
@@ -115,13 +82,17 @@ public sealed class GameRunner : IDisposable
     /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
     /// (and over the view) rather than wherever the real one is. Moving the real mouse over the game clears it.
     /// </summary>
-    public Vector2? PointerOverride { get; set; }
+    public Vector2? PointerOverride
+    {
+        get => Loop.PointerOverride;
+        set => Loop.PointerOverride = value;
+    }
 
     public void Start()
     {
         if (IsRunning)
             return;
-        IsRunning = true;
+        Loop.Start();
         _lastShown = Stopwatch.GetTimestamp();
         _pacer = new FramePacer(_surface.Dispatcher, OnFrame);
     }
@@ -129,10 +100,8 @@ public sealed class GameRunner : IDisposable
     /// <summary>Takes exactly one step of the game (for stepping through it while paused).</summary>
     public void Step()
     {
-        RunSafely(stepOnce: true, 0);
-        RenderLatest();
-        if (IsRunning)
-            FrameEnded?.Invoke(this, EventArgs.Empty);
+        Loop.Step();
+        ShowPointer();
     }
 
     public void Dispose()
@@ -148,271 +117,49 @@ public sealed class GameRunner : IDisposable
         _surface.MouseWheelTurned -= OnMouseWheel;
         _surface.PreviewMouseWheel -= OnWpfMouseWheel;
         _surface.TouchChanged -= OnTouch;
-        IsRunning = false;
-        _input.StopRumble();
         XInputGamepad.StopRumble();
-        Game.Stop();
+        Loop.Stop();
     }
 
     private void OnFrame(long shownAt)
     {
-        var plays = !IsPaused;
-        Frame(shownAt);
-        if (plays && IsRunning)
-            FrameEnded?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void Frame(long shownAt)
-    {
-        // Time a script stood still at a breakpoint isn't time the game owes: it picks up where it stopped.
-        if (_heldUntil > _lastShown)
-            _lastShown = Math.Min(_heldUntil, shownAt);
         var seconds = (double)Math.Max(0, shownAt - _lastShown) / Stopwatch.Frequency;
         _lastShown = shownAt;
-        var first = !_shownAny;
-        _shownAny = true;
-
-        // Timed only while something profiles the game (see Game.Profiler), and only frames it plays: not the first, whose
-        // time is the game starting up.
-        if (!IsPaused && !first && Game.Profiler is { } profiler)
+        if (IsPaused)
         {
-            // The garbage counted is this thread's and the workers', the game's: the editor's own work between frames isn't counted.
-            profiler.BeginFrame();
-            var steps = Game.Time.Frame;
-            var (allocated, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
-            var started = Stopwatch.GetTimestamp();
-            var breaks = ScriptProbes.Breaks;
-            RunSafely(stepOnce: false, seconds);
-            var stepped = Stopwatch.GetTimestamp();
-            // A frame held at a breakpoint isn't timed: it took as long as someone looked at it.
-            if (ScriptProbes.Breaks != breaks || !IsRunning)
+            if (_lockCenter is not null)
             {
-                RenderLatest();
-                return;
+                // A paused game gives the mouse back, so the editor can be used.
+                ReleaseMouse();
             }
-
-            // Building the picture times its own parts (what each kind of thing drawn costs: see FrameCostKind.Build).
-            RenderLatest(out var built, out var builtAllocated);
-            var drawn = Stopwatch.GetTimestamp();
-            if (ScriptProbes.Breaks != breaks)
-                return;
-            profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, Workers.AllocatedBytes() - builtAllocated);
-            profiler.Add(new FrameSample((float)(seconds * 1000), Milliseconds(started, stepped), Milliseconds(stepped, built),
-                Milliseconds(built, drawn), (int)(Game.Time.Frame - steps), _lastFrame?.Sprites.Count ?? 0,
-                Workers.AllocatedBytes() - allocated, GC.CollectionCount(0) - collections));
-            return;
+            else if (_input.RumbleStrength > 0)
+            {
+                // A paused game doesn't shake the controller.
+                _input.StopRumble();
+                XInputGamepad.StopRumble();
+            }
         }
 
-        if (!IsPaused)
-        {
-            RunSafely(stepOnce: false, seconds);
-        }
-        else if (_lockCenter is not null)
-        {
-            // A paused game gives the mouse back, so the editor can be used.
-            ReleaseMouse();
-        }
-        else if (_input.RumbleStrength > 0)
-        {
-            // A paused game doesn't shake the controller.
-            _input.StopRumble();
-            XInputGamepad.StopRumble();
-        }
-
+        Loop.Frame(seconds);
         ShowPointer();
-        RenderLatest();
     }
 
-    // A frame of the screen: the game takes the steps `seconds` holds (ending the input's frame after each), or with
-    // `stepOnce`, exactly one.
-    private void RunSafely(bool stepOnce, double seconds)
+    // Read before the game's steps: the mouse held for a first-person game, and the controllers.
+    private void Poll()
     {
-        var steps = Game.Time.Frame;
-        var breaks = ScriptProbes.Breaks;
-        var outer = t_running;
-        t_running = this;
-        try
-        {
-            UpdateMouseWorld();
-            UpdateMouseLock();
-            XInputGamepad.Poll(_input);
-            Game.ViewAspect = _surface.Aspect;
-            if (stepOnce)
-                Game.Tick(Game.Time.FixedDelta);
-            else
-                Game.Advance(seconds);
-        }
-        catch (ScriptAbortedException)
-        {
-            // Stopped (or rewound) at a breakpoint: this game is gone, and nothing went wrong in it.
-        }
-        catch (Exception ex) when (Hold(ex) is var held)
-        {
-            // Held where it was thrown and stopped or rewound meanwhile, the game's gone; let go, it stays paused or plays on as
-            // it was left, and the frame ends here.
-            if (held != ScriptFaultHold.Abandoned)
-            {
-                if (held == ScriptFaultHold.NotHeld)
-                    IsPaused = true;
-                Faulted?.Invoke(this, ex);
-            }
-        }
-        finally
-        {
-            t_running = outer;
-            if (stepOnce)
-                _input.EndFrame();
-            if (ScriptProbes.Breaks != breaks)
-                _heldUntil = Stopwatch.GetTimestamp();
-        }
-
-        ShowPointer();
-        if (IsRunning && Game.Time.Frame != steps)
-            Ticked?.Invoke(this, EventArgs.Empty);
+        UpdateMouseLock();
+        XInputGamepad.Poll(_input);
     }
 
     // The pointer the game asks for (see IInput.Cursor) over the surface; the arrow while it's paused, for the editor.
     private void ShowPointer() => _surface.Pointer = IsPaused ? Griff.Input.MouseCursor.Arrow : _input.Cursor;
-
-    // When a script last let go of a breakpoint it stood at in this game's frame (a Stopwatch timestamp).
-    private long _heldUntil;
-
-    // The game's frame is ending with an exception nothing in it caught: asked before anything unwinds (from the catch's
-    // filter), so the editor's debugger can hold the game at the line of script that threw, as at a breakpoint.
-    private static ScriptFaultHold Hold(Exception exception)
-    {
-        try
-        {
-            return ScriptProbes.Fault(exception);
-        }
-        catch (Exception)
-        {
-            // Something went wrong holding it: the game pauses on the error as it would anyway.
-            return ScriptFaultHold.NotHeld;
-        }
-    }
-
-    // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
-    // and the last good frame stays up.
-    private void RenderLatest() => RenderLatest(out _, out _);
-
-    // `built` is when the frame was built, before it's drawn (a Stopwatch timestamp), and `allocated` the bytes this thread
-    // had allocated by then.
-    private void RenderLatest(out long built, out long allocated)
-    {
-        RenderFrame frame;
-        if (!IsRunning)
-        {
-            // Stopped while a script stood at a breakpoint in this frame: the game's gone, and so is its picture.
-            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            return;
-        }
-
-        var outer = t_running;
-        t_running = this;
-        try
-        {
-            frame = SceneRenderer.Build(Game, _surface.Aspect, recycle: _lastFrame);
-        }
-        catch (ScriptAbortedException)
-        {
-            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            return;
-        }
-        // Held only the first time in a row it fails (a paused game is drawn again every frame).
-        catch (Exception ex) when ((_drawFaulted ? ScriptFaultHold.NotHeld : Hold(ex)) is var held)
-        {
-            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            if (!_drawFaulted)
-            {
-                _drawFaulted = true;
-                if (held != ScriptFaultHold.Abandoned)
-                {
-                    if (held == ScriptFaultHold.NotHeld)
-                        IsPaused = true;
-                    Faulted?.Invoke(this, ex);
-                }
-            }
-
-            return;
-        }
-        finally
-        {
-            t_running = outer;
-        }
-
-        (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-        _drawFaulted = false;
-        _lastFrame = frame;
-        if (Game.PictureWanted)
-            TakePicture();
-        _surface.Render(_lastFrame);
-    }
-
-    // A game just saved wants its screenshot: drawn once more without the panels over it, and read back.
-    private void TakePicture()
-    {
-        var outer = t_running;
-        t_running = this;
-        try
-        {
-            if (_surface.Capture(SceneRenderer.BuildPicture(Game, _surface.Aspect)) is var (pixels, width, height))
-                Game.TakePicture(pixels, width, height);
-            else
-                Game.TakePicture([], 0, 0);
-        }
-#pragma warning disable CA1031 // A script that throws while drawing the picture leaves the saved game without one, rather than stopping it.
-        catch (Exception)
-#pragma warning restore CA1031
-        {
-            Game.TakePicture([], 0, 0);
-        }
-        finally
-        {
-            t_running = outer;
-        }
-    }
-
-    private static float Milliseconds(long from, long to) => (float)((to - from) * 1000.0 / Stopwatch.Frequency);
-
-    private void UpdateMouseWorld()
-    {
-        var inverse = Matrix4x4.Identity;
-        var known = _lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out inverse);
-        if (known)
-            PlaceTouches(inverse);
-        if (PointerOverride is { } pointed)
-        {
-            (_input.MouseWorld, _input.IsMouseInView) = (pointed, true);
-            return;
-        }
-
-        if (known)
-        {
-            var world = Vector4.Transform(new Vector4(_mouseNdc, 0, 1), inverse);
-            _input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
-        }
-    }
-
-    // The fingers on the view, put in the world through the last frame's camera.
-    private void PlaceTouches(Matrix4x4 inverse)
-    {
-        if (_input.Touches.Count == 0)
-            return;
-        _input.PlaceTouches(ndc =>
-        {
-            var at = Vector4.Transform(new Vector4(ndc, 0, 1), inverse);
-            return new Vector2(at.X, at.Y) / at.W;
-        });
-    }
 
     // A finger on a touch screen, kept where it is on the view and put in the world at once (and with the mouse each frame,
     // as the camera moves).
     private void OnTouch(int id, Point pixel, bool down)
     {
         _input.SetTouch(id, _surface.ToNdc(pixel), down, onScreen: true);
-        if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
-            PlaceTouches(inverse);
+        Loop.PlaceTouches();
     }
 
     // The mouse held for a first-person game: how far it moved since last frame, then back to the middle of the view.
@@ -508,11 +255,7 @@ public sealed class GameRunner : IDisposable
         if (_mousePixel != pixel)
             PointerOverride = null;
         _mousePixel = pixel;
-        var ndc = _surface.ToNdc(pixel);
-        if (ndc != _mouseNdc)
-            _input.MouseMoved();
-        _mouseNdc = ndc;
-        _input.IsMouseInView = true;
+        Loop.PointAt(_surface.ToNdc(pixel));
     }
 
     private void OnMouseWheel(float notches) => _input.AddScroll(notches);

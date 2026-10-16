@@ -317,7 +317,8 @@ public sealed class LayerTests
         var compilation = CSharpCompilation.Create("Griff", trees, PlatformReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
-        // Anything unbound would hide a use; the core needs nothing beyond the platform.
+        // Anything unbound would hide a use; the core needs nothing beyond the platform (and NVorbis, the OGG decoder every
+        // host shares).
         var unbound = compilation.GetDiagnostics().Where(d => d.Id is "CS0246" or "CS0234" or "CS0103").Take(5).ToList();
         Assert.True(unbound.Count == 0, string.Join("\n", unbound));
         return (compilation, trees);
@@ -368,7 +369,7 @@ public sealed class LayerTests
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
         .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
         .Where(path => Path.GetFileName(path).StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
-                       Path.GetFileName(path) is "mscorlib.dll" or "netstandard.dll")
+                       Path.GetFileName(path) is "mscorlib.dll" or "netstandard.dll" or "NVorbis.dll")
         .Select(path => MetadataReference.CreateFromFile(path));
 
     internal static string RepoRoot()

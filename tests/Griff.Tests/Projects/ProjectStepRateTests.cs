@@ -62,8 +62,7 @@ public sealed class ProjectStepRateTests : IDisposable
 
         // Exported, it loads with the game.
         var loaded = await GameLoader.LoadAsync(project.RootPath);
-        var exported = new Game(loaded.Scene, new InputState());
-        exported.UseProjectSettings(loaded.Project);
+        var exported = loaded.NewGame();
         Assert.Equal(30, exported.Time.StepRate);
     }
 

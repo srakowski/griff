@@ -7,6 +7,7 @@ using Griff.Audio;
 using Griff.Graphics;
 using Griff.Input;
 using Griff.Rendering;
+using Griff.Hosting;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -14,9 +15,9 @@ namespace Griff.Web;
 
 /// <summary>
 /// Plays a Griff game in the browser. The page calls <see cref="Frame"/> once for each frame the screen shows (its
-/// <c>requestAnimationFrame</c>): the game takes the steps that frame's time holds, as on the desktop, its picture is
-/// drawn with WebGL (<see cref="WebGLRenderer"/>) and its sound is handed to Web Audio (<see cref="BufferedOutput"/>).
-/// The page sends the keyboard, mouse, touch and controller here as they happen. Saves go to the page's
+/// <c>requestAnimationFrame</c>), and the core's <see cref="GameLoop"/> plays it, as on the desktop: the game takes the
+/// steps that frame's time holds, its picture is drawn on the canvas (<see cref="WebView"/>, WebGL) and its sound handed
+/// to Web Audio (<see cref="WebSound"/>), read by the desktop's sound library (<see cref="AssetSoundLibrary"/>). The page sends the keyboard, mouse, touch and controller here as they happen. Saves go to the page's
 /// <c>localStorage</c>, under a key of the game's own (<see cref="WebSaves.KeyOf"/>).
 /// </summary>
 /// <remarks>
@@ -32,26 +33,21 @@ public static partial class WebPlayer
     public const string GameFolder = "/game";
 
     private static readonly InputState s_input = new() { IsMouseInView = false };
-    private static WebGLRenderer? s_renderer;
-    private static Game? s_game;
-    private static RenderFrame? s_last;
-    private static BufferedOutput? s_sound;
+    private static GameLoop? s_loop;
+    private static WebView? s_view;
+    private static WebSound? s_sound;
     private static double s_lastTime = -1;
-    private static Vector2 s_pointer;
-    private static bool s_faulted, s_quit, s_soundWaiting, s_noticed, s_syncingFullscreen;
+    private static Vector2? s_pointer;
+    private static bool s_faulted, s_quit, s_noticed, s_syncingFullscreen;
     private static readonly float[] s_rumble = new float[InputState.MaxGamepads];
     private static MouseCursor s_cursor;
     private static string? s_netStatus;
     private static int? s_still;
 
-    // The game's steps since the "steps" probe last read them: how many, and how long they took (all of them, and the slowest
-    // frame's, a step).
-    private static long s_stepCount;
-    private static double s_stepMilliseconds, s_worstStepMilliseconds;
+    // What the loop timed since the "steps" and the "frames" probes last read them (each reads and clears its own half).
+    private static GameLoopTimes s_stepTimes, s_frameTimes;
 
-    // The frames since the "frames" probe last read them: how many, and how long building, drawing and mixing the sound took.
-    private static long s_frameCount;
-    private static double s_buildMilliseconds, s_renderMilliseconds, s_soundMilliseconds;
+    private static Game? Playing => s_loop?.Game;
 
     /// <summary>
     /// Fetches the game exported next to the page (the files its <see cref="ExportLayout.WebFileList"/> lists, under
@@ -86,9 +82,11 @@ public static partial class WebPlayer
     public static async Task RunAsync(LoadedGame loaded)
     {
         var query = Browser.Query();
-        s_renderer = new WebGLRenderer(loaded.Project.AssetsPath);
-        var sounds = new WebSoundLibrary(loaded.Project.AssetsPath);
-        await DecodeMp3Async(loaded.Project.AssetsPath, sounds);
+        var project = loaded.Project!;
+        var view = s_view = new WebView(new WebGLRenderer(project.AssetsPath));
+        // The same library as the desktop's; the browser decodes the MP3s, as it starts.
+        var sounds = new AssetSoundLibrary(project.AssetsPath);
+        await DecodeMp3Async(project.AssetsPath, sounds);
 
         var start = QueryValue(query, "scene") is { Length: > 0 } named ? loaded with { Scene = loaded.LoadScene(named), SceneName = named } : loaded;
         // A still moment is the same moment wherever it's reached: its random numbers (Rand) start from 0 as the game does.
@@ -98,98 +96,93 @@ public static partial class WebPlayer
         if (s_still is not null)
             Rand.Seed(0);
         else
-            WebWarmup.Run(WebWarmup.HasTurningBodies(loaded.Project));
+            WebWarmup.Run(WebWarmup.HasTurningBodies(project));
 
-        var game = s_game = start.NewGame(s_input);
-        // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
-        game.Problems.Reported += p => Console.WriteLine(p.Message);
         foreach (var warning in loaded.Problems.Lines)
             Console.WriteLine(warning);
-
-        var mixer = new Mixer();
-        s_sound = new BufferedOutput(mixer);
-        // A still moment keeps the game's own silent audio, which counts the music by its steps as the desktop's does.
-        if (s_still is null)
-            game.Audio = new MixerAudio(mixer, sounds);
+        var key = WebSaves.KeyOf(project);
+        var sound = s_sound = new WebSound(new BufferedOutput(new Mixer()));
+        var game = start.NewGame(new GameHostOptions
+        {
+            Input = s_input,
+            // A still moment keeps the game's own silent audio, which counts the music by its steps as the desktop's does.
+            Audio = s_still is null ? new MixerAudio(sound.Output.Mixer, sounds) : null,
+            SaveData = new SaveData(Browser.LoadSave(key), json => Browser.StoreSave(key, json)),
+            // Something set up without code that can't do its job (a Table Values naming a row that isn't there) goes to the console.
+            Problems = p => Console.WriteLine(p.Message),
+        });
         game.FullscreenChanged += (_, _) =>
         {
             if (!s_syncingFullscreen)
                 Browser.Fullscreen(game.Fullscreen);
         };
-        var key = WebSaves.KeyOf(loaded.Project);
-        game.SaveData = new SaveData(Browser.LoadSave(key), json => Browser.StoreSave(key, json));
         if (game.Fullscreen)
             Browser.Fullscreen(true);
         game.QuitRequested += (_, _) => s_quit = true;
         game.SceneChanged += (_, scene) => NoticeNetwork(scene);
+
+        // The core's loop plays it, as on the desktop: the page only hands it a canvas, input and Web Audio.
+        var loop = s_loop = new GameLoop(game, view, sound);
+        // A game that throws stops, and says why, as the desktop player's pauses.
+        loop.Faulted += (_, ex) => Fail(ex);
+        if (s_pointer is { } pointer)
+            loop.PointAt(pointer);
+        loop.Start();
         NoticeNetwork(game.Scene);
-        Browser.Start(loaded.Project.Name, Shaders.Web, Shaders.Vertex, Shaders.Sprite, Shaders.Shape, Shaders.Effects);
+        Browser.Start(project.Name, Shaders.Web, Shaders.Vertex, Shaders.Sprite, Shaders.Shape, Shaders.Effects);
     }
 
     /// <summary>A frame of the screen, shown at <paramref name="now"/> (milliseconds) on a canvas this many pixels big.</summary>
     [JSExport]
     public static void Frame(double now, int width, int height)
     {
-        if (s_game is not { } game || s_renderer is null || s_faulted || s_quit)
+        if (s_loop is not { } loop || s_view is not { } view || s_faulted || s_quit)
             return;
         var seconds = s_lastTime < 0 ? 0 : (now - s_lastTime) / 1000;
         s_lastTime = now;
-        var aspect = width > 0 && height > 0 ? (float)width / height : 16f / 9;
+        view.Size = (width, height);
         try
         {
-            UpdatePointer();
-            game.ViewAspect = aspect;
             if (s_still is not { } steps)
+                loop.Frame(seconds);
+            else
             {
-                var (before, started) = (game.Time.Frame, System.Diagnostics.Stopwatch.GetTimestamp());
-                game.Advance(seconds);
-                if (game.Time.Frame - before is var taken and > 0)
+                // A still moment: its steps on the first frame, then drawn as it is.
+                if (steps >= 0)
                 {
-                    var milliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                    (s_stepCount, s_stepMilliseconds) = (s_stepCount + taken, s_stepMilliseconds + milliseconds);
-                    s_worstStepMilliseconds = Math.Max(s_worstStepMilliseconds, milliseconds / taken);
+                    loop.AdvanceSteps(steps);
+                    s_still = -1;
                 }
-            }
-            else if (steps >= 0)
-            {
-                TakeSteps(game, steps);
-                s_still = -1;
+
+                loop.Draw();
+                s_sound?.Pump();
             }
 
             if (s_quit)
             {
-                Quit(game);
+                Quit(loop.Game);
                 return;
             }
 
-            // A game just saved wants its screenshot: drawn once more without the panels over it, and read back.
-            if (game.PictureWanted)
-            {
-                s_renderer.Render(SceneRenderer.BuildPicture(game, aspect), width, height);
-                game.TakePicture(s_renderer.Capture(width, height), width, height);
-            }
-
-            var built = System.Diagnostics.Stopwatch.GetTimestamp();
-            s_last = SceneRenderer.Build(game, aspect, recycle: s_last);
-            var rendered = System.Diagnostics.Stopwatch.GetTimestamp();
-            s_renderer.Render(s_last, width, height);
-            var sounded = System.Diagnostics.Stopwatch.GetTimestamp();
-            PumpSound();
-            var done = System.Diagnostics.Stopwatch.GetTimestamp();
-            s_frameCount++;
-            s_buildMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(built, rendered).TotalMilliseconds;
-            s_renderMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(rendered, sounded).TotalMilliseconds;
-            s_soundMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(sounded, done).TotalMilliseconds;
-            AfterFrame(game);
+            if (!s_faulted)
+                AfterFrame(loop.Game);
         }
-#pragma warning disable CA1031 // A game that throws stops, and says why, as the desktop player's does.
+#pragma warning disable CA1031 // Whatever else goes wrong in a frame (drawing it, its sound) stops the game the same way.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
-            s_faulted = true;
-            Console.Error.WriteLine(ex);
-            Browser.Fail($"The game hit an error: {ex.Message}");
+            Fail(ex);
         }
+    }
+
+    // The game stops, and the page says why.
+    private static void Fail(Exception ex)
+    {
+        if (s_faulted)
+            return;
+        s_faulted = true;
+        Console.Error.WriteLine(ex);
+        Browser.Fail($"The game hit an error: {ex.Message}");
     }
 
     /// <summary>
@@ -225,10 +218,11 @@ public static partial class WebPlayer
     public static void Pointer(double x, double y, double movedX, double movedY)
     {
         var ndc = new Vector2((float)(x * 2 - 1), (float)(1 - y * 2));
-        if (ndc != s_pointer)
-            s_input.MouseMoved();
-        s_pointer = ndc;
-        s_input.IsMouseInView = true;
+        // Before the game has started, it's where the mouse is when it does.
+        if (s_loop is { } loop)
+            loop.PointAt(ndc);
+        else
+            s_pointer = ndc;
         s_input.AddMouseDelta(new Vector2((float)movedX, (float)-movedY));
     }
 
@@ -241,7 +235,7 @@ public static partial class WebPlayer
     {
         s_input.SetTouch(id, new Vector2((float)(x * 2 - 1), (float)(1 - y * 2)), down, onScreen: true);
         // Put in the world at once (and each frame after, as the camera moves).
-        UpdatePointer();
+        s_loop?.PlaceTouches();
     }
 
     /// <summary>The mouse left the canvas (or a finger was lifted).</summary>
@@ -271,7 +265,7 @@ public static partial class WebPlayer
 
     /// <summary>True when a click should take the mouse (a first-person game wants it) rather than reach the game.</summary>
     [JSExport]
-    public static bool WantsMouseLock() => s_input.WantsMouseLock && s_game is not null && !s_quit && !s_faulted;
+    public static bool WantsMouseLock() => s_input.WantsMouseLock && Playing is not null && !s_quit && !s_faulted;
 
     /// <summary>The browser took the mouse for the game (pointer lock), or gave it back (Esc).</summary>
     [JSExport]
@@ -281,7 +275,7 @@ public static partial class WebPlayer
     [JSExport]
     public static void FullscreenChanged(bool on)
     {
-        if (s_game is not { } game || game.Fullscreen == on)
+        if (Playing is not { } game || game.Fullscreen == on)
             return;
         s_syncingFullscreen = true;
         try
@@ -312,7 +306,7 @@ public static partial class WebPlayer
     [JSExport]
     public static string Probe(string what)
     {
-        if (s_game is not { } game)
+        if (Playing is not { } game)
             return "";
         var (name, argument) = what.IndexOf(':', StringComparison.Ordinal) is var colon and >= 0 ? (what[..colon], what[(colon + 1)..]) : (what, "");
         switch (name)
@@ -337,21 +331,19 @@ public static partial class WebPlayer
                     : "";
             case "steps":
             {
-                var read = string.Create(CultureInfo.InvariantCulture,
-                    $"{s_stepCount}|{(s_stepCount > 0 ? s_stepMilliseconds / s_stepCount : 0):0.###}|{s_worstStepMilliseconds:0.###}");
-                (s_stepCount, s_stepMilliseconds, s_worstStepMilliseconds) = (0, 0, 0);
-                return read;
+                var times = ReadTimes(ref s_stepTimes);
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{times.Steps}|{(times.Steps > 0 ? times.StepMilliseconds / times.Steps : 0):0.###}|{times.WorstStepMilliseconds:0.###}");
             }
 
             case "warmup":
                 return WebWarmup.Milliseconds.ToString("0", CultureInfo.InvariantCulture);
             case "frames":
             {
-                var frames = Math.Max(1, s_frameCount);
-                var read = string.Create(CultureInfo.InvariantCulture,
-                    $"{s_frameCount}|{s_buildMilliseconds / frames:0.###}|{s_renderMilliseconds / frames:0.###}|{s_soundMilliseconds / frames:0.###}");
-                (s_frameCount, s_buildMilliseconds, s_renderMilliseconds, s_soundMilliseconds) = (0, 0, 0, 0);
-                return read;
+                var times = ReadTimes(ref s_frameTimes);
+                var frames = Math.Max(1, times.Frames);
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{times.Frames}|{times.BuildMilliseconds / frames:0.###}|{times.DrawMilliseconds / frames:0.###}|{times.SoundMilliseconds / frames:0.###}");
             }
 
             case "flag":
@@ -412,16 +404,8 @@ public static partial class WebPlayer
         return null;
     }
 
-    /// <summary>Takes <paramref name="steps"/> of <paramref name="game"/>'s steps, a frame of one step each, as a still moment of it is reached.</summary>
-    private static void TakeSteps(Game game, int steps)
-    {
-        var step = 1.0 / game.Time.StepRate;
-        for (var i = 0; i < steps; i++)
-            game.Advance(step);
-    }
-
     // The game's MP3s, decoded by the browser before it starts (Load is called as the game plays, and can't wait).
-    private static async Task DecodeMp3Async(string assets, WebSoundLibrary sounds)
+    private static async Task DecodeMp3Async(string assets, AssetSoundLibrary sounds)
     {
         if (!Directory.Exists(assets))
             return;
@@ -443,21 +427,6 @@ public static partial class WebPlayer
                 Console.WriteLine($"Couldn't decode {Path.GetFileName(file)}: {ex.Message}");
             }
         }
-    }
-
-    // Keeps Web Audio a little ahead with what the mixer plays, or, until the browser lets the page make sound, plays it
-    // silently in time (and says a click or key starts it).
-    private static void PumpSound()
-    {
-        if (s_sound is not { } output)
-            return;
-        var state = Browser.AudioState();
-        var block = output.Pump(state >= 0 ? state : null, state >= 0 ? Browser.AudioLatency() : 0);
-        if (!block.IsEmpty)
-            Browser.AudioPush(MemoryMarshal.AsBytes(block));
-        var waiting = state == -1 && output.Mixer.Playing > 0;
-        if (waiting != s_soundWaiting)
-            Browser.SoundWaiting(s_soundWaiting = waiting);
     }
 
     // What the page does for the game once a frame is drawn: shake the controller, give back the mouse, say why hosting or
@@ -497,7 +466,7 @@ public static partial class WebPlayer
     // A scene set up for network play says, once, that it isn't there in a browser.
     private static void NoticeNetwork(Scene scene)
     {
-        if (s_noticed || s_game?.Network.Unavailable is not { } why || !NetSession.IsUsedIn(scene))
+        if (s_noticed || Playing?.Network.Unavailable is not { } why || !NetSession.IsUsedIn(scene))
             return;
         s_noticed = true;
         Browser.Notice(why);
@@ -506,8 +475,7 @@ public static partial class WebPlayer
     // The game's Quit: a page can't close itself, so the game stops and says so.
     private static void Quit(Game game)
     {
-        game.Stop();
-        s_input.StopRumble();
+        s_loop?.Stop();
         for (var pad = 0; pad < s_rumble.Length; pad++)
             Browser.Rumble(pad, s_rumble[pad] = 0);
         Browser.ReleaseMouse();
@@ -515,21 +483,22 @@ public static partial class WebPlayer
         Browser.Ended($"Thanks for playing {game.Title}.\nReload the page to play again.");
     }
 
-    // The mouse in the world, from where it is on the canvas, through the last frame's camera.
-    private static void UpdatePointer()
+    // The loop's times since either probe last read them go to both; `times` (the probe's own) is handed back and cleared.
+    private static GameLoopTimes ReadTimes(ref GameLoopTimes times)
     {
-        if (s_last is not null && Matrix4x4.Invert(s_last.ViewProjection, out var inverse))
+        if (s_loop is { } loop)
         {
-            var world = Vector4.Transform(new Vector4(s_pointer, 0, 1), inverse);
-            s_input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
-            if (s_input.Touches.Count > 0)
-            {
-                s_input.PlaceTouches(ndc =>
-                {
-                    var at = Vector4.Transform(new Vector4(ndc, 0, 1), inverse);
-                    return new Vector2(at.X, at.Y) / at.W;
-                });
-            }
+            var read = loop.ReadTimes();
+            s_stepTimes = Add(s_stepTimes, read);
+            s_frameTimes = Add(s_frameTimes, read);
         }
+
+        var result = times;
+        times = default;
+        return result;
+
+        static GameLoopTimes Add(GameLoopTimes a, GameLoopTimes b) => new(a.Steps + b.Steps, a.StepMilliseconds + b.StepMilliseconds,
+            Math.Max(a.WorstStepMilliseconds, b.WorstStepMilliseconds), a.Frames + b.Frames, a.BuildMilliseconds + b.BuildMilliseconds,
+            a.DrawMilliseconds + b.DrawMilliseconds, a.SoundMilliseconds + b.SoundMilliseconds);
     }
 }

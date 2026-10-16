@@ -2,6 +2,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
+using Griff.Platform.Windows;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Audio;
@@ -13,6 +14,8 @@ public sealed class AudioModule : IEditorModule
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // The editor's sound card, its own: its games, previews and the Sound Maker play through it (GRIFF_MUTE=1 keeps it shut).
+        services.AddSingleton(_ => AudioOutput.Open());
         services.AddSingleton<EditorAudio>();
         services.AddSingleton<EditorMute>();
         services.AddMenu(Menu, "_Audio", order: 5);

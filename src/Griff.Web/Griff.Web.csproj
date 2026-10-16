@@ -13,11 +13,6 @@
     <ProjectReference Include="..\Griff.Graphics\Griff.Graphics.csproj" />
   </ItemGroup>
 
-  <!-- OGG sounds and music, decoded by .NET as on the desktop (MIT; its notice goes into every export's THIRD-PARTY-NOTICES.txt). -->
-  <ItemGroup>
-    <PackageReference Include="NVorbis" />
-  </ItemGroup>
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>

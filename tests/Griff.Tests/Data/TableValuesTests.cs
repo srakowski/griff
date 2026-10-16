@@ -363,8 +363,7 @@ public sealed class TableValuesTests : IDisposable
     private static async Task PlaysWithTheTable(string folder)
     {
         var loaded = await GameLoader.LoadAsync(folder);
-        var game = new Game(loaded.Scene, new InputState()) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab };
-        game.UseProjectSettings(loaded.Project);
+        var game = loaded.NewGame();
         Step(game);
         Assert.Equal(10, game.Find("Slime")!.GetComponent<Health>()!.Max);
     }

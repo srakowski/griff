@@ -24,39 +24,119 @@ public static class ExportLayout
     public const string WebFileList = "files.txt";
 }
 
-/// <summary>Everything needed to start a game: project, component types and the start scene.</summary>
-public sealed record LoadedGame(Project Project, ComponentRegistry Components, Scene Scene, ProblemLog Problems)
+/// <summary>
+/// Everything needed to start a game: its component types, its start scene, how it loads its other scenes and prefabs,
+/// and the project it came from. Every host makes its games from one (<see cref="NewGame"/>): the player, windowed and as
+/// a server, the web player, the editor's Play and Play with Players, and a balance simulation's fights.
+/// </summary>
+/// <param name="Project">
+/// The project (or exported game folder) it was loaded from, whose settings, scenes and prefabs it plays with. Null for a
+/// game made of a running one's content (a simulation's arena), which says how it loads scenes and prefabs itself.
+/// </param>
+/// <param name="Components">The component types its scenes are read with (its scripts' too).</param>
+/// <param name="Scene">The scene it starts in.</param>
+/// <param name="Problems">What loading it found wrong, said once (a game doesn't say these again).</param>
+public sealed record LoadedGame(Project? Project, ComponentRegistry Components, Scene Scene, ProblemLog Problems)
 {
     private PrefabLibrary? _prefabs;
+    private readonly int? _stepRate;
 
     /// <summary>The start scene's name, for <see cref="Game.SceneName"/>.</summary>
     public string? SceneName { get; init; }
 
+    /// <summary>
+    /// How another scene loads by name, if not from the project's files: the editor plays the open scene as it is there,
+    /// unsaved changes included.
+    /// </summary>
+    public Func<string, Scene>? Scenes { get; init; }
+
+    /// <summary>How an entity is made from a prefab by name, if not from the project's prefabs.</summary>
+    public Func<string, Entity>? Prefabs { get; init; }
+
+    /// <summary>Steps a second of game time: the project's, unless set.</summary>
+    public int StepRate
+    {
+        get => _stepRate ?? Project?.StepRate ?? Time.DefaultStepRate;
+        init => _stepRate = value;
+    }
+
     /// <summary>Loads another scene of this game by name, for <see cref="Game.SceneLoader"/>.</summary>
-    public Scene LoadScene(string nameOrPath) => GameLoader.LoadScene(Project, Components, nameOrPath);
+    public Scene LoadScene(string nameOrPath) =>
+        Scenes is { } scenes ? scenes(nameOrPath)
+        : Project is { } project ? GameLoader.LoadScene(project, Components, nameOrPath)
+        : throw new FileNotFoundException($"No scene named \"{nameOrPath}\".");
 
     /// <summary>Creates an entity from one of this game's prefabs, for <see cref="Game.PrefabLoader"/>.</summary>
-    public Entity LoadPrefab(string nameOrPath) => (_prefabs ??= new PrefabLibrary(Project, Components)).Instantiate(nameOrPath);
+    public Entity LoadPrefab(string nameOrPath) =>
+        Prefabs is { } prefabs ? prefabs(nameOrPath)
+        : Project is { } project ? (_prefabs ??= new PrefabLibrary(project, Components)).Instantiate(nameOrPath)
+        : throw new FileNotFoundException($"No prefab named \"{nameOrPath}\".");
 
     /// <summary>
-    /// The game at its start scene, reading <paramref name="input"/>: its other scenes and prefabs loaded from here, its
-    /// title and components, and the project's settings (<see cref="GameLoader.UseProjectSettings"/>), as the web player
-    /// starts it (so a check drawing it on the desktop starts it the same).
+    /// The game at its start scene, set up for the host that plays it (<paramref name="host"/>: its input, sound, saves,
+    /// network and where its problems are said): its other scenes and prefabs loaded from here, its title and components,
+    /// and the project's settings (<see cref="GameLoader.UseProjectSettings"/>). The one way a host makes a game, so a game
+    /// starts the same in the editor, exported, in a browser and in a simulation.
     /// </summary>
-    public Game NewGame(InputState input)
+    public Game NewGame(GameHostOptions? host = null)
     {
-        var game = new Game(Scene, input)
+        host ??= new GameHostOptions();
+        var game = new Game(Scene, host.Input ?? new InputState())
         {
-            SceneLoader = LoadScene,
-            PrefabLoader = LoadPrefab,
+            // A game with nowhere to load scenes or prefabs from has no loader, which it says when asked for one.
+            SceneLoader = Scenes is not null || Project is not null ? LoadScene : null,
+            PrefabLoader = Prefabs is not null || Project is not null ? LoadPrefab : null,
             SceneName = SceneName,
-            Title = Project.Name,
+            Title = Project?.Name,
             Components = Components,
         };
-        game.UseProjectSettings(Project);
+        if (host.Problems is { } problems)
+            game.Problems.Reported += problems;
+        if (Project is { } project)
+            game.UseProjectSettings(project, host.Tables);
+        else if (host.Tables is { } tables)
+            game.Tables = tables;
+        game.Time.StepRate = StepRate;
         game.AlreadySaid(Problems.Lines);
+        if (host.Audio is { } audio)
+            game.Audio = audio;
+        if (host.SaveData is { } saves)
+            game.SaveData = saves;
+        game.Network.OverNetwork = host.OverNetwork;
         return game;
     }
+}
+
+/// <summary>
+/// What a host hands a game it makes (<see cref="LoadedGame.NewGame"/>): the input its window or page feeds, the sound it
+/// plays through, where it keeps its saves, whether it plays over the network and where its problems are said. Left out,
+/// each is the game's own: fresh input, silence, saves kept in memory, the network on this machine only.
+/// </summary>
+public sealed record GameHostOptions
+{
+    /// <summary>The input the host feeds from its keyboard, mouse, touch and controllers; a fresh one if null.</summary>
+    public InputState? Input { get; init; }
+
+    /// <summary>What the game's sound plays through (a <see cref="Audio.MixerAudio"/> on the host's mixer); silent if null.</summary>
+    public IAudio? Audio { get; init; }
+
+    /// <summary>Where the game keeps its saves; in memory if null.</summary>
+    public SaveData? SaveData { get; init; }
+
+    /// <summary>
+    /// Whether the game hosts and joins over the network (<see cref="INetwork.OverNetwork"/>): only the player's and the
+    /// editor's Play in its window do.
+    /// </summary>
+    public bool OverNetwork { get; init; }
+
+    /// <summary>
+    /// The tables it plays with, rather than the project's files read afresh: the editor's, kept across replays, or a
+    /// simulation step's.
+    /// </summary>
+    public Griff.Data.TableSet? Tables { get; init; }
+
+    /// <summary>Told each problem the game reports (something set up without code that can't do its job).</summary>
+    public Action<Problem>? Problems { get; init; }
 }
 
 /// <summary>Loads an exported game folder (or a project folder) for the player.</summary>
@@ -68,11 +148,14 @@ public static class GameLoader
     /// balance simulations (every <c>.sim</c> file, see <see cref="Game.Simulate"/>).
     /// Every host does this, so a game plays the same in the editor, exported and in a browser.
     /// </summary>
-    public static void UseProjectSettings(this Game game, Project project)
+    public static void UseProjectSettings(this Game game, Project project) => game.UseProjectSettings(project, null);
+
+    // As above, playing with `tables` (when given) rather than the project's files read afresh.
+    internal static void UseProjectSettings(this Game game, Project project, Griff.Data.TableSet? tables)
     {
         (game.Input as InputState)?.UseControls(project.Controls);
         game.Time.StepRate = project.StepRate;
-        game.Tables = Griff.Data.TableSet.Load(project.AssetsPath);
+        game.Tables = tables ?? Griff.Data.TableSet.Load(project.AssetsPath);
         game.Simulations = Griff.Data.SimulationFile.LoadAll(project.AssetsPath);
     }
 

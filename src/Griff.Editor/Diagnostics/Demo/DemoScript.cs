@@ -933,7 +933,7 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
         try
         {
             // A muted editor (Game > Mute, or GRIFF_MUTE=1) runs the exported game muted too.
-            var arguments = Griff.Platform.Windows.AudioOutput.Muted ? "--mute" : "";
+            var arguments = play.Sound.Muted ? "--mute" : "";
             game = _shippedGame = Process.Start(new ProcessStartInfo(exe, arguments) { WorkingDirectory = buildFolder, UseShellExecute = true });
             // Its keys go to it: the demo's input goes only to the editor and what it starts.
             DemoFocus.Allow(game!.Id);

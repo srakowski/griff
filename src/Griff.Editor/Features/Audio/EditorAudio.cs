@@ -8,7 +8,7 @@ namespace Griff.Editor.Features.Audio;
 
 /// <summary>
 /// Sound in the editor: previews of sound files and freshly made sounds (one at a time), the project's sounds for
-/// pickers, and the Sound Maker. Previews play through the same output as the game.
+/// pickers, and the Sound Maker. Previews play through the editor's sound output, as its games do.
 /// </summary>
 public sealed class EditorAudio
 {
@@ -17,10 +17,13 @@ public sealed class EditorAudio
     private SoundMakerWindow? _maker;
 
     private readonly Core.EditorWindow _editorWindow;
-    public EditorAudio(IProjectSession projectSession, Core.EditorWindow editorWindow)
+    private readonly SoundOutput _sound;
+
+    public EditorAudio(IProjectSession projectSession, Core.EditorWindow editorWindow, SoundOutput sound)
     {
         _projectSession = projectSession;
         _editorWindow = editorWindow;
+        _sound = sound;
     }
 
     public static readonly string[] Extensions = [".wav", ".mp3", ".ogg"];
@@ -63,7 +66,7 @@ public sealed class EditorAudio
     {
         if (AssetsPath is not { } root || Resolve(assetPath) is null)
             return false;
-        if (new FileSoundLibrary(root).Stream(assetPath!) is not { } stream)
+        if (WindowsAudio.Library(root).Stream(assetPath!) is not { } stream)
             return false;
         Start(stream, assetPath);
         return true;
@@ -129,7 +132,8 @@ public sealed class EditorAudio
     private void Start(IAudioStream stream, string? name)
     {
         _preview?.Stop();
-        _preview = AudioOutput.Mixer.Play(stream, 0.9f);
+        _sound.Start();
+        _preview = _sound.Mixer.Play(stream, 0.9f);
         Previewing = name;
         PreviewChanged?.Invoke(this, EventArgs.Empty);
     }

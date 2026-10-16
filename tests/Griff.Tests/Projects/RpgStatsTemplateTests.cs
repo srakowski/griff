@@ -276,8 +276,7 @@ public sealed class RpgStatsTemplateTests(ITestOutputHelper output) : IDisposabl
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
         Assert.Empty(loaded.Problems);
-        var game = new Game(loaded.Scene, new InputState()) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = loaded.SceneName };
-        game.UseProjectSettings(loaded.Project);
+        var game = loaded.NewGame();
         Assert.Equal("Fireball", game.Tables.Get("Spells", "Fireball").Name);
         Assert.True(game.Simulations.ContainsKey(RpgStatsTemplate.BalanceName));
 

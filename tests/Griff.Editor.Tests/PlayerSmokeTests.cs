@@ -50,6 +50,32 @@ public sealed class PlayerSmokeTests : IDisposable
         }
     }
 
+    // A dedicated server is a console program: the core's loop plays the game with nothing to draw on, and WPF never loads.
+    [Fact]
+    public async Task ExportedArcade_RunsAsADedicatedServerWithoutWpf()
+    {
+        var project = await Project.CreateAsync(_root, "Griff Server", ProjectTemplates.Get("Arcade"));
+        var export = GameExporter.Export(project, PlayerPath("Standalone"), Path.Combine(_root, "Build"), "");
+        Assert.True(export.Success, export.Error);
+
+        // A port of its own, so tests side by side don't meet (the smoke test's server stays on this machine).
+        var port = 41000 + Random.Shared.Next(8000);
+        var (exitCode, output) = await RunAsync(export.Executable!, "server", Path.Combine(_root, "Unpacked"), muteArgument: false, $"--server {port}");
+        try
+        {
+            Assert.True(exitCode == 0, $"The server exited with {exitCode}.\n{output}");
+            Assert.Contains("WPF: not loaded", output, StringComparison.Ordinal);
+            var steps = output.Split('\n').Select(l => l.Trim()).First(l => l.StartsWith("Server steps: ", StringComparison.Ordinal));
+            Assert.True(long.Parse(steps["Server steps: ".Length..], System.Globalization.CultureInfo.InvariantCulture) > 0, output);
+        }
+        finally
+        {
+            var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "Games");
+            if (GamePackage.Extract(export.Executable!, cache, Path.GetFileNameWithoutExtension(export.Executable!)) is { } unpacked)
+                Directory.Delete(unpacked, recursive: true);
+        }
+    }
+
     // The players the editor's build publishes beside it (see Griff.Editor.csproj's PublishPlayers).
     private static string PlayerPath(string kind)
     {
@@ -67,9 +93,9 @@ public sealed class PlayerSmokeTests : IDisposable
         return player;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame, string bundle, bool muteArgument)
+    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame, string bundle, bool muteArgument, string arguments = "")
     {
-        var start = new ProcessStartInfo(executable, muteArgument ? "--mute" : "")
+        var start = new ProcessStartInfo(executable, (muteArgument ? "--mute " : "") + arguments)
         {
             UseShellExecute = false,
             RedirectStandardError = true,

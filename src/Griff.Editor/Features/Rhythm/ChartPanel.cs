@@ -262,7 +262,7 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
             var written = File.GetLastWriteTimeUtc(path);
             if (_songData is { } data && data.Path == path && data.Written == written)
                 return data;
-            var library = new FileSoundLibrary(root);
+            var library = WindowsAudio.Library(root);
             var clip = library.Load(_song);
             var peaks = clip is null ? [] : clip.Peaks((int)Math.Clamp(clip.Seconds * PeaksPerSecond, 1, 200_000));
             var tempo = library.MusicRecipeOf(_song)?.Clamped().Tempo ?? 0;
@@ -762,8 +762,14 @@ public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
     // a test gives its own, with a clock it moves itself.
     internal Mixer Output
     {
-        get => _output ?? AudioOutput.Mixer;
+        get => _output ?? EditorMixer();
         set => _output = value;
+    }
+
+    private Mixer EditorMixer()
+    {
+        _play.Sound.Start();
+        return _play.Sound.Mixer;
     }
 
     /// <summary>True while the song plays (recording or not).</summary>

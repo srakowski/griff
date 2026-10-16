@@ -395,8 +395,7 @@ public sealed class PhysicsTemplateTests : IDisposable
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
         Assert.Empty(loaded.Problems);
-        var game = new Game(loaded.LoadScene("Level1"), _input) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = "Level1" };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene("Level1"), SceneName = "Level1" }).NewGame(new GameHostOptions { Input = _input });
         Run(game, 0.2f);
         Assert.Equal(12, game.Scene.Entities.First(e => e.Name == "Wood Plank").GetComponent<Breakable>()!.Strength);
         Play(game, Solutions[0]);

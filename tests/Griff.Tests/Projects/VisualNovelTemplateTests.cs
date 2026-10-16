@@ -418,11 +418,7 @@ public sealed class VisualNovelTemplateTests : IDisposable
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
         Assert.Empty(loaded.Problems);
-        var game = new Game(loaded.LoadScene(VisualNovelTemplate.StoryScene), new InputState())
-        {
-            SceneLoader = loaded.LoadScene, SceneName = VisualNovelTemplate.StoryScene,
-        };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene(VisualNovelTemplate.StoryScene), SceneName = VisualNovelTemplate.StoryScene }).NewGame();
         for (var i = 0; i < 30; i++)
             game.Tick(1 / 60f);
         Assert.Equal(VisualNovelTemplate.Script[1], Story(game).Said);

@@ -3,48 +3,28 @@ using System.IO;
 using Griff.Audio;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
-using NVorbis;
 
 namespace Griff.Platform.Windows;
 
 /// <summary>
-/// The sound card: one <see cref="Mixer"/> for the whole app (the editor's game, its other players' windows, previews and
-/// the Sound Maker), played through the default output device. Without a sound device it stays silent rather than
-/// failing. <see cref="Muted"/> (and <c>GRIFF_MUTE=1</c>, or the player's <c>--mute</c>) keeps the device shut.
+/// The sound card: <see cref="Open"/> makes a host its own <see cref="SoundOutput"/>, a <see cref="Mixer"/> played through
+/// the default output device, which the host keeps for everything it plays (the editor's: its game, its other players'
+/// windows, previews and the Sound Maker; the player's: its game). Without a sound device it stays silent rather than
+/// failing. <c>GRIFF_MUTE=1</c> (or the player's <c>--mute</c>) keeps the device shut.
 /// </summary>
 public static class AudioOutput
 {
     /// <summary>The environment variable that starts a Griff program muted (<c>GRIFF_MUTE=1</c>); programs it starts inherit it.</summary>
     public const string MuteVariable = "GRIFF_MUTE";
 
-    /// <summary>The mixer everything plays through. The first use opens the sound device (unless muted).</summary>
-    public static Mixer Mixer
-    {
-        get
-        {
-            Shared.Start();
-            return Shared.Mixer;
-        }
-    }
-
     /// <summary>True when <c>GRIFF_MUTE</c> was set (to anything but 0, false, no or off) as the program started.</summary>
     public static bool MutedByEnvironment { get; } = IsOn(Environment.GetEnvironmentVariable(MuteVariable));
 
-    // After MutedByEnvironment, which it reads: static fields start in the order they're written.
-    private static readonly SoundOutput Shared = new(OpenWaveOut, MutedByEnvironment);
-
     /// <summary>
-    /// Nothing reaches the speakers: the sound device is closed (or never opened) while everything plays on, silently and
-    /// at the same pace, so a game runs just as it would with sound. On from the start with <c>GRIFF_MUTE=1</c>.
+    /// A sound output on the default device, for a host to keep: the device opens as it's first started
+    /// (<see cref="SoundOutput.Start"/>), unless it's <paramref name="muted"/> (or <c>GRIFF_MUTE=1</c> was set).
     /// </summary>
-    public static bool Muted
-    {
-        get => Shared.Muted;
-        set => Shared.Muted = value;
-    }
-
-    /// <summary>True when sound actually reaches a device.</summary>
-    public static bool IsAvailable => Shared.IsDeviceOpen;
+    public static SoundOutput Open(bool muted = false) => new(OpenWaveOut, muted || MutedByEnvironment);
 
     /// <summary>Whether an environment variable's value turns a switch on: anything but empty, 0, false, no or off.</summary>
     public static bool IsOn(string? value) => !string.IsNullOrWhiteSpace(value) &&
@@ -88,7 +68,7 @@ public sealed record SoundDevice(IDisposable Device, double Latency);
 /// <summary>
 /// A <see cref="Mixer"/> and the device it plays through, which can be muted. Muted (or with no device) the device is
 /// closed and the mixer is still pulled along in real time with nothing heard, so sounds finish, music keeps its time and
-/// the game can't tell. <see cref="AudioOutput"/> is the app's one.
+/// the game can't tell. Each host keeps its own (<see cref="AudioOutput.Open"/>).
 /// </summary>
 public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool muted = false) : IDisposable
 {
@@ -267,100 +247,35 @@ public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool
 }
 
 /// <summary>
-/// Sounds from a project's Assets folder: WAV, MP3 and OGG. Decoded sounds are kept, and decoded again when their file
-/// changes (a sound remade in the Sound Maker while the game runs is heard straight away).
+/// A game's sound on Windows: the shared <see cref="AssetSoundLibrary"/> (the browser's too), which opens MP3s with
+/// Windows' own codec and decodes a sound again when its file changes, played through its host's <see cref="SoundOutput"/>.
 /// </summary>
-public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
+public static class WindowsAudio
 {
-    private readonly Dictionary<string, (DateTime Written, SoundClip? Clip)> _clips = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (DateTime Written, MusicRecipe? Recipe)> _recipes = new(StringComparer.OrdinalIgnoreCase);
-
-    public SoundClip? Load(string sound)
+    /// <summary>The game's audio: <see cref="MixerAudio"/> on <paramref name="output"/>'s mixer (started), reading <paramref name="assetRoot"/>.</summary>
+    public static MixerAudio Create(SoundOutput output, string assetRoot)
     {
-        var path = Resolve(sound);
-        if (path is null)
-            return null;
-        var written = File.GetLastWriteTimeUtc(path);
-        if (_clips.TryGetValue(path, out var cached) && cached.Written == written)
-            return cached.Clip;
-        var clip = Decode(path);
-        _clips[path] = (written, clip);
-        return clip;
+        output.Start();
+        return new MixerAudio(output.Mixer, Library(assetRoot));
     }
 
-    // MP3 and OGG music is decoded as it plays rather than all at once.
-    public IAudioStream? Stream(string sound)
-    {
-        var path = Resolve(sound);
-        if (path is null)
-            return null;
-        try
-        {
-            return Path.GetExtension(path).ToLowerInvariant() switch
-            {
-                ".mp3" => new Mp3Stream(path),
-                ".ogg" => new OggStream(path),
-                _ => Load(sound)?.Open(),
-            };
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException or NAudio.MmException)
-        {
-            return null;
-        }
-    }
+    /// <summary>The sounds in <paramref name="assetRoot"/>, as a game on Windows reads them.</summary>
+    public static AssetSoundLibrary Library(string assetRoot) => new(assetRoot) { OpenMp3 = OpenMp3, Reloads = true };
 
-    public MusicRecipe? MusicRecipeOf(string sound)
-    {
-        var path = Resolve(sound);
-        if (path is null)
-            return null;
-        var written = File.GetLastWriteTimeUtc(path);
-        if (_recipes.TryGetValue(path, out var cached) && cached.Written == written)
-            return cached.Recipe;
-        var recipe = Wav.ReadMusicRecipe(path);
-        _recipes[path] = (written, recipe);
-        return recipe;
-    }
+    /// <summary>Decodes any sound file a game on Windows reads (WAV, MP3, OGG) whole; null if it can't be read.</summary>
+    public static SoundClip? Decode(string path) => AssetSoundLibrary.Decode(path, OpenMp3);
 
-    /// <summary>Decodes any supported sound file whole; null if it can't be read.</summary>
-    public static SoundClip? Decode(string path)
+    // An MP3, read as it plays with Windows' own codec; its errors are those of a file that can't be read.
+    private static IAudioStream OpenMp3(string path)
     {
         try
         {
-            switch (Path.GetExtension(path).ToLowerInvariant())
-            {
-                case ".wav":
-                    return Wav.Decode(path);
-                case ".mp3":
-                case ".ogg":
-                    using (IAudioStream stream = path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ? new Mp3Stream(path) : new OggStream(path))
-                        return ReadAll(stream);
-                default:
-                    return null;
-            }
+            return new Mp3Stream(path);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException or UnauthorizedAccessException or NAudio.MmException)
+        catch (NAudio.MmException ex)
         {
-            return null;
+            throw new InvalidOperationException($"Windows couldn't decode {Path.GetFileName(path)}: {ex.Message}", ex);
         }
-    }
-
-    private static SoundClip ReadAll(IAudioStream stream)
-    {
-        var samples = new List<float>();
-        var buffer = new float[8192];
-        int read;
-        while ((read = stream.Read(buffer)) > 0)
-            samples.AddRange(buffer.AsSpan(0, read));
-        return new SoundClip(samples.ToArray(), stream.Channels, stream.SampleRate);
-    }
-
-    private string? Resolve(string relative)
-    {
-        if (string.IsNullOrWhiteSpace(relative))
-            return null;
-        var path = Path.Combine(assetRoot, relative.Trim().Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? path : null;
     }
 
     private sealed class Mp3Stream : IAudioStream
@@ -391,43 +306,4 @@ public sealed class FileSoundLibrary(string assetRoot) : ISoundLibrary
 
         public void Dispose() => _reader.Dispose();
     }
-
-    private sealed class OggStream(string path) : IAudioStream
-    {
-        private readonly VorbisReader _reader = new(path);
-
-        public int SampleRate => _reader.SampleRate;
-
-        public int Channels => Math.Min(2, _reader.Channels);
-
-        public int Read(Span<float> buffer)
-        {
-            if (_reader.Channels <= 2)
-                return _reader.ReadSamples(buffer[..(buffer.Length - buffer.Length % _reader.Channels)]);
-
-            // More than two channels: keep the first two.
-            var frames = buffer.Length / 2;
-            var all = new float[frames * _reader.Channels];
-            var read = _reader.ReadSamples(all) / _reader.Channels;
-            for (var f = 0; f < read; f++)
-            {
-                buffer[f * 2] = all[f * _reader.Channels];
-                buffer[f * 2 + 1] = all[f * _reader.Channels + 1];
-            }
-
-            return read * 2;
-        }
-
-        public void Rewind() => _reader.SamplePosition = 0;
-
-        public long Frames => _reader.TotalSamples;
-
-        public void Dispose() => _reader.Dispose();
-    }
-}
-
-/// <summary>The game's audio on Windows: <see cref="MixerAudio"/> on the shared output, reading the Assets folder.</summary>
-public static class WindowsAudio
-{
-    public static MixerAudio Create(string assetRoot) => new(AudioOutput.Mixer, new FileSoundLibrary(assetRoot));
 }

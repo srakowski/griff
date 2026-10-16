@@ -546,11 +546,8 @@ public sealed class FighterTemplateTests : IDisposable
 
         // The exported game: picked on the select screen, and fought.
         var input = new InputState();
-        var game = new Game(loaded.LoadScene(Project.DefaultSceneName), input)
-        {
-            SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = Project.DefaultSceneName, ViewAspect = 16 / 9f,
-        };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene(Project.DefaultSceneName), SceneName = Project.DefaultSceneName }).NewGame(new GameHostOptions { Input = input });
+        game.ViewAspect = 16 / 9f;
         ToTheFight(game, input);
         WaitForFight(game, input);
         JabToTheEnd(game, input, Key.D, Key.F);

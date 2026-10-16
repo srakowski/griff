@@ -57,7 +57,10 @@ public sealed partial class TestSocketTests
         var root = LayerTests.RepoRoot();
         var allowed = new[]
         {
-            Path.Combine("src", "Griff.Player", "App.xaml.cs"), Path.Combine("src", "Griff.Editor", "Features", "Play", "PlayMode.cs"),
+            Path.Combine("src", "Griff.Player", "App.cs"), Path.Combine("src", "Griff.Player", "Server.cs"),
+            Path.Combine("src", "Griff.Editor", "Features", "Play", "PlayMode.cs"),
+            // The factory every host makes its games with, which hands on the host's choice (GameHostOptions.OverNetwork).
+            Path.Combine("src", "Griff", "Runtime", "GameLoader.cs"),
             Path.Combine("tests", "Griff.Tests", "Networking", "TestSocketTests.cs"),
         };
         var found = new List<string>();

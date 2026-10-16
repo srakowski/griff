@@ -52,15 +52,10 @@ try
     // The bunnies are put in here rather than by the BunnyMark script, which would time the frames itself.
     var scene = loaded.Scene;
     scene.Remove(scene.Entities.First(e => e.Name == "BunnyMark"));
-    var game = new Game(scene, new InputState())
-    {
-        PrefabLoader = loaded.LoadPrefab,
-        SceneLoader = loaded.LoadScene,
-        Components = loaded.Components,
-        ViewAspect = 16 / 9f,
-        WorkerCount = workers,
-    };
-    game.UseProjectSettings(loaded.Project);
+    // Made as every host makes its game (silent, as it has no sound device).
+    var game = loaded.NewGame();
+    game.ViewAspect = 16 / 9f;
+    game.WorkerCount = workers;
     for (var i = 0; i < count; i++)
         game.Spawn("Bunny", new Vector2(-8.69f, 4.75f));
     if (dark)

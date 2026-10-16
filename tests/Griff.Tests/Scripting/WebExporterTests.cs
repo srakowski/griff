@@ -79,7 +79,7 @@ public sealed class WebExporterTests : IDisposable
 
         var loaded = await GameLoader.LoadAsync(fetched);
 
-        Assert.Equal("Loader Test", loaded.Project.Name);
+        Assert.Equal("Loader Test", loaded.Project?.Name);
         Assert.NotNull(loaded.Components.Find("Bouncer"));
         Assert.Equal("Main Camera", Assert.Single(loaded.Scene.Roots).Name);
     }

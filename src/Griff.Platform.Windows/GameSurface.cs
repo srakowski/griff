@@ -13,7 +13,7 @@ namespace Griff.Platform.Windows;
 /// Call <see cref="Render"/> once per frame. Mouse input over the surface is reported through events;
 /// keyboard input stays with the WPF window.
 /// </summary>
-public sealed class GameSurface : HwndHost
+public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
 {
     private const int WsChild = 0x40000000;
     private const int WsVisible = 0x10000000;

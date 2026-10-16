@@ -20,8 +20,8 @@ public sealed partial class EditorMute : ObservableObject
     private readonly ISettingsStore _settings;
     private readonly Action<bool> _apply;
 
-    public EditorMute(ISettingsStore settings)
-        : this(settings, AudioOutput.MutedByEnvironment, silent => AudioOutput.Muted = silent)
+    public EditorMute(ISettingsStore settings, SoundOutput sound)
+        : this(settings, AudioOutput.MutedByEnvironment, silent => sound.Muted = silent)
     {
     }
 

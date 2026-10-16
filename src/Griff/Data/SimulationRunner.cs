@@ -545,17 +545,15 @@ public static class SimulationRunner
         foreach (var entity in seconds)
             Assign(entity, second);
 
+        // Made as every host makes its games, of the host's content: its scenes, prefabs, components and step rate.
         var host = plan.Host;
-        var game = new Game(scene, new InputState())
+        var game = new LoadedGame(null, host.Components, scene, new ProblemLog())
         {
-            Tables = step.Tables,
-            SceneLoader = host.LoadScene,
-            PrefabLoader = host.LoadPrefab,
-            Components = host.Components,
             SceneName = simulation.Arena,
-        };
-        game.Time.StepRate = host.StepRate;
-        game.Problems.Reported += plan.Problems.Report;
+            Scenes = host.LoadScene,
+            Prefabs = host.LoadPrefab,
+            StepRate = host.StepRate,
+        }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report });
 
         double dealt = 0, taken = 0;
         var firstHealth = firsts.Select(e => e.GetComponent<Health>()).OfType<Health>().ToList();

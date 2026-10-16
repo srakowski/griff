@@ -606,11 +606,9 @@ public sealed class RhythmTemplateTests : IDisposable
         var saves = new SaveData();
         saves.Set(RhythmTemplate.SavedSong, RhythmTemplate.SongPath("Overdrive"));
         saves.Set(RhythmTemplate.SavedDifficulty, "Easy");
-        var game = new Game(loaded.LoadScene(RhythmTemplate.PlayScene), _input)
-        {
-            SceneLoader = loaded.LoadScene, SceneName = RhythmTemplate.PlayScene, ViewAspect = 16 / 9f, SaveData = saves, Audio = new SongAudio(),
-        };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene(RhythmTemplate.PlayScene), SceneName = RhythmTemplate.PlayScene })
+            .NewGame(new GameHostOptions { Input = _input, SaveData = saves, Audio = new SongAudio() });
+        game.ViewAspect = 16 / 9f;
         Step(game);
         PlayThrough(game, ChartOf(project, "Overdrive", "Easy"));
         Assert.Equal(("S", 0), (LanesOf(game).Grade, LanesOf(game).Misses));

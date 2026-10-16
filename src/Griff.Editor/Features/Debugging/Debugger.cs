@@ -11,7 +11,8 @@ using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Scripts;
-using Griff.Platform.Windows;
+using Griff.Hosting;
+using Griff.Runtime;
 using Griff.Scripting;
 using ICSharpCode.AvalonEdit.Document;
 using Microsoft.Extensions.Logging;
@@ -95,7 +96,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
     // A step under way (see Step): what decides where it ends, the game it's in, and what's waiting for it to end.
     private ScriptStep? _step;
-    private GameRunner? _stepRunner;
+    private GameLoop? _stepRunner;
     private TaskCompletionSource? _stepDone;
 
     // Where the game stands at a breakpoint (or the line a step ended at): the probe it stopped at, the script's text as
@@ -104,7 +105,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // `By` is what stopped it ("a breakpoint", "Step Over", "an exception"), and `Stepped` whether a step brought it there.
     // Stopped where a script threw, there's no probe (the line is where it threw), and `Exception` is what it threw.
     private sealed record Paused(ScriptProbe? Probe, string Where, int BuiltLine, string? Built, string Path, string Script, int Line,
-        IReadOnlyList<DebugValue> Values, nint Stack, MethodBase?[] Callers, GameRunner Runner, string By, bool Stepped)
+        IReadOnlyList<DebugValue> Values, nint Stack, MethodBase?[] Callers, GameLoop Runner, string By, bool Stepped)
     {
         public Exception? Exception { get; init; }
 
@@ -113,7 +114,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     }
 
     // A step from where a script threw: the exception ends the frame, and the step is over once it has (see Step).
-    private (StepKind Kind, TaskCompletionSource Done, string Path, GameRunner Runner)? _endingFrame;
+    private (StepKind Kind, TaskCompletionSource Done, string Path, GameLoop Runner)? _endingFrame;
 
     public Debugger(IScriptSession scriptSession, IProjectSession projectSession, PlayMode play, ScriptEditors editors, ISettingsStore settings, IStatusService status, ILogger<Debugger> logger)
     {
@@ -462,7 +463,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
 
         // Between frames: the next frame, up to the first line of script it runs. It's played once this returns, so a command
         // stepping is over (and can step again) when the game stops at that line rather than once it carries on from it.
-        if (_play.Runner is not { } runner)
+        if (_play.Loop is not { } runner)
             return Task.CompletedTask;
         var step = new ScriptStep(StepKind.Into, null, 0, []);
         var next = Begin(step, runner, table);
@@ -470,7 +471,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
         {
             if (_step != step)
                 return;
-            if (_play.Runner == runner && _play.IsPaused && !_play.IsAtBreakpoint)
+            if (_play.Loop == runner && _play.IsPaused && !_play.IsAtBreakpoint)
                 _play.Step();
             if (_step == step)
                 EndStep();
@@ -479,7 +480,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     }
 
     // Every line's switch on, so each can say whether the step ends there.
-    private Task Begin(ScriptStep step, GameRunner runner, ProbeTable table)
+    private Task Begin(ScriptStep step, GameLoop runner, ProbeTable table)
     {
         _step = step;
         _stepRunner = runner;
@@ -592,7 +593,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
             return true;
         if (_armedIds.Contains(hit.Probe) && hit.Probes == _armedIn?.Switches)
             return true;
-        if (GameRunner.Running != _stepRunner || hit.Probes != _scriptSession.ScriptProbes.Switches || _scriptSession.ScriptProbes[hit.Probe] is not { } probe)
+        if (GameLoop.Running != _stepRunner || hit.Probes != _scriptSession.ScriptProbes.Switches || _scriptSession.ScriptProbes[hit.Probe] is not { } probe)
             return false;
         return step.EndsAt(probe, hit.Stack, ScriptProbes.CallStack);
     }
@@ -601,7 +602,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     {
         // Only a game's own frame stops, on the editor's thread: not code the editor runs (reading a property for the
         // Inspector, say), and not a build of the scripts replaced since.
-        if (GameRunner.Running is not { } runner || _play.IsAtBreakpoint
+        if (GameLoop.Running is not { } runner || _play.IsAtBreakpoint
             || hit.Probes != _scriptSession.ScriptProbes.Switches || _scriptSession.ScriptProbes[hit.Probe] is not { } probe)
             return false;
 
@@ -646,7 +647,7 @@ public sealed class Debugger : ObservableObject, IScriptBreakHandler, IDisposabl
     // called into Griff where it was thrown.
     ScriptFaultHold IScriptBreakHandler.Fault(Exception exception)
     {
-        if (!PauseOnExceptions || GameRunner.Running is not { } runner || _play.IsAtBreakpoint
+        if (!PauseOnExceptions || GameLoop.Running is not { } runner || _play.IsAtBreakpoint
             || _scriptSession.ScriptProbes is not { Switches: { } switches } table)
             return ScriptFaultHold.NotHeld;
         var scripts = switches.Assembly;

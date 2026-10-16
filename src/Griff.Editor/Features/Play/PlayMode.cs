@@ -11,6 +11,7 @@ using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Modules.Fighting;
 using Griff.Platform.Windows;
+using Griff.Hosting;
 using Griff.Runtime;
 using Griff.Scenes;
 using Microsoft.Extensions.Logging;
@@ -60,10 +61,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
     public static readonly NetConditions SlowConditions = new() { Latency = 0.06, Jitter = 0.03, Loss = 0.02 };
 
     private readonly Core.EditorWindow _editorWindow;
+    // The editor's sound card, which every game it plays sounds through (see AudioModule).
+    private readonly SoundOutput _sound;
 
-    public PlayMode(IPlaySession playSession, IScriptSession scriptSession, IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, IStatusService status, ILogger<PlayMode> logger, Core.EditorWindow editorWindow)
+    public PlayMode(IPlaySession playSession, IScriptSession scriptSession, IProjectSession projectSession, ISceneDocuments sceneDocuments, ISelection selection, IStatusService status, ILogger<PlayMode> logger, Core.EditorWindow editorWindow, SoundOutput sound)
     {
         _editorWindow = editorWindow;
+        _sound = sound;
         _projectSession = projectSession;
         _sceneDocuments = sceneDocuments;
         _playSession = playSession;
@@ -297,9 +301,9 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner = null;
         _pendingSeek = null;
         StopPlayers();
-        runner.Ticked -= OnTicked;
-        runner.Faulted -= OnFaulted;
-        runner.FrameEnded -= OnFrameEnded;
+        runner.Loop.Ticked -= OnTicked;
+        runner.Loop.Faulted -= OnFaulted;
+        runner.Loop.FrameEnded -= OnFrameEnded;
         try
         {
             runner.Dispose();
@@ -371,6 +375,12 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// <summary>The runner of the game in the Game tab, while one plays.</summary>
     internal GameRunner? Runner => _runner;
 
+    /// <summary>The loop playing the Game tab's game, while one plays.</summary>
+    internal GameLoop? Loop => _runner?.Loop;
+
+    /// <summary>The editor's sound output, which its games play through.</summary>
+    internal SoundOutput Sound => _sound;
+
     /// <summary>Advances one frame and stays paused.</summary>
     public void Step()
     {
@@ -434,7 +444,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     private void OnFrameEnded(object? sender, EventArgs e)
     {
-        if (sender == _runner && _pendingSeek is { } index)
+        if (sender == _runner?.Loop && _pendingSeek is { } index)
         {
             _pendingSeek = null;
             Seek(index, always: true);
@@ -443,39 +453,42 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     private void StartRunner(Scene scene, bool paused)
     {
-        // Keys come from the whole window (or, with no window, as in tests, the game's own view).
-        _runner = new GameRunner(scene, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
-        _runner.Ticked += OnTicked;
-        _runner.Faulted += OnFaulted;
-        _runner.FrameEnded += OnFrameEnded;
-        // Played in the editor's window, a game can host and join over the network (to try it with another computer);
-        // with no window (tests) it stays on this machine.
-        _runner.Game.Network.OverNetwork = _editorWindow.Main is not null;
-        if (_projectSession.Project is { } project)
-        {
-            _runner.Game.SceneLoader = name => LoadScene(project, name);
-            _runner.Game.PrefabLoader = new PrefabLibrary(project, _projectSession.Components).Instantiate;
-            _runner.Game.SaveData = new SaveData(SaveData.EditorPath(project.RootPath));
-            _runner.Game.Title = project.Name;
-            _runner.Game.Components = _projectSession.Components;
-            _runner.Game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
-            _runner.Game.UseProjectSettings(project);
-            if (_tables is null)
-                _tables = _runner.Game.Tables;
-            else
-                _runner.Game.Tables = _tables;
-        }
-
         _playSession.Problems.Clear();
-        _runner.Game.Problems.Reported += OnGameProblem;
-        _runner.Game.SceneName = _sceneName;
-        _runner.Game.Profiler = _profiler;
-        _runner.Game.ShowHitboxes = _showHitboxes;
-        _runner.Game.SceneChanged += OnGameSceneChanged;
-        _runner.Game.Stepped += OnStepped;
-        _runner.Game.QuitRequested += OnGameQuit;
+        var project = _projectSession.Project!;
+        var game = Loaded(project, scene).NewGame(new GameHostOptions
+        {
+            Audio = WindowsAudio.Create(_sound, project.AssetsPath),
+            SaveData = new SaveData(SaveData.EditorPath(project.RootPath)),
+            // Played in the editor's window, a game can host and join over the network (to try it with another computer);
+            // with no window (tests) it stays on this machine.
+            OverNetwork = _editorWindow.Main is not null,
+            Tables = _tables,
+            Problems = OnGameProblem,
+        });
+        _tables ??= game.Tables;
+        game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
+        game.Profiler = _profiler;
+        game.ShowHitboxes = _showHitboxes;
+        game.SceneChanged += OnGameSceneChanged;
+        game.Stepped += OnStepped;
+        game.QuitRequested += OnGameQuit;
+
+        // Keys come from the whole window (or, with no window, as in tests, the game's own view).
+        _runner = new GameRunner(game, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
+        _runner.Loop.Ticked += OnTicked;
+        _runner.Loop.Faulted += OnFaulted;
+        _runner.Loop.FrameEnded += OnFrameEnded;
         _runner.Start();
     }
+
+    // The project's game as the editor plays it, starting in `scene` (a copy of one): the open scene plays as it is there,
+    // unsaved changes included (so Retry doesn't lose them), its other scenes and its prefabs as they're saved.
+    private LoadedGame Loaded(Griff.Projects.Project project, Scene scene) =>
+        new(project, _projectSession.Components, scene, new ProblemLog())
+        {
+            SceneName = _sceneName,
+            Scenes = name => LoadScene(project, name),
+        };
 
     /// <summary>
     /// Holds the game at a breakpoint a script of <paramref name="runner"/>'s game reached (on this thread, in the middle of
@@ -483,7 +496,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// resumed (<see cref="TogglePause"/>) or stopped or rewound. Returns true if it was stopped or rewound, so the script
     /// goes no further. False straight away if <paramref name="runner"/> isn't one of the games playing, or one is held already.
     /// </summary>
-    internal bool HoldAtBreakpoint(GameRunner runner, string where, string? stepped = null)
+    internal bool HoldAtBreakpoint(GameLoop runner, string where, string? stepped = null)
     {
         if (!CanHold(runner))
             return false;
@@ -500,13 +513,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// rewinding leaves it. Returns true if it was stopped or rewound. Null straight away if <paramref name="runner"/>
     /// isn't one of the games playing, or one is held already.
     /// </summary>
-    internal bool? HoldAtException(GameRunner runner, Exception exception, string where)
+    internal bool? HoldAtException(GameLoop runner, Exception exception, string where)
     {
         if (!CanHold(runner))
             return null;
 
         // Only the Game tab's game has a timeline (rewinding works with one player).
-        if (runner == _runner && _timeline is { } timeline && timeline.KeepRemembered(_position) is var (index, exact))
+        if (runner == _runner?.Loop && _timeline is { } timeline && timeline.KeepRemembered(_position) is var (index, exact))
         {
             (_exceptionSnapshot, ExceptionSnapshotExact) = (timeline.SequenceAt(index), exact);
             if (exact)
@@ -522,7 +535,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         return Hold($"Paused on {exception.GetType().Name} at {where}: {exception.Message} Continue (F5) plays on; Debug > Rewind to Before the Exception goes back to just before it.");
     }
 
-    private bool CanHold(GameRunner runner) => _held is null && _runner is not null && (runner == _runner || _players.Any(p => p.Runner == runner));
+    private bool CanHold(GameLoop runner) => _held is null && _runner is not null && (runner == _runner.Loop || _players.Any(p => p.Runner.Loop == runner));
 
     // The snapshot (by its sequence number) holding the moment just before the step the last exception was thrown in, and
     // the exception reported then (so it isn't reported again as the frame ends).
@@ -675,21 +688,18 @@ public sealed class PlayMode : ObservableObject, IDisposable
         var serializer = _projectSession.Serializer;
         var scene = _sceneDocuments.EditScene is { } edit ? serializer.LoadFromString(serializer.SaveToString(edit.Scene)) : new Scene();
         window.Show();
-        var runner = new GameRunner(scene, surface, window);
-        var game = runner.Game;
-        game.SceneLoader = name => LoadScene(project, name);
-        game.PrefabLoader = new PrefabLibrary(project, _projectSession.Components).Instantiate;
-        game.SaveData = new SaveData();
-        game.Title = project.Name;
-        game.Components = _projectSession.Components;
-        game.SceneName = _sceneName;
+        // Its saves are kept in memory, apart from the host's.
+        var game = Loaded(project, scene).NewGame(new GameHostOptions
+        {
+            Audio = WindowsAudio.Create(_sound, project.AssetsPath),
+            Problems = OnGameProblem,
+        });
         game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Network.PlayerName = $"Player {number}";
         game.ShowHitboxes = _showHitboxes;
-        game.UseProjectSettings(project);
-        game.Problems.Reported += OnGameProblem;
+        var runner = new GameRunner(game, surface, window);
         game.Network.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
-        runner.Faulted += OnFaulted;
+        runner.Loop.Faulted += OnFaulted;
         runner.Start();
 
         var player = new PlayerWindow(number, window, surface, runner);
@@ -698,7 +708,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         {
             if (_players.Remove(player))
             {
-                runner.Faulted -= OnFaulted;
+                runner.Loop.Faulted -= OnFaulted;
                 runner.Dispose();
                 Raise();
             }
@@ -724,7 +734,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         foreach (var player in _players.ToList())
         {
             _players.Remove(player);
-            player.Runner.Faulted -= OnFaulted;
+            player.Runner.Loop.Faulted -= OnFaulted;
             try
             {
                 player.Runner.Dispose();
@@ -876,7 +886,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _reported = null;
         if (!reported)
             _logger.LogError(ex, "Game error: {Message}", ex.Message);
-        _status.Show((sender as GameRunner)?.IsPaused == false ? $"{ex.GetType().Name} ended a frame; the game plays on (see Output)" : "Paused on error; see Output");
+        _status.Show((sender as GameLoop)?.IsPaused == false ? $"{ex.GetType().Name} ended a frame; the game plays on (see Output)" : "Paused on error; see Output");
         _nextFrame.TrySetResult();
         Refresh();
         Raise();

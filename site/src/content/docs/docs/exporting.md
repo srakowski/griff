@@ -124,9 +124,10 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   desktop player does. `WebExporter.Zip` packs it, and `WebServer` serves a folder to this computer.
 - **Scripts compiled at export load in the browser.** The interpreter loads `Scripts.dll` with `Assembly.Load` like the
   desktop does. Roslyn doesn't run in the browser; compiling at export means it needn't.
-- **The main loop is the browser's.** `griff.js` calls `WebPlayer.Frame` (a `[JSExport]`) on each
-  `requestAnimationFrame`, which takes the game's fixed steps that frame's time holds (`Game.Advance`, as on the desktop),
-  builds its `RenderFrame`, and hands it back. The browser build is single-threaded, so a game's `WorkerCount` starts
+- **The browser times the frames; the loop is the desktop's.** `griff.js` calls `WebPlayer.Frame` (a `[JSExport]`) on each
+  `requestAnimationFrame`, which hands the frame to the core's `GameLoop`, the one every host runs: it takes the game's
+  fixed steps that frame's time holds (`Game.Advance`), builds its `RenderFrame` and draws it on the canvas, pumps the
+  sound, and takes a saved game's picture, as on the desktop. The page only hands it the canvas, its input and Web Audio. The browser build is single-threaded, so a game's `WorkerCount` starts
   at 1 there (`Workers.Default`) and a big scene's work is done on the page's thread.
 - **Drawing is WebGL 2.** `WebGLRenderer`, like the desktop's `OpenGLRenderer`, turns each frame into a `DrawList`
   (`Griff.Graphics`: the quads in clip space, and the passes that draw them), and one `[JSImport]` call a frame hands the
@@ -141,8 +142,8 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   what's queued and the browser's own latency, so the music's time (`Audio.MusicTime`) is what's heard; until the
   browser lets the page play, the mixer is pulled along in real time with nothing heard, as a muted desktop game's is;
   and a stall (a page hidden in a background tab stops drawing) is left out of its clock, so the music doesn't jump.
-  WAV and OGG are decoded by .NET (NVorbis, as on the desktop), MP3 by the browser as the game starts (Windows decodes
-  it with its own codec). Music in WAV or OGG is read as it plays: decoded whole as it starts, a few minutes of Griff's
+  Sounds are read by the desktop's own library (`AssetSoundLibrary`): WAV and OGG decoded by .NET (NVorbis), MP3 by the
+  browser as the game starts (Windows decodes it with its own codec). Music in WAV or OGG is read as it plays: decoded whole as it starts, a few minutes of Griff's
   synth music held up that frame by some 60 ms and left megabytes for the garbage collector.
 - **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
   page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl

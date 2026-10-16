@@ -7,6 +7,14 @@
     <NoWarn>$(NoWarn);CS1591;CS1573;CS0419</NoWarn>
   </PropertyGroup>
 
+  <!--
+    OGG sounds and music, decoded by .NET on every host (Audio/AssetSoundLibrary.cs; MIT, its notice goes into every
+    export's THIRD-PARTY-NOTICES.txt).
+  -->
+  <ItemGroup>
+    <PackageReference Include="NVorbis" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Tests reach the switches between the ways a big scene runs (one thread or chunks), to check they agree. -->
     <InternalsVisibleTo Include="Griff.Tests" />

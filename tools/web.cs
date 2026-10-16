@@ -1701,13 +1701,13 @@ static async Task<byte[]> DrawOnDesktop(string gameFolder, string? scene, int st
     if (scene is not null)
         loaded = loaded with { Scene = loaded.LoadScene(scene), SceneName = scene };
     Griff.Rand.Seed(0);
-    var game = loaded.NewGame(new InputState { IsMouseInView = false });
+    var game = loaded.NewGame(new GameHostOptions { Input = new InputState { IsMouseInView = false } });
     var aspect = (float)width / height;
     game.ViewAspect = aspect;
     for (var i = 0; i < steps; i++)
         game.Advance(1.0 / game.Time.StepRate);
     var frame = Griff.Rendering.SceneRenderer.Build(game, aspect);
-    using var gl = new Griff.Graphics.OffscreenGL(width, height, loaded.Project.AssetsPath);
+    using var gl = new Griff.Graphics.OffscreenGL(width, height, loaded.Project!.AssetsPath);
     gl.Render(frame);
     return gl.Capture();
 }

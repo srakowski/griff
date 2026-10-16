@@ -274,7 +274,7 @@ public sealed class SteppingTests : IDisposable
         // The frame stepped into is played once: counted as it ends, since the game plays on from there in real time (as
         // many frames as the test takes to notice the step is over).
         object? afterFrame = null;
-        play.Runner!.FrameEnded += (_, _) => afterFrame ??= Count(workspace, walkers[0]);
+        play.Runner!.Loop.FrameEnded += (_, _) => afterFrame ??= Count(workspace, walkers[0]);
         Wait(debugger.StepInto());
         stops.Check();
         Assert.Equal(1, stops.Stops);

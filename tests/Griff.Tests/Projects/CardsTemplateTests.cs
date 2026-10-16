@@ -388,11 +388,7 @@ public sealed class CardsTemplateTests(ITestOutputHelper output) : IDisposable
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
         Assert.Empty(loaded.Problems);
-        var game = new Game(loaded.LoadScene(CardsTemplate.DuelScene), new InputState())
-        {
-            SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = CardsTemplate.DuelScene,
-        };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene(CardsTemplate.DuelScene), SceneName = CardsTemplate.DuelScene }).NewGame();
         for (var i = 0; i < 30; i++)
             game.Tick(1 / 60f);
         Assert.True(HandOf(game, CardsTemplate.PlayerHand).Count > 0);

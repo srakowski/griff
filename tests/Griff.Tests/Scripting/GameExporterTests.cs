@@ -62,7 +62,7 @@ public sealed class GameExporterTests : IDisposable
         var result = GameExporter.Export(project, _player, _output);
         var loaded = await GameLoader.LoadAsync(GamePackage.Extract(result.Executable!, _cache, "Loader Test")!);
 
-        Assert.Equal("Loader Test", loaded.Project.Name);
+        Assert.Equal("Loader Test", loaded.Project?.Name);
         Assert.NotNull(loaded.Components.Find("Bouncer"));
         Assert.Equal("Main Camera", Assert.Single(loaded.Scene.Roots).Name);
     }

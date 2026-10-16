@@ -698,8 +698,7 @@ public sealed class PinballTemplateTests : IDisposable
         Assert.All(wanted, file => Assert.True(File.Exists(Path.Combine(extracted, file)), file));
         var loaded = await GameLoader.LoadAsync(extracted);
         Assert.Empty(loaded.Problems);
-        var game = new Game(loaded.LoadScene("Table"), _input) { SceneLoader = loaded.LoadScene, PrefabLoader = loaded.LoadPrefab, SceneName = "Table" };
-        game.UseProjectSettings(loaded.Project);
+        var game = (loaded with { Scene = loaded.LoadScene("Table"), SceneName = "Table" }).NewGame(new GameHostOptions { Input = _input });
         Run(game, 0.3f);
         Plunge(game);
         Run(game, 0.3f);

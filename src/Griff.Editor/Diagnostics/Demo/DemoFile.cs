@@ -321,7 +321,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 var wantMuted = bool.Parse(a);
                 var muteSwitch = (Core.Commands.EditorCommand)ui.ToolbarButton("Game.Mute").Command;
                 var deviceShut = wantMuted || Platform.Windows.AudioOutput.MutedByEnvironment;
-                if (muteSwitch.IsChecked != wantMuted || Platform.Windows.AudioOutput.Muted != deviceShut)
+                if (muteSwitch.IsChecked != wantMuted || play.Sound.Muted != deviceShut)
                     throw new InvalidOperationException($"Expected Mute {(wantMuted ? "on" : "off")}, with the sound device {(deviceShut ? "shut" : "open")}.");
                 break;
             case "rename":

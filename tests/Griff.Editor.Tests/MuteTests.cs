@@ -60,7 +60,9 @@ public sealed class MuteTests : IDisposable
     public void Tests_run_muted_by_the_environment()
     {
         Assert.True(AudioOutput.MutedByEnvironment);
-        Assert.True(AudioOutput.Muted);
+        // Each host's own output starts muted, whatever it asks for.
+        using var output = AudioOutput.Open(muted: false);
+        Assert.True(output.Muted);
         Assert.True(AudioOutput.IsOn("1"));
         Assert.True(AudioOutput.IsOn("true"));
         Assert.False(AudioOutput.IsOn("0"));

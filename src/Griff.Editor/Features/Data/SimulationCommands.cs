@@ -163,35 +163,3 @@ public sealed class ExportSimulationResultsCommand(SimulationsPanel panel, IDial
         return Task.CompletedTask;
     }
 }
-
-/// <summary>Undoes the last change to the settings of the simulation showing in the Simulations panel (Ctrl+Z in it), saving its file as it was.</summary>
-public sealed class UndoSimulationCommand(SimulationsPanel panel) : EditorCommand
-{
-    public override string Id => "Data.UndoSimulation";
-    public override string Text => "Undo Simulation Change";
-    public override string? Icon => Icons.Undo;
-
-    protected override bool CanExecuteCore() => panel.CanUndo;
-
-    protected override Task ExecuteCoreAsync()
-    {
-        panel.Undo();
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Redoes the last change undone to the settings of the simulation showing in the Simulations panel (Ctrl+Y in it).</summary>
-public sealed class RedoSimulationCommand(SimulationsPanel panel) : EditorCommand
-{
-    public override string Id => "Data.RedoSimulation";
-    public override string Text => "Redo Simulation Change";
-    public override string? Icon => Icons.Redo;
-
-    protected override bool CanExecuteCore() => panel.CanRedo;
-
-    protected override Task ExecuteCoreAsync()
-    {
-        panel.Redo();
-        return Task.CompletedTask;
-    }
-}

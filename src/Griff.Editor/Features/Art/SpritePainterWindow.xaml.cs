@@ -7,7 +7,8 @@ namespace Griff.Editor.Features.Art;
 
 /// <summary>
 /// Paints pixel art for sprites and tilemaps, saved straight into the project. Not modal, so a sprite can be painted,
-/// saved, and seen in the scene (or the running game) without closing it.
+/// saved, and seen in the scene (or the running game) without closing it. Undo and Redo are the editor's (its view model
+/// is the document they go to while it's in front).
 /// </summary>
 public partial class SpritePainterWindow : ChromeWindow
 {
@@ -29,10 +30,6 @@ public partial class SpritePainterWindow : ChromeWindow
             Model.Save();
         else if (typing)
             return;
-        else if (modifiers == ModifierKeys.Control && e.Key == Key.Z)
-            Model.Undo();
-        else if (modifiers == ModifierKeys.Control && e.Key == Key.Y || modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.Z)
-            Model.Redo();
         else if (modifiers != ModifierKeys.None)
             return;
         else if (e.Key == Key.Escape)

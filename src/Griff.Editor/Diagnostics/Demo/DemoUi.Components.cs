@@ -22,7 +22,7 @@ internal sealed partial class DemoUi
         heading.BringIntoView();
         await Settle(200);
         await Click(heading, right: true);
-        var menuItem = await WaitFor(() => Find<MenuItem>(m => HeaderText(m.Header) == item && m.Tag is string tag && tag.StartsWith("component:", StringComparison.Ordinal) && m.IsVisible),
+        var menuItem = await WaitFor(() => Find<MenuItem>(m => HeaderText(m.Header) == item && m.Tag is ComponentMenuCommand && m.IsVisible),
             $"{item} on {component}'s menu", 3000);
         if (!menuItem.IsEnabled)
             throw new InvalidOperationException($"{item} is greyed out on {component}'s menu.");
@@ -31,20 +31,10 @@ internal sealed partial class DemoUi
         await Settle(250);
         if (Find<ContextMenu>(m => m.IsOpen) is { } open)
         {
-            // The click missed: close the menu and do what it would have.
+            // The click missed: close the menu and run what it would have.
             open.IsOpen = false;
             var section = InspectorSection(component) ?? throw new InvalidOperationException($"No {component} in the Inspector.");
-            switch (menuItem.Tag as string)
-            {
-                case "component:reset": section.ResetToDefaults(); break;
-                case "component:copy": section.CopyValues(); break;
-                case "component:paste": section.PasteValues(); break;
-                case "component:up": section.MoveUp(); break;
-                case "component:down": section.MoveDown(); break;
-                case "component:addall": section.AddToAll(); break;
-                case "component:remove": section.RemoveCommand.Execute(null); break;
-            }
-
+            await ((ComponentMenuCommand)menuItem.Tag).ExecuteAsync(section);
             Log?.Invoke($"FORCED componentmenu {component} > {item}");
             await Settle();
         }

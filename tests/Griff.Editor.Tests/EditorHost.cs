@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Windows.Threading;
+using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Settings;
+using Griff.Editor.Core.Undo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -29,6 +31,42 @@ internal static class EditorHost
     {
         PumpUntilDone(task, timeout ?? WaitTimeout);
         return task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Undoes the last change as Edit &gt; Undo (Ctrl+Z) does: in the document being worked on, or in <paramref name="in"/>
+    /// when given (a panel's undo button gives its own). False when there was nothing to undo.
+    /// </summary>
+    public static bool Undo(IServiceProvider services, IDocumentEditor? @in = null) => Step(services, "Edit.Undo", @in);
+
+    /// <summary>Redoes the last change undone, as Edit &gt; Redo (Ctrl+Y) does; see <see cref="Undo"/>.</summary>
+    public static bool Redo(IServiceProvider services, IDocumentEditor? @in = null) => Step(services, "Edit.Redo", @in);
+
+    /// <summary>Undoes as an agent does, with Edit &gt; Undo's tool, in the document being worked on; gives what it said.</summary>
+    public static string AgentUndo(IServiceProvider services) => AgentCommand(services, "Edit.Undo");
+
+    /// <summary>Redoes as an agent does, with Edit &gt; Redo's tool; gives what it said.</summary>
+    public static string AgentRedo(IServiceProvider services) => AgentCommand(services, "Edit.Redo");
+
+    private static string AgentCommand(IServiceProvider services, string id)
+    {
+        var tool = services.GetServices<Griff.Agent.IAgentToolSource>().SelectMany(s => s.GetTools()).Single(t => t.Name == Features.Agent.CommandTools.ToolName(id));
+        var result = Pump(tool.Invoke(Griff.Agent.ToolArgs.Empty));
+        Assert.False(result.IsError, result.Text);
+        return result.Text;
+    }
+
+    /// <summary>Runs the command <paramref name="id"/> on <paramref name="target"/>, as its menu item does (a component's menu gives it the component).</summary>
+    public static void Command(IServiceProvider services, string id, object target) =>
+        Pump(services.GetRequiredService<CommandRegistry>().Get(id).ExecuteAsync(target));
+
+    private static bool Step(IServiceProvider services, string id, IDocumentEditor? @in)
+    {
+        var command = services.GetRequiredService<CommandRegistry>().Get(id);
+        if (!command.CanExecute(@in))
+            return false;
+        Pump(command.ExecuteAsync(@in));
+        return true;
     }
 
     /// <summary>As <see cref="Pump{T}"/>, for a task that gives nothing.</summary>
@@ -73,6 +111,8 @@ internal static class EditorHost
                 services.AddSingleton<Griff.Editor.Core.Workspace.IClipboard, TestClipboard>();
                 configure(services);
                 using var provider = services.BuildServiceProvider();
+                // As the editor's window does at start (its Edit > Undo needs it): from now on, what's worked in is followed.
+                provider.GetRequiredService<ActiveDocument>();
                 test(provider);
             }
             catch (Exception ex)

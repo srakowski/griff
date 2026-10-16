@@ -47,16 +47,12 @@ public sealed class DataModule : IEditorModule
             .AddCommand<CutCellsCommand>()
             .AddCommand<PasteCellsCommand>()
             .AddCommand<ClearCellsCommand>()
-            .AddCommand<UndoTableCommand>()
-            .AddCommand<RedoTableCommand>()
             .AddCommand<NewSimulationCommand>()
             .AddCommand<OpenSimulationCommand>()
             .AddCommand<ShowSimulationsCommand>()
             .AddCommand<RunSimulationCommand>()
             .AddCommand<StopSimulationCommand>()
-            .AddCommand<ExportSimulationResultsCommand>()
-            .AddCommand<UndoSimulationCommand>()
-            .AddCommand<RedoSimulationCommand>();
+            .AddCommand<ExportSimulationResultsCommand>();
     }
 }
 
@@ -450,30 +446,4 @@ public sealed class ClearCellsCommand(TablesPanel panel) : TableEditCommand(pane
     public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 5, Order: 3);
 
     protected override void Run() => Panel.ClearCells();
-}
-
-/// <summary>Undoes the last change to the table showing in the Tables panel (Ctrl+Z in the grid), saving its file as it was.</summary>
-public sealed class UndoTableCommand(TablesPanel panel) : TableEditCommand(panel)
-{
-    public override string Id => "Data.Undo";
-    public override string Text => "_Undo Table Change";
-    public override string? Icon => Icons.Undo;
-    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 6, Order: 0);
-
-    protected override bool CanExecuteCore() => Panel.CanUndo;
-
-    protected override void Run() => Panel.Undo();
-}
-
-/// <summary>Redoes the last change undone on the table showing in the Tables panel (Ctrl+Y in the grid).</summary>
-public sealed class RedoTableCommand(TablesPanel panel) : TableEditCommand(panel)
-{
-    public override string Id => "Data.Redo";
-    public override string Text => "_Redo Table Change";
-    public override string? Icon => Icons.Redo;
-    public override MenuPlacement? Placement { get; } = new(DataModule.Menu, Group: 6, Order: 1);
-
-    protected override bool CanExecuteCore() => Panel.CanRedo;
-
-    protected override void Run() => Panel.Redo();
 }

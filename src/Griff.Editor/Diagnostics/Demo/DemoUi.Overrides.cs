@@ -16,8 +16,8 @@ internal sealed partial class DemoUi
     {
         var mark = await WaitFor(() => OverrideMark(component, label), $"the changed-field mark on {component}.{label}");
         await Click(mark);
-        var tag = apply ? "override:apply" : "override:revert";
-        var item = await WaitFor(() => Find<MenuItem>(m => m.Tag as string == tag && m.IsVisible), apply ? "Apply to Prefab" : "Revert to Prefab", 3000);
+        var item = await WaitFor(() => Find<MenuItem>(m => (apply ? m.Tag is ApplyFieldToPrefabCommand : m.Tag is RevertFieldToPrefabCommand) && m.IsVisible),
+            apply ? "Apply to Prefab" : "Revert to Prefab", 3000);
         await Settle(350);
         await Click(item);
         await Settle(250);
@@ -26,10 +26,7 @@ internal sealed partial class DemoUi
 
         if (InspectorRow(component, label)?.DataContext is PropertyField { IsOverridden: true } field)
         {
-            if (apply)
-                field.ApplyToPrefab();
-            else
-                field.RevertToPrefab();
+            await ((PrefabFieldCommand)item.Tag).ExecuteAsync(field);
             Log?.Invoke($"FORCED {(apply ? "applyfield" : "revertfield")} {component}.{label}");
             await Settle();
         }

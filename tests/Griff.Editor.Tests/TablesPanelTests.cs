@@ -99,12 +99,12 @@ public sealed class TablesPanelTests : IDisposable
         Assert.Contains("Fireball (12.5)", panel.Message);
         Assert.Equal("Set Fireball's Damage", panel.UndoDescription);
 
-        Assert.True(panel.Undo());
+        Assert.Contains("Set Fireball's Damage in the Spells table", EditorHost.AgentUndo(services));
         Assert.Equal("12", panel.Cell("Fireball", "Damage"));
         Assert.True(panel.ChangeColumn("Damage", type: "whole number"));
         Assert.Equal(ColumnType.WholeNumber, panel.Table!.Columns[0].Type);
-        Assert.True(panel.Undo());
-        Assert.True(panel.Redo());
+        Assert.True(EditorHost.Undo(services));
+        Assert.True(EditorHost.Redo(services));
         Assert.Contains("\"type\": \"whole number\"", File(workspace));
     });
 
@@ -148,8 +148,8 @@ public sealed class TablesPanelTests : IDisposable
         Assert.Equal(["Dragon", "Bat"], panel.Rows.Select(r => r.Name));
         panel.DeleteColumn("Speed");
         Assert.Equal(["Value"], panel.Columns.Select(c => c.Name));
-        Assert.True(panel.Undo());
-        Assert.True(panel.Undo());
+        Assert.True(EditorHost.Undo(services));
+        Assert.True(EditorHost.Undo(services));
         Assert.Equal(["Dragon", "Bat", "Slime"], panel.Rows.Select(r => r.Name));
     });
 
@@ -212,7 +212,7 @@ public sealed class TablesPanelTests : IDisposable
         panel.ImportCsv(csv);
         Assert.Equal(ColumnType.Number, panel.Table!.Columns[0].Type);
         Assert.Equal(["Slime"], panel.Rows.Select(r => r.Name));
-        panel.Undo();
+        EditorHost.Undo(services);
         Assert.Equal(["Slime", "Bat"], panel.Rows.Select(r => r.Name));
 
         var exported = Path.Combine(_root, "out.csv");
@@ -241,8 +241,8 @@ public sealed class TablesPanelTests : IDisposable
         Assert.True(broken.IsError);
         Assert.Contains("Fireball.Damage is \"lots\", but Damage takes a number", broken.Text);
         Assert.True(panel.HasProblem);
-        // Undo brings back the table as it last read.
-        Assert.True(panel.Undo());
+        // Undo in the panel brings back the table as it last read.
+        Assert.True(EditorHost.Undo(services, panel));
         Assert.False(panel.HasProblem);
         Assert.Equal("12", panel.Cell("Fireball", "Damage"));
 

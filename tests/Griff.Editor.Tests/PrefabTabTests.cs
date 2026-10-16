@@ -176,7 +176,7 @@ public sealed class PrefabTabTests : IDisposable
         Assert.True(prefab.IsDirty);
 
         // Save as Prefab on the prefab's own entity saves the tab.
-        prefab.History.Undo();
+        Assert.Contains("Coin prefab", EditorHost.AgentUndo(services));
         selection.Select(root);
         Wait(Run(services, "Entity.SaveAsPrefab"));
         Assert.False(prefab.IsDirty);

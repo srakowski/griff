@@ -103,8 +103,8 @@ public sealed class TableFormulasPanelTests : IDisposable
         Assert.Equal("", panel.Columns[2].Formula);
         Assert.Equal("20", panel.Cell("Fireball", "Damage"));
         Assert.True(panel.SetCell("Fireball", "Damage", "21"));
-        panel.Undo();
-        panel.Undo();
+        EditorHost.Undo(services);
+        EditorHost.Undo(services);
         Assert.Equal("=[Base Damage] * 2", panel.Columns[2].Formula);
         Assert.False(panel.HasFormulaProblems);
     });
@@ -181,9 +181,9 @@ public sealed class TableFormulasPanelTests : IDisposable
         Assert.Equal("Generate XP from points drawn by hand", panel.UndoDescription);
         Assert.Contains("\"points\": [[1, 100], [3, 1000], [6, 3000]]", File(workspace));
 
-        Assert.True(panel.Undo());
+        Assert.True(EditorHost.Undo(services));
         Assert.Equal("5000", panel.Cell("6", "XP"));
-        Assert.True(panel.Undo());
+        Assert.True(EditorHost.Undo(services));
         Assert.Equal(["Row 1"], panel.Rows.Select(r => r.Name));
 
         // What can't be generated is said.

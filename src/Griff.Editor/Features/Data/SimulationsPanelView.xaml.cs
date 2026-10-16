@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Media;
 using Griff.Editor.Core.Commands;
 
@@ -21,21 +20,9 @@ public partial class SimulationsPanelView : UserControl
         NewButton.Command = commands.Get("Data.NewSimulation");
         RunButton.Command = commands.Get("Data.RunSimulation");
         StopButton.Command = commands.Get("Data.StopSimulation");
-        UndoButton.Command = commands.Get("Data.UndoSimulation");
-        RedoButton.Command = commands.Get("Data.RedoSimulation");
+        UndoButton.Command = commands.Get("Edit.Undo");
+        RedoButton.Command = commands.Get("Edit.Redo");
         ExportButton.Command = commands.Get("Data.ExportResults");
-        // Undo and redo the settings while the panel has the keyboard (not while a box is being typed in: it undoes its own text).
-        PreviewKeyDown += (_, e) =>
-        {
-            if (Keyboard.Modifiers != ModifierKeys.Control || e.OriginalSource is TextBox { IsFocused: true })
-                return;
-            var keyCommand = e.Key == Key.Z ? UndoButton.Command : e.Key == Key.Y ? RedoButton.Command : null;
-            if (keyCommand?.CanExecute(null) == true)
-            {
-                keyCommand.Execute(null);
-                e.Handled = true;
-            }
-        };
         ResultsGrid.AutoGeneratingColumn += OnColumn;
         TabGrid.AutoGeneratingColumn += OnColumn;
     }

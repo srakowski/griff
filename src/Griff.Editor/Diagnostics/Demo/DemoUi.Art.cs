@@ -245,7 +245,7 @@ internal sealed partial class DemoUi
         Point Screen((int X, int Y) p) => canvas.PointToScreen(canvas.PointOf(p.X, p.Y));
 
         var before = model.Sheet.Copy();
-        var undoBefore = model.UndoCommand.CanExecute(null);
+        var undoBefore = model.History.CanUndo;
         await input.Drag(Screen(pixels[0]), pixels.Skip(1).Select(Screen).ToList(), 260, right: right);
         await Settle(120);
 

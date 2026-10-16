@@ -44,7 +44,7 @@ Select the entity and choose **Art → Animation Clips**. Pick a clip and the fr
 - **Copy From Previous Frame** (Ctrl+D) gives the frame the boxes of the frame before it, to move on a little as the fist goes out.
 - **Onion skin** (O) shows the frame before underneath, faintly, with its boxes dashed, to line the new ones up with.
 
-The first box drawn gives the entity a **Hitboxes**. Every change is one undo step (Ctrl+Z and Ctrl+Y in the Clip Editor, or Edit → Undo), and renaming or removing a clip takes its boxes along in the same step. Agents draw and set boxes through the same Clip Editor (`ui_invoke ClipEditor AddBox`, `ui_set ClipEditor BoxDamage`), or set **Boxes** with the scene tools.
+The first box drawn gives the entity a **Hitboxes**. Every change is one undo step (Ctrl+Z and Ctrl+Y, or Edit → Undo, which undo the scene the clips are in), and renaming or removing a clip takes its boxes along in the same step. Agents draw and set boxes through the same Clip Editor (`ui_invoke ClipEditor AddBox`, `ui_set ClipEditor BoxDamage`), or set **Boxes** with the scene tools.
 
 ## What a hit does
 

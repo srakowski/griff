@@ -17,9 +17,7 @@ public sealed class RhythmEditorModule : IEditorModule
         services
             .AddCommand<EditChartCommand>()
             .AddCommand<PlayChartCommand>()
-            .AddCommand<RecordChartCommand>()
-            .AddCommand<UndoChartCommand>()
-            .AddCommand<RedoChartCommand>();
+            .AddCommand<RecordChartCommand>();
     }
 }
 
@@ -118,40 +116,6 @@ public sealed class RecordChartCommand(ChartPanel panel, PanelLayout layout) : E
 
         layout.Show(panel.Id);
         panel.Record();
-        Outcome = panel.Message;
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Undoes the last change to the Chart panel's chart: a recorded take, or a note added, removed, moved or held.</summary>
-public sealed class UndoChartCommand(ChartPanel panel) : EditorCommand
-{
-    public override string Id => "Rhythm.UndoChart";
-    public override string Text => "_Undo Chart Change";
-    public override string? Icon => Icons.Undo;
-
-    protected override bool CanExecuteCore() => panel.CanUndo;
-
-    protected override Task ExecuteCoreAsync()
-    {
-        panel.Undo();
-        Outcome = panel.Message;
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Redoes the last change to the Chart panel's chart that was undone.</summary>
-public sealed class RedoChartCommand(ChartPanel panel) : EditorCommand
-{
-    public override string Id => "Rhythm.RedoChart";
-    public override string Text => "R_edo Chart Change";
-    public override string? Icon => Icons.Redo;
-
-    protected override bool CanExecuteCore() => panel.CanRedo;
-
-    protected override Task ExecuteCoreAsync()
-    {
-        panel.Redo();
         Outcome = panel.Message;
         return Task.CompletedTask;
     }

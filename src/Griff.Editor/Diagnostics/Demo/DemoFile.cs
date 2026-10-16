@@ -21,7 +21,8 @@ namespace Griff.Editor.Diagnostics.Demo;
 /// driven through the editor with real input. See demos/README.md for the commands. Each <c>chapter:</c> starts a
 /// chapter the viewer can rewind to; lines before the first chapter set the scene (usually <c>project:</c>).
 /// </summary>
-internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options)
+internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISelection selection, PlayMode play, SceneViewControl sceneView, DemoOptions options,
+    Core.Undo.ActiveDocument documents)
 {
     /// <summary>Where demos make their projects: this folder is the demos' own.</summary>
     internal static readonly string ProjectsRoot = Path.Combine(Path.GetTempPath(), "griff-demos");
@@ -199,8 +200,9 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
             case "key":
                 var (key, modifiers) = ParseKey(a);
                 // With the Add Component list or the Add Entity palette open, keys go to its search box (Enter adds, Down
-                // moves); with New Project open, to that window.
-                if (!DemoUi.IsAddListOpen && !DemoUi.IsEntityListOpen && DemoUi.NewProject is null)
+                // moves); with New Project open, to that window; with the Sprite Painter worked in last (it's the active
+                // window), to it (Ctrl+Z there undoes a stroke).
+                if (!DemoUi.IsAddListOpen && !DemoUi.IsEntityListOpen && DemoUi.NewProject is null && DemoUi.Painter is not { IsActive: true })
                     await ui.FocusEditor();
                 await ui.Shortcut(key, modifiers);
                 break;
@@ -618,9 +620,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                     : overrideList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                 string OverridesOf()
                 {
-                    if (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == overrideCopy) is not { Prefab: { } link } copy)
+                    if (workspace.Scene?.Scene.Entities.FirstOrDefault(e => e.Name == overrideCopy) is not { Prefab: not null } copy)
                         return $"{overrideCopy} isn't a prefab copy";
-                    var prefab = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(workspace.Project!.FindPrefab(link)!));
+                    if (Core.Workspace.PrefabFiles.PrefabOf(workspace, copy) is not { } prefab)
+                        return $"{overrideCopy}'s prefab can't be read";
                     var found = Griff.Editing.PrefabOverrides.Find(copy, prefab, workspace.Components).Select(o => o.ToString()).ToList();
                     return found.Count == 0 ? "none" : string.Join(", ", found);
                 }
@@ -1081,6 +1084,13 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
                 // "expectagent: text": the last agent: call's answer has to contain it.
                 if (!_agentAnswer.Contains(a, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException($"Expected the agent's answer to contain \"{a}\", but it was: {_agentAnswer}");
+                break;
+            case "expectundo":
+                // "expectundo: Set Row 1's Value in the Loot table": what Edit > Undo (Ctrl+Z) would undo now, and where.
+                string Undoes() => documents.UndoDescription is not { } undo ? "nothing"
+                    : documents.Editor == documents.Scene || documents.DocumentName is null ? undo : $"{undo} in {documents.DocumentName}";
+                if (!await Until(() => Undoes().Equals(a, StringComparison.OrdinalIgnoreCase), 3000))
+                    throw new InvalidOperationException($"Expected Edit > Undo to undo {a}, but it would undo {Undoes()}.");
                 break;
             case "expectfile":
                 // Checks a file the demo made (a saved sound) is really there, relative to Assets.

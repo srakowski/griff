@@ -5,8 +5,10 @@ using System.Windows.Threading;
 using Griff.Agent;
 using Griff.Editing;
 using Griff.Editor.Core.Commands;
+using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Debugging;
+using Griff.Editor.Features.Editing;
 using Griff.Editor.Features.Play;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +22,8 @@ namespace Griff.Editor.Features.Agent;
 /// here changes. Questions the command asks are answered from "answers" (see <see cref="AgentDialogs"/>), and a command
 /// that opens a window returns while it's open, so the window can be worked through the ui_ tools.
 /// </summary>
-public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefinition> menus, ISelection selection, IWorkspace workspace, PlayMode play, Debugger debugger) : IAgentToolSource
+public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefinition> menus, ISelection selection, IWorkspace workspace, PlayMode play, Debugger debugger,
+    ActiveDocument documents) : IAgentToolSource
 {
     public IEnumerable<AgentTool> GetTools()
     {
@@ -40,6 +43,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
                         "Call without and it says what it asks.")),
                     ("wait", Schema.Number("Seconds to wait for it to finish (default 5). A command that opens a window returns while it's open.")),
                     .. command.Choices is null ? [] : new[] { ("choice", Schema.String("Which of its choices to pick, as its submenu does (the description lists them).")) },
+                    .. command.Target is { } target ? new[] { (target.Argument, Schema.String(target.Description)) } : [],
                 ]),
                 Invoke = args => RunAsync(command, args),
             };
@@ -58,7 +62,11 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         var text = new StringBuilder();
         var summary = DocComments.Summary(command.DescribedBy);
         text.Append(summary.IsEmpty ? command.DisplayText.TrimEnd('.') + "." : summary.PlainText);
-        if (command.Placement is { } placement)
+        if (command.ContextPlacement is { } contextMenu)
+        {
+            text.Append(" (On ").Append(contextMenu.Menu);
+        }
+        else if (command.Placement is { } placement)
         {
             var menu = menus.FirstOrDefault(m => m.Id == placement.Menu)?.Text.Replace("_", "") ?? placement.Menu;
             // What makes things is in a submenu per category: "(Menu: Entity > Characters > Grid Enemy", or for a genre
@@ -76,6 +84,8 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
 
         if (command.GestureText is { Length: > 0 } gesture)
             text.Append(CultureInfo.InvariantCulture, $", {gesture}");
+        if (command.AlternateGesture?.GetDisplayStringForCulture(CultureInfo.CurrentUICulture) is { Length: > 0 } other)
+            text.Append(CultureInfo.InvariantCulture, $" or {other}");
         text.Append(')');
         if (command.IsChecked is { } on)
             text.Append(CultureInfo.InvariantCulture, $" It's an on/off setting, now {(on ? "on" : "off")}.");
@@ -94,16 +104,32 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
             selection.Select(SceneTools.Resolve(scene, reference));
         }
 
+        // What it acts on, for one that takes something (a component, by its name).
+        object? target = null;
+        if (command.Target is { } takes)
+        {
+            var name = args.OptionalString(takes.Argument) ?? throw new AgentException($"{command.DisplayText.TrimEnd('.')} needs \"{takes.Argument}\": {takes.Description}");
+            try
+            {
+                target = takes.Find(name);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+            {
+                throw new AgentException(ex.Message);
+            }
+        }
+
         // WPF works out what can run lazily; make sure it's up to date with what the agent just did.
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
-        if (!command.CanExecute())
-            throw new AgentException($"{command.DisplayText.TrimEnd('.')} can't be used right now{WhyNot(command)}.");
+        if (!command.CanExecute(target))
+            throw new AgentException($"{command.DisplayText.TrimEnd('.')} can't be used right now{WhyNot(command, target)}.");
 
-        var before = workspace.Scene?.History.UndoDescription;
+        var before = documents.UndoDescription;
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 5), 0, 120));
 
         // Queued rather than called, so a command that opens a modal window doesn't hold this call until it closes.
-        var dispatcher = Application.Current.Dispatcher;
+        // The editor's (or, run headless as the tests do, this thread's).
+        var dispatcher = Application.Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
         var choice = args.OptionalString("choice");
         // A command that runs the game into a breakpoint (Step Frame, say) is still going while it's stopped there: it says so then.
         var stops = debugger.Stops;
@@ -111,7 +137,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         void OnStopped(object? sender, EventArgs e) => stopped.TrySetResult();
         play.BreakpointReached += OnStopped;
         var nextFrame = play.NextFrame();
-        var run = dispatcher.InvokeAsync(() => choice is null ? command.ExecuteAsync() : command.ChooseAsync(choice), DispatcherPriority.Normal).Task.Unwrap();
+        var run = dispatcher.InvokeAsync(() => choice is null ? command.ExecuteAsync(target) : command.ChooseAsync(choice), DispatcherPriority.Normal).Task.Unwrap();
         Task first;
         try
         {
@@ -143,7 +169,7 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         if (!finished)
         {
             text.Append(CultureInfo.InvariantCulture, $"{command.DisplayText.TrimEnd('.')} is still going.");
-            var windows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList();
+            var windows = OpenWindows();
             if (windows.Count > 0)
                 text.Append(CultureInfo.InvariantCulture, $" Open windows: {string.Join(", ", windows.Select(w => $"\"{w.Title}\""))}. Use ui_inspect / ui_set / ui_invoke on them.");
             return ToolResult.Ok(text.ToString());
@@ -161,12 +187,12 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         // A step that ran to the end of the frame.
         if (debugger.StepEnded is { } ended && command is StepOverCommand or StepIntoCommand or StepOutCommand)
             text.Append(' ').Append(ended).Append('.');
-        var after = workspace.Scene?.History.UndoDescription;
-        if (after is not null && after != before)
-            text.Append(CultureInfo.InvariantCulture, $" Undo: \"{after}\".");
+        var after = documents.UndoDescription;
+        if (after is not null && after != before && command is not UndoCommand and not RedoCommand)
+            text.Append(CultureInfo.InvariantCulture, $" Undo: \"{after}\"{(documents.Editor == documents.Scene ? "" : $" ({documents.DocumentName})")}.");
         if (selection.Entities.Count > 0)
             text.Append(CultureInfo.InvariantCulture, $" Selected: {string.Join(", ", selection.Entities.Select(e => $"{e.Name} #{AgentValues.ShortId(e.Id)}"))}.");
-        var newWindows = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList();
+        var newWindows = OpenWindows();
         if (newWindows.Count > 0)
             text.Append(CultureInfo.InvariantCulture, $" Open windows: {string.Join(", ", newWindows.Select(w => $"\"{w.Title}\""))} (see ui_roots).");
         foreach (var error in AgentDialogs.Reported)
@@ -174,8 +200,14 @@ public sealed class CommandTools(IServiceProvider services, IEnumerable<MenuDefi
         return AgentDialogs.Reported.Count > 0 ? ToolResult.Error(text.ToString()) : ToolResult.Ok(text.ToString());
     }
 
-    private string WhyNot(EditorCommand command) =>
-        command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
+    // The editor's windows open besides its main one.
+    private static List<Window> OpenWindows() => Application.Current is { } app
+        ? [.. app.Windows.OfType<Window>().Where(w => w.IsVisible && w != app.MainWindow)]
+        : [];
+
+    private string WhyNot(EditorCommand command, object? target) =>
+        command.WhyNot(target) is { Length: > 0 } why ? $" ({why.TrimEnd('.')})"
+        : command.Choices is { Count: 0 } ? " (it has nothing to pick from)"
         : debugger.StoppedByException ? " (the game is stopped where a script threw, in the middle of a frame: Debug_Continue lets the exception end the frame and plays on, Debug_RewindBeforeException goes back to just before the step that threw, Game_Stop stops)"
         : play.IsAtBreakpoint ? " (the game is stopped at a line of script, in the middle of a frame: Debug_Continue or Game_Pause carries on, Debug_StepOver, Debug_StepInto and Debug_StepOut step)"
         : command is RewindBeforeExceptionCommand ? " (no script has thrown since the game started, its moment has left the rewind timeline, or more than one player is playing)"

@@ -151,7 +151,7 @@ public class InspectorMultiEditTests
         Assert.All([red, gold, wall], e => Assert.NotNull(e.GetComponent<Health>()));
         Assert.Contains("Health", inspector.Components.Select(c => c.Title));
 
-        inspector.Components.Single(c => c.Title == "Health").RemoveCommand.Execute(null);
+        EditorHost.Command(services, "Component.Remove", inspector.Components.Single(c => c.Title == "Health"));
         Assert.All([red, gold, wall], e => Assert.Null(e.GetComponent<Health>()));
 
         document.History.Undo();

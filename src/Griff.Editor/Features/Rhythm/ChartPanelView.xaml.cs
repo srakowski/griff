@@ -22,8 +22,8 @@ public partial class ChartPanelView : UserControl
         InitializeComponent();
         PlayButton.Command = commands.Get("Rhythm.PlayChart");
         RecordButton.Command = commands.Get("Rhythm.RecordChart");
-        UndoButton.Command = commands.Get("Rhythm.UndoChart");
-        RedoButton.Command = commands.Get("Rhythm.RedoChart");
+        UndoButton.Command = commands.Get("Edit.Undo");
+        RedoButton.Command = commands.Get("Edit.Redo");
         StartButton.Click += (_, _) =>
         {
             if (Model is { IsRecording: false } model)
@@ -77,18 +77,6 @@ public partial class ChartPanelView : UserControl
             else if (key is Key.Space or Key.Escape or Key.R && !e.IsRepeat)
             {
                 model.Stop();
-                e.Handled = true;
-            }
-
-            return;
-        }
-
-        if (Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            var keyCommand = key == Key.Z ? UndoButton.Command : key == Key.Y ? RedoButton.Command : null;
-            if (keyCommand?.CanExecute(null) == true)
-            {
-                keyCommand.Execute(null);
                 e.Handled = true;
             }
 

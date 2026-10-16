@@ -98,15 +98,12 @@
                                         Background="{DynamicResource Brush.Surface.PanelHeader}"
                                         BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                         BorderThickness="0,1"
+                                        MouseRightButtonUp="OnHeaderMenu"
                                         Tag="header">
-                                    <Border.InputBindings>
-                                        <MouseBinding Command="{Binding HeaderMenuCommand}"
-                                                      CommandParameter="{Binding ElementName=SectionHeader}"
-                                                      Gesture="RightClick" />
-                                    </Border.InputBindings>
                                     <DockPanel Height="28">
                                         <Button x:Name="RemoveButton"
-                                                Command="{Binding RemoveCommand}"
+                                                Command="{DynamicResource Command.RemoveComponent}"
+                                                CommandParameter="{Binding}"
                                                 DockPanel.Dock="Right"
                                                 Style="{StaticResource Style.Button.Toolbar}"
                                                 Tag="remove"
@@ -150,7 +147,8 @@
                                                 Margin="0,0,4,0"
                                                 Padding="6,1"
                                                 VerticalAlignment="Center"
-                                                Command="{Binding AddToAllCommand}"
+                                                Command="{DynamicResource Command.AddToAll}"
+                                                CommandParameter="{Binding}"
                                                 Content="Add to All"
                                                 DockPanel.Dock="Right"
                                                 Tag="addall"
@@ -307,8 +305,7 @@
                                                             Height="16"
                                                             Margin="-11,0,3,0"
                                                             Padding="0"
-                                                            Command="{Binding OverrideMenuCommand}"
-                                                            CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                                                            Click="OnOverrideMenu"
                                                             Cursor="Hand"
                                                             DockPanel.Dock="Left"
                                                             Style="{StaticResource Style.Button.Toolbar}"
@@ -338,13 +335,8 @@
                                                                Style="{StaticResource Style.Text.Secondary}"
                                                                Text="{Binding Label, Mode=OneTime}"
                                                                ToolTip="{Binding LabelTip}"
-                                                               ToolTipService.ShowDuration="60000">
-                                                        <TextBlock.InputBindings>
-                                                            <MouseBinding Command="{Binding OverrideMenuCommand}"
-                                                                          CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=TextBlock}}"
-                                                                          Gesture="RightClick" />
-                                                        </TextBlock.InputBindings>
-                                                    </TextBlock>
+                                                               MouseRightButtonUp="OnOverrideMenu"
+                                                               ToolTipService.ShowDuration="60000" />
                                                 </DockPanel>
                                                 <ContentControl x:Name="FieldEditor"
                                                                 Grid.Column="1"

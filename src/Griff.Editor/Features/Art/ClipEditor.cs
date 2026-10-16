@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Editing;
 using Griff.Editor.Core.Dialogs;
+using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
 using Griff.Modules.Fighting;
 using Griff.Scenes;
@@ -23,7 +24,7 @@ namespace Griff.Editor.Features.Art;
 /// drawn, moved and resized, copied from the frame before, and given their damage, knockback, stun, group or multiplier,
 /// with the frame before shown faintly underneath (onion skin). It follows the selection, so it stays open beside the scene.
 /// </summary>
-public sealed class ClipEditor : ObservableObject
+public sealed class ClipEditor : ObservableObject, IDocumentEditor
 {
     /// <summary>What the list calls an animation's own frames (its First Frame and Frame Count), which it plays without a clip.</summary>
     public const string OwnFrames = "(own frames)";
@@ -627,18 +628,20 @@ public sealed class ClipEditor : ObservableObject
         set => ChangeSelectedBox("Multiplier", Text(value), box => box with { Multiplier = NotNegative(value, "A multiplier") });
     }
 
-    /// <summary>Undoes the scene's last change, as Edit &gt; Undo does (Ctrl+Z in the Clip Editor).</summary>
-    public void Undo()
-    {
-        if (_document?.History.CanUndo == true)
-            _document.History.Undo();
-    }
+    /// <summary>
+    /// The clips' undo history, which is the scene's they're in: Edit &gt; Undo and Redo (Ctrl+Z, Ctrl+Y in the Clip Editor)
+    /// take a change to them back, as any change to the scene.
+    /// </summary>
+    public EditHistory? History => _document?.History;
 
-    /// <summary>Redoes the last change undone, as Edit &gt; Redo does (Ctrl+Y in the Clip Editor).</summary>
-    public void Redo()
+    /// <summary>The scene the clips are in, as undoing says it.</summary>
+    public string? DocumentName => _document is { } document ? $"the {document.Name} {(document.IsPrefab ? "prefab" : "scene")}" : null;
+
+    // Its changes are the scene's, which make the scene the active document by themselves.
+    event EventHandler? IDocumentEditor.Edited
     {
-        if (_document?.History.CanRedo == true)
-            _document.History.Redo();
+        add { }
+        remove { }
     }
 
     /// <summary>Picks the box at <paramref name="index"/> of <see cref="Boxes"/> (-1 for none).</summary>

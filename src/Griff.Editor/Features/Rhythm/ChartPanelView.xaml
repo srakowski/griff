@@ -109,10 +109,10 @@
                                       Value="{Binding AudioOffset}"
                                       ToolTip="How late you hear the sound, in milliseconds (Bluetooth headphones: 150 to 250): taps count on the beat you heard. It's your audio offset from playing in the editor; a Calibration sets it" />
                 <Separator Style="{StaticResource Style.Separator.Vertical}" />
-                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="chart:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
+                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" CommandParameter="{Binding}" Tag="chart:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Undo}" />
                 </Button>
-                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="chart:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
+                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" CommandParameter="{Binding}" Tag="chart:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Redo}" />
                 </Button>
                 <Separator Style="{StaticResource Style.Separator.Vertical}" />

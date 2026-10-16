@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using Griff.Data;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 using Griff.Runtime;
@@ -24,7 +25,7 @@ namespace Griff.Editor.Features.Data;
 /// pairs, rows far from the rest, dead levels and jumps. Every change to the settings is saved to the simulation's
 /// <c>.sim</c> file straight away and can be undone.
 /// </summary>
-public sealed class SimulationsPanel : ToolPanel
+public sealed class SimulationsPanel : ToolPanel, IDocumentEditor
 {
     /// <summary>The panel's tabs of results.</summary>
     public static IReadOnlyList<string> TabNames { get; } = ["Results", "Matrix", "Sweep", "Over a Run"];
@@ -376,25 +377,27 @@ public sealed class SimulationsPanel : ToolPanel
                     (steps > 1 ? $", at {steps} steps" : "") + $": {total.ToString("N0", CultureInfo.InvariantCulture)} runs");
     }
 
-    public bool CanUndo => _store.CanUndo(_name);
+    /// <summary>The undo history of the simulation showing: Edit &gt; Undo and Redo take its changes back while it's the active document.</summary>
+    public Griff.Editing.EditHistory? History => _store.HistoryOf(_name);
 
-    public bool CanRedo => _store.CanRedo(_name);
+    /// <summary>The simulation showing, as undoing in it says it: "the Classes simulation".</summary>
+    public string? DocumentName => _name is null ? null : $"the {_name} simulation";
 
-    public string? UndoDescription => _store.UndoDescription(_name);
+    /// <summary>Raised after it changes the simulation's settings, which makes it the document Edit &gt; Undo goes to.</summary>
+    public event EventHandler? Edited;
 
-    public string? RedoDescription => _store.RedoDescription(_name);
+    /// <summary>What Undo would undo in the simulation's settings, e.g. "Set Runs".</summary>
+    public string? UndoDescription => History?.UndoDescription;
 
-    /// <summary>Undoes the last change to the simulation's settings.</summary>
-    public bool Undo() => _name is not null && _store.Undo(_name);
-
-    /// <summary>Redoes the last change undone.</summary>
-    public bool Redo() => _name is not null && _store.Redo(_name);
+    /// <summary>What Redo would redo.</summary>
+    public string? RedoDescription => History?.RedoDescription;
 
     private void Change(Func<Simulation, Simulation> change, string description)
     {
         if (Simulation is not { } simulation)
             return;
         _store.Commit(change(simulation), description);
+        Edited?.Invoke(this, EventArgs.Empty);
     }
 
     private void ChangeSweep(Func<SimulationSweep, SimulationSweep> change, string description) =>
@@ -514,7 +517,7 @@ public sealed class SimulationsPanel : ToolPanel
     {
         var project = _workspace.Project ?? throw new InvalidOperationException("No project is open.");
         var components = _workspace.Components;
-        var tables = new TableSet(_tables.Tables.Select(t => t.Table).OfType<Table>());
+        var tables = new TableSet(_tables.Tables.Select(t => t.Value).OfType<Table>());
         var prefabs = new PrefabLibrary(project, components);
         var open = _workspace.EditScene is { IsPrefab: false } document ? (document.Name, Text: _workspace.Serializer.SaveToString(document.Scene)) : default;
         return new SimulationHost

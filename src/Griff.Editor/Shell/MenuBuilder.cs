@@ -108,6 +108,30 @@ public static class CommandMenuItems
         }
     }
 
+    /// <summary>
+    /// The right-click menu <paramref name="menu"/> (a component's, in the Inspector), built from the commands placed on it
+    /// (<see cref="EditorCommand.ContextPlacement"/>) that belong on it for <paramref name="target"/>, what it was opened on,
+    /// which each runs on: a separator between groups, and an item that can't run on it now greyed, saying why.
+    /// </summary>
+    public static ContextMenu ContextMenu(IEnumerable<EditorCommand> commands, string menu, object target)
+    {
+        var context = new ContextMenu();
+        var groups = commands.Where(c => c.ContextPlacement?.Menu == menu && c.IsOnMenuFor(target)).GroupBy(c => c.ContextPlacement!.Group).OrderBy(g => g.Key);
+        foreach (var group in groups)
+        {
+            if (context.Items.Count > 0)
+                context.Items.Add(new Separator());
+            foreach (var command in group.OrderBy(c => c.ContextPlacement!.Order))
+            {
+                var item = Item(command, command.TextFor(target), command.CanExecute(target) ? command.TipFor(target) : command.WhyNot(target));
+                item.CommandParameter = target;
+                context.Items.Add(item);
+            }
+        }
+
+        return context;
+    }
+
     /// <summary>A command's menu item: its text (or <paramref name="header"/>), shortcut and icon, running it when clicked.</summary>
     public static MenuItem Item(EditorCommand command, string? header = null, string? tip = null)
     {

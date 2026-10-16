@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using Griff.Audio;
 using Griff.Data;
 using Griff.Editor.Core.Panels;
+using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Audio;
 using Griff.Editor.Features.Data;
@@ -32,7 +33,7 @@ namespace Griff.Editor.Features.Rhythm;
 /// Agents read <see cref="NoteLines"/> and <see cref="Summary"/>, and record a take of taps at given moments with
 /// <see cref="RecordTake"/>.
 /// </summary>
-public sealed class ChartPanel : ToolPanel, IDisposable
+public sealed class ChartPanel : ToolPanel, IDocumentEditor, IDisposable
 {
     private const string MusicFolder = "Music/";
     private static readonly string[] DefaultDifficulties = ["Easy", "Normal", "Hard"];
@@ -123,7 +124,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
     // ----- Which chart
 
     /// <summary>The project's charts: its tables with a Beat and a Lane column.</summary>
-    public IReadOnlyList<string> ChartNames => [.. _tables.Tables.Where(t => ChartTable.IsChart(t.Table)).Select(t => t.Name)];
+    public IReadOnlyList<string> ChartNames => [.. _tables.Tables.Where(t => ChartTable.IsChart(t.Value)).Select(t => t.Name)];
 
     /// <summary>The chart showing (a table's name, "Groove"); setting it shows another.</summary>
     public string? ChartName
@@ -150,7 +151,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
             return false;
         }
 
-        if (entry.Table is { } table && !ChartTable.IsChart(table))
+        if (entry.Value is { } table && !ChartTable.IsChart(table))
         {
             Message = $"The {entry.Name} table isn't a chart: a chart has a Beat and a Lane column (it has {string.Join(", ", table.Columns.Select(c => c.Name))}).";
             return false;
@@ -177,7 +178,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
     {
         var name = !string.IsNullOrWhiteSpace(lanes.Chart) ? lanes.Chart.Trim()
             : !string.IsNullOrWhiteSpace(lanes.Song) ? Path.GetFileNameWithoutExtension(lanes.Song.Trim()) : null;
-        if (name is null || _tables.Entry(name) is not { } entry || !ChartTable.IsChart(entry.Table))
+        if (name is null || _tables.Entry(name) is not { } entry || !ChartTable.IsChart(entry.Value))
             return;
         if (!string.Equals(entry.Name, _chart, StringComparison.OrdinalIgnoreCase))
             Open(entry.Name);
@@ -672,7 +673,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         if (Mine().Any(r => r.Note.Lane == lane && Math.Abs(r.Note.Beat - note.Beat) < 1e-4))
             throw new InvalidOperationException($"There's a note at beat {ChartTable.Text(note.Beat)} in lane {lane} already.");
         var (after, row) = ChartTable.Add(Editable(), note, _difficulty);
-        _tables.Commit(after, $"Add a note at beat {ChartTable.Text(note.Beat)}");
+        Commit(after, $"Add a note at beat {ChartTable.Text(note.Beat)}");
         SelectedNote = row;
         Message = $"Added {row}: {note}.";
         return row;
@@ -682,7 +683,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
     public void RemoveNote(string row)
     {
         var at = Row(row);
-        _tables.Commit(ChartTable.Remove(Editable(), at.Row, _difficulty), $"Remove the note at beat {ChartTable.Text(at.Note.Beat)}");
+        Commit(ChartTable.Remove(Editable(), at.Row, _difficulty), $"Remove the note at beat {ChartTable.Text(at.Note.Beat)}");
         if (string.Equals(_selected, at.Row, StringComparison.OrdinalIgnoreCase))
             SelectedNote = null;
         Message = $"Removed {at.Row} ({at.Note}).";
@@ -700,7 +701,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         if (Mine().Any(r => r.Row != at.Row && r.Note.Lane == lane && Math.Abs(r.Note.Beat - moved.Beat) < 1e-4))
             throw new InvalidOperationException($"There's a note at beat {ChartTable.Text(moved.Beat)} in lane {lane} already.");
         var (after, now) = ChartTable.Change(Editable(), at.Row, moved, _difficulty);
-        _tables.Commit(after, $"Move the note at beat {ChartTable.Text(at.Note.Beat)}");
+        Commit(after, $"Move the note at beat {ChartTable.Text(at.Note.Beat)}");
         SelectedNote = now;
         Message = $"Moved {now} to {moved}.";
         return now;
@@ -714,7 +715,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         if (held == at.Note)
             return at.Row;
         var (after, now) = ChartTable.Change(Editable(), at.Row, held, _difficulty);
-        _tables.Commit(after, held.Hold > 0 ? $"Hold the note at beat {ChartTable.Text(at.Note.Beat)}" : $"Make the note at beat {ChartTable.Text(at.Note.Beat)} a tap");
+        Commit(after, held.Hold > 0 ? $"Hold the note at beat {ChartTable.Text(at.Note.Beat)}" : $"Make the note at beat {ChartTable.Text(at.Note.Beat)} a tap");
         SelectedNote = now;
         Message = held.Hold > 0 ? $"{now} is held for {ChartTable.Text(held.Hold)} beats." : $"{now} is a tap.";
         return now;
@@ -728,37 +729,30 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         _rows.FirstOrDefault(r => string.Equals(r.Row, row?.Trim(), StringComparison.OrdinalIgnoreCase)) is { Row: not null } found && found.InDifficulty ? found
         : throw new ArgumentException($"{DifficultyName} has no note called \"{row}\".", nameof(row));
 
+    // A change to the chart, as one undo step of its table: it makes the chart the document Edit > Undo goes to.
+    private void Commit(Table after, string description)
+    {
+        _tables.Commit(after, description);
+        Edited?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The undo history of the chart's table: Edit &gt; Undo and Redo take its changes back while it's the active document.</summary>
+    public EditHistory? History => _chart is null ? null : _tables.HistoryOf(_chart);
+
+    /// <summary>The chart, as undoing in it says it: "the Song Chart chart".</summary>
+    public string? DocumentName => _chart is null ? null : $"the {_chart} chart";
+
+    /// <summary>Not while a take records: undo and redo wait until it's put in.</summary>
+    public bool CanChange => !_recording;
+
+    /// <summary>Raised after it changes the chart (a take, or a note added, removed, moved or held).</summary>
+    public event EventHandler? Edited;
+
     /// <summary>What undo would undo on the chart, or null.</summary>
-    public string? UndoDescription => _tables.UndoDescription(_chart);
+    public string? UndoDescription => History?.UndoDescription;
 
     /// <summary>What redo would redo on the chart, or null.</summary>
-    public string? RedoDescription => _tables.RedoDescription(_chart);
-
-    public bool CanUndo => !_recording && _tables.CanUndo(_chart);
-
-    public bool CanRedo => !_recording && _tables.CanRedo(_chart);
-
-    /// <summary>Undoes the chart's last change (a take, or a note added, removed, moved or held). False if there's none.</summary>
-    public bool Undo()
-    {
-        var what = UndoDescription;
-        if (_recording || _chart is null || !_tables.Undo(_chart))
-            return false;
-        Message = $"Undid {Lower(what)}.";
-        return true;
-    }
-
-    /// <summary>Redoes the chart's last change undone. False if there's none.</summary>
-    public bool Redo()
-    {
-        var what = RedoDescription;
-        if (_recording || _chart is null || !_tables.Redo(_chart))
-            return false;
-        Message = $"Redid {Lower(what)}.";
-        return true;
-    }
-
-    private static string Lower(string? text) => string.IsNullOrEmpty(text) ? "it" : char.ToLowerInvariant(text[0]) + text[1..];
+    public string? RedoDescription => History?.RedoDescription;
 
     // ----- Playing
 
@@ -812,8 +806,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         StartPad();
         Message = $"Recording {DifficultyName} from {PlayheadText}: tap {LaneKeys} along to the song. Stop (Space) puts the take in.";
         OnPropertyChanged(nameof(IsRecording));
-        OnPropertyChanged(nameof(CanUndo));
-        OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(CanChange));
     }
 
     // Plays from `beat`, `leadIn` seconds of the song (or clicks) before it.
@@ -891,8 +884,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         _playhead = _recordFrom;
         OnPropertyChanged(nameof(Playhead));
         OnPropertyChanged(nameof(PlayheadText));
-        OnPropertyChanged(nameof(CanUndo));
-        OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(CanChange));
     }
 
     private void StopVoice()
@@ -918,7 +910,7 @@ public sealed class ChartPanel : ToolPanel, IDisposable
         _takes++;
         var perBar = Timing.PerBar;
         var range = string.Create(CultureInfo.InvariantCulture, $"bar {Math.Floor(from / perBar) + 1} to bar {Math.Floor(Math.Max(from, to) / perBar) + 1}");
-        _tables.Commit(after, $"Record take {_takes} ({Count(added, "note")} in {DifficultyName})");
+        Commit(after, $"Record take {_takes} ({Count(added, "note")} in {DifficultyName})");
         Message = $"Take {_takes}: {Count(added, "note")} in {DifficultyName} from {range}" +
                   (_replace ? $", in place of {removed}." : notes.Count > added ? $" ({Count(notes.Count - added, "was", "were")} there already)." : ".") +
                   (added > 0 ? " Undo takes it out." : "");

@@ -27,6 +27,12 @@ public sealed class EditHistory
     private long _savedEntryId;
     private bool _sealed = true;
 
+    /// <summary>
+    /// How many steps it keeps to undo, the oldest let go past it (the Sprite Painter keeps 200 strokes); no limit unless
+    /// set.
+    /// </summary>
+    public int Limit { get; init; } = int.MaxValue;
+
     /// <summary>Raised after an edit is executed, undone or redone.</summary>
     public event EventHandler<EditEventArgs>? Changed;
 
@@ -70,6 +76,20 @@ public sealed class EditHistory
         }
 
         Record(edit);
+        Changed?.Invoke(this, new EditEventArgs(edit, EditAction.Execute));
+    }
+
+    /// <summary>
+    /// Records <paramref name="edit"/>, a change that has already happened (its file changed outside the editor), as a step
+    /// to undo, without applying it again.
+    /// </summary>
+    public void RecordDone(IEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        EnsureNotGrouping();
+        _sealed = true;
+        Record(edit);
+        _sealed = true;
         Changed?.Invoke(this, new EditEventArgs(edit, EditAction.Execute));
     }
 
@@ -171,6 +191,8 @@ public sealed class EditHistory
             return;
 
         _undo.Add(new Entry(_nextEntryId++, edit));
+        if (_undo.Count > Limit)
+            _undo.RemoveAt(0);
         _sealed = false;
     }
 

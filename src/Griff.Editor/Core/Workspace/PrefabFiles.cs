@@ -8,6 +8,50 @@ namespace Griff.Editor.Core.Workspace;
 /// <summary>Prefab files as the editor uses them: saved from a selection, instantiated by drag-and-drop.</summary>
 public static class PrefabFiles
 {
+    // Prefab files read for looking at (what a placed copy changes from its prefab), per workspace: each with when it was
+    // written, read again when the file changes and all let go when scripts reload (a script component's type changes).
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IWorkspace, ReadPrefabs> s_read = [];
+
+    private sealed class ReadPrefabs
+    {
+        public readonly Dictionary<string, (DateTime Written, Entity? Prefab)> Files = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The prefab <paramref name="copy"/> (a placed copy) was made from, as an entity read from its file, or null if it isn't a
+    /// copy or its prefab can't be read. It's shared (the Inspector marks overrides from it, a demo's checks read it) and read again
+    /// only when the file changes, so it's for looking at: never change it, or put it in a scene.
+    /// </summary>
+    public static Entity? PrefabOf(IWorkspace workspace, Entity copy) =>
+        copy.Prefab is { } link && workspace.Project?.FindPrefab(link) is { } path ? Read(workspace, path) : null;
+
+    /// <summary>The prefab file at <paramref name="path"/> (a full path), read as <see cref="PrefabOf"/> reads one.</summary>
+    public static Entity? Read(IWorkspace workspace, string path)
+    {
+        var read = s_read.GetValue(workspace, w =>
+        {
+            var files = new ReadPrefabs();
+            w.ScriptsReloaded += (_, _) => files.Files.Clear();
+            return files;
+        });
+        var written = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+        if (read.Files.TryGetValue(path, out var known) && known.Written == written)
+            return known.Prefab;
+
+        Entity? prefab;
+        try
+        {
+            prefab = written == DateTime.MinValue ? null : workspace.Serializer.LoadPrefabFromString(File.ReadAllText(path));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            prefab = null;
+        }
+
+        read.Files[path] = (written, prefab);
+        return prefab;
+    }
+
     /// <summary>A file name made from an entity name: invalid characters become underscores.</summary>
     public static string SafeName(string entityName)
     {

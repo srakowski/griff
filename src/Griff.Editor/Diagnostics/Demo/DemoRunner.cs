@@ -152,7 +152,7 @@ internal static class DemoRunner
             }
             else
             {
-                restart = await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options).Run();
+                restart = await new DemoFile(scriptPath, ui, workspace, selection, play, sceneView, options, services.GetRequiredService<Core.Undo.ActiveDocument>()).Run();
             }
 
             Log(restart ? "starting over" : "demo finished");

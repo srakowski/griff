@@ -99,7 +99,7 @@ public sealed class PrefabOverrideTests : IDisposable
         Assert.False(Field(inspector, "Sprite", "Image").IsOverridden);
         Assert.Equal("Copy of the Coin prefab, with 1 change", inspector.Header!.PrefabNote);
 
-        amount.RevertToPrefab();
+        EditorHost.Command(services, "Component.RevertField", amount);
         Assert.Equal(1, copy.GetComponent<Pickup>()!.Amount);
         Assert.False(Field(inspector, "Pickup", "Amount").IsOverridden);
 
@@ -121,7 +121,9 @@ public sealed class PrefabOverrideTests : IDisposable
         selection.Select(big);
         var inspector = services.GetRequiredService<InspectorPanel>();
 
-        Field(inspector, "Pickup", "Amount").ApplyToPrefab();
+        // As an agent applies it, naming the field.
+        var apply = services.GetServices<Griff.Agent.IAgentToolSource>().SelectMany(s => s.GetTools()).Single(t => t.Name == Features.Agent.CommandTools.ToolName("Component.ApplyToPrefab"));
+        Assert.False(EditorHost.Pump(apply.Invoke(Griff.Agent.ToolArgs.Parse("""{"field": "Pickup.Amount"}"""))).IsError);
 
         var prefab = workspace.Serializer.LoadPrefabFromString(File.ReadAllText(project.DefaultPrefabPath("Coin")));
         Assert.Equal(10, prefab.GetComponent<Pickup>()!.Amount);
@@ -234,7 +236,7 @@ public sealed class PrefabOverrideTests : IDisposable
         Assert.True(Field(inspector, "Light", "Radius").IsOverridden);
         // Inside a copy, where a thing sits is part of the prefab like anything else.
         Assert.False(Field(inspector, "Transform", "Position").IsOverridden);
-        Field(inspector, "Light", "Radius").RevertToPrefab();
+        EditorHost.Command(services, "Component.RevertField", Field(inspector, "Light", "Radius"));
         Assert.Equal(2, inner.GetComponent<Light>()!.Radius);
     });
 }

@@ -1,0 +1,38 @@
+title: One undo
+intro: Edit → Undo and Ctrl+Z go to whatever you worked on last: the scene, a table, a chart, a simulation, or the sprite you're painting. Each keeps its own steps.
+project: Empty | One Undo
+
+chapter: A table and the scene | Each keeps its own steps
+deselect
+create: Sprite
+rename: Chest
+set: Sprite.Order = 3
+expectundo: Change Order
+menu: Data > New Table...
+prompt: Loot
+cell: Row 1 > Value = 5
+click: tables:cell:Row 1 > Name
+expectundo: Set Row 1's Value in the Loot table
+explain: tables:grid | The table was changed last | Ctrl+Z goes to what you worked on last: here, the Loot table. The status bar says what was undone, and where.
+key: Ctrl+Z
+expectcell: Row 1 > Value =
+expectvalue: Chest.Sprite.Order = 3
+say: The chest keeps its order. The scene has steps of its own.
+select: Chest
+expectundo: Change Order
+explain: panel:Hierarchy | Back to the scene | Click into the Hierarchy, the Scene view or the Inspector, and Ctrl+Z goes to the scene again.
+key: Ctrl+Z
+expectvalue: Chest.Sprite.Order = 0
+expectcell: Row 1 > Value =
+
+chapter: A sprite | In the Sprite Painter
+menu: Art > New Sprite...
+painter
+paint: 4,4 > 11,4
+expectundo: Paint in the Sprite Painter's Sprites/sprite.png
+say: The Sprite Painter is a window of its own. Ctrl+Z there takes back a stroke at a time, and so does Edit, Undo.
+key: Ctrl+Z
+expectundo: nothing
+key: Ctrl+Y
+expectundo: Paint in the Sprite Painter's Sprites/sprite.png
+say: Agents use the same undo: one tool, Edit Undo, going wherever you'd go.

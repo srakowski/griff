@@ -5,9 +5,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using Griff.Editor.Core.Modules;
-using Griff.Editor.Core.Panels;
-using Microsoft.Extensions.DependencyInjection;
+using Griff.Editor.Core.Commands;
+using Griff.Editor.Shell;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -15,9 +14,41 @@ public partial class InspectorView : UserControl
 {
     private ComponentCatalogWindow? _catalog;
 
-    public InspectorView()
+    private readonly CommandRegistry _commands;
+
+    public InspectorView(CommandRegistry commands)
     {
+        _commands = commands;
         InitializeComponent();
+        // The buttons on a component's header run its menu's commands, given the component.
+        Resources["Command.AddToAll"] = commands.Get("Component.AddToAll");
+        Resources["Command.RemoveComponent"] = commands.Get("Component.Remove");
+    }
+
+    // ----- Menus: a component's (right-clicking its header) and a changed field's (its mark, or right-clicking its name),
+    // each made of the commands placed on it, given the component or field.
+
+    private void OnHeaderMenu(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ComponentSection section } header)
+            return;
+        Open(CommandMenuItems.ContextMenu(_commands.All, ComponentMenuCommand.Menu, section), header, PlacementMode.MousePoint);
+        e.Handled = true;
+    }
+
+    private void OnOverrideMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PropertyField { IsOverridden: true } field } mark)
+            return;
+        Open(CommandMenuItems.ContextMenu(_commands.All, PrefabFieldCommand.Menu, field), mark, PlacementMode.Bottom);
+        e.Handled = true;
+    }
+
+    private static void Open(ContextMenu menu, FrameworkElement anchor, PlacementMode placement)
+    {
+        menu.PlacementTarget = anchor;
+        menu.Placement = placement;
+        menu.IsOpen = true;
     }
 
     private InspectorPanel Panel => (InspectorPanel)DataContext;
@@ -226,9 +257,4 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Name or FieldKind.Action or FieldKind.Output => Named,
             _ => null,
         };
-}
-
-public sealed class InspectorModule : IEditorModule
-{
-    public void ConfigureServices(IServiceCollection services) => services.AddPanel<InspectorPanel, InspectorView>();
 }

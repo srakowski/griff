@@ -104,9 +104,9 @@ public sealed class ClipEditorBoxTests
             document.History.Undo();
         Assert.Null(fighter.GetComponent<Hitboxes>());
         Assert.Empty(clips.Boxes);
-        clips.Redo();
+        Assert.Contains("scene", EditorHost.AgentRedo(services));
         Assert.Equal(["Punch 1 hit at 0.5,0.2 size 0.4x0.3"], Lines(fighter));
-        clips.Undo();
+        Assert.True(EditorHost.Undo(services, clips));
         Assert.Null(fighter.GetComponent<Hitboxes>());
     });
 

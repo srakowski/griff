@@ -86,26 +86,12 @@ public partial class ClipEditorWindow : ChromeWindow
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        // A box of the editor's own (no undo of its own) passes Ctrl+Z and Ctrl+Y on to the scene; any other keeps its keys.
+        // Undo and Redo are the editor's (the window's Ctrl+Z and Ctrl+Y go to the scene the clips are in); a box keeps its keys.
         if (e.OriginalSource is TextBox and not CommitTextBox)
             return;
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.D && Model.CopyPreviousFrameCommand.CanExecute(null))
         {
-            if (e.Key == Key.Z)
-                Model.Undo();
-            else if (e.Key == Key.Y)
-                Model.Redo();
-            else if (e.Key == Key.D && Model.CopyPreviousFrameCommand.CanExecute(null))
-                Model.CopyPreviousFrame();
-            else
-                return;
-            e.Handled = true;
-            return;
-        }
-
-        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.Z)
-        {
-            Model.Redo();
+            Model.CopyPreviousFrame();
             e.Handled = true;
             return;
         }

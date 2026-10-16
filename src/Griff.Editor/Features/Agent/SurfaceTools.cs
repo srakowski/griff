@@ -68,6 +68,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
             {
                 var root = Root(args.String("target"));
                 RefuseSceneData(root, args.String("path"), "ui_set");
+                WorkIn(root);
                 return Task.FromResult(ToolResult.Json(new JsonObject { ["now"] = ObjectSurface.Set(root, args.String("path"), args.Required("value"), _entities) }));
             },
         };
@@ -155,11 +156,20 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
         return ToolResult.Ok(text.ToString());
     }
 
+    // Working in a panel or window that edits a document (the Tables panel, the Sprite Painter) makes it the one Edit_Undo
+    // goes to, as clicking into it does.
+    private void WorkIn(object root)
+    {
+        if (root is Core.Undo.IDocumentEditor editor)
+            services.GetService<Core.Undo.ActiveDocument>()?.Activate(editor);
+    }
+
     private async Task<ToolResult> InvokeAsync(ToolArgs args)
     {
         var root = Root(args.String("target"));
         var path = args.String("path");
         RefuseSceneData(root, path, "ui_invoke");
+        WorkIn(root);
         JsonElement? arguments = args.TryGet("args", out var a) ? a : null;
         var wait = TimeSpan.FromSeconds(Math.Clamp(args.Number("wait", 10), 0, 300));
 
@@ -192,7 +202,7 @@ public sealed class SurfaceTools(IServiceProvider services, ServiceCatalog catal
         && !typeof(DependencyObject).IsAssignableFrom(type)
         && !typeof(EditorCommand).IsAssignableFrom(type)
         && !typeof(IAgentToolSource).IsAssignableFrom(type)
-        && type != typeof(MenuDefinition) && type != typeof(PanelDescriptor) && type != typeof(ServiceCatalog)
+        && type != typeof(MenuDefinition) && type != typeof(PanelDescriptor) && type != typeof(ServiceCatalog) && type != typeof(Core.Undo.IDocumentEditor)
         && !type.Namespace.StartsWith("Griff.Editor.Features.Agent", StringComparison.Ordinal);
 
     private static string NameOf(Type type) =>

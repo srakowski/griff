@@ -124,6 +124,7 @@ public partial class App : Application
         services.AddSingleton<IExternalPrograms, ExternalPrograms>();
         services.AddSingleton<IClipboard, WindowsClipboard>();
         services.AddSingleton<CommandRegistry>();
+        services.AddSingleton<Core.Undo.ActiveDocument>();
 
         services.AddMenu(Menus.File, "_File", order: 0);
         services.AddMenu(Menus.Edit, "_Edit", order: 1);

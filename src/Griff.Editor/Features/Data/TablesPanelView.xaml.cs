@@ -37,8 +37,8 @@ public partial class TablesPanelView : UserControl
         SortUpButton.Command = commands.Get("Data.SortAscending");
         SortDownButton.Command = commands.Get("Data.SortDescending");
         FillDownButton.Command = commands.Get("Data.FillDown");
-        UndoButton.Command = commands.Get("Data.Undo");
-        RedoButton.Command = commands.Get("Data.Redo");
+        UndoButton.Command = commands.Get("Edit.Undo");
+        RedoButton.Command = commands.Get("Edit.Redo");
         ImportButton.Command = commands.Get("Data.ImportCsv");
         ExportButton.Command = commands.Get("Data.ExportCsv");
         GenerateButton.Command = commands.Get("Data.GenerateCurve");
@@ -309,8 +309,6 @@ public partial class TablesPanelView : UserControl
             (ModifierKeys.Control, Key.X) when !typing => "Data.CutCells",
             (ModifierKeys.Control, Key.V) when !typing => "Data.PasteCells",
             (ModifierKeys.Control, Key.D) when !typing => "Data.FillDown",
-            (ModifierKeys.Control, Key.Z) when !typing => "Data.Undo",
-            (ModifierKeys.Control, Key.Y) when !typing => "Data.Redo",
             (ModifierKeys.None, Key.Delete) when !typing => "Data.ClearCells",
             (ModifierKeys.Control, Key.Enter) => "Data.AddRow",
             (ModifierKeys.Alt, Key.Up) => "Data.MoveRowsUp",

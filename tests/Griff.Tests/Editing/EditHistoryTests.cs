@@ -385,4 +385,52 @@ public class EditHistoryTests
         Assert.Equal(Vector3.Zero, a.Transform.Position);
         Assert.Equal(Vector3.Zero, replacement.Position);
     }
+
+    [Fact]
+    public void RecordDone_KeepsAChangeAlreadyMade_ToUndo()
+    {
+        var entity = new Entity("A");
+        var changed = false;
+        _history.Changed += (_, e) => changed = e.Action == EditAction.Execute;
+
+        // Locked outside the history (as a file changed on disk is): recorded, not applied again.
+        var applied = 0;
+        entity.IsLocked = true;
+        _history.RecordDone(new LockEdit(entity, () => applied++));
+        Assert.True(changed);
+        Assert.Equal(0, applied);
+        Assert.Equal("Lock A", _history.UndoDescription);
+
+        _history.Undo();
+        Assert.False(entity.IsLocked);
+        _history.Redo();
+        Assert.True(entity.IsLocked);
+    }
+
+    [Fact]
+    public void Limit_LetsTheOldestStepsGo()
+    {
+        var history = new EditHistory { Limit = 2 };
+        var entity = new Entity("A");
+        foreach (var name in new[] { "B", "C", "D" })
+            history.Execute(new RenameEntityEdit(entity, name));
+
+        history.Undo();
+        history.Undo();
+        Assert.False(history.CanUndo);
+        Assert.Equal("B", entity.Name);
+    }
+
+    private sealed class LockEdit(Entity entity, Action applied) : IEdit
+    {
+        public string Description => $"Lock {entity.Name}";
+
+        public void Apply()
+        {
+            entity.IsLocked = true;
+            applied();
+        }
+
+        public void Revert() => entity.IsLocked = false;
+    }
 }

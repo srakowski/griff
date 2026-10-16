@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using CommunityToolkit.Mvvm.Input;
 using Griff.Scripting;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
@@ -103,6 +104,13 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
         area.TextEntered += OnTextEntered;
         area.PreviewKeyDown += OnAssistKeyDown;
         area.PreviewKeyDown += OnPreviewKeyDown;
+        // The code's own undo, as a text box has: Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z while typing code undo the typing, never
+        // the document Edit > Undo goes to, even with nothing to undo here.
+        var undo = new RelayCommand(() => Undo());
+        var redo = new RelayCommand(() => Redo());
+        area.InputBindings.Add(new KeyBinding(undo, Key.Z, ModifierKeys.Control));
+        area.InputBindings.Add(new KeyBinding(redo, Key.Y, ModifierKeys.Control));
+        area.InputBindings.Add(new KeyBinding(redo, Key.Z, ModifierKeys.Control | ModifierKeys.Shift));
         area.TextView.MouseHover += OnMouseHover;
         area.TextView.MouseHoverStopped += OnMouseHoverStopped;
         area.TextView.PreviewMouseLeftButtonDown += OnTextViewMouseDown;
@@ -389,7 +397,7 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
 
     // ----- Keys -----
 
-    // The editor's window has shortcuts for the scene (Ctrl+Z, Ctrl+D, Delete, F2...). While typing code they mean
+    // The editor's window has shortcuts for the scene (Ctrl+D, Delete, F2...). While typing code they mean
     // what they mean in a code editor, so they're handled here before the window sees them.
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -426,8 +434,6 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
             (Key.Space, true, false, false) => Handle(() => _ = ShowCompletionAsync(null)),
             (Key.Space, true, true, false) => Handle(() => _ = ShowSignatureHelpAsync(force: true)),
             (Key.S, true, _, false) => Handle(() => SaveRequested?.Invoke(this, EventArgs.Empty)),
-            (Key.Z, true, false, false) => Handle(() => Undo()),
-            (Key.Z, true, true, false) or (Key.Y, true, false, false) => Handle(() => Redo()),
             (Key.X, true, false, false) => Handle(() => ApplicationCommands.Cut.Execute(null, TextArea)),
             (Key.C, true, false, false) => Handle(() => ApplicationCommands.Copy.Execute(null, TextArea)),
             (Key.V, true, false, false) => Handle(() => ApplicationCommands.Paste.Execute(null, TextArea)),
@@ -641,19 +647,6 @@ public sealed partial class CodeEditor : TextEditor, IDisposable
         CaretOffset = Math.Min(caret, Document.TextLength);
     }
 
-    // ----- Undo -----
-
-    public new void Undo()
-    {
-        if (Document.UndoStack.CanUndo)
-            Document.UndoStack.Undo();
-    }
-
-    public new void Redo()
-    {
-        if (Document.UndoStack.CanRedo)
-            Document.UndoStack.Redo();
-    }
 }
 
 /// <summary>Line numbers, right-aligned, with the caret's line bright and lines with errors in red.</summary>

@@ -167,11 +167,11 @@ public sealed class SimulationsPanelTests : IDisposable
         Assert.Equal("6 pairs × 40 runs: 240 runs", panel.Size);
 
         Assert.Equal("Set the second side's rows", panel.UndoDescription);
-        Assert.True(panel.Undo());
+        Assert.Contains("the Balance simulation", EditorHost.AgentUndo(services));
         Assert.Equal("", panel.SecondRows);
-        Assert.True(panel.Undo());
+        Assert.True(EditorHost.Undo(services));
         Assert.Equal(200, panel.Runs);
-        Assert.True(panel.Redo());
+        Assert.True(EditorHost.Redo(services));
         Assert.Equal(40, panel.Runs);
 
         // A name that isn't there is said, not thrown.

@@ -177,17 +177,17 @@ public class InspectorAddComponentTests
 
         // Saying no keeps it.
         using (AgentDialogs.Answering(JsonDocument.Parse("""{"Remove Body?": false}""").RootElement))
-            body.RemoveCommand.Execute(null);
+            EditorHost.Command(services, "Component.Remove", body);
         Assert.NotNull(player.GetComponent<Body>());
         Assert.False(document.History.CanUndo);
 
         using (AgentDialogs.Answering(JsonDocument.Parse("""{"Remove Body?": true}""").RootElement))
-            Section(inspector, "Body").RemoveCommand.Execute(null);
+            EditorHost.Command(services, "Component.Remove", Section(inspector, "Body"));
         Assert.Null(player.GetComponent<Body>());
         Assert.Equal(["Body"], Section(inspector, "Platformer Movement").Needs.Select(n => n.Name));
 
         // Nothing needs the sprite: it goes without asking.
-        Section(inspector, "Sprite").RemoveCommand.Execute(null);
+        EditorHost.Command(services, "Component.Remove", Section(inspector, "Sprite"));
         Assert.Null(player.GetComponent<Sprite>());
     });
 
@@ -203,7 +203,7 @@ public class InspectorAddComponentTests
         selection.Select(player);
 
         Assert.Equal("Remove component", Section(inspector, "Box Collider").RemoveTip);
-        Section(inspector, "Box Collider").RemoveCommand.Execute(null);
+        EditorHost.Command(services, "Component.Remove", Section(inspector, "Box Collider"));
         Assert.Null(player.GetComponent<BoxCollider>());
     });
 }

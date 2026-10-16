@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Data;
 using Griff.Editor.Core.Panels;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Core.Undo;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
 
@@ -21,7 +22,7 @@ namespace Griff.Editor.Features.Data;
 /// level (<see cref="GenerateCurve"/>, or <see cref="Curve"/>'s settings and Generate). <see cref="Chart"/> charts the
 /// picked column over the rows or levels.
 /// </summary>
-public sealed partial class TablesPanel : ToolPanel
+public sealed partial class TablesPanel : ToolPanel, IDocumentEditor
 {
     private readonly TableStore _store;
     private readonly IWorkspace _workspace;
@@ -214,8 +215,7 @@ public sealed partial class TablesPanel : ToolPanel
         OnPropertyChanged(nameof(HasTable));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(AssetPath));
-        OnPropertyChanged(nameof(CanUndo));
-        OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(History));
         OnPropertyChanged(nameof(UndoDescription));
         OnPropertyChanged(nameof(RedoDescription));
 
@@ -387,6 +387,7 @@ public sealed partial class TablesPanel : ToolPanel
     private void Commit(Table after, string description, string? message = null)
     {
         _store.Commit(after, description);
+        Edited?.Invoke(this, EventArgs.Empty);
         Message = message;
         if (message is not null)
             _status.Show(message);
@@ -920,37 +921,20 @@ public sealed partial class TablesPanel : ToolPanel
 
     // ----- Undo
 
-    /// <summary>Whether the table showing has an edit to undo.</summary>
-    public bool CanUndo => _store.CanUndo(_name);
+    /// <summary>The undo history of the table showing: Edit &gt; Undo and Redo take its changes back while it's the active document.</summary>
+    public Griff.Editing.EditHistory? History => _store.HistoryOf(_name);
 
-    /// <summary>Whether the table showing has an undone edit to redo.</summary>
-    public bool CanRedo => _store.CanRedo(_name);
+    /// <summary>The table showing, as undoing in it says it: "the Spells table".</summary>
+    public string? DocumentName => _name is null ? null : $"the {_name} table";
 
-    /// <summary>What Undo would undo, e.g. "Set Fireball's Damage".</summary>
-    public string? UndoDescription => _store.UndoDescription(_name);
+    /// <summary>Raised after it changes the table showing, which makes it the document Edit &gt; Undo goes to.</summary>
+    public event EventHandler? Edited;
 
-    /// <summary>What Redo would redo.</summary>
-    public string? RedoDescription => _store.RedoDescription(_name);
+    /// <summary>What Undo would undo in the table showing, e.g. "Set Fireball's Damage".</summary>
+    public string? UndoDescription => History?.UndoDescription;
 
-    /// <summary>Undoes the last change to the table showing (its file is saved as it was). False if there's none.</summary>
-    public bool Undo()
-    {
-        var what = UndoDescription;
-        if (_name is null || !_store.Undo(_name))
-            return false;
-        Message = $"Undid: {what}.";
-        return true;
-    }
-
-    /// <summary>Redoes the last change undone on the table showing. False if there's none.</summary>
-    public bool Redo()
-    {
-        var what = RedoDescription;
-        if (_name is null || !_store.Redo(_name))
-            return false;
-        Message = $"Redid: {what}.";
-        return true;
-    }
+    /// <summary>What Redo would redo in the table showing.</summary>
+    public string? RedoDescription => History?.RedoDescription;
 
     // ----- CSV
 
@@ -965,7 +949,7 @@ public sealed partial class TablesPanel : ToolPanel
     {
         var name = string.IsNullOrWhiteSpace(table) ? Path.GetFileNameWithoutExtension(path) : table.Trim();
         var text = File.ReadAllText(path);
-        if (_store.Entry(name) is { Table: { } existing } entry)
+        if (_store.Entry(name) is { Value: { } existing } entry)
         {
             var imported = TableText.FromCsv(text, entry.Name, existing);
             Commit(imported, $"Import {Path.GetFileName(path)}");
@@ -978,6 +962,7 @@ public sealed partial class TablesPanel : ToolPanel
         var fresh = TableText.FromCsv(text, name);
         _store.Create(name);
         _store.Commit(fresh, $"Import {Path.GetFileName(path)}");
+        Edited?.Invoke(this, EventArgs.Empty);
         Open(name);
         return Message = $"Made the {name} table from {Path.GetFileName(path)}: {Count(fresh.Rows.Count, "row")}, {Count(fresh.Columns.Count, "column")}.";
     }

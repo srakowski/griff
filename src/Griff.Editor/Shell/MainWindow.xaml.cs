@@ -70,13 +70,25 @@ public partial class MainWindow : ChromeWindow
         menuBuilder.Populate(MainMenu);
         toolbarBuilder.Populate(Toolbar);
         // Commands can share a shortcut when only one can run at a time (F10 steps a frame, or a line at a breakpoint).
-        foreach (var shared in commands.All.Where(c => c.Gesture is not null).GroupBy(c => (c.Gesture!.Key, c.Gesture.Modifiers)))
+        foreach (var shared in Shortcuts(commands.All).GroupBy(s => (s.Gesture.Key, s.Gesture.Modifiers)))
         {
-            var list = shared.ToList();
-            InputBindings.Add(new KeyBinding(list.Count == 1 ? list[0] : new FirstThatCanRun(list), list[0].Gesture!));
+            var list = shared.Select(s => s.Command).ToList();
+            InputBindings.Add(new KeyBinding(list.Count == 1 ? list[0] : new FirstThatCanRun(list), shared.First().Gesture));
         }
 
         panelHost.Attach(this, DockRoot, DocumentArea);
+    }
+
+    /// <summary>Every command's shortcuts: its gesture and any other it has (Redo's Ctrl+Shift+Z).</summary>
+    public static IEnumerable<(KeyGesture Gesture, EditorCommand Command)> Shortcuts(IEnumerable<EditorCommand> commands)
+    {
+        foreach (var command in commands)
+        {
+            if (command.Gesture is { } gesture)
+                yield return (gesture, command);
+            if (command.AlternateGesture is { } other)
+                yield return (other, command);
+        }
     }
 
     /// <summary>Closes the window for a caller that has already asked about unsaved changes.</summary>

@@ -75,17 +75,17 @@ public sealed class PaintSelectedCommand(EditorArt art, ISelection selection) : 
     public override string? Icon => Icons.Palette;
     public override MenuPlacement? Placement { get; } = new(ArtModule.Menu, Group: 1, Order: 0);
 
-    protected override bool CanExecuteCore() => Target() is not null;
+    protected override bool CanExecuteCore() => Painted() is not null;
 
     protected override Task ExecuteCoreAsync()
     {
-        if (Target() is { } component)
+        if (Painted() is { } component)
             art.PaintFor(component);
         return Task.CompletedTask;
     }
 
     // A tilemap layer paints its map's tileset: a picture of its own would make it a map of its own.
-    private Component? Target() =>
+    private Component? Painted() =>
         (Component?)selection.Entity?.GetComponent<Tilemap>()?.BaseMap ?? selection.Entity?.GetComponent<Sprite>();
 }
 

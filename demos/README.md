@@ -42,7 +42,7 @@ build: standalone
 | `menu: <Menu> > <Item>` | Click through the main menu, e.g. `menu: Build > Build Game`, and into submenus: `menu: View > Layouts > Level Building`. |
 | `create: <thing>` | Make something from the Entity menu by its name, clicking through the category it's in: `create: Platformer Player` is `menu: Entity > Characters > Platformer Player`. |
 | `hierarchymenu: <item> > <item>` | Right-click empty space in the Hierarchy and pick from its menu, into submenus: `hierarchymenu: Lights and Effects > Light`. |
-| `key: <shortcut>` | Press a shortcut, e.g. `key: Ctrl+Shift+B`, `key: F5`. |
+| `key: <shortcut>` | Press a shortcut, e.g. `key: Ctrl+Shift+B`, `key: F5`. It goes to the editor's window, or to the Sprite Painter while that's the active window (after `paint:`). |
 | `select: <entity>` / `deselect` | Pick an entity in the Hierarchy, or nothing. `select: Ctrl+Sign` Ctrl-clicks its row (adding it to the selection, or taking it out), `select: Shift+Coins` Shift-clicks it (selecting every row from the last one clicked). |
 | `expectselected: <entity>, <entity>...` | Fail unless exactly these are selected, in the order they were picked. |
 | `expectcount: <entity> = <n>` | Fail unless the open scene has that many entities with that name. |
@@ -143,6 +143,7 @@ build: standalone
 | `shot: <name> [\| <view> [\| <width> [\| <alt text>]]]` | Save a picture as `<name>.png` in `GRIFF_DEMO_SHOTS` (`%TEMP%\griff-demos\shots` without it): the editor by default, or `game`, `scene` or a window's title, at most `<width>` pixels wide. The website's tutorials use it (`site/README.md`); the alt text is for their page. |
 | `agent: <tool> <json>` / `expectagent: <text>` | Make the call an agent would through the MCP server (`agent: entity_create {"entity": {"name": "Coin"}}`), failing if it fails; `expectagent` fails unless the last call's answer has that text in it. |
 | `step: <text>` / `summary: <text>` | Nothing when played: a step in words, and a one-line description, for the tutorial page a script makes. |
+| `expectundo: <what>` | Fail unless Edit → Undo (Ctrl+Z) would undo that now, said as the status bar says it after: `expectundo: Set Row 1's Value in the Loot table`, `expectundo: Paint in the Sprite Painter's Sprites/Sprite.png`, or a change to the scene alone (`expectundo: Change Order`); `nothing` when there's nothing to undo. |
 | `expectfile: <path>` | Fail unless the file (relative to Assets) exists: checks a Save really saved. |
 | `painter` | Wait for the Sprite Painter to open (after `menu: Art > New Sprite...` or an image field's Paint button). |
 | `paint: <x>,<y> [> <x>,<y> ...] [\| right]` | Paint on the Sprite Painter's canvas with the real mouse, through those pixels of the frame (from 0, 0 at its top left), with the selected tool: one pixel is a click. `\| right` drags with the right button, which erases. |

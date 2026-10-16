@@ -60,10 +60,10 @@
                              Visibility="{Binding IsRunning, Converter={x:Static converters:BoolToVisibilityConverter.Default}}" />
                 <TextBlock VerticalAlignment="Center" Style="{StaticResource Style.Text.Secondary}" Text="{Binding ProgressText}" />
                 <Separator Style="{StaticResource Style.Separator.Vertical}" />
-                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
+                <Button x:Name="UndoButton" Style="{StaticResource Style.Button.Toolbar}" CommandParameter="{Binding}" Tag="sims:undo" ToolTip="{Binding UndoDescription, StringFormat=Undo {0} (Ctrl+Z), TargetNullValue=Nothing to undo}">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Undo}" />
                 </Button>
-                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
+                <Button x:Name="RedoButton" Style="{StaticResource Style.Button.Toolbar}" CommandParameter="{Binding}" Tag="sims:redo" ToolTip="{Binding RedoDescription, StringFormat=Redo {0} (Ctrl+Y), TargetNullValue=Nothing to redo}">
                     <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Redo}" />
                 </Button>
                 <Button x:Name="ExportButton" Style="{StaticResource Style.Button.Toolbar}" Tag="sims:export" ToolTip="Export the results to a CSV file...">

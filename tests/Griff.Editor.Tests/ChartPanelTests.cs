@@ -98,18 +98,18 @@ public sealed class ChartPanelTests : IDisposable
         Assert.Equal(notes, panel.NoteCount);
         Assert.Null(panel.NoteAt(4, 4));
 
-        // Each was a step of undo, by the panel's command.
+        // Each was a step of undo, by Edit > Undo (the chart was worked in last).
         Assert.Equal("Remove the note at beat 4", panel.UndoDescription);
-        EditorHost.Pump(commands.Get("Rhythm.UndoChart").ExecuteAsync());
+        EditorHost.Pump(commands.Get("Edit.Undo").ExecuteAsync());
         Assert.Equal("Normal 1", panel.NoteAt(4, 4));
-        EditorHost.Pump(commands.Get("Rhythm.UndoChart").ExecuteAsync());
-        EditorHost.Pump(commands.Get("Rhythm.UndoChart").ExecuteAsync());
+        EditorHost.Pump(commands.Get("Edit.Undo").ExecuteAsync());
+        EditorHost.Pump(commands.Get("Edit.Undo").ExecuteAsync());
         Assert.Equal(notes + 1, panel.NoteCount);
         Assert.Equal(row, panel.NoteAt(4.5, 3));
-        EditorHost.Pump(commands.Get("Rhythm.UndoChart").ExecuteAsync());
+        EditorHost.Pump(commands.Get("Edit.Undo").ExecuteAsync());
         Assert.Equal(notes, panel.NoteCount);
         Assert.Equal(GrooveSong.Chart().Rows.Count, tables.Find("Groove")!.Rows.Count);
-        EditorHost.Pump(commands.Get("Rhythm.RedoChart").ExecuteAsync());
+        EditorHost.Pump(commands.Get("Edit.Redo").ExecuteAsync());
         Assert.Equal(notes + 1, panel.NoteCount);
     });
 
@@ -137,7 +137,7 @@ public sealed class ChartPanelTests : IDisposable
 
         // One undo step takes the whole take out.
         Assert.Equal("Record take 1 (3 notes in Hard)", panel.UndoDescription);
-        Assert.True(panel.Undo());
+        Assert.Contains("chart", EditorHost.AgentUndo(services));
         Assert.Equal(hard, panel.NoteCount);
 
         // Overdub adds to what's there: a note already there stays one.
@@ -167,7 +167,8 @@ public sealed class ChartPanelTests : IDisposable
         Assert.Equal(16, panel.RecordingFrom);
         // The bar before is to get ready: heard from beat 12 (two seconds of it at 120).
         Assert.Equal(12, panel.HeardBeat, 6);
-        Assert.False(panel.CanUndo);
+        Assert.False(panel.CanChange);
+        Assert.False(EditorHost.Undo(services, panel));
         Assert.Throws<InvalidOperationException>(() => panel.PlayFrom(4));
 
         // A lane pressed and let go in the lead-in (beats 14 to 14.5) is before the playhead: nothing goes in.
@@ -182,7 +183,7 @@ public sealed class ChartPanelTests : IDisposable
         Assert.Contains("before the playhead", panel.Message);
         Assert.Equal(16, panel.Playhead);
         Assert.Equal(notes, panel.NoteCount);
-        Assert.False(panel.CanUndo);
+        Assert.Null(panel.UndoDescription);
 
         // Pressed from the playhead on, it goes in when the take is stopped: lane 2 held from beat 17 to 19 is a hold there.
         Assert.Null(panel.NoteAt(17, 2));

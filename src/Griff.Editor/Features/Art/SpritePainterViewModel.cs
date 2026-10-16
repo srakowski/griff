@@ -9,6 +9,8 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Art;
+using Griff.Editing;
+using Griff.Editor.Core.Undo;
 
 namespace Griff.Editor.Features.Art;
 
@@ -28,7 +30,7 @@ public enum PaintTool
 /// scratch or from a generated starting point, and saves it as a PNG in the project (Sprites/ and Tiles/) that
 /// remembers how it's cut up. Every stroke is one undo step.
 /// </summary>
-public sealed partial class SpritePainterViewModel : ObservableObject
+public sealed partial class SpritePainterViewModel : ObservableObject, IDocumentEditor
 {
     private const int UndoLimit = 200;
     private static readonly Regex ValidName = new(@"^[A-Za-z0-9 _\-]+$");
@@ -36,8 +38,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject
     private readonly EditorArt _art;
     private readonly DispatcherTimer _animate;
     private readonly Random _random = new();
-    private readonly List<PixelSheet> _undo = [];
-    private readonly List<PixelSheet> _redo = [];
+    private readonly EditHistory _history = new() { Limit = UndoLimit };
     private PixelSheet _sheet;
     private PixelSheet? _strokeStart;
     private (int X, int Y) _strokeFrom, _last;
@@ -69,14 +70,12 @@ public sealed partial class SpritePainterViewModel : ObservableObject
         Ideas = Enum.GetValues<SpriteIdea>().Select(i => new IdeaChoice(i, Humanize(i.ToString()), () => Generate(i))).ToList();
         Palettes = Palette.All;
 
-        UndoCommand = new RelayCommand(Undo, () => _undo.Count > 0);
-        RedoCommand = new RelayCommand(Redo, () => _redo.Count > 0);
         AddFrameCommand = new RelayCommand(AddFrame, () => Layout.Kind == SheetKind.Sprite && Layout.Frames < SheetLayout.MaxCells);
         RemoveFrameCommand = new RelayCommand(RemoveFrame, () => Layout.Kind == SheetKind.Sprite && Layout.Frames > 1);
-        ClearCommand = new RelayCommand(() => Change(s => s.Clear(_frame)));
-        FlipCommand = new RelayCommand(() => Change(s => s.Flip(_frame, horizontal: true)));
-        FlipVerticalCommand = new RelayCommand(() => Change(s => s.Flip(_frame, horizontal: false)));
-        OutlineCommand = new RelayCommand(() => Change(s => s.Outline(_frame, _color)));
+        ClearCommand = new RelayCommand(() => Change("Clear", s => s.Clear(_frame)));
+        FlipCommand = new RelayCommand(() => Change("Flip", s => s.Flip(_frame, horizontal: true)));
+        FlipVerticalCommand = new RelayCommand(() => Change("Flip Vertically", s => s.Flip(_frame, horizontal: false)));
+        OutlineCommand = new RelayCommand(() => Change("Outline", s => s.Outline(_frame, _color)));
         AnotherCommand = new RelayCommand(() => Generate(_lastIdea ?? SpriteIdea.Creature));
         SaveCommand = new RelayCommand(() => Save(), () => _art.AssetsPath is not null);
 
@@ -262,10 +261,6 @@ public sealed partial class SpritePainterViewModel : ObservableObject
 
     public RelayCommand OutlineCommand { get; }
 
-    public RelayCommand UndoCommand { get; }
-
-    public RelayCommand RedoCommand { get; }
-
     // ----- Colors
 
     public IReadOnlyList<Palette> Palettes { get; }
@@ -329,7 +324,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject
     {
         _lastIdea = idea;
         var frames = SpriteGenerator.Generate(idea, _random.Next(1, 100000), Layout.CellWidth, Layout.CellHeight);
-        Change(sheet =>
+        Change($"Make a {Humanize(idea.ToString()).ToLowerInvariant()}", sheet =>
         {
             if (Layout.Kind == SheetKind.Tileset)
             {
@@ -500,7 +495,14 @@ public sealed partial class SpritePainterViewModel : ObservableObject
         if (_strokeStart is not { } before)
             return;
         _strokeStart = null;
-        Commit(before);
+        Commit(before, _strokeErases ? "Erase" : _tool switch
+        {
+            PaintTool.Fill => "Fill",
+            PaintTool.Line => "Draw a line",
+            PaintTool.Rectangle => "Draw a rectangle",
+            PaintTool.Ellipse => "Draw an ellipse",
+            _ => "Paint",
+        });
     }
 
     public bool IsStroking => _strokeStart is not null;
@@ -549,37 +551,48 @@ public sealed partial class SpritePainterViewModel : ObservableObject
 
     // ----- Undo
 
-    private void Change(Action<PixelSheet> change)
+    /// <summary>
+    /// Its undo history: each stroke, generated picture, flip, outline, frame added or taken out and change of size is one
+    /// step (the last 200 are kept). Edit &gt; Undo and Redo (Ctrl+Z, Ctrl+Y in its window) take them back.
+    /// </summary>
+    public EditHistory History => _history;
+
+    /// <summary>What it paints, as undoing in it says it: "the Sprite Painter's Sprites/slime.png".</summary>
+    public string DocumentName => $"the Sprite Painter's {SavePath}";
+
+    /// <summary>Raised after a change to the picture, which makes it the document Edit &gt; Undo goes to.</summary>
+    public event EventHandler? Edited;
+
+    private void Change(string description, Action<PixelSheet> change)
     {
         var before = _sheet.Copy();
         change(_sheet);
-        Commit(before);
+        Commit(before, description);
     }
 
-    private void Commit(PixelSheet before)
+    private void Commit(PixelSheet before, string description)
     {
         if (_sheet.SameAs(before))
             return;
-        _undo.Add(before);
-        if (_undo.Count > UndoLimit)
-            _undo.RemoveAt(0);
-        _redo.Clear();
-        AfterLayoutChange(before.Layout);
+        _history.Execute(new SheetEdit(this, before, _sheet.Copy(), description));
+        Edited?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Undo() => Step(_undo, _redo);
-
-    public void Redo() => Step(_redo, _undo);
-
-    private void Step(List<PixelSheet> from, List<PixelSheet> to)
+    // Shows the picture as <paramref name="sheet"/> has it, after it was laid out as <paramref name="layout"/>.
+    private void Show(PixelSheet sheet, SheetLayout layout)
     {
-        if (from.Count == 0)
-            return;
-        var before = _sheet.Layout;
-        to.Add(_sheet.Copy());
-        _sheet.CopyFrom(from[^1]);
-        from.RemoveAt(from.Count - 1);
-        AfterLayoutChange(before);
+        _sheet.CopyFrom(sheet);
+        AfterLayoutChange(layout);
+    }
+
+    // One change to the picture: the whole sheet before and after it.
+    private sealed class SheetEdit(SpritePainterViewModel owner, PixelSheet before, PixelSheet after, string description) : IEdit
+    {
+        public string Description => description;
+
+        public void Apply() => owner.Show(after, before.Layout);
+
+        public void Revert() => owner.Show(before, after.Layout);
     }
 
     private void Relayout(SheetLayout layout)
@@ -588,7 +601,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject
         if (layout == Layout)
             return;
         var kind = Layout.Kind;
-        Change(s => s.Relayout(layout));
+        Change("Change the size", s => s.Relayout(layout));
         if (_editing is null && layout.Kind != kind)
             Name = SuggestName(layout.Kind == SheetKind.Tileset ? "tiles" : "sprite");
     }
@@ -597,8 +610,7 @@ public sealed partial class SpritePainterViewModel : ObservableObject
     {
         var before = _sheet.Layout;
         _sheet = sheet;
-        _undo.Clear();
-        _redo.Clear();
+        _history.Clear();
         _frame = 0;
         AfterLayoutChange(before);
     }
@@ -606,11 +618,11 @@ public sealed partial class SpritePainterViewModel : ObservableObject
     private void AddFrame()
     {
         var at = _frame + 1;
-        Change(s => s.InsertCell(at, copyOf: _frame));
+        Change("Add a frame", s => s.InsertCell(at, copyOf: _frame));
         Frame = at;
     }
 
-    private void RemoveFrame() => Change(s => s.RemoveCell(_frame));
+    private void RemoveFrame() => Change("Remove a frame", s => s.RemoveCell(_frame));
 
     // ----- Keeping the views up to date
 
@@ -625,8 +637,6 @@ public sealed partial class SpritePainterViewModel : ObservableObject
         OnPropertyChanged(string.Empty);
         RestartPreview();
         Changed();
-        UndoCommand.NotifyCanExecuteChanged();
-        RedoCommand.NotifyCanExecuteChanged();
         AddFrameCommand.NotifyCanExecuteChanged();
         RemoveFrameCommand.NotifyCanExecuteChanged();
     }

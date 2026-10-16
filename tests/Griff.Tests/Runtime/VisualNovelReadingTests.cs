@@ -170,7 +170,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.Equal(16 / 9f, saved.PictureAspect, 2);
         var (png, _) = _game.Pictures.Get("@save/2");
         var (rgba, width, height) = Png.Decode(png!)!.Value;
-        Assert.Equal((Game.PictureWidth, 135), (width, height));
+        Assert.Equal((SaveSystem.PictureWidth, 135), (width, height));
         Assert.Equal(200, rgba[0]);
 
         _game.LoadGame("2");
@@ -204,7 +204,7 @@ public sealed class VisualNovelReadingTests : IDisposable
     public void Saved_games_are_kept_from_one_run_of_the_game_to_the_next_and_can_be_deleted()
     {
         _game.SaveData = new SaveData(SavePath);
-        _game.Clock = () => new DateTimeOffset(2026, 10, 15, 14, 3, 0, TimeSpan.Zero);
+        _game.SaveSystem.Clock = () => new DateTimeOffset(2026, 10, 15, 14, 3, 0, TimeSpan.Zero);
         Build(0, "Ava: Hello!", "Ava: Again.");
         Start();
         _game.SaveGame("10");
@@ -298,7 +298,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         (button.Action, button.Size) = (ButtonAction.Continue, new Vector2(2, 2));
         _scene.Add(resume);
         var now = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
-        _game.Clock = () => now;
+        _game.SaveSystem.Clock = () => now;
 
         Start();
         Assert.Null(_game.LatestSave);
@@ -537,7 +537,7 @@ public sealed class VisualNovelReadingTests : IDisposable
         Assert.False(_game.Skipping);
     }
 
-    private static float SkipFrames => Game.SkipEvery + 2 * Frame;
+    private static float SkipFrames => ReadingSystem.SkipEvery + 2 * Frame;
 
     [Fact]
     public void Auto_reads_on_after_a_pause_as_long_as_the_line_and_waits_at_choices()

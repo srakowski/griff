@@ -315,7 +315,7 @@ public sealed partial class NetSession
             SpawnAvatar(player, fresh: false);
         }
 
-        _game.NetSceneStarted();
+        _game.NetworkSystem.NetSceneStarted();
     }
 
     private Entity? SpawnAvatar(NetPlayer player, bool fresh)
@@ -1008,7 +1008,7 @@ public sealed partial class NetSession
                 {
                     var name = r.String() ?? "";
                     var args = ReadData(ref r);
-                    _game.RunNetCommand(player, name, args);
+                    _game.NetworkSystem.RunNetCommand(player, name, args);
                     break;
                 }
             }
@@ -1214,7 +1214,7 @@ public sealed partial class NetSession
         Sender = from;
         try
         {
-            _game.SendFromNetwork(message, data, relay, route);
+            _game.MessageSystem.SendFromNetwork(message, data, relay, route);
         }
         finally
         {
@@ -1235,7 +1235,7 @@ public sealed partial class NetSession
             return;
         }
 
-        _game.RunNetCommand(LocalPlayer, name, args);
+        _game.NetworkSystem.RunNetCommand(LocalPlayer, name, args);
     }
 
     private void WriteData(NetWriter w, object? data) =>

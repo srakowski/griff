@@ -61,8 +61,14 @@ public class FrameTests
         // Griff's core systems, then each module's in module order (Adventures, Battles, Block Worlds, Cards, Contraptions, Dungeons, Falling Blocks, Fighting,
         // First Person, Match-3, Physics Games, Puzzles, Strategy, Tactics, Visual Novels): every step of a module's belongs to one of its systems, in the
         // place in the frame it had before modules.
-        Assert.Equal(["Levels", "Movement", "Grid Movement", "Turns", "Combat", "Triggers", "Switches", "Items", "Dragging", "Panels", "Adventures", "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Fighters", "Hitboxes", "Versus", "First Person",
-            "Match Boards", "Slingshots", "Breakables", "Level Goals", "Pinball", "Puzzles", "Note Lanes", "Song Select", "Strategy", "Tactics", "Stages"], game.Systems.Select(s => s.Name));
+        Assert.Equal(["Levels", "Movement", "Grid Movement", "Turns", "Combat", "Triggers", "Switches", "Items", "Dragging",
+            "Panels", "Time", "Input", "Network", "Scripts", "Timers", "Messages", "Lifetimes", "Effects",
+            "Tilemaps", "HUD", "Physics", "Scenes", "Menus", "Focus", "Pauses", "Reading", "Beat", "Calibration",
+            "Atmosphere", "Weather", "Lobby", "Views", "Saves", "Settings", "Tables", "Minigames", "Adventures",
+            "Battles", "Block Worlds", "Cards", "Contraptions", "Dungeons", "Falling Boards", "Fighters",
+            "Hitboxes", "Versus", "First Person", "Match Boards", "Slingshots", "Breakables", "Level Goals",
+            "Pinball", "Puzzles", "Rhythm Settings", "Note Lanes", "Song Select", "Strategy", "Tactics",
+            "Reading Settings", "Stages"], game.Systems.Select(s => s.Name));
         Assert.Equal("Slingshots", game.Frame.Single(s => s.Name == "Slingshots").System?.Name);
         Assert.Equal("Breakables", game.Frame.Single(s => s.Name == "Breakables").System?.Name);
         Assert.Equal("Level Goals", game.Frame.Single(s => s.Name == "Level Goals").System?.Name);
@@ -82,9 +88,9 @@ public class FrameTests
         Assert.Equal("First Person", game.Frame.Single(s => s.Name == "First Person").System?.Name);
         Assert.Equal("Puzzles", game.Frame.Single(s => s.Name == "Move History").System?.Name);
         Assert.Equal("Puzzles", game.Frame.Single(s => s.Name == "Goals").System?.Name);
-        Assert.Null(game.Frame.Single(s => s.Name == "Physics").System);
-        Assert.Null(game.Frame.Single(s => s.Name == "HUD").System);
-        Assert.Null(game.Frame.Single(s => s.Name == "Other Players' Tools").System);
+        Assert.Equal("Physics", game.Frame.Single(s => s.Name == "Physics").System?.Name);
+        Assert.Equal("HUD", game.Frame.Single(s => s.Name == "HUD").System?.Name);
+        Assert.Equal("Network", game.Frame.Single(s => s.Name == "Other Players' Tools").System?.Name);
     }
 
     [Fact]
@@ -147,7 +153,7 @@ public class FrameTests
 
         Assert.Empty(log);
         Assert.Null(game.GetSystem<Recorder>());
-        Assert.Equal(32, game.Systems.Count);
+        Assert.Equal(60, game.Systems.Count);
     }
 
     [Fact]

@@ -29,6 +29,11 @@ internal sealed class RhythmSystem : GameSystem
     private SaveData? _saves;
     private int _savesSeen;
 
+    // The player's settings: how fast they like the notes to come.
+    private readonly RhythmSettingsSystem _settings;
+
+    public RhythmSystem(RhythmSettingsSystem settings) => _settings = settings;
+
     public override string Name => "Note Lanes";
 
     private IAudio Audio => Game.Audio;
@@ -97,7 +102,7 @@ internal sealed class RhythmSystem : GameSystem
 
         var clock = ClockOf(lanes);
         var paused = Game.PausedThisFrame || lanes.Entity!.IsPaused;
-        lanes.SpeedNow = Math.Max(0, lanes.Speed) * Game.NoteSpeed;
+        lanes.SpeedNow = Math.Max(0, lanes.Speed) * _settings.NoteSpeed;
         // Its song started again this step (from where it was): the clock picks it up next step.
         var restarted = KeepSong(lanes, paused);
         var music = !restarted && clock is { IsPlaying: true } && (!OwnsSong(lanes) || PlayingIts(lanes));

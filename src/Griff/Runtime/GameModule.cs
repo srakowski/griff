@@ -133,14 +133,14 @@ public sealed class GameSetup
     /// Something players' machines in a network game can ask the host to do, by a name unique to the module (e.g.
     /// "griff.rts"): <paramref name="run"/> is called on the host with the player who asked and what they sent with it.
     /// </summary>
-    public void OnNetCommand(string name, Action<NetPlayer?, object?> run) => Game.OnNetCommand(name, run);
+    public void OnNetCommand(string name, Action<NetPlayer?, object?> run) => Game.NetworkSystem.OnNetCommand(name, run);
 
     /// <summary>
     /// Something the host of a network game can tell one player's machine (what its run of that player's tools wants shown
     /// there), by a name unique to the module: <paramref name="run"/> is called on that machine with what the host sent.
     /// The host sends it with <c>Game.Net.SendCommandTo</c>.
     /// </summary>
-    public void OnHostCommand(string name, Action<object?> run) => Game.OnHostCommand(name, run);
+    public void OnHostCommand(string name, Action<object?> run) => Game.NetworkSystem.OnHostCommand(name, run);
 
     private StepId AddStep(StepId anchor, bool before, string name, GameSystem system, Action run)
     {

@@ -3,19 +3,36 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Views: the main camera's, on the whole screen, and those viewports draw into parts of it.
+// What scripts call on the game for views: each member forwards to ViewSystem, which owns the state and the steps.
 public sealed partial class Game
 {
+    /// <summary>
+    /// The view (center, half height, aspect) on the screen of the player whose <paramref name="input"/> this is, if the
+    /// host has been told it (a player on another machine), or null.
+    /// </summary>
+    public static (Vector2 Center, float HalfHeight, float Aspect)? ViewOf(IInput input) =>
+        ViewSystem.ViewOf(input);
+
+    /// <summary>
+    /// The view a HUD is laid out for: this machine's camera, or the screen of the player the host is acting for.
+    /// </summary>
+    public (Vector2 Center, float HalfHeight, float Aspect) HudView() =>
+        _views.HudView();
+
+    /// <summary>
+    /// True if the game is seen through <paramref name="entity"/>'s eyes on its player's screen (see
+    /// <see cref="ISeesThroughEyes.LooksThrough"/>): a first-person game's player, and online each player's own character.
+    /// </summary>
+    public bool LooksThrough(Entity entity) =>
+        _views.LooksThrough(entity);
+
     /// <summary>
     /// The shape <paramref name="camera"/> is drawn at, its width over its height: <see cref="ViewAspect"/> (the screen's)
     /// for the main camera, its part of the screen's for a <see cref="Viewport"/>'s. What a HUD laid out in its view, or a
     /// camera kept inside the level, goes by.
     /// </summary>
-    public float AspectOf(Entity camera)
-    {
-        ArgumentNullException.ThrowIfNull(camera);
-        return camera.GetComponent<Viewport>() is { } viewport && camera != Views.FindCamera(Scene) ? viewport.AspectOn(ViewAspect) : ViewAspect;
-    }
+    public float AspectOf(Entity camera) =>
+        _views.AspectOf(camera);
 
     /// <summary>
     /// True if the mouse is over <paramref name="camera"/>'s part of the screen: the whole screen for the main camera, a
@@ -25,34 +42,6 @@ public sealed partial class Game
     /// exactly <see cref="IInput.MouseWorld"/> and the answer <see cref="IInput.IsMouseInView"/>.
     /// </summary>
     /// <example><code>if (Game.MouseIn(minimap, out var spot) &amp;&amp; Input.WasPressed(MouseButton.Left)) Game.Find("Camera")!.Transform.Position = new(spot, 0);</code></example>
-    public bool MouseIn(Entity camera, out Vector2 world)
-    {
-        ArgumentNullException.ThrowIfNull(camera);
-        var input = Input;
-        world = input.MouseWorld;
-        var main = Views.FindCamera(Scene);
-        if (camera == main)
-            return input.IsMouseInView;
-        if (camera.Scene != Scene || !camera.IsActive || camera.GetComponent<Viewport>() is not { IsShowing: true } viewport ||
-            camera.GetComponent<Camera>() is not { } lens)
-            return false;
-
-        // Where the mouse is on the screen, through the main camera; then back into the world through this one.
-        var aspect = ViewAspect > 0 ? ViewAspect : 1;
-        var mainSize = main?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
-        var onScreen = Vector4.Transform(new Vector4(input.MouseWorld, 0, 1), Views.ViewProjection(main, mainSize, aspect));
-        var clip = new Vector2(onScreen.X, onScreen.Y) / onScreen.W;
-        var (left, top, width, height) = viewport.Area;
-        var (across, down) = ((clip.X + 1) / 2, (1 - clip.Y) / 2);
-        var inside = input.IsMouseInView && across >= left && across <= left + width && down >= top && down <= top + height;
-
-        var toScreen = Views.ViewProjection(camera, lens.Size, viewport.AspectOn(aspect)) * viewport.ToScreen();
-        if (Matrix4x4.Invert(toScreen, out var back))
-        {
-            var seen = Vector4.Transform(new Vector4(clip, 0, 1), back);
-            world = new Vector2(seen.X, seen.Y) / seen.W;
-        }
-
-        return inside;
-    }
+    public bool MouseIn(Entity camera, out Vector2 world) =>
+        _views.MouseIn(camera, out world);
 }

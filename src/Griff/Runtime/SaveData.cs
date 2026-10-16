@@ -56,8 +56,11 @@ public sealed class SaveData : Scenes.ICarryStore
 
     public string? GetString(string key, string? fallback = null) => Get(key, fallback);
 
-    // A text value as it's kept, without going through its JSON: for big ones (a saved game) read often.
-    internal string? GetText(string key) =>
+    /// <summary>
+    /// The text kept under <paramref name="key"/> as it's kept, without going through its JSON (as <see cref="GetString"/>
+    /// does): for big text read often, such as a saved game or the lines a player has read. Null if there's none.
+    /// </summary>
+    public string? GetText(string key) =>
         _values[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     public void Set(string key, int value) => Put(key, JsonValue.Create(value));

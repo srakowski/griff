@@ -307,6 +307,54 @@ public interface IPlayersListener
 }
 
 /// <summary>
+/// A system that keeps settings a player chooses for themselves, as the game keeps its own (volume, full screen, the
+/// offsets): they're read back from <see cref="Game.SaveData"/> as the game starts and written as they change, and a
+/// <see cref="Slider"/> or <see cref="Toggle"/> set to one shows and sets it. The Rhythm module keeps a player's note speed
+/// this way, and the Visual Novels module how they like dialogue skipped and read on.
+/// </summary>
+public interface IPlayerSettings
+{
+    /// <summary>The setting's value as a slider or toggle shows it, or null if it isn't one this system keeps.</summary>
+    float? SettingValue(GameSetting setting);
+
+    /// <summary>Sets a setting this system keeps, from a slider or toggle; false if it keeps no such setting.</summary>
+    bool ApplySetting(GameSetting setting, float value);
+
+    /// <summary>
+    /// True for a setting with units of its own (how many times as fast notes come), which is a slider's value; the rest,
+    /// from 0 to 1, fill it.
+    /// </summary>
+    bool InOwnUnits(GameSetting setting);
+
+    /// <summary>Reads the settings saved earlier from <paramref name="data"/>; those never saved are left as they are.</summary>
+    void LoadSettings(SaveData data);
+
+    /// <summary>
+    /// Writes to <paramref name="data"/> whichever settings changed since they were last written, each step; with
+    /// <paramref name="now"/> (as the game quits), also what it otherwise writes only now and then.
+    /// </summary>
+    void SaveSettings(SaveData data, bool now);
+}
+
+/// <summary>
+/// What reading a conversation goes by that's a player's own: whether skipping (<see cref="Game.Skipping"/>) goes on
+/// through lines they haven't read yet, how quickly reading on by itself (<see cref="Game.AutoReading"/>) does, and the
+/// lines they've read before. A system that keeps them says so (the Visual Novels module's keeps them with the player's
+/// settings); with none, skipping stops at every line said and reading on by itself waits as at middle speed.
+/// </summary>
+public interface IReadingPreferences
+{
+    /// <summary>Whether skipping goes on through lines not read yet, rather than stopping at the first.</summary>
+    bool SkipUnread { get; }
+
+    /// <summary>How quickly dialogue reads on by itself, 0 (slowly) to 1 (quickly).</summary>
+    float AutoSpeed { get; }
+
+    /// <summary>Notes that the player is reading line <paramref name="row"/> of <paramref name="dialogue"/>; true if they had read it before.</summary>
+    bool Read(Dialogue dialogue, int row);
+}
+
+/// <summary>
 /// One step of the frame: a named piece of work in a <see cref="FramePhase"/>, belonging to a <see cref="GameSystem"/>
 /// (a script's, or one of Griff's that keeps track of something) or to the game itself.
 /// </summary>

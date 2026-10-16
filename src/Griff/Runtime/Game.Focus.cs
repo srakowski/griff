@@ -2,8 +2,7 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Which of the things that read the player's input has it: whatever says so with a property marked [Focus] (a movement's
-// Controllable, a board's, the strategy commander's), handed over by the Focus action.
+// What scripts call on the game for focus: each member forwards to FocusSystem, which owns the state and the steps.
 public sealed partial class Game
 {
     /// <summary>
@@ -14,57 +13,20 @@ public sealed partial class Game
     /// to a player at this machine. Done where the game is run, the host.
     /// </summary>
     /// <example><code>Game.Focus(Find("Arcade Board")!);  // later: Game.Focus(player);</code></example>
-    public void Focus(Entity entity)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        if (entity.Scene != Scene)
-            throw new InvalidOperationException("Only an entity in the running scene can be given focus.");
-        var player = NetSession.OwnerIdOf(entity);
-        var local = PlayedBy.Of(entity);
-        var entities = Scene.EntitiesNow;
-        for (var i = 0; i < entities.Length; i++)
-        {
-            var other = entities[i];
-            var inside = other.IsSelfOrDescendantOf(entity);
-            if (!inside && (!SamePlayer(player, NetSession.OwnerIdOf(other)) || !SamePlayer(local, PlayedBy.Of(other))))
-                continue;
-            var components = other.ComponentList;
-            for (var c = 0; c < components.Count; c++)
-            {
-                if (ComponentFocus.Has(components[c].GetType()))
-                    ComponentFocus.Set(components[c], inside);
-            }
-        }
-    }
+    public void Focus(Entity entity) =>
+        _focusSystem.Focus(entity);
 
     /// <summary>
     /// True if <paramref name="component"/> takes the player's input now: everything it has marked
     /// <see cref="FocusAttribute"/> is on (a board's Controllable), or it has nothing marked.
     /// </summary>
-    public static bool HasFocus(Component component)
-    {
-        ArgumentNullException.ThrowIfNull(component);
-        return ComponentFocus.Takes(component);
-    }
+    public static bool HasFocus(Component component) =>
+        FocusSystem.HasFocus(component);
 
     /// <summary>
     /// True if <paramref name="entity"/> takes the player's input now: every component on it that can have focus (see
     /// <see cref="FocusAttribute"/>) has it, or none can. What else on it reads input (a hotbar's number keys) goes by this.
     /// </summary>
-    public static bool HasFocus(Entity entity)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        var components = entity.ComponentList;
-        for (var i = 0; i < components.Count; i++)
-        {
-            if (!ComponentFocus.Takes(components[i]))
-                return false;
-        }
-
-        return true;
-    }
-
-    // Played by the same player: either belongs to nobody in particular (shared, or offline), or both to the same one (a
-    // network player's id, or a player at this machine's number).
-    private static bool SamePlayer(int a, int b) => a == 0 || b == 0 || a == b;
+    public static bool HasFocus(Entity entity) =>
+        FocusSystem.HasFocus(entity);
 }

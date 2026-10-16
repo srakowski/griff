@@ -108,7 +108,7 @@ public sealed partial class NetSession
         var exit = _hostSettings?.ExitScene is { Length: > 0 } hosts ? hosts : Settings?.ExitScene;
         Leave(reason);
         Ended?.Invoke(reason);
-        _game.LeftHost(exit);
+        _game.NetworkSystem.LeftHost(exit);
     }
 
     private void StopMirroring()
@@ -135,7 +135,7 @@ public sealed partial class NetSession
         _mirrors.Clear();
         _mirrorOf.Clear();
         _clientEpoch = -1;
-        _game.LoadSceneForNetwork(scene);
+        _game.SceneSystem.LoadSceneForNetwork(scene);
     }
 
     /// <summary>Called by the game once a scene the host asked for has loaded (or straight away if it was already showing).</summary>
@@ -162,7 +162,7 @@ public sealed partial class NetSession
         _clientEpoch = _loadingEpoch;
         _loadingEpoch = -1;
         _loadingScene = null;
-        _game.NetSceneStarted();
+        _game.NetworkSystem.NetSceneStarted();
         var w = new NetWriter(8);
         w.Byte((byte)NetMessage.Ready);
         w.VarInt(_clientEpoch);
@@ -216,7 +216,7 @@ public sealed partial class NetSession
                     var volume = r.Float();
                     var pitch = r.Float();
                     Vector2? at = r.Bool() ? r.Vector2() : null;
-                    _game.PlayRelayedSound(sound, volume, pitch, at);
+                    _game.NetworkSystem.PlayRelayedSound(sound, volume, pitch, at);
                     break;
                 }
 
@@ -230,7 +230,7 @@ public sealed partial class NetSession
                 {
                     var name = r.String() ?? "";
                     var args = ReadData(ref r);
-                    _game.RunHostCommand(name, args);
+                    _game.NetworkSystem.RunHostCommand(name, args);
                     break;
                 }
             }
@@ -267,7 +267,7 @@ public sealed partial class NetSession
         _players.AddRange(now);
         if (now.FirstOrDefault(p => p.IsLocal) is { } me)
             LocalPlayer = me;
-        _game.NetPlayersChanged();
+        _game.NetworkSystem.NetPlayersChanged();
         foreach (var joined in now.Where(p => !before.Contains(p) && !p.IsLocal))
             PlayerJoined?.Invoke(joined);
         foreach (var left in before.Where(p => !now.Contains(p) && !p.IsLocal))
@@ -347,7 +347,7 @@ public sealed partial class NetSession
         }
 
         if (entity.Scene == _game.Scene)
-            _game.RemoveForNetwork(entity);
+            _game.NetworkSystem.RemoveForNetwork(entity);
         foreach (var player in _players.Where(p => p.Avatar == entity))
             player.Avatar = null;
     }

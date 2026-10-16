@@ -1,20 +1,49 @@
 using System.Diagnostics;
+using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Running scripts a step at a time: in hierarchy order, each in turn, except a crowd (a run of crowd scripts of one type
-// next to each other: see CrowdAttribute), whose scripts run together, spread across the cores (see Workers).
-public sealed partial class Game
+/// <summary>
+/// Runs the scene's scripts (Behavior): starts those new to it, then runs their Update, FixedUpdate and LateUpdate in
+/// their steps, a kind of script at a time and, for a crowd of one kind, across the cores.
+/// </summary>
+internal sealed class ScriptSystem : GameSystem
 {
-    // A stretch of the scripts with a step: From to From + Count, of one crowd, or not a crowd.
-    private readonly record struct ScriptRun(int From, int Count, bool Crowd);
-
     // The scripts with an Update, a FixedUpdate and a LateUpdate, split into runs.
     private ScriptRun[] _updatingRuns = [];
+
     private ScriptRun[] _fixedUpdatingRuns = [];
+
     private ScriptRun[] _lateUpdatingRuns = [];
 
     private readonly CrowdJob _crowdJob = new();
+
+    // The scripts running this frame, taken as it starts: spawned scripts wait for the next one. Then those of them with
+    // an Update, a FixedUpdate and a LateUpdate, kept with the snapshot they were taken from (unchanged while nothing is
+    // added, removed, enabled or disabled), and the last snapshot every script of had started (by their serials: see
+    // ComponentList.Serial). Lists replaced are filled again two steps later (see SnapshotPool), counted by _steps.
+    private ComponentList<Behavior> _running;
+
+    private long _hooksFor = -1;
+
+    private Behavior[] _hooksFrom = [];
+
+    private Behavior[] _updating = [];
+
+    private Behavior[] _fixedUpdating = [];
+
+    private Behavior[] _lateUpdating = [];
+
+    private long _startedFor = -1;
+
+    private readonly SnapshotPool<Behavior> _scriptLists = new();
+
+    private readonly SnapshotPool<ScriptRun> _runLists = new();
+
+    public override string Name => "Scripts";
+
+    // A stretch of the scripts with a step: From to From + Count, of one crowd, or not a crowd.
+    private readonly record struct ScriptRun(int From, int Count, bool Crowd);
 
     // `scripts` in runs: each crowd of scripts of one crowd type next to each other, and what's between them.
     private ScriptRun[] RunsOf(Behavior[] scripts)
@@ -26,7 +55,7 @@ public sealed partial class Game
                 count++;
         }
 
-        var runs = _runLists.Rent(count, _steps);
+        var runs = _runLists.Rent(count, Game.StepCount);
         var (from, run) = (0, 0);
         for (var i = 1; i <= scripts.Length; i++)
         {
@@ -49,8 +78,8 @@ public sealed partial class Game
     // a run at a time; with a profiler, timing each run of scripts of one kind (a scene's bunnies all at once).
     private void RunScripts(Behavior[] scripts, ScriptRun[] runs, BehaviorHooks hook)
     {
-        var profiler = Profiler;
-        var paused = hook != BehaviorHooks.FixedUpdate && PausedThisFrame;
+        var profiler = Game.Profiler;
+        var paused = hook != BehaviorHooks.FixedUpdate && Game.PausedThisFrame;
         Type? kind = null;
         long started = 0, allocated = 0;
         foreach (var run in runs)
@@ -66,7 +95,7 @@ public sealed partial class Game
             for (var i = run.From; i < run.From + run.Count; i++)
             {
                 var behavior = scripts[i];
-                if (behavior.Entity?.Scene != Scene || (paused && !InOpenPanel(behavior.Entity)))
+                if (behavior.Entity?.Scene != Game.Scene || (paused && !Game.PanelSystem.InOpenPanel(behavior.Entity)))
                     continue;
                 if (profiler is not null)
                     Close(behavior.GetType());
@@ -109,7 +138,7 @@ public sealed partial class Game
     private void RunCrowd(Behavior[] scripts, ScriptRun run, BehaviorHooks hook, bool paused)
     {
         var job = _crowdJob;
-        job.Start(this, scripts, run, hook, paused, Rand.NextSeed());
+        job.Start(Game, scripts, run, hook, paused, Rand.NextSeed());
         try
         {
             // Paused, a panel's scripts run on this thread: whether one's on an open panel isn't for another to ask. With a
@@ -174,7 +203,7 @@ public sealed partial class Game
                 {
                     var behavior = _scripts[_run.From + place];
                     var entity = behavior.Entity;
-                    if (entity?.Scene != scene || (_paused && !game.InOpenPanel(entity)))
+                    if (entity?.Scene != scene || (_paused && !game.PanelSystem.InOpenPanel(entity)))
                         continue;
 
                     // Inside another entity, it'd read where that is (while another thread might be moving it): later.
@@ -218,4 +247,80 @@ public sealed partial class Game
             }
         }
     }
+
+    // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
+    internal void StartScripts()
+    {
+        _running = Game.Active<Behavior>();
+        var running = _running.Items;
+        var serial = _running.Serial;
+        if (serial == 0 || serial != _hooksFor)
+        {
+            var (updating, fixedUpdating, lateUpdating) = (_updating, _fixedUpdating, _lateUpdating);
+            var (updatingRuns, fixedUpdatingRuns, lateUpdatingRuns) = (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns);
+            (_updating, _fixedUpdating, _lateUpdating) = (With(running, BehaviorHooks.Update), With(running, BehaviorHooks.FixedUpdate),
+                With(running, BehaviorHooks.LateUpdate));
+            (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns) = (RunsOf(_updating), RunsOf(_fixedUpdating), RunsOf(_lateUpdating));
+            // The lists of their own that were replaced (not the snapshot itself, when every script had the step).
+            foreach (var old in (ReadOnlySpan<Behavior[]>)[updating, fixedUpdating, lateUpdating])
+            {
+                if (old != _hooksFrom && old != _updating && old != _fixedUpdating && old != _lateUpdating)
+                    _scriptLists.Retire(old, Game.StepCount);
+            }
+
+            _runLists.Retire(updatingRuns, Game.StepCount);
+            _runLists.Retire(fixedUpdatingRuns, Game.StepCount);
+            _runLists.Retire(lateUpdatingRuns, Game.StepCount);
+            (_hooksFor, _hooksFrom) = (serial, running);
+        }
+
+        // A big scene's scripts started long ago: unless it's changed, there's nothing to look for.
+        if (serial != 0 && serial == _startedFor)
+            return;
+        _startedFor = -1;
+        foreach (var behavior in running)
+        {
+            if (!behavior.IsStarted)
+                behavior.RunStart(Game);
+        }
+
+        _startedFor = serial;
+    }
+
+    // Those of `running` whose type has `hook`, in the same order.
+    private Behavior[] With(Behavior[] running, BehaviorHooks hook)
+    {
+        var count = 0;
+        foreach (var behavior in running)
+        {
+            if ((behavior.Hooks & hook) != 0)
+                count++;
+        }
+
+        if (count == running.Length)
+            return running;
+        var with = _scriptLists.Rent(count, Game.StepCount);
+        count = 0;
+        foreach (var behavior in running)
+        {
+            if ((behavior.Hooks & hook) != 0)
+                with[count++] = behavior;
+        }
+
+        return with;
+    }
+
+    // While a panel pauses the game, only the scripts on open panels run.
+    internal void UpdateScripts() => RunScripts(_updating, _updatingRuns, BehaviorHooks.Update);
+
+    // Just before bodies move, in steps where game time moves: not while paused (by a panel, or Time.Scale 0) or frozen in
+    // a hit stop, when physics doesn't step either.
+    internal void FixedUpdateScripts()
+    {
+        if (Game.Time.Delta > 0)
+            RunScripts(_fixedUpdating, _fixedUpdatingRuns, BehaviorHooks.FixedUpdate);
+    }
+
+    // After everything has moved and the camera has followed, before what's pinned to the screen is put in place.
+    internal void LateUpdateScripts() => RunScripts(_lateUpdating, _lateUpdatingRuns, BehaviorHooks.LateUpdate);
 }

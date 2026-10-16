@@ -10,8 +10,8 @@ public sealed partial class Game
 {
     private static readonly FramePhase[] Phases = Enum.GetValues<FramePhase>();
 
-    // Griff's own systems for gameplay with no code, each owning its state and its steps; Game's members for them only
-    // forward to them.
+    // Griff's own systems, each owning its state and its steps: gameplay with no code first, then the rest of what a game
+    // does. Every step of the frame is one of theirs; Game's members for them only forward to them.
     private readonly LevelSystem _levels = new();
     private readonly MovementSystem _movement = new();
     private readonly GridSystem _gridMoves = new();
@@ -21,6 +21,33 @@ public sealed partial class Game
     private readonly SwitchSystem _switches = new();
     private readonly ItemSystem _itemUses = new();
     private readonly DragSystem _drags = new();
+    private readonly ClockSystem _clock = new();
+    private readonly InputSystem _inputSystem = new();
+    private readonly NetworkSystem _network = new();
+    private readonly ScriptSystem _scriptSystem = new();
+    private readonly TimerSystem _timerSystem = new();
+    private readonly MessageSystem _messageSystem = new();
+    private readonly LifetimeSystem _lifetimes = new();
+    private readonly EffectSystem _effects = new();
+    private readonly TilemapSystem _tilemaps = new();
+    private readonly HudSystem _hud = new();
+    private readonly PhysicsSystem _physicsSystem = new();
+    private readonly SceneSystem _scenes = new();
+    private readonly MenuSystem _menuSystem = new();
+    private readonly FocusSystem _focusSystem = new();
+    private readonly PanelSystem _panels = new();
+    private readonly PauseSystem _pauses = new();
+    private readonly ReadingSystem _reading = new();
+    private readonly BeatSystem _beat = new();
+    private readonly CalibrationSystem _calibration = new();
+    private readonly AtmosphereSystem _atmosphere = new();
+    private readonly WeatherSystem _weather = new();
+    private readonly LobbySystem _lobby = new();
+    private readonly ViewSystem _views = new();
+    private readonly SaveSystem _saves = new();
+    private readonly SettingsSystem _settings = new();
+    private readonly TableSystem _tableSystem = new();
+    private readonly MinigameSystem _minigames = new();
 
     internal LevelSystem LevelSystem => _levels;
 
@@ -40,6 +67,60 @@ public sealed partial class Game
 
     internal DragSystem DragSystem => _drags;
 
+    internal ClockSystem ClockSystem => _clock;
+
+    internal InputSystem InputSystem => _inputSystem;
+
+    internal NetworkSystem NetworkSystem => _network;
+
+    internal ScriptSystem ScriptSystem => _scriptSystem;
+
+    internal TimerSystem TimerSystem => _timerSystem;
+
+    internal MessageSystem MessageSystem => _messageSystem;
+
+    internal LifetimeSystem LifetimeSystem => _lifetimes;
+
+    internal EffectSystem EffectSystem => _effects;
+
+    internal TilemapSystem TilemapSystem => _tilemaps;
+
+    internal HudSystem HudSystem => _hud;
+
+    internal PhysicsSystem PhysicsSystem => _physicsSystem;
+
+    internal SceneSystem SceneSystem => _scenes;
+
+    internal MenuSystem MenuSystem => _menuSystem;
+
+    internal FocusSystem FocusSystem => _focusSystem;
+
+    internal PanelSystem PanelSystem => _panels;
+
+    internal PauseSystem PauseSystem => _pauses;
+
+    internal ReadingSystem ReadingSystem => _reading;
+
+    internal BeatSystem BeatSystem => _beat;
+
+    internal CalibrationSystem CalibrationSystem => _calibration;
+
+    internal AtmosphereSystem AtmosphereSystem => _atmosphere;
+
+    internal WeatherSystem WeatherSystem => _weather;
+
+    internal LobbySystem LobbySystem => _lobby;
+
+    internal ViewSystem ViewSystem => _views;
+
+    internal SaveSystem SaveSystem => _saves;
+
+    internal SettingsSystem SettingsSystem => _settings;
+
+    internal TableSystem TableSystem => _tableSystem;
+
+    internal MinigameSystem MinigameSystem => _minigames;
+
     private readonly List<FrameStep> _builtInSteps = [];
     private readonly List<GameSystem> _systems = [];
     private GameSystem[] _builtInSystems = [];
@@ -48,26 +129,13 @@ public sealed partial class Game
     // on through the ones it started with.
     private FrameStep[][] _phases = [];
     private FrameStep[]? _frame;
-
-    // The scripts running this frame, taken as it starts: spawned scripts wait for the next one. Then those of them with
-    // an Update, a FixedUpdate and a LateUpdate, kept with the snapshot they were taken from (unchanged while nothing is
-    // added, removed, enabled or disabled), and the last snapshot every script of had started (by their serials: see
-    // ComponentList.Serial). Lists replaced are filled again two steps later (see SnapshotPool), counted by _steps.
-    private ComponentList<Behavior> _running;
-    private long _hooksFor = -1;
-    private Behavior[] _hooksFrom = [];
-    private Behavior[] _updating = [];
-    private Behavior[] _fixedUpdating = [];
-    private Behavior[] _lateUpdating = [];
-    private long _startedFor = -1;
-    private readonly SnapshotPool<Behavior> _scriptLists = new();
-    private readonly SnapshotPool<ScriptRun> _runLists = new();
     private long _steps;
     private double _tickSeconds;
 
-    // What physics calls back, made once rather than every frame.
-    private Action<Entity, Entity>? _onCollision;
-    private Action<Entity, Entity, bool>? _onTrigger;
+    // How many steps the game has taken, and how long each is: what the systems that pool or keep time go by.
+    internal long StepCount => _steps;
+
+    internal double TickSeconds => _tickSeconds;
 
     /// <summary>
     /// Every step of a frame in the order <see cref="Tick"/> takes them: Griff's own, then in each phase the
@@ -328,99 +396,97 @@ public sealed partial class Game
     // Griff's own steps, in the order a frame runs them. FrameTests pins this order: change it on purpose.
     private void BuildFrame()
     {
-        GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _panels];
+        GameSystem[] core = [_levels, _movement, _gridMoves, _turns, _combat, _triggers, _switches, _itemUses, _drags, _panels, _clock, _inputSystem,
+            _network, _scriptSystem, _timerSystem, _messageSystem, _lifetimes, _effects, _tilemaps, _hud, _physicsSystem, _scenes, _menuSystem,
+            _focusSystem, _pauses, _reading, _beat, _calibration, _atmosphere, _weather, _lobby, _views, _saves, _settings, _tableSystem, _minigames];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
-        Step(Steps.Panels, SyncPanels, _panels);
-        Step(Steps.Pauses, SyncPauses);
-        Step(Steps.Time, AdvanceTime);
-        Step(Steps.Input, () =>
-        {
-            (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
-            LocalPlayers.Update(Scene);
-        });
-        Step(Steps.DebugDrawing, Debug.BeginFrame);
-        Step(Steps.BeginNetwork, () => Net.BeginFrame(Time.UnscaledDelta));
-        Step(Steps.Tables, ApplyTables);
-        Step(Steps.CarriedValues, RunCarried);
-        Step(Steps.ScriptStart, StartScripts);
+        Step(Steps.Panels, _panels.SyncPanels);
+        Step(Steps.Pauses, _pauses.SyncPauses);
+        Step(Steps.Time, _clock.AdvanceTime);
+        Step(Steps.Input, _inputSystem.ReadInput);
+        Step(Steps.DebugDrawing, _clock.BeginDebugDrawing);
+        Step(Steps.BeginNetwork, _network.BeginNetwork);
+        Step(Steps.Tables, _tableSystem.ApplyTables);
+        Step(Steps.CarriedValues, _scenes.RunCarried);
+        Step(Steps.ScriptStart, _scriptSystem.StartScripts);
 
-        Step(Steps.Menus, UpdateMenus);
-        Step(Steps.Lobby, RunLobby);
-        Step(Steps.Grids, LineUpGrids);
-        Step(Steps.SwitchTargets, _switches.ApplySwitches, _switches);
-        Step(Steps.Turns, _turns.RunTurns, _turns);
-        Step(Steps.BeatClocks, RunBeatClocks);
-        Step(Steps.Calibrations, RunCalibrations);
+        Step(Steps.Menus, _menuSystem.UpdateMenus);
+        Step(Steps.Lobby, _lobby.RunLobby);
+        Step(Steps.Grids, _tilemaps.LineUpGrids);
+        Step(Steps.SwitchTargets, _switches.ApplySwitches);
+        Step(Steps.Turns, _turns.RunTurns);
+        Step(Steps.BeatClocks, _beat.RunBeatClocks);
+        Step(Steps.Calibrations, _calibration.RunCalibrations);
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
-        Step(Steps.Enemies, _levels.RunEnemies, _levels);
-        Step(Steps.Movement, _movement.RunMovement, _movement);
-        Step(Steps.ItemUses, _itemUses.RunItemUses, _itemUses);
+        Step(Steps.Enemies, _levels.RunEnemies);
+        Step(Steps.Movement, _movement.RunMovement);
+        Step(Steps.ItemUses, _itemUses.RunItemUses);
 
-        Step(Steps.Scripts, UpdateScripts, timesItself: true);
+        Step(Steps.Scripts, _scriptSystem.UpdateScripts, timesItself: true);
 
         // Whatever systems show on the screen is laid out first, so a click on it isn't taken for one in the world.
-        Step(Steps.HUD, LayOutHuds);
-        Step(Steps.OtherPlayersTools, RunOtherPlayersTools);
-        Step(Steps.Dragging, _drags.RunDragging, _drags);
-        Step(Steps.Attacks, _combat.RunAttacks, _combat);
-        Step(Steps.IdleGridMovers, _turns.PassIdleGridMovers, _turns);
-        Step(Steps.Timers, RunTimers);
-        Step(Steps.Coroutines, RunCoroutines);
-        Step(Steps.Tweens, RunTweens);
-        Step(Steps.Lifetimes, RunLifetimes);
-        Step(Steps.Spawners, RunSpawners);
-        Step(Steps.Shooters, _levels.RunShooters, _levels);
-        Step(Steps.Movers, _levels.RunMovers, _levels);
-        Step(Steps.Animations, RunAnimations);
-        Step(Steps.AnimatedTiles, RunAnimatedTiles);
-        Step(Steps.Particles, RunParticles);
-        Step(Steps.CameraShake, RunCameraShake);
-        Step(Steps.SpriteEffects, RunSpriteEffects);
-        Step(Steps.SimulatePrompts, FillPrompts);
-        Step(Steps.Typewriters, RunTypewriters);
-        Step(Steps.PickupSpin, _itemUses.RunPickupSpin, _itemUses);
+        Step(Steps.HUD, _hud.LayOutHuds);
+        Step(Steps.OtherPlayersTools, _network.RunOtherPlayersTools);
+        Step(Steps.Dragging, _drags.RunDragging);
+        Step(Steps.Attacks, _combat.RunAttacks);
+        Step(Steps.IdleGridMovers, _turns.PassIdleGridMovers);
+        Step(Steps.Timers, _timerSystem.RunTimers);
+        Step(Steps.Coroutines, _timerSystem.RunCoroutines);
+        Step(Steps.Tweens, _timerSystem.RunTweens);
+        Step(Steps.Lifetimes, _lifetimes.RunLifetimes);
+        Step(Steps.Spawners, _lifetimes.RunSpawners);
+        Step(Steps.Shooters, _levels.RunShooters);
+        Step(Steps.Movers, _levels.RunMovers);
+        Step(Steps.Animations, _effects.RunAnimations);
+        Step(Steps.AnimatedTiles, _tilemaps.RunAnimatedTiles);
+        Step(Steps.Particles, _effects.RunParticles);
+        Step(Steps.CameraShake, _effects.RunCameraShake);
+        Step(Steps.SpriteEffects, _effects.RunSpriteEffects);
+        Step(Steps.SimulatePrompts, _panels.FillPrompts);
+        Step(Steps.Typewriters, _hud.RunTypewriters);
+        Step(Steps.PickupSpin, _itemUses.RunPickupSpin);
 
         // Scripts push bodies just before they move.
-        Step(Steps.FixedScripts, FixedUpdateScripts, timesItself: true);
-        Step(Steps.Physics, StepPhysics);
-        Step(Steps.Carrying, _drags.CarryHeld, _drags);
+        Step(Steps.FixedScripts, _scriptSystem.FixedUpdateScripts, timesItself: true);
+        Step(Steps.Physics, _physicsSystem.StepPhysics);
+        Step(Steps.Carrying, _drags.CarryHeld);
 
-        Step(Steps.Pickups, _itemUses.RunPickups, _itemUses);
-        Step(Steps.Checkpoints, _levels.RunCheckpoints, _levels);
-        Step(Steps.Doors, _levels.RunDoors, _levels);
-        Step(Steps.Dialogues, _levels.RunDialogues, _levels);
-        Step(Steps.Switches, _switches.RunSwitches, _switches);
-        Step(Steps.Bouncers, _movement.RunBouncers, _movement);
-        Step(Steps.Crumbles, _movement.RunCrumbles, _movement);
-        Step(Steps.TouchDamage, _combat.RunTouchDamage, _combat);
-        Step(Steps.Health, _combat.RunHealth, _combat);
-        Step(Steps.Respawns, _levels.RunRespawns, _levels);
-        Step(Steps.Bars, RunBars);
-        Step(Steps.Stars, RunStars);
-        Step(Steps.Counters, RunCounters);
-        Step(Steps.TextOutputs, ShowOutputs);
-        Step(Steps.Fade, AdvanceFade);
-        Step(Steps.ScreenFlash, RunScreenFlash);
-        Step(Steps.Destroys, FlushDestroys);
-        Step(Steps.SceneChange, SwitchSceneIfRequested);
+        Step(Steps.Pickups, _itemUses.RunPickups);
+        Step(Steps.Checkpoints, _levels.RunCheckpoints);
+        Step(Steps.Doors, _levels.RunDoors);
+        Step(Steps.Dialogues, _levels.RunDialogues);
+        Step(Steps.Switches, _switches.RunSwitches);
+        Step(Steps.Bouncers, _movement.RunBouncers);
+        Step(Steps.Crumbles, _movement.RunCrumbles);
+        Step(Steps.TouchDamage, _combat.RunTouchDamage);
+        Step(Steps.Health, _combat.RunHealth);
+        Step(Steps.Respawns, _levels.RunRespawns);
+        Step(Steps.Bars, _hud.RunBars);
+        Step(Steps.Stars, _hud.RunStars);
+        Step(Steps.Counters, _hud.RunCounters);
+        Step(Steps.TextOutputs, _hud.ShowOutputs);
+        Step(Steps.Fade, _scenes.AdvanceFade);
+        Step(Steps.ScreenFlash, _effects.RunScreenFlash);
+        Step(Steps.Destroys, _lifetimes.FlushDestroys);
+        Step(Steps.SceneChange, _scenes.SwitchSceneIfRequested);
 
-        Step(Steps.Rooms, RunRooms);
-        Step(Steps.Followers, RunFollowers);
-        Step(Steps.LateScripts, LateUpdateScripts, timesItself: true);
-        Step(Steps.ScreenAnchors, LayOutScreen);
-        Step(Steps.Trails, RunTrails);
-        Step(Steps.Lights, RunLights);
-        Step(Steps.Weather, RunWeather);
-        Step(Steps.PresentPrompts, FillPrompts);
-        Step(Steps.SoundSources, RunSoundSources);
-        Step(Steps.SoundPlayers, RunSoundPlayers);
-        Step(Steps.PatrolWalks, _levels.CountPatrolWalks, _levels);
+        Step(Steps.Rooms, _atmosphere.RunRooms);
+        Step(Steps.Followers, _effects.RunFollowers);
+        Step(Steps.LateScripts, _scriptSystem.LateUpdateScripts, timesItself: true);
+        Step(Steps.ScreenAnchors, _hud.LayOutScreen);
+        Step(Steps.Trails, _effects.RunTrails);
+        Step(Steps.Lights, _atmosphere.RunLights);
+        Step(Steps.Weather, _weather.RunWeather);
+        Step(Steps.PresentPrompts, _panels.FillPrompts);
+        Step(Steps.SoundSources, _atmosphere.RunSoundSources);
+        Step(Steps.SoundPlayers, _atmosphere.RunSoundPlayers);
+        Step(Steps.PatrolWalks, _levels.CountPatrolWalks);
 
-        Step(Steps.Audio, () => Audio.Advance(Time.UnscaledDelta));
-        Step(Steps.Settings, SaveSettings);
-        Step(Steps.EndNetwork, () => Net.EndFrame(Time.UnscaledDelta));
+        Step(Steps.Audio, _atmosphere.AdvanceAudio);
+        Step(Steps.Settings, _settings.SaveSettings);
+        Step(Steps.EndNetwork, _network.EndNetwork);
 
         // Then each module's systems, their steps put in next to the steps they follow or go before.
         var setup = new GameSetup(this);
@@ -443,8 +509,9 @@ public sealed partial class Game
         BuildPhases();
     }
 
-    private void Step(StepId id, Action run, GameSystem? system = null, bool timesItself = false) =>
-        _builtInSteps.Add(new FrameStep(id, run, system) { TimesItself = timesItself });
+    // Each step is its system's method: the system it belongs to is the one that runs it.
+    private void Step(StepId id, Action run, bool timesItself = false) =>
+        _builtInSteps.Add(new FrameStep(id, run, run.Target as GameSystem) { TimesItself = timesItself });
 
     // Griff's steps, then each added system's Update, phase by phase.
     private void BuildPhases()
@@ -470,216 +537,15 @@ public sealed partial class Game
         system.RunUpdate();
     }
 
-    private void AdvanceTime()
-    {
-        _pausedAtStart = Time.IsPaused;
-        Time.Advance(_tickSeconds);
-    }
-
-    // Snapshot first: behaviors may spawn or destroy while we iterate. In a network game, the host runs scripts.
-    private void StartScripts()
-    {
-        _running = Active<Behavior>();
-        var running = _running.Items;
-        var serial = _running.Serial;
-        if (serial == 0 || serial != _hooksFor)
-        {
-            var (updating, fixedUpdating, lateUpdating) = (_updating, _fixedUpdating, _lateUpdating);
-            var (updatingRuns, fixedUpdatingRuns, lateUpdatingRuns) = (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns);
-            (_updating, _fixedUpdating, _lateUpdating) = (With(running, BehaviorHooks.Update), With(running, BehaviorHooks.FixedUpdate),
-                With(running, BehaviorHooks.LateUpdate));
-            (_updatingRuns, _fixedUpdatingRuns, _lateUpdatingRuns) = (RunsOf(_updating), RunsOf(_fixedUpdating), RunsOf(_lateUpdating));
-            // The lists of their own that were replaced (not the snapshot itself, when every script had the step).
-            foreach (var old in (ReadOnlySpan<Behavior[]>)[updating, fixedUpdating, lateUpdating])
-            {
-                if (old != _hooksFrom && old != _updating && old != _fixedUpdating && old != _lateUpdating)
-                    _scriptLists.Retire(old, _steps);
-            }
-
-            _runLists.Retire(updatingRuns, _steps);
-            _runLists.Retire(fixedUpdatingRuns, _steps);
-            _runLists.Retire(lateUpdatingRuns, _steps);
-            (_hooksFor, _hooksFrom) = (serial, running);
-        }
-
-        // A big scene's scripts started long ago: unless it's changed, there's nothing to look for.
-        if (serial != 0 && serial == _startedFor)
-            return;
-        _startedFor = -1;
-        foreach (var behavior in running)
-        {
-            if (!behavior.IsStarted)
-                behavior.RunStart(this);
-        }
-
-        _startedFor = serial;
-    }
-
-    // Those of `running` whose type has `hook`, in the same order.
-    private Behavior[] With(Behavior[] running, BehaviorHooks hook)
-    {
-        var count = 0;
-        foreach (var behavior in running)
-        {
-            if ((behavior.Hooks & hook) != 0)
-                count++;
-        }
-
-        if (count == running.Length)
-            return running;
-        var with = _scriptLists.Rent(count, _steps);
-        count = 0;
-        foreach (var behavior in running)
-        {
-            if ((behavior.Hooks & hook) != 0)
-                with[count++] = behavior;
-        }
-
-        return with;
-    }
-
-    // While a panel pauses the game, only the scripts on open panels run.
-    private void UpdateScripts() => RunScripts(_updating, _updatingRuns, BehaviorHooks.Update);
-
-    // Just before bodies move, in steps where game time moves: not while paused (by a panel, or Time.Scale 0) or frozen in
-    // a hit stop, when physics doesn't step either.
-    private void FixedUpdateScripts()
-    {
-        if (Time.Delta > 0)
-            RunScripts(_fixedUpdating, _fixedUpdatingRuns, BehaviorHooks.FixedUpdate);
-    }
-
-    // After everything has moved and the camera has followed, before what's pinned to the screen is put in place.
-    private void LateUpdateScripts() => RunScripts(_lateUpdating, _lateUpdatingRuns, BehaviorHooks.LateUpdate);
-
-    private void LayOutHuds()
-    {
-        // By index: a button pressed while laying out may do anything.
-        for (var i = 0; i < _systems.Count; i++)
-            _systems[i].RunLayOutHud();
-    }
-
-    // The host runs each other player's tools for them, as them: each system lays out its HUD for their screen, then runs
-    // their controls.
-    private void RunOtherPlayersTools()
-    {
-        if (!Net.IsHost)
-            return;
-        ForEachRemotePlayer(player =>
-        {
-            LayOutHuds();
-            for (var i = 0; i < _systems.Count; i++)
-                _systems[i].RunForOtherPlayer(player);
-        });
-    }
-
-    // Trails go after everything has moved (followers too), so their copies are left where things were drawn.
-    private void RunTrails()
-    {
-        foreach (var trail in Scene.RunningNow<Trail>())
-            trail.Advance(Time.Delta);
-    }
-
-    // Tilemaps that line up with another's cells (see Tilemap.LinesUpWith) stay on them: one spawned, or whose map moved.
-    private void LineUpGrids()
-    {
-        foreach (var map in Scene.ActiveNow<Tilemap>())
-        {
-            if (map.LinesUpWith is not null)
-                map.LineUp();
-        }
-    }
-
-    private void RunAnimatedTiles()
-    {
-        foreach (var tilemap in Scene.RunningNow<Tilemap>())
-        {
-            if (!string.IsNullOrWhiteSpace(tilemap.AnimatedTiles))
-                tilemap.AnimationTime += Time.Delta;
-        }
-    }
-
-    private void RunAnimations()
-    {
-        foreach (var animation in Scene.RunningNow<Animation>())
-            animation.Advance(Time.Delta);
-    }
-
-    private void RunParticles()
-    {
-        foreach (var emitter in Scene.RunningNow<ParticleEmitter>())
-        {
-            emitter.Advance(Time.Delta, Physics.Gravity);
-            if (emitter.DestroyWhenFinished && emitter.IsFinished && Runs(emitter.Entity!))
-                Destroy(emitter.Entity!);
-        }
-    }
-
-    private void RunCameraShake()
-    {
-        foreach (var camera in Scene.ActiveNow<Camera>())
-        {
-            camera.AdvanceShake(Time.UnscaledDelta);
-            camera.AdvanceAmbient(Time.UnscaledDelta);
-        }
-    }
-
-    // Only the sprites flashing or blinking, each dropped from the list once it's done, or gone. Each moves on by itself,
-    // so the order they're in doesn't matter.
-    private void RunSpriteEffects()
-    {
-        var sprites = Scene.SpriteEffects;
-        for (var i = 0; i < sprites.Count; i++)
-        {
-            var sprite = sprites[i];
-            if (sprite.Entity is { } entity && entity.Scene == Scene)
-            {
-                if (!entity.IsActive || entity.IsPaused)
-                    continue;
-                sprite.AdvanceEffects(Time.Delta);
-                if (sprite.HasEffects)
-                    continue;
-            }
-
-            if (sprite.EffectsListedIn == Scene)
-                sprite.EffectsListedIn = null;
-            sprites[i--] = sprites[^1];
-            sprites.RemoveAt(sprites.Count - 1);
-        }
-    }
-
-    private void StepPhysics()
-    {
-        if (Time.Delta <= 0)
-            return;
-        Physics.Step(Scene, Time.Delta, _onCollision ??= OnCollision, _onTrigger ??= OnTrigger);
-
-        // Room for what a heap of bodies that turn bump into, all awake at once, so a collapse doesn't grow it as it goes.
-        _touches.EnsureCapacity(Physics.TouchRoom);
-
-        // Ropes that snapped say so.
-        foreach (var rope in Physics.Snapped)
-        {
-            if (!string.IsNullOrWhiteSpace(rope.BreakMessage) && rope.Entity is { } entity)
-                Send(rope.BreakMessage.Trim(), entity, from: entity);
-        }
-
-        foreach (var (trigger, other) in Physics.TriggerPairs)
-        {
-            _touches.Add((trigger, other));
-            _touches.Add((other, trigger));
-        }
-    }
-
     // The scene is about to go (for another, or the game is stopping): systems keep what it leaves behind.
-    private void SystemsSceneEnding()
+    internal void SystemsSceneEnding()
     {
         foreach (var system in _systems.ToList())
             system.RunSceneEnding();
     }
 
     // A new scene: systems whose script stayed behind go, and the rest forget the last scene, Griff's first.
-    private void SystemsSceneChanged()
+    internal void SystemsSceneChanged()
     {
         // The pointer starts each scene as the arrow; what sets it there sets it again.
         Input.Cursor = Griff.Input.MouseCursor.Arrow;

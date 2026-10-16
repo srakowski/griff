@@ -419,7 +419,7 @@ internal sealed class LevelSystem : GameSystem
             ShowPrompt(door.Entity!, door.Prompt, ready.Count > 0);
 
             // One trip at a time: not while a scene change or another door's fade is under way.
-            if (ready.Count == 0 || Game.IsFadingOrChangingScene)
+            if (ready.Count == 0 || Game.SceneSystem.IsFadingOrChangingScene)
                 continue;
             var user = door.NeedsInteract ? ready.FirstOrDefault(u => Game.HasFocus(u) && Game.InputOf(u).WasPressed("Interact")) : ready[0];
             if (user is null)
@@ -470,7 +470,7 @@ internal sealed class LevelSystem : GameSystem
         if (Game.PausedThisFrame)
             return;
         RunTalks();
-        Game.RunReading();
+        Game.ReadingSystem.RunReading();
     }
 
     private void RunTalks()
@@ -570,7 +570,7 @@ internal sealed class LevelSystem : GameSystem
         ShowPrompt(dialogue.Entity!, dialogue.Prompt, false);
         if (BoxOf(dialogue) is { } box)
             box.IsEnabled = true;
-        if (Game.PausesAll(dialogue.PauseGame, dialogue.Pauses))
+        if (PauseSystem.PausesAll(dialogue.PauseGame, dialogue.Pauses))
         {
             _scaleBeforeTalk = Game.Time.Scale;
             Game.Time.Scale = 0;
@@ -578,7 +578,7 @@ internal sealed class LevelSystem : GameSystem
         else
         {
             // Only a group stands still, from now.
-            Game.SyncPauses();
+            Game.PauseSystem.SyncPauses();
         }
 
         if (resume && at >= 0 && at < dialogue.Lines.Count && dialogue.Row(at).Kind is Dialogue.RowKind.Said or Dialogue.RowKind.Choice)
@@ -614,7 +614,7 @@ internal sealed class LevelSystem : GameSystem
         var picked = dialogue.Row(_choiceRows[choice]);
         var after = _afterChoices;
         dialogue.Picked = choice;
-        Game.AddToLogs("> " + picked.Text);
+        Game.ReadingSystem.AddToLogs("> " + picked.Text);
         DoTags(dialogue, picked.Tags);
         dialogue.RaiseChosen(choice);
         if (_talking != dialogue)
@@ -638,7 +638,7 @@ internal sealed class LevelSystem : GameSystem
             return;
         if (on)
         {
-            Game.NoteFlagName(key);
+            Game.SaveSystem.NoteFlagName(key);
             Game.SaveData.Set(key, true);
         }
         else
@@ -860,7 +860,7 @@ internal sealed class LevelSystem : GameSystem
             text.Entity!.GetComponent<Typewriter>()?.Restart();
         }
 
-        Game.NoteLineShown(dialogue, row, line.Kind == Dialogue.RowKind.Said, resume);
+        Game.ReadingSystem.NoteLineShown(dialogue, row, line.Kind == Dialogue.RowKind.Said, resume);
         dialogue.RaiseLineShown();
     }
 
@@ -1014,7 +1014,7 @@ internal sealed class LevelSystem : GameSystem
         if (_scaleBeforeTalk is { } scale)
             Game.Time.Scale = scale;
         _scaleBeforeTalk = null;
-        Game.SyncPauses();
+        Game.PauseSystem.SyncPauses();
 
         if (!finished)
             return;

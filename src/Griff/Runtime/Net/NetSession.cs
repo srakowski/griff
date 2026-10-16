@@ -368,7 +368,7 @@ public sealed partial class NetSession : IDisposable
         Role = NetRole.Offline;
         IsConnecting = false;
         Status = reason;
-        _game.NetEnded();
+        _game.NetworkSystem.NetEnded();
     }
 
     // ----- Messages -----

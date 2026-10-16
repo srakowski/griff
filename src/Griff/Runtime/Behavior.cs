@@ -190,22 +190,22 @@ public abstract class Behavior : Component, IHealthListener
     /// Runs <paramref name="routine"/> over several frames, e.g. <c>StartCoroutine(Waves())</c>; see <see cref="Coroutine"/>.
     /// It stops if this entity is destroyed, and when the script is reloaded (Start then runs again on the new version).
     /// </summary>
-    protected Coroutine StartCoroutine(System.Collections.IEnumerator routine) => Game.StartCoroutine(routine, this);
+    protected Coroutine StartCoroutine(System.Collections.IEnumerator routine) => Game.TimerSystem.StartCoroutine(routine, this);
 
     /// <summary>Stops every coroutine this behavior started.</summary>
-    protected void StopCoroutines() => Game.StopCoroutines(this);
+    protected void StopCoroutines() => Game.TimerSystem.StopCoroutines(this);
 
     /// <summary>
     /// Calls <paramref name="action"/> whenever someone sends <paramref name="message"/> with <c>Game.Send</c>, until this
     /// entity is destroyed or the script is reloaded (Start then runs again on the new version, so listen in Start).
     /// </summary>
     /// <example><code>protected override void Start() => On("PlayerDied", () => Game.ReloadScene(fade: 0.5f));</code></example>
-    protected MessageListener On(string message, Action action) => Game.On(message, _ => action(), this);
+    protected MessageListener On(string message, Action action) => Game.MessageSystem.On(message, _ => action(), this);
 
     /// <summary>
     /// Like <see cref="On(string, Action)"/>, with the data sent along, e.g. <c>On&lt;int&gt;("ScoreChanged", score =&gt; ...)</c>.
     /// </summary>
-    protected MessageListener On<T>(string message, Action<T> action) => Game.On(message, data => action(data switch
+    protected MessageListener On<T>(string message, Action<T> action) => Game.MessageSystem.On(message, data => action(data switch
     {
         T value => value,
         null when default(T) is null => default!,
@@ -214,7 +214,7 @@ public abstract class Behavior : Component, IHealthListener
     }), this);
 
     /// <summary>Stops every message listener this behavior started.</summary>
-    protected void StopListening() => Game.StopListening(this);
+    protected void StopListening() => Game.MessageSystem.StopListening(this);
 
     /// <summary>
     /// Runs <paramref name="system"/> every frame until this entity is destroyed or left behind by a scene change, or

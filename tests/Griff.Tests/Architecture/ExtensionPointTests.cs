@@ -60,6 +60,45 @@ public sealed class ExtensionPointTests
             "GameSystem.Draw, the network attributes or INetState):\n" + string.Join("\n", named));
     }
 
+    // Every one of the core's systems (each GameSystem outside the modules), and Game itself, knows no genre: none names a
+    // component a module declares. A genre's work reaches the core through the extension points above, or is the module's.
+    [Fact]
+    public void CoreSystems_NameNoModulesComponent()
+    {
+        var (compilation, trees) = LayerTests.Core();
+        var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
+        var system = compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
+        var game = compilation.GetTypeByMetadataName("Griff.Runtime.Game")!;
+        var modules = Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules") + Path.DirectorySeparatorChar;
+        bool InModules(ISymbol symbol) =>
+            symbol.Locations.Any(l => l.SourceTree?.FilePath is { Length: > 0 } path && Path.GetFullPath(path).StartsWith(modules, StringComparison.OrdinalIgnoreCase));
+
+        var named = new List<string>();
+        var checkedSystems = 0;
+        foreach (var tree in trees)
+        {
+            var model = compilation.GetSemanticModel(tree);
+            var core = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .Select(c => model.GetDeclaredSymbol(c))
+                .OfType<INamedTypeSymbol>()
+                .Where(t => !InModules(t) && (SymbolEqualityComparer.Default.Equals(t, game) || (DerivesFrom(t, system) && !t.IsAbstract)))
+                .ToList();
+            if (core.Count == 0)
+                continue;
+            checkedSystems += core.Count(t => !SymbolEqualityComparer.Default.Equals(t, game));
+            named.AddRange(tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>()
+                .Select(n => LayerTests.Used(model.GetSymbolInfo(n).Symbol))
+                .OfType<INamedTypeSymbol>()
+                .Where(t => DerivesFrom(t, component) && InModules(t))
+                .Select(t => $"{Path.GetFileName(tree.FilePath)}: {t.Name}"));
+        }
+
+        Assert.True(checkedSystems >= 36, $"Found {checkedSystems} core systems");
+        Assert.True(named.Count == 0,
+            "A core system names a module's component (reach it through an extension point, or move the work to the module):\n" +
+            string.Join("\n", named.Distinct().Order()));
+    }
+
     private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
     {
         for (var t = type.BaseType; t is not null; t = t.BaseType)

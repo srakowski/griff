@@ -261,9 +261,9 @@ public static partial class SceneRenderer
         {
             // Quads over the whole view: twice the unit quad in clip space, taken back into the world.
             var whole = Matrix4x4.CreateScale(2, 2, 1) * clipToWorld;
-            if (game.ScreenFlashDrawn(blend) is { A: > 0 } flash)
+            if (game.EffectSystem.ScreenFlashDrawn(blend) is { A: > 0 } flash)
                 sprites.Add(new SpriteDraw(whole, null, flash, ScreenEntity));
-            if (TransitionDraw(game, game.FadeDrawn(blend), component?.Transition ?? SceneTransition.Fade, view, clipToWorld) is { } transition)
+            if (TransitionDraw(game, game.SceneSystem.FadeDrawn(blend), component?.Transition ?? SceneTransition.Fade, view, clipToWorld) is { } transition)
                 sprites.Add(transition);
         }
 
@@ -946,5 +946,4 @@ public static partial class SceneRenderer
             }
         }
     }
-
 }

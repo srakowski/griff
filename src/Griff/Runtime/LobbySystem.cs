@@ -4,10 +4,14 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Menus for network games: boxes to type a name or an address into, and the list of who's playing.
-public sealed partial class Game
+/// <summary>
+/// A network game's lobby with no code: name tags, text fields players type in, and scoreboards.
+/// </summary>
+internal sealed class LobbySystem : GameSystem
 {
-    private void RunLobby()
+    public override string Name => "Lobby";
+
+    internal void RunLobby()
     {
         RunTextFields();
         RunScoreboards();
@@ -17,12 +21,12 @@ public sealed partial class Game
     // Every machine works out the same names for itself, so they show at once wherever the character is.
     private void RunNameTags()
     {
-        foreach (var tag in Showing<NameTag>())
+        foreach (var tag in Game.Showing<NameTag>())
         {
             if (tag.Entity!.GetComponent<Text>() is not { } text)
                 continue;
-            var player = Net.IsOnline ? Net.OwnerOf(tag.Entity) : null;
-            var shown = player is null ? Net.IsOnline ? "" : tag.Offline ?? "" : tag.ShowScore ? $"{player.Name}  {player.Score}" : player.Name;
+            var player = Game.Net.IsOnline ? Game.Net.OwnerOf(tag.Entity) : null;
+            var shown = player is null ? Game.Net.IsOnline ? "" : tag.Offline ?? "" : tag.ShowScore ? $"{player.Name}  {player.Score}" : player.Name;
             if (text.Value != shown)
                 text.Value = shown;
             if (tag.UseColor && player is not null && text.Color != player.Color with { A = text.Color.A })
@@ -32,14 +36,14 @@ public sealed partial class Game
 
     private void RunTextFields()
     {
-        var fields = Active<TextField>();
+        var fields = Game.Active<TextField>();
         if (fields.Count == 0)
             return;
 
         // A click picks the field under the mouse, or none.
-        if (Input.WasPressed(MouseButton.Left) && Input.IsMouseInView)
+        if (Game.Input.WasPressed(MouseButton.Left) && Game.Input.IsMouseInView)
         {
-            var clicked = fields.FirstOrDefault(f => AreaOf(f.Entity!, f.Size).Contains(Input.MouseWorld));
+            var clicked = fields.FirstOrDefault(f => MenuSystem.AreaOf(f.Entity!, f.Size).Contains(Game.Input.MouseWorld));
             foreach (var field in fields)
                 field.IsFocused = field == clicked;
         }
@@ -51,24 +55,24 @@ public sealed partial class Game
                 field.Loaded = true;
                 field.Value = field.Use switch
                 {
-                    TextFieldUse.PlayerName => string.IsNullOrEmpty(field.Value) ? Net.PlayerName : field.Value,
-                    TextFieldUse.JoinAddress => SaveData.GetString(NetSession.AddressSaveKey) ?? field.Value,
+                    TextFieldUse.PlayerName => string.IsNullOrEmpty(field.Value) ? Game.Net.PlayerName : field.Value,
+                    TextFieldUse.JoinAddress => Game.SaveData.GetString(NetSession.AddressSaveKey) ?? field.Value,
                     _ => field.Value,
                 };
             }
 
             if (field.IsFocused)
             {
-                var typed = Input.TypeInto(field.Value ?? "", Math.Max(1, field.MaxLength));
+                var typed = Game.Input.TypeInto(field.Value ?? "", Math.Max(1, field.MaxLength));
                 if (typed != (field.Value ?? ""))
                 {
                     field.Value = typed;
                     Remember(field);
                 }
 
-                if (Input.WasPressed(Key.Enter) || Input.WasPressed(Key.Escape) || Input.WasPressed(Key.Tab))
+                if (Game.Input.WasPressed(Key.Enter) || Game.Input.WasPressed(Key.Escape) || Game.Input.WasPressed(Key.Tab))
                     field.IsFocused = false;
-                field.Blink = (field.Blink + Time.UnscaledDelta) % 1;
+                field.Blink = (field.Blink + Game.Time.UnscaledDelta) % 1;
             }
 
             if (field.Entity!.GetComponent<Text>() is { } text)
@@ -87,24 +91,24 @@ public sealed partial class Game
         switch (field.Use)
         {
             case TextFieldUse.PlayerName:
-                Net.PlayerName = field.Value ?? "";
+                Game.Net.PlayerName = field.Value ?? "";
                 break;
             case TextFieldUse.JoinAddress when string.IsNullOrWhiteSpace(field.Value):
-                SaveData.Delete(NetSession.AddressSaveKey);
+                Game.SaveData.Delete(NetSession.AddressSaveKey);
                 break;
             case TextFieldUse.JoinAddress:
-                SaveData.Set(NetSession.AddressSaveKey, field.Value!.Trim());
+                Game.SaveData.Set(NetSession.AddressSaveKey, field.Value!.Trim());
                 break;
         }
     }
 
     private void RunScoreboards()
     {
-        foreach (var board in Active<Scoreboard>())
+        foreach (var board in Game.Active<Scoreboard>())
         {
             if (board.Entity!.GetComponent<Text>() is not { } text)
                 continue;
-            var shown = board.HoldKey != Key.None && !Input.IsDown(board.HoldKey) ? "" : Describe(board);
+            var shown = board.HoldKey != Key.None && !Game.Input.IsDown(board.HoldKey) ? "" : Describe(board);
             if (text.Value != shown)
                 text.Value = shown;
 
@@ -130,14 +134,14 @@ public sealed partial class Game
         if (!string.IsNullOrWhiteSpace(board.Title))
             lines.AppendLine(board.Title.Trim());
 
-        if (!Net.IsOnline)
+        if (!Game.Net.IsOnline)
         {
             if (!string.IsNullOrWhiteSpace(board.Offline))
                 lines.AppendLine(board.Offline.Trim());
         }
         else
         {
-            var players = board.ShowScore ? Net.Players.OrderByDescending(p => p.Score).ThenBy(p => p.Id) : Net.Players.OrderBy(p => p.Id);
+            var players = board.ShowScore ? Game.Net.Players.OrderByDescending(p => p.Score).ThenBy(p => p.Id) : Game.Net.Players.OrderBy(p => p.Id);
             foreach (var player in players)
             {
                 var line = new StringBuilder(player.Name);
@@ -155,8 +159,8 @@ public sealed partial class Game
             }
         }
 
-        if (board.ShowStatus && !string.IsNullOrWhiteSpace(Net.Status))
-            lines.AppendLine(Net.Status);
+        if (board.ShowStatus && !string.IsNullOrWhiteSpace(Game.Net.Status))
+            lines.AppendLine(Game.Net.Status);
         return lines.ToString().TrimEnd();
     }
 }

@@ -3,20 +3,24 @@ using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Weather: rain, snow, leaves and embers over the view, and storms' lightning.
-public sealed partial class Game
+/// <summary>
+/// Rain, snow and storms falling around the camera.
+/// </summary>
+internal sealed class WeatherSystem : GameSystem
 {
     // Weather is scenery, so it has its own randomness and never changes what Rand gives the game.
     private readonly Random _weatherRandom = new();
 
-    private void RunWeather()
+    public override string Name => "Weather";
+
+    internal void RunWeather()
     {
-        var camera = Views.FindCamera(Scene);
+        var camera = Views.FindCamera(Game.Scene);
         var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
 
         // Room for the widest window and a little more, so nothing pops in at the edges.
-        var area = new Vector2(size * 2 * Math.Max(ViewAspect, 1) + 2, size * 2 + 2);
-        foreach (var weather in Scene.RunningNow<Weather>())
+        var area = new Vector2(size * 2 * Math.Max(Game.ViewAspect, 1) + 2, size * 2 + 2);
+        foreach (var weather in Game.Scene.RunningNow<Weather>())
         {
             if (Vector2.Distance(weather.Area, area) > 0.5f)
             {
@@ -31,9 +35,9 @@ public sealed partial class Game
                 weather.Drops.RemoveRange(wanted, weather.Drops.Count - wanted);
 
             foreach (var drop in weather.Drops)
-                MoveDrop(weather, drop, Time.Delta);
-            if (Time.Delta > 0)
-                weather.MovedIn = Scene.Step;
+                MoveDrop(weather, drop, Game.Time.Delta);
+            if (Game.Time.Delta > 0)
+                weather.MovedIn = Game.Scene.Step;
             RunStorm(weather);
         }
     }
@@ -111,7 +115,7 @@ public sealed partial class Game
     // A storm flashes every 4 to 11 seconds, twice in quick succession, with thunder rolling in a moment later.
     private void RunStorm(Weather weather)
     {
-        if (!weather.Storm || !(Time.Delta > 0))
+        if (!weather.Storm || !(Game.Time.Delta > 0))
         {
             weather.NextLightning = -1;
             return;
@@ -119,24 +123,24 @@ public sealed partial class Game
 
         if (weather.NextLightning < 0)
             weather.NextLightning = 2 + _weatherRandom.NextSingle() * 4;
-        weather.NextLightning -= Time.Delta;
+        weather.NextLightning -= Game.Time.Delta;
         if (weather.ThunderIn >= 0)
         {
-            weather.ThunderIn -= Time.Delta;
+            weather.ThunderIn -= Game.Time.Delta;
             if (weather.ThunderIn < 0 && !string.IsNullOrWhiteSpace(weather.ThunderSound))
-                Audio.Play(weather.ThunderSound.Trim(), 1, 0, 0.85f + _weatherRandom.NextSingle() * 0.3f);
+                Game.Audio.Play(weather.ThunderSound.Trim(), 1, 0, 0.85f + _weatherRandom.NextSingle() * 0.3f);
         }
 
         if (weather.FlickerIn >= 0)
         {
-            weather.FlickerIn -= Time.Delta;
+            weather.FlickerIn -= Game.Time.Delta;
             if (weather.FlickerIn < 0)
-                FlashScreen(new Color(0.92f, 0.95f, 1, 0.7f), 0.45f);
+                Game.FlashScreen(new Color(0.92f, 0.95f, 1, 0.7f), 0.45f);
         }
 
         if (weather.NextLightning <= 0)
         {
-            FlashScreen(new Color(0.92f, 0.95f, 1, 0.45f), 0.12f);
+            Game.FlashScreen(new Color(0.92f, 0.95f, 1, 0.45f), 0.12f);
             weather.FlickerIn = 0.14f;
             weather.ThunderIn = 0.4f + _weatherRandom.NextSingle() * 0.9f;
             weather.NextLightning = 4 + _weatherRandom.NextSingle() * 7;

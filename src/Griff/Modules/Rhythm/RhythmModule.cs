@@ -15,7 +15,9 @@ public sealed class RhythmModule : GameModule
     protected internal override void AddTo(GameSetup game)
     {
         // After the beat clocks (so the notes go by this step's beat), before scripts (so they see this step's judgments).
-        var lanes = game.AddSystem(new RhythmSystem());
+        // The player's note speed is kept with their settings.
+        var settings = game.AddSystem(new RhythmSettingsSystem());
+        var lanes = game.AddSystem(new RhythmSystem(settings));
         var laneStep = game.StepAfter(Steps.Calibrations, "Note Lanes", lanes, lanes.Run);
         game.OnNetCommand(RhythmSystem.RhythmCommand, lanes.RunCommand);
 

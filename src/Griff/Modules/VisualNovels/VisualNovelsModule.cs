@@ -14,6 +14,8 @@ public sealed class VisualNovelsModule : GameModule
 
     protected internal override void AddTo(GameSetup game)
     {
+        // How the player likes dialogue read, and the lines they have read, kept with their settings.
+        game.AddSystem(new ReadingSettingsSystem());
         var stages = game.AddSystem(new VisualNovelsSystem());
         // Around the dialogues' step: what a line says is done as it's said, and the advance action moves the talk on only
         // if Interact, a click or a choice didn't.

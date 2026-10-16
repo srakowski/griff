@@ -1,10 +1,12 @@
-using Griff.Input;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
 
-// Calibrations: the player taps along to clicks (or a flashing light) and gets how late they hear (or see) the game.
-public sealed partial class Game
+/// <summary>
+/// Runs calibrations (Calibration): the player taps along to clicks or flashes, and their audio or visual offset is set
+/// from how late they tap.
+/// </summary>
+internal sealed class CalibrationSystem : GameSystem
 {
     // A tap belongs to the beat it's nearest, counting from a quarter of a beat before it to three quarters after: players
     // are seldom early, and late speakers can be very late.
@@ -16,21 +18,23 @@ public sealed partial class Game
     // The calibrations seen showing, kept to stop the ones that go (a panel closing) and start the ones that come.
     private readonly List<Calibration> _calibrations = [];
 
+    public override string Name => "Calibration";
+
     // Runs in real time, under a pause menu too: it times what's heard, not the game. Each machine runs its own.
-    private void RunCalibrations()
+    internal void RunCalibrations()
     {
         for (var i = _calibrations.Count - 1; i >= 0; i--)
         {
             var gone = _calibrations[i];
-            if (gone.Entity is { } entity && entity.Scene == Scene && entity.IsActive)
+            if (gone.Entity is { } entity && entity.Scene == Game.Scene && entity.IsActive)
                 continue;
             _calibrations.RemoveAt(i);
             // Gone with its scene, the next scene's music is left to start; hidden (its panel closing), the music comes back.
             if (gone.IsRunning)
-                EndCalibration(gone, CalibrationState.Waiting, resume: gone.Entity?.Scene == Scene);
+                EndCalibration(gone, CalibrationState.Waiting, resume: gone.Entity?.Scene == Game.Scene);
         }
 
-        foreach (var calibration in Showing<Calibration>())
+        foreach (var calibration in Game.Showing<Calibration>())
         {
             if (!_calibrations.Contains(calibration))
             {
@@ -53,8 +57,8 @@ public sealed partial class Game
         }
 
         // Every one, shown or not, says the offset in use, so a button opening one can show it.
-        foreach (var calibration in Scene.AllNow<Calibration>())
-            calibration.Current = calibration.Measures == CalibrationKind.Visual ? VisualOffset : AudioOffset;
+        foreach (var calibration in Game.Scene.AllNow<Calibration>())
+            calibration.Current = calibration.Measures == CalibrationKind.Visual ? Game.VisualOffset : Game.AudioOffset;
     }
 
     private static double PerBeat(Calibration calibration) =>
@@ -64,7 +68,7 @@ public sealed partial class Game
     {
         if (!calibration.IsRunning)
         {
-            calibration.Resume = Audio.Music is { } playing && playing != IAudio.MetronomeMusic ? playing : null;
+            calibration.Resume = Game.Audio.Music is { } playing && playing != IAudio.MetronomeMusic ? playing : null;
             // Its buttons and sliders go while the player taps, so a tap can't press or drag one.
             calibration.Hidden.Clear();
             foreach (var inside in calibration.Entity!.SelfAndDescendants())
@@ -78,7 +82,7 @@ public sealed partial class Game
         }
 
         var silent = calibration.Measures == CalibrationKind.Visual;
-        Audio.PlayMetronome(calibration.Tempo, 4, silent ? 0 : Math.Clamp(calibration.Volume, 0, 1));
+        Game.Audio.PlayMetronome(calibration.Tempo, 4, silent ? 0 : Math.Clamp(calibration.Volume, 0, 1));
         calibration.State = CalibrationState.Listening;
         (calibration.Taps, calibration.Result, calibration.Spread, calibration.Applied) = (0, 0, 0, false);
         (calibration.Position, calibration.LastTap) = (-1, double.NegativeInfinity);
@@ -90,16 +94,16 @@ public sealed partial class Game
     {
         // Something else took the music over (the scene's starting as it opens with it): that's the music to come back
         // to, and the clicks start again.
-        if (Audio.Music != IAudio.MetronomeMusic)
+        if (Game.Audio.Music != IAudio.MetronomeMusic)
         {
-            if (Audio.Music is { } other)
+            if (Game.Audio.Music is { } other)
                 calibration.Resume = other;
             StartCalibration(calibration);
             return;
         }
 
         var perBeat = PerBeat(calibration);
-        var position = Audio.MusicTime / perBeat;
+        var position = Game.Audio.MusicTime / perBeat;
         calibration.Position = position;
         var countIn = Math.Max(0, calibration.CountIn);
         var beats = calibration.Tapped.Length;
@@ -128,11 +132,11 @@ public sealed partial class Game
     // none is open), so a panel opened over it has the keys.
     private bool Tapped(Calibration calibration)
     {
-        if (TopPanel is { } top && !Inside(calibration.Entity!, top))
+        if (Game.TopPanel is { } top && !PanelSystem.Inside(calibration.Entity!, top))
             return false;
-        if (calibration.TapAction is { Length: > 0 } action && !string.IsNullOrWhiteSpace(action) && Input.WasPressed(action.Trim()))
+        if (calibration.TapAction is { Length: > 0 } action && !string.IsNullOrWhiteSpace(action) && Game.Input.WasPressed(action.Trim()))
             return true;
-        return calibration.Clicks && Input.WasPressed(MouseButton.Left);
+        return calibration.Clicks && Game.Input.WasPressed(MouseButton.Left);
     }
 
     // The taps' average lag, leaving out those far from the middle one: a missed beat, a double tap, a late start.
@@ -174,13 +178,13 @@ public sealed partial class Game
     private void EndCalibration(Calibration calibration, CalibrationState state, bool resume = true)
     {
         calibration.State = state;
-        if (Audio.Music == IAudio.MetronomeMusic)
+        if (Game.Audio.Music == IAudio.MetronomeMusic)
         {
-            Audio.StopMusic();
+            Game.Audio.StopMusic();
             if (resume && calibration.Resume is { } music)
             {
-                var playing = Scene.ActiveNow<BackgroundMusic>().FirstOrDefault(m => string.Equals(m.Music?.Trim(), music.Trim(), StringComparison.OrdinalIgnoreCase));
-                Audio.PlayMusic(music, playing is null ? 0.6f : Math.Clamp(playing.Volume, 0, 1), playing?.Loop ?? true);
+                var playing = Game.Scene.ActiveNow<BackgroundMusic>().FirstOrDefault(m => string.Equals(m.Music?.Trim(), music.Trim(), StringComparison.OrdinalIgnoreCase));
+                Game.Audio.PlayMusic(music, playing is null ? 0.6f : Math.Clamp(playing.Volume, 0, 1), playing?.Loop ?? true);
             }
         }
 

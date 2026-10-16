@@ -135,7 +135,7 @@ public sealed class Rope : Component, IDrawable
     }
 
     /// <summary>Ties its other end to <paramref name="other"/> (null: the world), that one even if others share its name.</summary>
-    internal void TieTo(Entity? other) => (To, _other, _otherName) = (other?.Name, other, other?.Name);
+    public void TieTo(Entity? other) => (To, _other, _otherName) = (other?.Name, other, other?.Name);
 
     /// <summary>Where it's tied on its entity, in the world.</summary>
     public Vector2 WorldAnchor => Entity is null ? Anchor : Vector2.Transform(Anchor, Entity.Transform.WorldMatrix);

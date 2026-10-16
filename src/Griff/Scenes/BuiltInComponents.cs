@@ -30,7 +30,7 @@ public sealed class Camera : Component
     private Smoothed<System.Numerics.Vector2> _shake;
 
     /// <summary>Its <see cref="Size"/>, <see cref="Background"/> and <see cref="ShakeOffset"/> in a frame drawn as <paramref name="blend"/> says (see <see cref="StepBlend"/>).</summary>
-    internal (float Size, Color Background, System.Numerics.Vector2 Shake) Drawn(StepBlend blend) => (blend.Of(_size), blend.Of(_background), blend.Of(_shake));
+    public (float Size, Color Background, System.Numerics.Vector2 Shake) Drawn(StepBlend blend) => (blend.Of(_size), blend.Of(_background), blend.Of(_shake));
 
     /// <summary>
     /// For top-down games: among things with the same Order and Z, whatever is lower down draws in front, so the player
@@ -72,7 +72,7 @@ public sealed class Camera : Component
     private float _ambientFadeLeft;
 
     /// <summary>Fades to a room's ambient light (or back to the camera's own, with null) over real seconds.</summary>
-    internal void FadeAmbient(Color? ambient, float seconds)
+    public void FadeAmbient(Color? ambient, float seconds)
     {
         _ambientFrom = CurrentAmbient;
         _roomAmbient = ambient;
@@ -93,7 +93,7 @@ public sealed class Camera : Component
     private bool _ambientKept;
 
     /// <summary>The ambient light in a frame drawn as <paramref name="blend"/> says: part way through a fade between steps.</summary>
-    internal Color AmbientDrawn(StepBlend blend)
+    public Color AmbientDrawn(StepBlend blend)
     {
         var now = CurrentAmbient;
         return _ambientStepped.Value == now ? blend.Of(_ambientStepped) : now;

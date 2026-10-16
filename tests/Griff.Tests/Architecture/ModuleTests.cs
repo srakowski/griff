@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Xml.Linq;
+using Griff.Editing;
 using Griff.Input;
 using Griff.Runtime;
 using Griff.Scenes;
@@ -8,127 +10,112 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Griff.Tests.Architecture;
 
 /// <summary>
-/// Guards Griff's modules (see GameModule): each genre lives in a folder of its own under src/Griff/Modules, in a namespace
-/// to match, registered once by its module class, and the core names none of them. A module plugs in through extension
-/// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw and the small interfaces it opts into: IViewDrawer, ISeesThroughEyes, IHudLayout,
-/// RunForPlayer, GridStepStarting, SceneEnding...), components that draw themselves and say what they send, and interfaces
-/// Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport, IHearsMessages,
-/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone, and the hosts a game runs in (the web
-/// and desktop players) name none. Each is mashup-ready too: it names actions and outputs, and what of it reads the
-/// player's input takes it only with focus.
+/// Guards Griff's modules (see GameModule): each genre lives in a folder of its own under src/Modules, in a namespace to
+/// match, its running parts an assembly (Griff.Modules.Match3) built on Griff alone and its editor parts another beside them
+/// (Griff.Modules.Match3.Editor, in its Editor folder) built on its module and Griff.Editing, registered once by its module
+/// class. The compiler keeps who may name whom: Griff references no module (nor the editor's parts), a module no other
+/// module, and the hosts a game runs in (the web and desktop players) and the libraries they share none, so a module plugs
+/// in through extension points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw and
+/// the small interfaces it opts into), components that draw themselves and say what they send, and interfaces Griff's own
+/// components call. Each is mashup-ready too: it names actions and outputs, and what of it reads the player's input takes
+/// it only with focus.
 /// </summary>
 public sealed class ModuleTests
 {
     private const string ModulesNamespace = "Griff.Modules";
 
+    // Griff is the bottom: it references no Griff assembly, so it can't name a module or the editor's parts (Editing,
+    // Agent, templates), and grants no module its internals, so a module uses only its public API, as a script's system.
     [Fact]
-    public void Core_NamesNoModule()
+    public void Griff_ReferencesNoModuleNorTheEditor_AndOpensItsInternalsToTestsAlone()
     {
-        var (compilation, trees) = LayerTests.Core();
-        var moduleTypes = trees.Where(IsModuleFile)
-            .SelectMany(t => t.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => d.Identifier.Text))
-            .ToHashSet();
+        var griff = typeof(Game).Assembly;
+        Assert.Empty(griff.GetReferencedAssemblies().Where(a => a.Name?.StartsWith("Griff", StringComparison.Ordinal) == true).Select(a => a.Name));
+        Assert.Equal(["Griff.Tests"], griff.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>().Select(a => a.AssemblyName));
+        Assert.Empty(XDocument.Load(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Griff.csproj")).Descendants("ProjectReference"));
+    }
 
-        var named = new List<string>();
-        foreach (var tree in trees.Where(t => t.FilePath.Length > 0 && !IsModuleFile(t)))
+    // A module stands alone: its running parts build on Griff, not on another module, so any one can go without breaking
+    // the rest; its editor parts on its own module and Griff.Editing.
+    [Fact]
+    public void EachModule_BuildsOnGriffAlone_AndItsEditorPartsOnItAndGriffEditing()
+    {
+        var problems = new List<string>();
+        Assert.Equal(GameModule.All.Count, EditorModules.All.Count);
+        foreach (var module in GameModule.All)
         {
-            // Only names a module declares (or its namespace) need binding, which keeps the test quick.
-            var candidates = tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>()
-                .Where(n => moduleTypes.Contains(n.Identifier.Text) || n.Identifier.Text == "Modules")
-                .ToList();
-            if (candidates.Count == 0)
+            var assembly = module.GetType().Assembly;
+            var name = assembly.GetName().Name!;
+            Assert.Equal(module.Namespace, name);
+            Assert.True(ModuleAssemblies.IsModule(assembly));
+            foreach (var used in GriffsReferences(assembly).Where(r => r != "Griff"))
+                problems.Add($"{name} references {used}: a module builds on Griff alone.");
+
+            var editor = EditorModules.All.SingleOrDefault(a => a.GetName().Name == name + ModuleAssemblies.EditorSuffix);
+            if (editor is null)
+            {
+                problems.Add($"{name} has no editor parts beside it ({name}{ModuleAssemblies.EditorSuffix}).");
                 continue;
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var name in candidates)
-            {
-                var symbol = model.GetSymbolInfo(name).Symbol;
-                var used = symbol is INamespaceSymbol ns ? ns : (ISymbol?)LayerTests.Used(symbol);
-                if (used is not null && InModules(used))
-                    named.Add($"{Path.GetFileName(tree.FilePath)}: {LayerTests.Name(used)}");
             }
+
+            Assert.False(ModuleAssemblies.IsModule(editor));
+            foreach (var used in GriffsReferences(editor).Where(r => r is not ("Griff" or "Griff.Editing") && r != name))
+                problems.Add($"{editor.GetName().Name} references {used}: a module's editor parts build on it and Griff.Editing alone.");
         }
 
-        Assert.True(named.Count == 0,
-            "Griff's core names a module's types, which it should reach through an extension point (a GameSystem's hooks, " +
-            "the interfaces Griff's components call, drawing and network attributes):\n" + string.Join("\n", named.Distinct().Order()));
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    // The hosts and libraries a game runs in (the web player, the desktop player, the platform, the scripting, exporting
-    // and graphics libraries) name no module either: what one does for a module, it does through a hook any module can fill (such as
-    // GameModule.AddToWarmUp), so a game with none of a module's parts runs the same.
+    // The hosts and libraries a game runs in (the web player, the desktop player, the platform, the scripting, exporting,
+    // graphics and font libraries) and the editor's own libraries (Editing, Agent) build on no module: what one does for a
+    // module, it does through a hook any module can fill (such as GameModule.AddToWarmUp), so a game with none of a
+    // module's parts runs the same, and an export carries only the modules its project uses.
     [Theory]
-    [InlineData("Griff.Web")]
-    [InlineData("Griff.Player")]
-    [InlineData("Griff.Platform.Windows")]
-    [InlineData("Griff.Scripting")]
-    [InlineData("Griff.Exporting")]
-    [InlineData("Griff.Graphics")]
-    [InlineData("Griff.Graphics.OpenGL")]
-    public void Host_NamesNoModule(string project)
-    {
-        var (core, coreTrees) = LayerTests.Core();
-        var trees = LayerTests.Parse(Path.Combine(LayerTests.RepoRoot(), "src", project)).ToList();
-        Assert.NotEmpty(trees);
-        // Bound with the core's source, so its names resolve; what else the project uses (WPF, the browser) needn't.
-        var compilation = core.AddSyntaxTrees(trees);
-        var moduleTypes = coreTrees.Where(IsModuleFile)
-            .SelectMany(t => t.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => d.Identifier.Text))
-            .ToHashSet();
+    [InlineData("src/Griff.Web/Griff.Web.csproj")]
+    [InlineData("src/Griff.Player/Griff.Player.csproj")]
+    [InlineData("src/Griff.Platform.Windows/Griff.Platform.Windows.csproj")]
+    [InlineData("src/Griff.Scripting/Griff.Scripting.csproj")]
+    [InlineData("src/Griff.Exporting/Griff.Exporting.csproj")]
+    [InlineData("src/Griff.Graphics/Griff.Graphics.csproj")]
+    [InlineData("src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj")]
+    [InlineData("src/Griff.Fonts/Griff.Fonts.csproj")]
+    [InlineData("src/Griff.Editing/Griff.Editing.csproj")]
+    [InlineData("src/Griff.Agent/Griff.Agent.csproj")]
+    public void Host_BuildsOnNoModule(string project) =>
+        Assert.DoesNotContain(ProjectClosure(project), p => p.StartsWith("src/Modules/", StringComparison.OrdinalIgnoreCase));
 
-        var named = new List<string>();
-        foreach (var tree in trees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>()
-                         .Where(n => moduleTypes.Contains(n.Identifier.Text) || n.Identifier.Text == "Modules"))
-            {
-                var symbol = model.GetSymbolInfo(name).Symbol;
-                var used = symbol is INamespaceSymbol ns ? ns : (ISymbol?)LayerTests.Used(symbol);
-                if (used is not null && InModules(used))
-                    named.Add($"{Path.GetFileName(tree.FilePath)}: {LayerTests.Name(used)}");
-            }
-        }
+    // A game carries none of the editor's parts: the players build on neither Griff.Editing nor Griff.Agent.
+    [Theory]
+    [InlineData("src/Griff.Web/Griff.Web.csproj")]
+    [InlineData("src/Griff.Player/Griff.Player.csproj")]
+    public void ThePlayers_CarryNothingOfTheEditors(string project) =>
+        Assert.DoesNotContain(ProjectClosure(project), p => p.Contains("Griff.Editing", StringComparison.OrdinalIgnoreCase) ||
+                                                            p.Contains("Griff.Agent", StringComparison.OrdinalIgnoreCase) ||
+                                                            p.Contains("Griff.Editor", StringComparison.OrdinalIgnoreCase));
 
-        Assert.True(named.Count == 0,
-            $"{project} names a module's types, which it should reach through a hook any module can fill:\n" + string.Join("\n", named.Distinct().Order()));
-    }
-
-    // A module stands alone: it builds on the core, not on another module, so any one can go without breaking the rest.
-    [Fact]
-    public void EachModule_NamesNoOtherModule()
-    {
-        var (compilation, trees) = LayerTests.Core();
-        var named = new List<string>();
-        foreach (var tree in trees.Where(IsModuleFile))
-        {
-            var own = $"{ModulesNamespace}.{FolderOf(tree)}";
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
-            {
-                var symbol = model.GetSymbolInfo(name).Symbol;
-                var used = symbol is INamespaceSymbol ns ? ns : (ISymbol?)LayerTests.Used(symbol);
-                if (used is null || !InModules(used))
-                    continue;
-                var where = used is INamespaceSymbol n ? n.ToDisplayString() : used.ContainingNamespace.ToDisplayString();
-                if (where != ModulesNamespace && where != own && !where.StartsWith(own + ".", StringComparison.Ordinal))
-                    named.Add($"{FolderOf(tree)}/{Path.GetFileName(tree.FilePath)}: {LayerTests.Name(used)}");
-            }
-        }
-
-        Assert.True(named.Count == 0,
-            "A module names another module's types; it should reach it through the core's extension points:\n" + string.Join("\n", named.Distinct().Order()));
-    }
+    // The same, as the compiler built them: the libraries reference no module's assembly.
+    [Theory]
+    [InlineData(typeof(Griff.Scripting.ScriptCompiler))]
+    [InlineData(typeof(Griff.Exporting.GameExporter))]
+    [InlineData(typeof(EditorModules))]
+    [InlineData(typeof(Griff.Agent.McpServer))]
+    [InlineData(typeof(Griff.Fonts.FontCatalog))]
+    public void ALibrary_ReferencesNoModule(Type type) =>
+        Assert.DoesNotContain(GriffsReferences(type.Assembly), r => r.StartsWith(ModulesNamespace + ".", StringComparison.Ordinal));
 
     [Fact]
     public void EachModule_LivesInItsOwnFolderAndNamespace_WithOneModuleClass()
     {
         var (compilation, trees) = LayerTests.Core();
-        var folders = Directory.GetDirectories(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules")).Select(Path.GetFileName).Order().ToList();
+        var folders = LayerTests.ModuleFolders().Select(Path.GetFileName).ToList();
+        var others = LayerTests.OtherProjects().ToList();
         var problems = new List<string>();
 
-        foreach (var tree in trees.Where(IsModuleFile))
+        var moduleTrees = trees.Where(t => LayerTests.IsModuleFile(t.FilePath))
+            .Concat(others.Where(p => p.Name.StartsWith("Modules/", StringComparison.Ordinal)).SelectMany(p => p.Trees));
+        foreach (var tree in moduleTrees)
         {
-            var folder = FolderOf(tree);
+            var folder = LayerTests.ModuleOf(tree.FilePath);
             var expected = $"{ModulesNamespace}.{folder}";
             foreach (var ns in tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
             {
@@ -138,17 +125,23 @@ public sealed class ModuleTests
         }
 
         // Nothing outside the folders claims a module's namespace.
-        foreach (var tree in trees.Where(t => t.FilePath.Length > 0 && !IsModuleFile(t)))
+        foreach (var tree in trees.Where(t => t.FilePath.Length > 0 && !LayerTests.IsModuleFile(t.FilePath))
+                     .Concat(others.Where(p => !p.Name.StartsWith("Modules/", StringComparison.Ordinal)).SelectMany(p => p.Trees)))
         {
             foreach (var ns in tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().Where(n => n.Name.ToString().StartsWith(ModulesNamespace, StringComparison.Ordinal)))
-                problems.Add($"{Path.GetFileName(tree.FilePath)} is in {ns.Name} but outside src/Griff/Modules.");
+                problems.Add($"{Path.GetFileName(tree.FilePath)} is in {ns.Name} but outside src/Modules.");
         }
 
-        // One module class in each folder, registered once (found, not listed).
+        // Each folder: its two projects, named after it, and one module class, registered once (found, not listed).
         var gameModule = compilation.GetTypeByMetadataName("Griff.Runtime.GameModule")!;
         foreach (var folder in folders)
         {
-            var modules = trees.Where(t => IsModuleFile(t) && FolderOf(t) == folder)
+            var at = Path.Combine(LayerTests.ModulesFolder(), folder!);
+            if (!File.Exists(Path.Combine(at, $"{ModulesNamespace}.{folder}.csproj")))
+                problems.Add($"Modules/{folder} has no {ModulesNamespace}.{folder}.csproj.");
+            if (!File.Exists(Path.Combine(at, "Editor", $"{ModulesNamespace}.{folder}.Editor.csproj")))
+                problems.Add($"Modules/{folder}/Editor has no {ModulesNamespace}.{folder}.Editor.csproj.");
+            var modules = trees.Where(t => LayerTests.IsModuleFile(t.FilePath) && LayerTests.ModuleOf(t.FilePath) == folder)
                 .SelectMany(t => t.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
                     .Select(c => compilation.GetSemanticModel(t).GetDeclaredSymbol(c) as INamedTypeSymbol))
                 .Where(c => c?.BaseType is { } b && SymbolEqualityComparer.Default.Equals(b, gameModule))
@@ -159,6 +152,7 @@ public sealed class ModuleTests
 
         Assert.True(problems.Count == 0, string.Join("\n", problems));
         Assert.Equal(folders.Select(f => $"{ModulesNamespace}.{f}").Order(), GameModule.All.Select(m => m.Namespace).Order());
+        Assert.Equal(folders.Select(f => $"{ModulesNamespace}.{f}").Order(), ModuleAssemblies.All.Select(a => a.GetName().Name).Order());
     }
 
     // Every genre is mashup-ready (the Mixing genres guide): its components name something they do and something they know,
@@ -220,16 +214,29 @@ public sealed class ModuleTests
             p.PropertyType == typeof(Griff.Input.Key) || p.PropertyType == typeof(MouseButton) || p.PropertyType == typeof(GamepadButton) ||
             p.GetCustomAttribute<RowsAttribute>()?.Columns.Any(c => c.Names is { Kind: NameKind.Action }) == true);
 
-    private static bool IsModuleFile(SyntaxTree tree) =>
-        tree.FilePath.Length > 0 && Path.GetRelativePath(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules"), tree.FilePath) is var relative &&
-        !relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative);
+    // The Griff assemblies an assembly is compiled against (Griff, Griff.Editing, a module...).
+    private static List<string> GriffsReferences(Assembly assembly) =>
+        [.. assembly.GetReferencedAssemblies().Select(a => a.Name!).Where(n => n.StartsWith("Griff", StringComparison.Ordinal))];
 
-    private static string FolderOf(SyntaxTree tree) =>
-        Path.GetRelativePath(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules"), tree.FilePath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
-
-    private static bool InModules(ISymbol symbol)
+    // The projects a project builds on, itself included, as paths from the repository's root.
+    private static List<string> ProjectClosure(string project)
     {
-        var ns = symbol is INamespaceSymbol self ? self.ToDisplayString() : symbol.ContainingNamespace?.ToDisplayString() ?? "";
-        return ns == ModulesNamespace || ns.StartsWith(ModulesNamespace + ".", StringComparison.Ordinal);
+        var root = LayerTests.RepoRoot();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<string>([Path.GetFullPath(Path.Combine(root, project))]);
+        while (pending.TryPop(out var path))
+        {
+            if (!seen.Add(path))
+                continue;
+            foreach (var reference in XDocument.Load(path).Descendants("ProjectReference"))
+            {
+                // The editor's players are built beside it without being referenced; they don't count here.
+                if ((string?)reference.Attribute("ReferenceOutputAssembly") == "false")
+                    continue;
+                pending.Push(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, ((string)reference.Attribute("Include")!).Replace('\\', Path.DirectorySeparatorChar))));
+            }
+        }
+
+        return [.. seen.Select(p => Path.GetRelativePath(root, p).Replace('\\', '/'))];
     }
 }

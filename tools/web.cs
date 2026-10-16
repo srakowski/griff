@@ -1,6 +1,8 @@
 #:sdk Microsoft.NET.Sdk.Web
 #:project ../src/Griff.Exporting/Griff.Exporting.csproj
 #:project ../src/Griff.Platform.Windows/Griff.Platform.Windows.csproj
+#:project ../src/Griff.Editing/Griff.Editing.csproj
+#:project ../src/Modules/Griff.Modules.csproj
 #:property TargetFramework=net10.0-windows
 #:property PublishAot=false
 

@@ -38,7 +38,11 @@ public abstract class Component
     // A script that hasn't started yet (a rewind snapshot says which, so they start as they would have).
     internal virtual bool IsWaitingToStart => false;
 
-    internal IReadOnlyList<KeyValuePair<string, System.Text.Json.JsonElement>>? Kept { get; set; }
+    /// <summary>
+    /// Saved values it has no property for (one since removed, or written by a newer Griff), kept as they were read and
+    /// written back on save.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, System.Text.Json.JsonElement>>? Kept { get; internal set; }
 
     /// <summary>
     /// What it is to the code that goes through every entity every frame (drawing, mostly), worked out once as it's made:
@@ -132,7 +136,7 @@ public sealed class UpgradeFromAttribute(int version) : Attribute
 /// <summary>
 /// Where a component is listed in the editor's component catalog, e.g. "Movement" or "Enemies". Components without
 /// one are listed under "Scripts" (or "Other" for Griff's own). On something the editor makes (a create command, or a
-/// module's <see cref="Editing.EntityPreset"/>), it's the submenu of the Entity menu and the group of the Add Entity
+/// module's <c>Griff.Editing.EntityPreset</c>), it's the submenu of the Entity menu and the group of the Add Entity
 /// palette it's listed in, e.g. "Characters", or a module's name for its presets.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]

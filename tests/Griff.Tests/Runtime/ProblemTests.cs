@@ -148,9 +148,9 @@ public sealed partial class ProblemTests
     [Fact]
     public void NoSystem_LoadsPrefabsOutsideTheGame_OrSwallowsAMistakeSilently()
     {
-        var root = Path.Combine(LayerTests.RepoRoot(), "src", "Griff");
+        var root = Path.Combine(LayerTests.RepoRoot(), "src");
         string[] hosts = ["Game.cs", "GameLoader.cs", "PrefabLibrary.cs"];
-        string[] folders = ["Modules", "Runtime"];
+        string[] folders = ["Modules", Path.Combine("Griff", "Runtime")];
         var files = folders
             .SelectMany(d => Directory.EnumerateFiles(Path.Combine(root, d), "*.cs", SearchOption.AllDirectories))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))

@@ -4,7 +4,7 @@ namespace Griff.Scenes;
 /// A rectangle of a tilemap's tiles as numbers (-1 for none), from its top left, read from the map and written back to it
 /// all at once: a match-3 or falling-block board's.
 /// </summary>
-internal sealed class TileGrid
+public sealed class TileGrid
 {
     public required int[,] Cells { get; init; }
 

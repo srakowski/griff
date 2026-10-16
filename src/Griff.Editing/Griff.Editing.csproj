@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What making a game takes and playing one doesn't: editing scenes with undo (Griff.Editing: edits, the edit history,
+    copying values, prefab overrides, the names a field may hold, the Entity menu's presets and actions, the component
+    catalog and the docs it shows) and New Project's templates with their art and sounds (Griff.Templates). The editor,
+    agents and tests build on it; an exported game never carries it. Each module's editor parts build on it beside the
+    module (src/Modules/<Genre>/Editor).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS0419</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Griff\Griff.csproj" />
+    <ProjectReference Include="..\Griff.Fonts\Griff.Fonts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Griff.Tests" />
+  </ItemGroup>
+
+</Project>

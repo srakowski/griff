@@ -14,6 +14,12 @@ public static class ExportLayout
     /// <summary>Precompiled scripts, inside the game folder.</summary>
     public const string ScriptsAssembly = "Scripts.dll";
 
+    /// <summary>
+    /// The modules a game's project uses (see <see cref="GameModule"/>), their running assemblies only, inside the game folder:
+    /// its host loads them (<see cref="ModuleAssemblies.Load(string)"/>) before it reads the game.
+    /// </summary>
+    public const string ModulesFolder = "Modules";
+
     /// <summary>Marks a folder as created by export, so re-exporting may safely replace it.</summary>
     public const string Marker = ".griff-build";
 
@@ -43,6 +49,12 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
 
     /// <summary>The start scene's name, for <see cref="Game.SceneName"/>.</summary>
     public string? SceneName { get; init; }
+
+    /// <summary>
+    /// The modules whose systems its games run (<see cref="Game.Modules"/>): those its project uses
+    /// (<see cref="ProjectModules"/>), or every one this program has if null.
+    /// </summary>
+    public IReadOnlyList<GameModule>? Modules { get; init; }
 
     /// <summary>
     /// How another scene loads by name, if not from the project's files: the editor plays the open scene as it is there,
@@ -98,7 +110,7 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
     public Game NewGame(GameHostOptions? host = null)
     {
         host ??= new GameHostOptions();
-        var game = new Game(Scene, host.Input ?? new InputState())
+        var game = new Game(Scene, host.Input ?? new InputState(), Modules)
         {
             // A game with nowhere to load scenes or prefabs from has no loader, which it says when asked for one.
             SceneLoader = Scenes is not null || Project is not null ? LoadScene : null,
@@ -184,16 +196,22 @@ public static class GameLoader
         game.Simulations = Griff.Data.SimulationFile.LoadAll(project.AssetsPath);
     }
 
+    /// <summary>
+    /// Loads a game folder (an export's, or a project's): the modules it carries first (<see cref="ExportLayout.ModulesFolder"/>,
+    /// so its scenes read with their components), then its scripts and its start scene. Its games run the modules it uses.
+    /// </summary>
     public static async Task<LoadedGame> LoadAsync(string gameFolder)
     {
         var project = await Project.LoadAsync(gameFolder);
+        ModuleAssemblies.Load(Path.Combine(project.RootPath, ExportLayout.ModulesFolder));
         var components = ComponentRegistry.CreateDefault();
         var warnings = new ProblemLog();
 
         var scripts = Path.Combine(project.RootPath, ExportLayout.ScriptsAssembly);
+        Assembly? scriptAssembly = null;
         // Loaded from bytes so the file isn't locked while the game runs.
         if (File.Exists(scripts))
-            RegisterComponents(Assembly.Load(await File.ReadAllBytesAsync(scripts)), components, warnings);
+            RegisterComponents(scriptAssembly = Assembly.Load(await File.ReadAllBytesAsync(scripts)), components, warnings);
 
         var scenePath = project.StartScenePath is { } start && File.Exists(start)
             ? start
@@ -205,7 +223,11 @@ public static class GameLoader
         // A trigger, counter or wire naming an action or output nothing has: said now, not left to do nothing.
         foreach (var line in Griff.Scenes.NameChecks.Lines(scene, components))
             warnings.Report(line);
-        return new LoadedGame(project, components, scene, warnings) { SceneName = Path.GetFileNameWithoutExtension(scenePath) };
+        return new LoadedGame(project, components, scene, warnings)
+        {
+            SceneName = Path.GetFileNameWithoutExtension(scenePath),
+            Modules = ProjectModules.Of(project, scriptAssembly),
+        };
     }
 
     public static Scene LoadScene(Project project, ComponentRegistry components, string nameOrPath)

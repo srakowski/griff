@@ -587,7 +587,7 @@ public class SceneToolsTests
     [Fact]
     public void Describe_ListsTheFontsAFontCanName_AsThePickerGroupsThem()
     {
-        _host.Names = new KnownNames([], [], [], [], [], [], fonts: () => Griff.Fonts.FontChoices.For(null));
+        _host.Names = new KnownNames([], [], [], [], [], [], fonts: () => Griff.Editing.FontChoices.For(null));
 
         var text = Run("component_describe", """{"component": "Text"}""").Text;
         var font = text.Split('\n').Single(l => l.StartsWith("- font:", StringComparison.Ordinal));

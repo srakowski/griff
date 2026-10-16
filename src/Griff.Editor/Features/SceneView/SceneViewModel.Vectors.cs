@@ -165,7 +165,7 @@ public sealed partial class SceneViewModel
         private static Vector2 Nearest(Vector2 toward)
         {
             var unit = Vector2.Normalize(toward);
-            return DirectionAttribute.Ways.MaxBy(w => Vector2.Dot(Vector2.Normalize(w.Way), unit)).Way;
+            return FieldValues.Directions.MaxBy(w => Vector2.Dot(Vector2.Normalize(w.Way), unit)).Way;
         }
 
         private static Vector2 Fit(Vector2 v, float step)

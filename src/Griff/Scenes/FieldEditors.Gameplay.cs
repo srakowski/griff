@@ -233,9 +233,6 @@ public sealed class ItemCountsAttribute : FieldEditorAttribute
 
     /// <summary>A line read: the item and how many (see <see cref="Items.ReadOne"/>).</summary>
     public static (string Item, int Count) Read(string line) => Items.ReadOne(line);
-
-    /// <summary>A line written: "Key 2", or "Key" for one.</summary>
-    public static string Write(string item, int count) => Items.Write(item, count);
 }
 
 /// <summary>
@@ -282,10 +279,6 @@ public sealed class ItemUsesAttribute : FieldEditorAttribute
             .ToList();
         return (line[..colon].Trim(), effects);
     }
-
-    /// <summary>A line written: "Bomb: spawn Explosion, send Boom".</summary>
-    public static string Write(string item, IEnumerable<(string Verb, string Argument)> effects) =>
-        $"{item.Trim()}: {string.Join(", ", effects.Select(e => $"{e.Verb} {e.Argument.Trim()}"))}";
 }
 
 /// <summary>
@@ -309,10 +302,6 @@ public sealed class TileCountsAttribute : FieldEditorAttribute
 
     /// <summary>How many of each tile the string says, a tile named twice adding up: what the game counts against (see <see cref="Formats.KindCounts"/>).</summary>
     public static IReadOnlyDictionary<int, int> Totals(string? text) => Formats.KindCounts(text);
-
-    /// <summary>Pairs written: "0:20, 3:15".</summary>
-    public static string Write(IEnumerable<(int Tile, int Count)> pairs) =>
-        string.Join(", ", pairs.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Tile}:{p.Count}")));
 
     private static (int, int)? ReadPair(string part) => Formats.KindCount(part);
 }

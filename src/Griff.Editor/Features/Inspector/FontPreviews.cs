@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Griff.Editing;
 using Griff.Fonts;
 using Griff.Scenes;
 

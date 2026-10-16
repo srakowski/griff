@@ -25,12 +25,17 @@ public sealed class StaticStateTests
         // Breakpoint probes are compiled into scripts, which have no game to ask: what they count is the process's.
         ["Griff.Debugging.ScriptProbes.s_breaks"] = "how many times a script was held at a breakpoint, in any game",
         ["Griff.Debugging.ScriptProbes.s_watchers"] = "how many debuggers watch exceptions thrown through scripts",
+        // The module assemblies loaded into the process are the process's, like any assembly it has loaded.
+        ["Griff.ModuleAssemblies.s_loaded"] = "the module assemblies the process has loaded",
+        ["Griff.ModuleAssemblies.s_revision"] = "how many times a host loaded more of them",
+        ["Griff.ModuleAssemblies.s_resolving"] = "whether the process finds them for scripts that name them",
     };
 
     [Fact]
     public void The_engine_keeps_no_mutable_static_but_caches()
     {
-        var found = typeof(Game).Assembly.GetTypes()
+        // Griff's and its modules'.
+        var found = ModuleAssemblies.All.Prepend(typeof(Game).Assembly).SelectMany(a => a.GetTypes())
             .Where(t => !t.IsDefined(typeof(CompilerGeneratedAttribute), false))
             .SelectMany(t => t.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
                 // (A static property's backing field counts; the compiler's own caches of lambdas, named <>..., don't.)

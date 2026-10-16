@@ -195,8 +195,8 @@ public sealed partial class Game
         return true;
     }
 
-    // The systems scripts added, in the order they were.
-    internal IEnumerable<GameSystem> AddedSystems => _systems.Where(s => !IsBuiltIn(s));
+    /// <summary>The systems scripts added (<see cref="AddSystem{T}(T)"/>), in the order they were: not Griff's or its modules'.</summary>
+    public IEnumerable<GameSystem> AddedSystems => _systems.Where(s => !IsBuiltIn(s));
 
     /// <summary>The running system of type <typeparamref name="T"/>, if there is one.</summary>
     public T? GetSystem<T>() where T : GameSystem
@@ -527,9 +527,9 @@ public sealed partial class Game
         Step(Steps.Settings, _settings.SaveSettings);
         Step(Steps.EndNetwork, _network.EndNetwork);
 
-        // Then each module's systems, their steps put in next to the steps they follow or go before.
+        // Then the systems of each module it uses, their steps put in next to the steps they follow or go before.
         var setup = new GameSetup(this);
-        foreach (var module in GameModule.All)
+        foreach (var module in Modules)
         {
             setup.Module = module;
             module.AddTo(setup);

@@ -433,9 +433,12 @@ public sealed class GridMovement : Component
     internal void RaiseBumped(Vector2 way) => Bumped?.Invoke(this, way);
 
     // The step under way: from and to (world positions) and how far along, 0–1. Whether it has snapped onto its grid yet.
-    internal bool Stepping { get; set; }
 
-    internal Vector2 From { get; set; }
+    /// <summary>True while it's taking a step from one cell to the next.</summary>
+    public bool Stepping { get; internal set; }
+
+    /// <summary>Where the step under way (see <see cref="Stepping"/>) started, in the world.</summary>
+    public Vector2 From { get; internal set; }
 
     internal Vector2 To { get; set; }
 
@@ -450,7 +453,28 @@ public sealed class GridMovement : Component
     // The frame it was last pushed in: a crate pushed by a mover that ran before it doesn't glide on again that frame.
     internal long PushedOnFrame { get; set; } = -1;
 
-    internal bool Started { get; set; }
+    /// <summary>
+    /// True once it has snapped onto its grid (it does as it first runs, and again after <see cref="Unplace"/>): until then
+    /// its <see cref="Cell"/> isn't known yet.
+    /// </summary>
+    public bool Started { get; internal set; }
+
+    /// <summary>
+    /// Stands it still in <paramref name="cell"/> facing <paramref name="facing"/>, dropping the step it was on and any step
+    /// asked for or pressed: for something putting the board back as it was (a puzzle's undo). It doesn't move the entity;
+    /// move it to the cell's middle first.
+    /// </summary>
+    public void PlaceOn((int X, int Y) cell, Vector2 facing)
+    {
+        (Started, Stepping, Cell, Facing, Progress, Glide) = (true, false, cell, facing, 0, null);
+        (Queued, Buffered, Rest, BumpedWay) = (null, null, 0, (0, 0));
+    }
+
+    /// <summary>
+    /// Drops the step it was on and any asked for, and snaps onto the cell it's over when it next runs: for something that
+    /// moved it outright (a dungeon's stairs).
+    /// </summary>
+    public void Unplace() => (Started, Stepping, Queued, Buffered) = (false, false, null, null);
 
     // A step asked for by a script; a way pressed during a step, taken when it ends; the way held last frame and for how
     // long; the way it last bumped into while that's still held, so a wall only bumps once a press.
@@ -530,8 +554,11 @@ public sealed class GridChase : Component, IGridDriver
 
     internal void RaiseReached() => Reached?.Invoke(this);
 
-    // Whether it was within its stop distance last time it looked, so Reached is raised once each time it gets there.
-    internal bool WasNear { get; set; }
+    /// <summary>Whether it was within its stop distance last time it looked, so Reached is raised once each time it gets there.</summary>
+    public bool WasNear { get; internal set; }
+
+    /// <summary>Picks up where it was (a puzzle's undo): whether it was chasing, and whether it was near.</summary>
+    public void Resume(bool chasing, bool wasNear) => (IsChasing, WasNear) = (chasing, wasNear);
 }
 
 /// <summary>
@@ -621,11 +648,17 @@ public sealed class GridPatrol : Component, IGridDriver
 
     internal void RaiseArrived(int point) => Arrived?.Invoke(this, point);
 
-    // The cell it was in last frame, to add how far it went to Away; seconds left waiting at a point. Not saved: a
-    // restored game starts counting again from wherever it is.
-    internal (int X, int Y)? LastCell { get; set; }
+    /// <summary>
+    /// The cell it was in last frame, to add how far it went to Away. Not saved: a restored game starts counting again from
+    /// wherever it is.
+    /// </summary>
+    public (int X, int Y)? LastCell { get; internal set; }
 
-    internal float WaitLeft { get; set; }
+    /// <summary>Seconds left waiting at a point.</summary>
+    public float WaitLeft { get; internal set; }
+
+    /// <summary>Picks up where it was (a puzzle's undo): its seconds left waiting and the cell it was in last.</summary>
+    public void Resume(float waitLeft, (int X, int Y)? lastCell) => (WaitLeft, LastCell) = (waitLeft, lastCell);
 }
 
 /// <summary>

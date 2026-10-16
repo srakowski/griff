@@ -1,4 +1,6 @@
 #:project ../src/Griff/Griff.csproj
+#:project ../src/Griff.Editing/Griff.Editing.csproj
+#:project ../src/Modules/Griff.Modules.csproj
 #:property PublishAot=false
 #:property TieredCompilation=false
 

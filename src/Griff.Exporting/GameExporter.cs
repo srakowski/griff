@@ -83,16 +83,51 @@ public static class GameExporter
 
     /// <summary>
     /// Writes the game folder every export carries into <paramref name="folder"/>: the project's manifest, its Assets
-    /// without the script sources, and the scripts <paramref name="compiled"/> (if it has any) as
-    /// <see cref="ExportLayout.ScriptsAssembly"/>.
+    /// without the script sources, the scripts <paramref name="compiled"/> (if it has any) as
+    /// <see cref="ExportLayout.ScriptsAssembly"/>, and the running parts of the modules the project uses
+    /// (<see cref="ModulesOf"/>) in <see cref="ExportLayout.ModulesFolder"/>: no other module's, and nothing of the editor's.
     /// </summary>
     internal static void WriteGame(Project project, CompileResult compiled, string folder)
     {
         File.Copy(project.ManifestPath, Path.Combine(Directory.CreateDirectory(folder).FullName, Project.ManifestFileName));
         CopyFolder(project.AssetsPath, Path.Combine(folder, Project.AssetsFolderName),
             path => !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
-        if (compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
-            File.WriteAllBytes(Path.Combine(folder, ExportLayout.ScriptsAssembly), assembly);
+        var scripts = compiled.Assembly is { } assembly && Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any()
+            ? assembly
+            : null;
+        if (scripts is not null)
+            File.WriteAllBytes(Path.Combine(folder, ExportLayout.ScriptsAssembly), scripts);
+
+        var modules = ModulesOf(project, scripts);
+        if (modules.Count > 0)
+        {
+            var into = Directory.CreateDirectory(Path.Combine(folder, ExportLayout.ModulesFolder)).FullName;
+            foreach (var module in modules)
+            {
+                var file = module.GetType().Assembly.Location;
+                if (file.Length == 0 || !File.Exists(file))
+                    throw new InvalidOperationException($"The {module.Name} module's assembly has no file to export.");
+                File.Copy(file, Path.Combine(into, Path.GetFileName(file)), overwrite: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The modules an export of <paramref name="project"/> carries: those its scenes and prefabs use, and those its scripts
+    /// (<paramref name="scripts"/>, built) were built against.
+    /// </summary>
+    public static IReadOnlyList<GameModule> ModulesOf(Project project, byte[]? scripts)
+    {
+        var used = new HashSet<GameModule>(ProjectModules.InFiles(project.AssetsPath));
+        if (scripts is not null)
+        {
+            using var reader = new System.Reflection.PortableExecutable.PEReader(new MemoryStream(scripts));
+            var metadata = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(reader);
+            var names = metadata.AssemblyReferences.Select(h => metadata.GetString(metadata.GetAssemblyReference(h).Name)).ToHashSet(StringComparer.Ordinal);
+            used.UnionWith(GameModule.All.Where(m => names.Contains(m.GetType().Assembly.GetName().Name!)));
+        }
+
+        return [.. used.OrderBy(m => m.Name, StringComparer.Ordinal)];
     }
 
     internal static void CopyFolder(string source, string destination, Func<string, bool> include)

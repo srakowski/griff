@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -182,7 +183,7 @@ public sealed class TileNumbersEditor : FieldEditor<TileNumbersAttribute>
         var picked = Picked.ToList();
         if (!picked.Remove(tile))
             picked.Add(tile);
-        SetText(TileNumbersAttribute.Write(picked));
+        SetText(FieldValues.WriteTiles(picked));
     }
 
     public override void Refresh()
@@ -226,7 +227,7 @@ public sealed class TileAnimationsEditor : FieldEditor<TileAnimationsAttribute>
         var runs = Runs.ToList();
         var first = runs.Count > 0 ? runs.Max(r => r.Last) + 1 : 0;
         runs.Add(new TileAnimation(first, first + 3, 4));
-        SetText(TileAnimationsAttribute.Write(runs));
+        SetText(FieldValues.WriteTileAnimations(runs));
     }
 
     /// <summary>Sets run <paramref name="number"/> (from 1): its first and last tile and frames a second, as one undo step.</summary>
@@ -241,7 +242,7 @@ public sealed class TileAnimationsEditor : FieldEditor<TileAnimationsAttribute>
         var runs = Runs.ToList();
         Check(number, runs.Count);
         runs.RemoveAt(number - 1);
-        SetText(TileAnimationsAttribute.Write(runs));
+        SetText(FieldValues.WriteTileAnimations(runs));
     }
 
     public IRelayCommand AddCommand => _add ??= new RelayCommand(Add);
@@ -263,7 +264,7 @@ public sealed class TileAnimationsEditor : FieldEditor<TileAnimationsAttribute>
         run = run with { First = Math.Clamp(run.First, 0, Tilemap.MaxTiles - 2), FramesPerSecond = Math.Max(0.1f, run.FramesPerSecond) };
         run = run with { Last = Math.Clamp(run.Last, run.First + 1, Tilemap.MaxTiles - 1) };
         runs[number - 1] = run;
-        var text = TileAnimationsAttribute.Write(runs);
+        var text = FieldValues.WriteTileAnimations(runs);
         if (seal)
             SetText(text);
         else
@@ -356,7 +357,7 @@ public sealed class AutoTilesEditor : FieldEditor<AutoTilesAttribute>
             throw new ArgumentOutOfRangeException(nameof(first), $"A run is 16 tiles, from 0 to {Tilemap.MaxTiles - 16}.");
         if (!firsts.Contains(start))
             firsts.Add(start);
-        SetText(AutoTilesAttribute.Write(firsts));
+        SetText(FieldValues.WriteAutoTiles(firsts));
     }
 
     /// <summary>Starts run <paramref name="number"/> (from 1) at <paramref name="first"/>, as one undo step.</summary>
@@ -373,7 +374,7 @@ public sealed class AutoTilesEditor : FieldEditor<AutoTilesAttribute>
         if (number < 1 || number > firsts.Count)
             throw new ArgumentOutOfRangeException(nameof(number), $"The runs are numbered 1 to {firsts.Count}.");
         firsts.RemoveAt(number - 1);
-        SetText(AutoTilesAttribute.Write(firsts));
+        SetText(FieldValues.WriteAutoTiles(firsts));
     }
 
     public IRelayCommand AddCommand => _add ??= new RelayCommand(() => Add());
@@ -392,7 +393,7 @@ public sealed class AutoTilesEditor : FieldEditor<AutoTilesAttribute>
         if (number < 1 || number > firsts.Count)
             return;
         firsts[number - 1] = Math.Clamp(first, 0, Tilemap.MaxTiles - 16);
-        SetTextLive(AutoTilesAttribute.Write(firsts));
+        SetTextLive(FieldValues.WriteAutoTiles(firsts));
     }
 }
 

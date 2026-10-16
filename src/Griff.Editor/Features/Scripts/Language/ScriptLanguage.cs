@@ -66,7 +66,21 @@ public sealed class ScriptLanguage : IDisposable
             metadataReferences: References.Value);
         _solution = _workspace.CurrentSolution
             .AddProject(project)
-            .AddDocument(DocumentId.CreateNewId(_projectId), ScriptCompiler.ImplicitUsingsPath, SourceText.From(ScriptCompiler.ImplicitUsings), filePath: ScriptCompiler.ImplicitUsingsPath);
+            .AddDocument(DocumentId.CreateNewId(_projectId), ScriptCompiler.ImplicitUsingsPath,
+                SourceText.From(ScriptCompiler.ImplicitUsingsFor(Griff.Runtime.GameModule.All)), filePath: ScriptCompiler.ImplicitUsingsPath);
+    }
+
+    /// <summary>
+    /// Gives the scripts the usings of <paramref name="modules"/>, those their project uses, as their build has them (see
+    /// <see cref="ScriptCompiler.ImplicitUsingsFor"/>).
+    /// </summary>
+    public void UseModules(IEnumerable<Griff.Runtime.GameModule> modules)
+    {
+        lock (_gate)
+        {
+            if (Find(_solution, ScriptCompiler.ImplicitUsingsPath) is { } usings)
+                _solution = _solution.WithDocumentText(usings.Id, SourceText.From(ScriptCompiler.ImplicitUsingsFor(modules)));
+        }
     }
 
     public void Dispose() => _workspace.Dispose();

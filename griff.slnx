@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Griff.Agent/Griff.Agent.csproj" />
+    <Project Path="src/Griff.Editing/Griff.Editing.csproj" />
     <Project Path="src/Griff.Editor/Griff.Editor.csproj" />
     <Project Path="src/Griff.Exporting/Griff.Exporting.csproj" />
     <Project Path="src/Griff.Fonts/Griff.Fonts.csproj" />
@@ -10,6 +12,41 @@
     <Project Path="src/Griff.Scripting/Griff.Scripting.csproj" />
     <Project Path="src/Griff.Web/Griff.Web.csproj" />
     <Project Path="src/Griff/Griff.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/Griff.Modules.csproj" />
+    <Project Path="src/Modules/Adventures/Editor/Griff.Modules.Adventures.Editor.csproj" />
+    <Project Path="src/Modules/Adventures/Griff.Modules.Adventures.csproj" />
+    <Project Path="src/Modules/Battles/Editor/Griff.Modules.Battles.Editor.csproj" />
+    <Project Path="src/Modules/Battles/Griff.Modules.Battles.csproj" />
+    <Project Path="src/Modules/BlockWorlds/Editor/Griff.Modules.BlockWorlds.Editor.csproj" />
+    <Project Path="src/Modules/BlockWorlds/Griff.Modules.BlockWorlds.csproj" />
+    <Project Path="src/Modules/Cards/Editor/Griff.Modules.Cards.Editor.csproj" />
+    <Project Path="src/Modules/Cards/Griff.Modules.Cards.csproj" />
+    <Project Path="src/Modules/Contraptions/Editor/Griff.Modules.Contraptions.Editor.csproj" />
+    <Project Path="src/Modules/Contraptions/Griff.Modules.Contraptions.csproj" />
+    <Project Path="src/Modules/Dungeons/Editor/Griff.Modules.Dungeons.Editor.csproj" />
+    <Project Path="src/Modules/Dungeons/Griff.Modules.Dungeons.csproj" />
+    <Project Path="src/Modules/FallingBlocks/Editor/Griff.Modules.FallingBlocks.Editor.csproj" />
+    <Project Path="src/Modules/FallingBlocks/Griff.Modules.FallingBlocks.csproj" />
+    <Project Path="src/Modules/Fighting/Editor/Griff.Modules.Fighting.Editor.csproj" />
+    <Project Path="src/Modules/Fighting/Griff.Modules.Fighting.csproj" />
+    <Project Path="src/Modules/FirstPerson/Editor/Griff.Modules.FirstPerson.Editor.csproj" />
+    <Project Path="src/Modules/FirstPerson/Griff.Modules.FirstPerson.csproj" />
+    <Project Path="src/Modules/Match3/Editor/Griff.Modules.Match3.Editor.csproj" />
+    <Project Path="src/Modules/Match3/Griff.Modules.Match3.csproj" />
+    <Project Path="src/Modules/PhysicsGames/Editor/Griff.Modules.PhysicsGames.Editor.csproj" />
+    <Project Path="src/Modules/PhysicsGames/Griff.Modules.PhysicsGames.csproj" />
+    <Project Path="src/Modules/Puzzles/Editor/Griff.Modules.Puzzles.Editor.csproj" />
+    <Project Path="src/Modules/Puzzles/Griff.Modules.Puzzles.csproj" />
+    <Project Path="src/Modules/Rhythm/Editor/Griff.Modules.Rhythm.Editor.csproj" />
+    <Project Path="src/Modules/Rhythm/Griff.Modules.Rhythm.csproj" />
+    <Project Path="src/Modules/Strategy/Editor/Griff.Modules.Strategy.Editor.csproj" />
+    <Project Path="src/Modules/Strategy/Griff.Modules.Strategy.csproj" />
+    <Project Path="src/Modules/Tactics/Editor/Griff.Modules.Tactics.Editor.csproj" />
+    <Project Path="src/Modules/Tactics/Griff.Modules.Tactics.csproj" />
+    <Project Path="src/Modules/VisualNovels/Editor/Griff.Modules.VisualNovels.Editor.csproj" />
+    <Project Path="src/Modules/VisualNovels/Griff.Modules.VisualNovels.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Griff.Editor.Tests/Griff.Editor.Tests.csproj" />

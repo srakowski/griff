@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Data;
 using Griff.Scenes;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -44,7 +45,7 @@ public sealed class DiceEditor(PropertyField field, DiceAttribute attribute) : F
     }
 
     /// <summary>The sides offered: 4, 6, 8, 10, 12, 20 and 100.</summary>
-    public IReadOnlyList<int> SidesChoices => DiceAttribute.CommonSides;
+    public IReadOnlyList<int> SidesChoices => FieldValues.DiceSides;
 
     /// <summary>"Rolls 3 to 18, 10.5 on average", "Always 5", or what's wrong; for none, that it's empty.</summary>
     public string Summary

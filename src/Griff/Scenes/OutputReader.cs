@@ -9,7 +9,7 @@ namespace Griff.Scenes;
 /// The entity is the one the track field names (one inside the reader's own entity first, otherwise the scene's, a network
 /// game's own player's first; "*" is the first in the scene with the output), or without a name the reader's own entity, or the nearest it's inside, with that output.
 /// </remarks>
-internal sealed class OutputReader
+public sealed class OutputReader
 {
     /// <summary>The track that means any entity of the scene with the output, the first there is.</summary>
     public const string AnyEntity = "*";

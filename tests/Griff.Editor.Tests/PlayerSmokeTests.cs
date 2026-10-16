@@ -51,6 +51,48 @@ public sealed class PlayerSmokeTests : IDisposable
         }
     }
 
+    // A genre's template exported carries the running parts of its own modules and nothing of the editor's: the player
+    // bundles Griff and no module, editing or agent assembly, the game its Modules folder with only its module, which the
+    // player loads before the game and plays.
+    [Fact]
+    public async Task ExportedMatch3_CarriesOnlyItsModule_AndNothingOfTheEditors_AndRuns()
+    {
+        var project = await Project.CreateAsync(_root, "Griff Gems", ProjectTemplates.Get("Match3"));
+        var player = PlayerPath("Small");
+        var export = GameExporter.Export(project, player, Path.Combine(_root, "Build"), " (needs .NET)");
+        Assert.True(export.Success, export.Error);
+
+        var bundled = ThirdPartyNotices.FilesIn(player);
+        Assert.Contains(bundled, f => f.Equals("Griff.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(bundled, f => f.StartsWith(ModuleAssemblies.Prefix, StringComparison.OrdinalIgnoreCase) ||
+                                            f.StartsWith("Griff.Editing", StringComparison.OrdinalIgnoreCase) ||
+                                            f.StartsWith("Griff.Agent", StringComparison.OrdinalIgnoreCase) ||
+                                            f.StartsWith("Griff.Editor", StringComparison.OrdinalIgnoreCase) ||
+                                            f.StartsWith("Griff.Scripting", StringComparison.OrdinalIgnoreCase));
+
+        var cache = Path.Combine(_root, "Cache");
+        var game = GamePackage.Extract(export.Executable!, cache, "Griff Gems")!;
+        Assert.Equal(["Griff.Modules.Match3.dll"], Directory.GetFiles(Path.Combine(game, ExportLayout.ModulesFolder)).Select(Path.GetFileName));
+        // Beside its scripts, if it has any, nothing else of code.
+        Assert.Equal([Path.Combine(ExportLayout.ModulesFolder, "Griff.Modules.Match3.dll")],
+            Directory.EnumerateFiles(game, "*.dll", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(game, f)).Where(f => f != ExportLayout.ScriptsAssembly));
+
+        var frame = Path.Combine(_root, "frame.png");
+        var (exitCode, output) = await RunAsync(export.Executable!, frame, Path.Combine(_root, "Unpacked"), muteArgument: false);
+        try
+        {
+            Assert.True(exitCode == 0, $"The player exited with {exitCode}.\n{output}");
+            Assert.True(File.Exists(frame), "The player didn't save a frame.");
+            Assert.True(ColorsIn(frame) > 1, "The frame is one flat color: nothing was drawn.");
+        }
+        finally
+        {
+            var games = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Griff", "Games");
+            if (GamePackage.Extract(export.Executable!, games, Path.GetFileNameWithoutExtension(export.Executable!)) is { } unpacked)
+                Directory.Delete(unpacked, recursive: true);
+        }
+    }
+
     // A dedicated server is a console program: the core's loop plays the game with nothing to draw on, and WPF never loads.
     [Fact]
     public async Task ExportedArcade_RunsAsADedicatedServerWithoutWpf()

@@ -35,10 +35,14 @@ public sealed class SimulationHost
     /// <summary>Types that can be script simulations (classes deriving from <see cref="SimulationScript"/>), besides those beside the components.</summary>
     public IReadOnlyList<Type> ScriptTypes { get; init; } = [];
 
-    /// <summary>A host playing as <paramref name="game"/> does: its tables, components, scenes, prefabs and step rate.</summary>
+    /// <summary>The modules its fights run the systems of (see <see cref="Game.Modules"/>): every one this program has if null.</summary>
+    public IReadOnlyList<GameModule>? Modules { get; init; }
+
+    /// <summary>A host playing as <paramref name="game"/> does: its tables, components, modules, scenes, prefabs and step rate.</summary>
     public static SimulationHost Of(Game game) => new()
     {
         Tables = game.Tables,
+        Modules = game.Modules,
         Components = game.Components ?? ComponentRegistry.CreateDefault(),
         LoadScene = game.SceneLoader,
         LoadPrefab = game.PrefabLoader,
@@ -557,6 +561,7 @@ public static class SimulationRunner
             Scenes = host.LoadScene,
             Prefabs = host.LoadPrefab,
             StepRate = host.StepRate,
+            Modules = host.Modules,
         }.NewGame(new GameHostOptions { Tables = step.Tables, Problems = plan.Problems.Report });
 
         double dealt = 0, taken = 0;

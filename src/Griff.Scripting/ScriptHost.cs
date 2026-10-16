@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -21,6 +22,9 @@ public sealed class ReloadResult
 
     /// <summary>True if the sources matched the loaded scripts, so nothing was rebuilt.</summary>
     public bool Unchanged { get; init; }
+
+    /// <summary>The modules the scripts' project uses, which they got a <c>using</c> for; null for every one.</summary>
+    public IReadOnlyList<GameModule>? Modules { get; internal set; }
 
     /// <summary>The scripts loaded, when they were rebuilt.</summary>
     public Assembly? Assembly { get; init; }
@@ -47,10 +51,15 @@ public sealed class ScriptHost(ComponentRegistry registry)
     public IReadOnlyList<Type> ComponentTypes => _types;
 
     /// <summary>
-    /// How the scripts are built: <see cref="ScriptCompiler.Compile"/> to start, or one that adds to them (the editor builds
-    /// them with breakpoint probes, so a breakpoint can stop them without building them again).
+    /// How the scripts are built, given the modules their project uses (null: every one): <see cref="ScriptCompiler.Compile"/>
+    /// to start, or one that adds to them (the editor builds them with breakpoint probes, so a breakpoint can stop them
+    /// without building them again).
     /// </summary>
-    public Func<IReadOnlyList<ScriptSource>, CompileResult> Compiler { get; init; } = sources => ScriptCompiler.Compile(sources);
+    public Func<IReadOnlyList<ScriptSource>, IReadOnlyList<GameModule>?, CompileResult> Compiler { get; init; } =
+        (sources, modules) => ScriptCompiler.Compile(sources, modules: modules);
+
+    /// <summary>The modules the loaded scripts' project uses, which they got a <c>using</c> for; null for every one.</summary>
+    public IReadOnlyList<GameModule>? Modules { get; private set; }
 
     /// <summary>What the loaded build carries besides the scripts' code (the editor's breakpoint probes), or null.</summary>
     public IScriptAttachment? Attachment { get; private set; }
@@ -62,20 +71,34 @@ public sealed class ScriptHost(ComponentRegistry registry)
     /// Compiles and swaps in <paramref name="sources"/>. If they're identical to what's loaded, nothing is
     /// rebuilt: running scripts keep their state (editors often save a file several times in a row).
     /// </summary>
-    public ReloadResult Reload(IReadOnlyList<ScriptSource> sources, IEnumerable<Scene> liveScenes)
+    /// <param name="modules">The modules their project uses, which they get a <c>using</c> for; null for every one.</param>
+    public ReloadResult Reload(IReadOnlyList<ScriptSource> sources, IEnumerable<Scene> liveScenes, IReadOnlyList<GameModule>? modules = null)
     {
-        var fingerprint = string.Join("\0", sources.Select(s => s.Path + "\0" + s.Text));
+        var fingerprint = string.Join("\0", sources.Select(s => s.Path + "\0" + s.Text)) + "\0" +
+                          (modules is null ? "*" : string.Join(",", modules.Select(m => m.Name)));
         if (fingerprint == _loadedSources)
             return new ReloadResult { Success = true, Diagnostics = [], ComponentTypes = _types, Unchanged = true };
 
-        var result = Apply(Compiler(sources), liveScenes);
+        var result = Apply(Compiler(sources, modules), liveScenes);
+        result.Modules = modules;
         if (result.Success)
+        {
             _loadedSources = fingerprint;
+            Modules = modules;
+        }
+
         return result;
     }
 
-    public ReloadResult ReloadFolder(string folder, IEnumerable<Scene> liveScenes) =>
-        Reload(ScriptCompiler.ReadFolder(folder), liveScenes);
+    /// <summary>
+    /// Compiles and swaps in every script under <paramref name="folder"/> (a project's Assets), with a <c>using</c> for each
+    /// module the project uses: its scenes and prefabs as saved, and <paramref name="liveScenes"/> as they are.
+    /// </summary>
+    public ReloadResult ReloadFolder(string folder, IEnumerable<Scene> liveScenes)
+    {
+        var scenes = liveScenes.ToList();
+        return Reload(ScriptCompiler.ReadFolder(folder), scenes, ProjectModules.Of(folder, null, scenes));
+    }
 
     /// <summary>Unregisters script types and turns their components into MissingComponents (data kept).</summary>
     public void Unload(IEnumerable<Scene> liveScenes)

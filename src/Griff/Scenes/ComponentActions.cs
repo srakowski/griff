@@ -194,7 +194,7 @@ public sealed class ComponentAction
     }
 
     /// <summary>True if two names are the same, whatever their capitals and spaces.</summary>
-    internal static bool SameWords(ReadOnlySpan<char> a, ReadOnlySpan<char> b)
+    public static bool SameWords(ReadOnlySpan<char> a, ReadOnlySpan<char> b)
     {
         int i = 0, j = 0;
         while (true)
@@ -212,8 +212,8 @@ public sealed class ComponentAction
         }
     }
 
-    // "EndTurn" as "End Turn".
-    internal static string Spaced(string name)
+    /// <summary>A name written as words, the way the editor shows it: "EndTurn" as "End Turn".</summary>
+    public static string Spaced(string name)
     {
         var text = new System.Text.StringBuilder(name.Length + 4);
         for (var i = 0; i < name.Length; i++)

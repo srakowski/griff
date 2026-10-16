@@ -18,7 +18,7 @@ one item, the first unchecked one under **Next**. Do it well rather than doing m
    its tests, MCP check and demo. If the item is bigger than that (several systems, a template plus the components it
    needs, a rewrite), split it in `backlog.md` into pieces that each stand on their own, in build order, commit just
    that change to main (stage `backlog.md` by path and nothing else), and build only the first piece.
-4. Check the Griff MCP is on main (`src/Griff/Agent/`, the MCP server the editor serves). Every item is tested through
+4. Check the Griff MCP is on main (`src/Griff.Agent/`, the MCP server the editor serves). Every item is tested through
    it; if it isn't there yet, say so and stop before writing any code.
 
 ## 1. Work in a worktree
@@ -34,7 +34,7 @@ Other agents may be working in the main checkout at the same time, so never swit
 ## 2. Build it
 
 - Treat the item as the whole prompt, the way the user would have typed it. Read how the neighbouring features are
-  built first (git history, the docs in `site/src/content/docs/docs/`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff/Templates/`)
+  built first (git history, the docs in `site/src/content/docs/docs/`, `src/Griff/Scenes/*Components.cs`, the templates in `src/Griff.Editing/Templates/` and the genres in `src/Modules/`)
   and follow the same shape: no-code components that work from the Inspector, scripting API where it helps, a
   playable (and audible) template when the item names one, multiplayer and rewind support like the existing
   components, and undo for everything in the editor.
@@ -55,7 +55,7 @@ Other agents may be working in the main checkout at the same time, so never swit
 Never launch anything while the user is busy: `CLAUDE.local.md` (local, not in git) may name programs that mean so;
 while any of them is running, wait until it's closed.
 
-1. Start the editor from the worktree's build with the MCP server on, the way `src/Griff/Agent/` and `docs/agents.md` say
+1. Start the editor from the worktree's build with the MCP server on, the way `src/Griff.Agent/` and `docs/agents.md` say
    to. Use the Griff MCP tools if this session has them connected; otherwise talk to it over HTTP with JSON-RPC
    (`initialize`, then `tools/list` and `tools/call`) at `http://127.0.0.1:<port>/mcp` (7650 by default).
 2. Exercise the new feature the way an agent building a game would: create entities, add and set the new

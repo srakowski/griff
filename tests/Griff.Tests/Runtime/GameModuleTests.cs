@@ -134,7 +134,7 @@ public class GameModuleTests
             }
             """;
 
-        Assert.All(GameModule.All, m => Assert.Contains($"global using {m.Namespace};", ScriptCompiler.ImplicitUsings));
+        Assert.All(GameModule.All, m => Assert.Contains($"global using {m.Namespace};", ScriptCompiler.ImplicitUsingsFor(GameModule.All)));
         var result = ScriptCompiler.Compile([new ScriptSource("Trainer.cs", source)]);
         Assert.True(result.Success, string.Join("\n", result.Errors));
     }

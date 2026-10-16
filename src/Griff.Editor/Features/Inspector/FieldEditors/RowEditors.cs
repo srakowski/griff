@@ -3,6 +3,7 @@ using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -34,9 +35,9 @@ public sealed class ItemCountsEditor : FieldEditor<ItemCountsAttribute>
         var entries = Entries;
         var at = entries.FindIndex(e => ItemCountsAttribute.Read(e).Item.Equals(item.Trim(), StringComparison.OrdinalIgnoreCase));
         if (at >= 0)
-            entries[at] = ItemCountsAttribute.Write(item, ItemCountsAttribute.Read(entries[at]).Count + Math.Max(1, count));
+            entries[at] = FieldValues.WriteItemCount(item, ItemCountsAttribute.Read(entries[at]).Count + Math.Max(1, count));
         else
-            entries.Add(ItemCountsAttribute.Write(item, Math.Max(1, count)));
+            entries.Add(FieldValues.WriteItemCount(item, Math.Max(1, count)));
         SetLines(entries);
     }
 
@@ -45,7 +46,7 @@ public sealed class ItemCountsEditor : FieldEditor<ItemCountsAttribute>
     {
         var entries = Entries;
         Check(number, entries.Count);
-        entries[number - 1] = ItemCountsAttribute.Write(item, Math.Max(1, count));
+        entries[number - 1] = FieldValues.WriteItemCount(item, Math.Max(1, count));
         SetLines(entries);
     }
 
@@ -84,7 +85,7 @@ public sealed class ItemCountsEditor : FieldEditor<ItemCountsAttribute>
         var entries = Entries;
         if (number < 1 || number > entries.Count || item.Trim().Length == 0)
             return;
-        entries[number - 1] = ItemCountsAttribute.Write(item, Math.Max(1, count));
+        entries[number - 1] = FieldValues.WriteItemCount(item, Math.Max(1, count));
         SetLines(entries, seal);
     }
 
@@ -181,9 +182,9 @@ public sealed class ItemUsesEditor : FieldEditor<ItemUsesAttribute>
         var entries = Entries;
         var at = entries.FindIndex(e => ItemUsesAttribute.Read(e)?.Item.Equals(item.Trim(), StringComparison.OrdinalIgnoreCase) == true);
         if (at >= 0)
-            entries[at] = ItemUsesAttribute.Write(item, [.. ItemUsesAttribute.Read(entries[at])!.Value.Effects, effect]);
+            entries[at] = FieldValues.WriteItemUse(item, [.. ItemUsesAttribute.Read(entries[at])!.Value.Effects, effect]);
         else
-            entries.Add(ItemUsesAttribute.Write(item, [effect]));
+            entries.Add(FieldValues.WriteItemUse(item, [effect]));
         SetLines(entries);
     }
 
@@ -258,7 +259,7 @@ public sealed class ItemUsesEditor : FieldEditor<ItemUsesAttribute>
         var (item, effects) = change(Entry(number));
         if (item.Length == 0)
             return;
-        entries[number - 1] = ItemUsesAttribute.Write(item, effects);
+        entries[number - 1] = FieldValues.WriteItemUse(item, effects);
         SetLines(entries, seal);
     }
 
@@ -431,7 +432,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
         var pairs = Pairs.ToList();
         if (pairs.RemoveAll(p => p.Tile == tile) == 0)
             pairs.Add((tile, Math.Max(1, count)));
-        SetText(TileCountsAttribute.Write(pairs));
+        SetText(FieldValues.WriteTileCounts(pairs));
     }
 
     /// <summary>Sets how many of row <paramref name="number"/>'s tile (from 1), as one undo step.</summary>
@@ -441,7 +442,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
         if (number < 1 || number > pairs.Count)
             throw new ArgumentOutOfRangeException(nameof(number), pairs.Count == 0 ? "There are none yet: Toggle a tile to add it." : $"The rows are numbered 1 to {pairs.Count}.");
         pairs[number - 1] = (pairs[number - 1].Tile, Math.Max(0, count));
-        SetText(TileCountsAttribute.Write(pairs));
+        SetText(FieldValues.WriteTileCounts(pairs));
     }
 
     /// <summary>Takes row <paramref name="number"/> (from 1) out, as one undo step.</summary>
@@ -451,7 +452,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
         if (number < 1 || number > pairs.Count)
             throw new ArgumentOutOfRangeException(nameof(number), $"The rows are numbered 1 to {pairs.Count}.");
         pairs.RemoveAt(number - 1);
-        SetText(TileCountsAttribute.Write(pairs));
+        SetText(FieldValues.WriteTileCounts(pairs));
     }
 
     public override void Refresh()
@@ -467,7 +468,7 @@ public sealed class TileCountsEditor : FieldEditor<TileCountsAttribute>
         if (number < 1 || number > pairs.Count)
             return;
         pairs[number - 1] = (pairs[number - 1].Tile, Math.Max(0, count));
-        SetTextLive(TileCountsAttribute.Write(pairs));
+        SetTextLive(FieldValues.WriteTileCounts(pairs));
     }
 
     internal ImageSource? Picture(int tile) => TilePictures.MapOf(Component) is { } map ? TilePictures.Of(Host.Art, map, tile) : null;

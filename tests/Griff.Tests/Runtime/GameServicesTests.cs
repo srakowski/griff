@@ -12,7 +12,7 @@ public class GameServicesTests
     {
         var game = new Game(new Scene(), new InputState());
         var get = typeof(IGameServices).GetMethod(nameof(IGameServices.Get))!;
-        var services = typeof(IGameService).Assembly.GetTypes()
+        var services = ModuleAssemblies.All.Prepend(typeof(IGameService).Assembly).SelectMany(a => a.GetTypes())
             .Where(t => t.IsInterface && t != typeof(IGameService) && typeof(IGameService).IsAssignableFrom(t))
             .ToList();
 

@@ -36,7 +36,7 @@ Every user-visible change gets a narrated demo, and the demos stay current:
 ## Agents (MCP)
 
 The editor serves MCP at `http://127.0.0.1:7650/mcp` while it's open (`src/Griff.Editor/Features/Agent`; the protocol,
-scene tools and reflection live in `src/Griff/Agent`). It has no list of features: its tools are projections of what
+scene tools and reflection live in `src/Griff.Agent`). It has no list of features: its tools are projections of what
 the editor already registers, so new capabilities reach agents by themselves. Keep it that way by putting each
 capability where a projection sees it:
 

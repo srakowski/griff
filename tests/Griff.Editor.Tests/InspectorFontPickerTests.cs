@@ -4,6 +4,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Inspector;
+using Griff.Editing;
 using Griff.Fonts;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;

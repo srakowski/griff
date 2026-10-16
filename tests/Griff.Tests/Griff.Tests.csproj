@@ -41,6 +41,9 @@
     <ProjectReference Include="..\..\src\Griff.Graphics\Griff.Graphics.csproj" />
     <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />
     <ProjectReference Include="..\..\src\Griff.Exporting\Griff.Exporting.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Editing\Griff.Editing.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Agent\Griff.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Griff.Modules.csproj" />
   </ItemGroup>
 
 </Project>

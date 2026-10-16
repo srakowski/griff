@@ -17,7 +17,7 @@ set: Counter.Format = Score: {0}
 explain: field:Counter.Output | Counting an output | A counter used to look for a match board itself. Now the board names its outputs, so any component, a script's too, can feed a counter.
 write: Scripts/AutoSwap.cs | genre-modules/AutoSwap.cs
 code: Assets/Scripts/AutoSwap.cs | AutoSwap.cs
-say: This script plays the board by itself. It names the Match Board without any using line: scripts get every module's types, just as they get Griff's.
+say: This script plays the board by itself. It names the Match Board without any using line: a script gets the types of each genre its project uses, just as it gets Griff's.
 hidecode
 deselect
 create: Empty

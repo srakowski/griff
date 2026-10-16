@@ -254,7 +254,7 @@ public sealed class ComponentPanel : ObservableObject, IPropertyHost
     }
 
     private ComponentDescriptor? Find(string name) =>
-        _projectSession.Components.All.FirstOrDefault(d => d.Type.Name == name && d.Type.Assembly != typeof(Component).Assembly);
+        _projectSession.Components.All.FirstOrDefault(d => d.Type.Name == name && !ModuleAssemblies.IsGriffs(d.Type));
 
     /// <summary>Starts over from the compiled component: its documentation and properties.</summary>
     public void Rebuild()

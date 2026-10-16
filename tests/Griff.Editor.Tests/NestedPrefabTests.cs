@@ -53,6 +53,10 @@ public sealed class NestedPrefabTests : IDisposable
         inside.GetComponent<Sprite>()!.Tint = new Color(1, 0.8f, 0);
         chest.Add(inside, root);
         File.WriteAllText(project.DefaultPrefabPath("Chest"), workspace.Serializer.SavePrefabToString(root));
+        // Known to the project's prefabs as written, so their files settling later (whenever the watcher gets to them, later
+        // on a busy machine) isn't a change that brings copies up to date in the middle of a test.
+        Assert.NotNull(workspace.PrefabLibrary!.VersionOf(project.DefaultPrefabPath("Coin")));
+        Assert.NotNull(workspace.PrefabLibrary.VersionOf(project.DefaultPrefabPath("Chest")));
 
         var scene = workspace.Scene!;
         var placedCoin = services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!;

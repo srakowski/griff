@@ -200,7 +200,7 @@ internal sealed class SnapshotCodec(SceneSerializer serializer)
     private sealed class Plan
     {
         private static readonly MethodInfo WriteKeptMethod = typeof(SnapshotCodec).GetMethod(nameof(WriteKept), BindingFlags.NonPublic | BindingFlags.Static)!;
-        private static readonly PropertyInfo KeptProperty = typeof(Component).GetProperty(nameof(Component.Kept), BindingFlags.NonPublic | BindingFlags.Instance)!;
+        private static readonly PropertyInfo KeptProperty = typeof(Component).GetProperty(nameof(Component.Kept), BindingFlags.Public | BindingFlags.Instance)!;
 
         public Plan(int index, ComponentDescriptor descriptor)
         {

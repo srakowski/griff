@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The agent surface: the MCP server (its protocol and HTTP transport), the scene and asset tools, describing components
+    and playtesting a running game. The editor serves it (Features/Agent) and projects its own commands and view models
+    onto it; an exported game never carries it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS0419</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Griff.Editing\Griff.Editing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Griff.Tests" />
+  </ItemGroup>
+
+</Project>

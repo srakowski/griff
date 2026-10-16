@@ -338,10 +338,13 @@ public sealed class RollsForAttribute(string property) : Attribute
     public string Property { get; } = property;
 }
 
-// Dice written as text, read once when the text changes: rolled each hit with Rand, or the plain number when it's empty
-// (or doesn't read as dice).
-internal struct DiceRoll
+/// <summary>
+/// Dice written as text (a component's "2d6+3"), read once when the text changes: rolled each hit with Rand, or the plain
+/// number when it's empty (or doesn't read as dice).
+/// </summary>
+public struct DiceRoll
 {
+    /// <summary>The dice as written.</summary>
     private string? _text;
     private Dice? _dice;
 
@@ -357,5 +360,6 @@ internal struct DiceRoll
         }
     }
 
+    /// <summary>A roll of the dice, or <paramref name="otherwise"/> when there are none.</summary>
     public readonly float Roll(float otherwise) => _dice is { } dice ? dice.Roll() : otherwise;
 }

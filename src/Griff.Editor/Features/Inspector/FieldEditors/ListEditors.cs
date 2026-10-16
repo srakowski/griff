@@ -3,6 +3,7 @@ using System.Numerics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -33,7 +34,7 @@ public sealed class PrefabCountsEditor : FieldEditor<PrefabCountsAttribute>
     {
         if (string.IsNullOrWhiteSpace(prefab))
             throw new ArgumentException("Name a prefab, like Enemy.", nameof(prefab));
-        SetLines([.. Entries, PrefabCountsAttribute.Write(prefab, Math.Max(0, least), Math.Max(0, Math.Max(least, most)))]);
+        SetLines([.. Entries, FieldValues.WritePrefabCount(prefab, Math.Max(0, least), Math.Max(0, Math.Max(least, most)))]);
     }
 
     /// <summary>Sets row <paramref name="number"/> (from 1): its prefab and the fewest and most of it, as one undo step.</summary>
@@ -79,7 +80,7 @@ public sealed class PrefabCountsEditor : FieldEditor<PrefabCountsAttribute>
         var (prefab, least, most) = change(PrefabCountsAttribute.Read(entries[number - 1]));
         if (prefab.Length == 0)
             return;
-        entries[number - 1] = PrefabCountsAttribute.Write(prefab, least, Math.Max(least, most));
+        entries[number - 1] = FieldValues.WritePrefabCount(prefab, least, Math.Max(least, most));
         SetLines(entries, seal);
     }
 
@@ -133,7 +134,7 @@ public sealed class DirectionEditor : FieldEditor<DirectionAttribute>
     public DirectionEditor(PropertyField field, DirectionAttribute attribute)
         : base(field, attribute)
     {
-        Ways = [.. DirectionAttribute.Ways.Select(w => new WayChoice(w.Name, w.Way, this)),
+        Ways = [.. FieldValues.Directions.Select(w => new WayChoice(w.Name, w.Way, this)),
             .. attribute.None is null ? Array.Empty<WayChoice>() : [new WayChoice(NoneName, Vector2.Zero, this)]];
     }
 
@@ -144,7 +145,7 @@ public sealed class DirectionEditor : FieldEditor<DirectionAttribute>
     public const string NoneName = "None";
 
     /// <summary>The way it points, when it's one of the eight ("Up Right"), or None for (0, 0) where that means something; otherwise null.</summary>
-    public string? Way => Field.IsMixed ? null : Field.Value is Vector2 v ? v == Vector2.Zero && Attribute.None is not null ? NoneName : DirectionAttribute.NameOf(v) : null;
+    public string? Way => Field.IsMixed ? null : Field.Value is Vector2 v ? v == Vector2.Zero && Attribute.None is not null ? NoneName : FieldValues.DirectionName(v) : null;
 
     /// <summary>Points it one of the eight ways, by name ("Up", "Down Left"), as one undo step.</summary>
     public void Point(string way)
@@ -156,10 +157,10 @@ public sealed class DirectionEditor : FieldEditor<DirectionAttribute>
             return;
         }
 
-        var found = DirectionAttribute.Ways.FirstOrDefault(w => w.Name.Equals(way.Trim(), StringComparison.OrdinalIgnoreCase) ||
+        var found = FieldValues.Directions.FirstOrDefault(w => w.Name.Equals(way.Trim(), StringComparison.OrdinalIgnoreCase) ||
             w.Name.Replace(" ", "", StringComparison.Ordinal).Equals(way.Trim(), StringComparison.OrdinalIgnoreCase));
         if (found.Name is null)
-            throw new ArgumentException($"There's no way called {way}; the ways are {string.Join(", ", DirectionAttribute.Ways.Select(w => w.Name))}.");
+            throw new ArgumentException($"There's no way called {way}; the ways are {string.Join(", ", FieldValues.Directions.Select(w => w.Name))}.");
         Field.Value = found.Way;
         Host.Seal();
     }

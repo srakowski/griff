@@ -255,7 +255,7 @@ public class SceneDataTests
     public void BuiltInComponents_AreFound_NotListed()
     {
         var found = ComponentRegistry.CreateDefault().All.Select(d => d.Type).ToHashSet();
-        var engine = typeof(Component).Assembly.GetTypes()
+        var engine = ModuleAssemblies.All.Prepend(typeof(Component).Assembly).SelectMany(a => a.GetTypes())
             .Where(t => t.IsSubclassOf(typeof(Component)) && !t.IsAbstract && t != typeof(MissingComponent) && t.GetConstructor(Type.EmptyTypes) is not null);
 
         Assert.Equal(engine.ToHashSet(), found);

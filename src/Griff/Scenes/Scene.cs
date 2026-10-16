@@ -32,8 +32,10 @@ public sealed class Scene
     // the step it became the game's scene in (nothing glides into a scene on its first), how many frames of it have been
     // drawn between steps, and while one is, which drawing it is (0 otherwise), how far between them, and the furthest
     // anything moving in a step glides rather than jumps.
-    internal long Step;
     internal long FirstStep = -1;
+
+    /// <summary>The step the game is taking on this scene, or took last (the game's <c>Time.Frame</c> then).</summary>
+    public long Step { get; internal set; }
     internal long DrawStamps;
     internal long DrawStamp;
     internal float DrawBlend;
@@ -108,9 +110,12 @@ public sealed class Scene
         }
     }
 
-    // The same, for the engine to go through in the step it asked in (see SnapshotPool): it's filled again once it has been
-    // replaced, unless it was also handed out to be kept.
-    internal Entity[] EntitiesNow
+    /// <summary>
+    /// Every entity, for a system to go through in the step it asked in without keeping the array: once replaced (an entity
+    /// added or destroyed), it's filled again later, unless it was also handed out to be kept, so going through it each step
+    /// makes no garbage.
+    /// </summary>
+    public Entity[] EntitiesNow
     {
         get
         {
@@ -194,13 +199,17 @@ public sealed class Scene
     public ComponentList<T> Running<T>() where T : class =>
         _paused.Count == 0 ? Active<T>() : IndexOf<T>().Running(ActiveVersion, PauseVersion, keep: true);
 
-    // The same lists for the engine, which goes through them in the step it asked in and doesn't keep them: once replaced,
-    // they're filled again two steps later (see SnapshotPool), so enabling, disabling and destroying make no garbage.
-    internal ComponentList<T> AllNow<T>() where T : class => IndexOf<T>().All(keep: false);
+    /// <summary>
+    /// As <see cref="All{T}"/>, for a system to go through in the step it asked in without keeping the list: once replaced,
+    /// it's filled again two steps later, so enabling, disabling and destroying make no garbage.
+    /// </summary>
+    public ComponentList<T> AllNow<T>() where T : class => IndexOf<T>().All(keep: false);
 
-    internal ComponentList<T> ActiveNow<T>() where T : class => IndexOf<T>().Active(ActiveVersion, keep: false);
+    /// <summary>As <see cref="Active{T}"/>, for a system to go through in the step it asked in without keeping the list (see <see cref="AllNow{T}"/>).</summary>
+    public ComponentList<T> ActiveNow<T>() where T : class => IndexOf<T>().Active(ActiveVersion, keep: false);
 
-    internal ComponentList<T> RunningNow<T>() where T : class =>
+    /// <summary>As <see cref="Running{T}"/>, for a system to go through in the step it asked in without keeping the list (see <see cref="AllNow{T}"/>).</summary>
+    public ComponentList<T> RunningNow<T>() where T : class =>
         _paused.Count == 0 ? ActiveNow<T>() : IndexOf<T>().Running(ActiveVersion, PauseVersion, keep: false);
 
     // The entities held still with everything inside them (see Entity.IsPaused), and a number that changes whenever they do.

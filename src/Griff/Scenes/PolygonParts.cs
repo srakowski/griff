@@ -10,7 +10,7 @@ namespace Griff.Scenes;
 /// shape (an L, a cup, a crescent of rock) collides as the pieces it's made of. Worked out once when the points change;
 /// the same points always make the same pieces.
 /// </summary>
-internal sealed class PolygonParts
+public sealed class PolygonParts
 {
     /// <summary>The most points a polygon uses: those after it are left out.</summary>
     public const int MaxPoints = 64;

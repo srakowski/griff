@@ -36,6 +36,19 @@ public sealed class WebExporterTests : IDisposable
             Directory.Delete(_root, recursive: true);
     }
 
+    // A web game carries the modules its project uses beside its files, which the page fetches and loads before the game.
+    [Fact]
+    public async Task Export_CarriesTheModulesItsProjectUses_InItsFileList()
+    {
+        var project = await Project.CreateAsync(_root, "Gems", Griff.Templates.ProjectTemplates.Get("Match3"));
+
+        var result = WebExporter.Export(project, _player, _output);
+
+        Assert.True(result.Success, result.Error);
+        var files = File.ReadAllLines(Path.Combine(_output, ExportLayout.GameFolder, ExportLayout.WebFileList));
+        Assert.Equal([$"{ExportLayout.ModulesFolder}/Griff.Modules.Match3.dll"], files.Where(f => f.EndsWith(".dll", StringComparison.Ordinal) && f != ExportLayout.ScriptsAssembly));
+    }
+
     [Fact]
     public async Task Export_PutsThePlayerBesideTheGame_AndListsTheGamesFiles()
     {

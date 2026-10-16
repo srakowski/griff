@@ -48,6 +48,9 @@ public sealed class PrefabTabTests : IDisposable
         coin.AddComponent<Pickup>().Amount = 1;
         Directory.CreateDirectory(Path.GetDirectoryName(project.DefaultPrefabPath("Coin"))!);
         File.WriteAllText(project.DefaultPrefabPath("Coin"), workspace.Serializer.SavePrefabToString(coin));
+        // Known to the project's prefabs as written, so the file settling later (whenever the watcher gets to it, later on a
+        // busy machine) isn't a change that brings copies up to date in the middle of a test.
+        Assert.NotNull(workspace.PrefabLibrary!.VersionOf(project.DefaultPrefabPath("Coin")));
 
         var level2 = new Scene();
         level2.Add(services.GetRequiredService<PrefabFiles>().Instantiate("Prefabs/Coin.prefab")!);

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Numerics;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Scenes;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -99,7 +100,7 @@ public sealed class PointsEditor : FieldEditor<PointsAttribute>
 
     private void Save(List<Vector2> points, bool seal)
     {
-        var text = PointsAttribute.Write(points);
+        var text = FieldValues.WritePoints(points);
         if (seal)
             SetText(text);
         else

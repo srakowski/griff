@@ -80,7 +80,7 @@ public sealed class Light : Component
     /// Where it is, how far it reaches, its color, its intensity (flicker included, as <see cref="CurrentIntensity"/>) and
     /// how soft its edge is, in a frame drawn as <paramref name="blend"/> says.
     /// </summary>
-    internal (Vector2 Center, float Radius, Color Color, float Intensity, float Softness) Drawn(StepBlend blend)
+    public (Vector2 Center, float Radius, Color Color, float Intensity, float Softness) Drawn(StepBlend blend)
     {
         var world = Entity?.Transform.WorldMatrix ?? Matrix4x4.Identity;
         return (Vector2.Transform(blend.Of(_offset), world), blend.Of(_radius), blend.Of(_color),

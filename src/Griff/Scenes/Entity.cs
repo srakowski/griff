@@ -142,6 +142,36 @@ public sealed class Entity
 
     public IReadOnlyList<Entity> Children => ChildList;
 
+    /// <summary>
+    /// Puts <paramref name="child"/> last inside this entity while neither is in a scene: an entity being built before it
+    /// goes into one (a template's, a prefab's). An entity in a scene moves with <see cref="Scene.Move"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Either is in a scene, or the child is inside another entity.</exception>
+    public void AddChild(Entity child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        if (Scene is not null || child.Scene is not null)
+            throw new InvalidOperationException("An entity in a scene moves with Scene.Move.");
+        if (child.Parent is not null)
+            throw new InvalidOperationException($"{child.Name} is inside {child.Parent.Name}; take it out first.");
+        ChildList.Add(child);
+        child.Parent = this;
+    }
+
+    /// <summary>Takes <paramref name="child"/> out of this entity while it isn't in a scene (see <see cref="AddChild"/>).</summary>
+    /// <returns>Whether it was inside this one.</returns>
+    /// <exception cref="InvalidOperationException">It's in a scene.</exception>
+    public bool RemoveChild(Entity child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        if (Scene is not null)
+            throw new InvalidOperationException("An entity in a scene moves with Scene.Move.");
+        if (!ChildList.Remove(child))
+            return false;
+        child.Parent = null;
+        return true;
+    }
+
     public Transform Transform { get; }
 
     /// <summary>

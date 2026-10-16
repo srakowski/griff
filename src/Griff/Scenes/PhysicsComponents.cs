@@ -58,9 +58,15 @@ public abstract class Collider : Component
     /// <summary>True if <paramref name="point"/> (in the world) is inside the shape, turned if it <see cref="Turns"/>.</summary>
     public abstract bool Contains(Vector2 point);
 
-    // The step it's held out of the world for (a slingshot's shot waiting its turn or in the pouch): that step, nothing bumps
-    // into it and it bumps into nothing. Set again each step it's held.
+    // The step it's held out of the world for (see HoldOut).
     internal long HeldOutIn = -1;
+
+    /// <summary>
+    /// Holds it out of the world for the step <paramref name="step"/> (its scene's <see cref="Scene.Step"/>): a slingshot's
+    /// shot waiting its turn or in the pouch. That step nothing bumps into it and it bumps into nothing; hold it again each
+    /// step it's held.
+    /// </summary>
+    public void HoldOut(long step) => HeldOutIn = step;
 
     // Whether a world matrix turns things (so a shape that Turns needs turning).
     private protected static bool IsTurning(in Matrix4x4 world) => world.M12 != 0 || world.M21 != 0;
@@ -624,8 +630,8 @@ public sealed class Body : Component
     /// </summary>
     public bool Frozen { get; set; }
 
-    // Held still for the step: frozen, or paused with its group (see Entity.IsPaused). Others bump into it as into a wall.
-    internal bool HeldStill => Frozen || (Entity?.IsPaused ?? false);
+    /// <summary>Held still for the step: frozen, or paused with its group (see <see cref="Entity.IsPaused"/>). Others bump into it as into a wall.</summary>
+    public bool HeldStill => Frozen || (Entity?.IsPaused ?? false);
 
     /// <summary>
     /// How heavy it is, for pushes from a Thruster and for sharing movement with what it's welded or roped
@@ -751,9 +757,14 @@ public sealed class Body : Component
     // Seconds left falling through one-way platforms.
     internal float DropThroughLeft { get; set; }
 
-    // Set by movement components each frame for the next physics step only: no gravity (climbing, dashing, top-down), and
-    // passing through one-way platforms (climbing a ladder through one).
+    // Set by movement components each frame for the next physics step only (see Float).
     internal bool FloatThisStep { get; set; }
+
+    /// <summary>
+    /// For the next physics step only: no gravity (climbing, dashing, top-down, a tractor beam's pull), and passing through
+    /// one-way platforms (climbing a ladder through one). What floats it does so again each step.
+    /// </summary>
+    public void Float() => FloatThisStep = true;
 
     // The rope it hangs on (a player climbing it): the rope moves it.
     internal Rope? Climbing;

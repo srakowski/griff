@@ -129,12 +129,12 @@ public sealed class HingeJoint : Component
         }
     }
 
-    // The entity called `name` nearest this one (not itself), as a part that wants the nearest says so.
-    internal static Entity? Nearest(Scene scene, Entity from, string name) =>
+    /// <summary>The entity called <paramref name="name"/> nearest <paramref name="from"/> (not itself), for a part that wants the nearest.</summary>
+    public static Entity? Nearest(Scene scene, Entity from, string name) =>
         EntityNames.Find(scene, name, new NameLookup(from, Scope: NameScope.Scene, ExceptFrom: true, Centre: static e => Flat(e.Transform.WorldPosition)));
 
     /// <summary>Hinges it to <paramref name="other"/> (null: the world), that one even if others share its name.</summary>
-    internal void HingeTo(Entity? other) => (To, Other, _otherName) = (other?.Name, other, other?.Name);
+    public void HingeTo(Entity? other) => (To, Other, _otherName) = (other?.Name, other, other?.Name);
 
     /// <summary>Joins the two as they stand now: where the hinge is on what it's hinged to, and how they're turned.</summary>
     internal void Join()

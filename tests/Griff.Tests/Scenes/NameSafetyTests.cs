@@ -188,11 +188,11 @@ public sealed class NameSafetyTests
     [Fact]
     public void ATypeNameAScriptSees_BelongsToOneNamespace()
     {
-        // What every script gets without writing it (ScriptCompiler.ImplicitUsings): System's common namespaces, Griff's and each module's.
+        // What a script can get without writing it (ScriptCompiler.ImplicitUsingsFor): System's common namespaces, Griff's and each module's its project uses.
         var visible = new HashSet<string>(["System", "System.Collections", "System.Collections.Generic", "System.Linq", "System.Numerics",
             "Griff", "Griff.Data", "Griff.Input", "Griff.Runtime", "Griff.Scenes", .. GameModule.All.Select(m => m.Namespace)]);
-        var assemblies = new[] { typeof(object).Assembly, typeof(IEnumerable).Assembly, typeof(List<>).Assembly, typeof(Enumerable).Assembly,
-            typeof(Vector2).Assembly, typeof(System.Numerics.BigInteger).Assembly, typeof(Dialogue).Assembly }.Distinct();
+        System.Reflection.Assembly[] assemblies = [typeof(object).Assembly, typeof(IEnumerable).Assembly, typeof(List<>).Assembly, typeof(Enumerable).Assembly,
+            typeof(Vector2).Assembly, typeof(System.Numerics.BigInteger).Assembly, typeof(Dialogue).Assembly, .. ModuleAssemblies.All];
         var clashes = assemblies.SelectMany(a => a.GetExportedTypes())
             .Where(t => !t.IsNested && t.Namespace is { } ns && visible.Contains(ns))
             .GroupBy(t => (t.Name, t.IsGenericType ? t.GetGenericArguments().Length : 0))

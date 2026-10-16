@@ -389,7 +389,7 @@ public sealed partial class Physics : IKeepsState
     /// members don't collide with each other. An anchored group (welded to something without a body, or with a frozen
     /// member) holds still.
     /// </summary>
-    public IReadOnlyList<BodyGroup> Groups { get; internal set; } = [];
+    public IReadOnlyList<BodyGroup> Groups { get; set; } = [];
 
     internal void Step(float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
     {

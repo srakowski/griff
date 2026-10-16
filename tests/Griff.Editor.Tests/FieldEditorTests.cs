@@ -100,7 +100,7 @@ public sealed class FieldEditorTests : IDisposable
     [Fact]
     public void EveryFieldEditorAttribute_HasAnEditor_FoundByItsType()
     {
-        var attributes = typeof(FieldEditorAttribute).Assembly.GetTypes()
+        var attributes = ModuleAssemblies.All.Prepend(typeof(FieldEditorAttribute).Assembly).SelectMany(a => a.GetTypes())
             .Where(t => t is { IsAbstract: false } && t.IsSubclassOf(typeof(FieldEditorAttribute)))
             .ToList();
         Assert.NotEmpty(attributes);

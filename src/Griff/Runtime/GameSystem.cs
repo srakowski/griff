@@ -118,7 +118,7 @@ public abstract class GameSystem : IKeepsState
     void IKeepsState.Restored() => Restored();
 
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
-    internal Behavior? Owner { get; set; }
+    public Behavior? Owner { get; internal set; }
 
     internal bool IsRemoved { get; set; }
 

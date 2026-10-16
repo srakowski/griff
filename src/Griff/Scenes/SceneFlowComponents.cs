@@ -306,7 +306,7 @@ internal interface ICarryStore : IGameService
 /// A component with places in the world it keeps as numbers of its own (a strategy map's middle), which move with it when
 /// the game sets what it's in somewhere else (a minigame, beside the rest of the world).
 /// </summary>
-internal interface IWorldPlaced
+public interface IWorldPlaced
 {
     /// <summary>Moves its places in the world by <paramref name="by"/>.</summary>
     void Shift(System.Numerics.Vector2 by);
@@ -316,7 +316,7 @@ internal interface IWorldPlaced
 /// A component that says where someone arriving at its entity stands (an adventure's hotspot: where the walker stands to
 /// use it), for a door's Arrive At in the scene before.
 /// </summary>
-internal interface IArrivalSpot
+public interface IArrivalSpot
 {
     /// <summary>Where someone arriving here stands, in the world.</summary>
     System.Numerics.Vector2 ArrivalPoint { get; }

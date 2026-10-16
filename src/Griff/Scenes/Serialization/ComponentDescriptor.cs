@@ -261,7 +261,8 @@ public sealed class PropertyDescriptor
     // A Vector2 called Direction, or ending in it ("FleeDirection"), is a direction without being marked.
     private static readonly DirectionAttribute Way = new();
 
-    internal PropertyInfo Info => _property;
+    /// <summary>The property itself, for its attributes and its /// docs.</summary>
+    public PropertyInfo Info => _property;
 
     public string Name => _property.Name;
 

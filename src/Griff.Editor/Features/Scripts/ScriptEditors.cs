@@ -48,6 +48,8 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
                 ProjectChanged();
         };
         projectSession.AddCloseGuard(ConfirmCloseAllAsync);
+        // The script editor knows the usings the build gives them: those of the modules the project uses.
+        scriptSession.ScriptsReloaded += (_, result) => Language.UseModules(result.Modules ?? Griff.Runtime.GameModule.All);
         // Like an IDE's build: playing saves the scripts first, so the game runs what you see.
         play.Started += (_, _) => SaveAll();
         _ = Language.WarmUpAsync();
@@ -254,6 +256,7 @@ public sealed class ScriptEditors : ObservableObject, IDisposable
         }
 
         Language.Load(ScriptCompiler.ReadFolder(project.AssetsPath));
+        Language.UseModules(Griff.Runtime.ProjectModules.InFiles(project.AssetsPath));
         Directory.CreateDirectory(project.AssetsPath);
         _watcher = new FileSystemWatcher(project.AssetsPath, "*.cs")
         {

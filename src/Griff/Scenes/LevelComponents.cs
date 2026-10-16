@@ -835,7 +835,7 @@ public sealed class Dialogue : Component
     private void Begin(IDialogues dialogues) => dialogues.Start(this);
 
     /// <summary>What a row of <see cref="Lines"/> is.</summary>
-    internal enum RowKind
+    public enum RowKind
     {
         Said,
         Choice,
@@ -847,7 +847,7 @@ public sealed class Dialogue : Component
     }
 
     /// <summary>What a tag at the start of a row does.</summary>
-    internal enum TagKind
+    public enum TagKind
     {
         If,
         IfNot,
@@ -863,13 +863,13 @@ public sealed class Dialogue : Component
     /// A tag at the start of a row, like "[set MetKing]": for a module's own, <see cref="Word"/> is the word it starts with
     /// ("show") and <see cref="Name"/> the rest ("Ava left happy").
     /// </summary>
-    internal readonly record struct Tag(TagKind Kind, string Name, string? Word = null);
+    public readonly record struct Tag(TagKind Kind, string Name, string? Word = null);
 
     /// <summary>
     /// A row of <see cref="Lines"/>: what it is, the text to show (a line's or a choice's), where it goes (a choice's or a
     /// go-to's) or the name of the part it starts, and its tags. A line said as it is (after "\") names no speaker.
     /// </summary>
-    internal readonly record struct DialogueRow(RowKind Kind, string Text, string? To, IReadOnlyList<Tag> Tags, bool AsIs = false)
+    public readonly record struct DialogueRow(RowKind Kind, string Text, string? To, IReadOnlyList<Tag> Tags, bool AsIs = false)
     {
         /// <summary>True if every "[if]" tag holds, asking <paramref name="isSet"/> about each flag.</summary>
         public bool Holds(Func<string, bool> isSet) =>
@@ -882,7 +882,7 @@ public sealed class Dialogue : Component
     }
 
     /// <summary>Reads row <paramref name="row"/> of <see cref="Lines"/>.</summary>
-    internal DialogueRow Row(int row)
+    public DialogueRow Row(int row)
     {
         var raw = Lines[row] ?? "";
         var trimmed = raw.TrimStart();
@@ -944,7 +944,9 @@ public sealed class Dialogue : Component
         return text;
     }
 
-    private static readonly Lazy<IReadOnlyDictionary<string, Type>> TagClaims = new(() => ClaimTags(typeof(Dialogue).Assembly.GetTypes()));
+    // Griff's and its modules' (those this program has: see ModuleAssemblies).
+    private static readonly ModuleAssemblies.Cached<IReadOnlyDictionary<string, Type>> TagClaims = new(() =>
+        ClaimTags([.. typeof(Dialogue).Assembly.GetTypes(), .. ModuleAssemblies.All.SelectMany(a => a.GetTypes())]));
 
     // The words the core's own tags start with.
     private static readonly string[] CoreTagWords = ["if", "not", "set", "clear", "send"];

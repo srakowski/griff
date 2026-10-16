@@ -42,7 +42,7 @@ public sealed class Health : Component, ICarried
     private Smoothed<float> _current = new(3);
 
     /// <summary>Its <see cref="Current"/> hit points in a frame drawn as <paramref name="blend"/> says, for a meter showing them.</summary>
-    internal float CurrentDrawn(StepBlend blend) => blend.Of(_current);
+    public float CurrentDrawn(StepBlend blend) => blend.Of(_current);
 
     /// <summary>Seconds after a hit during which further damage is ignored. 0 lets every hit land.</summary>
     [Group("When Hit")]
@@ -173,7 +173,7 @@ public sealed class Health : Component, ICarried
     /// As <see cref="Damage(float, Entity?)"/>; with <paramref name="always"/>, it lands even while it can't be hurt after the
     /// last hit: a blow that isn't a touch, such as a card's damage, each of which counts.
     /// </summary>
-    internal bool Damage(float amount, Entity? source, bool always)
+    public bool Damage(float amount, Entity? source, bool always)
     {
         if (!(amount > 0) || IsDead || (IsInvincible && !always))
             return false;

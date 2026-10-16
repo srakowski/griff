@@ -41,7 +41,7 @@ public sealed class ExtensionPointTests
     public void Core_NamesNoComponentButItsOwn(string file, string[] allowed)
     {
         var (compilation, trees) = LayerTests.Core();
-        var path = Path.GetFullPath(Path.Combine(LayerTests.RepoRoot(), "src", "Griff", file));
+        var path = Path.GetFullPath(Path.Combine(LayerTests.RepoRoot(), "src", file.StartsWith("Modules/", StringComparison.Ordinal) ? "" : "Griff", file));
         var tree = trees.Single(t => t.FilePath.Length > 0 && string.Equals(Path.GetFullPath(t.FilePath), path, StringComparison.OrdinalIgnoreCase));
         var model = compilation.GetSemanticModel(tree);
         var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
@@ -70,7 +70,7 @@ public sealed class ExtensionPointTests
         var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
         var system = compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
         var game = compilation.GetTypeByMetadataName("Griff.Runtime.Game")!;
-        var modules = Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules") + Path.DirectorySeparatorChar;
+        var modules = LayerTests.ModulesFolder() + Path.DirectorySeparatorChar;
         bool InModules(ISymbol symbol) =>
             symbol.Locations.Any(l => l.SourceTree?.FilePath is { Length: > 0 } path && Path.GetFullPath(path).StartsWith(modules, StringComparison.OrdinalIgnoreCase));
 
@@ -117,7 +117,7 @@ public sealed class ExtensionPointTests
         Assert.Contains("Any component", symbol.GetDocumentationCommentXml());
 
         var type = typeof(Component).Assembly.GetType(name)!;
-        var users = typeof(Component).Assembly.GetTypes().Concat(typeof(ExtensionPointTests).Assembly.GetTypes())
+        var users = ModuleAssemblies.All.Prepend(typeof(Component).Assembly).Append(typeof(ExtensionPointTests).Assembly).SelectMany(a => a.GetTypes())
             .Where(t => t.IsClass && !t.IsAbstract && typeof(Component).IsAssignableFrom(t) &&
                 (type.IsInterface ? type.IsAssignableFrom(t) : t.GetCustomAttributes(type, inherit: true).Length > 0))
             .Select(t => t.Name)

@@ -10,7 +10,10 @@ public sealed class ComponentRegistry
     private readonly Dictionary<Type, ComponentDescriptor> _byType = [];
     private readonly Dictionary<string, ComponentDescriptor> _byFormerName = new(StringComparer.Ordinal);
 
-    /// <summary>A registry containing Griff's built-in components: every one in the engine, found rather than listed.</summary>
+    /// <summary>
+    /// A registry containing Griff's built-in components: every one in the engine and in the modules this program has (see
+    /// <c>Griff.ModuleAssemblies</c>), found rather than listed.
+    /// </summary>
     public static ComponentRegistry CreateDefault()
     {
         var registry = new ComponentRegistry();
@@ -19,7 +22,8 @@ public sealed class ComponentRegistry
         return registry;
     }
 
-    private static readonly Lazy<IReadOnlyList<Type>> BuiltIn = new(() => ComponentTypesIn(typeof(Component).Assembly));
+    private static readonly ModuleAssemblies.Cached<IReadOnlyList<Type>> BuiltIn = new(() =>
+        [.. ComponentTypesIn(typeof(Component).Assembly), .. ModuleAssemblies.All.SelectMany(ComponentTypesIn)]);
 
     /// <summary>
     /// The component types <paramref name="assembly"/> defines: every concrete <see cref="Component"/> with a public

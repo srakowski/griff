@@ -24,6 +24,7 @@ namespace Griff.Editor.Features.Play;
 public sealed class PlayMode : ObservableObject, IDisposable
 {
     private readonly IProjectSession _projectSession;
+    private readonly IScriptSession _scriptSession;
     private readonly ISceneDocuments _sceneDocuments;
     private readonly IPlaySession _playSession;
     private readonly ISelection _selection;
@@ -69,6 +70,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _editorWindow = editorWindow;
         _sound = sound;
         _projectSession = projectSession;
+        _scriptSession = scriptSession;
         _sceneDocuments = sceneDocuments;
         _playSession = playSession;
         _selection = selection;
@@ -486,13 +488,16 @@ public sealed class PlayMode : ObservableObject, IDisposable
     }
 
     // The project's game as the editor plays it, starting in `scene` (a copy of one): the open scene plays as it is there,
-    // unsaved changes included (so Retry doesn't lose them), its other scenes and its prefabs as they're saved.
+    // unsaved changes included (so Retry doesn't lose them), its other scenes and its prefabs as they're saved. It runs the
+    // modules the project uses, as its export would: its scenes' and prefabs', the open one's and its scripts'.
     private LoadedGame Loaded(Griff.Projects.Project project, Scene scene) =>
         new(project, _projectSession.Components, scene, new ProblemLog())
         {
             SceneName = _sceneName,
             Scenes = name => LoadScene(project, name),
             Library = _projectSession.PrefabLibrary,
+            Modules = ProjectModules.Of(project, _scriptSession.ScriptTypes is [var first, ..] ? first.Assembly : null,
+                [scene, .. _sceneDocuments.EditScene is { } open ? [open.Scene] : Array.Empty<Scene>()]),
         };
 
     // The project's sounds, one library for every game played while it's open: what one decoded the next plays at once,

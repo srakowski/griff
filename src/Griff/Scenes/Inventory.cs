@@ -112,10 +112,11 @@ public sealed class Inventory : Component, IHoldsItems, ICarried
     /// <summary>Everything it holds and how many, in the order each was first added.</summary>
     public IReadOnlyList<(string Name, int Count)> Contents => _items.ToList();
 
-    // What it holds, without a copy (for what reads it every frame), and a number that goes up whenever that changes.
-    internal IReadOnlyList<(string Name, int Count)> Held => _items;
+    /// <summary>What it holds, without a copy, for what reads it every frame (see <see cref="Version"/>); don't keep it.</summary>
+    public IReadOnlyList<(string Name, int Count)> Held => _items;
 
-    internal int Version { get; private set; }
+    /// <summary>A number that goes up whenever what it holds changes, so what shows it redraws only then.</summary>
+    public int Version { get; private set; }
 
     // The Version last kept in the save data.
     internal int SavedVersion { get; set; } = -1;

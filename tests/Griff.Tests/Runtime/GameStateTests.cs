@@ -10,7 +10,7 @@ public class GameStateTests
     // The parts of a game whose fields are its state: the game, its clock and numbers, and every system Griff has.
     private static IEnumerable<Type> Parts() =>
         new[] { typeof(Game), typeof(Time), typeof(GameRandom), typeof(Physics) }
-            .Concat(typeof(Game).Assembly.GetTypes().Where(t => typeof(GameSystem).IsAssignableFrom(t) && !t.IsAbstract));
+            .Concat(ModuleAssemblies.All.Prepend(typeof(Game).Assembly).SelectMany(a => a.GetTypes()).Where(t => typeof(GameSystem).IsAssignableFrom(t) && !t.IsAbstract));
 
     [Fact]
     public void Every_field_of_a_system_is_in_the_snapshot_or_marked_as_not_its_state()

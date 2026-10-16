@@ -15,9 +15,10 @@ public static class ProbeCompiler
     /// them as written; the build has the probes in. A probe that doesn't compile (something the analysis didn't foresee) is
     /// left out, so a script that compiles always builds.
     /// </summary>
-    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources)
+    /// <param name="modules">The modules their project uses, which they get a <c>using</c> for; null for every one.</param>
+    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, IReadOnlyList<Griff.Runtime.GameModule>? modules = null)
     {
-        var result = Build(ScriptCompiler.CreateCompilation(sources));
+        var result = Build(ScriptCompiler.CreateCompilation(sources, modules: modules));
         if (result.Attachment is ProbeTable table)
             table.KeepSources(sources);
         return result;

@@ -45,9 +45,6 @@ public abstract class FieldEditorAttribute : Attribute
 /// </summary>
 public sealed class DiceAttribute : FieldEditorAttribute
 {
-    /// <summary>The sides the Inspector offers: the tabletop set.</summary>
-    public static IReadOnlyList<int> CommonSides { get; } = [4, 6, 8, 10, 12, 20, 100];
-
     public override string Describe() =>
         "Dice: how many, \"d\", their sides, then anything added or taken away, e.g. \"2d6+3\", \"d20\", \"1d8+1d6-1\" or a plain number; empty for none. The Inspector builds them and shows the lowest, highest and average roll.";
 
@@ -84,10 +81,6 @@ public sealed class PointsAttribute : FieldEditorAttribute
 
     /// <summary>Reads "x y; x y" (see <see cref="Mover.ParsePoints"/>).</summary>
     public static IReadOnlyList<Vector2> Read(string? text) => Mover.ParsePoints(text);
-
-    /// <summary>Writes points as "x y; x y", on hundredths: what <see cref="Read"/> reads back.</summary>
-    public static string Write(IEnumerable<Vector2> points) =>
-        string.Join("; ", points.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.X:0.##} {p.Y:0.##}")));
 }
 
 /// <summary>
@@ -116,26 +109,6 @@ public sealed class TileNumbersAttribute : FieldEditorAttribute
         var set = Tilemap.ParseTileSet(text);
         return [.. Enumerable.Range(0, set.Length).Where(i => set[i])];
     }
-
-    /// <summary>Writes tile numbers as the field holds them, runs of three or more as ranges: "10-15, 20".</summary>
-    public static string Write(IEnumerable<int> tiles)
-    {
-        var sorted = tiles.Distinct().Order().ToList();
-        var parts = new List<string>();
-        for (var i = 0; i < sorted.Count;)
-        {
-            var j = i;
-            while (j + 1 < sorted.Count && sorted[j + 1] == sorted[j] + 1)
-                j++;
-            if (j - i >= 2)
-                parts.Add($"{sorted[i]}-{sorted[j]}");
-            else
-                parts.AddRange(sorted.Skip(i).Take(j - i + 1).Select(t => t.ToString(CultureInfo.InvariantCulture)));
-            i = j + 1;
-        }
-
-        return string.Join(", ", parts);
-    }
 }
 
 /// <summary>
@@ -152,10 +125,6 @@ public sealed class TileAnimationsAttribute : FieldEditorAttribute
         var bad = Parts(value).FirstOrDefault(p => Tilemap.ParseAnimations(p).Count != 1);
         return bad is not null ? $"\"{bad}\" isn't a run of tiles: write it like 16-19 @6 (two tiles or more, then a speed)" : null;
     }
-
-    /// <summary>Writes runs as the field holds them: "16-19 @6, 30-31 @2".</summary>
-    public static string Write(IEnumerable<TileAnimation> runs) => string.Join(", ", runs.Select(r =>
-        string.Create(CultureInfo.InvariantCulture, $"{r.First}-{r.Last} @{r.FramesPerSecond:0.##}")));
 }
 
 /// <summary>
@@ -172,9 +141,6 @@ public sealed class AutoTilesAttribute : FieldEditorAttribute
         var bad = Parts(value).FirstOrDefault(p => Tilemap.ParseAutoTiles(p).Count != 1);
         return bad is not null ? $"\"{bad}\" isn't a run of 16 tiles: give its first tile, like 16, or 16-31" : null;
     }
-
-    /// <summary>Writes runs as the field holds them, each by its first and last tile: "16-31, 48-63".</summary>
-    public static string Write(IEnumerable<int> firsts) => string.Join(", ", firsts.Select(f => $"{f}-{f + 15}"));
 }
 
 /// <summary>
@@ -281,10 +247,6 @@ public sealed class PrefabCountsAttribute : FieldEditorAttribute
 
         return (text, 1, 1);
     }
-
-    /// <summary>A line written: "Enemy 4", "Potion 1-2", or just the name for one.</summary>
-    public static string Write(string prefab, int least, int most) =>
-        least == most ? least == 1 ? prefab.Trim() : $"{prefab.Trim()} {least}" : $"{prefab.Trim()} {Math.Min(least, most)}-{Math.Max(least, most)}";
 }
 
 /// <summary>
@@ -309,28 +271,6 @@ public sealed class DirectionAttribute : FieldEditorAttribute
 
     public override string Describe() =>
         $"A direction, x right and y up: [0, 1] is up, [1, 0] right, [1, 1] up and to the right{(Turned ? ", in its own space (turned with the entity)" : "")}{(None is null ? "" : $"; [0, 0] is {None}")}. The Inspector has a compass of the eight ways; with Distance Handles the Scene view draws it as an arrow to drag round.";
-
-    /// <summary>The eight ways, by name, each with its direction: "Up" (0, 1), "Up Right" (1, 1)...</summary>
-    public static IReadOnlyList<(string Name, Vector2 Way)> Ways { get; } =
-    [
-        ("Up Left", new(-1, 1)), ("Up", new(0, 1)), ("Up Right", new(1, 1)),
-        ("Left", new(-1, 0)), ("Right", new(1, 0)),
-        ("Down Left", new(-1, -1)), ("Down", new(0, -1)), ("Down Right", new(1, -1)),
-    ];
-
-    /// <summary>The name of the way <paramref name="direction"/> points, when it's one of the eight exactly; otherwise null.</summary>
-    public static string? NameOf(Vector2 direction)
-    {
-        if (direction == Vector2.Zero)
-            return null;
-        foreach (var (name, way) in Ways)
-        {
-            if (Vector2.Distance(Vector2.Normalize(way), Vector2.Normalize(direction)) < 1e-4f)
-                return name;
-        }
-
-        return null;
-    }
 }
 
 /// <summary>

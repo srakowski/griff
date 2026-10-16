@@ -60,10 +60,10 @@ public static class ScriptCompiler
     public const string ImplicitUsingsPath = "<griff implicit usings>";
 
     /// <summary>
-    /// The usings every script gets without writing them: System's common namespaces, Griff's, and each module's (see
-    /// <see cref="GameModule"/>), so a script names a Match Board or a Unit as it does a Sprite.
+    /// The usings every script gets without writing them: System's common namespaces and Griff's, then those of the modules
+    /// its project uses (<see cref="ImplicitUsingsFor"/>).
     /// </summary>
-    public static string ImplicitUsings { get; } = """
+    public const string CommonUsings = """
         global using System;
         global using System.Collections;
         global using System.Collections.Generic;
@@ -76,13 +76,23 @@ public static class ScriptCompiler
         global using Griff.Scenes;
         global using Griff.Simulations;
 
-        """ + string.Concat(GameModule.All.Select(m => $"global using {m.Namespace};{Environment.NewLine}"));
+        """;
+
+    /// <summary>
+    /// The usings a project's scripts get without writing them: <see cref="CommonUsings"/>, and each module's the project uses
+    /// (<paramref name="modules"/>, see <see cref="ProjectModules"/>), so a script names a Match Board or a Unit as it does a
+    /// Sprite. A module no scene or prefab uses yet is a <c>using Griff.Modules.Match3;</c> away; the scripts compile against
+    /// every module this program has.
+    /// </summary>
+    public static string ImplicitUsingsFor(IEnumerable<GameModule> modules) =>
+        CommonUsings + string.Concat(modules.Select(m => m.Namespace).Distinct().Order(StringComparer.Ordinal)
+            .Select(ns => $"global using {ns};{Environment.NewLine}"));
 
     private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(LoadReferences);
 
     public static CSharpParseOptions ParseOptions { get; } = new(LanguageVersion.Latest);
 
-    /// <summary>What scripts compile against: the runtime's System assemblies and Griff.</summary>
+    /// <summary>What scripts compile against: the runtime's System assemblies, Griff and its modules.</summary>
     public static ImmutableArray<MetadataReference> MetadataReferences => References.Value;
 
     public static CSharpCompilationOptions CompilationOptions { get; } = new(
@@ -99,9 +109,13 @@ public static class ScriptCompiler
     public static CSharpCompilationOptions ExportCompilationOptions { get; } =
         CompilationOptions.WithOptimizationLevel(OptimizationLevel.Release);
 
-    /// <summary>Reads and compiles every *.cs file under <paramref name="folder"/>.</summary>
+    /// <summary>
+    /// Reads and compiles every *.cs file under <paramref name="folder"/> (a project's Assets), with a <c>using</c> for each
+    /// module its scenes and prefabs use (<see cref="ProjectModules.InFiles"/>).
+    /// </summary>
     /// <param name="optimize">Compile for an exported game (<see cref="ExportCompilationOptions"/>) rather than the editor.</param>
-    public static CompileResult CompileFolder(string folder, bool optimize = false) => Compile(ReadFolder(folder), optimize);
+    public static CompileResult CompileFolder(string folder, bool optimize = false) =>
+        Compile(ReadFolder(folder), optimize, ProjectModules.InFiles(folder));
 
     /// <summary>Every *.cs file under <paramref name="folder"/>, in a stable order.</summary>
     public static IReadOnlyList<ScriptSource> ReadFolder(string folder) =>
@@ -114,18 +128,21 @@ public static class ScriptCompiler
 
     /// <summary>Compiles <paramref name="sources"/>.</summary>
     /// <param name="optimize">Compile for an exported game (<see cref="ExportCompilationOptions"/>) rather than the editor.</param>
-    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false) =>
-        Emit(CreateCompilation(sources, optimize));
+    /// <param name="modules">The modules their project uses, which they get a <c>using</c> for; null for every one (scripts with no project).</param>
+    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false, IEnumerable<GameModule>? modules = null) =>
+        Emit(CreateCompilation(sources, optimize, modules));
 
     /// <summary>
     /// The compilation of <paramref name="sources"/> with the implicit usings, before it's emitted: what a build that adds
     /// to the scripts (the editor's breakpoint probes) starts from, and emits with <see cref="Emit"/>.
     /// </summary>
-    public static CSharpCompilation CreateCompilation(IReadOnlyList<ScriptSource> sources, bool optimize = false)
+    /// <param name="modules">The modules their project uses, which they get a <c>using</c> for; null for every one (scripts with no project).</param>
+    public static CSharpCompilation CreateCompilation(IReadOnlyList<ScriptSource> sources, bool optimize = false, IEnumerable<GameModule>? modules = null)
     {
+        var usings = ImplicitUsingsFor(modules ?? GameModule.All);
         var trees = sources
             .Select(s => CSharpSyntaxTree.ParseText(s.Text, ParseOptions, s.Path, System.Text.Encoding.UTF8))
-            .Append(CSharpSyntaxTree.ParseText(ImplicitUsings, ParseOptions, ImplicitUsingsPath, System.Text.Encoding.UTF8))
+            .Append(CSharpSyntaxTree.ParseText(usings, ParseOptions, ImplicitUsingsPath, System.Text.Encoding.UTF8))
             .ToList();
 
         return CSharpCompilation.Create(
@@ -172,13 +189,15 @@ public static class ScriptCompiler
 
     /// <summary>
     /// The files of the assemblies scripts compile against: the runtime's own System assemblies (the "trusted platform
-    /// assemblies") and Griff. The script editor reads them with their documentation, for its tooltips.
+    /// assemblies"), Griff, and the running parts of every module this program has (see <see cref="ModuleAssemblies"/>). The
+    /// script editor reads them with their documentation, for its tooltips.
     /// </summary>
     public static IReadOnlyList<string> ReferencePaths { get; } = [.. ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "")
         .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
         .Where(p => Path.GetFileName(p).StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
                     Path.GetFileName(p) is "mscorlib.dll" or "netstandard.dll")
         .Append(typeof(Component).Assembly.Location)
+        .Concat(ModuleAssemblies.All.Select(a => a.Location).Where(p => p.Length > 0))
         .Distinct(StringComparer.OrdinalIgnoreCase)];
 
     private static ImmutableArray<MetadataReference> LoadReferences() =>

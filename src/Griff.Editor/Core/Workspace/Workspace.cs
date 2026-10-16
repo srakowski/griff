@@ -79,7 +79,7 @@ public sealed class Workspace(
     private Griff.Editing.KnownNameIndex? _names;
 
     public Griff.Editing.KnownNames? Names =>
-        Project is { } project ? (_names ??= new(Components, p => Griff.Fonts.FontChoices.For(p.AssetsPath))).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
+        Project is { } project ? (_names ??= new(Components, p => Griff.Editing.FontChoices.For(p.AssetsPath))).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
     public ScriptHost Scripts => _scripts ??= NewScriptHost();
 
@@ -381,7 +381,19 @@ public sealed class Workspace(
             TryRecovery(() => RecoveryFiles.Delete(saved, document.FilePath));
         logger.LogInformation("Saved {Scene}", document.Name);
         status.Show($"Saved {document.Name}");
+        FollowModules();
         return true;
+    }
+
+    // A scene or prefab saved with the first component of a module the project didn't use (or without the last of one it
+    // did): the scripts build again, so their usings are those of the modules the project uses (ScriptCompiler).
+    private void FollowModules()
+    {
+        if (Project is not { } project || _scripts?.Modules is not { } built)
+            return;
+        var scenes = new[] { _editScene, _scene }.Concat(_prefabs).OfType<SceneDocument>().Select(d => d.Scene).Distinct();
+        if (!Griff.Runtime.ProjectModules.Of(project.AssetsPath, null, scenes).SequenceEqual(built))
+            ReloadScripts();
     }
 
     // A prefab is one entity, with everything else inside it.
@@ -416,6 +428,7 @@ public sealed class Workspace(
 
         prefab.MarkSaved();
         logger.LogInformation("Saved prefab {Prefab}", prefab.Name);
+        FollowModules();
         if (Project is { } project)
         {
             var update = PrefabFilesFor().UpdateCopies(PrefabFiles.AssetPathOf(project, prefab.FilePath), json, oldJson, roots[0]);

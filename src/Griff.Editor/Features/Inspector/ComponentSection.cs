@@ -138,7 +138,7 @@ public sealed class ComponentSection : ObservableObject
     public bool CanRemove => Component is not Transform;
 
     /// <summary>True for components from the project's scripts, which can be opened in the script editor.</summary>
-    public bool IsScript => Component is not MissingComponent && Component.GetType().Assembly != typeof(Component).Assembly;
+    public bool IsScript => Component is not MissingComponent && !ModuleAssemblies.IsGriffs(Component.GetType());
 
     public IRelayCommand EditScriptCommand { get; }
 

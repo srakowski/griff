@@ -25,7 +25,19 @@ public sealed partial class Game
     /// <param name="scene">The scene it starts in.</param>
     /// <param name="input">The input its host feeds (<see cref="HostInput"/>), which the game reads (<see cref="Input"/>).</param>
     public Game(Scene scene, InputState input)
+        : this(scene, input, null)
     {
+    }
+
+    /// <param name="scene">The scene it starts in.</param>
+    /// <param name="input">The input its host feeds (<see cref="HostInput"/>), which the game reads (<see cref="Input"/>).</param>
+    /// <param name="modules">
+    /// The modules whose systems it runs (<see cref="Modules"/>): those its project uses (see <see cref="LoadedGame.Modules"/>),
+    /// or, if null, every one this program has.
+    /// </param>
+    public Game(Scene scene, InputState input, IEnumerable<GameModule>? modules)
+    {
+        Modules = modules is null ? GameModule.All : [.. modules.Distinct().OrderBy(m => m.Name, StringComparer.Ordinal)];
         _input = input;
         _services = new GameServices(this);
         Scene = scene;
@@ -51,6 +63,13 @@ public sealed partial class Game
 
     [NotState("a part of its own, put back in place")]
     private GameRandom? _random;
+
+    /// <summary>
+    /// The modules whose systems it runs, by name: those its project uses (see <see cref="LoadedGame.Modules"/>), or every one
+    /// this program has for a game made without one.
+    /// </summary>
+    [field: NotState("what it was made with")]
+    public IReadOnlyList<GameModule> Modules { get; }
 
     [field: NotState("put back with the snapshot's scene")]
     public Scene Scene

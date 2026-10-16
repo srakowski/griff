@@ -118,7 +118,7 @@ public sealed partial class EntityNamesTests
         {
             var relative = Path.GetRelativePath(LayerTests.RepoRoot(), file).Replace(Path.DirectorySeparatorChar, '/');
             if (relative.EndsWith("Scenes/EntityNames.cs", StringComparison.Ordinal) || relative.Contains("/obj/") || relative.Contains("/Diagnostics/") ||
-                relative.StartsWith("src/Griff/Agent/", StringComparison.Ordinal) || relative.StartsWith("src/Griff.Editor/Features/Agent/", StringComparison.Ordinal))
+                relative.StartsWith("src/Griff.Agent/", StringComparison.Ordinal) || relative.StartsWith("src/Griff.Editor/Features/Agent/", StringComparison.Ordinal))
                 continue;
             found.AddRange(File.ReadLines(file).Select((line, i) => (line, i)).Where(l => lookup.IsMatch(l.line))
                 .Select(l => $"{relative}:{l.i + 1}: {l.line.Trim()}"));

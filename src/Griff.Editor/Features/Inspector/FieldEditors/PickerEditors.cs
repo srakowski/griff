@@ -4,6 +4,7 @@ using Griff.Modules.Fighting;
 using Griff.Scenes;
 using Griff.Editor.Features.Art;
 using Griff.Editor.Features.Fighting;
+using Griff.Editing;
 
 namespace Griff.Editor.Features.Inspector;
 
@@ -143,7 +144,7 @@ public sealed class StatEditor(PropertyField field, StatAttribute attribute) : F
             var types = entities.Where(e => e.Components.Any(c => c is Griff.Modules.Cards.Card or Health))
                 .SelectMany(e => e.Components).Select(c => c.GetType()).Append(typeof(Griff.Modules.Cards.Card)).Append(typeof(Health))
                 .Where(t => t != typeof(Transform));
-            return ["Value", .. StatAttribute.NumbersOf(types)];
+            return ["Value", .. FieldValues.StatNumbers(types)];
         }
     }
 

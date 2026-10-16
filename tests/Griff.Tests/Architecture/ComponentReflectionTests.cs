@@ -17,10 +17,9 @@ public sealed class ComponentReflectionTests
     {
         var (core, coreTrees) = LayerTests.Core();
         var found = Reflected(core, coreTrees);
-        foreach (var project in Directory.GetDirectories(Path.Combine(LayerTests.RepoRoot(), "src")).Where(p => Path.GetFileName(p) != "Griff"))
+        foreach (var (_, trees) in LayerTests.OtherProjects())
         {
-            // Each project bound with the core's source, so its components resolve; what else it uses (WPF, the browser) needn't.
-            var trees = LayerTests.Parse(project).ToList();
+            // Each project bound with the engine's source, so its components resolve; what else it uses (WPF, the browser) needn't.
             found.AddRange(Reflected(core.AddSyntaxTrees(trees), trees));
         }
 

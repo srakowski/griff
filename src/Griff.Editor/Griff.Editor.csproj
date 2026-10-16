@@ -5,6 +5,10 @@
     <ProjectReference Include="..\Griff.Platform.Windows\Griff.Platform.Windows.csproj" />
     <ProjectReference Include="..\Griff.Scripting\Griff.Scripting.csproj" />
     <ProjectReference Include="..\Griff.Exporting\Griff.Exporting.csproj" />
+    <ProjectReference Include="..\Griff.Editing\Griff.Editing.csproj" />
+    <ProjectReference Include="..\Griff.Agent\Griff.Agent.csproj" />
+    <!-- Every module, running and editor parts, beside the editor: it plays them, exports them and edits with them. -->
+    <ProjectReference Include="..\Modules\Griff.Modules.csproj" />
   </ItemGroup>
 
   <ItemGroup>

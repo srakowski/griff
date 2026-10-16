@@ -11,6 +11,8 @@ Griff exports a game from the **Build** menu two ways: as a Windows program, and
 
 Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, with a breakpoint probe on each line (see [The script editor](/docs/scripting/#the-script-editor)), which makes saving a script take a little longer there (about 50 ms for the Arcade template's five scripts, against 15). Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
+A game carries Griff's runtime and only the genres it uses: the players hold `Griff` and no genre, and an export puts the running parts of each genre its project uses (those its scenes and prefabs have a component of, and those its scripts name) in its game folder's `Modules`, which the player loads before the game. Nothing of the editor's (editing, templates, the agent surface, a genre's editor parts) is in a game. A Match-3 game carries the Match-3 genre (about 65 KB) and no other; a game with no genre in it carries none.
+
 A multiplayer game's export hosts and joins from its own menu: see [Multiplayer](/docs/multiplayer/).
 
 ## In a browser
@@ -113,17 +115,17 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
 ### How it works
 
 - **Griff runs on .NET for WebAssembly unchanged.** `Griff.Web` is a `Microsoft.NET.Sdk.WebAssembly` project that
-  references `src/Griff` as it is: all of it compiles for `browser-wasm`, and no workload is needed (no `wasm-tools`),
+  references `src/Griff` as it is (and no genre: a game brings its own, below): all of it compiles for `browser-wasm`, and no workload is needed (no `wasm-tools`),
   since the runtime is the Mono interpreter that ships in the SDK's runtime pack. The editor publishes it with itself
   (`Player\Web`, in Release, without the `.br` and `.gz` copies static hosts don't use) as it does the desktop players.
 - **A game is exported for the web** by `WebExporter` (`Griff.Exporting`, beside the desktop `GameExporter`): the
   published player (`index.html`, titled with the game's name, `main.js`, `griff.js` and .NET in `_framework`), and in
-  `game/` the same game folder the desktop player carries (the manifest, Assets without the script sources, and the
-  scripts compiled as `Scripts.dll`), with a `files.txt` listing it. A browser can't list a folder, so the player
+  `game/` the same game folder the desktop player carries (the manifest, Assets without the script sources, the
+  scripts compiled as `Scripts.dll` and the genres it uses in `Modules`), with a `files.txt` listing it. A browser can't list a folder, so the player
   fetches what `files.txt` names into its in-memory file system and loads the game from there with `GameLoader`, as the
   desktop player does. `WebExporter.Zip` packs it, and `WebServer` serves a folder to this computer.
 - **Scripts compiled at export load in the browser.** The interpreter loads `Scripts.dll` with `Assembly.Load` like the
-  desktop does. Roslyn doesn't run in the browser; compiling at export means it needn't.
+  desktop does, after the game's genres (`ModuleAssemblies.Load`, from its `Modules` folder). Roslyn doesn't run in the browser; compiling at export means it needn't.
 - **The browser times the frames; the loop is the desktop's.** `griff.js` calls `WebPlayer.Frame` (a `[JSExport]`) on each
   `requestAnimationFrame`, which hands the frame to the core's `GameLoop`, the one every host runs: it takes the game's
   fixed steps that frame's time holds (`Game.Advance`), builds its `RenderFrame` and draws it on the canvas, pumps the

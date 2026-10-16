@@ -1,0 +1,36 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    Griff's modules, a folder each (see GameModule): the genre's running parts are Griff.Modules.<Genre> (its folder,
+    building on Griff alone, so it can't name the editor or another module), and its editor parts (its templates and their
+    art, its Entity menu presets and actions) are Griff.Modules.<Genre>.Editor beside them (its Editor folder, building on
+    the module and Griff.Editing). A game finds the running parts it plays with from the module assemblies beside it or
+    those its export carries (ModuleAssemblies), never by scanning Griff; the editor finds the editor parts the same way
+    (EditorModules). Each csproj is empty: what it is follows from its name, here.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The editor's component catalog and agents read the components' docs; not every public member needs one. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS0419</NoWarn>
+    <IsModuleEditor Condition="$(MSBuildProjectName.EndsWith('.Editor'))">true</IsModuleEditor>
+    <IsModule Condition="'$(IsModuleEditor)' != 'true' and $(MSBuildProjectName.StartsWith('Griff.Modules.'))">true</IsModule>
+    <!-- A module's folder holds its editor's project too, which builds the Editor folder; the module leaves it alone. -->
+    <DefaultItemExcludes Condition="'$(IsModule)' == 'true'">$(DefaultItemExcludes);Editor/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsModule)' == 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Griff/Griff.csproj" />
+    <InternalsVisibleTo Include="$(MSBuildProjectName).Editor" />
+    <InternalsVisibleTo Include="Griff.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsModuleEditor)' == 'true'">
+    <ProjectReference Include="$(MSBuildProjectDirectory)/../$(MSBuildProjectName.Replace('.Editor', '')).csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Griff.Editing/Griff.Editing.csproj" />
+    <InternalsVisibleTo Include="Griff.Tests" />
+  </ItemGroup>
+
+</Project>

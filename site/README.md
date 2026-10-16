@@ -52,7 +52,7 @@ Three sets of pages are written from the code, so a new component or command sho
 typed by hand or kept in git (`src/content/docs/reference/` is git-ignored):
 
 - `reference/components/`: every component, a page each, by category. A page is `component_describe`'s text for it
-  (`ComponentDescription` in `src/Griff/Agent`, from `ComponentRegistry` and the `///` comments), so the site and agents
+  (`ComponentDescription` in `src/Griff.Agent`, from `ComponentRegistry` and the `///` comments), so the site and agents
   read the same words.
 - `reference/commands.md`: every editor command by menu, with its id, shortcut and `///` summary (the
   `CommandRegistry` the MCP server turns into tools).

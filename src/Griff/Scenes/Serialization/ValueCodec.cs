@@ -9,8 +9,9 @@ namespace Griff.Scenes.Serialization;
 /// and enums are written by name, so scene files stay readable and diff cleanly. Lists of strings
 /// are written one string per line, so line-based data (like tilemap rows) diffs line by line.
 /// </summary>
-internal static class ValueCodec
+public static class ValueCodec
 {
+    /// <summary>Whether a property of <paramref name="type"/> is a plain value this reads and writes.</summary>
     public static bool IsSupported(Type type) =>
         type == typeof(bool) || type == typeof(int) || type == typeof(float) || type == typeof(double) ||
         type == typeof(string) || type.IsEnum || type == typeof(Color) ||
@@ -21,6 +22,7 @@ internal static class ValueCodec
     public static bool AreEqual(object? a, object? b) =>
         a is IReadOnlyList<string> x && b is IReadOnlyList<string> y ? x.SequenceEqual(y) : Equals(a, b);
 
+    /// <summary>Writes <paramref name="value"/> as a scene file keeps it.</summary>
     public static void Write(Utf8JsonWriter writer, object? value)
     {
         switch (value)
@@ -50,6 +52,7 @@ internal static class ValueCodec
     }
 
     /// <exception cref="FormatException">The JSON doesn't hold a value of <paramref name="type"/>.</exception>
+    /// <summary>Reads a value of <paramref name="type"/> written as a scene file keeps it.</summary>
     public static object? Read(JsonElement element, Type type)
     {
         try

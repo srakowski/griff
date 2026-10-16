@@ -269,7 +269,7 @@ public sealed class Transform : Component
     /// Its own <see cref="Rotation"/> (in its parent's space) in the frame being drawn: between how it was turned as the
     /// last step began and how it is, as <see cref="WorldMatrix"/> turns it.
     /// </summary>
-    internal Vector3 RotationDrawn =>
+    public Vector3 RotationDrawn =>
         Entity?.Scene is not { DrawStamp: not 0 } scene || _movedStep != scene.Step || _jumpedStep == scene.Step
             ? _rotation
             : GlidedRotation(scene.DrawBlend);

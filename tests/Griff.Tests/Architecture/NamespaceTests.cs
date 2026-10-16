@@ -9,7 +9,8 @@ namespace Griff.Tests.Architecture;
 /// <c>new</c>), and a namespace counts with those inside it (Griff.Scenes.Serialization is part of the scenes,
 /// Griff.Editing.Presets of editing), but for Griff's own types (Color, Rand) and each module, which stand apart. So the
 /// tables (Griff.Data) sit below the scenes and the simulations that run games (Griff.Simulations) above the runtime; the
-/// project and its files (Griff.Projects) below the runtime and the templates (Griff.Templates) above the scenes.
+/// project and its files (Griff.Projects) below the runtime. The editor's parts (Griff.Editing and its templates, the
+/// agent surface) and each module are assemblies of their own above these, which the compiler keeps (ModuleTests).
 /// </summary>
 public sealed class NamespaceTests
 {
@@ -29,8 +30,8 @@ public sealed class NamespaceTests
     {
         var areas = LayerTests.Graph().Uses.Select(u => Area(u.User)).ToHashSet();
 
-        Assert.Superset(new HashSet<string> { "Griff", "Griff.Data", "Griff.Editing", "Griff.Projects", "Griff.Runtime", "Griff.Scenes",
-            "Griff.Simulations", "Griff.Templates", "Griff.Modules.Fighting" }, areas);
+        Assert.Superset(new HashSet<string> { "Griff", "Griff.Data", "Griff.Projects", "Griff.Runtime", "Griff.Scenes",
+            "Griff.Simulations", "Griff.Modules.Fighting" }, areas);
     }
 
     // A cycle is caught however many namespaces it goes through, and named by the types that close it.

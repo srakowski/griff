@@ -310,14 +310,52 @@ public sealed class LayerTests
         }
     }
 
-    /// <summary>The core's source (src/Griff), parsed and bound: for tests about what its code uses.</summary>
+    /// <summary>
+    /// The engine's source, parsed and bound together: the core's (src/Griff) and its modules' running parts (each
+    /// src/Modules folder but its Editor), for tests about what its code uses. (Which assembly may use which the compiler
+    /// keeps: see ModuleTests.)
+    /// </summary>
     internal static (CSharpCompilation Compilation, List<SyntaxTree> Trees) Core() => CoreSource.Value;
 
     private static readonly Lazy<(CSharpCompilation Compilation, List<SyntaxTree> Trees)> CoreSource = new(Bind);
 
+    /// <summary>Where the modules are, a folder each: src/Modules.</summary>
+    internal static string ModulesFolder() => Path.Combine(RepoRoot(), "src", "Modules");
+
+    /// <summary>Each module's folder (src/Modules/Match3): those with the module's project in them.</summary>
+    internal static IReadOnlyList<string> ModuleFolders() =>
+        [.. Directory.GetDirectories(ModulesFolder()).Where(d => File.Exists(Path.Combine(d, $"Griff.Modules.{Path.GetFileName(d)}.csproj"))).Order(StringComparer.Ordinal)];
+
+    /// <summary>Whether <paramref name="path"/> is a module's source, its running parts' or its editor parts'.</summary>
+    internal static bool IsModuleFile(string path) =>
+        path.Length > 0 && Path.GetRelativePath(ModulesFolder(), path) is var relative && !relative.StartsWith("..", StringComparison.Ordinal) &&
+        !Path.IsPathRooted(relative) && relative.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="path"/> is a module's editor parts' source (its Editor folder).</summary>
+    internal static bool IsModuleEditorFile(string path) =>
+        IsModuleFile(path) && Path.GetRelativePath(ModulesFolder(), path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) is [_, "Editor", ..];
+
+    /// <summary>The module folder <paramref name="path"/> is in ("Match3").</summary>
+    internal static string ModuleOf(string path) =>
+        Path.GetRelativePath(ModulesFolder(), path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+
+    /// <summary>
+    /// Every project but the engine's source (<see cref="Core"/>), parsed, a folder each: src's other projects and each
+    /// module's editor parts.
+    /// </summary>
+    internal static IEnumerable<(string Name, List<SyntaxTree> Trees)> OtherProjects()
+    {
+        var src = Path.Combine(RepoRoot(), "src");
+        foreach (var project in Directory.GetDirectories(src).Where(p => Path.GetFileName(p) is not ("Griff" or "Modules")).Order(StringComparer.Ordinal))
+            yield return (Path.GetFileName(project), Parse(project).ToList());
+        foreach (var module in ModuleFolders())
+            yield return ($"Modules/{Path.GetFileName(module)}/Editor", Parse(Path.Combine(module, "Editor")).ToList());
+    }
+
     private static (CSharpCompilation Compilation, List<SyntaxTree> Trees) Bind()
     {
-        var trees = Parse(Path.Combine(RepoRoot(), "src", "Griff")).Append(CSharpSyntaxTree.ParseText(ImplicitUsings)).ToList();
+        var modules = ModuleFolders().SelectMany(m => Parse(m).Where(t => !IsModuleEditorFile(t.FilePath)));
+        var trees = Parse(Path.Combine(RepoRoot(), "src", "Griff")).Concat(modules).Append(CSharpSyntaxTree.ParseText(ImplicitUsings)).ToList();
         var compilation = CSharpCompilation.Create("Griff", trees, PlatformReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
@@ -351,12 +389,10 @@ public sealed class LayerTests
 
     internal static string Name(ISymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat.WithGenericsOptions(SymbolDisplayGenericsOptions.None));
 
-    private static bool IsBuildOutput(string project, string path)
-    {
-        var relative = Path.GetRelativePath(project, path);
-        return relative.StartsWith("bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-               relative.StartsWith("obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-    }
+    // Build output, the project's own or a project's inside it (a module's editor parts').
+    private static bool IsBuildOutput(string project, string path) =>
+        Path.GetRelativePath(project, path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) is var parts &&
+        parts.SkipLast(1).Any(part => part.Equals("bin", StringComparison.OrdinalIgnoreCase) || part.Equals("obj", StringComparison.OrdinalIgnoreCase));
 
     // What the SDK's ImplicitUsings adds for a plain library (Griff.csproj).
     internal const string ImplicitUsings = """

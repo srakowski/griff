@@ -109,8 +109,9 @@ public abstract class FieldEditor : ObservableObject
             }
         }
 
-        // Griff's attributes made from one an editor takes (each kind of rows) get its editor.
-        foreach (var attribute in typeof(FieldEditorAttribute).Assembly.GetTypes().Where(t => t is { IsAbstract: false } && t.IsSubclassOf(typeof(FieldEditorAttribute))))
+        // Griff's and its modules' attributes made from one an editor takes (each kind of rows) get its editor.
+        foreach (var attribute in ModuleAssemblies.All.Prepend(typeof(FieldEditorAttribute).Assembly).SelectMany(a => a.GetTypes())
+                     .Where(t => t is { IsAbstract: false } && t.IsSubclassOf(typeof(FieldEditorAttribute))))
         {
             for (var t = attribute.BaseType; t is not null && !editors.ContainsKey(attribute); t = t.BaseType)
             {

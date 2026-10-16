@@ -109,14 +109,14 @@ public sealed class GameplayFieldEditorAttributeTests
     {
         Assert.Equal(("Brass Key", 2), ItemCountsAttribute.Read("Brass Key 2"));
         Assert.Equal(("Potion", 1), ItemCountsAttribute.Read("Potion"));
-        Assert.Equal("Potion", ItemCountsAttribute.Write("Potion", 1));
-        Assert.Equal("Key 3", ItemCountsAttribute.Write("Key", 3));
+        Assert.Equal("Potion", FieldValues.WriteItemCount("Potion", 1));
+        Assert.Equal("Key 3", FieldValues.WriteItemCount("Key", 3));
 
         var uses = Assert.IsType<ItemUsesAttribute>(Property<Inventory>("ItemUses").Editor);
         var read = ItemUsesAttribute.Read("Bomb: Spawn Explosion, send Boom")!.Value;
         Assert.Equal("Bomb", read.Item);
         Assert.Equal([("spawn", "Explosion"), ("send", "Boom")], read.Effects);
-        Assert.Equal("Bomb: spawn Explosion, send Boom", ItemUsesAttribute.Write("Bomb", [("spawn", "Explosion"), ("send", "Boom")]));
+        Assert.Equal("Bomb: spawn Explosion, send Boom", FieldValues.WriteItemUse("Bomb", [("spawn", "Explosion"), ("send", "Boom")]));
         Assert.Null(uses.Problem(new Inventory(), (IReadOnlyList<string>)["Potion: heal 3", ""]));
         Assert.Equal("\"Potion heal 3\" isn't an item's use: write the item, a colon, then what it does, like Potion: heal 3",
             uses.Problem(new Inventory(), (IReadOnlyList<string>)["Potion heal 3"]));
@@ -129,7 +129,7 @@ public sealed class GameplayFieldEditorAttributeTests
     {
         var collect = Assert.IsType<TileCountsAttribute>(Property<Griff.Modules.Match3.MatchBoard>("Collect").Editor);
         Assert.Equal([(0, 20), (3, 15)], TileCountsAttribute.Read("0:20, 3: 15, x"));
-        Assert.Equal("0:20, 3:15", TileCountsAttribute.Write([(0, 20), (3, 15)]));
+        Assert.Equal("0:20, 3:15", FieldValues.WriteTileCounts([(0, 20), (3, 15)]));
         Assert.Equal("\"x\" isn't a tile and how many: write it like 0:20", collect.Problem(new Griff.Modules.Match3.MatchBoard(), "0:20, x"));
         Assert.IsType<TileNumbersAttribute>(Property<Griff.Modules.Match3.MatchBoard>("Gems").Editor);
     }

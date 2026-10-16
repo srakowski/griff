@@ -2,6 +2,7 @@ using System.Numerics;
 using Griff.Agent;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Editing;
 
 namespace Griff.Tests.Scenes;
 
@@ -54,7 +55,7 @@ public sealed class FieldEditorAttributeTests
         Assert.True(points.FromStart);
         Assert.True(Assert.IsType<PointsAttribute>(Property<GridPatrol>("Points").Editor).Cells);
         Assert.Equal(3, Assert.IsType<PointsAttribute>(Property<PolygonCollider>("Points").Editor).Least);
-        Assert.Equal("4 0; 0.5 -1.25", PointsAttribute.Write([new(4, 0), new(0.5f, -1.25f)]));
+        Assert.Equal("4 0; 0.5 -1.25", FieldValues.WritePoints([new(4, 0), new(0.5f, -1.25f)]));
         Assert.Equal([new Vector2(4, 0), new Vector2(0.5f, -1.25f)], PointsAttribute.Read("4 0; 0.5 -1.25"));
         Assert.Equal("\"4\" isn't a point: write each as two numbers, x then y, like 4 0", points.Problem(new Mover(), "4 0; 4"));
     }
@@ -64,12 +65,12 @@ public sealed class FieldEditorAttributeTests
     {
         Assert.IsType<TileNumbersAttribute>(Property<Tilemap>("BackgroundTiles").Editor);
         Assert.IsType<TileNumbersAttribute>(Property<Griff.Modules.Dungeons.DungeonGenerator>("WallTile").Editor);
-        Assert.Equal("1, 2, 5-8, 20", TileNumbersAttribute.Write([20, 5, 6, 7, 8, 1, 2, 6]));
+        Assert.Equal("1, 2, 5-8, 20", FieldValues.WriteTiles([20, 5, 6, 7, 8, 1, 2, 6]));
         Assert.Equal([1, 2, 5, 6, 7, 8, 20], TileNumbersAttribute.Read("1, 2, 5-8, 20"));
         Assert.Equal("\"x\" isn't a tile number or range: write them like 10-15, 20", new TileNumbersAttribute().Problem(new Tilemap(), "3, x"));
-        Assert.Equal("16-19 @6, 30-31 @2.5", TileAnimationsAttribute.Write([new(16, 19, 6), new(30, 31, 2.5f)]));
+        Assert.Equal("16-19 @6, 30-31 @2.5", FieldValues.WriteTileAnimations([new(16, 19, 6), new(30, 31, 2.5f)]));
         Assert.NotNull(new TileAnimationsAttribute().Problem(new Tilemap(), "16 @6"));
-        Assert.Equal("16-31, 48-63", AutoTilesAttribute.Write([16, 48]));
+        Assert.Equal("16-31, 48-63", FieldValues.WriteAutoTiles([16, 48]));
         Assert.NotNull(new AutoTilesAttribute().Problem(new Tilemap(), "16-20"));
     }
 
@@ -79,9 +80,9 @@ public sealed class FieldEditorAttributeTests
         Assert.Equal(("Enemy", 4, 4), PrefabCountsAttribute.Read("Enemy 4"));
         Assert.Equal(("Health Potion", 1, 2), PrefabCountsAttribute.Read("Health Potion 2-1"));
         Assert.Equal(("Gold", 1, 1), PrefabCountsAttribute.Read("Gold"));
-        Assert.Equal("Enemy 4", PrefabCountsAttribute.Write("Enemy", 4, 4));
-        Assert.Equal("Potion 1-2", PrefabCountsAttribute.Write("Potion", 1, 2));
-        Assert.Equal("Gold", PrefabCountsAttribute.Write("Gold", 1, 1));
+        Assert.Equal("Enemy 4", FieldValues.WritePrefabCount("Enemy", 4, 4));
+        Assert.Equal("Potion 1-2", FieldValues.WritePrefabCount("Potion", 1, 2));
+        Assert.Equal("Gold", FieldValues.WritePrefabCount("Gold", 1, 1));
     }
 
     [Fact]
@@ -101,10 +102,10 @@ public sealed class FieldEditorAttributeTests
     {
         Assert.IsType<DirectionAttribute>(Property<Shooter>("Direction").Editor);
         Assert.IsType<DirectionAttribute>(Property<Bouncer>("Direction").Editor);
-        Assert.Equal("Up Right", DirectionAttribute.NameOf(new Vector2(2, 2)));
-        Assert.Equal("Down", DirectionAttribute.NameOf(new Vector2(0, -3)));
-        Assert.Null(DirectionAttribute.NameOf(new Vector2(1, 2)));
-        Assert.Null(DirectionAttribute.NameOf(Vector2.Zero));
+        Assert.Equal("Up Right", FieldValues.DirectionName(new Vector2(2, 2)));
+        Assert.Equal("Down", FieldValues.DirectionName(new Vector2(0, -3)));
+        Assert.Null(FieldValues.DirectionName(new Vector2(1, 2)));
+        Assert.Null(FieldValues.DirectionName(Vector2.Zero));
         Assert.True(Property<Shooter>("Offset").Offset!.World);
         Assert.False(Property<Light>("Offset").Offset!.World);
     }

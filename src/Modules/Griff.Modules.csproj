@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Every module, its running parts and its editor parts, for a program that has them all: the editor, the tests and the
+    tools reference this rather than naming each genre. It holds no code of its own; the modules' assemblies are copied
+    beside the program that references it, where ModuleAssemblies and EditorModules find them. An exported game never
+    carries it: its export carries the modules its project uses.
+  -->
+  <PropertyGroup>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="*/Griff.Modules.*.csproj;*/Editor/Griff.Modules.*.Editor.csproj" />
+  </ItemGroup>
+
+</Project>

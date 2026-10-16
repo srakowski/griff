@@ -127,7 +127,8 @@ public sealed class BeatClock : Component
     // which, and how far in it was (as the sound card says, before the player's offset); the last beat that landed.
     internal double Counted { get; set; } = -1;
 
-    internal double Shown { get; set; } = -1;
+    /// <summary>The beats drawn: those counted, ahead by the player's visual offset, for what shows the beat.</summary>
+    public double Shown { get; internal set; } = -1;
 
     internal long LastLanded { get; set; } = -1;
 

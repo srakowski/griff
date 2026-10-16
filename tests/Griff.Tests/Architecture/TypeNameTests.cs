@@ -17,12 +17,10 @@ public sealed class TypeNameTests
     public void NoCodeOutsideAModule_ComparesATypesNameWithAString()
     {
         var (core, coreTrees) = LayerTests.Core();
-        var modules = Path.Combine(LayerTests.RepoRoot(), "src", "Griff", "Modules") + Path.DirectorySeparatorChar;
-        var found = Compared(core, coreTrees.Where(t => t.FilePath.Length > 0 && !t.FilePath.StartsWith(modules, StringComparison.OrdinalIgnoreCase)));
-        foreach (var project in Directory.GetDirectories(Path.Combine(LayerTests.RepoRoot(), "src")).Where(p => Path.GetFileName(p) != "Griff"))
+        var found = Compared(core, coreTrees.Where(t => t.FilePath.Length > 0 && !LayerTests.IsModuleFile(t.FilePath)));
+        foreach (var (_, trees) in LayerTests.OtherProjects().Where(p => !p.Name.StartsWith("Modules/", StringComparison.Ordinal)))
         {
-            // Each project bound with the core's source, so its names resolve; what else it uses (WPF, the browser) needn't.
-            var trees = LayerTests.Parse(project).ToList();
+            // Each project bound with the engine's source, so its names resolve; what else it uses (WPF, the browser) needn't.
             found.AddRange(Compared(core.AddSyntaxTrees(trees), trees));
         }
 

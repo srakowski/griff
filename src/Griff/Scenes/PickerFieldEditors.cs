@@ -1,5 +1,4 @@
 using System.Globalization;
-using Griff.Editing;
 
 namespace Griff.Scenes;
 
@@ -53,15 +52,6 @@ public sealed class StatAttribute : FieldEditorAttribute
 {
     public override string Describe() =>
         "A number of its target's components, by its property's name (\"Value\": any component's) or a component's and its property's (\"Health.Max\"). The Inspector lists the numbers of the components in the scene.";
-
-    /// <summary>
-    /// The numbers that can be named, "Component.Property", of the component types <paramref name="types"/>: every whole or
-    /// decimal number their models say tables and cards may set (see <see cref="ComponentModel.Settable"/>).
-    /// </summary>
-    public static IReadOnlyList<string> NumbersOf(IEnumerable<Type> types) =>
-        [.. types.Distinct().OrderBy(t => t.Name, StringComparer.Ordinal).SelectMany(t => ComponentModel.Of(t).Settable
-            .Where(p => p.Type == typeof(float) || p.Type == typeof(int))
-            .Select(p => $"{t.Name}.{p.Name}"))];
 }
 
 /// <summary>

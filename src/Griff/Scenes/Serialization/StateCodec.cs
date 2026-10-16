@@ -254,9 +254,9 @@ internal sealed class StatePlan
         typeof(IKeepsState).IsAssignableFrom(type) || type.IsDefined(typeof(NotStateAttribute), inherit: true) ||
         type.GetInterfaces().Any(i => i.IsDefined(typeof(NotStateAttribute)));
 
-    // Griff's own assembly, or a game's scripts (anything else built on Griff that isn't one of Griff's own hosts: the
+    // Griff's own assembly and its modules', or a game's scripts (anything else built on Griff that isn't one of Griff's own hosts: the
     // editor, the players, the script compiler). The framework's objects, and the hosts', are kept as they are.
-    public static bool IsCopyable(Assembly assembly) => assembly == s_griff || s_copyable.GetValue(assembly, static a =>
+    public static bool IsCopyable(Assembly assembly) => assembly == s_griff || ModuleAssemblies.IsModule(assembly) || s_copyable.GetValue(assembly, static a =>
     {
         var name = a.GetName().Name ?? "";
         var host = name.StartsWith("Griff.", StringComparison.Ordinal) && !name.EndsWith(".Tests", StringComparison.Ordinal);

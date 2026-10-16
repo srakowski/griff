@@ -3,14 +3,17 @@ using Griff.Scenes;
 namespace Griff.Runtime;
 
 /// <summary>
-/// A part of Griff that lives in a place of its own: a folder under src/Griff/Modules with a namespace to match
-/// (Griff.Modules.Match3), holding everything of a genre such as Match-3 or Strategy: its components, systems, drawing,
-/// network state, templates and the entities the editor's Entity menu makes. Griff's core names no module. Most of a
-/// module is found by type: its components (and how they draw and what they send), its templates
-/// (<c>Griff.Templates.ProjectTemplate</c>) and its Entity menu presets (<c>Griff.Editing.EntityPreset</c>). What can't
-/// be found is how it runs, which the module registers once, in <see cref="AddTo"/>: its systems, where their steps go in
-/// the frame, and what players' machines may ask its host to do. Modules are found rather than listed (see
-/// <see cref="All"/>), so adding one is adding a folder with a module class in it.
+/// A part of Griff that lives in a place of its own: a folder under src/Modules with a namespace to match
+/// (Griff.Modules.Match3), holding everything of a genre such as Match-3 or Strategy. Its running parts (components,
+/// systems, drawing, network state) are an assembly of their own, Griff.Modules.Match3, built on Griff alone; its editor
+/// parts (templates and their art, the entities the editor's Entity menu makes) are another in its Editor folder,
+/// Griff.Modules.Match3.Editor. Griff names no module, and no module another. Most of a module is found by type: its
+/// components (and how they draw and what they send), its templates (<c>Griff.Templates.ProjectTemplate</c>) and its Entity
+/// menu presets (<c>Griff.Editing.EntityPreset</c>). What can't be found is how it runs, which the module registers once,
+/// in <see cref="AddTo"/>: its systems, where their steps go in the frame, and what players' machines may ask its host to
+/// do. Modules are found from the module assemblies a program has (see <see cref="All"/> and <see cref="ModuleAssemblies"/>),
+/// so adding one is adding a folder with a module class and its two projects in it; a game builds the systems of the
+/// modules it uses (<see cref="LoadedGame.Modules"/>), and an export carries only those.
 /// </summary>
 /// <example>
 /// <code>
@@ -29,14 +32,21 @@ namespace Griff.Runtime;
 [NotState("what a genre adds to every game")]
 public abstract class GameModule
 {
-    private static readonly Lazy<IReadOnlyList<GameModule>> Found = new(() => typeof(GameModule).Assembly.GetTypes()
+    private static readonly ModuleAssemblies.Cached<IReadOnlyList<GameModule>> Found = new(() => ModuleAssemblies.All
+        .SelectMany(a => a.GetTypes())
         .Where(t => t.IsSubclassOf(typeof(GameModule)) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
         .Select(t => (GameModule)Activator.CreateInstance(t)!)
         .OrderBy(m => m.Name, StringComparer.Ordinal)
         .ToList());
 
-    /// <summary>Every module in Griff, by name. A game adds each one's systems in this order (see <see cref="AddTo"/>).</summary>
+    /// <summary>
+    /// Every module this program has (those in <see cref="ModuleAssemblies.All"/>), by name. A game adds the systems of those
+    /// it uses in this order (see <see cref="AddTo"/>).
+    /// </summary>
     public static IReadOnlyList<GameModule> All => Found.Value;
+
+    /// <summary>The module named <paramref name="name"/> ("Match-3"), or null if this program hasn't one.</summary>
+    public static GameModule? Named(string name) => All.FirstOrDefault(m => m.Name == name);
 
     /// <summary>What it's called, e.g. "Match-3".</summary>
     public abstract string Name { get; }

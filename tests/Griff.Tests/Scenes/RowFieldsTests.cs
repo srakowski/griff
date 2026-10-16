@@ -129,7 +129,7 @@ public sealed class RowFieldsTests
         Assert.Null(with.Editor!.Problem(hotspot, "2"));
         Assert.StartsWith("\"two\" isn't a number", with.Editor.Problem(hotspot, "two"), StringComparison.Ordinal);
 
-        Assert.Contains("Health.Max", StatAttribute.NumbersOf([typeof(Health)]));
+        Assert.Contains("Health.Max", FieldValues.StatNumbers([typeof(Health)]));
     }
 
     [Fact]

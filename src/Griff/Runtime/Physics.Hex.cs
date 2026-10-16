@@ -18,6 +18,7 @@ public sealed partial class Physics
     // How many times a step pushes a body out of the hexagons round it, one at a time (for a notch between two of them).
     private const int HexPasses = 8;
 
+    [NotState("gathered again each step")]
     private readonly List<HexWalls> _hex = [];
 
     /// <summary>

@@ -266,13 +266,13 @@ public sealed class PlayMode : ObservableObject, IDisposable
         // A big scene is snapshotted less often: copying one out costs a step half a millisecond on average at most (a
         // Debug editor copies 20,000 BunnyMark bunnies out in under 3 ms, so ten times a second).
         _timeline = new Timeline(_projectSession.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5), RememberBudget = RememberBudget };
-        _timeline.Record(copy, 0, force: true);
         _position = 0;
-        _timeOffset = 0;
         (_exceptionSnapshot, _reported) = (null, null);
         _sceneName = edit.Name;
         _tables = null;
         StartRunner(copy, paused: false);
+        // The first snapshot is the game as it starts, before its first step.
+        _timeline.Record(_runner!.Game, force: true);
 
         // Keys should drive the game, not whichever field had focus.
         Keyboard.ClearFocus();
@@ -291,9 +291,11 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
         LetGo(abandon: true);
         _runner = null;
+        _pendingSeek = null;
         StopPlayers();
         runner.Ticked -= OnTicked;
         runner.Faulted -= OnFaulted;
+        runner.FrameEnded -= OnFrameEnded;
         try
         {
             runner.Dispose();
@@ -395,26 +397,44 @@ public sealed class PlayMode : ObservableObject, IDisposable
             return;
         }
 
-        // Rewinding from a breakpoint leaves the frame it's in: the game goes back to before it.
-        LetGo(abandon: true);
-        var selectedId = _selection.Entity?.Id;
-        var old = _runner;
-        old.Ticked -= OnTicked;
-        old.Faulted -= OnFaulted;
-        old.Dispose();
+        // Rewinding from a breakpoint leaves the frame it's in, and the game goes back once that frame has gone, so nothing
+        // the frame does on its way out lands in the moment put back.
+        if (_held is not null)
+        {
+            _pendingSeek = index;
+            LetGo(abandon: true);
+            SetPaused(true);
+            return;
+        }
 
-        var scene = timeline.Restore(index);
+        // The same game goes back: its scene, and everything it kept besides (its systems, clock, random numbers, timers,
+        // tweens, coroutines and scripts' own fields), so it goes on from there just as it did.
+        var selectedId = _selection.Entity?.Id;
+        var game = _runner.Game;
+        var scene = timeline.Restore(index, game);
         _runtime = new SceneDocument(scene, _runtime!.FilePath, isRuntime: true);
         _playSession.ReplacePlayScene(_runtime);
         _selection.Select(selectedId is { } id ? scene.Find(id) : null);
+        _sceneName = game.SceneName ?? _sceneName;
 
         _position = index;
-        // The game starts its clock again from there, and its next step from that snapshot.
-        _timeOffset = timeline.TimeAt(index);
         timeline.RememberSnapshot(index);
-        StartRunner(scene, paused: true);
+        SetPaused(true);
+        game.ShowAsIs();
         _status.Show($"Rewound {SecondsBehind:0.0}s. Resume to continue from here.");
         Raise();
+    }
+
+    // A rewind asked for at a breakpoint, done once the frame it stood in has gone (see Seek).
+    private int? _pendingSeek;
+
+    private void OnFrameEnded(object? sender, EventArgs e)
+    {
+        if (sender == _runner && _pendingSeek is { } index)
+        {
+            _pendingSeek = null;
+            Seek(index, always: true);
+        }
     }
 
     private void StartRunner(Scene scene, bool paused)
@@ -423,6 +443,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         _runner = new GameRunner(scene, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
         _runner.Ticked += OnTicked;
         _runner.Faulted += OnFaulted;
+        _runner.FrameEnded += OnFrameEnded;
         if (_projectSession.Project is { } project)
         {
             _runner.Game.SceneLoader = name => LoadScene(project, name);
@@ -773,21 +794,17 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
     private void Record(GameRunner runner, Timeline timeline)
     {
-        var time = _timeOffset + runner.Game.Time.Total;
         var took = false;
         if (!runner.IsPaused)
         {
-            took = timeline.Record(_runtime!.Scene, time);
+            took = timeline.Record(runner.Game);
             _position = timeline.Count - 1;
         }
 
         // The moment the next step starts from, in case a script throws in it (see RewindBeforeException).
         if (!took && RemembersSteps)
-            timeline.Remember(_runtime!.Scene, time);
+            timeline.Remember(runner.Game);
     }
-
-    // The game time of the snapshot the game was last rewound to: its clock starts again from naught there.
-    private double _timeOffset;
 
     /// <summary>
     /// Remember the moment between every two steps of the Game tab's game (not just the snapshots, which are several steps

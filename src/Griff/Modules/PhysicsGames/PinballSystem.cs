@@ -29,12 +29,16 @@ internal sealed partial class PinballSystem : GameSystem
     public override string Name => "Pinball";
 
     // The step's tilts and what each covers.
+    [NotState("lists kept only to use again")]
     private readonly List<(Tilt Tilt, Scope Scope)> _tilts = new(4);
 
     // What touched a piece this step, the controls that work one, and a set of lanes being changed: with room to start
     // with, so the first ball to touch something, the first flip and the first player don't grow them mid-game.
+    [NotState("lists kept only to use again")]
     private readonly List<Entity> _found = new(8);
+    [NotState("lists kept only to use again")]
     private readonly List<IInput> _inputs = new(8);
+    [NotState("lists kept only to use again")]
     private readonly List<Lane> _set = new(8);
 
     private Scene Scene => Game.Scene;

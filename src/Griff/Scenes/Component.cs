@@ -29,6 +29,15 @@ public abstract class Component
     /// Saved values this component's type has no property for (from a newer version, or a property since removed), in
     /// the order they were saved. The serializer writes them back, so loading and saving a scene loses nothing.
     /// </summary>
+    /// <summary>
+    /// True while the fields a rewind snapshot keeps of it besides its saved properties are all as a new one's (a sprite
+    /// that isn't flashing), so a snapshot leaves them out: what lets thousands of them cost a snapshot next to nothing.
+    /// </summary>
+    internal virtual bool IsAtRest => false;
+
+    // A script that hasn't started yet (a rewind snapshot says which, so they start as they would have).
+    internal virtual bool IsWaitingToStart => false;
+
     internal IReadOnlyList<KeyValuePair<string, System.Text.Json.JsonElement>>? Kept { get; set; }
 
     /// <summary>

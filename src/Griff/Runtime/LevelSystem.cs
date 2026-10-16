@@ -688,8 +688,11 @@ internal sealed class LevelSystem : GameSystem
         return _setFlags.GetAlternateLookup<ReadOnlySpan<char>>();
     }
 
+    [NotState("worked out again from the save data")]
     private HashSet<string>? _setFlags;
+    [NotState("worked out again from the save data")]
     private SaveData? _setFlagsOf;
+    [NotState("worked out again from the save data")]
     private long _setFlagsVersion;
 
     // The name a flag is saved under, matched without minding capitals, or null when it's not saved.
@@ -723,6 +726,7 @@ internal sealed class LevelSystem : GameSystem
     }
 
     // What the modules' own dialogue tags do, by the word they start with.
+    [NotState("what the modules' tags do, registered as the game is set up")]
     private readonly Dictionary<string, Action<Dialogue, string>> _dialogueTags = new(StringComparer.OrdinalIgnoreCase);
 
     internal void OnDialogueTag(string word, Action<Dialogue, string> run) => _dialogueTags[word] = run;

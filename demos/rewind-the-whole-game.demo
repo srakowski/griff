@@ -1,0 +1,33 @@
+title: Rewinding the whole game
+intro: A rewind now puts the whole game back, not just its scene: timers, coroutines, tweens, a script's own fields and the game's random numbers, so it plays on just as it did.
+project: Arcade | Whole Rewind
+scene: Game
+
+chapter: A script that remembers | A count in a private field, on a timer
+write: Scripts/Ticker.cs | rewind-the-whole-game/Ticker.cs
+create: Text
+rename: Ticker
+add: Ticker
+add: ScreenAnchor
+set: ScreenAnchor.Anchor = Top
+set: ScreenAnchor.Offset = 0, -1
+code: Assets/Scripts/Ticker.cs | Ticker.cs
+say: Here's a little script. Every half second it adds one to a count it keeps in a private field and rolls a die, and the text shows both.
+hidecode
+play
+wait: 3
+pause
+expectvalue: Ticker.Ticker.InStep = True
+explain: game | Playing | The enemies come in waves from a coroutine, each popping in with a tween, and the count goes up on its timer.
+
+chapter: Back in time | The same game goes back
+explain: rewind | The Rewind bar | Until now a rewind put back only what the scene file holds. The script started over, its private fields empty, its timer and coroutines gone.
+rewind: 0.4
+expectvalue: Ticker.Ticker.InStep = True
+explain: game | All of it | Now the same game goes back: the count in the private field, the timer partway to its next tick, the waves' coroutine, the tweens, the clock and the random numbers.
+pause
+wait: 1.5
+expectvalue: Ticker.Ticker.InStep = True
+explain: game | And on again | It plays on from there just as it did the first time: the same ticks, the same rolls, the same enemies in the same places.
+stop
+say: Every system keeps its state in its own fields, and a rewind keeps all of them. A test rewinds every template partway and plays it on to the same last bit as the first time through.

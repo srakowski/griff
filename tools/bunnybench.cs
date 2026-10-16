@@ -89,7 +89,7 @@ try
         game.Stepped += (_, _) =>
         {
             var start = Stopwatch.GetTimestamp();
-            timeline.Record(game.Scene, game.Time.Total);
+            timeline.Record(game);
             if (recording >= 0)
                 recordTimes[recording] += Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         };

@@ -18,7 +18,9 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
     public override string Name => "Contraptions";
 
     private ContraptionsState _local = new();
+    [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, ContraptionsState> _players = [];
+    [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, string> _sent = [];
 
     // This machine's own player's tools, or while the host runs another player's for them, that player's.
@@ -576,8 +578,11 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
 
     // Each weld as of this frame and the last time the groups were worked out: its entity, what it's welded to, their bodies,
     // and whether that's there.
+    [NotState("worked out again from the welds")]
     private readonly List<WeldLink> _links = [];
+    [NotState("worked out again from the welds")]
     private readonly List<WeldLink> _welded = [];
+    [NotState("worked out again from the welds")]
     private List<BodyGroup> _groups = [];
 
     private List<BodyGroup> GroupWelds(List<WeldLink> links)

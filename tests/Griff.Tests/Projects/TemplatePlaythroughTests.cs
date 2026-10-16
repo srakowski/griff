@@ -1,7 +1,4 @@
 using System.Numerics;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
 using Griff.Input;
 using Griff.Projects;
 using Griff.Runtime;
@@ -13,40 +10,43 @@ namespace Griff.Tests.Projects;
 
 /// <summary>
 /// Every template played for ten seconds with the same presses and clicks ends up exactly where it did before: the scene
-/// it's in, every entity saved to the last bit. A change to how the game is put together (which system does what, in what
-/// order) that changes how a game plays fails here; a change meant to change it updates the fingerprint below.
+/// it's in, every entity's components' values to the last bit (<see cref="GameFingerprint"/>). A change to how the game is
+/// put together (which system does what, in what order) that changes how a game plays fails here; a change meant to change
+/// it updates the fingerprint below.
 /// Played on its own, as the process-wide settings other tests change (worker threads, network sockets) are the game's too.
 /// </summary>
 [Collection(nameof(Runtime.CoresCollection))]
-public sealed partial class TemplatePlaythroughTests
+public sealed class TemplatePlaythroughTests
 {
-    // Each template's fingerprint after the playthrough, as it was when gameplay moved from Game into its systems (the counters in it saved as version 2, counting an output, since counters stopped knowing genres).
+    // Each template's fingerprint after the playthrough (GameFingerprint: what the game holds, not how a file writes it), as
+    // it was when gameplay moved from Game into its systems: the 11 templates with a counter that changed when counters
+    // stopped knowing genres hold the same values once its old settings are read as its upgrade step reads them.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["Adventure"] = "FB6D960D117FB243",
-        ["Arcade"] = "779E0F4753C19F26",
-        ["BunnyMark"] = "753E6B0497DF19B2",
-        ["Cards"] = "08B61685D5259D90",
-        ["Contraption"] = "EA79A078DE3692C1",
-        ["Empty"] = "4B382F53B9F0F0F6",
-        ["FallingBlocks"] = "1882C5E6D8382534",
-        ["Fighter"] = "59A48C8DFF3A82EF",
-        ["Isometric"] = "CDA4A3ED3DA7C507",
-        ["Match3"] = "6A32DB13951DED48",
-        ["Multiplayer"] = "9F29966EEDBADF8C",
-        ["Physics"] = "ECF76C1AD3DD16A2",
-        ["Pinball"] = "C86FD5743CF96FB8",
-        ["Platformer"] = "3C8FB39DCFA71E24",
-        ["Puzzle"] = "E249A63D52AD0098",
-        ["Rhythm"] = "7A074A421E72B789",
-        ["Roguelike"] = "53F6E34ADC9C61E5",
-        ["RpgStats"] = "C49F6D085F3D0389",
-        ["Sandbox"] = "4709245AB2E79B44",
-        ["Shooter"] = "9FDAA155B32825DE",
-        ["Strategy"] = "DD6CE495495093DF",
-        ["Tactics"] = "00BB69C166234DF6",
-        ["TopDown"] = "85824FDDF918081A",
-        ["VisualNovel"] = "9C786242F10CDCC0",
+        ["Adventure"] = "D47AB276F92904B0",
+        ["Arcade"] = "7C8BFAD48936C32C",
+        ["BunnyMark"] = "3D197FBD0472E9B2",
+        ["Cards"] = "0C6B92D4102B2E6E",
+        ["Contraption"] = "09E5C68ABFCC0E69",
+        ["Empty"] = "E8C70CF6D8B2824F",
+        ["FallingBlocks"] = "B3206D2B4E26F59F",
+        ["Fighter"] = "7EAF10060FE5B019",
+        ["Isometric"] = "F9CF9EABF773386D",
+        ["Match3"] = "1264064BE43D16E2",
+        ["Multiplayer"] = "85494230B520E0C6",
+        ["Physics"] = "BA863472CDF071C9",
+        ["Pinball"] = "DC4D5CB2344BEB84",
+        ["Platformer"] = "12577747B301AF25",
+        ["Puzzle"] = "2ED9D08CA71612F2",
+        ["Rhythm"] = "2A31EC96060E1F71",
+        ["Roguelike"] = "38BAF8DC4FB831D4",
+        ["RpgStats"] = "CC2272F248D58C6D",
+        ["Sandbox"] = "915E3ED539ED8900",
+        ["Shooter"] = "3BDF6F5299786048",
+        ["Strategy"] = "242AE340F5650C22",
+        ["Tactics"] = "5FC39AFA6C15833C",
+        ["TopDown"] = "0B56E1DD1AA7A073",
+        ["VisualNovel"] = "E73E4A64BEAC3D1D",
     };
 
     public static TheoryData<string> Templates => [.. ProjectTemplates.All.Select(t => t.Name)];
@@ -100,9 +100,10 @@ public sealed partial class TemplatePlaythroughTests
                 input.EndFrame();
             }
 
-            var saved = new SceneSerializer(registry).SaveToString(game.Scene);
-            var text = $"{game.SceneName}\n{Ids().Replace(saved, "#")}";
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16];
+            var description = GameFingerprint.Describe(game.SceneName, game.Scene, registry);
+            if (Environment.GetEnvironmentVariable("GRIFF_FINGERPRINT_DUMP") is { Length: > 0 } dump)
+                File.WriteAllText(Path.Combine(dump, template + ".txt"), description);
+            return GameFingerprint.Hash(description);
         }
         finally
         {
@@ -110,8 +111,4 @@ public sealed partial class TemplatePlaythroughTests
                 Directory.Delete(root, recursive: true);
         }
     }
-
-    // Spawned entities get new ids each run.
-    [GeneratedRegex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")]
-    private static partial Regex Ids();
 }

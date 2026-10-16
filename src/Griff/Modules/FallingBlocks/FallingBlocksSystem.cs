@@ -36,7 +36,7 @@ internal sealed class FallingBlocksSystem : GameSystem
 
     private void RunFalling(FallingBoard board, Tilemap map)
     {
-        board.Random ??= new Random(board.Seed != 0 ? board.Seed : Rand.Range(1, int.MaxValue));
+        board.Random ??= new GameRandom(board.Seed != 0 ? board.Seed : Rand.Range(1, int.MaxValue));
         board.Started = true;
         board.StartLevel ??= board.Level;
         if (board.RestartRequested)

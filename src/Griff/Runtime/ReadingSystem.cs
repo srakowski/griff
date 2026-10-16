@@ -28,8 +28,10 @@ internal sealed class ReadingSystem : GameSystem
 
     private bool _skipHeld;
 
+    [NotState("a link to the module that keeps the player's reading settings")]
     private IReadingPreferences? _preferences;
 
+    [NotState("a link to the module that keeps the player's reading settings")]
     private bool _preferencesFound;
 
     // ----- Logs on screen (Backlog)

@@ -23,6 +23,7 @@ namespace Griff.Runtime;
 /// </example>
 public abstract class Behavior : Component, IHealthListener
 {
+    [NotState("the game it runs in, set as it starts (or is put back by a rewind)")]
     private Game? _game;
 
     /// <summary>The running game. Only available from <see cref="Start"/> onwards.</summary>
@@ -63,12 +64,16 @@ public abstract class Behavior : Component, IHealthListener
         }
     }
 
+    [field: NotState("a rewind snapshot says which scripts are still to start (see IsWaitingToStart)")]
     internal bool IsStarted { get; private set; }
+
+    internal override bool IsWaitingToStart => !IsStarted;
 
     /// <summary>
     /// Which of Update, FixedUpdate and LateUpdate its type has, worked out once a type: the game calls only those. And
     /// whether it's a crowd script (see <see cref="CrowdAttribute"/>).
     /// </summary>
+    [field: NotState("worked out from its type")]
     internal BehaviorHooks Hooks { get; }
 
     protected Behavior() => Hooks = HooksOf(GetType());
@@ -261,6 +266,13 @@ public abstract class Behavior : Component, IHealthListener
         _game = game;
         IsStarted = true;
         Start();
+    }
+
+    // Put back by a rewind as having started (it had, at the snapshot): it goes on without starting again.
+    internal void PutBack(Game game)
+    {
+        _game = game;
+        IsStarted = true;
     }
 
     internal void RunUpdate() => Update();

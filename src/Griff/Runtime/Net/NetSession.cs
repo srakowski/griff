@@ -56,6 +56,7 @@ internal enum NetMessage : byte
 /// its player's own character itself so it never waits on the connection. Cameras, the HUD, menus and music stay on each
 /// machine. Put a <see cref="Multiplayer"/> component in the scene to give each player a character and choose teams.
 /// </remarks>
+[NotState("a network game's connection")]
 public sealed partial class NetSession : IDisposable
 {
     /// <summary>The port games are hosted on unless a <see cref="Multiplayer"/> says otherwise.</summary>

@@ -28,7 +28,9 @@ internal sealed partial class ContraptionsSystem
     }
 
     // What each input is given this frame, and inputs whose entities have gone: kept to fill again, so wiring makes no garbage.
+    [NotState("filled again each step")]
     private readonly Dictionary<(Entity Entity, string Port), float> _wireInputs = [];
+    [NotState("filled again each step")]
     private readonly List<(Entity Entity, string Port)> _goneInputs = [];
 
     private void ForgetGoneInputs()
@@ -269,8 +271,8 @@ internal sealed partial class ContraptionsSystem
     {
         foreach (var sensor in Game.Active<WireSensor>())
         {
-            sensor.Count = Physics.TriggerPairs.Where(p => p.Trigger == sensor.Entity && p.Other.Scene == Scene)
-                .Select(p => (By: Game.BodyOwner(p.Other), Layer: Game.LayerOf(p.Other)))
+            sensor.Count = Physics.TriggerPairs.Where(p => p.Item1 == sensor.Entity && p.Item2.Scene == Scene)
+                .Select(p => (By: Game.BodyOwner(p.Item2), Layer: Game.LayerOf(p.Item2)))
                 .Where(t => t.By is not null && t.By != sensor.Entity && sensor.AcceptsLayer(t.Layer))
                 .Select(t => t.By).Distinct().Count();
         }

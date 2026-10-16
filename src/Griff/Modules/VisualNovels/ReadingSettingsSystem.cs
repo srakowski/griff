@@ -19,16 +19,23 @@ internal sealed class ReadingSettingsSystem : GameSystem, IPlayerSettings, IRead
     // The read lines are written to the save data at most this often, in seconds, while new ones are being read.
     private const double ReadLinesWriteEvery = 1;
 
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private bool _skipUnread;
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private float _autoSpeed = 0.5f;
 
     // The settings as last read or written, so they're written only as they change.
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private (bool SkipUnread, float AutoSpeed)? _saved;
 
     // The lines read, by their ids, and the save data they were read from.
+    [NotState("the lines read, kept with the save data rather than the game")]
     private HashSet<uint>? _readLines;
+    [NotState("the lines read, kept with the save data rather than the game")]
     private SaveData? _readLinesOf;
+    [NotState("the lines read, kept with the save data rather than the game")]
     private bool _readLinesChanged;
+    [NotState("the lines read, kept with the save data rather than the game")]
     private double _readLinesWrittenAt = double.NegativeInfinity;
 
     public override string Name => "Reading Settings";

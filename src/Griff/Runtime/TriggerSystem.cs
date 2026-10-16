@@ -16,6 +16,7 @@ internal sealed class TriggerSystem : GameSystem
     private int _triggerDepth;
 
     // The targets of the trigger going off at each depth, kept to go off again without garbage.
+    [NotState("lists kept only to use again")]
     private readonly List<Entity>[] _triggerTargets = [.. Enumerable.Range(0, MaxTriggerDepth).Select(_ => new List<Entity>())];
 
     public int Do(Entity entity, string action, string? with = null)

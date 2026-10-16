@@ -16,6 +16,7 @@ namespace Griff.Data;
 /// step, never part way through one (see <see cref="Stage"/>), so a step reads one version of every table, and the same
 /// changes at the same step play out the same. Formulas reading a changed table are worked out again with it.
 /// </remarks>
+[NotState("the project's tables")]
 public sealed class TableSet
 {
     private Snapshot _current;

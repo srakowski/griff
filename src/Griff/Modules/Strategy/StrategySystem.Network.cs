@@ -11,6 +11,7 @@ internal sealed partial class StrategySystem
     internal const string StrategyCommand = "griff.rts";
 
     // The player whose order the host is carrying out right now (so it doesn't mark the host's own screen).
+    [NotState("a network game's player")]
     private NetPlayer? _orderingFor;
 
     // An order from this machine's commander: carried out here, and on a player's machine sent to the host to carry out

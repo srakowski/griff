@@ -12,7 +12,9 @@ namespace Griff.Modules.Cards;
 internal sealed partial class CardsSystem
 {
     // Units found this frame, kept to look through again without garbage.
+    [NotState("lists kept only to use again")]
     private readonly List<Entity> _units = [];
+    [NotState("lists kept only to use again")]
     private readonly List<Entity> _targets = [];
 
     // ----- Effects -----

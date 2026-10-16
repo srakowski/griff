@@ -542,8 +542,11 @@ internal sealed partial class AdventuresSystem : GameSystem, IHudLayout, IMouseO
 
     // The draws of this frame's labels, what's said broken into lines and the name shown by the pointer, kept from frame to
     // frame so drawing them makes no garbage while they stay the same.
+    [NotState("drawn again from what's said")]
     private readonly List<SpriteDraw> _labels = [];
+    [NotState("drawn again from what's said")]
     private (string? Said, List<string> Lines) _wrapped = (null, []);
+    [NotState("drawn again from what's said")]
     private (object? Over, bool Look, string? Called, string? Holding, string Text) _named;
 
     protected override void Draw(FrameDrawing frame)

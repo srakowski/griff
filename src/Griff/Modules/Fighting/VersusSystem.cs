@@ -26,9 +26,11 @@ internal sealed class VersusSystem : GameSystem
     public override string Name => "Versus";
 
     // The fighters a select's previews were last made from, so a preview is made again only when its character changes.
+    [NotState("worked out again from the selects")]
     private readonly Dictionary<Entity, string> _previewOf = [];
 
     // What each select's players played with when their controls were last described, so they're described again only on a change.
+    [NotState("worked out again from the selects")]
     private readonly Dictionary<CharacterSelect, ((KeySet, int) First, (KeySet, int) Second, int Humans)> _described = [];
 
     protected override void SceneChanged()

@@ -408,11 +408,12 @@ public sealed class CardEffectTests
     {
         List<string> Play(int seed)
         {
+            // Seeded before the game's first step: its numbers start from there.
+            Rand.Seed(seed);
             var test = new CardEffectTests();
             var (order, _, _, hand) = test.Duel();
             foreach (var effect in hand.Cards.SelectMany(c => c.Entity!.GetComponents<CardEffect>()))
                 effect.DamageRoll = effect.Damage > 0 ? "1d6" : null;
-            Rand.Seed(seed);
             var said = new List<string>();
             for (var round = 0; round < 3; round++)
             {

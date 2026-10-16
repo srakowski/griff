@@ -62,7 +62,7 @@ public enum FramePhase
 /// // In a script on the level: protected override void Start() => AddSystem(new Magnets());
 /// </code>
 /// </example>
-public abstract class GameSystem
+public abstract class GameSystem : IKeepsState
 {
     private Game? _game;
 
@@ -107,21 +107,41 @@ public abstract class GameSystem
     {
     }
 
+    /// <summary>
+    /// Called once a rewind has put the game back, the system's fields with it (see <see cref="IKeepsState"/>), to work
+    /// out again what its fields marked <see cref="NotStateAttribute"/> hold. Nothing by default.
+    /// </summary>
+    protected virtual void Restored()
+    {
+    }
+
+    void IKeepsState.Restored() => Restored();
+
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
     internal Behavior? Owner { get; set; }
 
     internal bool IsRemoved { get; set; }
 
     // What the system opts into (see the interfaces below), found once as it's added.
+    [NotState("what the system opts into, found as it's added")]
     private IViewDrawer? _viewDrawer;
+    [NotState("what the system opts into, found as it's added")]
     private ISeesThroughEyes? _eyes;
+    [NotState("what the system opts into, found as it's added")]
     private IHudLayout? _hud;
+    [NotState("what the system opts into, found as it's added")]
     private IMouseOnHud? _mouse;
+    [NotState("what the system opts into, found as it's added")]
     private INoticeSource? _notice;
+    [NotState("what the system opts into, found as it's added")]
     private IPlayerTools? _tools;
+    [NotState("what the system opts into, found as it's added")]
     private IGridStepListener? _gridSteps;
+    [NotState("what the system opts into, found as it's added")]
     private ISceneEndListener? _sceneEnd;
+    [NotState("what the system opts into, found as it's added")]
     private IClaimsBack? _claimsBack;
+    [NotState("what the system opts into, found as it's added")]
     private IPlayersListener? _players;
 
     internal void Attach(Game game)

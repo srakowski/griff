@@ -16,6 +16,7 @@ internal sealed class TurnSystem : GameSystem
     internal const string GridStepCommand = "griff.gridstep";
 
     // The scene's turn orders as of this frame, so asking whether something is waiting doesn't look through the scene.
+    [NotState("gathered again each step")]
     private ComponentList<TurnOrder> _turnOrders;
 
     public TurnOrder? TurnOrderOf(Entity? entity) =>

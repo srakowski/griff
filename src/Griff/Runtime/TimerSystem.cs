@@ -17,8 +17,10 @@ internal sealed class TimerSystem : GameSystem
 
     // The tweens and timers a frame runs, copied out (into lists kept for the next frame, so running them makes no garbage)
     // since what they call can start more.
+    [NotState("lists kept only to use again")]
     private readonly List<Tween> _runningTweens = new(16);
 
+    [NotState("lists kept only to use again")]
     private readonly List<GameTimer> _runningTimers = new(16);
 
     public override string Name => "Timers";

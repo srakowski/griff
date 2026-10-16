@@ -8,8 +8,10 @@ namespace Griff.Runtime;
 internal sealed class PhysicsSystem : GameSystem
 {
     // What physics calls back, made once rather than every frame.
+    [NotState("made once")]
     private Action<Entity, Entity>? _onCollision;
 
+    [NotState("made once")]
     private Action<Entity, Entity, bool>? _onTrigger;
 
     public override string Name => "Physics";

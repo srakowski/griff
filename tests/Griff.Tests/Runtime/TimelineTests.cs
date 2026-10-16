@@ -188,6 +188,98 @@ public class TimelineTests
 
     public static TheoryData<string> Templates => [.. ProjectTemplates.All.Select(t => t.Name)];
 
+    [Theory]
+    [MemberData(nameof(Templates))]
+    public async Task Rewinding_a_template_partway_plays_on_with_the_same_input_to_the_same_last_bit(string template)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "griff-rewind-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var project = await Project.CreateAsync(root, "Rewind", ProjectTemplates.Get(template));
+            var registry = ComponentRegistry.CreateDefault();
+            Assert.True(new ScriptHost(registry).ReloadFolder(project.AssetsPath, []).Success);
+            var serializer = new SceneSerializer(registry);
+
+            // Five seconds of presses, clicks and mouse movement, each frame's as a whole (so the input can be set to any
+            // frame's), played through once with a snapshot two seconds in.
+            const int Steps = 300, RewindAfter = 120;
+            Key[] keys = [Key.Left, Key.Right, Key.Up, Key.Down, Key.Space, Key.Z, Key.X, Key.Enter, Key.W, Key.A, Key.S, Key.D, Key.E, Key.D1, Key.D2];
+            var random = new Random(3);
+            var frames = new List<(bool[] Keys, Vector2 Mouse, bool Click)>();
+            var (held, click) = (new bool[keys.Length], false);
+            for (var frame = 0; frame < Steps; frame++)
+            {
+                for (var i = 0; i < keys.Length; i++)
+                {
+                    if (random.Next(8) == 0)
+                        held[i] = random.Next(2) == 0;
+                }
+
+                if (random.Next(10) == 0)
+                    click = random.Next(2) == 0;
+                frames.Add(([.. held], new Vector2(random.NextSingle() * 16 - 8, random.NextSingle() * 10 - 5), click));
+            }
+
+            var input = new InputState();
+            void Press(int frame)
+            {
+                var (down, mouse, clicked) = frames[frame];
+                for (var i = 0; i < keys.Length; i++)
+                    input.SetKey(keys[i], down[i]);
+                input.MouseWorld = mouse;
+                input.SetMouseButton(MouseButton.Left, clicked);
+            }
+
+            var start = template == "Multiplayer" ? "Arena" : Project.DefaultSceneName;
+            Rand.Seed(7);
+            var game = new Game(GameLoader.LoadScene(project, registry, start), input)
+            {
+                PrefabLoader = new PrefabLibrary(project, registry).Instantiate,
+                SceneLoader = name => GameLoader.LoadScene(project, registry, name),
+                SceneName = start,
+                Components = registry,
+                ViewAspect = 16 / 9f,
+            };
+            var timeline = new Timeline(serializer, framesPerSnapshot: 1000);
+            void Play(int from)
+            {
+                for (var frame = from; frame < Steps; frame++)
+                {
+                    Press(frame);
+                    game.Tick(1 / 60.0);
+                    input.EndFrame();
+                    if (frame == RewindAfter - 1)
+                        timeline.Record(game, force: true);
+                }
+            }
+
+            Play(0);
+            var first = Projects.GameFingerprint.Describe(game.SceneName, game.Scene, registry);
+            var (time, steps) = (game.Time.Total, game.Time.Frame);
+
+            // Back to the snapshot, the input as it was then, and on with the same presses.
+            timeline.Restore(0, game);
+            Press(RewindAfter - 1);
+            input.EndFrame();
+            Play(RewindAfter);
+
+            var again = Projects.GameFingerprint.Describe(game.SceneName, game.Scene, registry);
+            if (Environment.GetEnvironmentVariable("GRIFF_FINGERPRINT_DUMP") is { Length: > 0 } dump)
+            {
+                File.WriteAllText(Path.Combine(dump, template + ".first.txt"), first);
+                File.WriteAllText(Path.Combine(dump, template + ".again.txt"), again);
+            }
+
+            Assert.Equal((time, steps), (game.Time.Total, game.Time.Frame));
+            Assert.Equal(first, again);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void Unchanged_entities_share_their_records_with_the_last_snapshot()
     {

@@ -7,9 +7,9 @@ namespace Griff.Runtime;
 
 /// <summary>
 /// Rewind for play mode: keeps periodic snapshots of the running scene so you can step back in time, inspect or tweak,
-/// and resume from there. A snapshot holds what a scene file does (public script properties included; private script
-/// fields restart from their defaults) and restores as the file would load, but is kept in a compact binary form made
-/// without garbage. Taking one is split in two so the game's steps pay for as little of it as they can: between two steps,
+/// and resume from there. A snapshot holds what a scene file does and restores as the file would load, but is kept in a
+/// compact binary form made without garbage; taken of a game (<see cref="Record(Game, bool)"/>), it also holds what the
+/// game keeps besides (see <see cref="IKeepsState"/>), and <see cref="Restore(int, Game)"/> puts the game itself back. Taking one is split in two so the game's steps pay for as little of it as they can: between two steps,
 /// every entity's values are copied out at once (its record), which is little more than reading them; then, on another
 /// thread (it reads nothing but the copies), each record is compared with the entity's record in the last snapshot and
 /// kept as just the bytes that changed (next to nothing for an entity that didn't change), with every tenth snapshot kept
@@ -114,7 +114,16 @@ public sealed class Timeline
     /// <paramref name="force"/>) and drops the oldest past capacity. True if it took one (which is then also the moment
     /// <see cref="Remember"/> keeps).
     /// </summary>
-    public bool Record(Scene scene, double time, bool force = false)
+    public bool Record(Scene scene, double time, bool force = false) => Record(scene, time, force, null);
+
+    /// <summary>
+    /// <see cref="Record(Scene, double, bool)"/> for a running game: each snapshot also keeps what the game keeps besides
+    /// its scene (its systems, clock, random numbers, timers and scripts' own fields; see <see cref="IKeepsState"/>), so
+    /// <see cref="Restore(int, Game)"/> puts the game itself back.
+    /// </summary>
+    public bool Record(Game game, bool force = false) => Record(game.Scene, game.Time.Total, force, game);
+
+    private bool Record(Scene scene, double time, bool force, Game? game)
     {
         var due = force || ++_stepsSinceSnapshot >= Spacing;
         // The last is kept once it's settled; the next isn't taken until it is.
@@ -125,7 +134,7 @@ public sealed class Timeline
 
         _stepsSinceSnapshot = 0;
         var start = Stopwatch.GetTimestamp();
-        Capture(scene, time);
+        Capture(scene, time, game);
         // The first takes longer, with the code that writes snapshots made ready as it goes.
         _pendingTimed = !force;
         if (_pendingTimed)
@@ -162,19 +171,39 @@ public sealed class Timeline
     /// It's copied out as a snapshot is, without settling it or keeping it unless asked; a scene too big to copy out every
     /// step (see <see cref="RememberBudget"/>) isn't.
     /// </summary>
-    public void Remember(Scene scene, double time)
+    public void Remember(Scene scene, double time) => Remember(scene, time, null);
+
+    /// <summary><see cref="Remember(Scene, double)"/> for a running game, with what it keeps besides its scene.</summary>
+    public void Remember(Game game) => Remember(game.Scene, game.Time.Total, game);
+
+    private void Remember(Scene scene, double time, Game? game)
     {
         (_remembered, _rememberedCopy) = (null, false);
         if (RememberBudget <= TimeSpan.Zero || _averageCapture > RememberBudget.TotalMilliseconds)
             return;
         var start = Stopwatch.GetTimestamp();
         _spare.Clear();
+        var state = game?.BeginState();
         var roots = scene.Roots;
         for (var i = 0; i < roots.Count; i++)
-            Write(_spare, roots[i]);
+            Write(_spare, roots[i], state);
         (_rememberedCopy, _spareTime, _spareHeldStill) = (true, time, scene.HeldStill);
+        if (game is not null)
+            _spareState = game.EndState(_spareState ?? RentState());
+        else if (_spareState is { } spare)
+        {
+            _statePool.Push(spare);
+            _spareState = null;
+        }
+
         _averageCapture = Average(_averageCapture, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
     }
+
+    // What a game kept besides its scene with each snapshot (and with the remembered copy), used again once one goes.
+    private readonly Stack<GameState> _statePool = new();
+    private GameState? _spareState;
+
+    private GameState? RentState() => _statePool.Count > 0 ? _statePool.Pop() : null;
 
     /// <summary>The next step starts from snapshot <paramref name="index"/> (the game was just put back there).</summary>
     public void RememberSnapshot(int index) => (_remembered, _rememberedCopy) = (_snapshots[index], false);
@@ -197,7 +226,8 @@ public sealed class Timeline
         if (_settling is not null)
             Keep(trim: true);
         var basis = _baseSnapshot is { Chain: < KeyEvery - 1 } last ? last : null;
-        var kept = new Snapshot(_spareTime, ++_sequence, basis) { HeldStill = _spareHeldStill };
+        var kept = new Snapshot(_spareTime, ++_sequence, basis) { HeldStill = _spareHeldStill, State = _spareState };
+        _spareState = null;
         (_current, _spare) = (_spare, _current);
         kept.Entities = _current.Count;
         _snapshots.Add(kept);
@@ -242,6 +272,20 @@ public sealed class Timeline
         return scene;
     }
 
+    /// <summary>
+    /// Puts <paramref name="game"/> back as it was at snapshot <paramref name="index"/> (taken with
+    /// <see cref="Record(Game, bool)"/>): in a fresh scene in that snapshot's state, with everything the game kept besides
+    /// its scene as it was (its systems, clock, random numbers, timers, tweens, coroutines and scripts' own fields), so it
+    /// goes on from there just as it did. Returns the scene.
+    /// </summary>
+    public Scene Restore(int index, Game game)
+    {
+        var state = _snapshots[index].State ?? throw new InvalidOperationException("That snapshot was taken of a scene, without its game.");
+        var scene = Restore(index);
+        game.Restore(scene, state);
+        return scene;
+    }
+
     /// <summary>Forgets everything after <paramref name="index"/>, so resuming from it starts a new future.</summary>
     public void TruncateAfter(int index)
     {
@@ -272,15 +316,19 @@ public sealed class Timeline
         (_remembered, _rememberedCopy) = (null, false);
     }
 
-    // Copies every entity's record out, depth first, into the current frame, to be settled on another thread.
-    private void Capture(Scene scene, double time)
+    // Copies every entity's record out, depth first, into the current frame, to be settled on another thread; with a
+    // game, what it keeps besides (each component's own as its entity's record is written).
+    private void Capture(Scene scene, double time, Game? game)
     {
         var basis = _baseSnapshot is { Chain: < KeyEvery - 1 } last ? last : null;
         var snapshot = new Snapshot(time, ++_sequence, basis);
         _current.Clear();
+        var state = game?.BeginState();
         var roots = scene.Roots;
         for (var i = 0; i < roots.Count; i++)
-            Write(_current, roots[i]);
+            Write(_current, roots[i], state);
+        if (game is not null)
+            snapshot.State = game.EndState(RentState());
 
         snapshot.Entities = _current.Count;
         snapshot.HeldStill = scene.HeldStill;
@@ -294,16 +342,16 @@ public sealed class Timeline
         _pending = snapshot;
     }
 
-    private void Write(Frame frame, Entity entity)
+    private void Write(Frame frame, Entity entity, StateWriter? state)
     {
         var buffer = frame.Buffer;
         var offset = buffer.Length;
         var refStart = buffer.RefCount;
-        _codec.Write(entity, buffer);
+        _codec.Write(entity, buffer, state);
         var children = entity.ChildList;
         frame.Add(new Entry(entity.Id, offset, buffer.Length - offset, refStart, buffer.RefCount - refStart, children.Count));
         for (var i = 0; i < children.Count; i++)
-            Write(frame, children[i]);
+            Write(frame, children[i], state);
     }
 
     // On another thread: works out how the pending snapshot keeps each record, into its chunks and strings.
@@ -321,7 +369,7 @@ public sealed class Timeline
         (snapshot.Chunks, snapshot.Used) = _stream.Finish();
         snapshot.Refs = _streamRefs.Refs.AsSpan(0, _streamRefs.RefCount).ToArray();
         snapshot.Bytes = snapshot.Chunks.Sum(c => (long)c.Length) + snapshot.Refs.LongLength * IntPtr.Size + _pendingStrings + 64 +
-                         52L * (snapshot.Contacts?.Count ?? 0);
+                         52L * (snapshot.Contacts?.Count ?? 0) + (snapshot.State?.Bytes ?? 0);
         _pendingSettleMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
     }
 
@@ -559,6 +607,12 @@ public sealed class Timeline
             _contactPool.Push(contacts);
             snapshot.Contacts = null;
         }
+
+        if (snapshot.State is { } state)
+        {
+            _statePool.Push(state);
+            snapshot.State = null;
+        }
     }
 
     // The oldest goes. One that a kept snapshot is still written against stays in memory (and counted) until the oldest
@@ -711,6 +765,9 @@ public sealed class Timeline
 
         // Seconds left of a hit stop then (see Scene.HeldStill).
         public float HeldStill { get; set; }
+
+        // What the game kept besides its scene, if it was taken of a game.
+        public GameState? State { get; set; }
 
         // What it adds to memory: its chunks, its strings, and the strings in it that are new.
         public long Bytes { get; set; }

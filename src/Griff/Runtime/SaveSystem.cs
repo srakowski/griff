@@ -23,20 +23,29 @@ internal sealed class SaveSystem : GameSystem
     private Scene? _pictureOf;
 
     // A saved game waiting to be switched to at the end of the frame (after a fade, if any).
-    private (Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header)? _pendingLoad;
+    private PendingLoad? _pendingLoad;
+
+    // A saved game read back, waiting to be switched to. Never changed once made, so a snapshot keeps the same one.
+    [NotState("read back from a save, and never changed")]
+    private sealed record PendingLoad(Scene Scene, string? Name, IReadOnlyList<string> Flags, string Slot, JsonObject? Header);
 
     // The saved games as last read, by slot, with their screenshots' text (to notice one change), and the save data and
     // version they were read from.
+    [NotState("worked out again from the save data")]
     private readonly Dictionary<string, (SavedGame Game, string? Picture)> _slots = new(StringComparer.Ordinal);
 
+    [NotState("worked out again from the save data")]
     private SaveData? _slotsOf;
 
+    [NotState("worked out again from the save data")]
     private long _slotsVersion = -1;
 
+    [NotState("takes the pictures saved with games")]
     private readonly GamePictures _pictures = new();
 
     /// <summary>The time a game is saved at: now, unless a test says otherwise.</summary>
     // When a game is saved, which tests set.
+    [NotState("the host's clock")]
     private Func<DateTimeOffset> _clock = () => DateTimeOffset.Now;
 
     public override string Name => "Saves";
@@ -51,8 +60,10 @@ internal sealed class SaveSystem : GameSystem
         set => _clock = value;
     }
 
+    [field: NotState("the host's")]
     internal event Action<string>? GameSaved;
 
+    [field: NotState("the host's")]
     internal event Action<string>? GameLoaded;
 
     public IReadOnlyList<SavedGame> SavedGames
@@ -138,7 +149,7 @@ internal sealed class SaveSystem : GameSystem
         foreach (var warning in warnings)
             Game.Warn($"Loading the game saved in \"{slot}\": {warning}");
         var header = ParseHeader(text);
-        var load = (scene, header?["scene"]?.GetValue<string>() ?? Game.SceneName, (IReadOnlyList<string>)FlagsIn(header), slot, header);
+        var load = new PendingLoad(scene, header?["scene"]?.GetValue<string>() ?? Game.SceneName, FlagsIn(header), slot, header);
         if (fade > 0)
         {
             Game.FadeThrough(fade, () => _pendingLoad = load);

@@ -24,18 +24,24 @@ public sealed partial class Physics
     private const int JointPart = 5 << 28;
 
     // The step's hinges, as found before anything moves: which bodies they join, and what they're hinged to.
+    [NotState("gathered again each step")]
     private readonly List<JointLink> _joints = [];
 
     // Bodies a hinge joins (and so are worked out with those that turn), the pairs that don't bump into each other, and
     // bodies a running motor keeps awake.
+    [NotState("gathered again each step")]
     private readonly HashSet<Body> _jointed = [];
+    [NotState("gathered again each step")]
     private readonly HashSet<(Entity, Entity)> _unbumped = [];
+    [NotState("gathered again each step")]
     private readonly HashSet<Body> _motorized = [];
 
     // The step's welded groups that move, worked out with the bodies that turn.
+    [NotState("gathered again each step")]
     private readonly List<BodyGroup> _turningGroups = [];
 
     // The hinges worked out this step (with at least one side moving here).
+    [NotState("gathered again each step")]
     private readonly List<JointRow> _rows = [];
 
     private readonly record struct JointLink(HingeJoint Hinge, Body Host, Entity? Other, Body? OtherBody);

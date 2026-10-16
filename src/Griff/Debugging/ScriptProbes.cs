@@ -157,7 +157,7 @@ public static class ScriptProbes
 
         // While it's held, the editor works on this thread: what it does mustn't draw on the game's random numbers or count
         // as a crowd's script, and scripts it runs (reading a property, say) don't stop again.
-        var random = Rand.Use(null);
+        var random = Rand.Use(GameRandom.Unseeded());
         var crowd = Crowds.SetAside();
         t_quiet++;
         bool abort;
@@ -261,7 +261,7 @@ public static class ScriptProbes
         if (t_handler is not { } handler || t_quiet > 0 || exception is ScriptAbortedException)
             return ScriptFaultHold.NotHeld;
 
-        var random = Rand.Use(null);
+        var random = Rand.Use(GameRandom.Unseeded());
         var crowd = Crowds.SetAside();
         t_quiet++;
         try

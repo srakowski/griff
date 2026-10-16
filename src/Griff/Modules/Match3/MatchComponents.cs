@@ -361,11 +361,11 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
         return counts;
     }
 
-    // ----- What the game keeps while it runs (rewinds start these afresh) -----
+    // ----- What the game keeps while it runs (not saved with the scene, but kept with rewind snapshots) -----
 
     internal bool Started { get; set; }
 
-    internal Random? Random { get; set; }
+    internal GameRandom? Random { get; set; }
 
     // Gems drawn away from their cells, sliding or falling back in.
     internal Dictionary<(int X, int Y), GemMotion> Motions { get; } = [];

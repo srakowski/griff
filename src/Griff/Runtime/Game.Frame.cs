@@ -1,5 +1,8 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Diagnostics;
 using Griff.Scenes;
+using Griff.Scenes.Serialization;
 
 namespace Griff.Runtime;
 
@@ -121,14 +124,20 @@ public sealed partial class Game
 
     internal MinigameSystem MinigameSystem => _minigames;
 
+    [NotState("the frame's steps: the same for the game's life")]
     private readonly List<FrameStep> _builtInSteps = [];
+    [NotState("kept first, on its own (see CaptureState)")]
     private readonly List<GameSystem> _systems = [];
+    [NotState("the frame's steps: the same for the game's life")]
     private GameSystem[] _builtInSystems = [];
 
     // Each phase's steps as they stand; replaced (never changed) when a system is added or taken away, so a frame can go
     // on through the ones it started with.
+    [NotState("the frame's steps, worked out again from the systems")]
     private FrameStep[][] _phases = [];
+    [NotState("the frame's steps, worked out again from the systems")]
     private FrameStep[]? _frame;
+    [NotState("the steps taken, which never goes back (lists kept to use again count by it)")]
     private long _steps;
     private double _tickSeconds;
 
@@ -264,6 +273,7 @@ public sealed partial class Game
     /// Raised after each step the game takes (see <see cref="Advance"/>), once its input is done with: controls set here
     /// count for the next step. The editor keeps its rewind snapshots here.
     /// </summary>
+    [field: NotState("the host's")]
     public event EventHandler? Stepped;
 
     /// <summary>
@@ -277,6 +287,19 @@ public sealed partial class Game
     public void Advance(double seconds)
     {
         ThrowIfStopped();
+        var previous = Here();
+        try
+        {
+            AdvanceHere(seconds);
+        }
+        finally
+        {
+            Rand.EnterGame(previous);
+        }
+    }
+
+    private void AdvanceHere(double seconds)
+    {
         if (!(seconds > 0))
             seconds = 0;
         Time.CountFrame(seconds);
@@ -319,11 +342,19 @@ public sealed partial class Game
     public void Tick(double seconds)
     {
         ThrowIfStopped();
-        Time.CountFrame(seconds);
-        Step(seconds);
-        Scene.HeldStill = Time.FrozenLeft;
-        Time.Blend = 1;
-        Stepped?.Invoke(this, EventArgs.Empty);
+        var previous = Here();
+        try
+        {
+            Time.CountFrame(seconds);
+            Step(seconds);
+            Scene.HeldStill = Time.FrozenLeft;
+            Time.Blend = 1;
+            Stepped?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            Rand.EnterGame(previous);
+        }
     }
 
     /// <summary>
@@ -333,6 +364,7 @@ public sealed partial class Game
     public void ShowAsIs() => Time.Blend = 1;
 
     // How much real time the game owes in steps: what's left of the frames so far, less than a step.
+    [NotState("real time owed by the host's frames")]
     private double _owed;
 
     // Frame times measured in floating point land a hair either side of a step; within this, it's a step.
@@ -556,5 +588,123 @@ public sealed partial class Game
             if (!system.IsRemoved)
                 system.RunSceneChanged();
         }
+    }
+}
+
+// Rewind: what the game keeps besides its scene (see IKeepsState), taken with each snapshot and put back with it.
+public sealed partial class Game : IKeepsState
+{
+    [NotState("reused to write each snapshot's state")]
+    private readonly StateWriter _stateWriter = new();
+
+    // The parts whose fields are kept, in order: the game, its clock and physics, then each system running. (Its random
+    // numbers are kept apart: they start as the game first takes a step.)
+    private IEnumerable<object> KeptParts()
+    {
+        yield return this;
+        yield return Time;
+        yield return Physics;
+        foreach (var system in _systems)
+            yield return system;
+    }
+
+    /// <summary>
+    /// What the game keeps besides its scene, as it is between two steps (see <see cref="IKeepsState"/>): which systems
+    /// run and every part's fields, its random numbers, what the save data holds, then for each component what the scene
+    /// file doesn't hold of it (a script that hasn't started yet, a script's own fields, a body's time in the air).
+    /// Written into <paramref name="into"/> if given (reusing its memory).
+    /// </summary>
+    internal GameState CaptureState(GameState? into = null)
+    {
+        var writer = BeginState();
+        foreach (var entity in Scene.Entities)
+        {
+            var components = entity.Components;
+            for (var i = 0; i < components.Count; i++)
+            {
+                if (components[i] is not MissingComponent)
+                    writer.Component(entity, i, components[i], KeptFields.OfComponent(components[i].GetType()));
+            }
+        }
+
+        return EndState(into);
+    }
+
+    // The first part of CaptureState, before the components: a rewind snapshot writes each component's state
+    // (StateWriter.Component) as it goes through the entities for their records, then ends it (EndState).
+    internal StateWriter BeginState()
+    {
+        var writer = _stateWriter;
+        writer.Begin(Scene);
+        writer.Write(_systems.Count);
+        foreach (var system in _systems)
+            writer.Ref(system);
+        foreach (var part in KeptParts())
+            KeptFields.OfPart(part.GetType()).Write(part, writer);
+        writer.Write(_random is null ? (byte)0 : (byte)1);
+        if (_random is not null)
+            KeptFields.OfPart(typeof(GameRandom)).Write(_random, writer);
+        writer.Ref(_saveData.Held());
+        return writer;
+    }
+
+    internal GameState EndState(GameState? into)
+    {
+        _stateWriter.Write(StateWriter.ComponentsEnd);
+        return _stateWriter.Finish(into);
+    }
+
+    /// <summary>
+    /// Puts the game back as <paramref name="state"/> (from <see cref="CaptureState"/>) had it, in <paramref name="scene"/>
+    /// (the snapshot's scene, put back as a scene file loads): the same game goes on from there, its systems, clock, random
+    /// numbers, timers, tweens, coroutines and save data as they were, and its scripts started as they were, with their own
+    /// fields.
+    /// </summary>
+    internal void Restore(Scene scene, GameState state)
+    {
+        Scene = scene;
+        var reader = new StateReader(state, scene);
+        var systems = new GameSystem[reader.Read<int>()];
+        for (var i = 0; i < systems.Length; i++)
+            systems[i] = (GameSystem)reader.Ref()!;
+        foreach (var system in _systems.Except(systems))
+            system.IsRemoved = true;
+        _systems.Clear();
+        _systems.AddRange(systems);
+        foreach (var part in KeptParts())
+            reader.Fields(part, KeptFields.OfPart(part.GetType()).Fields);
+        if (reader.Read<byte>() == 0)
+            _random = null;
+        else
+            reader.Fields(_random ??= new GameRandom(0), KeptFields.OfPart(typeof(GameRandom)).Fields);
+        _saveData.PutBack((string)reader.Ref()!);
+
+        // Each component's own fields, and the scripts that hadn't started yet: every other script had.
+        var waiting = new HashSet<Behavior>();
+        for (var tag = reader.Read<byte>(); tag != StateWriter.ComponentsEnd; tag = reader.Read<byte>())
+        {
+            var entity = scene.Find(reader.Read<Guid>())!;
+            var component = entity.Components[reader.Read<int>()];
+            if (tag == StateWriter.Waiting)
+            {
+                waiting.Add((Behavior)component);
+                continue;
+            }
+
+            reader.Fields(component, KeptFields.OfComponent(component.GetType()).Fields);
+            // The scene lists the sprites flashing or blinking, for the game to move on.
+            (component as Sprite)?.ListEffects();
+        }
+
+        foreach (var script in scene.AllNow<Behavior>())
+        {
+            if (!waiting.Contains(script))
+                script.PutBack(this);
+        }
+
+        scene.Step = scene.FirstStep = Time.Frame;
+        BuildPhases();
+        foreach (var part in KeptParts())
+            (part as IKeepsState)?.Restored();
     }
 }

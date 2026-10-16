@@ -9,6 +9,7 @@ namespace Griff.Runtime;
 internal sealed class PauseSystem : GameSystem
 {
     // The groups being paused, gathered each time, kept to fill again without garbage.
+    [NotState("gathered again each time")]
     private readonly List<Entity> _pausing = [];
 
     public override string Name => "Pauses";

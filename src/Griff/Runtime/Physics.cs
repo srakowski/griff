@@ -18,7 +18,7 @@ public readonly record struct RaycastHit(Entity Entity, Vector2 Point, Vector2 N
 /// where they touch, so it spins, tips over and falls flat, and its box or polygon turns with it; everything else meets it
 /// turned, walks up its slant, and knocks it about.
 /// </summary>
-public sealed partial class Physics
+public sealed partial class Physics : IKeepsState
 {
     // Bounces slower than this (world units per second) settle to a stop, so resting bodies don't jitter.
     private const float SettleSpeed = 1f;
@@ -30,26 +30,35 @@ public sealed partial class Physics
     // A crate can push a crate that pushes a crate, and no further.
     private const int MaxPushChain = 4;
 
-    private HashSet<(Entity Trigger, Entity Other)> _triggerPairs = [];
-    private HashSet<(Entity Trigger, Entity Other)> _lastTriggerPairs = [];
+    private EntityPairSet _triggerPairs = new();
+    [NotState("gathered again each step")]
+    private EntityPairSet _lastTriggerPairs = new();
 
     // Where each grounded body's ground was at the end of the last step, so riders follow it when it moves.
     private readonly Dictionary<Body, (Entity Ground, Vector2 Position)> _grounds = [];
 
     // The slope tiles bodies walk on during a step.
+    [NotState("gathered again each step")]
     private readonly List<Slope> _slopes = [];
 
     // What a step works with, kept from one to the next so a step allocates as little as it can.
+    [NotState("gathered again each step")]
     private readonly Solids _solids = new();
+    [NotState("gathered again each step")]
     private readonly Dictionary<Body, BodyGroup> _groupOf = [];
+    [NotState("gathered again each step")]
     private readonly HashSet<BodyGroup> _movedGroups = [];
+    [NotState("gathered again each step")]
     private readonly ShapeGrid _triggerGrid = new();
+    [NotState("gathered again each step")]
     private readonly List<(Collider Collider, Area Area, LayerFilter Filter)> _triggerShapes = [];
+    [NotState("gathered again each step")]
     private readonly List<int> _near = [];
+    [NotState("gathered again each step")]
     private Func<int, Box>? _triggerBounds;
 
-    /// <summary>Each trigger and the collider overlapping it, as of the last step.</summary>
-    public HashSet<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
+    /// <summary>Each trigger and the collider overlapping it, as of the last step, in the order they were found.</summary>
+    public EntityPairSet TriggerPairs => _triggerPairs;
 
     /// <summary>The <see cref="Gravity"/> a game starts with: 25 units per second squared, down.</summary>
     public static readonly Vector2 DefaultGravity = new(0, -25f);
@@ -60,8 +69,8 @@ public sealed partial class Physics
     /// <summary>Forgets trigger overlaps, e.g. when the scene changes.</summary>
     public void Reset()
     {
-        _triggerPairs = [];
-        _lastTriggerPairs = [];
+        _triggerPairs = new();
+        _lastTriggerPairs = new();
         _grounds.Clear();
     }
 

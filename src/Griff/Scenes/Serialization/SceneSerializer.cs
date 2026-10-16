@@ -9,6 +9,7 @@ namespace Griff.Scenes.Serialization;
 /// hierarchy so files read naturally and merge well. Loading is forgiving: problems with individual
 /// components or values are reported as warnings instead of failing the whole scene.
 /// </summary>
+[NotState("reads and writes scenes")]
 public sealed class SceneSerializer(ComponentRegistry registry)
 {
     public const int FormatVersion = 1;

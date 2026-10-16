@@ -37,21 +37,32 @@ public sealed partial class Physics
     private const float OverStretch = 1.02f;
 
     // The step's ropes, and the bodies at their ends (for waking and islands).
+    [NotState("gathered again each step")]
     private readonly List<Rope> _ropes = [];
+    [NotState("gathered again each step")]
     private readonly List<(Body? Host, Body? Other)> _ropeEnds = [];
 
     // Players climbing ropes this step: their rope moves them.
+    [NotState("gathered again each step")]
     private readonly HashSet<Body> _climbing = [];
 
     // What a step works out for its ropes: each one awake, its points (and players hanging on it, and corners it's wrapped
     // round), what holds them together, and where they touch the world.
+    [NotState("gathered again each step")]
     private readonly List<RopeRun> _runs = [];
+    [NotState("gathered again each step")]
     private readonly List<RopeDot> _dots = [];
+    [NotState("gathered again each step")]
     private readonly List<RopeTie> _ties = [];
+    [NotState("gathered again each step")]
     private readonly List<RopeTouch> _ropeTouches = [];
+    [NotState("gathered again each step")]
     private readonly List<int> _ropeNear = [];
+    [NotState("gathered again each step")]
     private readonly List<byte> _ropeNearEnd = [];
+    [NotState("gathered again each step")]
     private readonly List<float> _stretch = [];
+    [NotState("gathered again each step")]
     private Scene? _ropeScene;
 
     /// <summary>Ropes that broke in the last step, for their Break Messages.</summary>

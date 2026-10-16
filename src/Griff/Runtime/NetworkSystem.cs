@@ -9,8 +9,10 @@ namespace Griff.Runtime;
 /// </summary>
 internal sealed class NetworkSystem : GameSystem
 {
+    [NotState("what's registered as the game is set up")]
     private readonly Dictionary<string, Action<NetPlayer?, object?>> _netCommands = new(StringComparer.Ordinal);
 
+    [NotState("what's registered as the game is set up")]
     private readonly Dictionary<string, Action<object?>> _hostCommands = new(StringComparer.Ordinal);
 
     public override string Name => "Network";

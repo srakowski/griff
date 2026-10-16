@@ -12,19 +12,21 @@ namespace Griff.Runtime;
 /// </summary>
 public sealed partial class Game : IGameContext
 {
-    private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
+    private readonly EntityPairSet _touches = new();
 
     /// <summary>
-    /// Who touched what in this frame's physics, both ways round (triggers and what's in them too), for systems that look
-    /// for themselves without making garbage.
+    /// Who touched what in this frame's physics, both ways round (triggers and what's in them too), in the order physics
+    /// found them, for systems that look for themselves without making garbage.
     /// </summary>
-    public HashSet<(Entity Source, Entity Target)> Touches => _touches;
+    public EntityPairSet Touches => _touches;
+
+    [NotState("whether the host has stopped it")]
     private bool _stopped;
 
     public Game(Scene scene, IInput input)
     {
-        Scene = scene;
         _input = input;
+        Scene = scene;
         Net = new NetSession(this);
         Debug = new DebugDraw(Time);
         BuildFrame();
@@ -37,21 +39,38 @@ public sealed partial class Game : IGameContext
             Time.Freeze(scene.HeldStill);
     }
 
+    // Makes this the game whose numbers Rand draws on on this thread, returning the numbers that were, to put back once done.
+    private GameRandom? Here() => Rand.EnterGame(Random);
+
+    /// <summary>
+    /// The game's random numbers (what <see cref="Rand"/> draws on during its steps), starting from where the numbers of
+    /// the thread it first runs a step on were then: after <c>Rand.Seed(5)</c>, a new game plays the same every time.
+    /// </summary>
+    internal GameRandom Random => _random ??= Rand.Outside.Copy();
+
+    [NotState("a part of its own, put back in place")]
+    private GameRandom? _random;
+
+    [field: NotState("put back with the snapshot's scene")]
     public Scene Scene { get; internal set; }
 
     /// <summary>Loads scenes by name for <see cref="LoadScene"/>. Set by the host (editor or player).</summary>
+    [field: NotState("the host's")]
     public Func<string, Scene>? SceneLoader { get; set; }
 
     /// <summary>Creates entities from prefabs by name for <see cref="Spawn(string, Entity?)"/>. Set by the host (editor or player).</summary>
+    [field: NotState("the host's")]
     public Func<string, Entity>? PrefabLoader { get; set; }
 
     /// <summary>Raised after <see cref="LoadScene"/> switches to a new scene.</summary>
+    [field: NotState("the host's")]
     public event EventHandler<Scene>? SceneChanged;
 
     // The scene system tells everyone the scene has changed, once every system has caught up with it.
     internal void RaiseSceneChanged(Scene next) => SceneChanged?.Invoke(this, next);
 
     /// <summary>Raised when gameplay code calls <see cref="Quit"/>. The host closes the game (the editor stops playing).</summary>
+    [field: NotState("the host's")]
     public event EventHandler? QuitRequested;
 
     /// <summary>
@@ -66,15 +85,18 @@ public sealed partial class Game : IGameContext
     /// each step the game takes also times each of its steps, each kind of script and each system a script added, with
     /// the garbage each makes (see <see cref="FrameProfiler.Costs"/>).
     /// </summary>
+    [field: NotState("the host's")]
     public FrameProfiler? Profiler { get; set; }
 
     /// <summary>
     /// How many entities a scene of this game has before its frames are built in chunks across the cores (see
     /// <see cref="Workers"/>), or null for the renderer's own choice. Tests set it to compare the two ways.
     /// </summary>
+    [field: NotState("the host's")]
     internal int? ChunkedFrom { get; set; }
 
     /// <summary>The view's width divided by its height. Set by the host each frame; <see cref="ScreenAnchor"/> uses it.</summary>
+    [field: NotState("the host's")]
     public float ViewAspect { get; set; } = 16f / 9f;
 
     /// <summary>True once <see cref="Quit"/> has been called.</summary>
@@ -86,6 +108,7 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public IInput Input => _actingInput ?? _input;
 
+    [NotState("the host's")]
     private readonly IInput _input;
 
     /// <summary>This machine's own controls, even while the host runs another player's tools for them (see <see cref="Input"/>).</summary>
@@ -93,9 +116,11 @@ public sealed partial class Game : IGameContext
 
     public Time Time { get; } = new();
 
+    [field: NotState("a part of its own, put back in place")]
     public Physics Physics { get; } = new();
 
     /// <summary>Lines, boxes, circles and text drawn over the game for a frame, to see what code is doing.</summary>
+    [field: NotState("what code draws to debug, for a while")]
     public DebugDraw Debug { get; }
 
     /// <summary>Values kept between runs (high scores, progress). Set by the host; in memory only by default.</summary>
@@ -114,6 +139,7 @@ public sealed partial class Game : IGameContext
         }
     }
 
+    [NotState("kept as its text (see CaptureState)")]
     private SaveData _saveData = new();
 
     /// <summary>Set by the platform; silent by default (tests, headless). The player's saved volumes are applied to it.</summary>
@@ -127,6 +153,7 @@ public sealed partial class Game : IGameContext
         }
     }
 
+    [NotState("the host's")]
     private IAudio _audio = new SilentAudio();
 
     /// <summary>Asks the host to close the game; in the editor, play mode stops.</summary>
@@ -227,6 +254,7 @@ public sealed partial class Game : IGameContext
     /// table, row or column that isn't there, or a table's formula naming one, or working itself out in a loop (see
     /// <see cref="TableSet.Problems"/>). The editor shows it in Output; it doesn't stop the game.
     /// </summary>
+    [field: NotState("the host's")]
     public event EventHandler<string>? Warning;
 
     private readonly HashSet<string> _warned = [];

@@ -8,16 +8,20 @@ namespace Griff.Runtime;
 /// </summary>
 internal sealed class TableSystem : GameSystem
 {
+    [NotState("the project's tables")]
     private TableSet _tables = new();
 
+    [NotState("worked out again from the tables")]
     private int _tablesSeen = -1;
 
+    [NotState("worked out again from the scene")]
     private long _tableValuesSeen = -1;
 
     // The Table Values that have set their values since the tables last changed: one new to the game sets its own, and a
     // block broken away (its Table Values gone) sets nobody's again.
     private readonly HashSet<TableValues> _tableValuesApplied = [];
 
+    [NotState("the project's simulations")]
     private IReadOnlyDictionary<string, Simulation> _simulations = new Dictionary<string, Simulation>();
 
     public override string Name => "Tables";

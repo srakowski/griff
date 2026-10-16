@@ -77,6 +77,7 @@ public readonly record struct InputBinding
 }
 
 /// <summary>What gameplay code reads. "Pressed" and "released" are true for exactly one frame.</summary>
+[NotState("the host's controls")]
 public interface IInput
 {
     /// <summary>

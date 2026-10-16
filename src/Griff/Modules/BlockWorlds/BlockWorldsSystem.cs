@@ -19,7 +19,9 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
     public override string Name => "Block Worlds";
 
     private BlockWorldsState _local = new();
+    [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, BlockWorldsState> _players = [];
+    [NotState("a network game's players")]
     private readonly Dictionary<NetPlayer, string?> _sent = [];
 
     // This machine's own player's HUD, or while the host runs another player's tools for them, that player's.
@@ -532,7 +534,7 @@ internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, I
         blocks.FallClock = 0;
 
         // Lowest first, so a column of sand falls together.
-        var cells = blocks.Unsettled.OrderByDescending(c => c.Y).ToList();
+        var cells = blocks.Unsettled.OrderByDescending(c => c.Y).ThenBy(c => c.X).ToList();
         blocks.Unsettled.Clear();
         foreach (var (x, y) in cells)
         {

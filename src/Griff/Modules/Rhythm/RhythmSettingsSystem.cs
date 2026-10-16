@@ -12,9 +12,11 @@ internal sealed class RhythmSettingsSystem : GameSystem, IPlayerSettings
     internal const string NoteSpeedSaveKey = "griff.noteSpeed";
     internal const float MinNoteSpeed = 0.25f, MaxNoteSpeed = 4;
 
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private float _noteSpeed = 1;
 
     // The note speed as last read or written, so it's written only as it changes.
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private float? _saved;
 
     public override string Name => "Rhythm Settings";

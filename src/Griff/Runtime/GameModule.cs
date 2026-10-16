@@ -26,6 +26,7 @@ namespace Griff.Runtime;
 /// }
 /// </code>
 /// </example>
+[NotState("what a genre adds to every game")]
 public abstract class GameModule
 {
     private static readonly Lazy<IReadOnlyList<GameModule>> Found = new(() => typeof(GameModule).Assembly.GetTypes()

@@ -496,7 +496,7 @@ public static class SimulationRunner
         var second = step.Second[secondIndex];
         var seed = SeedOf(plan.Simulation.Seed, step.Index, first?.Name, second?.Name, index);
         var run = new SimulationRun(first, second, step.Tables, step.Value, index, seed, plan, step);
-        var previous = Rand.Use(new Random(seed));
+        var previous = Rand.Use(new GameRandom(seed));
         try
         {
             if (plan.Script is { } type)

@@ -89,6 +89,7 @@ public sealed class Stars : Component, IDrawable
     public int Shown { get; internal set; }
 
     // The output it shows, found once.
+    [field: NotState("finds the output again")]
     internal OutputReader Reader { get; } = new();
 
     // Seconds until the next star fills, and how long ago each star popped in (for drawing it bigger as it does).

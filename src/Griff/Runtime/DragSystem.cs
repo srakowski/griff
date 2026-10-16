@@ -13,7 +13,8 @@ internal sealed class DragSystem : GameSystem
     public override string Name => "Dragging";
 
     // Keyed by the player whose mouse holds it (0 offline), or the grabber holding it.
-    private readonly Dictionary<object, Holding> _holdings = [];
+    // In the order they were picked up, so what goes by them (which is let go first) goes the same way every time.
+    private readonly OrderedDictionary<object, Holding> _holdings = [];
 
     private readonly Dictionary<Draggable, Slide> _slides = [];
 

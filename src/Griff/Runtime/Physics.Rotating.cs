@@ -63,26 +63,38 @@ public sealed partial class Physics
 
 
     // What one gathering of contacts found.
+    [NotState("gathered again each step")]
     private readonly List<Contact> _contacts = [];
 
     // A step's bodies that turn, in order, and those of them that sleep on; the bodies it works out (awake turning ones, and
     // bodies moved the old way they touch) and the contacts between them and everything else.
+    [NotState("gathered again each step")]
     private readonly List<Body> _turning = [];
+    [NotState("gathered again each step")]
     private readonly HashSet<Body> _sleepers = [];
+    [NotState("gathered again each step")]
     private readonly HashSet<Guid> _sleeping = [];
+    [NotState("gathered again each step")]
     private readonly List<Mover> _movers = [];
+    [NotState("gathered again each step")]
     private readonly Dictionary<Body, int> _moverOf = [];
+    [NotState("gathered again each step")]
     private readonly List<Contact> _solving = [];
+    [NotState("gathered again each step")]
     private readonly List<float> _islandStill = [];
 
     // What a sleeping welded group touches, all its members together; and while gathering one's contacts, the group, whose
     // members don't meet each other.
+    [NotState("gathered again each step")]
     private readonly List<Contact> _groupContacts = [];
+    [NotState("gathered again each step")]
     private BodyGroup? _excluding;
 
     // The scene's memory of its contacts, for the step.
+    [NotState("the scene's contacts, taken each step")]
     private ContactMemory _memory = new();
 
+    [NotState("gathered again each step")]
     private float _widestMargin;
 
     // The step of every body that turns, together: asleep ones stay so unless disturbed; the rest (and the sleepers they
@@ -216,6 +228,7 @@ public sealed partial class Physics
     }
 
     // How many bodies that turn the step's lists have room for, all awake and touching.
+    [NotState("room made only to use again")]
     private int _roomFor;
 
     // About how many points a body in a heap touches things at, and the touches the game hears of for each.

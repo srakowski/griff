@@ -9,6 +9,7 @@ namespace Griff.Projects;
 /// A Griff project: a folder containing a <c>project.griff</c> manifest and the project's content.
 /// The folder is the project, so it can be moved, renamed or checked into source control as a unit.
 /// </summary>
+[NotState("the project the game is made from")]
 public sealed class Project
 {
     public const string ManifestFileName = "project.griff";

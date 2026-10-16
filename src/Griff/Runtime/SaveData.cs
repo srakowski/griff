@@ -14,6 +14,7 @@ namespace Griff.Runtime;
 ///     Game.SaveData.Set("best", Score);
 /// </code>
 /// </example>
+[NotState("the game's, kept as one: a snapshot keeps what it holds as text")]
 public sealed class SaveData : Scenes.ICarryStore
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
@@ -137,6 +138,34 @@ public sealed class SaveData : Scenes.ICarryStore
             _values.Remove(key);
         else
             _values[key] = value;
+        Write();
+    }
+
+    // What it holds as text, for a rewind snapshot (made again only once something has changed), and putting that back.
+    private string? _held;
+    private long _heldVersion = -1;
+
+    internal string Held()
+    {
+        if (_heldVersion != Version || _held is null)
+            (_held, _heldVersion) = (_values.ToJsonString(), Version);
+        return _held;
+    }
+
+    // A rewind puts back what the game had saved then (and writes it, as any change is).
+    internal void PutBack(string held)
+    {
+        if (held == Held())
+            return;
+        var values = Load(held);
+        _values.Clear();
+        foreach (var key in values.Select(p => p.Key).ToList())
+        {
+            var value = values[key];
+            values.Remove(key);
+            _values[key] = value;
+        }
+
         Write();
     }
 

@@ -19,12 +19,15 @@ internal sealed class HitboxesSystem : GameSystem
     internal static readonly Color StunColor = new(1f, 0.82f, 0.25f);
 
     private readonly List<Landing> _landings = [];
+    [NotState("lists kept only to use again")]
     private readonly List<int> _groupsDone = [];
+    [NotState("lists kept only to use again")]
     private readonly List<SpriteDraw> _draws = [];
 
     public override string Name => "Hitboxes";
 
     /// <summary>Draws every box in play over the game: the editor's Game &gt; Show Hitboxes, or <c>Game.ShowHitboxes</c>.</summary>
+    [field: NotState("the editor's Show Hitboxes")]
     public bool Show { get; set; }
 
     // A hit found this step, landed once they've all been found.

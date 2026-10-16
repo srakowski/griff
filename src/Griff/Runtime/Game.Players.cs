@@ -9,12 +9,15 @@ namespace Griff.Runtime;
 public sealed partial class Game
 {
     /// <summary>Multiplayer: host a game, join one, see who's playing, send messages to other machines.</summary>
+    [field: NotState("a network game's connection")]
     public NetSession Net { get; }
 
     /// <summary>The game's name, set by the host (editor or player). Only copies of the same game can play together.</summary>
+    [field: NotState("the host's")]
     public string? Title { get; set; }
 
     /// <summary>The component types the game uses, set by the host (editor or player), for sending entities over a network.</summary>
+    [field: NotState("the host's")]
     public ComponentRegistry? Components { get; set; }
 
     /// <summary>
@@ -32,6 +35,7 @@ public sealed partial class Game
     /// <summary>The people playing at this machine, each with their own keys or controller (see <see cref="Runtime.LocalPlayers"/>).</summary>
     public LocalPlayers LocalPlayers => _localPlayers ??= new LocalPlayers(this);
 
+    [NotState("the players on this machine and their controls, the host's")]
     private LocalPlayers? _localPlayers;
 
     // Nothing held, nothing pressed.
@@ -50,6 +54,7 @@ public sealed partial class Game
         return Net.PlayerById(owner)?.Remote is { } remote ? remote : NoControls;
     }
 
+    [NotState("the players on this machine and their controls, the host's")]
     private NoInput? _noInput;
 
     /// <summary>True if this machine runs <paramref name="entity"/>'s gameplay: everything offline and on the host.</summary>
@@ -95,7 +100,9 @@ public sealed partial class Game
     // ----- Running a player's tools for them, on the host -----
 
     // The player whose hotbar, tools and building the host is running right now, with their controls.
+    [NotState("a network game's player")]
     private NetPlayer? _acting;
+    [NotState("a network game's player")]
     private IInput? _actingInput;
 
     /// <summary>

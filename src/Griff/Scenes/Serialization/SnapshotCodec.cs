@@ -33,7 +33,13 @@ internal sealed class SnapshotCodec(SceneSerializer serializer)
     private readonly Plan?[] _recent = new Plan?[8];
 
     /// <summary>Writes <paramref name="entity"/>'s record (its id first, then its name, flags, prefab and components; not its children).</summary>
-    public void Write(Entity entity, SnapshotBuffer buffer)
+    public void Write(Entity entity, SnapshotBuffer buffer) => Write(entity, buffer, null);
+
+    /// <summary>
+    /// <see cref="Write(Entity, SnapshotBuffer)"/>, and with <paramref name="state"/> (a running game's, see
+    /// <see cref="StateWriter"/>), what each component keeps besides its saved values, written there as it goes.
+    /// </summary>
+    public void Write(Entity entity, SnapshotBuffer buffer, StateWriter? state)
     {
         var components = entity.Components;
         var at = buffer.Reserve(HeaderSize);
@@ -58,6 +64,7 @@ internal sealed class SnapshotCodec(SceneSerializer serializer)
             if (i < _recent.Length)
                 _recent[i] = plan;
             plan.Write(component, buffer);
+            state?.Component(entity, i, component, plan.Kept);
         }
     }
 
@@ -203,7 +210,11 @@ internal sealed class SnapshotCodec(SceneSerializer serializer)
             Fields = [.. descriptor.Properties.Select(SnapshotField.For)];
             Used = [.. descriptor.Properties.SelectMany(p => p.FormerSerializedNames.Prepend(p.SerializedName)), "type", "version"];
             Write = Compile();
+            Kept = KeptFields.OfComponent(Type);
         }
+
+        // What it keeps besides its saved values, for a running game's state.
+        public readonly KeptFields Kept;
 
         public readonly Type Type;
 

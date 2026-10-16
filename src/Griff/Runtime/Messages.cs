@@ -97,6 +97,7 @@ internal sealed class MessageBoard
         return heard;
     }
 
+    [NotState("lists kept only to use again")]
     private readonly Stack<List<MessageListener>> _spare = new();
 
     /// <summary>Drops listeners whose owners are gone, e.g. after a scene switch.</summary>

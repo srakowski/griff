@@ -681,6 +681,7 @@ public sealed class Counter : Component, ICarried
     internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || !string.IsNullOrWhiteSpace(Output);
 
     // The output it counts, found once.
+    [field: NotState("finds the output again")]
     internal OutputReader Reader { get; } = new();
 
     // Whether it had reached its value when last looked at, so it sends its Reach Message as it gets there (not when a

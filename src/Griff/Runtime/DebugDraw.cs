@@ -24,6 +24,7 @@ public sealed record DebugText(Vector2 Position, string Text, float Size, Color 
 /// Debug.Text(Transform.Position + new Vector3(0, 1, 0), state.ToString());
 /// </code>
 /// </example>
+[NotState("what code draws to debug")]
 public sealed class DebugDraw
 {
     private readonly List<(DebugShape Shape, long Frame, double Until)> _shapes = [];

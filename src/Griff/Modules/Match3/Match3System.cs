@@ -67,7 +67,7 @@ internal sealed class Match3System : GameSystem
 
     private void RunBoard(MatchBoard board, Tilemap map)
     {
-        board.Random ??= new Random(board.Seed != 0 ? board.Seed : Rand.Range(1, int.MaxValue));
+        board.Random ??= new GameRandom(board.Seed != 0 ? board.Seed : Rand.Range(1, int.MaxValue));
         if (!board.Started)
         {
             board.Started = true;

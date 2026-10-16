@@ -32,11 +32,13 @@ internal sealed class MenuSystem : GameSystem
     private Vector2? _lastMouseOnView;
 
     // The controls a frame's menus work with, kept from one frame to the next so a game without menus allocates nothing.
+    [NotState("gathered again each step")]
     private readonly MenuControls _menus = new();
 
     private static readonly List<Button> NoneClicked = [];
 
     // Their targets, kept to look through without garbage.
+    [NotState("gathered again each time")]
     private readonly List<Entity> _doTargets = [];
 
     public override string Name => "Menus";

@@ -26,10 +26,13 @@ internal sealed class RhythmSystem : GameSystem
     private readonly List<NoteLanes> _showing = [];
 
     // The save data the lanes last read from, and how many the game has had: lanes read again from new save data.
+    [NotState("worked out again from the save data")]
     private SaveData? _saves;
+    [NotState("worked out again from the save data")]
     private int _savesSeen;
 
     // The player's settings: how fast they like the notes to come.
+    [NotState("a link to the module's settings")]
     private readonly RhythmSettingsSystem _settings;
 
     public RhythmSystem(RhythmSettingsSystem settings) => _settings = settings;
@@ -400,6 +403,7 @@ internal sealed class RhythmSystem : GameSystem
         return name;
     }
 
+    [NotState("worked out again from the songs' names")]
     private readonly Dictionary<string, string> _chartNames = [];
 
     private static void FreshMarks(NoteLanes lanes)

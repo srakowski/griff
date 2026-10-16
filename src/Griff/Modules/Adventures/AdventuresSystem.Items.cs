@@ -19,7 +19,9 @@ internal sealed partial class AdventuresSystem
     private static readonly IReadOnlyList<(string Name, int Count)> Nothing = [];
 
     // This machine's bar as laid out this step: its buttons (for an agent or a demo to find) and whether the mouse is on it.
+    [NotState("laid out again each step")]
     private readonly List<HudButton> _buttons = [];
+    [NotState("laid out again each step")]
     private (InventoryBar? Bar, int Version, int First, int Shown, HudRect Back, string? Holding) _laidOut;
     private bool _onBar;
 
@@ -27,7 +29,9 @@ internal sealed partial class AdventuresSystem
     private readonly List<Hotspot> _reach = [];
 
     // Each item's picture (null for a tile) and its tile's color, as worked out, until the bar's icons or the tables change.
+    [NotState("worked out again from the items")]
     private readonly Dictionary<string, (ItemIcon? Icon, Color Tile)> _icons = new(StringComparer.OrdinalIgnoreCase);
+    [NotState("worked out again from the items")]
     private (InventoryBar? Bar, IReadOnlyList<string>? Icons, string? Table, int Tables) _iconsFor;
 
     private void ItemsSceneChanged()
@@ -102,7 +106,9 @@ internal sealed partial class AdventuresSystem
 
     // The last few layouts, used again while nothing about them changes (the view each step and each frame), so laying the
     // bar out every step and frame makes no garbage.
+    [NotState("kept only to use again")]
     private readonly ItemBarLayout?[] _layouts = new ItemBarLayout?[3];
+    [NotState("kept only to use again")]
     private int _nextLayout;
 
     private ItemBarLayout LayoutOf(InventoryBar bar, int count, Vector2 center, Vector2 half)
@@ -681,6 +687,7 @@ internal sealed partial class AdventuresSystem
         _labels.Add(FrameDrawing.Label(Initial(item), at - new Vector2(0, side * 0.2f), side * 0.5f, new Color(1, 1, 1, alpha)));
     }
 
+    [NotState("worked out again from the items")]
     private readonly Dictionary<string, string> _initials = new(StringComparer.Ordinal);
 
     private string Initial(string item)

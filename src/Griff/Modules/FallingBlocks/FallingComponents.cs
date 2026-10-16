@@ -15,7 +15,8 @@ namespace Griff.Modules.FallingBlocks;
 /// <see cref="RotateAction"/> turns it; the <see cref="DropAction"/> drops it all the way at once. Each kind of piece
 /// lands as its own tile (from <see cref="FirstTile"/>), so a tileset gives each its look; without a tileset image each
 /// kind draws as a square of its own color. Tiles painted on the board to begin with are blocks already there. The
-/// tiles, score, rows and level are saved with the scene, so a rewind goes back to them (with a new piece coming in). In
+/// tiles, score, rows and level are saved with the scene, and the piece falling and those to come are kept with rewind
+/// snapshots, so a rewind goes back to just where it was. In
 /// a network game the host runs the board and any player can move the piece.
 /// </remarks>
 [Category("Gameplay")]
@@ -263,7 +264,7 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
         return rows;
     }
 
-    // ----- What the game keeps while it runs (rewinds start these afresh) -----
+    // ----- What the game keeps while it runs (not saved with the scene, but kept with rewind snapshots) -----
 
     internal bool Started { get; set; }
 
@@ -272,7 +273,7 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
     // The level it started at, to go back to on a restart.
     internal int? StartLevel { get; set; }
 
-    internal Random? Random { get; set; }
+    internal GameRandom? Random { get; set; }
 
     internal FallingPiece? Falling
     {

@@ -14,8 +14,10 @@ internal sealed class AtmosphereSystem : GameSystem
 
     private readonly HashSet<BackgroundMusic> _startedMusic = [];
 
+    [NotState("the sounds playing: sound isn't rewound, so a rewind stops them and their sources start them again")]
     private readonly Dictionary<SoundSource, ISoundLoop> _loops = [];
 
+    [NotState("the sources heard this step, gathered again each step")]
     private readonly HashSet<SoundSource> _liveSources = [];
 
     public override string Name => "Atmosphere";
@@ -230,6 +232,9 @@ internal sealed class AtmosphereSystem : GameSystem
             _loops.Remove(source);
         }
     }
+
+    // The sounds played for the entities before a rewind stop: those put back start theirs again.
+    protected override void Restored() => StopSoundSources();
 
     internal void StopSoundSources()
     {

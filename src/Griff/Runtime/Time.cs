@@ -6,7 +6,7 @@ namespace Griff.Runtime;
 /// is drawn between the last two steps (see <see cref="Blend"/>). <see cref="Delta"/> is a step's game time: multiply
 /// speeds by it.
 /// </summary>
-public sealed class Time
+public sealed class Time : IKeepsState
 {
     /// <summary>
     /// The most real time a single frame may cover, so a stall (breakpoint, window drag) doesn't teleport things: a frame
@@ -61,6 +61,7 @@ public sealed class Time
     /// what's drawn is placed that far from where it was to where it is, so it moves smoothly on any screen. 1 when the
     /// game is stepped by hand or held still.
     /// </summary>
+    [field: NotState("how far between two steps the host draws")]
     public float Blend { get; internal set; } = 1;
 
     /// <summary>Frames the screen has shown (one each <see cref="Game.Advance"/> or <see cref="Game.Tick"/>), where <see cref="Frame"/> counts steps.</summary>

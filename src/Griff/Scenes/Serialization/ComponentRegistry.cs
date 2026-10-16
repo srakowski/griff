@@ -3,6 +3,7 @@ using System.Reflection;
 namespace Griff.Scenes.Serialization;
 
 /// <summary>The component types a scene may contain, keyed by their saved name.</summary>
+[NotState("the kinds of components there are")]
 public sealed class ComponentRegistry
 {
     private readonly Dictionary<string, ComponentDescriptor> _byName = new(StringComparer.Ordinal);

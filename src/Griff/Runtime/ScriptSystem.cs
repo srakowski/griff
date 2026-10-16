@@ -10,34 +10,47 @@ namespace Griff.Runtime;
 internal sealed class ScriptSystem : GameSystem
 {
     // The scripts with an Update, a FixedUpdate and a LateUpdate, split into runs.
+    [NotState("worked out again from the scene's scripts")]
     private ScriptRun[] _updatingRuns = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private ScriptRun[] _fixedUpdatingRuns = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private ScriptRun[] _lateUpdatingRuns = [];
 
+    [NotState("used again for each crowd")]
     private readonly CrowdJob _crowdJob = new();
 
     // The scripts running this frame, taken as it starts: spawned scripts wait for the next one. Then those of them with
     // an Update, a FixedUpdate and a LateUpdate, kept with the snapshot they were taken from (unchanged while nothing is
     // added, removed, enabled or disabled), and the last snapshot every script of had started (by their serials: see
     // ComponentList.Serial). Lists replaced are filled again two steps later (see SnapshotPool), counted by _steps.
+    [NotState("worked out again from the scene's scripts")]
     private ComponentList<Behavior> _running;
 
+    [NotState("worked out again from the scene's scripts")]
     private long _hooksFor = -1;
 
+    [NotState("worked out again from the scene's scripts")]
     private Behavior[] _hooksFrom = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private Behavior[] _updating = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private Behavior[] _fixedUpdating = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private Behavior[] _lateUpdating = [];
 
+    [NotState("worked out again from the scene's scripts")]
     private long _startedFor = -1;
 
+    [NotState("lists kept only to use again")]
     private readonly SnapshotPool<Behavior> _scriptLists = new();
 
+    [NotState("lists kept only to use again")]
     private readonly SnapshotPool<ScriptRun> _runLists = new();
 
     public override string Name => "Scripts";

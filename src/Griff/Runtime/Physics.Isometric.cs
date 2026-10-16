@@ -14,6 +14,7 @@ public sealed partial class Physics
     // The most cells a move or a ray looks along (a body moving so fast it would cross more goes the rest unchecked).
     private const int GridReach = 4096;
 
+    [NotState("gathered again each step")]
     private readonly List<IsometricWalls> _isometric = [];
 
     /// <summary>

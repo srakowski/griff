@@ -13,6 +13,7 @@ internal sealed class MessageSystem : GameSystem
 
     // Lists Deliver picks out what hears a message into, one for each message being sent at once (one sent as another is
     // heard), kept for the next.
+    [NotState("lists kept only to use again")]
     private readonly Stack<List<Component>> _pickLists = new();
 
     private bool _netMessage;

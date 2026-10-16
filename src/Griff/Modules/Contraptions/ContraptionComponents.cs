@@ -499,6 +499,7 @@ public sealed class Wire : Component, IDrawable
     internal (string? Input, string Name)? Port { get; set; }
 
     // The output it carries, found once on its source.
+    [field: NotState("finds the output again")]
     internal OutputReader Reader { get; } = new();
 
     // Its arrow from where it comes from says what it carries where: "On to Power".

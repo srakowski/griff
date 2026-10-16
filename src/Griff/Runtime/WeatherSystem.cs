@@ -9,6 +9,7 @@ namespace Griff.Runtime;
 internal sealed class WeatherSystem : GameSystem
 {
     // Weather is scenery, so it has its own randomness and never changes what Rand gives the game.
+    [NotState("weather is scenery, with numbers of its own that never change the game")]
     private readonly Random _weatherRandom = new();
 
     public override string Name => "Weather";

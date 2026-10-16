@@ -423,6 +423,7 @@ public sealed class Bar : Component, IDrawable
     public string? Output { get; set; }
 
     // The output it shows, found once.
+    [field: NotState("finds the output again")]
     internal OutputReader Reader { get; } = new();
 
     // Its arrow from what it shows says what it shows.

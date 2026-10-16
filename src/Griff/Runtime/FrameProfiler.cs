@@ -98,6 +98,7 @@ public sealed record FrameCost(string Name, FrameCostKind Kind, double Ms, doubl
 /// What's added between one frame and the next counts in the next frame added. Keeping track of a cost allocates nothing
 /// once it's been seen, so it doesn't count as garbage itself.
 /// </remarks>
+[NotState("the host's profiler")]
 public sealed class FrameProfiler
 {
     /// <summary>Ten seconds at 60 frames a second.</summary>

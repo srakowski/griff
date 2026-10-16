@@ -7,10 +7,13 @@ namespace Griff.Runtime;
 /// </summary>
 internal sealed class SettingsSystem : GameSystem
 {
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private Settings? _savedSettings;
 
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private bool _fullscreen;
 
+    [NotState("the player's settings, kept with the save data rather than the game")]
     private float _audioOffset, _visualOffset;
 
     public override string Name => "Settings";
@@ -59,6 +62,7 @@ internal sealed class SettingsSystem : GameSystem
         }
     }
 
+    [field: NotState("the host's")]
     internal event EventHandler? FullscreenChanged;
 
     // Settings saved earlier win over the defaults; values never saved are left as they are.

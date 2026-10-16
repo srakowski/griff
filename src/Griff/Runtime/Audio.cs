@@ -4,6 +4,7 @@ namespace Griff.Runtime;
 /// Sound for gameplay code. Paths are relative to the project's Assets folder, e.g. "Sounds/jump.wav".
 /// WAV, MP3 and OGG are supported. Make sounds and music in the editor with Audio &gt; Sound Maker.
 /// </summary>
+[NotState("the host's sound")]
 public interface IAudio
 {
     /// <summary>Plays a one-shot sound effect. Overlapping plays of the same sound are fine.</summary>

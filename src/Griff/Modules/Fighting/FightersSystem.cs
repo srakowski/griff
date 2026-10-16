@@ -24,6 +24,7 @@ internal sealed class FightersSystem : GameSystem
     public override string Name => "Fighters";
 
     // Each fighter's moves, its own and its table's, with what they were made from.
+    [NotState("worked out again from the fighters")]
     private readonly Dictionary<FightingCharacter, Moves> _moves = [];
 
     private sealed class Moves
@@ -239,6 +240,8 @@ internal sealed class FightersSystem : GameSystem
     }
 
     protected override void SceneChanged() => _moves.Clear();
+
+    protected override void Restored() => _moves.Clear();
 
     private static FighterMove? Find(IReadOnlyList<FighterMove> moves, string? name)
     {

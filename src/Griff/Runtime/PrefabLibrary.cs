@@ -8,6 +8,7 @@ namespace Griff.Runtime;
 /// Creates entities from a project's prefab files, for <see cref="Game.PrefabLoader"/>. Files are read once and
 /// re-read when they change on disk, so saving a prefab while the game runs affects the next spawn.
 /// </summary>
+[NotState("the project's prefabs")]
 public sealed class PrefabLibrary(Project project, ComponentRegistry components)
 {
     private readonly Dictionary<string, (DateTime Written, string Json)> _files = new(StringComparer.OrdinalIgnoreCase);

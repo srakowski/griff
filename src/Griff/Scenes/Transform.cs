@@ -15,27 +15,42 @@ public sealed class Transform : Component
     private Vector3 _scale = Vector3.One;
 
     // The matrices, kept until something moves: this transform's own, and the world one with the parent's it was made from.
+    [NotState("worked out again from its position, rotation and scale")]
     private Matrix4x4 _local;
+    [NotState("worked out again from its position, rotation and scale")]
     private bool _localKept;
+    [NotState("worked out again from its position, rotation and scale")]
     private Matrix4x4 _world;
+    [NotState("worked out again from its position, rotation and scale")]
     private bool _worldKept;
+    [NotState("worked out again from its position, rotation and scale")]
     private Transform? _worldParent;
+    [NotState("worked out again from its position, rotation and scale")]
     private int _worldParentStamp;
 
     // Goes up each time the world matrix is worked out again, so children know theirs is out of date.
+    [NotState("worked out again from its position, rotation and scale")]
     private int _worldStamp;
 
     // Drawing a running game between its steps: where it was as the step it last moved in began, which step that was,
     // and the last step it jumped in (teleported, added to the scene, moved to another parent), which it isn't glided
     // over. Then the matrix it's drawn with in the frame being drawn, which drawing that is, and whether that's simply its
     // world matrix (neither it nor anything it's in glides).
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private Vector3 _fromPosition;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private Vector3 _fromRotation;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private Vector3 _fromScale = Vector3.One;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private long _movedStep = -1;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private long _jumpedStep = -1;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private Matrix4x4 _drawn;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private long _drawnFor;
+    [NotState("where it's drawn between two steps: drawn as it is once put back")]
     private bool _drawnAsIs;
 
     /// <summary>Where it is, in world units, from its parent's position (or the world's middle, with none). Y is up.</summary>

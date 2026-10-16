@@ -239,6 +239,7 @@ public sealed class Text : Component, IDrawable
     internal string? Said => _readout ?? Value;
 
     // The output it shows, found once, and what its readout was last made from (so it's only made again when that changes).
+    [field: NotState("finds the output again")]
     internal OutputReader Reader { get; } = new();
 
     internal (string? Template, float Number, string? Name, float OutOf)? ReadFrom { get; set; }
@@ -401,8 +402,12 @@ public sealed class Sprite : Component, IDrawable, INetState
     /// <summary>True while a <see cref="Flash"/> or <see cref="Blink"/> is under way.</summary>
     internal bool HasEffects => _flashLeft.Value != 0 || _blinkLeft != 0;
 
+    // Neither flashing nor blinking, its own fields are as a new sprite's: a rewind snapshot leaves them out.
+    internal override bool IsAtRest => !HasEffects;
+
     // The scene whose list of sprites flashing or blinking it's in (see Scene.SpriteEffects), if any: the game moves on
     // only those, rather than going through every sprite every step.
+    [field: NotState("listed again as a rewind puts it back")]
     internal Scene? EffectsListedIn { get; set; }
 
     internal void ListEffects()

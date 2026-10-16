@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using Griff.Audio;
+using Griff.Hosting;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -248,19 +249,20 @@ public sealed class SoundOutput(Func<SoundOutput, SoundDevice?> openDevice, bool
 
 /// <summary>
 /// A game's sound on Windows: the shared <see cref="AssetSoundLibrary"/> (the browser's too), which opens MP3s with
-/// Windows' own codec and decodes a sound again when its file changes, played through its host's <see cref="SoundOutput"/>.
+/// Windows' own codec and decodes a sound again when its game's files say it changed, played through its host's
+/// <see cref="SoundOutput"/>.
 /// </summary>
 public static class WindowsAudio
 {
-    /// <summary>The game's audio: <see cref="MixerAudio"/> on <paramref name="output"/>'s mixer (started), reading <paramref name="assetRoot"/>.</summary>
-    public static MixerAudio Create(SoundOutput output, string assetRoot)
+    /// <summary>The game's audio: <see cref="MixerAudio"/> on <paramref name="output"/>'s mixer (started), reading <paramref name="sounds"/>.</summary>
+    public static MixerAudio Create(SoundOutput output, ISoundLibrary sounds)
     {
         output.Start();
-        return new MixerAudio(output.Mixer, Library(assetRoot));
+        return new MixerAudio(output.Mixer, sounds);
     }
 
-    /// <summary>The sounds in <paramref name="assetRoot"/>, as a game on Windows reads them.</summary>
-    public static AssetSoundLibrary Library(string assetRoot) => new(assetRoot) { OpenMp3 = OpenMp3, Reloads = true };
+    /// <summary>The sounds among <paramref name="assets"/>, as a game on Windows reads them.</summary>
+    public static AssetSoundLibrary Library(IAssetSource assets) => new(assets) { OpenMp3 = OpenMp3 };
 
     /// <summary>Decodes any sound file a game on Windows reads (WAV, MP3, OGG) whole; null if it can't be read.</summary>
     public static SoundClip? Decode(string path) => AssetSoundLibrary.Decode(path, OpenMp3);

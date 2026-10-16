@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Fonts;
+using Griff.Hosting;
 using Silk.NET.OpenGL;
 using StbImageSharp;
 
@@ -40,8 +41,8 @@ public sealed class OpenGLRenderer : QuadRenderer
     // With screen effects, the frame is drawn into this picture first, then onto the screen through the effects.
     private Target _picture;
 
-    public OpenGLRenderer(GL gl, string assetRoot)
-        : base(assetRoot, installedFonts: true)
+    public OpenGLRenderer(GL gl, IAssetSource? assets)
+        : base(assets, installedFonts: true)
     {
         _gl = gl;
         _program = CreateProgram(Shaders.Sprite);

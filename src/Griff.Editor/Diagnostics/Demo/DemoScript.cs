@@ -870,7 +870,7 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
         await StartPlaying();
         await Wait(1500);
         await ui.Say("Enter to start.");
-        if (play.Game?.Input is Griff.Runtime.InputState menuInput)
+        if (play.Game?.HostInput is { } menuInput)
         {
             Overlay.ShowKeys("Enter");
             menuInput.SetKey(Griff.Input.Key.Enter, true);

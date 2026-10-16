@@ -43,6 +43,8 @@ public static partial class WebPlayer
     private static MouseCursor s_cursor;
     private static string? s_netStatus;
     private static int? s_still;
+    // The paths of the game's files fetched as the page opened: what it draws and plays is found among them.
+    private static string[] s_fetched = [];
 
     // What the loop timed since the "steps" and the "frames" probes last read them (each reads and clears its own half).
     private static GameLoopTimes s_stepTimes, s_frameTimes;
@@ -72,6 +74,7 @@ public static partial class WebPlayer
             await File.WriteAllBytesAsync(path, bytes);
             Browser.Progress(++done, files.Length);
         }));
+        s_fetched = [.. files.Select(file => Path.Combine(GameFolder, file))];
         return await GameLoader.LoadAsync(GameFolder);
     }
 
@@ -83,9 +86,11 @@ public static partial class WebPlayer
     {
         var query = Browser.Query();
         var project = loaded.Project!;
-        var view = s_view = new WebView(new WebGLRenderer(project.AssetsPath));
+        // Its files were all fetched before it started (FetchGameAsync), and don't change.
+        var assets = new PreloadedAssets(project.AssetsPath, s_fetched);
+        var view = s_view = new WebView(new WebGLRenderer(assets));
         // The same library as the desktop's; the browser decodes the MP3s, as it starts.
-        var sounds = new AssetSoundLibrary(project.AssetsPath);
+        var sounds = new AssetSoundLibrary(assets);
         await DecodeMp3Async(project.AssetsPath, sounds);
 
         var start = QueryValue(query, "scene") is { Length: > 0 } named ? loaded with { Scene = loaded.LoadScene(named), SceneName = named } : loaded;
@@ -258,7 +263,7 @@ public static partial class WebPlayer
     [JSExport]
     public static void Blur() => s_input.ReleaseAll();
 
-    /// <summary>Controller <paramref name="index"/> this frame (see <see cref="WebGamepad.Apply(InputState, int, bool, int, double, double, double, double, double, double)"/>), or none.</summary>
+    /// <summary>Controller <paramref name="index"/> this frame (see <see cref="WebGamepad.Apply(IHostInput, int, bool, int, double, double, double, double, double, double)"/>), or none.</summary>
     [JSExport]
     public static void Gamepad(int index, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY, double leftTrigger, double rightTrigger) =>
         WebGamepad.Apply(s_input, index, connected, pressed, leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);

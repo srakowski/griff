@@ -24,7 +24,9 @@ public sealed partial class Game
     [NotState("whether the host has stopped it")]
     private bool _stopped;
 
-    public Game(Scene scene, IInput input)
+    /// <param name="scene">The scene it starts in.</param>
+    /// <param name="input">The input its host feeds (<see cref="HostInput"/>), which the game reads (<see cref="Input"/>).</param>
+    public Game(Scene scene, InputState input)
     {
         _input = input;
         _services = new GameServices(this);
@@ -32,7 +34,7 @@ public sealed partial class Game
         Debug = new DebugDraw(Time);
         BuildFrame();
         _network.ListenForCommands();
-        (input as InputState)?.UseSaveData(_saveData);
+        input.UseSaveData(_saveData);
         _settings.LoadSettings();
         _panels.SyncPanels();
         // A scene put back into a hit stop (a rewind) finishes it.
@@ -143,8 +145,17 @@ public sealed partial class Game
     /// </summary>
     public IInput Input => _input;
 
+    /// <summary>
+    /// The same input as its host drives it: what the keyboard, mouse, touch and controllers do, the project's controls and the
+    /// player's rebinding (see <see cref="IHostInput"/>). Gameplay code reads <see cref="Input"/>.
+    /// </summary>
+    public IHostInput HostInput => _input;
+
+    // This machine's input whole, for what splits it among the players at it and sends it to a network game's host.
+    internal InputState MachineInput => _input;
+
     [NotState("the host's")]
-    private readonly IInput _input;
+    private readonly InputState _input;
 
     public Time Time { get; } = new();
 
@@ -170,7 +181,7 @@ public sealed partial class Game
         set
         {
             _saveData = value;
-            (Input as InputState)?.UseSaveData(value);
+            _input.UseSaveData(value);
             _settings.LoadSettings();
         }
     }

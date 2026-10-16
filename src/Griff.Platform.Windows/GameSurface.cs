@@ -46,7 +46,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     private WglContext? _context;
     private GL? _gl;
     private OpenGLRenderer? _renderer;
-    private string? _assetRoot;
+    private Griff.Hosting.IAssetSource? _assets;
     private bool _trackingLeave;
 
     /// <summary>Raised with the cursor position in pixels from the top-left of the surface.</summary>
@@ -84,15 +84,18 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
 
     private Griff.Input.MouseCursor _pointer;
 
-    /// <summary>Folder that sprite image paths are relative to (the project's Assets folder).</summary>
-    public string? AssetRoot
+    /// <summary>
+    /// The game's files its images and fonts are drawn from: the project's Assets, watched in the editor, fixed in an
+    /// exported game. Nothing is drawn until it's set.
+    /// </summary>
+    public Griff.Hosting.IAssetSource? Assets
     {
-        get => _assetRoot;
+        get => _assets;
         set
         {
-            if (_assetRoot == value)
+            if (_assets == value)
                 return;
-            _assetRoot = value;
+            _assets = value;
             _renderer?.Dispose();
             _renderer = null;
         }
@@ -121,7 +124,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     /// <summary>Draws <paramref name="frame"/> and presents it. Does nothing until the surface has a window.</summary>
     public void Render(RenderFrame frame)
     {
-        if (_context is null || _gl is null || AssetRoot is null)
+        if (_context is null || _gl is null || Assets is null)
             return;
 
         var (width, height) = PixelSize;
@@ -129,7 +132,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
             return;
 
         _context.MakeCurrent();
-        _renderer ??= new OpenGLRenderer(_gl, AssetRoot);
+        _renderer ??= new OpenGLRenderer(_gl, Assets);
         _renderer.Render(frame, width, height);
         _context.SwapBuffers();
     }
@@ -137,7 +140,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
     /// <summary>Renders <paramref name="frame"/> and returns the pixels (top-down RGBA) without presenting.</summary>
     public (byte[] Pixels, int Width, int Height)? Capture(RenderFrame frame)
     {
-        if (_context is null || _gl is null || AssetRoot is null)
+        if (_context is null || _gl is null || Assets is null)
             return null;
 
         var (width, height) = PixelSize;
@@ -145,7 +148,7 @@ public sealed class GameSurface : HwndHost, Griff.Hosting.IGameView
             return null;
 
         _context.MakeCurrent();
-        _renderer ??= new OpenGLRenderer(_gl, AssetRoot);
+        _renderer ??= new OpenGLRenderer(_gl, Assets);
         _renderer.Render(frame, width, height);
         return (_renderer.Capture(width, height), width, height);
     }

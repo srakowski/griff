@@ -164,10 +164,64 @@ public sealed class GameLoopTests
         Assert.True(loop.Input.MouseWorld.X > 0);
         Assert.Equal(0, loop.Input.MouseWorld.Y, 3);
 
-        // An agent pointing wins over the real mouse.
-        loop.PointerOverride = new Vector2(-3, 2);
+        // An extension the host added (as the editor adds an agent's pointer) sets what the game reads after the real mouse,
+        // until the real one moves.
+        var pointer = new Pointer { At = new Vector2(-3, 2) };
+        loop.Add(pointer);
         loop.Frame(1.0 / game.Time.StepRate);
         Assert.Equal(new Vector2(-3, 2), loop.Input.MouseWorld);
+        loop.PointAt(new Vector2(0.5f, 0));
+        loop.Frame(1.0 / game.Time.StepRate);
+        Assert.Null(pointer.At);
+        Assert.True(loop.Input.MouseWorld.X > 0);
+    }
+
+    [Theory]
+    [InlineData(FaultHold.Resumed)]
+    [InlineData(FaultHold.Abandoned)]
+    public void An_extension_can_hold_a_game_where_it_threw(FaultHold hold)
+    {
+        var (game, counter) = NewGame();
+        var loop = new GameLoop(game, new View());
+        var holder = new Holder(hold);
+        loop.Add(holder);
+        Exception? faulted = null;
+        loop.Faulted += (_, ex) => faulted = ex;
+        loop.Start();
+        counter.Throws = true;
+
+        loop.Frame(1.0 / game.Time.StepRate);
+
+        // Asked before anything unwound; let go, the game plays on and the error is said; gone, nothing is.
+        Assert.Equal("Broken on purpose.", holder.Asked?.Message);
+        Assert.False(loop.IsPaused);
+        Assert.Equal(hold == FaultHold.Resumed ? "Broken on purpose." : null, faulted?.Message);
+    }
+
+    // Points the mouse, as the editor's playtest pointer does.
+    private sealed class Pointer : IGameLoopExtension
+    {
+        public Vector2? At { get; set; }
+
+        public void BeforeSteps(GameLoop loop)
+        {
+            if (At is { } at)
+                (loop.Input.MouseWorld, loop.Input.IsMouseInView) = (at, true);
+        }
+
+        public void PointerMoved(GameLoop loop) => At = null;
+    }
+
+    // Holds a game where it threw, as the editor's debugger does, and says what became of it.
+    private sealed class Holder(FaultHold hold) : IGameLoopExtension
+    {
+        public Exception? Asked { get; private set; }
+
+        public FaultHold Fault(GameLoop loop, Exception exception)
+        {
+            Asked = exception;
+            return hold;
+        }
     }
 
     [Fact]
@@ -189,7 +243,7 @@ public sealed class GameLoopTests
     public void A_host_hands_the_game_it_makes_its_input_sound_saves_and_tables()
     {
         var input = new InputState();
-        var audio = new MixerAudio(new Mixer(), new AssetSoundLibrary(Path.GetTempPath()));
+        var audio = new MixerAudio(new Mixer(), new AssetSoundLibrary(new AssetFolder(Path.GetTempPath())));
         var saves = new SaveData();
         var tables = new TableSet();
         var problems = new List<Problem>();

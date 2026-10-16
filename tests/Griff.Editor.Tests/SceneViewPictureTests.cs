@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.SceneView;
 using Griff.Graphics;
+using Griff.Platform.Windows;
 using Griff.Projects;
 using Griff.Rendering;
 using Color = Griff.Color;

@@ -257,7 +257,7 @@ public sealed partial class ControlsViewModel : ObservableObject
         {
             await project.SetControlsAsync(controls);
             // The running game picks the change up straight away, so it can be tried without stopping.
-            if (_play.Game?.Input is InputState input)
+            if (_play.Game?.HostInput is { } input)
             {
                 input.UseControls(project.Controls);
                 message += " (and in the running game)";

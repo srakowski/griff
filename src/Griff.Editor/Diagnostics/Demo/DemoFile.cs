@@ -1501,7 +1501,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
 
     private async Task GameKey(string name, double seconds)
     {
-        if (CurrentGame?.Input is not Griff.Runtime.InputState input)
+        if (CurrentGame?.HostInput is not { } input)
             throw new InvalidOperationException("The game isn't playing.");
         // "LeftShift+Right" holds both.
         var keys = name.Split('+', StringSplitOptions.TrimEntries).Select(k => Enum.Parse<Griff.Input.Key>(k, ignoreCase: true)).ToList();
@@ -1514,7 +1514,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         }
         finally
         {
-            if (CurrentGame?.Input is Griff.Runtime.InputState still)
+            if (CurrentGame?.HostInput is { } still)
             {
                 foreach (var key in keys)
                     still.SetKey(key, false);
@@ -1526,7 +1526,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
     // A first-person game turns with it once it holds the mouse, so the game is clicked first to give it the mouse.
     private async Task MouseLook(string argument)
     {
-        if (CurrentGame?.Input is not Griff.Runtime.InputState input)
+        if (CurrentGame?.HostInput is not { } input)
             throw new InvalidOperationException("The game isn't playing.");
         var space = argument.LastIndexOf(' ');
         if (space < 0)

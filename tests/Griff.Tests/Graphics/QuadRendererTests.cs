@@ -1,6 +1,7 @@
 using System.Numerics;
 using Griff.Fonts;
 using Griff.Graphics;
+using Griff.Hosting;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -32,7 +33,7 @@ public sealed class QuadRendererTests : IDisposable
     [Fact]
     public void EachImage_IsLoadedOnce_WhateverItsNameIsSpelledLike()
     {
-        using var renderer = new Recording(_assets);
+        using var renderer = new Recording(new AssetFolder(_assets));
 
         renderer.Render(Frame("Art/hero.png", "Art\\hero.png", "art/HERO.png", "Art/missing.png", null), 100, 100);
         renderer.Render(Frame("Art/hero.png", "Art/missing.png"), 100, 100);
@@ -44,28 +45,32 @@ public sealed class QuadRendererTests : IDisposable
     }
 
     [Fact]
-    public void AnImageWhoseFileChanges_IsLoadedAgain()
+    public void AnImageWhoseFileChanges_IsLoadedAgain_WhereItsSourceSaysSo()
     {
-        using var renderer = new Recording(_assets);
-        var path = Path.Combine(_assets, "Art", "hero.png");
+        // The editor's files are watched; an exported game's don't change, and nothing looks at them again.
+        using var watched = new WatchedAssetFolder(_assets);
+        using var renderer = new Recording(watched);
+        using var exported = new Recording(new AssetFolder(_assets));
         renderer.Render(Frame("Art/hero.png"), 100, 100);
+        exported.Render(Frame("Art/hero.png"), 100, 100);
 
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
-        // Looked at once a second at most.
+        File.WriteAllBytes(Path.Combine(_assets, "Art", "hero.png"), [2]);
         var waited = System.Diagnostics.Stopwatch.StartNew();
-        while (renderer.Loaded.Count < 2 && waited.Elapsed < TimeSpan.FromSeconds(5))
+        while (renderer.Loaded.Count < 2 && waited.Elapsed < TimeSpan.FromSeconds(10))
         {
             renderer.Render(Frame("Art/hero.png"), 100, 100);
-            Thread.Sleep(50);
+            exported.Render(Frame("Art/hero.png"), 100, 100);
+            Thread.Sleep(20);
         }
 
         Assert.Equal([1, 1], renderer.Loaded.Select(l => l.Texture));
+        Assert.Equal([1], exported.Loaded.Select(l => l.Texture));
     }
 
     [Fact]
     public void GlyphRows_AreHandedOverBeforeTheFrameIsDrawn_OnlyWhenTheyChange()
     {
-        using var renderer = new Recording(_assets);
+        using var renderer = new Recording(new AssetFolder(_assets));
         var text = new RenderFrame
         {
             ViewProjection = Matrix4x4.Identity,
@@ -94,7 +99,7 @@ public sealed class QuadRendererTests : IDisposable
         commands.Where(c => c.Op == DrawOp.Sprites).Select(c => c.Texture);
 
     // A renderer that draws nothing, keeping what it was asked to do.
-    private sealed class Recording(string assets) : QuadRenderer(assets, installedFonts: false)
+    private sealed class Recording(IAssetSource assets) : QuadRenderer(assets, installedFonts: false)
     {
         public List<(int Texture, string Path)> Loaded { get; } = [];
 

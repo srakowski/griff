@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using Griff.Hosting;
 using NVorbis;
 
 namespace Griff.Audio;
@@ -6,14 +8,25 @@ namespace Griff.Audio;
 /// A game's sounds from its Assets folder, the same on every host: WAV (what Griff's Sound Maker and music synth make)
 /// and OGG decoded by .NET (NVorbis), MP3 by the platform (<see cref="OpenMp3"/>: Windows' own codec on the desktop) or
 /// handed in decoded beforehand (<see cref="Decoded"/>: the browser decodes a game's MP3s as it starts). Music in WAV,
-/// OGG and the platform's MP3 is read as it plays, not decoded whole. Decoded sounds are kept, and with
-/// <see cref="Reloads"/> decoded again when their file changes (a sound remade in the Sound Maker while the game runs is
-/// heard straight away).
+/// OGG and the platform's MP3 is read as it plays, not decoded whole. Decoded sounds are kept, and decoded again when the
+/// game's <see cref="IAssetSource"/> says their file changed (in the editor, a sound remade in the Sound Maker while the
+/// game runs is heard straight away); an exported game's files don't change, so nothing is looked at again.
 /// </summary>
-public sealed class AssetSoundLibrary(string assetRoot) : ISoundLibrary
+public sealed class AssetSoundLibrary : ISoundLibrary, IDisposable
 {
-    private readonly Dictionary<string, (DateTime Written, SoundClip? Clip)> _clips = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (DateTime Written, MusicRecipe? Recipe)> _recipes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IAssetSource _assets;
+    // By the file's path: what's decoded so far (null for a file that isn't there or can't be read), and the files the source
+    // said changed since, forgotten as the next sound is asked for.
+    private readonly Dictionary<string, SoundClip?> _clips = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, MusicRecipe?> _recipes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentQueue<string> _changed = new();
+
+    /// <param name="assets">The game's files.</param>
+    public AssetSoundLibrary(IAssetSource assets)
+    {
+        _assets = assets;
+        _assets.Changed += _changed.Enqueue;
+    }
 
     /// <summary>The extensions of the sound files it reads.</summary>
     public static readonly IReadOnlyList<string> Extensions = [".wav", ".mp3", ".ogg"];
@@ -24,26 +37,25 @@ public sealed class AssetSoundLibrary(string assetRoot) : ISoundLibrary
     /// <summary>MP3s decoded before the game started, by their path in Assets ('/' between folders).</summary>
     public Dictionary<string, SoundClip> Decoded { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether a file changed since it was decoded is decoded again (the editor's and the player's files can change; a browser's can't).</summary>
-    public bool Reloads { get; init; }
-
     public SoundClip? Load(string sound)
     {
-        if (Resolve(sound) is not { } path)
+        if (PathOf(sound) is not { } path)
             return null;
-        var written = Reloads ? File.GetLastWriteTimeUtc(path) : default;
-        if (_clips.TryGetValue(path, out var cached) && cached.Written == written)
-            return cached.Clip;
-        var clip = Path.GetExtension(path).Equals(".mp3", StringComparison.OrdinalIgnoreCase) && OpenMp3 is null
-            ? Decoded.GetValueOrDefault(Relative(path))
+        if (_clips.TryGetValue(path, out var cached))
+            return cached;
+        var clip = !_assets.Exists(path) ? null
+            : Path.GetExtension(path).Equals(".mp3", StringComparison.OrdinalIgnoreCase) && OpenMp3 is null ? Decoded.GetValueOrDefault(Relative(path))
             : Decode(path, OpenMp3);
-        _clips[path] = (written, clip);
+        _clips[path] = clip;
         return clip;
     }
 
+    /// <summary>Stops hearing of the files' changes.</summary>
+    public void Dispose() => _assets.Changed -= _changed.Enqueue;
+
     public IAudioStream? Stream(string sound)
     {
-        if (Resolve(sound) is not { } path)
+        if (PathOf(sound) is not { } path || !_assets.Exists(path))
             return null;
         try
         {
@@ -65,13 +77,12 @@ public sealed class AssetSoundLibrary(string assetRoot) : ISoundLibrary
 
     public MusicRecipe? MusicRecipeOf(string sound)
     {
-        if (Resolve(sound) is not { } path)
+        if (PathOf(sound) is not { } path)
             return null;
-        var written = Reloads ? File.GetLastWriteTimeUtc(path) : default;
-        if (_recipes.TryGetValue(path, out var cached) && cached.Written == written)
-            return cached.Recipe;
-        var recipe = path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? Wav.ReadMusicRecipe(path) : null;
-        _recipes[path] = (written, recipe);
+        if (_recipes.TryGetValue(path, out var cached))
+            return cached;
+        var recipe = path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) && _assets.Exists(path) ? Wav.ReadMusicRecipe(path) : null;
+        _recipes[path] = recipe;
         return recipe;
     }
 
@@ -118,14 +129,18 @@ public sealed class AssetSoundLibrary(string assetRoot) : ISoundLibrary
         return new SoundClip([.. samples], stream.Channels, stream.SampleRate);
     }
 
-    private string Relative(string path) => Path.GetRelativePath(assetRoot, path).Replace(Path.DirectorySeparatorChar, '/');
+    private string Relative(string path) => Path.GetRelativePath(_assets.Root, path).Replace(Path.DirectorySeparatorChar, '/');
 
-    private string? Resolve(string relative)
+    // Where the sound's file is (or would be), once the files the source said changed are forgotten.
+    private string? PathOf(string relative)
     {
-        if (string.IsNullOrWhiteSpace(relative))
-            return null;
-        var path = Path.Combine(assetRoot, relative.Trim().Replace('\\', '/').Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? path : null;
+        while (_changed.TryDequeue(out var changed))
+        {
+            _clips.Remove(changed);
+            _recipes.Remove(changed);
+        }
+
+        return string.IsNullOrWhiteSpace(relative) ? null : _assets.PathOf(relative.Trim());
     }
 
     // More than two channels keep the first two.

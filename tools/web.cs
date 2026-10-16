@@ -1,6 +1,7 @@
 #:sdk Microsoft.NET.Sdk.Web
 #:project ../src/Griff.Scripting/Griff.Scripting.csproj
-#:project ../src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj
+#:project ../src/Griff.Platform.Windows/Griff.Platform.Windows.csproj
+#:property TargetFramework=net10.0-windows
 #:property PublishAot=false
 
 // Griff in a browser: exports a game for the web (WebExporter, with the web player Griff.Web publishes) and serves it on
@@ -1707,7 +1708,7 @@ static async Task<byte[]> DrawOnDesktop(string gameFolder, string? scene, int st
     for (var i = 0; i < steps; i++)
         game.Advance(1.0 / game.Time.StepRate);
     var frame = Griff.Rendering.SceneRenderer.Build(game, aspect);
-    using var gl = new Griff.Graphics.OffscreenGL(width, height, loaded.Project!.AssetsPath);
+    using var gl = new Griff.Platform.Windows.OffscreenGL(width, height, loaded.Project!.AssetsPath);
     gl.Render(frame);
     return gl.Capture();
 }

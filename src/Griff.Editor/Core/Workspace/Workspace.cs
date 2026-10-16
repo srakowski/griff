@@ -37,6 +37,7 @@ public sealed class Workspace(
     private readonly ObservableCollection<SceneDocument> _prefabs = [];
     private ReadOnlyObservableCollection<SceneDocument>? _readOnlyPrefabs;
     private FileSystemWatcher? _scriptWatcher;
+    private Griff.Hosting.WatchedAssetFolder? _assets;
     private DispatcherTimer? _scriptDebounce;
     private DispatcherTimer? _recoveryTimer;
     private readonly List<Func<Task<bool>>> _closeGuards = [];
@@ -50,6 +51,8 @@ public sealed class Workspace(
         get => _project;
         private set => SetProperty(ref _project, value);
     }
+
+    public Griff.Hosting.IAssetSource? Assets => _assets;
 
     public SceneDocument? Scene => _prefab ?? _scene;
 
@@ -157,6 +160,8 @@ public sealed class Workspace(
     {
         _scriptWatcher?.Dispose();
         _scriptWatcher = null;
+        _assets?.Dispose();
+        _assets = null;
         _scriptDebounce?.Stop();
         _recoveryTimer?.Stop();
     }
@@ -496,6 +501,8 @@ public sealed class Workspace(
 
         SetScene(null);
         _prefabs.Clear();
+        _assets?.Dispose();
+        _assets = new Griff.Hosting.WatchedAssetFolder(project.AssetsPath);
         Project = project;
         RememberRecent(project.RootPath);
 

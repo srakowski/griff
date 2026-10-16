@@ -1,21 +1,33 @@
 using System.Runtime.InteropServices;
+using Griff.Graphics;
+using Griff.Hosting;
 using Griff.Rendering;
 using Silk.NET.OpenGL;
 
-namespace Griff.Graphics;
+namespace Griff.Platform.Windows;
 
 /// <summary>
 /// An OpenGL context on a window that's never shown, drawing into a framebuffer of its own this many pixels big, with an
 /// <see cref="OpenGLRenderer"/>: frames drawn and read back with no window on the screen, for the editor's Scene view (its
 /// picture, with the handles drawn over it), for benchmarks and for comparing the desktop's pixels with the browser's.
-/// Windows only (WGL). Used on the thread that made it.
+/// Windows only (WGL), so it's here rather than beside the renderer, which runs wherever OpenGL does. Used on the thread
+/// that made it.
 /// </summary>
 public sealed class OffscreenGL : IDisposable
 {
     private readonly IntPtr _window, _dc, _context, _opengl32;
     private readonly uint _framebuffer, _color;
 
+    /// <summary>As below, drawing images from the files in <paramref name="assetRoot"/>, which don't change.</summary>
     public OffscreenGL(int width, int height, string assetRoot)
+        : this(width, height, new AssetFolder(assetRoot))
+    {
+    }
+
+    /// <param name="width">The framebuffer's width in pixels.</param>
+    /// <param name="height">Its height.</param>
+    /// <param name="assets">The game's files, which images and fonts are drawn from.</param>
+    public OffscreenGL(int width, int height, IAssetSource assets)
     {
         (Width, Height) = (width, height);
         // opengl32.dll is loaded before the pixel format is chosen: GDI may otherwise choose before the driver is loaded, and a
@@ -61,7 +73,7 @@ public sealed class OffscreenGL : IDisposable
         GL.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _color);
         GL.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)width, (uint)height);
         GL.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, _color);
-        Renderer = new OpenGLRenderer(GL, assetRoot);
+        Renderer = new OpenGLRenderer(GL, assets);
     }
 
     public int Width { get; private set; }

@@ -1,4 +1,5 @@
 using Griff.Audio;
+using Griff.Hosting;
 
 namespace Griff.Tests.Hosting;
 
@@ -23,7 +24,7 @@ public sealed class AssetSoundLibraryTests : IDisposable
     public void Wav_is_decoded_whole_and_read_as_it_plays()
     {
         Write("beep.wav", Tone(4410));
-        var library = new AssetSoundLibrary(_assets);
+        var library = new AssetSoundLibrary(new AssetFolder(_assets));
 
         Assert.Equal(4410, library.Load("Sounds/beep.wav")!.Frames);
         Assert.Same(library.Load("Sounds/beep.wav"), library.Load(Path.Combine("Sounds", "beep.wav")));
@@ -34,16 +35,21 @@ public sealed class AssetSoundLibraryTests : IDisposable
     }
 
     [Fact]
-    public void A_changed_file_is_decoded_again_where_files_can_change()
+    public void A_changed_file_is_decoded_again_where_its_source_says_so()
     {
         Write("beep.wav", Tone(4410));
-        var reloads = new AssetSoundLibrary(_assets) { Reloads = true };
-        var keeps = new AssetSoundLibrary(_assets);
+        using var watched = new WatchedAssetFolder(_assets);
+        using var reloads = new AssetSoundLibrary(watched);
+        using var keeps = new AssetSoundLibrary(new AssetFolder(_assets));
         Assert.Equal(4410, reloads.Load("Sounds/beep.wav")!.Frames);
         Assert.Equal(4410, keeps.Load("Sounds/beep.wav")!.Frames);
 
+        // The editor's files are watched: once the write has settled, the sound is decoded afresh. An exported game's are
+        // fixed, and nothing looks at them again.
+        var said = new ManualResetEventSlim();
+        watched.Changed += path => { if (path.EndsWith("beep.wav", StringComparison.Ordinal)) said.Set(); };
         Write("beep.wav", Tone(2205));
-        File.SetLastWriteTimeUtc(Path.Combine(_assets, "Sounds", "beep.wav"), DateTime.UtcNow.AddMinutes(1));
+        Assert.True(said.Wait(TimeSpan.FromSeconds(10)), "The watched folder never said the file changed.");
 
         Assert.Equal(2205, reloads.Load("Sounds/beep.wav")!.Frames);
         Assert.Equal(4410, keeps.Load("Sounds/beep.wav")!.Frames);
@@ -55,20 +61,20 @@ public sealed class AssetSoundLibraryTests : IDisposable
         File.WriteAllBytes(Path.Combine(_assets, "Sounds", "song.mp3"), [1, 2, 3]);
 
         // The browser's: decoded as the game starts, by its path in Assets.
-        var browser = new AssetSoundLibrary(_assets);
+        var browser = new AssetSoundLibrary(new AssetFolder(_assets));
         Assert.Null(browser.Load("Sounds/song.mp3"));
-        browser = new AssetSoundLibrary(_assets);
+        browser = new AssetSoundLibrary(new AssetFolder(_assets));
         browser.Decoded["Sounds/song.mp3"] = Tone(100);
         Assert.Equal(100, browser.Load("Sounds/song.mp3")!.Frames);
         Assert.Equal(100, browser.Stream("Sounds/song.mp3")!.Frames);
 
         // The desktop's: its own codec opens it, read as it plays; one it can't read plays as nothing.
         var opened = new List<string>();
-        var desktop = new AssetSoundLibrary(_assets) { OpenMp3 = path => { opened.Add(Path.GetFileName(path)); return Tone(300).Open(); } };
+        var desktop = new AssetSoundLibrary(new AssetFolder(_assets)) { OpenMp3 = path => { opened.Add(Path.GetFileName(path)); return Tone(300).Open(); } };
         Assert.Equal(300, desktop.Stream("Sounds/song.mp3")!.Frames);
         Assert.Equal(300, desktop.Load("Sounds/song.mp3")!.Frames);
         Assert.Equal(["song.mp3", "song.mp3"], opened);
-        var broken = new AssetSoundLibrary(_assets) { OpenMp3 = _ => throw new InvalidOperationException("Not an MP3.") };
+        var broken = new AssetSoundLibrary(new AssetFolder(_assets)) { OpenMp3 = _ => throw new InvalidOperationException("Not an MP3.") };
         Assert.Null(broken.Stream("Sounds/song.mp3"));
         Assert.Null(broken.Load("Sounds/song.mp3"));
     }
@@ -78,7 +84,7 @@ public sealed class AssetSoundLibraryTests : IDisposable
     {
         Write("beep.wav", Tone(Mixer.SampleRate / 10));
         var mixer = new Mixer();
-        var audio = new MixerAudio(mixer, new AssetSoundLibrary(_assets));
+        var audio = new MixerAudio(mixer, new AssetSoundLibrary(new AssetFolder(_assets)));
 
         audio.Play("Sounds/beep.wav");
         Assert.Equal(1, mixer.Playing);

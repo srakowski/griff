@@ -67,7 +67,7 @@ public sealed class MultiplayerGenreTests
 
         NetWorld.Keys(world.Client).SetKey(Key.Space, true);
         world.Client.Tick(NetWorld.Frame);
-        ((InputState)world.Client.Input).EndFrame();
+        world.Client.HostInput.EndFrame();
         world.Client.Tick(NetWorld.Frame);
         Assert.True(mine.Transform.Position.Y > ground, "the jump starts on the player's own machine straight away");
         NetWorld.Keys(world.Client).SetKey(Key.Space, false);

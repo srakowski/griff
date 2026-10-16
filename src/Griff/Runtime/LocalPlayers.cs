@@ -137,14 +137,12 @@ public sealed class LocalPlayers
     /// </summary>
     public IInput Input(int player, int playing)
     {
-        if (_game.Input is not InputState machine || player is < 1 or > Max)
-            return player == 1 ? _game.Input : _game.NoControls;
-        if (playing <= 1)
+        if (player is < 1 or > Max || playing <= 1)
             return player == 1 ? _game.Input : _game.NoControls;
         var (keys, pad) = DeviceOf(player, playing);
         if (keys == KeySet.None && pad < 0)
             return _game.NoControls;
-        var input = _inputs[player - 1] ??= new LocalPlayerInput(machine);
+        var input = _inputs[player - 1] ??= new LocalPlayerInput(_game.MachineInput);
         input.Use(keys, pad);
         return input;
     }
@@ -160,8 +158,8 @@ public sealed class LocalPlayers
     {
         if (player is < 1 or > Max)
             return (KeySet.None, -1);
-        var machine = _game.Input as InputState;
-        int Pad(int nth) => machine?.ConnectedGamepad(nth) ?? -1;
+        var machine = _game.MachineInput;
+        int Pad(int nth) => machine.ConnectedGamepad(nth);
         var chosen = Chosen(player);
         switch (chosen)
         {
@@ -180,7 +178,7 @@ public sealed class LocalPlayers
             return player == 1 ? (KeySet.All, Pad(0)) : (KeySet.None, -1);
         if (player > playing)
             return (KeySet.None, -1);
-        var pads = machine?.GamepadCount ?? 0;
+        var pads = machine.GamepadCount;
         // Everyone has a controller: the first player the keyboard as well.
         if (pads >= playing)
             return (player == 1 ? KeySet.All : KeySet.None, Pad(player - 1));
@@ -212,7 +210,7 @@ public sealed class LocalPlayers
             KeySet.Right => "Right keys (arrows)",
             _ => null,
         };
-        var gamepad = pad >= 0 && _game.Input is InputState machine ? $"Gamepad {Nth(machine, pad) + 1}" : null;
+        var gamepad = pad >= 0 ? $"Gamepad {Nth(_game.MachineInput, pad) + 1}" : null;
         return (keyboard, gamepad) switch
         {
             ({ } k, { } g) => $"{k} and {g}",

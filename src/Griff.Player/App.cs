@@ -46,7 +46,9 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         }
 
         var project = loaded.Project!;
-        var surface = new GameSurface { AssetRoot = project.AssetsPath };
+        // An exported game's files don't change while it plays: they're read once, never watched.
+        var assets = new Griff.Hosting.AssetFolder(project.AssetsPath);
+        var surface = new GameSurface { Assets = assets };
         var window = new Window
         {
             Title = project.Name,
@@ -78,7 +80,7 @@ public sealed class App(PlayerOptions options) : Application, IDisposable
         _sound = AudioOutput.Open(options.Mute);
         var game = loaded.NewGame(new GameHostOptions
         {
-            Audio = WindowsAudio.Create(_sound, project.AssetsPath),
+            Audio = WindowsAudio.Create(_sound, WindowsAudio.Library(assets)),
             // A smoke test's game stays on this machine and keeps its saves to itself.
             SaveData = smokeOutput is null ? new SaveData(SaveData.PlayerPath(project.Name)) : null,
             OverNetwork = smokeOutput is null,

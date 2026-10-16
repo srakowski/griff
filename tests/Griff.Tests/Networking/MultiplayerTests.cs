@@ -56,10 +56,10 @@ internal sealed class NetWorld
     private static void Tick(Game game)
     {
         game.Tick(Frame);
-        ((InputState)game.Input).EndFrame();
+        game.HostInput.EndFrame();
     }
 
-    public static InputState Keys(Game game) => (InputState)game.Input;
+    public static IHostInput Keys(Game game) => game.HostInput;
 }
 
 public sealed class MultiplayerTests
@@ -202,7 +202,7 @@ public sealed class MultiplayerTests
             var network = new MemoryNetwork();
             var hostKeys = new InputState();
             var host = new Game(Make(), hostKeys) { SceneName = "Arena", SceneLoader = _ => Make() };
-            void Tick(Game g) { g.Tick(random.NextDouble() * 0.05 + 0.002); ((InputState)g.Input).EndFrame(); }
+            void Tick(Game g) { g.Tick(random.NextDouble() * 0.05 + 0.002); g.HostInput.EndFrame(); }
             for (var i = 0; i < random.Next(1, 60); i++) Tick(host);
             host.Network.Host(network.Open(7777));
             var client = new Game(Make(), new InputState()) { SceneName = "Arena", SceneLoader = _ => Make() };

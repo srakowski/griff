@@ -243,10 +243,93 @@ public interface IInput
 }
 
 /// <summary>
-/// Input state fed by a platform backend: call <see cref="SetKey"/>/<see cref="SetMouseButton"/> as events
-/// arrive and <see cref="EndFrame"/> after each game tick. The game calls <see cref="BeginFrame"/> at the start of each.
+/// A game's input as its host drives it (<see cref="Game.HostInput"/>), where <see cref="IInput"/> is what the game reads:
+/// what the keyboard, mouse, touch screen and controllers do, as they do it; its frames; the project's controls; the
+/// player's rebinding, kept in the game's saves; and what the game asks of the host back (the controllers' rumble, the
+/// pointer, holding the mouse). A platform feeds this and nothing else, so a new one's input keeps the actions, rebinding
+/// and local players every other has: <see cref="InputState"/> does those once, for all of them.
 /// </summary>
-public sealed class InputState : IInput
+public interface IHostInput : IInput
+{
+    /// <summary>Starts a step: what changed since the last is seen from now on (the game calls it).</summary>
+    void BeginFrame(float realSeconds);
+
+    /// <summary>Ends a step: "pressed" and "released" are over, and the frame's typing, scrolling and mouse movement.</summary>
+    void EndFrame();
+
+    /// <summary>Plays with the project's controls: its own actions and the built-in ones it changed.</summary>
+    void UseControls(IReadOnlyDictionary<string, IReadOnlyList<InputBinding>> controls);
+
+    /// <summary>Keeps the player's rebinding (<see cref="IInput.Rebind"/>) in <paramref name="saveData"/>, and plays with what's there.</summary>
+    void UseSaveData(SaveData saveData);
+
+    /// <summary>A key went down or up.</summary>
+    void SetKey(Key key, bool down);
+
+    /// <summary>A mouse button went down or up.</summary>
+    void SetMouseButton(MouseButton button, bool down);
+
+    /// <summary>The real mouse moved (so the keyboard and mouse are what's being played with).</summary>
+    void MouseMoved();
+
+    /// <summary>The mouse moved this many pixels (right and up positive), for <see cref="IInput.MouseDelta"/>.</summary>
+    void AddMouseDelta(Vector2 pixels);
+
+    /// <summary>The wheel turned this many notches.</summary>
+    void AddScroll(float notches);
+
+    /// <summary>Characters were typed.</summary>
+    void AddText(string text);
+
+    /// <summary>Backspace was pressed (or repeated).</summary>
+    void TypeBackspace();
+
+    /// <summary>Everything held is let go (the game lost the keyboard).</summary>
+    void ReleaseAll();
+
+    /// <summary>Where the mouse is in the world, which the host works out through the camera.</summary>
+    new Vector2 MouseWorld { get; set; }
+
+    /// <summary>Whether the mouse is over the game's view.</summary>
+    new bool IsMouseInView { get; set; }
+
+    /// <summary>Whether the host holds the mouse for the game (see <see cref="IInput.WantsMouseLock"/>).</summary>
+    new bool IsMouseLocked { get; set; }
+
+    /// <summary>
+    /// A finger at <paramref name="at"/>, down or lifted: in the world, or with <paramref name="onScreen"/> on the view (-1..1
+    /// across it), put in the world by <see cref="PlaceTouches"/>.
+    /// </summary>
+    void SetTouch(int id, Vector2 at, bool down, bool onScreen = false);
+
+    /// <summary>Puts the fingers given on the screen in the world, through <paramref name="toWorld"/> (the view as it is now).</summary>
+    void PlaceTouches(Func<Vector2, Vector2> toWorld);
+
+    /// <summary>Controller <paramref name="index"/> this frame: what's held, its sticks and triggers (0..1).</summary>
+    void SetGamepad(int index, IEnumerable<GamepadButton> down, Vector2 leftStick, Vector2 rightStick, float leftTrigger = 0, float rightTrigger = 0);
+
+    /// <summary>Controller <paramref name="index"/> was plugged in or pulled out.</summary>
+    void SetGamepadConnected(int index, bool connected);
+
+    /// <summary>Holds (or lets go of) one button on controller <paramref name="index"/>, leaving the rest as they are.</summary>
+    void HoldGamepadButton(int index, GamepadButton button, bool down);
+
+    /// <summary>How hard the controllers should be shaking now, 0..1 (the strongest).</summary>
+    float RumbleStrength { get; }
+
+    /// <summary>How hard controller <paramref name="index"/> should be shaking now, 0..1.</summary>
+    float RumbleStrengthOf(int index);
+
+    /// <summary>Stops every controller shaking (the game stopped or paused).</summary>
+    void StopRumble();
+}
+
+/// <summary>
+/// The input every host feeds (<see cref="IHostInput"/>) and every game reads (<see cref="IInput"/>): call
+/// <see cref="SetKey"/>/<see cref="SetMouseButton"/> as events arrive and <see cref="EndFrame"/> after each game tick. The
+/// game calls <see cref="BeginFrame"/> at the start of each.
+/// </summary>
+public sealed class InputState : IHostInput
 {
     /// <summary>Where the player's <see cref="Rebind"/> choices are kept in <see cref="SaveData"/>.</summary>
     public const string BindingsSaveKey = "griff.bindings";

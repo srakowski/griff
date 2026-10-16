@@ -144,7 +144,10 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   and a stall (a page hidden in a background tab stops drawing) is left out of its clock, so the music doesn't jump.
   Sounds are read by the desktop's own library (`AssetSoundLibrary`): WAV and OGG decoded by .NET (NVorbis), MP3 by the
   browser as the game starts (Windows decodes it with its own codec). Music in WAV or OGG is read as it plays: decoded whole as it starts, a few minutes of Griff's
-  synth music held up that frame by some 60 ms and left megabytes for the garbage collector.
+  synth music held up that frame by some 60 ms and left megabytes for the garbage collector. Images, fonts and sounds are
+  found among the files fetched as the page opened (`PreloadedAssets`), never looked for again; a desktop export's are
+  read from its folder when first wanted (`AssetFolder`) and never watched, as only the editor's files change while a game
+  plays.
 - **Input comes from DOM events**: keys by `KeyboardEvent.code` (where the key is, as Griff's keys are on Windows; the
   page keeps the ones the game takes, so the arrows don't scroll it, and leaves the browser its F keys and Ctrl
   shortcuts), typed text, pointer events for the mouse and touch (its position in the world through the last frame's

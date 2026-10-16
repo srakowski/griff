@@ -26,7 +26,8 @@ public static class FontChoices
         choices.Add(new NameChoice(builtIn.Name, "built in", Safe));
         usable.Add(builtIn.Name);
 
-        var files = new ProjectFonts(assetRoot).Files();
+        using var fonts = new ProjectFonts(assetRoot is null ? null : new Hosting.AssetFolder(assetRoot));
+        var files = fonts.Files();
         foreach (var free in FreeFonts.All)
         {
             var added = files.Contains(free.AssetPath, StringComparer.OrdinalIgnoreCase);

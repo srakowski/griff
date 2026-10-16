@@ -1,4 +1,5 @@
 using Griff.Fonts;
+using Griff.Hosting;
 using Griff.Scenes;
 
 namespace Griff.Tests.Fonts;
@@ -141,7 +142,9 @@ public sealed class GlyphAtlasTests : IDisposable
     [Fact]
     public void FontFiles_InAssets_AreUsed_AndReadAgainWhenTheyChange()
     {
-        var atlas = new GlyphAtlas(_assets);
+        // The editor's Assets, which it's told the changes to.
+        using var assets = new WatchedAssetFolder(_assets);
+        using var atlas = new GlyphAtlas(assets);
         Assert.Same(BuiltInFonts.Default.Face, atlas.Fonts.FaceFor("Fonts/missing.ttf"));
         Assert.Same(BuiltInFonts.Default.Face, atlas.Fonts.FaceFor(null));
         Assert.Same(BuiltInFonts.Default.Face, atlas.Fonts.FaceFor("  "));
@@ -155,11 +158,16 @@ public sealed class GlyphAtlasTests : IDisposable
         // It hasn't got plain Latin letters (it's the fallback's subset): those come from the built-in font.
         Assert.Equal(1, atlas.Lay("A", "Fonts/wide.ttf", TextAlign.Left).Length);
 
-        // A file that isn't a font draws in the built-in font, once it's noticed (at most a second later).
+        // A file that isn't a font draws in the built-in font, once the source says it changed.
         File.WriteAllText(Path.Combine(_assets, "Fonts", "wide.ttf"), "not a font");
-        File.SetLastWriteTimeUtc(Path.Combine(_assets, "Fonts", "wide.ttf"), DateTime.UtcNow.AddMinutes(1));
-        Thread.Sleep(1100);
-        Assert.True(atlas.RefreshChanged());
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!atlas.RefreshChanged())
+        {
+            Assert.True(waited.Elapsed < TimeSpan.FromSeconds(10), "The font's change was never said.");
+            Thread.Sleep(20);
+        }
+
+
         Assert.Null(atlas.Fonts.Project.Find("Fonts/wide.ttf"));
         Assert.Same(BuiltInFonts.Default.Face, atlas.Fonts.FaceFor("Fonts/wide.ttf"));
     }

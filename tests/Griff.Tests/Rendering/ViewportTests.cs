@@ -231,7 +231,7 @@ public sealed class ViewportTests
     public void TheMouse_IsReadThroughAViewportsCamera()
     {
         var game = SplitScreen();
-        var input = (InputState)game.Input;
+        var input = game.HostInput;
         var main = game.Scene.Entities.First(e => e.Name == "Main Camera");
         var right = game.Scene.Entities.First(e => e.Name == "Right Camera");
         game.Tick(1 / 60.0);

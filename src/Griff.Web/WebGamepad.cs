@@ -25,7 +25,7 @@ public static class WebGamepad
     /// <paramref name="pressed"/> is <c>buttons[n].pressed</c>), the sticks (the browser's axes 0 to 3, up negative) and the
     /// triggers (<c>buttons[6].value</c> and <c>buttons[7].value</c>, 0 to 1).
     /// </summary>
-    public static void Apply(InputState input, int index, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY,
+    public static void Apply(IHostInput input, int index, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY,
         double leftTrigger, double rightTrigger)
     {
         input.SetGamepadConnected(index, connected);
@@ -45,8 +45,8 @@ public static class WebGamepad
         input.SetGamepad(index, down, Stick(leftX, leftY), Stick(rightX, rightY), Unit(leftTrigger), Unit(rightTrigger));
     }
 
-    /// <summary>As <see cref="Apply(InputState, int, bool, int, double, double, double, double, double, double)"/> for the first controller.</summary>
-    public static void Apply(InputState input, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY,
+    /// <summary>As <see cref="Apply(IHostInput, int, bool, int, double, double, double, double, double, double)"/> for the first controller.</summary>
+    public static void Apply(IHostInput input, bool connected, int pressed, double leftX, double leftY, double rightX, double rightY,
         double leftTrigger, double rightTrigger) =>
         Apply(input, 0, connected, pressed, leftX, leftY, rightX, rightY, leftTrigger, rightTrigger);
 

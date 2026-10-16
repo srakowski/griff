@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Numerics;
-using Griff.Debugging;
 using Griff.Rendering;
 using Griff.Runtime;
 
@@ -44,7 +43,8 @@ public readonly record struct GameLoopTimes(long Steps, double StepMilliseconds,
 /// Plays a <see cref="Game"/> a frame of the screen at a time, the same for every host: the steps the frame's time holds
 /// (<see cref="Game.Advance"/>), its picture built between the last two and drawn on the host's <see cref="IGameView"/>,
 /// its sound pumped (<see cref="IFrameSound"/>), the save's picture taken when a game asks for one, and an error that ends a
-/// frame caught, the game paused on it (or held where it was thrown by the editor's debugger, <see cref="ScriptProbes"/>).
+/// frame caught, the game paused on it (or held where it was thrown by an extension the host added: the editor's debugger, see
+/// <see cref="IGameLoopExtension"/>).
 /// It has no UI of its own: the host calls <see cref="Frame"/> as its screen shows one (the desktop's compositor, the
 /// browser's <c>requestAnimationFrame</c>, a dedicated server's timer, <see cref="Run"/>) and feeds <see cref="Input"/>
 /// from its keyboard, mouse, touch and controllers.
@@ -52,6 +52,7 @@ public readonly record struct GameLoopTimes(long Steps, double StepMilliseconds,
 public sealed class GameLoop
 {
     private readonly IFrameSound? _sound;
+    private readonly List<IGameLoopExtension> _extensions = [];
     private RenderFrame? _lastFrame;
     private Vector2 _pointer;
     private bool _isPaused, _drawFaulted, _shownAny;
@@ -63,13 +64,13 @@ public sealed class GameLoop
     [ThreadStatic]
     private static GameLoop? t_running;
 
-    /// <param name="game">The game it plays, made by its host (<see cref="LoadedGame.NewGame"/>), reading an <see cref="InputState"/>.</param>
+    /// <param name="game">The game it plays, made by its host (<see cref="LoadedGame.NewGame"/>).</param>
     /// <param name="view">What it's drawn on; none for a game nobody watches (a dedicated server), whose picture isn't built.</param>
     /// <param name="sound">Sound the host plays a frame at a time, if it does.</param>
     public GameLoop(Game game, IGameView? view = null, IFrameSound? sound = null)
     {
         Game = game;
-        Input = game.Input as InputState ?? throw new ArgumentException("The game reads input a host can't feed: make it with an InputState.", nameof(game));
+        Input = game.HostInput;
         View = view;
         _sound = sound;
     }
@@ -88,15 +89,15 @@ public sealed class GameLoop
 
     /// <summary>
     /// Raised when gameplay code throws, ending the frame. The game pauses so the error can be fixed (unless the editor's
-    /// debugger held it where it was thrown and let it play on: see <see cref="ScriptProbes.Fault"/>).
+    /// debugger held it where it was thrown and let it play on: see <see cref="IGameLoopExtension.Fault"/>).
     /// </summary>
     public event EventHandler<Exception>? Faulted;
 
     /// <summary>The game it plays.</summary>
     public Game Game { get; }
 
-    /// <summary>The game's input, which the host feeds.</summary>
-    public InputState Input { get; }
+    /// <summary>The game's input as the host drives it (<see cref="Game.HostInput"/>).</summary>
+    public IHostInput Input { get; }
 
     /// <summary>What it's drawn on, if anything.</summary>
     public IGameView? View { get; }
@@ -106,7 +107,7 @@ public sealed class GameLoop
 
     /// <summary>
     /// The loop whose game is taking its steps or building its picture on this thread right now, if any: what a breakpoint
-    /// reached in it stops (see <see cref="ScriptProbes"/>), rather than code the editor runs between frames.
+    /// reached in it stops (the editor's debugger), rather than code the editor runs between frames.
     /// </summary>
     public static GameLoop? Running => t_running;
 
@@ -125,14 +126,17 @@ public sealed class GameLoop
         }
     }
 
-    /// <summary>
-    /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
-    /// (and over the view) rather than wherever the real one is. The real mouse moving (<see cref="PointAt"/>) clears it.
-    /// </summary>
-    public Vector2? PointerOverride { get; set; }
-
     /// <summary>Asked before each frame's steps: the host reads what it polls (controllers, a held mouse).</summary>
     public Action? BeforeSteps { get; set; }
+
+    /// <summary>What the host added to watch or steer the frames (the editor's debugger and playtest pointer); none in a shipped game.</summary>
+    public IReadOnlyList<IGameLoopExtension> Extensions => _extensions;
+
+    /// <summary>Adds <paramref name="extension"/>, asked from the next frame on.</summary>
+    public void Add(IGameLoopExtension extension) => _extensions.Add(extension);
+
+    /// <summary>Takes <paramref name="extension"/> away.</summary>
+    public void Remove(IGameLoopExtension extension) => _extensions.Remove(extension);
 
     public void Start()
     {
@@ -157,7 +161,12 @@ public sealed class GameLoop
     public void PointAt(Vector2 ndc)
     {
         if (ndc != _pointer)
+        {
             Input.MouseMoved();
+            foreach (var extension in _extensions)
+                extension.PointerMoved(this);
+        }
+
         _pointer = ndc;
         Input.IsMouseInView = true;
     }
@@ -257,11 +266,11 @@ public sealed class GameLoop
         var steps = Game.Time.Frame;
         var (allocated, collections) = (Workers.AllocatedBytes(), GC.CollectionCount(0));
         var started = Stopwatch.GetTimestamp();
-        var breaks = ScriptProbes.Breaks;
+        var breaks = Holds();
         TakeSteps(stepOnce: false, seconds);
         var stepped = Stopwatch.GetTimestamp();
         // A frame held at a breakpoint isn't timed: it took as long as someone looked at it.
-        if (ScriptProbes.Breaks != breaks || !IsRunning)
+        if (Holds() != breaks || !IsRunning)
         {
             Draw();
             return;
@@ -270,7 +279,7 @@ public sealed class GameLoop
         // Building the picture times its own parts (what each kind of thing drawn costs: see FrameCostKind.Build).
         Draw(out var built, out var builtAllocated);
         var drawn = Stopwatch.GetTimestamp();
-        if (ScriptProbes.Breaks != breaks)
+        if (Holds() != breaks)
             return;
         profiler.AddCost("Draw", FrameCostKind.Picture, drawn - built, Workers.AllocatedBytes() - builtAllocated);
         profiler.Add(new FrameSample((float)(seconds * 1000), (float)Milliseconds(started, stepped), (float)Milliseconds(stepped, built),
@@ -282,7 +291,7 @@ public sealed class GameLoop
     private void TakeSteps(bool stepOnce, double seconds)
     {
         var steps = Game.Time.Frame;
-        var breaks = ScriptProbes.Breaks;
+        var breaks = Holds();
         var outer = t_running;
         t_running = this;
         var started = Stopwatch.GetTimestamp();
@@ -297,17 +306,13 @@ public sealed class GameLoop
             else
                 Game.Advance(seconds);
         }
-        catch (ScriptAbortedException)
-        {
-            // Stopped (or rewound) at a breakpoint: this game is gone, and nothing went wrong in it.
-        }
         catch (Exception ex) when (Hold(ex) is var held)
         {
-            // Held where it was thrown and stopped or rewound meanwhile, the game's gone; let go, it stays paused or plays on as
-            // it was left, and the frame ends here.
-            if (held != ScriptFaultHold.Abandoned)
+            // Held where it was thrown and stopped or rewound meanwhile (or stopped at a breakpoint), the game's gone and nothing
+            // went wrong in it; let go, it stays paused or plays on as it was left, and the frame ends here.
+            if (held != FaultHold.Abandoned)
             {
-                if (held == ScriptFaultHold.NotHeld)
+                if (held == FaultHold.NotHeld)
                     IsPaused = true;
                 Faulted?.Invoke(this, ex);
             }
@@ -317,7 +322,7 @@ public sealed class GameLoop
             t_running = outer;
             if (stepOnce)
                 Input.EndFrame();
-            if (ScriptProbes.Breaks != breaks)
+            if (Holds() != breaks)
                 _heldUntil = Stopwatch.GetTimestamp();
         }
 
@@ -337,19 +342,34 @@ public sealed class GameLoop
     }
 
     // The game's frame is ending with an exception nothing in it caught: asked before anything unwinds (from the catch's
-    // filter), so the editor's debugger can hold the game at the line of script that threw, as at a breakpoint.
-    private static ScriptFaultHold Hold(Exception exception)
+    // filter), so an extension (the editor's debugger) can hold the game at the line of script that threw, as at a breakpoint.
+    private FaultHold Hold(Exception exception)
     {
         try
         {
-            return ScriptProbes.Fault(exception);
+            foreach (var extension in _extensions)
+            {
+                if (extension.Fault(this, exception) is not FaultHold.NotHeld and var held)
+                    return held;
+            }
+
+            return FaultHold.NotHeld;
         }
 #pragma warning disable CA1031 // Something went wrong holding it: the game pauses on the error as it would anyway.
         catch (Exception)
 #pragma warning restore CA1031
         {
-            return ScriptFaultHold.NotHeld;
+            return FaultHold.NotHeld;
         }
+    }
+
+    // How many times the extensions have held the game so far (see IGameLoopExtension.Holds).
+    private long Holds()
+    {
+        var holds = 0L;
+        foreach (var extension in _extensions)
+            holds += extension.Holds;
+        return holds;
     }
 
     // A script's Draw (a drawable component or a system) can throw like its Update can: the game stops the same way, once,
@@ -381,24 +401,17 @@ public sealed class GameLoop
         {
             frame = SceneRenderer.Build(Game, view.Aspect, recycle: _lastFrame);
         }
-        catch (ScriptAbortedException)
+        // Held only the first time in a row it fails (a paused game is drawn again every frame). Stopped or rewound while it
+        // was held (or at a breakpoint), the game's gone and nothing went wrong in it.
+        catch (Exception ex) when ((_drawFaulted ? FaultHold.NotHeld : Hold(ex)) is var held)
         {
             (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            return;
-        }
-        // Held only the first time in a row it fails (a paused game is drawn again every frame).
-        catch (Exception ex) when ((_drawFaulted ? ScriptFaultHold.NotHeld : Hold(ex)) is var held)
-        {
-            (built, allocated) = (Stopwatch.GetTimestamp(), Workers.AllocatedBytes());
-            if (!_drawFaulted)
+            if (!_drawFaulted && held != FaultHold.Abandoned)
             {
                 _drawFaulted = true;
-                if (held != ScriptFaultHold.Abandoned)
-                {
-                    if (held == ScriptFaultHold.NotHeld)
-                        IsPaused = true;
-                    Faulted?.Invoke(this, ex);
-                }
+                if (held == FaultHold.NotHeld)
+                    IsPaused = true;
+                Faulted?.Invoke(this, ex);
             }
 
             return;
@@ -456,24 +469,19 @@ public sealed class GameLoop
         _times = _times with { SoundMilliseconds = _times.SoundMilliseconds + Milliseconds(started, Stopwatch.GetTimestamp()) };
     }
 
-    // The mouse and the fingers in the world, through the last frame's camera (or where an agent points).
+    // The mouse and the fingers in the world, through the last frame's camera; then what the extensions set (where an agent
+    // points).
     private void PlacePointer()
     {
-        var inverse = Matrix4x4.Identity;
-        var known = _lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out inverse);
-        if (known)
+        if (_lastFrame is not null && Matrix4x4.Invert(_lastFrame.ViewProjection, out var inverse))
+        {
             PlaceTouches(inverse);
-        if (PointerOverride is { } pointed)
-        {
-            (Input.MouseWorld, Input.IsMouseInView) = (pointed, true);
-            return;
-        }
-
-        if (known)
-        {
             var world = Vector4.Transform(new Vector4(_pointer, 0, 1), inverse);
             Input.MouseWorld = new Vector2(world.X, world.Y) / world.W;
         }
+
+        foreach (var extension in _extensions)
+            extension.BeforeSteps(this);
     }
 
     private void PlaceTouches(Matrix4x4 inverse)

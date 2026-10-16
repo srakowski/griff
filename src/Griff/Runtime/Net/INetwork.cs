@@ -74,6 +74,13 @@ public interface INetwork : IGameService
     /// </summary>
     bool OverNetwork { get; set; }
 
+    /// <summary>
+    /// What hosting and joining open their sockets with and find a typed address by: UDP (<see cref="UdpTransport"/>) unless
+    /// the host hands another (<see cref="GameHostOptions.Transport"/>), so a platform with its own way to reach other
+    /// machines (a browser's) is one more <see cref="INetTransport"/>.
+    /// </summary>
+    INetTransport Transport { get; set; }
+
     /// <summary>Pretend network trouble (lag, lost packets) on what this machine sends, to try the game on a bad connection.</summary>
     NetConditions FakeLag { get; set; }
 

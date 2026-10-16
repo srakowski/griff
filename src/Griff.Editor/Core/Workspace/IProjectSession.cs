@@ -15,6 +15,12 @@ public interface IProjectSession : INotifyPropertyChanged
 {
     Project? Project { get; }
 
+    /// <summary>
+    /// The open project's Assets as games played and drawn in the editor read them: watched, so a file saved while a game plays
+    /// (a sprite from a paint program, a sound from the Sound Maker) is drawn and heard again. Null with no project open.
+    /// </summary>
+    Griff.Hosting.IAssetSource? Assets { get; }
+
     ComponentRegistry Components { get; }
 
     SceneSerializer Serializer { get; }

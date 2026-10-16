@@ -52,7 +52,7 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
 
     public void ReleaseAll(Game? game)
     {
-        if (game?.Input is InputState input)
+        if (game?.HostInput is { } input)
         {
             foreach (var key in _down)
                 input.SetKey(key, false);
@@ -64,7 +64,7 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
     /// <summary>Sets the keys for the next tick.</summary>
     public void Step(Game game)
     {
-        if (game.Input is not InputState input)
+        if (game.HostInput is not { } input)
             return;
 
         var now = game.Time.Total;
@@ -208,7 +208,7 @@ internal sealed class DemoPilotBrain(Action<string>? showKeys)
         return best;
     }
 
-    private void Set(InputState input, Key key, bool down)
+    private void Set(IHostInput input, Key key, bool down)
     {
         if (down == input.IsDown(key) && down == _down.Contains(key))
             return;

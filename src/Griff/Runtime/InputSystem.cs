@@ -11,7 +11,7 @@ internal sealed class InputSystem : GameSystem
 
     internal void ReadInput()
     {
-        (Game.Input as InputState)?.BeginFrame(Game.Time.UnscaledDelta);
+        Game.HostInput.BeginFrame(Game.Time.UnscaledDelta);
         Game.LocalPlayers.Update(Game.Scene);
     }
 }

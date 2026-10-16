@@ -1,4 +1,5 @@
 using System.Numerics;
+using Griff.Hosting;
 using Griff.Scenes;
 
 namespace Griff.Fonts;
@@ -35,7 +36,7 @@ public readonly record struct GlyphQuad(float Left, float Top, float Right, floa
 /// Windows' own fonts on the player's computer (Chinese, Japanese, Korean, emoji...; see
 /// <see cref="InstalledFonts.Fallback"/>), and is drawn as the font's missing-glyph box if none has it.
 /// </remarks>
-public sealed class GlyphAtlas
+public sealed class GlyphAtlas : IDisposable
 {
     /// <summary>Pages the atlas grows to before it starts again from nothing (between frames).</summary>
     public const int MaxPages = 8;
@@ -48,11 +49,11 @@ public sealed class GlyphAtlas
     private readonly Dictionary<(int Face, int Left, int Right), float> _kerning = [];
     private GlyphQuad[] _quads = new GlyphQuad[64];
 
-    /// <param name="assetRoot">The project's Assets folder, which font files are found in; null for none.</param>
+    /// <param name="assets">The game's files, which font files are found in; null for none.</param>
     /// <param name="installedFallback">See <see cref="InstalledFallback"/>.</param>
-    public GlyphAtlas(string? assetRoot, bool installedFallback = true)
+    public GlyphAtlas(IAssetSource? assets, bool installedFallback = true)
     {
-        Fonts = new FontCatalog(assetRoot);
+        Fonts = new FontCatalog(assets);
         InstalledFallback = installedFallback;
     }
 
@@ -167,10 +168,13 @@ public sealed class GlyphAtlas
     }
 
     /// <summary>
-    /// Reads again the font files that changed (checked at most once a second), so editing a font updates the running
-    /// game. True if one did.
+    /// Reads again the font files its source said changed, so editing a font updates the game running in the editor. True
+    /// if one did.
     /// </summary>
     public bool RefreshChanged() => Fonts.RefreshChanged();
+
+    /// <summary>Stops hearing of its files' changes.</summary>
+    public void Dispose() => Fonts.Dispose();
 
     /// <summary>
     /// Called once a frame, after drawing it: an atlas that has grown past <see cref="MaxPages"/> starts again from nothing,

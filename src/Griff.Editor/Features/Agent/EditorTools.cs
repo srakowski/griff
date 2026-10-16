@@ -201,7 +201,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
         {
             if (sceneDocuments.Scene is not { } document || projectSession.Project is not { } project)
                 throw new AgentException("No scene is open.");
-            play.Surface.AssetRoot = project.AssetsPath; // Set by Play; a picture outside play needs it too.
+            play.Surface.Assets = projectSession.Assets; // Set by Play; a picture outside play needs it too.
             bitmap = await WithTabAsync(editorWindow, editorWindow.GameTab!, () =>
             {
                 var aspect = play.Surface.Aspect;
@@ -314,7 +314,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
         var player = args.TryGet("player", out var which) && which.ValueKind == JsonValueKind.Number ? which.GetInt32() : 1;
         if (play.Game is null)
             throw new AgentException("The game isn't running. Start it with Game_Play.");
-        if (play.PlayerGame(player) is not { } game || game.Input is not InputState input)
+        if (play.PlayerGame(player) is not { } game || game.HostInput is not { } input)
             throw new AgentException($"There's no player {player}: Play with Players (Game_PlayWith2) starts the others.");
         if (player != 1 && (args.TryGet("steps", out var all) ? all.EnumerateArray().Any(UsesMouse) : UsesMouse(args.Root)))
             throw new AgentException("The mouse is player 1's: another player's steps can hold and tap keys, and wait.");
@@ -368,7 +368,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
         return false;
     }
 
-    private async Task<ToolResult> PlayStepsAsync(Griff.Runtime.Game game, InputState input, List<JsonElement> steps, ToolArgs args,
+    private async Task<ToolResult> PlayStepsAsync(Griff.Runtime.Game game, IHostInput input, List<JsonElement> steps, ToolArgs args,
         StringBuilder log, double startTime, Dictionary<string, bool> flags)
     {
         foreach (var step in steps)
@@ -469,7 +469,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
     private bool _usedMouse;
 
     // A "point", "click", "drag", "scroll" or "touch" step, played with the mouse (or fingers) where it says; false for any other step.
-    private async Task<bool> MouseStepAsync(Griff.Runtime.Game game, InputState input, JsonElement step)
+    private async Task<bool> MouseStepAsync(Griff.Runtime.Game game, IHostInput input, JsonElement step)
     {
         if (step.ValueKind != JsonValueKind.Object)
             return false;
@@ -568,7 +568,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
     // The ids of an agent's fingers on the touch screen, well clear of a real one's.
     private const int AgentFingers = 1 << 20;
 
-    private static List<Press> Keys(JsonElement step, string name, InputState input)
+    private static List<Press> Keys(JsonElement step, string name, IHostInput input)
     {
         if (step.ValueKind != JsonValueKind.Object || !step.TryGetProperty(name, out var value))
             return [];
@@ -592,7 +592,7 @@ public sealed class EditorTools(IProjectSession projectSession, ISceneDocuments 
     // A key, or a button on one of the controllers, held or let go.
     private readonly record struct Press(Key? Key, int Pad, GamepadButton Button)
     {
-        public void Set(InputState input, bool down)
+        public void Set(IHostInput input, bool down)
         {
             if (Key is { } key)
                 input.SetKey(key, down);

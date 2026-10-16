@@ -25,9 +25,9 @@ public static class XInputGamepad
 
     /// <summary>
     /// Copies each controller's state into <paramref name="input"/> (up to four, each its own, for players at one machine)
-    /// and shakes each as hard as it asks (<see cref="InputState.RumbleStrengthOf"/>). No controller means nothing pressed.
+    /// and shakes each as hard as it asks (<see cref="IHostInput.RumbleStrengthOf"/>). No controller means nothing pressed.
     /// </summary>
-    public static void Poll(InputState input)
+    public static void Poll(IHostInput input)
     {
         if (_unavailable)
             return;

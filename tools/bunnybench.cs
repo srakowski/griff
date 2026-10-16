@@ -1,5 +1,6 @@
 #:project ../src/Griff.Scripting/Griff.Scripting.csproj
-#:project ../src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj
+#:project ../src/Griff.Platform.Windows/Griff.Platform.Windows.csproj
+#:property TargetFramework=net10.0-windows
 #:property PublishAot=false
 #:property AllowUnsafeBlocks=true
 
@@ -24,6 +25,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using Griff.Graphics;
+using Griff.Platform.Windows;
 using Griff.Input;
 using Griff.Projects;
 using Griff.Rendering;

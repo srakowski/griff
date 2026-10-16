@@ -19,6 +19,41 @@ public interface INetSocket : IDisposable
     void Broadcast(int port, ReadOnlySpan<byte> datagram);
 }
 
+/// <summary>
+/// What a game's network play goes over: it makes the sockets hosting and joining use and finds the address a player
+/// types. UDP (<see cref="UdpTransport"/>) unless the host hands another (<see cref="Runtime.GameHostOptions.Transport"/>):
+/// a <see cref="MemoryNetwork"/> in tests, or a browser's own, which is one more of these.
+/// </summary>
+public interface INetTransport
+{
+    /// <summary>
+    /// A socket at <paramref name="port"/> (0 picks any free one, for joining). <paramref name="loopbackOnly"/>: reachable
+    /// only from this machine (see <see cref="Runtime.INetwork.OverNetwork"/>).
+    /// </summary>
+    INetSocket Open(int port, bool loopbackOnly);
+
+    /// <summary>
+    /// Where "192.168.1.5", "my-pc" or "my-pc:7777" is, with <paramref name="defaultPort"/> when it names none; null if it
+    /// can't be found.
+    /// </summary>
+    EndPoint? Resolve(string? address, int defaultPort);
+}
+
+/// <summary>Network play over UDP (IPv4), as the desktop player and the editor play: <see cref="UdpNetSocket"/>s.</summary>
+public sealed class UdpTransport : INetTransport
+{
+    /// <summary>The one there is: it keeps nothing.</summary>
+    public static UdpTransport Instance { get; } = new();
+
+    private UdpTransport()
+    {
+    }
+
+    public INetSocket Open(int port, bool loopbackOnly) => new UdpNetSocket(port, loopbackOnly);
+
+    public EndPoint? Resolve(string? address, int defaultPort) => UdpNetSocket.Resolve(address, defaultPort);
+}
+
 /// <summary>A UDP socket for playing over a network (IPv4).</summary>
 public sealed class UdpNetSocket : INetSocket
 {
@@ -145,7 +180,7 @@ public sealed class UdpNetSocket : INetSocket
 /// A pretend network inside one process: sockets made from it talk to each other instantly and reliably, unless
 /// <see cref="Filter"/> drops datagrams. For tests, and for extra players in the editor's own window.
 /// </summary>
-public sealed class MemoryNetwork
+public sealed class MemoryNetwork : INetTransport
 {
     private readonly Dictionary<EndPoint, MemorySocket> _sockets = [];
     private int _nextPort = 50000;
@@ -172,6 +207,18 @@ public sealed class MemoryNetwork
             _sockets.Add(endPoint, socket);
             return socket;
         }
+    }
+
+    /// <summary>A socket on this network (all of it is this machine's).</summary>
+    INetSocket INetTransport.Open(int port, bool loopbackOnly) => Open(port);
+
+    /// <summary>Where an address is on this network: every machine is this one, so only its port counts ("my-pc:7777").</summary>
+    public EndPoint? Resolve(string? address, int defaultPort)
+    {
+        var text = (address ?? "").Trim();
+        var colon = text.LastIndexOf(':');
+        var port = colon >= 0 && int.TryParse(text[(colon + 1)..], out var given) && given is > 0 and < 65536 ? given : defaultPort;
+        return new IPEndPoint(IPAddress.Loopback, port);
     }
 
     private void Deliver(EndPoint from, EndPoint to, ReadOnlySpan<byte> datagram)

@@ -31,6 +31,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private readonly IStatusService _status;
     private readonly ILogger<PlayMode> _logger;
     private GameRunner? _runner;
+    private PlaytestPointer? _pointer;
     private SceneDocument? _runtime;
     private Timeline? _timeline;
     private int _position;
@@ -169,8 +170,8 @@ public sealed class PlayMode : ObservableObject, IDisposable
     /// </summary>
     internal void PointAt(System.Numerics.Vector2? world)
     {
-        if (_runner is not null)
-            _runner.PointerOverride = world;
+        if (_pointer is not null)
+            _pointer.At = world;
     }
 
     /// <summary>Player <paramref name="number"/>'s game (1 is the Game tab's), for diagnostics.</summary>
@@ -270,7 +271,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         if (selectedId is { } id)
             _selection.Select(copy.Find(id));
 
-        Surface.AssetRoot = project.AssetsPath;
+        Surface.Assets = _projectSession.Assets;
         // A big scene is snapshotted less often: copying one out costs a step half a millisecond on average at most (a
         // Debug editor copies 20,000 BunnyMark bunnies out in under 3 ms, so ten times a second).
         _timeline = new Timeline(_projectSession.Serializer) { CostPerStep = TimeSpan.FromMilliseconds(0.5), RememberBudget = RememberBudget };
@@ -457,7 +458,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
         var project = _projectSession.Project!;
         var game = Loaded(project, scene).NewGame(new GameHostOptions
         {
-            Audio = WindowsAudio.Create(_sound, project.AssetsPath),
+            Audio = WindowsAudio.Create(_sound, Sounds()),
             SaveData = new SaveData(SaveData.EditorPath(project.RootPath)),
             // Played in the editor's window, a game can host and join over the network (to try it with another computer);
             // with no window (tests) it stays on this machine.
@@ -475,6 +476,10 @@ public sealed class PlayMode : ObservableObject, IDisposable
 
         // Keys come from the whole window (or, with no window, as in tests, the game's own view).
         _runner = new GameRunner(game, Surface, (UIElement?)_editorWindow.Main ?? Surface) { IsPaused = paused, TakesKeys = NotTypingCode };
+        // The editor's own hooks in its loop, which an exported game's has none of: the debugger, and where an agent points.
+        _pointer = new PlaytestPointer();
+        _runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
+        _runner.Loop.Add(_pointer);
         _runner.Loop.Ticked += OnTicked;
         _runner.Loop.Faulted += OnFaulted;
         _runner.Loop.FrameEnded += OnFrameEnded;
@@ -489,6 +494,22 @@ public sealed class PlayMode : ObservableObject, IDisposable
             SceneName = _sceneName,
             Scenes = name => LoadScene(project, name),
         };
+
+    // The project's sounds, one library for every game played while it's open: what one decoded the next plays at once,
+    // and a file saved meanwhile (the project's Assets are watched) is decoded again.
+    private Griff.Audio.AssetSoundLibrary Sounds()
+    {
+        var assets = _projectSession.Assets ?? Griff.Hosting.AssetFolder.None;
+        if (_sounds?.Assets != assets)
+        {
+            _sounds?.Library.Dispose();
+            _sounds = (assets, WindowsAudio.Library(assets));
+        }
+
+        return _sounds.Value.Library;
+    }
+
+    private (Griff.Hosting.IAssetSource Assets, Griff.Audio.AssetSoundLibrary Library)? _sounds;
 
     /// <summary>
     /// Holds the game at a breakpoint a script of <paramref name="runner"/>'s game reached (on this thread, in the middle of
@@ -667,7 +688,7 @@ public sealed class PlayMode : ObservableObject, IDisposable
     private void OpenPlayer(Griff.Projects.Project project, int number, int players)
     {
         var main = _editorWindow.Main!;
-        var surface = new GameSurface { AssetRoot = project.AssetsPath };
+        var surface = new GameSurface { Assets = _projectSession.Assets };
         var (left, top, width, height) = PlaceFor(main, number, players);
         var window = new Window
         {
@@ -691,13 +712,14 @@ public sealed class PlayMode : ObservableObject, IDisposable
         // Its saves are kept in memory, apart from the host's.
         var game = Loaded(project, scene).NewGame(new GameHostOptions
         {
-            Audio = WindowsAudio.Create(_sound, project.AssetsPath),
+            Audio = WindowsAudio.Create(_sound, Sounds()),
             Problems = OnGameProblem,
         });
         game.Network.FakeLag = _slowConnection ? SlowConditions : new NetConditions();
         game.Network.PlayerName = $"Player {number}";
         game.ShowHitboxes = _showHitboxes;
         var runner = new GameRunner(game, surface, window);
+        runner.Loop.Add(Debugging.DebuggerLoopHooks.Instance);
         game.Network.Join(_network!.Open(), new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, NetSession.DefaultPort));
         runner.Loop.Faulted += OnFaulted;
         runner.Start();

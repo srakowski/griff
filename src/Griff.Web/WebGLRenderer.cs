@@ -11,7 +11,7 @@ namespace Griff.Web;
 /// bytes, ints or doubles). Images are read from the game's files here and decoded by the browser; text is drawn only in
 /// the game's own fonts and the built-in one, since the browser has nothing else.
 /// </summary>
-public sealed class WebGLRenderer(string? assetRoot) : QuadRenderer(assetRoot, installedFonts: false)
+public sealed class WebGLRenderer(Griff.Hosting.IAssetSource? assets) : QuadRenderer(assets, installedFonts: false)
 {
     public override byte[] Capture(int width, int height)
     {
@@ -31,7 +31,7 @@ public sealed class WebGLRenderer(string? assetRoot) : QuadRenderer(assetRoot, i
     // An image is read from the game's files and given to the page under its texture, which the page decodes; one that
     // isn't there is given as nothing, which the page draws as the missing image's checker.
     protected override void LoadImage(int texture, string path) =>
-        Browser.LoadImage(texture, File.Exists(path) ? File.ReadAllBytes(path) : []);
+        Browser.LoadImage(texture, Assets.Exists(path) ? File.ReadAllBytes(path) : []);
 
     // One of the game's own pictures (a saved game's screenshot) goes to the page the same way.
     protected override void LoadImage(int texture, byte[] encoded) => Browser.LoadImage(texture, encoded);

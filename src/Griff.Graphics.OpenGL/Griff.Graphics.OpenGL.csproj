@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The desktop's renderer: Griff.Graphics' DrawList drawn with OpenGL 3.3 (Silk.NET), images decoded by StbImageSharp. -->
+  <!--
+    The desktop's renderer: Griff.Graphics' DrawList drawn with OpenGL 3.3 (Silk.NET), images decoded by StbImageSharp. No
+    window system here: the contexts it draws in (a window's, an off-screen one) are the platform's, Griff.Platform.Windows.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\Griff.Graphics\Griff.Graphics.csproj" />
   </ItemGroup>

@@ -556,14 +556,11 @@ public sealed partial class NetSession
         if (_hostConnection is not { State: NetConnectionState.Connected } connection || _clientEpoch < 0)
             return;
 
-        if (_network.Input is InputState input)
-        {
-            var blocked = _network.LocalInputBlocked;
-            _report.Sample(input, blocked);
-            var view = _network.View;
-            var (data, acked) = _report.Write(input, blocked, _network.MouseOnUi, view);
-            connection.SendUnreliable(data, acked);
-        }
+        var input = _network.Input;
+        var blocked = _network.LocalInputBlocked;
+        _report.Sample(input, blocked);
+        var (data, acked) = _report.Write(input, blocked, _network.MouseOnUi, _network.View);
+        connection.SendUnreliable(data, acked);
 
         SendOwnState(connection);
     }

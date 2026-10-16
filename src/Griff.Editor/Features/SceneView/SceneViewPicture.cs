@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editor.Core.Workspace;
 using Griff.Graphics;
+using Griff.Platform.Windows;
 using Griff.Rendering;
 using Griff.Scenes;
 
@@ -27,7 +28,7 @@ internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel mo
     private static readonly Entity GridEntity = new("Grid");
 
     private OffscreenGL? _gl;
-    private string? _root;
+    private Griff.Hosting.IAssetSource? _assets;
     private WriteableBitmap? _bitmap;
     private RenderFrame? _frame;
     private bool _stale = true;
@@ -84,13 +85,13 @@ internal sealed class SceneViewPicture(SceneViewport viewport, SceneViewModel mo
     {
         try
         {
-            var root = projectSession.Project?.AssetsPath ?? Path.GetTempPath();
-            if (_gl is null || _root != root)
+            var assets = projectSession.Assets ?? Griff.Hosting.AssetFolder.None;
+            if (_gl is null || _assets != assets)
             {
                 _gl?.Dispose();
-                (_gl, _root, _frame) = (null, null, null);
-                _gl = new OffscreenGL(width, height, root);
-                _root = root;
+                (_gl, _assets, _frame) = (null, null, null);
+                _gl = new OffscreenGL(width, height, assets);
+                _assets = assets;
             }
 
             _gl.Resize(width, height);

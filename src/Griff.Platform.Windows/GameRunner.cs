@@ -20,7 +20,7 @@ public sealed class GameRunner : IDisposable
 {
     private readonly GameSurface _surface;
     private readonly UIElement _keySource;
-    private readonly InputState _input;
+    private readonly IHostInput _input;
     // When the compositor let the last frame go (a Stopwatch timestamp): frames are timed from one to the next.
     private long _lastShown;
     private Point? _mousePixel;
@@ -28,7 +28,7 @@ public sealed class GameRunner : IDisposable
     // While the game has the mouse (see IInput.WantsMouseLock): the screen point the cursor is held at.
     private (int X, int Y)? _lockCenter;
 
-    /// <param name="game">The game, made by its host with an <see cref="InputState"/> this feeds.</param>
+    /// <param name="game">The game, made by its host; this feeds its <see cref="Game.HostInput"/>.</param>
     /// <param name="surface">What it's drawn on, whose mouse and touch it reads.</param>
     /// <param name="keySource">Where its keys come from (its window, or the editor's).</param>
     public GameRunner(Game game, GameSurface surface, UIElement keySource)
@@ -77,16 +77,6 @@ public sealed class GameRunner : IDisposable
     /// paused): the editor says no while typing code, so F9 and typing work there while the game runs.
     /// </summary>
     public Func<bool>? TakesKeys { get; set; }
-
-    /// <summary>
-    /// Where an agent playtesting the game points the mouse, in world units: while it's set, the game sees the mouse there
-    /// (and over the view) rather than wherever the real one is. Moving the real mouse over the game clears it.
-    /// </summary>
-    public Vector2? PointerOverride
-    {
-        get => Loop.PointerOverride;
-        set => Loop.PointerOverride = value;
-    }
 
     public void Start()
     {
@@ -252,8 +242,6 @@ public sealed class GameRunner : IDisposable
         // Held, the mouse's movement is measured each frame from the middle of the view instead.
         if (_lockCenter is null && _mousePixel is { } last)
             _input.AddMouseDelta(new Vector2((float)(pixel.X - last.X), (float)(last.Y - pixel.Y)));
-        if (_mousePixel != pixel)
-            PointerOverride = null;
         _mousePixel = pixel;
         Loop.PointAt(_surface.ToNdc(pixel));
     }

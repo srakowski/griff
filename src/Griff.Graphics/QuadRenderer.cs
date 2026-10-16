@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using Griff.Fonts;
+using Griff.Hosting;
 using Griff.Rendering;
 using Griff.Runtime;
 
@@ -6,8 +8,8 @@ namespace Griff.Graphics;
 
 /// <summary>
 /// What every renderer does the same, whatever it draws with: each frame is turned into a <see cref="DrawList"/>, the
-/// images it draws are numbered and loaded once (and loaded again when their files change, so editing a sprite in a paint
-/// program updates the running game), and the rows of the glyph atlas's pages that text added glyphs to are handed over
+/// images it draws are numbered and loaded once from the game's files (and again when its <see cref="IAssetSource"/> says
+/// one changed, so editing a sprite in a paint program updates the game running in the editor), and the rows of the glyph atlas's pages that text added glyphs to are handed over
 /// before the frame is drawn. A renderer for a graphics API says how to load an image, copy glyph rows to a page's
 /// texture, run a draw list's passes and read the pixels back.
 /// </summary>
@@ -19,28 +21,29 @@ namespace Griff.Graphics;
 /// </remarks>
 public abstract class QuadRenderer : IRenderer
 {
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
-
-    private readonly string _assetRoot;
+    private readonly IAssetSource _assets;
     private readonly Dictionary<string, int> _byName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _byPath = new(StringComparer.OrdinalIgnoreCase);
 
-    // Each image's file and when it was last written, by texture (0 is white, so no file).
+    // Each image's file, by texture (0 is white, so no file), and the files the source said changed since the last frame.
     private readonly List<string> _paths = [""];
-    private readonly List<DateTime> _stamps = [DateTime.MinValue];
+    private readonly ConcurrentQueue<string> _changed = new();
     private byte[] _glyphRows = [];
-    private DateTime _lastRefresh = DateTime.UtcNow;
 
-    /// <param name="assetRoot">The game's Assets folder, which images and font files are read from.</param>
+    /// <param name="assets">The game's files, which images and font files are read from (none if null).</param>
     /// <param name="installedFonts">
     /// Whether text may be drawn in fonts installed on this computer (a font a scene names that isn't in the game's files,
     /// and characters no font of the game's has). Not in a browser, which has only the game's files.
     /// </param>
-    protected QuadRenderer(string? assetRoot, bool installedFonts)
+    protected QuadRenderer(IAssetSource? assets, bool installedFonts)
     {
-        _assetRoot = assetRoot ?? "";
-        List = new DrawList(ImageTexture, new GlyphAtlas(assetRoot, installedFonts));
+        _assets = assets ?? AssetFolder.None;
+        _assets.Changed += _changed.Enqueue;
+        List = new DrawList(ImageTexture, new GlyphAtlas(_assets, installedFonts));
     }
+
+    /// <summary>The game's files it draws from.</summary>
+    public IAssetSource Assets => _assets;
 
     /// <summary>The last frame, as it was drawn.</summary>
     public DrawList List { get; }
@@ -71,6 +74,8 @@ public abstract class QuadRenderer : IRenderer
 
     protected virtual void Dispose(bool disposing)
     {
+        _assets.Changed -= _changed.Enqueue;
+        Glyphs.Dispose();
     }
 
     /// <summary>
@@ -106,12 +111,11 @@ public abstract class QuadRenderer : IRenderer
             return texture;
         if (GamePictures.IsPicture(name))
             return PictureTexture(name);
-        var path = Path.Combine(_assetRoot, name.Replace('\\', '/').Replace('/', Path.DirectorySeparatorChar));
+        var path = _assets.PathOf(name);
         if (!_byPath.TryGetValue(path, out texture))
         {
             texture = _paths.Count;
             _paths.Add(path);
-            _stamps.Add(Stamp(path));
             _byPath[path] = texture;
             LoadImage(texture, path);
         }
@@ -120,20 +124,13 @@ public abstract class QuadRenderer : IRenderer
         return texture;
     }
 
-    // Loads the images whose files changed again, looking at most once a second.
+    // Loads the images whose files the source said changed again (a game's files that don't change say nothing).
     private void RefreshImages()
     {
-        var now = DateTime.UtcNow;
-        if (now - _lastRefresh < RefreshInterval)
-            return;
-        _lastRefresh = now;
-        for (var texture = 1; texture < _paths.Count; texture++)
+        while (_changed.TryDequeue(out var path))
         {
-            var stamp = Stamp(_paths[texture]);
-            if (stamp == _stamps[texture])
-                continue;
-            _stamps[texture] = stamp;
-            LoadImage(texture, _paths[texture]);
+            if (_byPath.TryGetValue(path, out var texture))
+                LoadImage(texture, path);
         }
     }
 
@@ -162,7 +159,6 @@ public abstract class QuadRenderer : IRenderer
     {
         var texture = _paths.Count;
         _paths.Add("");
-        _stamps.Add(DateTime.MinValue);
         _byName[name] = texture;
         _pictureTextures[texture] = (name, -1);
         LoadPicture(texture, name);
@@ -194,6 +190,4 @@ public abstract class QuadRenderer : IRenderer
         _pictureTextures[texture] = (name, version);
         LoadImage(texture, png ?? []);
     }
-
-    private static DateTime Stamp(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
 }

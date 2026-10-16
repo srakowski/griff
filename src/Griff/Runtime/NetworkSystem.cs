@@ -36,6 +36,9 @@ internal sealed class NetworkSystem : GameSystem, INetwork
     [NotState("the host's")]
     private bool _overNetwork;
 
+    [NotState("the host's")]
+    private INetTransport _transport = UdpTransport.Instance;
+
     [NotState("worked out again from the scene")]
     private (Scene? Scene, long Version, Multiplayer? Settings) _settings = (null, -1, null);
 
@@ -105,6 +108,12 @@ internal sealed class NetworkSystem : GameSystem, INetwork
     {
         get => _overNetwork;
         set => _overNetwork = value;
+    }
+
+    public INetTransport Transport
+    {
+        get => _transport;
+        set => _transport = value;
     }
 
     public NetConditions FakeLag
@@ -275,7 +284,7 @@ internal sealed class NetworkSystem : GameSystem, INetwork
     internal SaveData SaveData => Game.SaveData;
 
     // This machine's own controls.
-    internal IInput Input => Game.Input;
+    internal InputState Input => Game.MachineInput;
 
     internal string? Title => Game.Title;
 

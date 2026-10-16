@@ -196,11 +196,12 @@ public sealed partial class NetSession : IDisposable
         INetSocket socket;
         try
         {
-            socket = new UdpNetSocket(chosen, loopbackOnly: !_network.OverNetwork);
+            socket = _network.Transport.Open(chosen, loopbackOnly: !_network.OverNetwork);
         }
-        catch (SocketException ex)
+        // A transport that can't open the port says so as a socket does (a memory network's as an invalid operation).
+        catch (Exception ex) when (ex is SocketException or InvalidOperationException)
         {
-            Status = ex.SocketErrorCode == SocketError.AddressAlreadyInUse
+            Status = ex is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse }
                 ? $"Couldn't host: port {chosen} is already in use."
                 : $"Couldn't host: {ex.Message}";
             return false;
@@ -228,12 +229,12 @@ public sealed partial class NetSession : IDisposable
         if (text.Length > 0 && !text.Equals("lan", StringComparison.OrdinalIgnoreCase))
             _network.SaveData.Set(AddressSaveKey, text);
 
-        UdpNetSocket socket;
+        INetSocket socket;
         try
         {
-            socket = new UdpNetSocket(loopbackOnly: !_network.OverNetwork);
+            socket = _network.Transport.Open(0, loopbackOnly: !_network.OverNetwork);
         }
-        catch (SocketException ex)
+        catch (Exception ex) when (ex is SocketException or InvalidOperationException)
         {
             Fail($"Couldn't join: {ex.Message}");
             return;
@@ -249,7 +250,7 @@ public sealed partial class NetSession : IDisposable
             return;
         }
 
-        if (UdpNetSocket.Resolve(text, chosen) is not { } host)
+        if (_network.Transport.Resolve(text, chosen) is not { } host)
         {
             socket.Dispose();
             Fail($"Couldn't find \"{text}\".");

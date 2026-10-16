@@ -103,6 +103,8 @@ public sealed record LoadedGame(Project? Project, ComponentRegistry Components, 
         if (host.SaveData is { } saves)
             game.SaveData = saves;
         game.Network.OverNetwork = host.OverNetwork;
+        if (host.Transport is { } transport)
+            game.Network.Transport = transport;
         return game;
     }
 }
@@ -130,6 +132,12 @@ public sealed record GameHostOptions
     public bool OverNetwork { get; init; }
 
     /// <summary>
+    /// What the game's network play goes over (<see cref="INetwork.Transport"/>): UDP if null. A platform with its own way to
+    /// reach other machines hands its own.
+    /// </summary>
+    public Griff.Networking.INetTransport? Transport { get; init; }
+
+    /// <summary>
     /// The tables it plays with, rather than the project's files read afresh: the editor's, kept across replays, or a
     /// simulation step's.
     /// </summary>
@@ -153,7 +161,7 @@ public static class GameLoader
     // As above, playing with `tables` (when given) rather than the project's files read afresh.
     internal static void UseProjectSettings(this Game game, Project project, Griff.Data.TableSet? tables)
     {
-        (game.Input as InputState)?.UseControls(project.Controls);
+        game.HostInput.UseControls(project.Controls);
         game.Time.StepRate = project.StepRate;
         game.Tables = tables ?? Griff.Data.TableSet.Load(project.AssetsPath);
         game.Simulations = Griff.Data.SimulationFile.LoadAll(project.AssetsPath);

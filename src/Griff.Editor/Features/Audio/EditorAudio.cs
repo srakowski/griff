@@ -66,7 +66,7 @@ public sealed class EditorAudio
     {
         if (AssetsPath is not { } root || Resolve(assetPath) is null)
             return false;
-        if (WindowsAudio.Library(root).Stream(assetPath!) is not { } stream)
+        if (WindowsAudio.Library(new Griff.Hosting.AssetFolder(root)).Stream(assetPath!) is not { } stream)
             return false;
         Start(stream, assetPath);
         return true;

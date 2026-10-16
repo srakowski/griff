@@ -43,12 +43,12 @@ public class NoteLanesTests
         Assert.Equal(["Easy", "Hard"], RhythmChart.Difficulties(chart));
 
         lanes.Play("Easy");
-        Tick(game, game.Input);
+        Tick(game, game.HostInput);
         Assert.Equal(2, lanes.Notes);
         Assert.Equal("Easy", lanes.Difficulty);
 
         lanes.Play("Expert");
-        Tick(game, game.Input);
+        Tick(game, game.HostInput);
         Assert.Contains(warnings, w => w.Contains("no difficulty called \"Expert\"") && w.Contains("Easy, Hard"));
     }
 
@@ -637,10 +637,10 @@ public class NoteLanesTests
             input.SetKey(key, false);
     }
 
-    private static void Tick(Game game, IInput input)
+    private static void Tick(Game game, IHostInput input)
     {
         game.Tick(Step);
-        ((InputState)input).EndFrame();
+        input.EndFrame();
     }
 
     private sealed class OneSong(SoundClip clip) : ISoundLibrary

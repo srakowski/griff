@@ -25,7 +25,7 @@ public sealed class FontPreviews
     public BitmapSource? Preview(string? assetRoot, string? font, string text)
     {
         if (_atlas is null || _root != assetRoot)
-            (_atlas, _root) = (new GlyphAtlas(assetRoot ?? FreeFonts.Folder), assetRoot);
+            (_atlas, _root) = (new GlyphAtlas(new Griff.Hosting.AssetFolder(assetRoot ?? FreeFonts.Folder)), assetRoot);
         var (rgba, width, height, _) = _atlas.Rasterize(text, FontChoices.PreviewFont(font, assetRoot), TextAlign.Left);
         _atlas.EndFrame();
         if (width <= 0 || height <= 0)

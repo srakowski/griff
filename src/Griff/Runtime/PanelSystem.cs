@@ -267,21 +267,18 @@ internal sealed class PanelSystem : GameSystem, IPanels
     // "Press {Interact}" shows the key or button that does it on the device in use.
     internal void FillPrompts()
     {
-        var state = Game.Input as InputState;
+        var state = Game.MachineInput;
         foreach (var text in Game.Scene.ActiveNow<Text>())
         {
             if (text.Said is not { } value || !value.Contains('{'))
                 continue;
 
             // Filled in again only once what it says, the device played with or the bindings change: no garbage a frame.
-            if (state is not null)
-            {
-                var from = (value, state.UsingGamepad, Rebinding: _rebinding, state.BindingsVersion);
-                if (text.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == from.UsingGamepad &&
-                    listening == from.Rebinding && version == from.BindingsVersion)
-                    continue;
-                text.PromptedFrom = from;
-            }
+            var from = (value, state.UsingGamepad, Rebinding: _rebinding, state.BindingsVersion);
+            if (text.PromptedFrom is var (said, gamepad, listening, version) && ReferenceEquals(said, value) && gamepad == from.UsingGamepad &&
+                listening == from.Rebinding && version == from.BindingsVersion)
+                continue;
+            text.PromptedFrom = from;
 
             text.SetShown(InputPrompts.Fill(Game.Input, value, _rebinding));
         }

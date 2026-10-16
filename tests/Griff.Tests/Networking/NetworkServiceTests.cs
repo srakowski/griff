@@ -79,6 +79,35 @@ public sealed class NetworkServiceTests
     }
 
     [Fact]
+    public void Hosting_and_joining_open_their_sockets_with_the_transport_the_host_hands()
+    {
+        // A platform with its own way to reach other machines hands its transport; here, a network inside the process.
+        var network = new MemoryNetwork();
+        var loaded = new LoadedGame(null, Griff.Scenes.Serialization.ComponentRegistry.CreateDefault(), Arena(), new ProblemLog()) { SceneName = "Arena" };
+        var host = loaded.NewGame(new GameHostOptions { Transport = network });
+        Assert.Same(network, host.Network.Transport);
+        Assert.Same(UdpTransport.Instance, new Game(Arena(), new InputState()).Network.Transport);
+
+        Assert.True(host.Network.Host(7777));
+        var guest = (loaded with { Scene = Arena() }).NewGame(new GameHostOptions { Transport = network });
+        guest.Network.Join("my-pc:7777");
+        for (var i = 0; i < 120 && !guest.Network.IsClient; i++)
+        {
+            host.Tick(1 / 60.0);
+            guest.Tick(1 / 60.0);
+        }
+
+        Assert.True(guest.Network.IsClient, guest.Network.Status);
+        Assert.Equal(2, host.Network.Players.Count);
+
+        // A port the transport can't open is said as a socket's would be.
+        var third = (loaded with { Scene = Arena() }).NewGame(new GameHostOptions { Transport = network });
+        Assert.False(third.Network.Host(7777));
+        Assert.Null(third.Network.Session);
+        Assert.StartsWith("Couldn't host", third.Network.Status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Hosting_or_joining_that_cant_start_leaves_no_session()
     {
         var game = new Game(Arena(), new InputState()) { SceneName = "Arena" };

@@ -324,7 +324,7 @@ public sealed partial class Game
             finally
             {
                 // What was pressed counted in this step, and doesn't again in the next.
-                (Input as InputState)?.EndFrame();
+                _input.EndFrame();
             }
 
             Stepped?.Invoke(this, EventArgs.Empty);

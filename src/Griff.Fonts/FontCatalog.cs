@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using Griff.Hosting;
 
 namespace Griff.Fonts;
 
@@ -8,14 +8,12 @@ namespace Griff.Fonts;
 /// name (<see cref="InstalledFonts"/>, drawn on the computer it's on and never shipped). Whatever can't be found or read
 /// draws in the built-in font.
 /// </summary>
-public sealed class FontCatalog
+public sealed class FontCatalog : IDisposable
 {
     private readonly Dictionary<string, FontFace> _faces = new(StringComparer.Ordinal);
-    private readonly long _refreshTicks = Stopwatch.Frequency;
-    private long _lastRefresh = Stopwatch.GetTimestamp();
 
-    /// <param name="assetRoot">The project's Assets folder, which font files are found in; null for none.</param>
-    public FontCatalog(string? assetRoot) => Project = new ProjectFonts(assetRoot);
+    /// <param name="assets">The game's files, which font files are found in; null for none.</param>
+    public FontCatalog(IAssetSource? assets) => Project = new ProjectFonts(assets);
 
     /// <summary>The font files in the project's Assets.</summary>
     public ProjectFonts Project { get; }
@@ -31,20 +29,19 @@ public sealed class FontCatalog
     }
 
     /// <summary>
-    /// Reads again the project's font files that changed (checked at most once a second), so editing a font updates the
-    /// running game. True if one did.
+    /// Reads again the project's font files its source said changed, so editing a font updates the game running in the
+    /// editor. True if one did.
     /// </summary>
     public bool RefreshChanged()
     {
-        var now = Stopwatch.GetTimestamp();
-        if (now - _lastRefresh < _refreshTicks)
-            return false;
-        _lastRefresh = now;
         if (!Project.RefreshChanged())
             return false;
         _faces.Clear();
         return true;
     }
+
+    /// <summary>Stops hearing of the font files' changes.</summary>
+    public void Dispose() => Project.Dispose();
 
     private FontFace Resolve(string font) =>
         (ProjectFonts.IsFontFile(font) ? Project.Find(font) : BuiltInFonts.Find(font)?.Face ?? InstalledFonts.Find(font)) ?? BuiltInFonts.Default.Face;

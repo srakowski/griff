@@ -54,7 +54,7 @@ public sealed class ProjectStepRateTests : IDisposable
 
         Assert.Equal(30, game.Time.StepRate);
         Assert.Equal(1 / 30f, game.Time.FixedDelta, 6);
-        Assert.Contains("Shield", ((InputState)game.Input).Actions);
+        Assert.Contains("Shield", game.HostInput.Actions);
 
         // A frame of a 30th of a second is one step of it.
         game.Advance(1 / 30.0);

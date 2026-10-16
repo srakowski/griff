@@ -41,8 +41,8 @@ internal static partial class SnapshotRunner
         Capture("multiplayer-guest.png", 2);
 
         // The guest walks right and fires at the host; the host fires back.
-        var guestKeys = (InputState)guest.Input;
-        var hostKeys = (InputState)host.Input;
+        var guestKeys = guest.HostInput;
+        var hostKeys = host.HostInput;
         var guestAvatar = guest.Network.LocalPlayer!.Avatar!;
         var start = guestAvatar.Transform.Position;
         guestKeys.SetKey(Key.A, true);

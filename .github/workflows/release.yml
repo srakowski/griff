@@ -58,6 +58,12 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: ./tools/release-notes.ps1 -Tag $env:TAG -Out artifacts/release/release-notes.md
 
+      # Each failed test as an annotation on the run, readable without signing in (see ci.yml).
+      - name: Name the failed tests
+        if: ${{ failure() }}
+        shell: pwsh
+        run: ./tools/test-failures.ps1 -Results TestResults
+
       - name: Keep the test results
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

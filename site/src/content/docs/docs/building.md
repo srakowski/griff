@@ -11,7 +11,7 @@ dotnet test
 dotnet run --project src/Griff.Editor
 ```
 
-Every project shares `Directory.Build.props` (nullable on, warnings are errors, the .NET analyzers' recommended rules), package versions live in `Directory.Packages.props`, and `.editorconfig` holds the code style. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw. Its test steps pass `--blame-hang-timeout 10m`, so a test run that stops making progress is killed after ten minutes with the test that was running named, instead of hanging for hours; add the same to a local run (`dotnet test tests/Griff.Editor.Tests --blame-hang-timeout 10m`) to get that too.
+Every project shares `Directory.Build.props` (nullable on, warnings are errors, the .NET analyzers' recommended rules), package versions live in `Directory.Packages.props`, and `.editorconfig` holds the code style.
 
 ## Quiet runs
 
@@ -25,7 +25,7 @@ Every project shares `Directory.Build.props` (nullable on, warnings are errors, 
 Exported games' scripts are compiled optimized, like a Release build; the editor compiles them for debugging, with a breakpoint probe on each line (see [The script editor](/docs/scripting/#the-script-editor)), which makes saving a script take a little longer there (about 50 ms for the Arcade template's five scripts, against 15). Exported games are self-contained: they include the .NET runtime and run on any 64-bit Windows PC without installing anything (expect a zipped download of about 60 MB).
 
 
-Building the editor also publishes the game players it exports games with (`dotnet build src/Griff.Editor/Griff.Editor.csproj`), and the tests are `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw. Its test steps pass `--blame-hang-timeout 10m`, so a test run that stops making progress is killed after ten minutes with the test that was running named, instead of hanging for hours; add the same to a local run (`dotnet test tests/Griff.Editor.Tests --blame-hang-timeout 10m`) to get that too. How the repository is laid out is in [Architecture](/docs/architecture/).
+Building the editor also publishes the game players it exports games with (`dotnet build src/Griff.Editor/Griff.Editor.csproj`), and the tests are `dotnet test tests/Griff.Tests` and `dotnet test tests/Griff.Editor.Tests`. CI (`.github/workflows/ci.yml`) builds the editor and runs both test projects on Windows for every push and pull request, with Mesa's software OpenGL so the player smoke test can draw. Its test steps pass `--blame-hang-timeout 10m`, so a test run that stops making progress is killed after ten minutes with the test that was running named, instead of hanging for hours; add the same to a local run (`dotnet test tests/Griff.Editor.Tests --blame-hang-timeout 10m`) to get that too. When a test fails, `tools/test-failures.ps1` reads the run's `.trx` files and names each failed test, with the first lines of its message and stack, as an annotation on the run, which the run's page and GitHub's public API show without signing in (the log and the kept results need an account); the Site workflow's game export (`tools\web.ps1 -Site`) says why it failed the same way. How the repository is laid out is in [Architecture](/docs/architecture/).
 
 ## Releases
 

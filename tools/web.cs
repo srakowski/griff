@@ -50,6 +50,9 @@ const float LabelY = 3.8f;
 // The templates --check plays unless --template picks others.
 const string CheckedTemplates = "Platformer,Shooter,Match3,Isometric,Physics,Pinball,Rhythm,BunnyMark,Multiplayer";
 
+// What crashes it is reported as a failure is (above all on GitHub Actions, as an annotation).
+AppDomain.CurrentDomain.UnhandledException += (_, e) => Annotate($"web.cs stopped: {e.ExceptionObject}");
+
 var check = args.Contains("--check");
 var exportOnly = args.Contains("--export");
 var port = int.TryParse(Arg("--port"), CultureInfo.InvariantCulture, out var p) ? p : 8091;
@@ -576,7 +579,7 @@ async Task<int> BuildSite(string folder, string profile)
     var shared = Path.Combine(layout, "_player");
     Directory.CreateDirectory(shared);
     var first = Path.Combine(stage, games[0].Slug);
-    Directory.Move(Path.Combine(first, "_framework"), Path.Combine(shared, "_framework"));
+    MoveFolder(Path.Combine(first, "_framework"), Path.Combine(shared, "_framework"));
     File.Copy(Path.Combine(first, "main.js"), Path.Combine(shared, "main.js"));
     File.Copy(Path.Combine(first, "griff.js"), Path.Combine(shared, "griff.js"));
     foreach (var game in games)
@@ -587,7 +590,7 @@ async Task<int> BuildSite(string folder, string profile)
             Directory.Delete(Path.Combine(from, "_framework"), recursive: true);
         foreach (var leftover in new[] { "main.js", "griff.js", ExportLayout.Marker })
             File.Delete(Path.Combine(from, leftover));
-        Directory.Move(from, to);
+        MoveFolder(from, to);
         var page = Path.Combine(to, WebExporter.Page);
         var html = File.ReadAllText(page);
         const string Script = "src=\"main.js\"";
@@ -679,7 +682,7 @@ async Task<int> BuildSite(string folder, string profile)
     if (Directory.Exists(folder))
         Directory.Delete(folder, recursive: true);
     Directory.CreateDirectory(Path.GetDirectoryName(folder)!);
-    Directory.Move(layout, folder);
+    MoveFolder(layout, folder);
     Console.WriteLine($"{games.Count} games in {folder}: {Folder(folder) / 1048576.0:0.0} MB in all, of which .NET and the player {playerBytes / 1048576.0:0.0} MB " +
                       $"(about {gzipped / 1048576.0:0.0} MB gzipped, downloaded once) are shared by every game.");
     return 0;
@@ -1927,6 +1930,24 @@ void Report(string folder)
                       $"the game {Size(Path.Combine(folder, ExportLayout.GameFolder)) / 1024.0:0} KB.");
 }
 
+// Moves a folder, or copies it and deletes the original when the two are on different drives, which Directory.Move can't do
+// (on GitHub's runners the temporary folder is on C: and the repository on D:).
+static void MoveFolder(string from, string to)
+{
+    if (string.Equals(Path.GetPathRoot(Path.GetFullPath(from)), Path.GetPathRoot(Path.GetFullPath(to)), StringComparison.OrdinalIgnoreCase))
+    {
+        Directory.Move(from, to);
+        return;
+    }
+
+    Directory.CreateDirectory(to);
+    foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+        Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, directory)));
+    foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)));
+    Directory.Delete(from, recursive: true);
+}
+
 static void TryDelete(string folder)
 {
     try
@@ -1947,7 +1968,16 @@ string? Arg(string name) => Array.IndexOf(args, name) is var at and >= 0 && at +
 static int Fail(string message)
 {
     Console.Error.WriteLine(message);
+    Annotate(message);
     return 1;
+}
+
+// Under GitHub Actions, a failure is also an annotation on the run (an ::error:: line), so it can be read on the run's page and
+// through the public API without signing in to see the log.
+static void Annotate(string message)
+{
+    if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+        Console.WriteLine($"::error title=tools/web.cs::{message.Replace("%", "%25").Replace("\r", "%0D").Replace("\n", "%0A")}");
 }
 
 // One game being checked in the browser: opening it, its screenshots, and the keys, taps and controller it's sent.

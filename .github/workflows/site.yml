@@ -52,6 +52,7 @@ jobs:
         with:
           global-json-file: global.json
 
+      # A failure says why as an annotation on the run (tools/web.ps1 and web.cs print ::error:: lines under Actions).
       - name: Export the games
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/web.ps1 -Site site/public/play

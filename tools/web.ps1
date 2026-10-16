@@ -38,9 +38,23 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 
+# Under GitHub Actions a failure is also an annotation on the run (an ::error:: line), readable without signing in to see the log.
+function Annotate([string]$message) {
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        Write-Output "::error title=tools/web.ps1::$($message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A'))"
+    }
+}
+trap {
+    Annotate "web.ps1 stopped: $_"
+    break
+}
+
 if (-not $NoBuild) {
     dotnet publish "$repo\src\Griff.Web\Griff.Web.csproj" -c Release --nologo -v q
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if ($LASTEXITCODE -ne 0) {
+        Annotate "Publishing the web player (src/Griff.Web) failed with exit code $LASTEXITCODE; its errors are above."
+        exit $LASTEXITCODE
+    }
 }
 
 Push-Location $repo
@@ -56,6 +70,8 @@ try {
     if ($Project) { $arguments += @('--project', (Resolve-Path $Project).Path) }
     if ($Out) { $arguments += @('--out', $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)) }
     dotnet run -c Release "$repo\tools\web.cs" -- @arguments
+    # web.cs annotates what it found wrong itself; this says that it stopped, also when it couldn't start (a build error).
+    if ($LASTEXITCODE -ne 0) { Annotate "tools/web.cs exited with $LASTEXITCODE." }
     exit $LASTEXITCODE
 }
 finally {

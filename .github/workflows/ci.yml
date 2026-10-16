@@ -25,14 +25,21 @@ jobs:
         id: build
         run: dotnet build src/Griff.Editor/Griff.Editor.csproj
 
-      # Each test's result goes to the log as it finishes, and to a .trx file kept with the run when one fails, so a
-      # failure can be read without signing in to see the log. The editor's tests run even when the engine's fail.
+      # Each test's result goes to the log as it finishes, and to a .trx file kept with the run when one fails. The editor's
+      # tests run even when the engine's fail.
       - name: Engine tests
         run: dotnet test tests/Griff.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=engine.trx" --results-directory TestResults --blame-hang-timeout 10m
 
       - name: Editor tests
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: dotnet test tests/Griff.Editor.Tests --logger "console;verbosity=normal" --logger "trx;LogFileName=editor.trx" --results-directory TestResults --blame-hang-timeout 10m
+
+      # Each failed test as an annotation on the run (its name and the first lines of its message and stack), which the
+      # run's page and the public API show without signing in, unlike the log and the kept results.
+      - name: Name the failed tests
+        if: ${{ failure() }}
+        shell: pwsh
+        run: ./tools/test-failures.ps1 -Results TestResults
 
       - name: Keep the test results
         if: ${{ failure() }}

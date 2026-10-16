@@ -17,14 +17,37 @@ public sealed class OffscreenGL : IDisposable
     public OffscreenGL(int width, int height, string assetRoot)
     {
         (Width, Height) = (width, height);
-        _window = CreateWindowEx(0, "static", "Griff", 0x80000000, 0, 0, width, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        _dc = GetDC(_window);
-        var format = new PixelFormat { Size = (ushort)Marshal.SizeOf<PixelFormat>(), Version = 1, Flags = 0x4 | 0x20 | 0x1, ColorBits = 32, AlphaBits = 8, DepthBits = 24, StencilBits = 8 };
-        SetPixelFormat(_dc, ChoosePixelFormat(_dc, ref format), ref format);
-        _context = wglCreateContext(_dc);
-        if (_context == IntPtr.Zero || !wglMakeCurrent(_dc, _context))
-            throw new InvalidOperationException("No OpenGL context could be made.");
+        // opengl32.dll is loaded before the pixel format is chosen: GDI may otherwise choose before the driver is loaded, and a
+        // driver installed as the system's software OpenGL (Mesa on a machine with no GPU) then can't make a context the first
+        // time in a process. A driver still starting up can refuse one too, so it gets a few tries, each on a new window (a
+        // window's pixel format is set once).
         _opengl32 = LoadLibrary("opengl32.dll");
+        var problem = "";
+        for (var attempt = 1; ; attempt++)
+        {
+            _window = CreateWindowEx(0, "static", "Griff", 0x80000000, 0, 0, width, height, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            _dc = GetDC(_window);
+            var format = new PixelFormat { Size = (ushort)Marshal.SizeOf<PixelFormat>(), Version = 1, Flags = 0x4 | 0x20 | 0x1, ColorBits = 32, AlphaBits = 8, DepthBits = 24, StencilBits = 8 };
+            var chosen = ChoosePixelFormat(_dc, ref format);
+            if (chosen == 0 || !SetPixelFormat(_dc, chosen, ref format))
+                problem = $"no pixel format (chose {chosen}, error {Marshal.GetLastPInvokeError()})";
+            else if ((_context = wglCreateContext(_dc)) == IntPtr.Zero)
+                problem = $"no context ({Describe(_dc, chosen)})";
+            else if (!wglMakeCurrent(_dc, _context))
+                problem = $"the context couldn't be made current ({Describe(_dc, chosen)})";
+            else
+                break;
+
+            if (_context != IntPtr.Zero)
+                wglDeleteContext(_context);
+            _context = IntPtr.Zero;
+            _ = ReleaseDC(_window, _dc);
+            DestroyWindow(_window);
+            if (attempt == 3)
+                throw new InvalidOperationException($"No OpenGL context could be made: {problem}.");
+            Thread.Sleep(100);
+        }
+
         GL = GL.GetApi(name =>
         {
             var address = wglGetProcAddress(name);
@@ -54,6 +77,18 @@ public sealed class OffscreenGL : IDisposable
     /// <summary>The framebuffer's pixels, as top-down RGBA rows.</summary>
     public byte[] Capture() => Renderer.Capture(Width, Height);
 
+    // What a pixel format is, for an error message: its bits and whether it's GDI's generic (software 1.1) one.
+    private static string Describe(IntPtr dc, int format)
+    {
+        var error = Marshal.GetLastPInvokeError();
+        var described = new PixelFormat();
+        if (DescribePixelFormat(dc, format, (uint)Marshal.SizeOf<PixelFormat>(), ref described) == 0)
+            return $"pixel format {format}, error {error}";
+        const uint GenericFormat = 0x40, GenericAccelerated = 0x1000;
+        var kind = (described.Flags & GenericFormat) == 0 ? "a driver's" : (described.Flags & GenericAccelerated) != 0 ? "generic, accelerated" : "GDI's generic software";
+        return $"pixel format {format}: {kind}, {described.ColorBits}-bit color, {described.DepthBits}-bit depth, flags 0x{described.Flags:x}, error {error}";
+    }
+
     public void Dispose()
     {
         Renderer.Dispose();
@@ -61,6 +96,7 @@ public sealed class OffscreenGL : IDisposable
         GL.DeleteFramebuffer(_framebuffer);
         wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
         wglDeleteContext(_context);
+        _ = ReleaseDC(_window, _dc);
         DestroyWindow(_window);
     }
 
@@ -84,16 +120,22 @@ public sealed class OffscreenGL : IDisposable
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr window);
 
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr window, IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    private static extern int DescribePixelFormat(IntPtr dc, int format, uint size, ref PixelFormat descriptor);
+
     [DllImport("gdi32.dll")]
     private static extern int ChoosePixelFormat(IntPtr dc, ref PixelFormat format);
 
-    [DllImport("gdi32.dll")]
+    [DllImport("gdi32.dll", SetLastError = true)]
     private static extern bool SetPixelFormat(IntPtr dc, int format, ref PixelFormat descriptor);
 
-    [DllImport("opengl32.dll")]
+    [DllImport("opengl32.dll", SetLastError = true)]
     private static extern IntPtr wglCreateContext(IntPtr dc);
 
-    [DllImport("opengl32.dll")]
+    [DllImport("opengl32.dll", SetLastError = true)]
     private static extern bool wglMakeCurrent(IntPtr dc, IntPtr context);
 
     [DllImport("opengl32.dll")]

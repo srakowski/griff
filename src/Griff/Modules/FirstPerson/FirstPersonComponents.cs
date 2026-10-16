@@ -185,6 +185,7 @@ public sealed class FirstPersonMovement : Component
 public sealed class Weapon : Component
 {
     /// <summary>The weapon's name, e.g. "Shotgun".</summary>
+    [PlainText("the weapon's name as shown, its own words")]
     public string? Name { get; set; } = "Pistol";
 
     /// <summary>The number key that takes it out, 1 to 9.</summary>

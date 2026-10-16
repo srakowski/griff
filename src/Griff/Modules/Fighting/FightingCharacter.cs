@@ -191,6 +191,7 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// <summary>The move it's doing, by name; empty when it's free. Set by the game.</summary>
     [Group("State")]
     [Output("Move")]
+    [PlainText("the move under way: the game sets it")]
     public string? Move { get; set; }
 
     /// <summary>Steps into the move it's doing. Set by the game.</summary>
@@ -251,6 +252,7 @@ public sealed class FightingCharacter : Component, IPlaytestReport
 
     /// <summary>Who its combo is on (an id). Set by the game.</summary>
     [NotSent]
+    [PlainText("who its combo is on: the game sets it")]
     public string? ComboOn { get; set; }
 
     /// <summary>
@@ -258,6 +260,7 @@ public sealed class FightingCharacter : Component, IPlaytestReport
     /// the same written once with how many ("5*40 2 3 6P"). What motions and the input buffer read. Set by the game.
     /// </summary>
     [NotSent]
+    [PlainText("what was pressed lately: the game writes it")]
     public string? History
     {
         get

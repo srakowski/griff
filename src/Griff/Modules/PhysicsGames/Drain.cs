@@ -85,6 +85,7 @@ public sealed class Drain : Component, IPlaytestReport
     public float SaveLeft { get; set; }
 
     /// <summary>The ball waiting to be served, by its entity's id. Set by the game.</summary>
+    [PlainText("the ball waiting: the game sets it")]
     public string? Serving { get; set; }
 
     /// <summary>Seconds until it's served. Set by the game.</summary>

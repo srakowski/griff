@@ -650,6 +650,15 @@ internal sealed partial class DemoUi(MainWindow main, SceneViewControl sceneView
     public async Task SetEnum(string component, string label, string value)
     {
         var row = await WaitFor(() => InspectorRow(component, label), $"{component}.{label}");
+        // An enum of many choices (a key) is picked from its list to search, by its name in code.
+        if (row.DataContext is PropertyField { IsLongEnum: true } searched)
+        {
+            var choice = searched.EnumChoices.FirstOrDefault(c => c.Label == value || c.Value.ToString() == value)
+                ?? throw new ArgumentException($"{component}.{label} has no {value} choice.");
+            await PickFromList(component, label, choice.Value.ToString());
+            return;
+        }
+
         var combo = Descendants<ComboBox>(row).First();
         await Click(combo);
         // Choices read "Ping Pong"; a demo can name them either way.

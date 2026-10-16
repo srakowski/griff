@@ -82,6 +82,7 @@ public sealed class ComputerFighter : Component, IPlaytestReport
     public bool Guarding { get; set; }
 
     /// <summary>The step its opponent's move it has already chosen whether to guard against started on, as "move@frame". Set by the game.</summary>
+    [PlainText("the move it last read: the game sets it")]
     public string? SawMove { get; set; }
 
     /// <summary>Its <see cref="Behavior"/> in words, for a training menu's label: "Fight", "Stand", "Crouch" or "Jump".</summary>

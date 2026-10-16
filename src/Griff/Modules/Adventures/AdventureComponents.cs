@@ -190,6 +190,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
 
     /// <summary>What it's called by the pointer, e.g. "Old Door"; empty uses its entity's name. Read as the "Name" output.</summary>
     [Output]
+    [PlainText("what the pointer calls it, its own words")]
     public string? Name { get; set; }
 
     /// <summary>
@@ -236,6 +237,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
 
     /// <summary>What the walker says on looking at it, e.g. "A rusty old key."</summary>
     [Group("Look")]
+    [PlainText("what the walker says, its own words")]
     public string? LookLine { get; set; }
 
     /// <summary>
@@ -263,6 +265,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
 
     /// <summary>What the walker says on using it, e.g. "It won't budge."</summary>
     [Group("Use")]
+    [PlainText("what the walker says, its own words")]
     public string? UseLine { get; set; }
 
     /// <summary>Using it starts the <see cref="Dialogue"/> on its entity: talking to a character.</summary>
@@ -328,6 +331,7 @@ public sealed class Hotspot : Component, IPointOutline, IDrawable, IDialogueStar
     /// looks away." Empty uses the inventory bar's Wrong Line.
     /// </summary>
     [Group("Items")]
+    [PlainText("what the walker says, its own words")]
     public string? WrongItemLine { get; set; }
 
     /// <summary>How many times it has been looked at. The game counts them.</summary>
@@ -552,6 +556,7 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     /// stands. The game sets it as it walks.
     /// </summary>
     [Group("State")]
+    [PlainText("where it's still to walk: the game sets it")]
     public string? Route
     {
         get => _route;
@@ -565,18 +570,21 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
     }
 
     /// <summary>The entity of the hotspot it's walking over to, to look at or use once it's there; empty for none.</summary>
+    [PlainText("the hotspot it's walking to: the game sets it")]
     public string? Heading { get; set; }
 
     /// <summary>What it does with the hotspot it's walking to (<see cref="Heading"/>) once it gets there.</summary>
     public AdventureVerb HeadingVerb { get; set; }
 
     /// <summary>The item it's going to use on the hotspot it's walking to (<see cref="Heading"/>); empty to just use or look at it.</summary>
+    [PlainText("the item it's taking there: the game sets it")]
     public string? HeadingItem { get; set; }
 
     /// <summary>
     /// The entity of the hotspot the keys or a controller are on, to use or look at with their Use and Look actions; empty
     /// while they're not (the mouse is in use).
     /// </summary>
+    [PlainText("the hotspot the keys are on: the game sets it")]
     public string? Pointed { get; set; }
 
     /// <summary>The way it faces, as a unit vector: down to start with. The game sets it as it walks.</summary>
@@ -584,6 +592,7 @@ public sealed class Walker : Component, IDrawEffect, IPlaytestReport
 
     /// <summary>What it's saying, over its head; empty for nothing. Read as the "Said" output.</summary>
     [Output]
+    [PlainText("what it's saying: the game sets it")]
     public string? Said { get; set; }
 
     /// <summary>Seconds before what it's saying goes. Counted down where the game is run (its line goes from every screen then).</summary>

@@ -110,6 +110,7 @@ public sealed class Hitboxes : Component, IPlaytestReport
 
     /// <summary>The clip of the swing under way (what <see cref="Struck"/> is for). Set by the game.</summary>
     [NotSent]
+    [PlainText("the swing under way: the game sets it")]
     public string? SwingClip { get; set; }
 
     /// <summary>How far into its clip the swing under way was last step, in seconds: a clip starting over is a new swing. Set by the game.</summary>
@@ -122,6 +123,7 @@ public sealed class Hitboxes : Component, IPlaytestReport
 
     /// <summary>What the swing under way has hit, by group, a line each ("1 id"): it hits each thing once per group. Set by the game.</summary>
     [NotSent]
+    [PlainText("what the swing has hit: the game writes it")]
     public IReadOnlyList<string> Struck
     {
         get => _struck;

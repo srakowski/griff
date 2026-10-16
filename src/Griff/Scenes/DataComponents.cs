@@ -50,6 +50,7 @@ public sealed class TableValues : Component
     /// Set by the game: which values it set last, so a rewind (which brings back what they were) doesn't set them again,
     /// rolling new dice, unless the row has changed since. Leave it be.
     /// </summary>
+    [PlainText("which values the game set last: the game writes it")]
     public string? Applied { get; set; }
 
     public override bool Uses(string property) => property != nameof(Applied);

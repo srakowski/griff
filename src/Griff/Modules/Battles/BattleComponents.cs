@@ -35,6 +35,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
 
     /// <summary>What it's called in what it says, e.g. "Elf Mage"; empty uses its entity's name. Read as the "Title" output.</summary>
     [Output]
+    [PlainText("what it's called in what it says, its own words")]
     public string? Title { get; set; }
 
     /// <summary>Hit points an attack takes away, before the foe's <see cref="Armor"/>.</summary>
@@ -78,6 +79,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
     /// <summary>Its spell's name, e.g. "Fireball", said when it's cast; empty for none. Read as the "Spell" output.</summary>
     [Group("Spell")]
     [Output]
+    [PlainText("its spell's name as it says it, named nowhere else")]
     public string? Spell { get; set; }
 
     /// <summary>Mana a cast costs.</summary>
@@ -111,6 +113,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
     /// <summary>The item it carries, e.g. "Potion", said when it's used; empty for none. Read as the "Item" output.</summary>
     [Group("Item")]
     [Output]
+    [PlainText("its item's name as it says it, named nowhere else")]
     public string? Item { get; set; }
 
     /// <summary>How many of its <see cref="Item"/> it has left; each use takes one.</summary>
@@ -191,6 +194,7 @@ public sealed class Battler : Component, IActionReady, ITurnReady, IPlaytestRepo
     /// <summary>What it last did, e.g. "Elf Mage casts Fireball on Ogre: 14 damage." The game sets it. Read as the "Said" output.</summary>
     [Group("State")]
     [Output]
+    [PlainText("what it last did: the game writes it")]
     public string? Said { get; set; }
 
     /// <summary>True while it can move: it's its turn (if it takes turns) and it hasn't moved yet. The game keeps it up to date.</summary>

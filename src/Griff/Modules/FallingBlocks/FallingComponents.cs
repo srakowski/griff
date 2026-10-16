@@ -51,6 +51,7 @@ public sealed partial class FallingBoard : Component, IDrawable, IDrawsTilemap, 
         AllShapes.Contains(char.ToUpperInvariant(shape)) ? [.. FallingShapes.Cells(char.ToUpperInvariant(shape), 0, 0, 0).Select(c => (c.X, -c.Y))] : [];
 
     /// <summary>The tile the I lands as; the J lands as the next, then L, O, S, T and Z.</summary>
+    [TileNumbers]
     public int FirstTile { get; set; }
 
     /// <summary>Picks the order the pieces come in: the same number always gives the same ones. 0 is different each game.</summary>

@@ -1,0 +1,33 @@
+title: Every field has an editor
+intro: A field that takes names, lists or anything written like code can't land as a box to type it in any more, and a script's fields get good editors without anyone writing one.
+project: Empty | Field Kit Four
+write: Scripts/Shop.cs | generic-field-editors/Shop.cs
+
+chapter: A script's lists | Rows, and names with their values
+create: Empty
+rename: Shopkeeper
+add: Shop
+explain: field:Shop.Stock | Stock | A script's list is rows now: one thing a row, to set, add, take out and move up.
+click: editor:Shop.Stock:add
+editorset: Shop.Stock:item:3 = Bow
+expectvalue: Shopkeeper.Shop.Stock = Sword\nShield\nBow
+explain: field:Shop.Prices | Prices | Lines written as a name and its value are a dictionary: the two side by side, the value a number to drag when they're all numbers.
+editorset: Shop.Prices:value:1 = 35
+expectvalue: Shopkeeper.Shop.Prices = Sword: 35\nShield: 20
+explain: field:Shop.Colors | Colors | And a list of colors is swatches, with the palette to pick from.
+key: Ctrl+Z
+expectvalue: Shopkeeper.Shop.Prices = Sword: 30\nShield: 20
+
+chapter: Many choices | A key, searched for
+explain: field:Shop.Open Key | Open Key | A choice of many, like the key that opens the shop, is searched for by typing a few letters, not scrolled to.
+pick: Shop.OpenKey = PageDown
+expectvalue: Shopkeeper.Shop.OpenKey = PageDown
+
+chapter: Names and ways | Known from a field's name
+explain: field:Shop.Next Scene | Next Scene | A field called Next Scene picks from the project's scenes without being marked, as Prefab and Message fields pick theirs.
+pick: Shop.NextScene = Main
+expectvalue: Shopkeeper.Shop.NextScene = Main
+explain: field:Shop.Facing Direction | Facing Direction | And a direction gets the compass.
+click: editor:Shop.FacingDirection:way:Up
+expectvalue: Shopkeeper.Shop.FacingDirection.Y = 1
+explain: field:Shop.Greeting | Greeting | A field that should stay text says why, here the shopkeeper's own words. Griff's tests fail for any other field typed from memory, saying what to mark it.

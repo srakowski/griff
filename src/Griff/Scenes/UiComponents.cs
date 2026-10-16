@@ -648,9 +648,11 @@ public sealed class Toggle : Component
     public string? SaveAs { get; set; }
 
     /// <summary>What the entity's <see cref="Text"/> says while it's on, e.g. "Sound: On". Empty leaves the text alone.</summary>
+    [PlainText("words its text shows while it's on")]
     public string? OnText { get; set; }
 
     /// <summary>What the entity's <see cref="Text"/> says while it's off, e.g. "Sound: Off".</summary>
+    [PlainText("words its text shows while it's off")]
     public string? OffText { get; set; }
 
     /// <summary>Raised when the player flips it.</summary>

@@ -260,6 +260,7 @@ public sealed class NoteLanes : Component, IDrawable, IPlaytestReport
     /// Great, O Good, M Miss, S left out (gone by before it started), - no end (a tap). The game sets it; a rewind takes it
     /// back.
     /// </summary>
+    [PlainText("how each note went: the game writes it")]
     public string? Played
     {
         get

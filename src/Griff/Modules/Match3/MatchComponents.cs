@@ -122,6 +122,7 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// How many of each kind have been cleared so far, as kind:count pairs like <see cref="Collect"/>. Saved with the
     /// scene, so a rewind takes them back.
     /// </summary>
+    [PlainText("how many of each gem have been cleared: the game counts it")]
     public string? Cleared { get; set; }
 
     /// <summary>A swap that lines nothing up slides back. Untick it to let any two neighbors swap.</summary>

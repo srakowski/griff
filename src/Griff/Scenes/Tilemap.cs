@@ -372,6 +372,7 @@ public sealed partial class Tilemap : Component, ISortsInParts
     public string? IgnoreLayers { get; set; }
 
     /// <summary>The grid, top row first; see the remarks on <see cref="Tilemap"/> for the format.</summary>
+    [PlainText("the grid, a line a row: painted in the Scene view with the tile palette")]
     public IReadOnlyList<string> Tiles
     {
         get => _tiles;

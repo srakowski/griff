@@ -271,7 +271,7 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
                     yield return (component, $"{component.GetType().Name}.{property.Name}", ActionNames.Problem(actions) + ".");
                 if (property.OutputName is not null && OutputNames.Unmatched(component, property) is { Count: > 0 } outputs)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", OutputNames.Problem(outputs) + ".");
-                if (property.Editor?.Problem(component, property.GetValue(component)) is { } problem)
+                if ((property.Editor ?? GenericFields.For(property, property.GetValue(component)))?.Problem(component, property.GetValue(component)) is { } problem)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", problem + ".");
             }
         }

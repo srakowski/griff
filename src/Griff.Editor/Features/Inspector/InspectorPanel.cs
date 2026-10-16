@@ -1341,13 +1341,18 @@ public sealed class PropertyField : ObservableObject
                 .ToList();
         }
 
-        // A field marked for an editor of its own gets it, when the editor has one for it.
-        if (property.Editor is { } attribute && FieldEditor.Create(this, attribute) is { } editor)
+        // A field marked for an editor of its own gets it, when the editor has one for it; a list of strings without one gets
+        // rows (or names and values), unless it's marked as plain text.
+        if ((property.Editor ?? GenericFields.For(property, Value)) is { } attribute && FieldEditor.Create(this, attribute) is { } editor)
         {
+            _attribute = attribute;
             Editor = editor;
             Kind = FieldKind.Custom;
         }
     }
+
+    // What its editor reads the value as: the attribute it's marked with, or the rows a list without one gets.
+    private readonly FieldEditorAttribute? _attribute;
 
     /// <summary>
     /// For a field with an editor of its own (<see cref="FieldKind.Custom"/>): that editor, e.g. a dice builder or a list of
@@ -1371,7 +1376,7 @@ public sealed class PropertyField : ObservableObject
     /// What's wrong with the value, for a field whose editor reads it (dice that aren't dice, a clip that isn't one of the
     /// animation's), shown in yellow; null when it reads, or the selected entities' values differ.
     /// </summary>
-    public string? ValueProblem => IsMixed ? null : _property.Editor?.Problem(_components[0], Value);
+    public string? ValueProblem => IsMixed ? null : (_attribute ?? _property.Editor)?.Problem(_components[0], Value);
 
     /// <summary>True while <see cref="ValueProblem"/> says something.</summary>
     public bool HasValueProblem => ValueProblem is not null;
@@ -1618,6 +1623,9 @@ public sealed class PropertyField : ObservableObject
                 TextValue = name;
                 _owner.Audio.Preview(name);
                 return;
+            case FieldKind.Enum:
+                EnumValue = name;
+                return;
         }
 
         if (IsFont)
@@ -1694,7 +1702,19 @@ public sealed class PropertyField : ObservableObject
     });
 
     /// <summary>True for a field with a list to pick from: images, sounds, and names of entities, prefabs, scenes, input actions, layers and messages.</summary>
-    public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name or FieldKind.Action or FieldKind.Output;
+    public bool HasPicker => Kind is FieldKind.Image or FieldKind.Sound or FieldKind.Entity or FieldKind.Name or FieldKind.Action or FieldKind.Output || IsLongEnum;
+
+    /// <summary>Enums with more choices than this (a key, of a hundred) are picked from a list to search rather than dropped down.</summary>
+    public const int LongEnum = 12;
+
+    /// <summary>
+    /// For an enum field with more than <see cref="LongEnum"/> choices (a key to press): picked from a list searched by typing
+    /// (its picker, as a name's), rather than a drop-down to scroll.
+    /// </summary>
+    public bool IsLongEnum => Kind == FieldKind.Enum && EnumChoices.Count > LongEnum;
+
+    /// <summary>For an enum field: its choice as it reads ("Page Up"), or <see cref="Mixed"/> when the selected entities' differ.</summary>
+    public string EnumLabel => IsMixed ? Mixed : Value is Enum value ? InspectorPanel.Humanize(value.ToString()) : "";
 
     /// <summary>For a field naming a prefab, scene, input action, layer or message: "a prefab", "a message".</summary>
     public string? NameNoun => _property.Names is { } kind ? KnownNames.Noun(kind) : null;
@@ -1709,6 +1729,7 @@ public sealed class PropertyField : ObservableObject
             : "Choose an entity from the scene, or drag one here from the Hierarchy",
         FieldKind.Action => "Choose something it can do: what the components of what it's done on can do",
         FieldKind.Output => "Choose what it reads: what the components of the entity it reads know",
+        FieldKind.Enum => "Choose one: type a few letters to find it",
         _ => _property.Names?.Kind switch
         {
             NameKind.Message => "Choose a message the project sends or listens for, or type a new one",
@@ -1801,6 +1822,10 @@ public sealed class PropertyField : ObservableObject
                 setup = new("Type to find something it reads", "What it reads knows nothing yet: give it a component that does",
                     false, true, none);
                 break;
+            case FieldKind.Enum:
+                choices = [.. EnumChoices.Select(c => new PickerChoice(c.Value.ToString(), label: c.Label, detail: c.Tip))];
+                setup = new("Type to find a choice", "There's nothing to choose", false, false, []);
+                break;
             default:
                 var kind = _property.Names!;
                 var owner = _owner;
@@ -1827,6 +1852,7 @@ public sealed class PropertyField : ObservableObject
 
         bool IsPicked(string name) => Kind is FieldKind.Image or FieldKind.Sound
             ? string.Equals(name, current, StringComparison.OrdinalIgnoreCase)
+            : Kind == FieldKind.Enum ? !IsMixed && Value?.ToString() == name
             : Names(name);
         return new FieldPicker(setup, choices, Pick, IsPicked, () => IsPickerOpen = false);
     }
@@ -2163,20 +2189,25 @@ public sealed class PropertyField : ObservableObject
         return FromFloats(_property.Type, values);
     })]);
 
+    // A rotation (Quaternion) shows as the angles in degrees about X, Y and Z it turns by, as a Transform's Rotation does,
+    // rather than its four numbers, which nobody types.
     private static float[] ToFloats(object? value) => value switch
     {
         Vector2 v => [v.X, v.Y],
         Vector3 v => [v.X, v.Y, v.Z],
         Vector4 v => [v.X, v.Y, v.Z, v.W],
-        Quaternion q => [q.X, q.Y, q.Z, q.W],
+        Quaternion q when Transform.EulerDegrees(q) is var angles => [Round(angles.X), Round(angles.Y), Round(angles.Z)],
         _ => [],
     };
+
+    // Angles back from a quaternion on thousandths, so 90 doesn't read 89.99999.
+    private static float Round(float degrees) => MathF.Round(degrees, 3);
 
     private static object FromFloats(Type type, float[] v) =>
         type == typeof(Vector2) ? new Vector2(v[0], v[1])
         : type == typeof(Vector3) ? new Vector3(v[0], v[1], v[2])
         : type == typeof(Vector4) ? new Vector4(v[0], v[1], v[2], v[3])
-        : new Quaternion(v[0], v[1], v[2], v[3]);
+        : Transform.FromEulerDegrees(new Vector3(v[0], v[1], v[2]));
 }
 
 /// <summary>An entity an entity field can name, how deep it is in the Hierarchy, and whether the field names it now.</summary>

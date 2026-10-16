@@ -29,9 +29,11 @@ public sealed class Card : Component, IDrawable, IDrawEffect, INetSecret, IPlayt
     private string[] _lines = [];
 
     /// <summary>What it's called, written along its top. Empty writes its entity's name.</summary>
+    [PlainText("what's written on it, its own words")]
     public string? Title { get; set; }
 
     /// <summary>What it does, written under its picture and wrapped to fit, e.g. "Deal 3 damage."</summary>
+    [PlainText("what's written on it, its own words")]
     public string? Text
     {
         get => _text;

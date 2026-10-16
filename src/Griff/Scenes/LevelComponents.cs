@@ -1073,6 +1073,7 @@ public sealed class DialogueTagsAttribute(params string[] words) : Attribute
 public sealed class Speaker : Component
 {
     /// <summary>The name shown over what they say, and that lines start with to be said by them. Empty uses the entity's name.</summary>
+    [PlainText("the speaker's own name, which lines start with")]
     public string? Name { get; set; }
 
     /// <summary>Their picture, shown in the box's portrait while they talk. Empty shows no portrait.</summary>

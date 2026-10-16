@@ -44,12 +44,15 @@ public sealed class WorldGenerator : Component
 
     /// <summary>The tile on top of the ground.</summary>
     [Group("Ground")]
+    [TileNumbers]
     public int GrassTile { get; set; } = 0;
 
     /// <summary>The tile under the grass, <see cref="DirtDepth"/> cells deep.</summary>
+    [TileNumbers]
     public int DirtTile { get; set; } = 1;
 
     /// <summary>The tile under the dirt, all the way down.</summary>
+    [TileNumbers]
     public int StoneTile { get; set; } = 2;
 
     /// <summary>How many cells of dirt lie under the grass before the stone starts.</summary>
@@ -71,19 +74,23 @@ public sealed class WorldGenerator : Component
     public float Sand { get; set; } = 0.15f;
 
     /// <summary>The tile for patches of sand; -1 for none.</summary>
+    [TileNumbers]
     public int SandTile { get; set; } = -1;
 
     /// <summary>How often a tree grows on the grass, from 0 (never) to 1 (wherever there's room).</summary>
     public float Trees { get; set; } = 0.15f;
 
     /// <summary>The tile for tree trunks; -1 for no trees.</summary>
+    [TileNumbers]
     public int TrunkTile { get; set; } = -1;
 
     /// <summary>The tile for treetops; -1 for none.</summary>
+    [TileNumbers]
     public int LeavesTile { get; set; } = -1;
 
     /// <summary>A tile for the bottom row, usually one that's unbreakable (see <see cref="Blocks.Unbreakable"/>).</summary>
     [Group("More")]
+    [TileNumbers]
     public int BottomTile { get; set; } = -1;
 
     /// <summary>

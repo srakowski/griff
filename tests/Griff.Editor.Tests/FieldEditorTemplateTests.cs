@@ -36,7 +36,7 @@ public sealed partial class FieldEditorTemplateTests
         foreach (var (attribute, editorType) in FieldEditor.Kinds)
         {
             Assert.True(templates.Contains(new DataTemplateKey(editorType)), $"{editorType.Name} has no DataTemplate in FieldEditors/*.xaml.");
-            var found = registry.All.SelectMany(d => d.Properties.Select(p => (Descriptor: d, Property: p)))
+            var found = registry.All.Concat(Scripted.All).SelectMany(d => d.Properties.Select(p => (Descriptor: d, Property: p)))
                 .FirstOrDefault(x => x.Property.Editor?.GetType() == attribute);
             if (found.Descriptor is null)
                 continue;
@@ -64,16 +64,20 @@ public sealed partial class FieldEditorTemplateTests
         Assert.Equal(FieldEditor.Kinds.Values.Select(t => t.Name).Order(), drawn.Select(t => t.Name).Order());
     });
 
-    // The field editors' templates, every FieldEditors/*.xaml, each read as the app reads it: in a dictionary of its own,
-    // finding its StaticResources in itself, in what it merges, and in the theme (the app's resources).
-    private static ResourceDictionary Templates()
+    // The field editors' templates, every FieldEditors/*.xaml, and the Inspector's own (FieldTemplates.xaml, whose
+    // FieldSelector picks a field's template by its kind), each read as the app reads it: in a dictionary of its own, finding
+    // its StaticResources in itself, in what it merges, and in the theme (the app's resources).
+    internal static ResourceDictionary Templates()
     {
-        var folder = Path.Combine(RepositoryRoot(), "src", "Griff.Editor", "Features", "Inspector", "FieldEditors");
+        var inspector = Path.Combine(RepositoryRoot(), "src", "Griff.Editor", "Features", "Inspector");
+        var folder = Path.Combine(inspector, "FieldEditors");
         var all = new ResourceDictionary();
-        foreach (var file in Directory.GetFiles(folder, "*.xaml").Order(StringComparer.Ordinal))
+        foreach (var file in Directory.GetFiles(folder, "*.xaml").Order(StringComparer.Ordinal).Append(Path.Combine(inspector, "FieldTemplates.xaml")))
         {
             var text = File.ReadAllText(file);
-            var merged = MergedSource().Matches(MergedDictionaries().Match(text).Value).Select(m => Inside(File.ReadAllText(Path.Combine(folder, m.Groups[1].Value))));
+            // The Inspector's own merges the editors' files, which are read on their own here.
+            var merged = Path.GetDirectoryName(file) != folder ? []
+                : MergedSource().Matches(MergedDictionaries().Match(text).Value).Select(m => Inside(File.ReadAllText(Path.Combine(folder, m.Groups[1].Value))));
             var xaml = $"""
                 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -93,6 +97,27 @@ public sealed partial class FieldEditorTemplateTests
 
         return all;
     }
+
+    // A script marked for the editors none of Griff's components use (a list's rows, names and values), as a game's might be.
+    private static readonly Lazy<Griff.Scenes.Serialization.ComponentRegistry> ScriptedRegistry = new(() =>
+    {
+        var registry = Griff.Scenes.Serialization.ComponentRegistry.CreateDefault();
+        var result = new Griff.Scripting.ScriptHost(registry).Reload([new Griff.Scripting.ScriptSource("Scripts/Marked.cs", """
+            using System.Collections.Generic;
+            public class Marked : Behavior
+            {
+                [ListRows(CellKind.Color)]
+                public IReadOnlyList<string> Colors { get; set; } = ["#F2607E"];
+
+                [Pairs(Values = CellKind.Number)]
+                public IReadOnlyList<string> Prices { get; set; } = ["Sword: 30"];
+            }
+            """)], []);
+        Assert.True(result.Success, string.Join('\n', result.Diagnostics));
+        return registry;
+    });
+
+    private static Griff.Scenes.Serialization.ComponentRegistry Scripted => ScriptedRegistry.Value;
 
     [GeneratedRegex(@"<ResourceDictionary\s+Source=""([^""]+)""")]
     private static partial Regex MergedSource();

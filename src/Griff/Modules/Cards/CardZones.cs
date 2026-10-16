@@ -448,6 +448,7 @@ public sealed class Hand : CardZone, IDrawable, IDrawEffect, ITurnReady, IPlayte
     /// as its side's turn began ("Wolf: 2 damage to Blue Hero."). The game sets it. Read as the "Said" output.
     /// </summary>
     [Output]
+    [PlainText("what was last played: the game sets it")]
     public string? Said { get; set; }
 
     /// <summary>Its side: its Turn Taker's (on it or an entity it's inside), or empty with none.</summary>
@@ -675,6 +676,7 @@ public sealed class PlayZone : CardZone, IDrawable, IPlaytestReport
     public Color HoverColor { get; set; } = Color.FromBytes(0xFF, 0xE0, 0x82, 0x60);
 
     /// <summary>Words written in it while it's empty, e.g. "Play a card".</summary>
+    [PlainText("what's written in it, its own words")]
     public string? Label { get; set; }
 
     /// <summary>Seconds a card takes to slide into place on it.</summary>

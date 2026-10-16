@@ -156,6 +156,7 @@ public sealed class Slingshot : Component, IDrawable, IPlaytestReport, IActionRe
     public float LoadIn { get; set; }
 
     /// <summary>The shot it last launched, by its entity's id, while it's flying: what the camera follows. Set by the game.</summary>
+    [PlainText("the shot in the air: the game sets it")]
     public string? Flying { get; set; }
 
     /// <summary>Seconds the shot it last launched has been all but still. Set by the game.</summary>

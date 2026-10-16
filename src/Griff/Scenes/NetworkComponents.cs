@@ -170,9 +170,11 @@ public enum TextFieldUse
 public sealed class TextField : Component
 {
     /// <summary>What's typed in it.</summary>
+    [PlainText("what's typed in it")]
     public string? Value { get; set; }
 
     /// <summary>Shown, faded, while it's empty, e.g. "Your name".</summary>
+    [PlainText("words it shows")]
     public string? Placeholder { get; set; }
 
     /// <summary>The longest it can get.</summary>
@@ -205,6 +207,7 @@ public sealed class TextField : Component
 public sealed class Scoreboard : Component
 {
     /// <summary>A line on top, e.g. "Players". Empty has none.</summary>
+    [PlainText("words it shows")]
     public string? Title { get; set; } = "Players";
 
     /// <summary>Show each player's score.</summary>
@@ -219,6 +222,7 @@ public sealed class Scoreboard : Component
     public bool ShowStatus { get; set; } = true;
 
     /// <summary>What it shows when not in a network game. Empty shows nothing.</summary>
+    [PlainText("words it shows")]
     public string? Offline { get; set; } = "Not connected";
 
     /// <summary>A key that shows it while held, e.g. Tab, for a scoreboard during play. None shows it all the time.</summary>
@@ -244,5 +248,6 @@ public sealed class NameTag : Component
     public bool UseColor { get; set; } = true;
 
     /// <summary>What it shows when not in a network game. Empty shows nothing.</summary>
+    [PlainText("words it shows")]
     public string? Offline { get; set; }
 }

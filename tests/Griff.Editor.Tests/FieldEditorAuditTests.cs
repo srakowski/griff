@@ -7,26 +7,15 @@ namespace Griff.Editor.Tests;
 /// <summary>
 /// The field editors audit of the core components (Basics, Rendering, Physics, Movement, Combat, Level and Audio; the
 /// players' and enemies' pieces are in Movement and Combat): every field that takes text, a list or a spatial vector, and
-/// the editor the Inspector gives it. A field that slips back to a plain box, or a new one that lands as one, shows here.
-/// Fields of plain values (numbers, toggles, choices, colors) keep the editors their kinds get.
+/// the editor the Inspector gives it. A field that slips back to a plain box, or a new one that lands as one, shows here;
+/// a plain box ("Text", "Lines") is only for a field marked [PlainText("why")], which <see cref="FieldCoverageTests"/>
+/// holds every component to. Fields of plain values (numbers, toggles, choices, colors) keep the editors their kinds get.
 /// </summary>
 public sealed partial class FieldEditorAuditTests
 {
     /// <summary>The categories this audit covers.</summary>
     private static readonly string[] Categories = ["Basics", "Rendering", "Physics", "Movement", "Combat", "Level", "Audio"];
 
-    /// <summary>
-    /// Text the Inspector rightly leaves as text: a name it gives itself or words it says (nothing else names them), and
-    /// what the game writes. Each with why.
-    /// </summary>
-    private static readonly Dictionary<string, string> PlainText = new()
-    {
-        ["Battler.Title"] = "what it's called in what it says, its own words",
-        ["Battler.Spell"] = "its spell's name as it says it, named nowhere else",
-        ["Battler.Item"] = "its item's name as it says it, named nowhere else",
-        ["Battler.Said"] = "what it last did: the game writes it",
-        ["Tilemap.Tiles"] = "the grid, painted in the Scene view with the tile palette",
-    };
 
     // What the Inspector gives a field, as the audit table says it.
     internal static string EditorOf(PropertyField field) => field.Kind switch
@@ -58,8 +47,6 @@ public sealed partial class FieldEditorAuditTests
                 var name = $"{descriptor.DisplayName}.{property.Name}";
                 if (plainKinds.Contains(field.Kind) || field.Kind == FieldKind.Vector && property.Offset is null)
                     continue;
-                if (field.Kind is FieldKind.Text or FieldKind.Lines)
-                    Assert.True(PlainText.ContainsKey(name), $"{name} is plain text: give it an editor, or say why text is right for it.");
                 table.Add($"{name}: {EditorOf(field)}");
             }
         }

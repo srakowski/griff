@@ -63,7 +63,9 @@ internal sealed partial class DemoUi
             return;
         // A list naming several stays open, to tick another.
         after.IsPickerOpen = false;
-        var done = after.Kind is FieldKind.Image or FieldKind.Sound ? after.TextValue == name : after.Names(name) == wanted;
+        var done = after.Kind is FieldKind.Image or FieldKind.Sound ? after.TextValue == name
+            : after.Kind == FieldKind.Enum ? after.Value?.ToString() == name
+            : after.Names(name) == wanted;
         if (!done)
         {
             after.Pick(name);

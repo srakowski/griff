@@ -152,6 +152,17 @@ public sealed class ComponentDescriptor
                     $"{type.Name}.{property.Name} is marked [{editor.GetType().Name[..^"Attribute".Length]}], which goes on {editor.FitsText}, " +
                     $"but it's {property.PropertyType.Name}.");
             }
+
+            if (property.GetCustomAttribute<PlainTextAttribute>() is { } plain)
+            {
+                if (!PlainTextAttribute.Fits(property.PropertyType))
+                    throw new NotSupportedException($"{type.Name}.{property.Name} is marked [PlainText], which goes on a string, a list of strings or a whole number, but it's {property.PropertyType.Name}.");
+                if (string.IsNullOrWhiteSpace(plain.Why))
+                    throw new NotSupportedException($"{type.Name}.{property.Name} is marked [PlainText] without saying why: [PlainText(\"words it shows\")].");
+                if (property.GetCustomAttribute<FieldEditorAttribute>() is not null || property.GetCustomAttribute<NamesAttribute>() is not null ||
+                    property.GetCustomAttribute<EntityNameAttribute>() is not null || property.GetCustomAttribute<AssetFileAttribute>() is not null)
+                    throw new NotSupportedException($"{type.Name}.{property.Name} is marked [PlainText] and has a picker or an editor too: it's one or the other.");
+            }
         }
 
         // A group runs on from its [Group] to the next one in the same class.
@@ -218,23 +229,40 @@ public sealed class PropertyDescriptor
         FormerSerializedNames = FormerNames.Select(n => JsonNamingPolicy.CamelCase.ConvertName(n)).Where(n => n != SerializedName).Distinct().ToList();
         Distance = property.PropertyType == typeof(float) ? property.GetCustomAttribute<DistanceAttribute>() : null;
         EntityName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<EntityNameAttribute>() : null;
-        Names = property.PropertyType != typeof(string) ? null
-            : property.GetCustomAttribute<NamesAttribute>() ?? (EntityName is null && IsFontName(property.Name) ? FontNames : null);
+        PlainText = property.GetCustomAttribute<PlainTextAttribute>();
         ActionName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<ActionNameAttribute>() : null;
         OutputName = property.PropertyType == typeof(string) ? property.GetCustomAttribute<OutputNameAttribute>() : null;
-        Editor = property.GetCustomAttribute<FieldEditorAttribute>();
+        Editor = property.GetCustomAttribute<FieldEditorAttribute>()
+            ?? (property.PropertyType == typeof(System.Numerics.Vector2) && PlainText is null && property.Name.EndsWith("Direction", StringComparison.Ordinal) ? Way : null);
+        File = property.GetCustomAttribute<AssetFileAttribute>();
+        Names = property.PropertyType != typeof(string) ? null
+            : property.GetCustomAttribute<NamesAttribute>() ?? (EntityName is null && ActionName is null && OutputName is null && Editor is null &&
+                File is null && PlainText is null ? NamesByName(property.Name) : null);
         Offset = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<OffsetAttribute>() : null;
         Resizable = property.PropertyType == typeof(System.Numerics.Vector2) ? property.GetCustomAttribute<ResizableAttribute>() : null;
-        File = property.GetCustomAttribute<AssetFileAttribute>();
     }
 
     /// <summary>For a string marked <see cref="AssetFileAttribute"/>: the kind of file in Assets it names, which its name doesn't say.</summary>
     public AssetFileAttribute? File { get; }
 
-    // A string called Font, or ending in Font ("TitleFont"), names a font without being marked.
-    private static readonly NamesAttribute FontNames = new(NameKind.Font);
+    /// <summary>
+    /// From <see cref="PlainTextAttribute"/>: plain text is right for it, and why (words it shows, what the game writes); null
+    /// for a field that has a picker or an editor of its own, or should.
+    /// </summary>
+    public PlainTextAttribute? PlainText { get; }
 
-    private static bool IsFontName(string name) => name.EndsWith("Font", StringComparison.Ordinal);
+    // What a string names by its name alone, unmarked: one called Font, Prefab, Scene or Message, or ending in one
+    // ("TitleFont", "BulletPrefab", "NextScene", "WinMessage"), names a font, prefab, scene or message.
+    private static readonly (string Ending, NamesAttribute Names)[] NamedBy =
+    [
+        ("Font", new(NameKind.Font)), ("Prefab", new(NameKind.Prefab)), ("Scene", new(NameKind.Scene)), ("Message", new(NameKind.Message)),
+    ];
+
+    private static NamesAttribute? NamesByName(string name) =>
+        NamedBy.FirstOrDefault(n => name.EndsWith(n.Ending, StringComparison.Ordinal)).Names;
+
+    // A Vector2 called Direction, or ending in it ("FleeDirection"), is a direction without being marked.
+    private static readonly DirectionAttribute Way = new();
 
     internal PropertyInfo Info => _property;
 
@@ -259,8 +287,9 @@ public sealed class PropertyDescriptor
 
     /// <summary>
     /// For a string marked <see cref="NamesAttribute"/>: it names a prefab, scene, input action, collision layer, message
-    /// or font, which the Inspector picks from a list of the project's. A string called Font (or ending in Font) names a
-    /// font without being marked.
+    /// or font, which the Inspector picks from a list of the project's. A string called Font, Prefab, Scene or Message (or
+    /// ending in one, "WinMessage") names one without being marked, unless it has another picker, an editor or
+    /// <see cref="PlainTextAttribute"/>.
     /// </summary>
     public NamesAttribute? Names { get; }
 
@@ -278,7 +307,8 @@ public sealed class PropertyDescriptor
 
     /// <summary>
     /// The editor of its own the Inspector gives it (see <see cref="FieldEditorAttribute"/>): dice, points, tile numbers,
-    /// clips and the like; null for the plain one its type gets.
+    /// clips and the like; null for the plain one its type gets. A <see cref="System.Numerics.Vector2"/> called Direction (or
+    /// ending in it) is a <see cref="DirectionAttribute"/> without being marked.
     /// </summary>
     public FieldEditorAttribute? Editor { get; }
 

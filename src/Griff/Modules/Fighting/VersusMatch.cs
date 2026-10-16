@@ -141,18 +141,22 @@ public sealed class VersusMatch : Component, IPlaytestReport
 
     /// <summary>What's announced in the middle of the screen: "Round 1", "Fight!", "K.O.", "Time", "Kenta Wins"; empty for nothing. Set by the game.</summary>
     [Output]
+    [PlainText("what's announced: the game sets it")]
     public string? Announcement { get; set; }
 
     /// <summary>The fighter that won the match (its name, as shown), or "Draw"; empty until it's over. Set by the game.</summary>
     [Output]
+    [PlainText("who won: the game sets it")]
     public string? Winner { get; set; }
 
     /// <summary>The first fighter's name as shown: its character's (the prefab it was made from), or its own. Set by the game.</summary>
     [Output]
+    [PlainText("the fighter's name as shown: the game sets it")]
     public string? FirstName { get; set; }
 
     /// <summary>The second fighter's name as shown. Set by the game.</summary>
     [Output]
+    [PlainText("the fighter's name as shown: the game sets it")]
     public string? SecondName { get; set; }
 
     /// <summary>Where the first fighter starts each round, as it was placed. Set by the game as the match starts.</summary>

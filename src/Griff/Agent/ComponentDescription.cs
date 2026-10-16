@@ -95,6 +95,10 @@ public static class ComponentDescription
                 });
             if (property.Editor is { } editor)
                 text.Append(" (").Append(editor.Describe()).Append(')');
+            else if (GenericFields.For(property, sample is null ? null : property.GetValue(sample)) is { } generic)
+                text.Append(" (").Append(generic.Describe()).Append(')');
+            if (property.PlainText is { } plain)
+                text.Append(CultureInfo.InvariantCulture, $" (Plain text: {plain.Why}.)");
             if (property.Info.IsDefined(typeof(NotSentAttribute), true))
                 text.Append(" (Not sent in a network game: each machine has its own.)");
             if (property.EntityName is { } entityName)

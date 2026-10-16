@@ -216,6 +216,27 @@
         </ComboBox>
     </DataTemplate>
 
+    <!-- Enums with many choices (a key to press): the choice, and a list to search by typing a few letters -->
+    <DataTemplate x:Key="Field.LongEnum" DataType="inspector:PropertyField">
+        <DockPanel x:Name="Row">
+            <inspector:FieldPickerPopup DockPanel.Dock="Right" PlacementTarget="{Binding ElementName=Row}" />
+            <Button Width="24"
+                    Margin="2,0,0,0"
+                    Command="{Binding TogglePickerCommand}"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource Style.Button.Toolbar}"
+                    Tag="enum:choose"
+                    ToolTip="{Binding PickerTip, Mode=OneTime}">
+                <TextBlock Style="{StaticResource Style.Icon}" Text="{x:Static theme:Icons.Search}" />
+            </Button>
+            <Button HorizontalContentAlignment="Left"
+                    Command="{Binding TogglePickerCommand}"
+                    Content="{Binding EnumLabel}"
+                    Tag="enum:value"
+                    ToolTip="{Binding PickerTip, Mode=OneTime}" />
+        </DockPanel>
+    </DataTemplate>
+
     <!-- Colors: the swatch opens the picker (hue and value, alpha, palette, recent colors); the hex can be typed -->
     <DataTemplate x:Key="Field.Color" DataType="inspector:PropertyField">
         <DockPanel x:Name="Row">
@@ -289,6 +310,7 @@
                                      Entity="{StaticResource Field.Entity}"
                                      Named="{StaticResource Field.Name}"
                                      Enum="{StaticResource Field.Enum}"
+                                     LongEnum="{StaticResource Field.LongEnum}"
                                      Lines="{StaticResource Field.Lines}"
                                      Number="{StaticResource Field.Number}"
                                      Image="{StaticResource Field.Image}"

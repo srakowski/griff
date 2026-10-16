@@ -107,6 +107,7 @@ public sealed class Stage : Component, IDrawable
 
     /// <summary>The background being changed from, while a fade or slide is under way.</summary>
     [Group("State")]
+    [PlainText("the background being left: the game sets it")]
     public string? LeavingBackground { get; set; }
 
     /// <summary>How the background is changing.</summary>

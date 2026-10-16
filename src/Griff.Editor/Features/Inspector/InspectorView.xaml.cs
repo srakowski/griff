@@ -192,6 +192,9 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
     public DataTemplate? Number { get; set; }
     public DataTemplate? Text { get; set; }
     public DataTemplate? Enum { get; set; }
+
+    /// <summary>For an enum with many choices (<see cref="PropertyField.IsLongEnum"/>): its choice, with a list to search.</summary>
+    public DataTemplate? LongEnum { get; set; }
     public DataTemplate? Vector { get; set; }
     public DataTemplate? Color { get; set; }
     public DataTemplate? Lines { get; set; }
@@ -212,6 +215,7 @@ public sealed class FieldTemplateSelector : DataTemplateSelector
             FieldKind.Bool => Bool,
             FieldKind.Number => Number,
             FieldKind.Text => Text,
+            FieldKind.Enum when ((PropertyField)item).IsLongEnum => LongEnum,
             FieldKind.Enum => Enum,
             FieldKind.Vector => Vector,
             FieldKind.Color => Color,

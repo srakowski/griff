@@ -117,6 +117,7 @@ public sealed class InventoryBar : Component, IPlaytestReport
     /// of its own), or two items that don't go together are put together. Empty says nothing.
     /// </summary>
     [Group("Lines")]
+    [PlainText("what the walker says, its own words")]
     public string? WrongLine { get; set; } = "That doesn't work.";
 
     /// <summary>Along the bottom of the screen or the top.</summary>
@@ -151,6 +152,7 @@ public sealed class InventoryBar : Component, IPlaytestReport
     /// <summary>The item on the pointer, picked from the bar to use on something; empty for none. Read as the "Holding" output.</summary>
     [Group("State")]
     [Output]
+    [PlainText("the item on the pointer: the game sets it as items are picked")]
     public string? Holding { get; set; }
 
     /// <summary>How far the bar is scrolled: the first item shown, counting from 0.</summary>
@@ -331,6 +333,7 @@ public sealed class UseWith : Component
 
     /// <summary>What the walker says, e.g. "The key turns. It's open!"</summary>
     [Group("What It Does")]
+    [PlainText("what the walker says, its own words")]
     public string? Line { get; set; }
 
     /// <summary>Starts the <see cref="Dialogue"/> on the hotspot's entity: giving something to a character.</summary>

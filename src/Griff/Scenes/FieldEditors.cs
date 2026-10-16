@@ -345,6 +345,24 @@ public sealed class OffsetAttribute : Attribute
 }
 
 /// <summary>
+/// Says plain text is right for a property that takes text or a list of it, and why: words it shows or says, a name it gives
+/// itself that nothing else names, or what the game writes as it runs (<c>[PlainText("words it shows")]</c>). The Inspector
+/// keeps a plain box for it, and a list keeps its lines as one block of text (a tilemap's rows) rather than a row each. Every
+/// other field taking text has a picker or an editor of its own: Griff's tests fail for one with neither, and say what to
+/// mark it. A whole number named like a tile ("FirstTile") that isn't one says so with it too.
+/// </summary>
+/// <param name="why">Why typing it is right, e.g. "words it shows" or "what the game writes".</param>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class PlainTextAttribute(string why) : Attribute
+{
+    /// <summary>Why typing it is right.</summary>
+    public string Why { get; } = why;
+
+    /// <summary>True for the types it goes on: text, a list of strings, or a whole number named like a tile.</summary>
+    public static bool Fits(Type type) => type == typeof(string) || type == typeof(IReadOnlyList<string>) || type == typeof(int);
+}
+
+/// <summary>
 /// Marks a string property as text that shows an output when another property names one, with <c>{0}</c> for the output
 /// and <c>{1}</c> what it's out of, each with a format after a colon if it says ("Gold: {0}", "{0} / {1}", "{0:0.0} m/s"):
 /// a <see cref="Text"/>'s Value. While the output is set the Inspector offers what to put in and shows how it reads now.

@@ -10,25 +10,6 @@ public sealed partial class FieldEditorAuditTests
     /// <summary>The categories the gameplay and UI audit covers.</summary>
     private static readonly string[] GameplayCategories = ["Gameplay", "UI", "Story", "Wiring", "Data", "Multiplayer"];
 
-    /// <summary>
-    /// Text in those categories the Inspector rightly leaves as text: words it shows, a name it gives itself, or what the
-    /// game writes. Each with why.
-    /// </summary>
-    private static readonly Dictionary<string, string> GameplayPlainText = new()
-    {
-        ["TableValues.Applied"] = "which values the game set last: the game writes it",
-        ["MatchBoard.Cleared"] = "how many of each gem have been cleared: the game counts it",
-        ["NameTag.Offline"] = "words it shows",
-        ["Scoreboard.Title"] = "words it shows",
-        ["Scoreboard.Offline"] = "words it shows",
-        ["Backlog.Lines"] = "the lines said so far: dialogues write them as they're said",
-        ["Speaker.Name"] = "the speaker's own name, which lines start with",
-        ["SaveSlot.EmptyText"] = "words it shows",
-        ["TextField.Value"] = "what's typed in it",
-        ["TextField.Placeholder"] = "words it shows",
-        ["Toggle.OnText"] = "words its text shows while it's on",
-        ["Toggle.OffText"] = "words its text shows while it's off",
-    };
 
     [Fact]
     public void GameplayAndUiComponentsFields_GetTheEditorsTheAuditGaveThem() => EditorHost.Run(services =>
@@ -46,8 +27,6 @@ public sealed partial class FieldEditorAuditTests
                 var name = $"{descriptor.DisplayName}.{property.Name}";
                 if (plainKinds.Contains(field.Kind) || field.Kind == FieldKind.Vector && property.Offset is null && property.Resizable is null)
                     continue;
-                if (field.Kind is FieldKind.Text or FieldKind.Lines)
-                    Assert.True(GameplayPlainText.ContainsKey(name), $"{name} is plain text: give it an editor, or say why text is right for it.");
                 table.Add($"{name}: {(field.Kind == FieldKind.Vector && property.Resizable is not null ? "Resizable" : EditorOf(field))}");
             }
         }
@@ -83,6 +62,7 @@ public sealed partial class FieldEditorAuditTests
         DropTarget.TakeMessage: Names:Message
         DropTarget.AllFullMessage: Names:Message
         FallingBoard.Pieces: LetterCounts
+        FallingBoard.FirstTile: TileNumbers
         FallingBoard.RotateAction: Names:Action
         FallingBoard.DropAction: Names:Action
         FallingBoard.MoveSound: Sound

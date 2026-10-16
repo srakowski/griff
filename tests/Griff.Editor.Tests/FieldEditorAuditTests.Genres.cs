@@ -16,44 +16,6 @@ public sealed partial class FieldEditorAuditTests
     // (the falling-blocks, match-3 and tactics boards and units among them).
     private static readonly string[] GenreElsewhere = ["Basics", "Rendering", "Physics", "Movement", "Combat", "Level", "Audio", "Gameplay", "Wiring"];
 
-    /// <summary>
-    /// Text the Inspector rightly leaves as text: words a component says or shows (nothing else names them), and what the game
-    /// sets as it runs. Each with why.
-    /// </summary>
-    private static readonly Dictionary<string, string> GenrePlainText = new()
-    {
-        ["Hotspot.Name"] = "what the pointer calls it, its own words",
-        ["Hotspot.LookLine"] = "what the walker says, its own words",
-        ["Hotspot.UseLine"] = "what the walker says, its own words",
-        ["Hotspot.WrongItemLine"] = "what the walker says, its own words",
-        ["InventoryBar.WrongLine"] = "what the walker says, its own words",
-        ["InventoryBar.Holding"] = "the item on the pointer: the game sets it as items are picked",
-        ["UseWith.Line"] = "what the walker says, its own words",
-        ["Walker.Route"] = "where it's still to walk: the game sets it",
-        ["Walker.Heading"] = "the hotspot it's walking to: the game sets it",
-        ["Walker.HeadingItem"] = "the item it's taking there: the game sets it",
-        ["Walker.Pointed"] = "the hotspot the keys are on: the game sets it",
-        ["Walker.Said"] = "what it's saying: the game sets it",
-        ["Card.Title"] = "what's written on it, its own words",
-        ["Card.Text"] = "what's written on it, its own words",
-        ["Hand.Said"] = "what was last played: the game sets it",
-        ["PlayZone.Label"] = "what's written in it, its own words",
-        ["ComputerFighter.SawMove"] = "the move it last read: the game sets it",
-        ["FightingCharacter.Move"] = "the move under way: the game sets it",
-        ["FightingCharacter.ComboOn"] = "who its combo is on: the game sets it",
-        ["FightingCharacter.History"] = "what was pressed lately: the game writes it",
-        ["Hitboxes.SwingClip"] = "the swing under way: the game sets it",
-        ["Hitboxes.Struck"] = "what the swing has hit: the game writes it",
-        ["VersusMatch.Announcement"] = "what's announced: the game sets it",
-        ["VersusMatch.Winner"] = "who won: the game sets it",
-        ["VersusMatch.FirstName"] = "the fighter's name as shown: the game sets it",
-        ["VersusMatch.SecondName"] = "the fighter's name as shown: the game sets it",
-        ["Weapon.Name"] = "the weapon's name as shown, its own words",
-        ["Drain.Serving"] = "the ball waiting: the game sets it",
-        ["Slingshot.Flying"] = "the shot in the air: the game sets it",
-        ["NoteLanes.Played"] = "how each note went: the game writes it",
-        ["Stage.LeavingBackground"] = "the background being left: the game sets it",
-    };
 
     // What the Inspector gives a field, as the audit table says it: the core audit's words, a rows editor by its kind of rows
     // ("Rows:Recipes"), and a kind of name by its scope ("Names:Kind(Team)").
@@ -81,8 +43,6 @@ public sealed partial class FieldEditorAuditTests
                 var name = $"{descriptor.DisplayName}.{property.Name}";
                 if (plainKinds.Contains(field.Kind) || field.Kind == FieldKind.Vector && property.Offset is null)
                     continue;
-                if (field.Kind is FieldKind.Text or FieldKind.Lines)
-                    Assert.True(GenrePlainText.ContainsKey(name), $"{name} is plain text: give it an editor, or say why text is right for it.");
                 table.Add($"{name}: {GenreEditorOf(field)}");
             }
         }
@@ -161,7 +121,14 @@ public sealed partial class FieldEditorAuditTests
         Crafting.Recipes: Rows:Recipes
         Crafting.Sound: Sound
         Hotbar.Colors: Rows:ItemColors
+        WorldGenerator.GrassTile: TileNumbers
+        WorldGenerator.DirtTile: TileNumbers
+        WorldGenerator.StoneTile: TileNumbers
         WorldGenerator.Ores: Rows:TileAmounts
+        WorldGenerator.SandTile: TileNumbers
+        WorldGenerator.TrunkTile: TileNumbers
+        WorldGenerator.LeavesTile: TileNumbers
+        WorldGenerator.BottomTile: TileNumbers
         WorldGenerator.Walls: Entity
         WorldGenerator.Spawn: Entities
         Card.Title: Text

@@ -283,6 +283,13 @@ public sealed class Transform : Component
 
     public Vector3 WorldPosition => WorldMatrix.Translation;
 
+    /// <summary>A rotation as angles in degrees about X, Y and Z, as <see cref="Rotation"/> holds them (none for an empty quaternion).</summary>
+    public static Vector3 EulerDegrees(Quaternion rotation) => rotation == default ? Vector3.Zero : ToEulerDegrees(rotation);
+
+    /// <summary>The rotation that angles in degrees about X, Y and Z make, as <see cref="Rotation"/> holds them.</summary>
+    public static Quaternion FromEulerDegrees(Vector3 degrees) =>
+        Quaternion.CreateFromYawPitchRoll(ToRadians(degrees.Y), ToRadians(degrees.X), ToRadians(degrees.Z));
+
     private static float ToRadians(float degrees) => degrees * (MathF.PI / 180f);
 
     private static float ToDegrees(float radians) => radians * (180f / MathF.PI);

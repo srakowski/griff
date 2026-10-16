@@ -20,6 +20,7 @@ public sealed class Backlog : Component, IDrawable
     /// nobody (a narrator), and "&gt; Stay in the sun" for a choice picked. Dialogues add to it as they're said.
     /// </summary>
     [Group("State")]
+    [PlainText("the lines said so far: dialogues write them as they're said")]
     public IReadOnlyList<string> Lines { get; set; } = [];
 
     /// <summary>How many lines it keeps: past it, the oldest go.</summary>
@@ -194,6 +195,7 @@ public sealed class SaveSlot : Component, IDrawable
     public string? Format { get; set; } = "{date}  {time}\n{line}";
 
     /// <summary>What it says while nothing is saved there.</summary>
+    [PlainText("words it shows")]
     public string? EmptyText { get; set; } = "Empty";
 
     /// <summary>How big the screenshot is, in world units.</summary>

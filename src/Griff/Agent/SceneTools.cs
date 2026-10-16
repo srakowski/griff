@@ -267,10 +267,8 @@ public sealed class SceneTools(IAgentScene host) : IAgentToolSource
             {
                 if (property.Names is not null && host.Names is { } known && known.Unmatched(component, property) is { Count: > 0 } names)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", KnownNames.Problem(property.Names, names) + ".");
-                if (property.ActionName is not null && ActionNames.Unmatched(component, property) is { Count: > 0 } actions)
-                    yield return (component, $"{component.GetType().Name}.{property.Name}", ActionNames.Problem(actions) + ".");
-                if (property.OutputName is not null && OutputNames.Unmatched(component, property) is { Count: > 0 } outputs)
-                    yield return (component, $"{component.GetType().Name}.{property.Name}", OutputNames.Problem(outputs) + ".");
+                if (NameChecks.Problem(component, property) is { } unresolved)
+                    yield return (component, $"{component.GetType().Name}.{property.Name}", unresolved + ".");
                 if ((property.Editor ?? GenericFields.For(property, property.GetValue(component)))?.Problem(component, property.GetValue(component)) is { } problem)
                     yield return (component, $"{component.GetType().Name}.{property.Name}", problem + ".");
             }

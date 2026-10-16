@@ -911,12 +911,13 @@ public static partial class SceneRenderer
         return new SpriteDraw(quad, null, color, ScreenEntity) { HoleRadius = Math.Max(radius / half, 1e-4f) };
     }
 
-    // What an iris closes in on: the entity called Player, or else the first a player moves (see PlayerMovementAttribute).
+    // What an iris closes in on: what a view is centred on (see IViewFocus), or else the first a player moves (see PlayerMovementAttribute).
     private static Vector2? IrisCenter(Scene scene)
     {
         // In the minigame that has the screen, if one has.
         var shown = MinigameRoot.Shown(scene);
-        var player = scene.EntitiesNow.FirstOrDefault(e => e.Name == "Player" && e.IsActive && !MinigameRoot.IsBehind(e, shown))
+        var player = scene.EntitiesNow.Where(e => e.IsActive).SelectMany(e => e.Components.OfType<IViewFocus>())
+                         .Select(f => f.Focus).FirstOrDefault(t => t is { IsActive: true } && !MinigameRoot.IsBehind(t, shown))
                      ?? scene.EntitiesNow.FirstOrDefault(e => e.IsActive && PlayerMovementAttribute.IsOn(e) && !MinigameRoot.IsBehind(e, shown));
         if (player is null)
             return null;

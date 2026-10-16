@@ -66,8 +66,9 @@ public sealed class ComponentOutput
     private readonly Func<Component, string?, float>? _outOf;
 
     internal ComponentOutput(Type component, MemberInfo member, string name, Type valueType, string? keyName, string? example,
-        Func<Component, string?, float> number, Func<Component, string?, string?>? text, Func<Component, string?, float>? outOf, string? outOfName)
+        Func<Component, string?, float> number, Func<Component, string?, string?>? text, Func<Component, string?, float>? outOf, string? outOfName, IReadOnlyList<string> formerNames)
     {
+        FormerNames = formerNames;
         ComponentType = component;
         Member = member;
         Name = name;
@@ -133,8 +134,11 @@ public sealed class ComponentOutput
     /// <summary>What it's out of on <paramref name="component"/> (see <see cref="OutputAttribute.OutOf"/>); 0 for nothing.</summary>
     public float ReadOutOf(Component component, string? key = null) => _outOf?.Invoke(component, key) ?? 0;
 
+    /// <summary>Names it had before (<see cref="FormerNameAttribute"/>): what still names it.</summary>
+    public IReadOnlyList<string> FormerNames { get; }
+
     /// <summary>
-    /// True if <paramref name="name"/> names it: its name, whatever the capitals and spaces ("moves left" is MovesLeft), or
+    /// True if <paramref name="name"/> names it: its name or a former one (<see cref="FormerNames"/>), whatever the capitals and spaces ("moves left" is MovesLeft), or
     /// with its component's in front ("MatchBoard.Score"). The name it's read by (after a colon) isn't part of it.
     /// </summary>
     public bool IsCalled(ReadOnlySpan<char> name)
@@ -148,7 +152,15 @@ public sealed class ComponentOutput
             name = name[(dot + 1)..];
         }
 
-        return ComponentAction.SameWords(name, Name);
+        if (ComponentAction.SameWords(name, Name))
+            return true;
+        for (var i = 0; i < FormerNames.Count; i++)
+        {
+            if (ComponentAction.SameWords(name, FormerNames[i]))
+                return true;
+        }
+
+        return false;
     }
 
     public override string ToString() => QualifiedName;
@@ -325,7 +337,8 @@ public static class ComponentOutputs
             }
         }
 
-        return new ComponentOutput(type, member, name, valueType, keyName, attribute.Example, number, text, outOf, attribute.OutOf);
+        return new ComponentOutput(type, member, name, valueType, keyName, attribute.Example, number, text, outOf, attribute.OutOf,
+            [.. member.GetCustomAttributes<FormerNameAttribute>(inherit: false).Select(a => a.Name.Replace(" ", "", StringComparison.Ordinal))]);
     }
 
     // Reads that allocate nothing: the getter bound as an open delegate on its declaring type, its value given as a number

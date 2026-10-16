@@ -388,6 +388,9 @@ internal sealed class FighterTemplate : ProjectTemplate
         var first = Placed(Roster[0], FirstFighter, -2.4f, player: 1, opponent: SecondFighter);
         var second = Placed(Roster[Math.Min(1, Roster.Count - 1)], SecondFighter, 2.4f, player: 2, opponent: FirstFighter);
         second.GetComponent<Sprite>()!.FlipX = true;
+        // Training's dummy is a computer fighter standing still: its buttons name its actions and outputs, so it has them in the scene.
+        if (training)
+            second.AddComponent<ComputerFighter>().Behavior = ComputerBehavior.Stand;
         scene.Add(first);
         scene.Add(second);
 

@@ -385,6 +385,8 @@ public sealed partial class Game
     private void Step(double seconds)
     {
         _tickSeconds = seconds;
+        if (!ReferenceEquals(_namesChecked, Scene))
+            CheckNames();
         // What moves in it remembers where it was as it began, to be drawn between the two.
         Scene.Step = Time.Frame + 1;
         Scene.Steps++;

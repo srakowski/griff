@@ -511,16 +511,13 @@ internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsB
     private bool IsAlive(Entity entity) =>
         entity.Scene == Scene && !Game.IsDestroying(entity) && Health.Of(entity) is not { IsDead: true };
 
-    // Sprites on entities called "Team Color" take on their team's color.
+    // Sprites with a Team Color take on their team's color.
     private static void TintTeam(Entity entity, Faction? faction)
     {
         if (faction is null)
             return;
-        foreach (var part in entity.SelfAndDescendants().Where(e => e.Name == "Team Color"))
-        {
-            if (part.GetComponent<Sprite>() is { } sprite)
-                sprite.Tint = faction.Color with { A = sprite.Tint.A };
-        }
+        foreach (var sprite in TeamColor.SpritesIn(entity))
+            sprite.Tint = faction.Color with { A = sprite.Tint.A };
     }
 
     // ----- Prefabs -----

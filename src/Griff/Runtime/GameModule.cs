@@ -124,11 +124,14 @@ public sealed class GameSetup
     public StepId StepBefore(StepId before, string name, GameSystem system, Action run) => AddStep(before, before: true, name, system, run);
 
     /// <summary>
-    /// Does one of the module's dialogue tags (see <see cref="DialogueTagsAttribute"/>) as the line it's on is said:
-    /// <paramref name="run"/> is called with the dialogue and what follows the word in the brackets ("Ava left happy" for
-    /// "[show Ava left happy]"). A dialogue is said on the machine of the player reading it.
+    /// Does the dialogue tags of <typeparamref name="T"/> (the words its <see cref="DialogueTagsAttribute"/> lists, written
+    /// once, there) as the line they're on is said: <paramref name="run"/> is called with the dialogue, the word and what
+    /// follows the word in the brackets ("Ava left happy" for "[show Ava left happy]"). A dialogue is said on the machine of
+    /// the player reading it.
     /// </summary>
-    public void OnDialogueTag(string word, Action<Dialogue, string> run) => Game.LevelSystem.OnDialogueTag(word, run);
+    /// <exception cref="InvalidOperationException"><typeparamref name="T"/> has no dialogue tags, or another module already does a word.</exception>
+    public void OnDialogueTags<T>(Action<Dialogue, string, string> run) where T : Component =>
+        Game.LevelSystem.OnDialogueTags(typeof(T), run);
 
     /// <summary>
     /// Something players' machines in a network game can ask the host to do, by a name unique to the module (e.g.

@@ -52,10 +52,14 @@ public sealed class ComponentRegistry
         var descriptor = new ComponentDescriptor(type);
         if (_byName.TryGetValue(descriptor.Name, out var clash))
             throw new InvalidOperationException($"{type.FullName} and {clash.Type.FullName} are both saved as \"{descriptor.Name}\".");
+        if (_byFormerName.TryGetValue(descriptor.Name, out var renamed))
+            throw new InvalidOperationException($"{type.FullName} is saved as \"{descriptor.Name}\", which {renamed.Type.FullName} was saved as before.");
         foreach (var former in descriptor.FormerNames)
         {
             if (_byFormerName.TryGetValue(former, out var other))
                 throw new InvalidOperationException($"{type.FullName} and {other.Type.FullName} both say they were saved as \"{former}\" before.");
+            if (_byName.TryGetValue(former, out var current))
+                throw new InvalidOperationException($"{type.FullName} says it was saved as \"{former}\" before, which {current.Type.FullName} is saved as.");
         }
 
         foreach (var former in descriptor.FormerNames)

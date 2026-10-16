@@ -150,7 +150,7 @@ public static class ComponentDescription
                 var value = action.ValueKind is { } kind
                     ? $" (done with {kind}, its {action.ValueName}: a trigger's with{(action.DefaultValue is { } fallback ? $", {AgentValues.ToJson(fallback)?.ToJsonString()} without one" : "")})"
                     : "";
-                text.AppendLine(CultureInfo.InvariantCulture, $"- {action.Name}{value}{meaning}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {action.Name}{value}{Former(action.FormerNames)}{meaning}");
             }
         }
 
@@ -163,7 +163,7 @@ public static class ComponentDescription
                 var meaning = DocComments.Summary(output) is { IsEmpty: false } doc ? ". " + doc.PlainText.Replace("\n\n", " ") : "";
                 var by = output.KeyName is { } key ? $", read by a {ComponentAction.Spaced(key).ToLowerInvariant()} after a colon, e.g. \"{output.Reference}\"" : "";
                 var of = output.OutOfName is { } outOf ? $", out of its {JsonNamingPolicy.CamelCase.ConvertName(outOf)}" : "";
-                text.AppendLine(CultureInfo.InvariantCulture, $"- {output.Name} ({output.ValueKind}{by}{of}){meaning}");
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {output.Name} ({output.ValueKind}{by}{of}){Former(output.FormerNames)}{meaning}");
             }
         }
 
@@ -230,4 +230,7 @@ public static class ComponentDescription
         if (typeof(INetState).IsAssignableFrom(type))
             yield return "In a network game, it also sends values of its own besides its properties.";
     }
+
+    // " (formerly Unlock)": what a renamed action or output still answers to.
+    private static string Former(IReadOnlyList<string> names) => names.Count > 0 ? $" (formerly {string.Join(", ", names)})" : "";
 }

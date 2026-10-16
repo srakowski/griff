@@ -963,15 +963,40 @@ public sealed class Dialogue : Component
         return text;
     }
 
-    private static readonly Lazy<HashSet<string>> TagWords = new(() => new HashSet<string>(
-        typeof(Dialogue).Assembly.GetTypes().SelectMany(t => t.GetCustomAttributes(typeof(DialogueTagsAttribute), false))
-            .SelectMany(a => ((DialogueTagsAttribute)a).Words), StringComparer.OrdinalIgnoreCase));
+    private static readonly Lazy<IReadOnlyDictionary<string, Type>> TagClaims = new(() => ClaimTags(typeof(Dialogue).Assembly.GetTypes()));
+
+    // The words the core's own tags start with.
+    private static readonly string[] CoreTagWords = ["if", "not", "set", "clear", "send"];
+
+    /// <summary>
+    /// Which component claims each tag word (<see cref="DialogueTagsAttribute"/>) among <paramref name="types"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Two components claim one word, or one claims a word the core's own tags start with.</exception>
+    public static IReadOnlyDictionary<string, Type> ClaimTags(IEnumerable<Type> types)
+    {
+        var claims = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in types)
+        {
+            foreach (var attribute in type.GetCustomAttributes(typeof(DialogueTagsAttribute), false))
+            {
+                foreach (var word in ((DialogueTagsAttribute)attribute).Words)
+                {
+                    if (CoreTagWords.Contains(word, StringComparer.OrdinalIgnoreCase))
+                        throw new InvalidOperationException($"{type.Name} claims the dialogue tag word \"{word}\", which Griff's own tags start with.");
+                    if (!claims.TryAdd(word, type))
+                        throw new InvalidOperationException($"{type.Name} and {claims[word].Name} both claim the dialogue tag word \"{word}\": a word starts one module's tags.");
+                }
+            }
+        }
+
+        return claims;
+    }
 
     /// <summary>
     /// True if <paramref name="word"/> starts one of a module's own dialogue tags (see <see cref="DialogueTagsAttribute"/>),
     /// e.g. "show" for a visual novel's "[show Ava left]".
     /// </summary>
-    public static bool IsTagWord(string word) => TagWords.Value.Contains(word);
+    public static bool IsTagWord(string word) => TagClaims.Value.ContainsKey(word);
 
     /// <summary>
     /// Splits "Name: what they say" into the name and what's said, when the line starts that way, and "Name (happy): ..."
@@ -1064,7 +1089,8 @@ public sealed class Dialogue : Component
 /// Marks a component that dialogue lines direct with tags of its own, starting with these words, e.g. a visual novel
 /// stage's "[show Ava left happy]": a row of a <see cref="Dialogue"/>'s lines starting with one in square brackets is a
 /// tag rather than said, done as the line is said by what the component's module registers for it (GameSetup's
-/// OnDialogueTag). Found by this attribute, the way components are.
+/// OnDialogueTags, which takes the words from here: they are written once). Found by this attribute, the way components
+/// are; a word starts one component's tags, so two claiming one (or one of Griff's own: if, set, clear, send) fails.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class DialogueTagsAttribute(params string[] words) : Attribute

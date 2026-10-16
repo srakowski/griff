@@ -222,21 +222,30 @@ public sealed class ChoiceOfAttribute(string member) : FieldEditorAttribute
     /// <summary>What the choices are, for component_describe, e.g. "one of its clips (Clips)".</summary>
     public string? Noun { get; init; }
 
+    /// <summary>
+    /// A member of the component listing names that are right too but aren't offered (the former names of what it lists,
+    /// see <see cref="FormerNameAttribute"/>), so a scene saved before a rename isn't flagged.
+    /// </summary>
+    public string? Also { get; init; }
+
     public override string Describe() =>
         $"Names {Noun ?? $"one of what {Member} lists"}; the Inspector picks from them and flags a name that isn't one. Empty for none.";
 
     /// <summary>What <paramref name="component"/> lists to pick from now.</summary>
-    public IReadOnlyList<string> Choices(Component component)
+    public IReadOnlyList<string> Choices(Component component) => Listed(component, Member);
+
+    private static IReadOnlyList<string> Listed(Component component, string member)
     {
         var type = component.GetType();
-        var found = (object?)type.GetProperty(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)?.GetValue(component)
-            ?? type.GetMethod(Member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, Type.EmptyTypes)?.Invoke(component, null);
+        var found = (object?)type.GetProperty(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)?.GetValue(component)
+            ?? type.GetMethod(member, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, Type.EmptyTypes)?.Invoke(component, null);
         return found is IEnumerable<string> names ? [.. names] : [];
     }
 
     public override string? Problem(Component component, object? value) =>
         value is string { Length: > 0 } name && !string.IsNullOrWhiteSpace(name) &&
-        !Choices(component).Contains(name.Trim(), StringComparer.OrdinalIgnoreCase)
+        !Choices(component).Contains(name.Trim(), StringComparer.OrdinalIgnoreCase) &&
+        !(Also is { } also && Listed(component, also).Contains(name.Trim(), StringComparer.OrdinalIgnoreCase))
             ? $"There's no \"{name.Trim()}\" to pick: {(Choices(component) is { Count: > 0 } choices ? $"the choices are {string.Join(", ", choices)}" : "there's nothing to pick yet")}"
             : null;
 }

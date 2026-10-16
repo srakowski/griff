@@ -162,8 +162,8 @@ internal sealed class StrategyTemplate : ProjectTemplate
             unit.Team = team;
         if (entity.GetComponent<Building>() is { } building)
             building.Team = team;
-        foreach (var part in entity.SelfAndDescendants().Where(e => e.Name == "Team Color"))
-            part.GetComponent<Sprite>()!.Tint = color;
+        foreach (var sprite in TeamColor.SpritesIn(entity))
+            sprite.Tint = color;
         return entity;
     }
 
@@ -182,6 +182,7 @@ internal sealed class StrategyTemplate : ProjectTemplate
         unit.Radius = size / 2;
 
         var team = new Entity("Team Color");
+        team.AddComponent<TeamColor>();
         var band = team.AddComponent<Sprite>();
         band.Size = new Vector2(size);
         band.Tint = PlayerBlue;
@@ -270,6 +271,7 @@ internal sealed class StrategyTemplate : ProjectTemplate
         building.Hotkey = hotkey;
 
         var team = new Entity("Team Color");
+        team.AddComponent<TeamColor>();
         var band = team.AddComponent<Sprite>();
         band.Size = size;
         band.Tint = PlayerBlue;

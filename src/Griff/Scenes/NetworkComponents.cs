@@ -52,7 +52,7 @@ public sealed class Multiplayer : Component
 
     /// <summary>
     /// Paint each player's character their own color (their team's, in a team game) so everyone can tell them apart:
-    /// its sprite, or its children called "Team Color" if it has any.
+    /// its sprite, or the sprites with a Team Color if it has any.
     /// </summary>
     public bool ColorPlayers { get; set; } = true;
 

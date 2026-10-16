@@ -313,10 +313,11 @@ public class SceneTransitionTests
     }
 
     [Fact]
-    public void Iris_ClosesOnThePlayer()
+    public void Iris_ClosesOnWhatTheCameraFollows()
     {
         _camera.Transition = SceneTransition.Iris;
-        var player = new Entity("Player");
+        _camera.Entity!.AddComponent<Follow>().Target = "Hero";
+        var player = new Entity("Hero");
         player.Transform.Position = new Vector3(3, 1, 0);
         _scene.Add(player);
 

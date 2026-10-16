@@ -98,9 +98,11 @@ public sealed class ComponentNameAttribute(string name) : Attribute
 /// An earlier name, so scenes saved before a rename keep their values. On a component: the name it was saved under,
 /// e.g. <c>[FormerName("Enemy")]</c> on a class renamed to Foe (a name without a namespace also matches one in the
 /// class's own namespace). On a property: its earlier name in code, e.g. <c>[FormerName("Speed")]</c> on MoveSpeed.
-/// Scenes load under either name and save under the new one. A component or property can have several.
+/// On an <c>[Action]</c> method or an <c>[Output]</c>: the name it had, so every trigger, button, counter, wire and
+/// condition that still names it keeps working. Scenes load under either name and save under the new one. A component,
+/// property, action or output can have several.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public sealed class FormerNameAttribute(string name) : Attribute
 {
     public string Name { get; } = name;

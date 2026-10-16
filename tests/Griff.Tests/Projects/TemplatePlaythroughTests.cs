@@ -20,7 +20,8 @@ public sealed class TemplatePlaythroughTests
 {
     // Each template's fingerprint after the playthrough (GameFingerprint: what the game holds, not how a file writes it), as
     // it was when gameplay moved from Game into its systems: the 11 templates with a counter that changed when counters
-    // stopped knowing genres hold the same values once its old settings are read as its upgrade step reads them.
+    // stopped knowing genres hold the same values once its old settings are read as its upgrade step reads them. Strategy's
+    // changed when its team-colored bands got a Team Color component (the play is the same: the old fingerprint without it).
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["Adventure"] = "D47AB276F92904B0",
@@ -43,7 +44,7 @@ public sealed class TemplatePlaythroughTests
         ["RpgStats"] = "CC2272F248D58C6D",
         ["Sandbox"] = "915E3ED539ED8900",
         ["Shooter"] = "3BDF6F5299786048",
-        ["Strategy"] = "242AE340F5650C22",
+        ["Strategy"] = "D6F35CA22F0B563E",
         ["Tactics"] = "5FC39AFA6C15833C",
         ["TopDown"] = "0B56E1DD1AA7A073",
         ["VisualNovel"] = "E73E4A64BEAC3D1D",

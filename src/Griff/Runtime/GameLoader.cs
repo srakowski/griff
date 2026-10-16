@@ -54,6 +54,7 @@ public sealed record LoadedGame(Project Project, ComponentRegistry Components, S
             Components = Components,
         };
         game.UseProjectSettings(Project);
+        game.AlreadySaid(Warnings);
         return game;
     }
 }
@@ -93,6 +94,9 @@ public static class GameLoader
 
         await using var stream = File.OpenRead(scenePath);
         var scene = new SceneSerializer(components).Load(stream, warnings);
+        // A trigger, counter or wire naming an action or output nothing has: said now, not left to do nothing.
+        foreach (var line in Griff.Editing.NameChecks.Lines(scene, components))
+            warnings.Add(line);
         return new LoadedGame(project, components, scene, warnings) { SceneName = Path.GetFileNameWithoutExtension(scenePath) };
     }
 

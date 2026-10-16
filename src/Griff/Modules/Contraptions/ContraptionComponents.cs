@@ -443,7 +443,7 @@ public sealed class Wire : Component, IDrawable
     /// or one of its components' actions, e.g. "Spawn", "Fire" or "Damage", done once each time the signal comes on (with
     /// the signal as its amount).
     /// </summary>
-    [ChoiceOf(nameof(InputChoices), Noun = "one of its entity's inputs: Power, Show, its parts' own (a gate's A and B, a lamp's On...) or one of its actions")]
+    [ChoiceOf(nameof(InputChoices), Also = nameof(FormerInputs), Noun = "one of its entity's inputs: Power, Show, its parts' own (a gate's A and B, a lamp's On...) or one of its actions")]
     public string? Input { get; set; } = "Power";
 
     /// <summary>
@@ -471,6 +471,10 @@ public sealed class Wire : Component, IDrawable
 
         return inputs;
     }
+
+    /// <summary>The names its entity's actions had before (see <see cref="FormerNameAttribute"/>): still right for an Input, though not offered.</summary>
+    public IReadOnlyList<string> FormerInputs() =>
+        Entity is { } entity ? [.. ComponentActions.On([entity]).SelectMany(a => a.FormerNames)] : [];
 
     /// <summary>The entity it comes from, by name. The nearest one with that name is used.</summary>
     [EntityName(Incoming = true)]

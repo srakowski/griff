@@ -21,7 +21,6 @@ public sealed class VisualNovelsModule : GameModule
         // if Interact, a click or a choice didn't.
         game.StepBefore(Steps.Dialogues, "Stage Input", stages, stages.Note);
         game.StepAfter(Steps.Dialogues, "Stages", stages, stages.Run);
-        foreach (var word in StageLines.TagWords)
-            game.OnDialogueTag(word, (dialogue, args) => stages.Direct(dialogue, word, args));
+        game.OnDialogueTags<Stage>(stages.Direct);
     }
 }

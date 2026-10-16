@@ -454,7 +454,7 @@ public sealed partial class NetSession
     {
         if (Settings is not { ColorPlayers: true })
             return;
-        var parts = avatar.SelfAndDescendants().Where(e => e.Name == "Team Color").SelectMany(e => e.GetComponents<Sprite>()).ToList();
+        var parts = TeamColor.SpritesIn(avatar);
         if (parts.Count == 0 && avatar.GetComponent<Sprite>() is { } sprite)
             parts.Add(sprite);
         foreach (var part in parts)

@@ -332,6 +332,10 @@ public sealed class SceneSerializer(ComponentRegistry registry)
                 ReadComponent(entity, data, context);
         }
 
+        // Before the Team Color component, an entity called that was painted in its team's color: scenes saved then still are.
+        if (name == TeamColor.FormerEntityName && entity.GetComponent<Sprite>() is not null && entity.GetComponent<TeamColor>() is null && registry.IsRegistered(typeof(TeamColor)))
+            entity.AddComponent<TeamColor>();
+
         if (element.TryGetProperty("children", out var children))
         {
             foreach (var childElement in children.EnumerateArray())

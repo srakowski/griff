@@ -11,7 +11,7 @@ namespace Griff.Scenes;
 [Category("Movement")]
 [WorksWith(typeof(Camera), Note = "a camera that follows the player")]
 [ComponentName("Follow")]
-public sealed class Follow : Component
+public sealed class Follow : Component, IViewFocus
 {
     private Entity? _target;
     private bool _placed;
@@ -46,6 +46,8 @@ public sealed class Follow : Component
     /// </summary>
     [EntityName]
     public string? StayInside { get; set; }
+
+    Entity? IViewFocus.Focus => _target;
 
     /// <summary>The entity being followed. Set it from a script to follow something without looking it up by name.</summary>
     [DoNotSerialize]
@@ -352,4 +354,14 @@ public sealed class Viewport : Component
     }
 
     private static float Finite(float value) => float.IsFinite(value) ? value : 0;
+}
+
+/// <summary>
+/// Any component that says what the view is centred on, such as a <see cref="Follow"/> on a camera: a screen effect that
+/// closes in on the action (the iris) looks there, with no entity called anything in particular. Any component can be one.
+/// </summary>
+public interface IViewFocus
+{
+    /// <summary>What the view is centred on right now, or null.</summary>
+    Entity? Focus { get; }
 }

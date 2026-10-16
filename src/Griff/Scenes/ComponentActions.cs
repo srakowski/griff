@@ -61,8 +61,9 @@ public sealed class ComponentAction
     private readonly object? _default;
 
     internal ComponentAction(Type component, MethodInfo method, string name, Type? valueType, string? valueName, object? fallback, bool takesGame,
-        Action<Component, IGameContext?, float, string?> invoke)
+        Action<Component, IGameContext?, float, string?> invoke, IReadOnlyList<string> formerNames)
     {
+        FormerNames = formerNames;
         ComponentType = component;
         Method = method;
         Name = name;
@@ -163,9 +164,12 @@ public sealed class ComponentAction
         };
     }
 
+    /// <summary>Names it had before (<see cref="FormerNameAttribute"/>): what still names it.</summary>
+    public IReadOnlyList<string> FormerNames { get; }
+
     /// <summary>
-    /// True if <paramref name="name"/> names it: its name, whatever the capitals and spaces ("end turn" is EndTurn), or
-    /// with its component's in front ("Health.Damage").
+    /// True if <paramref name="name"/> names it: its name or a former one (<see cref="FormerNames"/>), whatever the
+    /// capitals and spaces ("end turn" is EndTurn), or with its component's in front ("Health.Damage").
     /// </summary>
     public bool IsCalled(ReadOnlySpan<char> name)
     {
@@ -178,7 +182,15 @@ public sealed class ComponentAction
             name = name[(dot + 1)..];
         }
 
-        return SameWords(name, Name);
+        if (SameWords(name, Name))
+            return true;
+        for (var i = 0; i < FormerNames.Count; i++)
+        {
+            if (SameWords(name, FormerNames[i]))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>True if two names are the same, whatever their capitals and spaces.</summary>
@@ -303,7 +315,7 @@ public static class ComponentActions
 
         // Anything that can have focus can be given it (see FocusAttribute), unless it says for itself what Focus does.
         if (ComponentFocus.Has(type) && !actions.Any(a => SameName(a.Name, FocusName)))
-            actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, g)));
+            actions.Add(new ComponentAction(type, FocusMethod, FocusName, null, null, null, takesGame: true, (c, g, _, _) => ComponentFocus.Focus(c, g), []));
 
         return new Found(actions, powered);
     }
@@ -339,7 +351,8 @@ public static class ComponentActions
             : valueType == typeof(int) ? 1
             : valueType == typeof(bool) ? true
             : null;
-        return new ComponentAction(type, method, name, valueType, valueType is null ? null : values[0].Name, fallback, takesGame, Bind(method, takesGame, valueType));
+        return new ComponentAction(type, method, name, valueType, valueType is null ? null : values[0].Name, fallback, takesGame, Bind(method, takesGame, valueType),
+            [.. method.GetCustomAttributes<FormerNameAttribute>(inherit: false).Select(a => a.Name.Replace(" ", "", StringComparison.Ordinal))]);
     }
 
     // A call that allocates nothing: the method bound as an open delegate on its declaring type, with the value passed as

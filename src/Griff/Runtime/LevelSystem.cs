@@ -729,7 +729,17 @@ internal sealed class LevelSystem : GameSystem
     [NotState("what the modules' tags do, registered as the game is set up")]
     private readonly Dictionary<string, Action<Dialogue, string>> _dialogueTags = new(StringComparer.OrdinalIgnoreCase);
 
-    internal void OnDialogueTag(string word, Action<Dialogue, string> run) => _dialogueTags[word] = run;
+    internal void OnDialogueTags(Type component, Action<Dialogue, string, string> run)
+    {
+        var words = Dialogue.ClaimTags([component]);
+        if (words.Count == 0)
+            throw new InvalidOperationException($"{component.Name} has no [DialogueTags]: the words its dialogue tags start with are written there.");
+        foreach (var word in words.Keys)
+        {
+            if (!_dialogueTags.TryAdd(word, (dialogue, args) => run(dialogue, word, args)))
+                throw new InvalidOperationException($"The dialogue tag word \"{word}\" is done twice: a word starts one module's tags.");
+        }
+    }
 
     // Shows the first line from row on whose flags let it be said, going where go-tos say and doing rows of tags on the
     // way; the end of the lines or the start of another part ends it.

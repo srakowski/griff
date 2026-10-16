@@ -1,0 +1,25 @@
+title: Names that match
+intro: A trigger or counter that names an action or output nothing has is flagged, and a renamed action keeps answering to its old name.
+project: Platformer | Names
+
+chapter: A trigger doing something nothing can | Flagged in the Inspector
+create: Empty
+rename: Rules
+add: Trigger
+set: Trigger.Message = Boom
+set: Trigger.Do = Explode
+expectflagged: Trigger.Do = Explode
+explain: field:Trigger.Do | Do | Nothing on this entity has an action called Explode, so the field is flagged. The same name is listed by scene_tree for agents, reported when the game is loaded and said in Output as it starts, instead of the trigger silently doing nothing.
+set: Trigger.Do = Set Flag
+set: Trigger.With = Rich
+expectflagged: Trigger.Do = none
+say: Naming an action Set Flag has resolves, so the flag goes away.
+
+chapter: A counter reading what isn't there | Outputs the same way
+select: Score
+set: Counter.Track = Player
+set: Counter.Output = Silver
+expectflagged: Counter.Output = Silver
+set: Counter.Output = Speed
+expectflagged: Counter.Output = none
+say: A script that renames an action or output with FormerName keeps every trigger, button, counter and wire that still names the old one working.

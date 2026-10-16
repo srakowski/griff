@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Data;
+using Griff.Editing;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -258,6 +259,23 @@ public sealed partial class Game : IGameContext
     public event EventHandler<string>? Warning;
 
     private readonly HashSet<string> _warned = [];
+
+    // The scene whose names (actions, outputs, wires' inputs) have been checked: each scene says once, as it starts, what
+    // it names that nothing answers to.
+    [NotState("a rewound game doesn't say it again: each problem is said once a game")]
+    private Scene? _namesChecked;
+
+    /// <summary>Problems the host has already said (the loader's warnings), so the game doesn't say them again.</summary>
+    internal void AlreadySaid(IEnumerable<string> messages) => _warned.UnionWith(messages);
+
+    private void CheckNames()
+    {
+        _namesChecked = Scene;
+        if (Components is not { } components)
+            return;
+        foreach (var line in NameChecks.Lines(Scene, components))
+            Warn(line);
+    }
 
     /// <summary>
     /// Each problem once a game, so one that comes up every step isn't said every step.

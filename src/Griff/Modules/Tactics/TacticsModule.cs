@@ -15,7 +15,7 @@ public sealed class TacticsModule : GameModule
     {
         // After turns are taken and before anything moves, so a unit sent off this frame takes its first step this frame.
         var tactics = game.AddSystem(new TacticsSystem());
-        game.StepAfter("Turns", "Tactics", tactics, tactics.Run);
+        game.StepAfter(Steps.Turns, "Tactics", tactics, tactics.Run);
         game.OnNetCommand(TacticsSystem.TacticsCommand, tactics.RunTacticsOrder);
     }
 }

@@ -16,10 +16,10 @@ public sealed class BlockWorldsModule : GameModule
         var worlds = game.AddSystem(new BlockWorldsSystem());
 
         // Worlds are made before anything moves, so the player is stood on the new ground in the first frame.
-        game.StepBefore("Menus", "Worlds", worlds, worlds.StartWorlds);
+        game.StepBefore(Steps.Menus, "Worlds", worlds, worlds.StartWorlds);
 
         // Once the HUD is laid out, so a click on it doesn't dig.
-        game.StepAfter("HUD", "Blocks", worlds, worlds.RunBlocks);
+        game.StepAfter(Steps.HUD, "Blocks", worlds, worlds.RunBlocks);
         game.OnHostCommand(BlockWorldsSystem.UiCommand, worlds.ShowUi);
     }
 }

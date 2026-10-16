@@ -39,9 +39,9 @@ internal sealed partial class AdventuresSystem
         _iconsFor = default;
     }
 
-    protected override bool MouseOnHud => _onBar;
+    public bool MouseOnHud => _onBar;
 
-    protected override IReadOnlyList<HudButton> HudButtons => _buttons;
+    public IReadOnlyList<HudButton> HudButtons => _buttons;
 
     // ----- What's held -----
 
@@ -77,7 +77,7 @@ internal sealed partial class AdventuresSystem
     // (online), or this machine's.
     private (Vector2 Center, Vector2 Half) BarView(Walker walker, IInput input)
     {
-        var aspect = input is RemoteInput { HasView: true } remote ? remote.View.Aspect : Game.ViewAspect;
+        var aspect = Game.ViewOf(input)?.Aspect ?? Game.ViewAspect;
         if (!string.IsNullOrWhiteSpace(walker.Camera) && Game.Find(walker.Camera.Trim()) is { } camera &&
             camera.GetComponent<Camera>() is { } lens && camera.GetComponent<Viewport>() is { IsShowing: true } viewport)
         {
@@ -86,7 +86,7 @@ internal sealed partial class AdventuresSystem
             return (new Vector2(at.X, at.Y), new Vector2(lens.Size * wide, lens.Size));
         }
 
-        var (center, height, shape) = input is RemoteInput { HasView: true } other ? other.View : Game.HudView();
+        var (center, height, shape) = Game.ViewOf(input) ?? Game.HudView();
         return (center, new Vector2(height * (shape > 0 ? shape : 1), height));
     }
 
@@ -121,7 +121,7 @@ internal sealed partial class AdventuresSystem
 
     // This machine's bar, laid out before anything acts on a click, so a click on it isn't one on the world (and an agent or
     // a demo can find its items).
-    protected override void LayOutHud()
+    public void LayOutHud()
     {
         // The host doesn't keep other players' bars: each player's machine lays out its own, and says if the mouse is on it.
         if (Game.ActingFor is not null)

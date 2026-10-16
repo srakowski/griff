@@ -10,7 +10,7 @@ namespace Griff.Modules.Contraptions;
 /// that move as one, ropes, thrusters and wiring (ContraptionsSystem.Wiring.cs). Drawn by
 /// <see cref="ContraptionsDrawing"/>. In a network game the host runs every player's tools for them.
 /// </summary>
-internal sealed partial class ContraptionsSystem : GameSystem
+internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMouseOnHud, INoticeSource, IPlayerTools
 {
     // What the host tells a player's machine its run of their tools wants shown: a notice, and ports to pick from.
     internal const string UiCommand = "griff.tools.ui";
@@ -57,14 +57,14 @@ internal sealed partial class ContraptionsSystem : GameSystem
 
     protected override void Draw(FrameDrawing frame) => ContraptionsDrawing.Draw(this, frame);
 
-    protected override bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
+    public bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
 
-    protected override IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
+    public IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
 
-    protected override string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
+    public string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
 
     // The host runs another player's tools for them, then tells their machine what to show: a notice, ports to pick.
-    protected override void RunForPlayer(NetPlayer player)
+    public void RunForPlayer(NetPlayer player)
     {
         RunToolsOf();
         var state = PlayerState(player);
@@ -114,7 +114,7 @@ internal sealed partial class ContraptionsSystem : GameSystem
 
     // The tools along the top, the spawn list and the ports to pick, for this frame's view; a click on one of their
     // buttons.
-    protected override void LayOutHud()
+    public void LayOutHud()
     {
         Sandbox.Buttons.Clear();
         var tools = Tools;

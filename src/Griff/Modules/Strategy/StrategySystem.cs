@@ -12,7 +12,7 @@ namespace Griff.Modules.Strategy;
 /// the HUD are in StrategySystem.Controls.cs, the computer's play in StrategySystem.Computer.cs, and what's sent over a
 /// network in StrategySystem.Network.cs. Scripts reach it through <see cref="StrategyGame"/>'s members of Game.
 /// </summary>
-internal sealed partial class StrategySystem : GameSystem
+internal sealed partial class StrategySystem : GameSystem, IMouseOnHud, IClaimsBack, IPlayersListener
 {
     // Cells for finding the way, in world units.
     private const float NavCellSize = 0.5f;
@@ -51,7 +51,7 @@ internal sealed partial class StrategySystem : GameSystem
     protected override void Draw(FrameDrawing frame) => StrategyDrawing.Draw(this, frame);
 
     // The mouse on a HUD isn't on the world.
-    protected override bool MouseOnHud
+    public bool MouseOnHud
     {
         get
         {
@@ -66,7 +66,7 @@ internal sealed partial class StrategySystem : GameSystem
     }
 
     // Esc cancels placing a building or picking a target before it opens a pause menu.
-    protected override bool ClaimsBack
+    public bool ClaimsBack
     {
         get
         {

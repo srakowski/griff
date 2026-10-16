@@ -111,7 +111,7 @@ internal sealed partial class StrategySystem
     }
 
     // In a game with teams, a strategy player commands their team's faction; computer players leave human teams alone.
-    protected override void PlayersChanged()
+    public void PlayersChanged()
     {
         if (Game.Net.TeamNames().Count == 0)
             return;

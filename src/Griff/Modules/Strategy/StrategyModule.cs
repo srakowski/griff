@@ -15,7 +15,7 @@ public sealed class StrategyModule : GameModule
     {
         // Before physics, after scripts: a script's orders take effect this frame.
         var strategy = game.AddSystem(new StrategySystem());
-        game.StepBefore("Attacks", "Strategy", strategy, strategy.Run);
+        game.StepBefore(Steps.Attacks, "Strategy", strategy, strategy.Run);
         game.OnNetCommand(StrategySystem.StrategyCommand, strategy.RunStrategyOrder);
     }
 }

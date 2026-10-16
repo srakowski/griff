@@ -8,7 +8,7 @@ namespace Griff.Modules.Puzzles;
 /// Runs grid puzzles with no code: goals covered by the crates resting on them (<see cref="Goal"/>), and undo and restart
 /// (<see cref="MoveHistory"/>), each grid player's step a move to take back.
 /// </summary>
-internal sealed class PuzzlesSystem : GameSystem
+internal sealed class PuzzlesSystem : GameSystem, IGridStepListener
 {
     public override string Name => "Puzzles";
 
@@ -166,7 +166,7 @@ internal sealed class PuzzlesSystem : GameSystem
     }
 
     // A grid player's step (with the crates it pushes) is a move: every move history remembers the moment before it.
-    protected override void GridStepStarting(GridMovement movement)
+    public void GridStepStarting(GridMovement movement)
     {
         var mover = movement.Entity!;
         if (Game.Net.IsOnline || !IsGridPlayer(mover))

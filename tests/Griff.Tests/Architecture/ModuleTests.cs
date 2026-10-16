@@ -9,7 +9,7 @@ namespace Griff.Tests.Architecture;
 /// <summary>
 /// Guards Griff's modules (see GameModule): each genre lives in a folder of its own under src/Griff/Modules, in a namespace
 /// to match, registered once by its module class, and the core names none of them. A module plugs in through extension
-/// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw, DrawView, Eyes, LayOutHud,
+/// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw and the small interfaces it opts into: IViewDrawer, ISeesThroughEyes, IHudLayout,
 /// RunForPlayer, GridStepStarting, SceneEnding...), components that draw themselves and say what they send, and interfaces
 /// Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport, IHearsMessages,
 /// IClaimsNumberKeys). Modules don't name each other either, so each stands alone, and the hosts a game runs in (the web

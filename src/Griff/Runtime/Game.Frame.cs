@@ -301,96 +301,96 @@ public sealed partial class Game
         GameSystem[] core = [_levels, _switches, _drags, _panels];
 
         // Begin. Panels shown or hidden since last frame open or close first, so a pause starts straight away.
-        Step(FramePhase.Begin, "Panels", SyncPanels, _panels);
-        Step(FramePhase.Begin, "Pauses", SyncPauses);
-        Step(FramePhase.Begin, "Time", AdvanceTime);
-        Step(FramePhase.Begin, "Input", () =>
+        Step(Steps.Panels, SyncPanels, _panels);
+        Step(Steps.Pauses, SyncPauses);
+        Step(Steps.Time, AdvanceTime);
+        Step(Steps.Input, () =>
         {
             (Input as InputState)?.BeginFrame(Time.UnscaledDelta);
             LocalPlayers.Update(Scene);
         });
-        Step(FramePhase.Begin, "Debug Drawing", Debug.BeginFrame);
-        Step(FramePhase.Begin, "Network", () => Net.BeginFrame(Time.UnscaledDelta));
-        Step(FramePhase.Begin, "Tables", ApplyTables);
-        Step(FramePhase.Begin, "Carried Values", RunCarried);
-        Step(FramePhase.Begin, "Script Start", StartScripts);
+        Step(Steps.DebugDrawing, Debug.BeginFrame);
+        Step(Steps.BeginNetwork, () => Net.BeginFrame(Time.UnscaledDelta));
+        Step(Steps.Tables, ApplyTables);
+        Step(Steps.CarriedValues, RunCarried);
+        Step(Steps.ScriptStart, StartScripts);
 
-        Step(FramePhase.Logic, "Menus", UpdateMenus);
-        Step(FramePhase.Logic, "Lobby", RunLobby);
-        Step(FramePhase.Logic, "Grids", LineUpGrids);
-        Step(FramePhase.Logic, "Switch Targets", ApplySwitches, _switches);
-        Step(FramePhase.Logic, "Turns", RunTurns);
-        Step(FramePhase.Logic, "Beat Clocks", RunBeatClocks);
-        Step(FramePhase.Logic, "Calibrations", RunCalibrations);
+        Step(Steps.Menus, UpdateMenus);
+        Step(Steps.Lobby, RunLobby);
+        Step(Steps.Grids, LineUpGrids);
+        Step(Steps.SwitchTargets, ApplySwitches, _switches);
+        Step(Steps.Turns, RunTurns);
+        Step(Steps.BeatClocks, RunBeatClocks);
+        Step(Steps.Calibrations, RunCalibrations);
 
         // No-code enemies and players go before scripts, so a script can still take over a body this frame.
-        Step(FramePhase.Logic, "Enemies", RunEnemies);
-        Step(FramePhase.Logic, "Movement", RunMovement);
-        Step(FramePhase.Logic, "Item Uses", RunItemUses);
+        Step(Steps.Enemies, RunEnemies);
+        Step(Steps.Movement, RunMovement);
+        Step(Steps.ItemUses, RunItemUses);
 
-        Step(FramePhase.Scripts, "Scripts", UpdateScripts, timesItself: true);
+        Step(Steps.Scripts, UpdateScripts, timesItself: true);
 
         // Whatever systems show on the screen is laid out first, so a click on it isn't taken for one in the world.
-        Step(FramePhase.Simulate, "HUD", LayOutHuds);
-        Step(FramePhase.Simulate, "Other Players' Tools", RunOtherPlayersTools);
-        Step(FramePhase.Simulate, "Dragging", RunDragging, _drags);
-        Step(FramePhase.Simulate, "Attacks", RunAttacks);
-        Step(FramePhase.Simulate, "Idle Grid Movers", PassIdleGridMovers);
-        Step(FramePhase.Simulate, "Timers", RunTimers);
-        Step(FramePhase.Simulate, "Coroutines", RunCoroutines);
-        Step(FramePhase.Simulate, "Tweens", RunTweens);
-        Step(FramePhase.Simulate, "Lifetimes", RunLifetimes);
-        Step(FramePhase.Simulate, "Spawners", RunSpawners);
-        Step(FramePhase.Simulate, "Shooters", RunShooters);
-        Step(FramePhase.Simulate, "Movers", RunMovers);
-        Step(FramePhase.Simulate, "Animations", RunAnimations);
-        Step(FramePhase.Simulate, "Animated Tiles", RunAnimatedTiles);
-        Step(FramePhase.Simulate, "Particles", RunParticles);
-        Step(FramePhase.Simulate, "Camera Shake", RunCameraShake);
-        Step(FramePhase.Simulate, "Sprite Effects", RunSpriteEffects);
-        Step(FramePhase.Simulate, "Prompts", FillPrompts);
-        Step(FramePhase.Simulate, "Typewriters", RunTypewriters);
-        Step(FramePhase.Simulate, "Pickup Spin", RunPickupSpin);
+        Step(Steps.HUD, LayOutHuds);
+        Step(Steps.OtherPlayersTools, RunOtherPlayersTools);
+        Step(Steps.Dragging, RunDragging, _drags);
+        Step(Steps.Attacks, RunAttacks);
+        Step(Steps.IdleGridMovers, PassIdleGridMovers);
+        Step(Steps.Timers, RunTimers);
+        Step(Steps.Coroutines, RunCoroutines);
+        Step(Steps.Tweens, RunTweens);
+        Step(Steps.Lifetimes, RunLifetimes);
+        Step(Steps.Spawners, RunSpawners);
+        Step(Steps.Shooters, RunShooters);
+        Step(Steps.Movers, RunMovers);
+        Step(Steps.Animations, RunAnimations);
+        Step(Steps.AnimatedTiles, RunAnimatedTiles);
+        Step(Steps.Particles, RunParticles);
+        Step(Steps.CameraShake, RunCameraShake);
+        Step(Steps.SpriteEffects, RunSpriteEffects);
+        Step(Steps.SimulatePrompts, FillPrompts);
+        Step(Steps.Typewriters, RunTypewriters);
+        Step(Steps.PickupSpin, RunPickupSpin);
 
         // Scripts push bodies just before they move.
-        Step(FramePhase.Physics, "Fixed Scripts", FixedUpdateScripts, timesItself: true);
-        Step(FramePhase.Physics, "Physics", StepPhysics);
-        Step(FramePhase.Physics, "Carrying", CarryHeld, _drags);
+        Step(Steps.FixedScripts, FixedUpdateScripts, timesItself: true);
+        Step(Steps.Physics, StepPhysics);
+        Step(Steps.Carrying, CarryHeld, _drags);
 
-        Step(FramePhase.Resolve, "Pickups", RunPickups);
-        Step(FramePhase.Resolve, "Checkpoints", RunCheckpoints);
-        Step(FramePhase.Resolve, "Doors", RunDoors, _levels);
-        Step(FramePhase.Resolve, "Dialogues", RunDialogues, _levels);
-        Step(FramePhase.Resolve, "Switches", RunSwitches, _switches);
-        Step(FramePhase.Resolve, "Bouncers", RunBouncers);
-        Step(FramePhase.Resolve, "Crumbles", RunCrumbles);
-        Step(FramePhase.Resolve, "Touch Damage", RunTouchDamage);
-        Step(FramePhase.Resolve, "Health", RunHealth);
-        Step(FramePhase.Resolve, "Respawns", RunRespawns);
-        Step(FramePhase.Resolve, "Bars", RunBars);
-        Step(FramePhase.Resolve, "Stars", RunStars);
-        Step(FramePhase.Resolve, "Counters", RunCounters);
-        Step(FramePhase.Resolve, "Text Outputs", ShowOutputs);
-        Step(FramePhase.Resolve, "Fade", AdvanceFade);
-        Step(FramePhase.Resolve, "Screen Flash", RunScreenFlash);
-        Step(FramePhase.Resolve, "Destroys", FlushDestroys);
-        Step(FramePhase.Resolve, "Scene Change", SwitchSceneIfRequested);
+        Step(Steps.Pickups, RunPickups);
+        Step(Steps.Checkpoints, RunCheckpoints);
+        Step(Steps.Doors, RunDoors, _levels);
+        Step(Steps.Dialogues, RunDialogues, _levels);
+        Step(Steps.Switches, RunSwitches, _switches);
+        Step(Steps.Bouncers, RunBouncers);
+        Step(Steps.Crumbles, RunCrumbles);
+        Step(Steps.TouchDamage, RunTouchDamage);
+        Step(Steps.Health, RunHealth);
+        Step(Steps.Respawns, RunRespawns);
+        Step(Steps.Bars, RunBars);
+        Step(Steps.Stars, RunStars);
+        Step(Steps.Counters, RunCounters);
+        Step(Steps.TextOutputs, ShowOutputs);
+        Step(Steps.Fade, AdvanceFade);
+        Step(Steps.ScreenFlash, RunScreenFlash);
+        Step(Steps.Destroys, FlushDestroys);
+        Step(Steps.SceneChange, SwitchSceneIfRequested);
 
-        Step(FramePhase.Present, "Rooms", RunRooms);
-        Step(FramePhase.Present, "Followers", RunFollowers);
-        Step(FramePhase.Present, "Late Scripts", LateUpdateScripts, timesItself: true);
-        Step(FramePhase.Present, "Screen Anchors", LayOutScreen);
-        Step(FramePhase.Present, "Trails", RunTrails);
-        Step(FramePhase.Present, "Lights", RunLights);
-        Step(FramePhase.Present, "Weather", RunWeather);
-        Step(FramePhase.Present, "Prompts", FillPrompts);
-        Step(FramePhase.Present, "Sound Sources", RunSoundSources);
-        Step(FramePhase.Present, "Sound Players", RunSoundPlayers);
-        Step(FramePhase.Present, "Patrol Walks", CountPatrolWalks);
+        Step(Steps.Rooms, RunRooms);
+        Step(Steps.Followers, RunFollowers);
+        Step(Steps.LateScripts, LateUpdateScripts, timesItself: true);
+        Step(Steps.ScreenAnchors, LayOutScreen);
+        Step(Steps.Trails, RunTrails);
+        Step(Steps.Lights, RunLights);
+        Step(Steps.Weather, RunWeather);
+        Step(Steps.PresentPrompts, FillPrompts);
+        Step(Steps.SoundSources, RunSoundSources);
+        Step(Steps.SoundPlayers, RunSoundPlayers);
+        Step(Steps.PatrolWalks, CountPatrolWalks);
 
-        Step(FramePhase.End, "Audio", () => Audio.Advance(Time.UnscaledDelta));
-        Step(FramePhase.End, "Settings", SaveSettings);
-        Step(FramePhase.End, "Network", () => Net.EndFrame(Time.UnscaledDelta));
+        Step(Steps.Audio, () => Audio.Advance(Time.UnscaledDelta));
+        Step(Steps.Settings, SaveSettings);
+        Step(Steps.EndNetwork, () => Net.EndFrame(Time.UnscaledDelta));
 
         // Then each module's systems, their steps put in next to the steps they follow or go before.
         var setup = new GameSetup(this);
@@ -413,8 +413,8 @@ public sealed partial class Game
         BuildPhases();
     }
 
-    private void Step(FramePhase phase, string name, Action run, GameSystem? system = null, bool timesItself = false) =>
-        _builtInSteps.Add(new FrameStep(phase, name, run, system) { TimesItself = timesItself });
+    private void Step(StepId id, Action run, GameSystem? system = null, bool timesItself = false) =>
+        _builtInSteps.Add(new FrameStep(id, run, system) { TimesItself = timesItself });
 
     // Griff's steps, then each added system's Update, phase by phase.
     private void BuildPhases()

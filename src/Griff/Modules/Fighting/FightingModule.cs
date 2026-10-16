@@ -19,14 +19,14 @@ public sealed class FightingModule : GameModule
         // After physics (where everything is this step), before touch damage and health (which hear the damage).
         // Fighters read their players' input with the other player movements, before scripts.
         var fighters = game.AddSystem(new FightersSystem());
-        game.StepAfter("Movement", "Fighters", fighters, fighters.Run);
-        game.StepAfter("Physics", "Fighters Landing", fighters, fighters.Land);
+        var fighterStep = game.StepAfter(Steps.Movement, "Fighters", fighters, fighters.Run);
+        game.StepAfter(Steps.Physics, "Fighters Landing", fighters, fighters.Land);
         var hitboxes = game.AddSystem(new HitboxesSystem());
-        game.StepBefore("Touch Damage", "Hitboxes", hitboxes, hitboxes.Run);
+        game.StepBefore(Steps.TouchDamage, "Hitboxes", hitboxes, hitboxes.Run);
 
         // Character selects and versus matches just before the fighters move: a round's start (or end) holds them this step.
         var versus = game.AddSystem(new VersusSystem());
-        game.StepBefore("Fighters", "Character Select", versus, versus.RunSelects);
-        game.StepBefore("Fighters", "Versus", versus, versus.RunMatches);
+        game.StepBefore(fighterStep, "Character Select", versus, versus.RunSelects);
+        game.StepBefore(fighterStep, "Versus", versus, versus.RunMatches);
     }
 }

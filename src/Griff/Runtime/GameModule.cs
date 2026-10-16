@@ -21,7 +21,7 @@ namespace Griff.Runtime;
 ///     protected internal override void AddTo(GameSetup game)
 ///     {
 ///         var boards = game.AddSystem(new Match3System());
-///         game.StepAfter("Dragging", "Match Boards", boards, boards.Run);
+///         game.StepAfter(Steps.Dragging, "Match Boards", boards, boards.Run);
 ///     }
 /// }
 /// </code>
@@ -79,7 +79,7 @@ public abstract class GameModule
 public sealed class GameSetup
 {
     private readonly List<GameSystem> _systems = [];
-    private readonly List<(string Anchor, bool Before, string Name, Action Run, GameSystem System, GameModule Module)> _steps = [];
+    private readonly List<(StepId Anchor, bool Before, StepId Id, Action Run, GameSystem System, GameModule Module)> _steps = [];
 
     internal GameSetup(Game game) => Game = game;
 
@@ -101,22 +101,26 @@ public sealed class GameSetup
         ArgumentNullException.ThrowIfNull(system);
         if (_systems.Any(s => s.GetType() == system.GetType()))
             throw new InvalidOperationException($"{system.Name} has already been added.");
+        if (system.GetType().GetMethod("Update", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.DeclaringType != typeof(GameSystem))
+            throw new InvalidOperationException($"{system.Name} overrides Update, but a module's system is scheduled by its steps alone (StepAfter, StepBefore).");
         _systems.Add(system);
         return system;
     }
 
     /// <summary>
     /// Adds a step called <paramref name="name"/> to the frame, run as part of <paramref name="system"/>, just after the
-    /// step <paramref name="after"/> (one of Griff's or another module's, e.g. "Dragging", or "Present: Prompts" for one
-    /// whose name comes up in two phases) and after the steps added there before it, in that step's phase.
+    /// step <paramref name="after"/> (one of Griff's, from <see cref="Steps"/>, or one this or another module added
+    /// before) and after the steps added there before it, in that step's phase. Returns the step's id, for another step
+    /// to follow it.
     /// </summary>
-    public void StepAfter(string after, string name, GameSystem system, Action run) => AddStep(after, before: false, name, system, run);
+    public StepId StepAfter(StepId after, string name, GameSystem system, Action run) => AddStep(after, before: false, name, system, run);
 
     /// <summary>
     /// Adds a step called <paramref name="name"/> to the frame, run as part of <paramref name="system"/>, just before the
-    /// step <paramref name="before"/> and after the steps added before it there, in that step's phase.
+    /// step <paramref name="before"/> and after the steps added before it there, in that step's phase. Returns the step's
+    /// id, for another step to go next to it.
     /// </summary>
-    public void StepBefore(string before, string name, GameSystem system, Action run) => AddStep(before, before: true, name, system, run);
+    public StepId StepBefore(StepId before, string name, GameSystem system, Action run) => AddStep(before, before: true, name, system, run);
 
     /// <summary>
     /// Does one of the module's dialogue tags (see <see cref="DialogueTagsAttribute"/>) as the line it's on is said:
@@ -138,48 +142,52 @@ public sealed class GameSetup
     /// </summary>
     public void OnHostCommand(string name, Action<object?> run) => Game.OnHostCommand(name, run);
 
-    private void AddStep(string anchor, bool before, string name, GameSystem system, Action run)
+    private StepId AddStep(StepId anchor, bool before, string name, GameSystem system, Action run)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(anchor);
+        ArgumentNullException.ThrowIfNull(anchor);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (!_systems.Contains(system))
             throw new InvalidOperationException($"Add {system.Name} with AddSystem before giving it steps.");
-        _steps.Add((anchor, before, name, run, system, Module!));
+        var id = new StepId(anchor.Phase, name);
+        _steps.Add((anchor, before, id, run, system, Module!));
+        return id;
     }
 
     // Griff's steps with the modules' put in next to the steps they name, in the order they were added: those before a
     // step, the step, then those after it (each of them with the steps that name it in turn).
     internal List<FrameStep> Place(IReadOnlyList<FrameStep> core)
     {
-        var all = core.ToList();
-        var pending = _steps.Select((s, i) => (Step: s, Index: i)).ToList();
+        var known = core.Select(s => s.Id).ToHashSet();
+        var ids = new HashSet<(FramePhase, string)>(core.Select(s => (s.Phase, s.Name)));
+        var anchors = new Dictionary<(StepId Anchor, bool Before), List<FrameStep>>();
+        var pending = _steps.ToList();
 
         // Resolve anchors among Griff's steps and the modules' already placed, until nothing more can be.
-        var anchors = new Dictionary<(string Anchor, bool Before), List<FrameStep>>();
-        var resolved = new Dictionary<int, FrameStep>();
         while (pending.Count > 0)
         {
             var progress = false;
-            foreach (var (step, index) in pending.ToList())
+            foreach (var step in pending.ToList())
             {
-                var known = all.Concat(resolved.Values).ToList();
-                if (Find(known, step.Anchor, step.Module) is not { } anchor)
+                if (!known.Contains(step.Anchor))
                     continue;
-                var frameStep = new FrameStep(anchor.Phase, step.Name, step.Run, step.System);
-                resolved[index] = frameStep;
-                var key = (anchor.ToString(), step.Before);
+                if (!ids.Add((step.Id.Phase, step.Id.Name)))
+                    throw new InvalidOperationException(
+                        $"The {step.Module.Name} module adds a step \"{step.Id.Name}\" to the {step.Id.Phase} phase, which already has one called that.");
+                var frameStep = new FrameStep(step.Id, step.Run, step.System);
+                known.Add(step.Id);
+                var key = (step.Anchor, step.Before);
                 if (!anchors.TryGetValue(key, out var list))
                     anchors[key] = list = [];
                 list.Add(frameStep);
-                pending.Remove((step, index));
+                pending.Remove(step);
                 progress = true;
             }
 
             if (!progress)
             {
-                var (step, _) = pending[0];
+                var step = pending[0];
                 throw new InvalidOperationException(
-                    $"The {step.Module.Name} module puts its step \"{step.Name}\" {(step.Before ? "before" : "after")} \"{step.Anchor}\", but the frame has no step called that.");
+                    $"The {step.Module.Name} module puts its step \"{step.Id.Name}\" {(step.Before ? "before" : "after")} \"{step.Anchor}\", which isn't a step of this frame (use a Steps member, or the id of a step added earlier).");
             }
         }
 
@@ -190,21 +198,11 @@ public sealed class GameSetup
 
         void Expand(FrameStep step)
         {
-            foreach (var before in anchors.GetValueOrDefault((step.ToString(), true)) ?? [])
+            foreach (var before in anchors.GetValueOrDefault((step.Id, true)) ?? [])
                 Expand(before);
             frame.Add(step);
-            foreach (var after in anchors.GetValueOrDefault((step.ToString(), false)) ?? [])
+            foreach (var after in anchors.GetValueOrDefault((step.Id, false)) ?? [])
                 Expand(after);
         }
-    }
-
-    // A step by its name, or by "Phase: Name" when the name comes up in more than one phase.
-    private static FrameStep? Find(List<FrameStep> steps, string anchor, GameModule module)
-    {
-        var matches = steps.Where(s => s.Name == anchor || s.ToString() == anchor).ToList();
-        if (matches.Count > 1 && matches.Select(s => s.Phase).Distinct().Count() > 1)
-            throw new InvalidOperationException(
-                $"The {module.Name} module names the step \"{anchor}\", which comes up in more than one phase: say which, e.g. \"{matches[0]}\".");
-        return matches.FirstOrDefault();
     }
 }

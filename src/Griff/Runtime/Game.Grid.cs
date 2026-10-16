@@ -7,12 +7,17 @@ namespace Griff.Runtime;
 // target or walk a route on their own, and the crates they push.
 public sealed partial class Game
 {
-    // How far the stick has to lean before it counts as a way.
-    internal const float GridDeadZone = 0.4f;
+    /// <summary>
+    /// How far the stick has to lean before it counts as a way.
+    /// </summary>
+    public const float GridDeadZone = 0.4f;
 
-    // How far past the two ends a search for a way goes with no map to keep it in, in cells; and the most cells it looks at.
-    internal const int GridSearchMargin = 12;
-    internal const int GridSearchLimit = 250_000;
+    /// <summary>
+    /// How far past the two ends a search for a way goes with no map to keep it in, in cells; and the most cells it looks at.
+    /// </summary>
+    public const int GridSearchMargin = 12;
+    /// <summary>The most cells a grid search looks at before it gives up.</summary>
+    public const int GridSearchLimit = 250_000;
 
     // The most crates one step pushes along in a row.
     private const int GridPushRowLimit = 16;
@@ -289,8 +294,10 @@ public sealed partial class Game
             .FirstOrDefault(e => e.GetComponent<GridMovement>() is null && Hurtable(e) && grid.CellAt(Flat(e.Transform.WorldPosition)) == cell);
     }
 
-    // Stays in its cell, lunging part way toward the next and back over a step's time.
-    internal static void Lunge(GridMovement m, GridCells grid, (int X, int Y) toward, Vector2 direction, float progress)
+    /// <summary>
+    /// Stays in its cell, lunging part way toward the next and back over a step's time.
+    /// </summary>
+    public static void Lunge(GridMovement m, GridCells grid, (int X, int Y) toward, Vector2 direction, float progress)
     {
         m.From = m.To = grid.Center(m.Cell);
         m.Lunge = (grid.Center(toward) - m.From) * 0.35f;
@@ -610,9 +617,11 @@ public sealed partial class Game
         return null;
     }
 
-    // Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner (a hex
-    // map's neighbours all share a side). The goal is open whoever stands in it (it's where the target is).
-    internal static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
+    /// <summary>
+    /// Whether a step from a cell by a change of cell is open, as a step is: a diagonal can't cut a wall's corner (a hex
+    /// map's neighbours all share a side). The goal is open whoever stands in it (it's where the target is).
+    /// </summary>
+    public static bool CanPass(GridWalls walls, (int X, int Y) from, (int X, int Y) by, bool avoidMovers, (int X, int Y) goal)
     {
         bool Open((int X, int Y) c) => !walls.IsWall(c) && (!avoidMovers || c == goal || walls.MoverIn(c) is null);
         if (!Open((from.X + by.X, from.Y + by.Y)))
@@ -632,10 +641,12 @@ public sealed partial class Game
 
     // ----- What's in the way -----
 
-    // Where a grid mover can't go, gathered once so a search can ask about many cells: off its map (when it has to stay
-    // on), solid tiles on any tilemap, solid colliders over a cell's middle, and the cells other grid movers are in or
-    // heading into. Layers either side passes through don't count.
-    internal sealed class GridWalls
+    /// <summary>
+    /// Where a grid mover can't go, gathered once so a search can ask about many cells: off its map (when it has to stay
+    /// on), solid tiles on any tilemap, solid colliders over a cell's middle, and the cells other grid movers are in or
+    /// heading into. Layers either side passes through don't count.
+    /// </summary>
+    public sealed class GridWalls
     {
         private readonly GridCells _grid;
         private readonly bool _stayOnMap;
@@ -662,6 +673,7 @@ public sealed partial class Game
         /// <summary>The cells it's about.</summary>
         public GridCells Grid => _grid;
 
+        /// <summary>Gathers where <paramref name="m"/> can't go on <paramref name="grid"/>, leaving out the mover <paramref name="except"/> (the one searching).</summary>
         public static GridWalls Gather(Game game, GridMovement m, GridCells grid, Entity? except = null)
         {
             var entity = m.Entity!;
@@ -734,9 +746,12 @@ public sealed partial class Game
         /// <summary>The grid mover in a cell, or heading into it.</summary>
         public Entity? MoverIn((int X, int Y) cell) => _movers.GetValueOrDefault(cell);
 
+        /// <summary>True if nothing blocks a cell: no wall and no grid mover in it or heading into it.</summary>
         public bool IsFree((int X, int Y) cell) => !IsWall(cell) && MoverIn(cell) is null;
     }
 
-    // Puts it at a world position, whatever its parent.
-    internal static void MoveTo(Entity entity, Vector2 world) => Shift(entity, world - Flat(entity.Transform.WorldPosition));
+    /// <summary>
+    /// Puts it at a world position, whatever its parent.
+    /// </summary>
+    public static void MoveTo(Entity entity, Vector2 world) => Shift(entity, world - Flat(entity.Transform.WorldPosition));
 }

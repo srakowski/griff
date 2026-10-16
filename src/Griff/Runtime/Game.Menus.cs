@@ -11,12 +11,17 @@ public sealed partial class Game
     private const float NavigateRepeatDelay = 0.4f;
     private const float NavigateRepeatEvery = 0.12f;
 
-    // A stick pushed further than this counts as a direction.
-    internal const float NavigateStick = 0.5f;
+    /// <summary>
+    /// A stick pushed further than this counts as a direction.
+    /// </summary>
+    public const float NavigateStick = 0.5f;
 
-    // How long an arrow has to be held before a cursor (on a board, a grid) repeats, and how often it does then.
-    internal const float CursorRepeatDelay = 0.35f;
-    internal const float CursorRepeatEvery = 0.1f;
+    /// <summary>
+    /// How long an arrow has to be held before a cursor (on a board, a grid) repeats, and how often it does then.
+    /// </summary>
+    public const float CursorRepeatDelay = 0.35f;
+    /// <summary>Seconds between moves of a menu's cursor while a direction is held.</summary>
+    public const float CursorRepeatEvery = 0.1f;
 
     private readonly HashSet<Component> _controlsSeen = [];
     private Component? _focus;

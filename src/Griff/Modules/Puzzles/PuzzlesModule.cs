@@ -15,9 +15,9 @@ public sealed class PuzzlesModule : GameModule
         var puzzles = game.AddSystem(new PuzzlesSystem());
 
         // Before anything moves, so a move taken back this frame isn't stepped on from where it was.
-        game.StepBefore("Enemies", "Move History", puzzles, puzzles.RunMoveHistory);
+        game.StepBefore(Steps.Enemies, "Move History", puzzles, puzzles.RunMoveHistory);
 
         // After switches, so a crate that covers a goal this frame counts this frame.
-        game.StepAfter("Switches", "Goals", puzzles, puzzles.RunGoals);
+        game.StepAfter(Steps.Switches, "Goals", puzzles, puzzles.RunGoals);
     }
 }

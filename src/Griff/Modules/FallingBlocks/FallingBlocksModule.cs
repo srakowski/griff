@@ -14,6 +14,6 @@ public sealed class FallingBlocksModule : GameModule
     {
         // After scripts, so a move a script asks for is made this frame: with the other boards, before attacks.
         var boards = game.AddSystem(new FallingBlocksSystem());
-        game.StepBefore("Attacks", "Falling Boards", boards, boards.RunBoards);
+        game.StepBefore(Steps.Attacks, "Falling Boards", boards, boards.RunBoards);
     }
 }

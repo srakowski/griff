@@ -420,45 +420,45 @@ public class GameModuleTests
     {
     }
 
-    public sealed class Looker : GameSystem
+    public sealed class Looker : GameSystem, ISeesThroughEyes
     {
         public Entity? Through { get; set; }
 
-        protected override Entity? Eyes => Through;
+        public Entity? Eyes => Through;
 
-        protected override bool LooksThrough(Entity entity) => entity == Through;
+        public bool LooksThrough(Entity entity) => entity == Through;
     }
 
-    public sealed class Hud : GameSystem
+    public sealed class Hud : GameSystem, IHudLayout, INoticeSource
     {
         private readonly List<HudButton> _buttons = [];
 
         public int LaidOut { get; private set; }
 
-        protected override void LayOutHud()
+        public void LayOutHud()
         {
             LaidOut++;
             _buttons.Clear();
             _buttons.Add(new HudButton("Badge", 0, "Go", new HudRect(0, 0, 1, 1), () => { }));
         }
 
-        protected override IReadOnlyList<HudButton> HudButtons => _buttons;
+        public IReadOnlyList<HudButton> HudButtons => _buttons;
 
-        protected override string? Notice => "Go!";
+        public string? Notice => "Go!";
     }
 
-    public sealed class Steps : GameSystem
+    public sealed class Steps : GameSystem, IGridStepListener
     {
         public List<float> From { get; } = [];
 
-        protected override void GridStepStarting(GridMovement mover) => From.Add(MathF.Round(mover.Entity!.Transform.Position.X, 2));
+        public void GridStepStarting(GridMovement mover) => From.Add(MathF.Round(mover.Entity!.Transform.Position.X, 2));
     }
 
-    public sealed class Keeper : GameSystem
+    public sealed class Keeper : GameSystem, ISceneEndListener
     {
         public int Ended { get; private set; }
 
-        protected override void SceneEnding() => Ended++;
+        public void SceneEnding() => Ended++;
     }
 
     public sealed class Overlay : GameSystem
@@ -468,11 +468,11 @@ public class GameModuleTests
         protected override void Draw(FrameDrawing frame) => Log.Add("overlay");
     }
 
-    public sealed class OwnView : GameSystem
+    public sealed class OwnView : GameSystem, IViewDrawer
     {
         public List<string> Log { get; init; } = [];
 
-        protected override void DrawView(FrameDrawing frame) => Log.Add("view");
+        public void DrawView(FrameDrawing frame) => Log.Add("view");
 
         protected override void Draw(FrameDrawing frame) => Log.Add("own view's overlay");
     }
@@ -502,10 +502,10 @@ public class GameModuleTests
         void ITurnReady.TurnBegins() => Turns++;
     }
 
-    public sealed class Placing : GameSystem
+    public sealed class Placing : GameSystem, IClaimsBack
     {
         public bool Busy { get; set; }
 
-        protected override bool ClaimsBack => Busy;
+        public bool ClaimsBack => Busy;
     }
 }

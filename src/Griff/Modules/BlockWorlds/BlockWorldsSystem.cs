@@ -8,10 +8,10 @@ namespace Griff.Modules.BlockWorlds;
 /// <summary>
 /// Runs block worlds with no code: worlds made from a seed, digging and building with the mouse (or straight ahead when
 /// the game is seen through the player's eyes), a hotbar, crafting, sand that falls, and worlds kept in the save data.
-/// Its HUD (the hotbar and the crafting list) is laid out in <see cref="LayOutHud"/> and drawn by
+/// Its HUD (the hotbar and the crafting list) is laid out in <see cref="IHudLayout.LayOutHud"/> and drawn by
 /// <see cref="BlockWorldsDrawing"/>. In a network game the host digs, builds and crafts for every player.
 /// </summary>
-internal sealed class BlockWorldsSystem : GameSystem
+internal sealed class BlockWorldsSystem : GameSystem, IHudLayout, IMouseOnHud, INoticeSource, IPlayerTools, ISceneEndListener
 {
     // What the host tells a player's machine its run of their hotbar and crafting wants shown: a notice.
     internal const string UiCommand = "griff.blocks.ui";
@@ -55,14 +55,14 @@ internal sealed class BlockWorldsSystem : GameSystem
 
     protected override void Draw(FrameDrawing frame) => BlockWorldsDrawing.Draw(this, frame);
 
-    protected override bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
+    public bool MouseOnHud => Sandbox.Hud is not null && Sandbox.MouseOnHud;
 
-    protected override IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
+    public IReadOnlyList<HudButton> HudButtons => Sandbox.Buttons;
 
-    protected override string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
+    public string? Notice => Sandbox.NoticeLeft > 0 ? Sandbox.Notice : null;
 
     // The host runs another player's hotbar, crafting and digging for them, then tells their machine what to show.
-    protected override void RunForPlayer(NetPlayer player)
+    public void RunForPlayer(NetPlayer player)
     {
         RunBlockPlayers();
         var state = PlayerState(player);
@@ -83,7 +83,7 @@ internal sealed class BlockWorldsSystem : GameSystem
     // ----- The HUD -----
 
     // The hotbar along the bottom and the crafting list over it, for this frame's view; a click on one of their buttons.
-    protected override void LayOutHud()
+    public void LayOutHud()
     {
         Sandbox.Buttons.Clear();
         // Shown even while the player is paused (see Entity.IsPaused); its buttons do nothing meanwhile.
@@ -207,7 +207,7 @@ internal sealed class BlockWorldsSystem : GameSystem
     private static bool Changed(Blocks blocks) =>
         !string.IsNullOrWhiteSpace(blocks.SaveAs) && blocks.Entity?.GetComponent<Tilemap>() is { } map && !ReferenceEquals(map.Tiles, blocks.SavedTiles);
 
-    protected override void SceneEnding()
+    public void SceneEnding()
     {
         foreach (var blocks in Scene.AllNow<Blocks>())
         {

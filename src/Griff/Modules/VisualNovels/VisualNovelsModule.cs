@@ -17,8 +17,8 @@ public sealed class VisualNovelsModule : GameModule
         var stages = game.AddSystem(new VisualNovelsSystem());
         // Around the dialogues' step: what a line says is done as it's said, and the advance action moves the talk on only
         // if Interact, a click or a choice didn't.
-        game.StepBefore("Dialogues", "Stage Input", stages, stages.Note);
-        game.StepAfter("Dialogues", "Stages", stages, stages.Run);
+        game.StepBefore(Steps.Dialogues, "Stage Input", stages, stages.Note);
+        game.StepAfter(Steps.Dialogues, "Stages", stages, stages.Run);
         foreach (var word in StageLines.TagWords)
             game.OnDialogueTag(word, (dialogue, args) => stages.Direct(dialogue, word, args));
     }

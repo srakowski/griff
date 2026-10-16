@@ -83,8 +83,10 @@ public sealed partial class Game
     /// <summary>True while dialogue is skipping: <see cref="Skipping"/>, or a skip key held.</summary>
     public bool IsSkipping => _skipping || SkipHeld;
 
-    // Set each frame by what reads a skip key (a visual novel stage's Skip action), while it's held.
-    internal bool SkipHeld { get; set; }
+    /// <summary>
+    /// Set each frame by what reads a skip key (a visual novel stage's Skip action), while it's held.
+    /// </summary>
+    public bool SkipHeld { get; set; }
 
     /// <summary>
     /// Seconds <see cref="AutoReading"/> waits after <paramref name="said"/> has typed out before reading on: longer for

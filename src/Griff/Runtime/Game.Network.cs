@@ -51,25 +51,25 @@ public sealed partial class Game
             return LocalPlayers.Playing > 1 && PlayedBy.Of(entity) is var player && player > 0 ? LocalPlayers.Input(player) : Input;
         if (Net.LocalPlayer is { } me && me.Id == owner)
             return LocalInputBlocked ? NoControls : Input;
-        return Net.PlayerById(owner)?.Input is { } remote ? remote : NoControls;
+        return Net.PlayerById(owner)?.Remote is { } remote ? remote : NoControls;
     }
 
     private NoInput? _noInput;
 
     /// <summary>True if this machine runs <paramref name="entity"/>'s gameplay: everything offline and on the host.</summary>
-    internal static bool Runs(Entity entity) => entity.RunsHere;
+    public static bool Runs(Entity entity) => entity.RunsHere;
 
     /// <summary>True if this machine moves <paramref name="entity"/>: what it runs, except other players' own characters.</summary>
-    internal static bool Moves(Entity entity) => entity.MovesHere;
+    public static bool Moves(Entity entity) => entity.MovesHere;
 
     /// <summary>A menu that would pause the game is open here: online the game goes on, but this player's keys don't reach it.</summary>
-    internal bool LocalInputBlocked => AnyPanelPauses();
+    public bool LocalInputBlocked => AnyPanelPauses();
 
     /// <summary>
     /// The mouse is over this machine's HUD, so a click there isn't meant for the world. Only buttons showing count: one on a
     /// panel just closed keeps the hover it had.
     /// </summary>
-    internal bool MouseOnUi => MouseOnHud || AnyButtonHovered();
+    public bool MouseOnUi => MouseOnHud || AnyButtonHovered();
 
     private bool AnyButtonHovered()
     {
@@ -82,8 +82,8 @@ public sealed partial class Game
         return false;
     }
 
-    /// <summary>The mouse is over something a system shows on the screen (see <see cref="GameSystem.MouseOnHud"/>).</summary>
-    internal bool MouseOnHud => SystemHasMouse();
+    /// <summary>The mouse is over something a system shows on the screen (see <see cref="IMouseOnHud.MouseOnHud"/>).</summary>
+    public bool MouseOnHud => SystemHasMouse();
 
     private bool SystemHasMouse()
     {
@@ -197,10 +197,10 @@ public sealed partial class Game
     private IInput? _actingInput;
 
     /// <summary>
-    /// The other player the host is running tools for right now (see <see cref="GameSystem.RunForPlayer"/>), or null when
+    /// The other player the host is running tools for right now (see <see cref="IPlayerTools.RunForPlayer"/>), or null when
     /// it's this machine's own player: what a system keeps for a player should be theirs while it's set.
     /// </summary>
-    internal NetPlayer? ActingFor => _acting;
+    public NetPlayer? ActingFor => _acting;
 
     /// <summary>
     /// On the host of a network game, runs <paramref name="run"/> once for each other player with a character: as if their
@@ -212,9 +212,9 @@ public sealed partial class Game
             return;
         foreach (var player in Net.Players.ToList())
         {
-            if (player.IsLocal || player.Input is null || player.Avatar is null)
+            if (player.IsLocal || player.Remote is null || player.Avatar is null)
                 continue;
-            (_acting, _actingInput) = (player, player.Input);
+            (_acting, _actingInput) = (player, player.Remote);
             try
             {
                 run(player);
@@ -226,9 +226,11 @@ public sealed partial class Game
         }
     }
 
-    // What this player has (their hotbar, their tools): in a network game, what's on their own character. Not what's
-    // paused, unless `evenPaused` (for a HUD that still shows what a paused player has).
-    internal ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component =>
+    /// <summary>
+    /// What this player has (their hotbar, their tools): in a network game, what's on their own character. Not what's
+    /// paused, unless `evenPaused` (for a HUD that still shows what a paused player has).
+    /// </summary>
+    public ComponentList<T> Mine<T>(bool evenPaused = false) where T : Component =>
         Net.IsOnline ? MineOnline<T>(evenPaused) : evenPaused ? Present<T>() : Active<T>();
 
     private ComponentList<T> MineOnline<T>(bool evenPaused) where T : Component
@@ -241,13 +243,27 @@ public sealed partial class Game
         });
     }
 
-    // A menu open on this machine (not counting another player's, whose tools the host is running for them).
-    internal bool PanelOpenHere => _acting is null && TopPanel is not null;
+    /// <summary>
+    /// A menu open on this machine (not counting another player's, whose tools the host is running for them).
+    /// </summary>
+    public bool PanelOpenHere => _acting is null && TopPanel is not null;
 
-    // The view a HUD is laid out for: this machine's camera, or the screen of the player the host is acting for.
-    internal (Vector2 Center, float HalfHeight, float Aspect) HudView()
+    /// <summary>
+    /// The view (center, half height, aspect) on the screen of the player whose <paramref name="input"/> this is, if the
+    /// host has been told it (a player on another machine), or null.
+    /// </summary>
+    public static (Vector2 Center, float HalfHeight, float Aspect)? ViewOf(IInput input) =>
+        input is RemoteInput { HasView: true } remote ? remote.View : null;
+
+    /// <summary>True if the mouse of the player whose <paramref name="input"/> this is, on another machine, is over their UI.</summary>
+    public static bool MouseOnUiOf(IInput input) => input is RemoteInput { MouseOnUi: true };
+
+    /// <summary>
+    /// The view a HUD is laid out for: this machine's camera, or the screen of the player the host is acting for.
+    /// </summary>
+    public (Vector2 Center, float HalfHeight, float Aspect) HudView()
     {
-        if (_acting?.Input is { HasView: true } input)
+        if (_acting?.Remote is { HasView: true } input)
             return input.View;
         var camera = Views.FindCamera(Scene);
         var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
@@ -257,7 +273,7 @@ public sealed partial class Game
 
     /// <summary>
     /// True if the game is seen through <paramref name="entity"/>'s eyes on its player's screen (see
-    /// <see cref="GameSystem.LooksThrough"/>): a first-person game's player, and online each player's own character.
+    /// <see cref="ISeesThroughEyes.LooksThrough"/>): a first-person game's player, and online each player's own character.
     /// </summary>
     public bool LooksThrough(Entity entity)
     {
@@ -296,7 +312,7 @@ public sealed partial class Game
     }
 
     /// <summary>In a network game, marks what <paramref name="by"/> fired or made as its player's: what it hits counts for them.</summary>
-    internal void Claim(Entity spawned, Entity by)
+    public void Claim(Entity spawned, Entity by)
     {
         // A shot is on its shooter's team, so it doesn't hurt the shooter's allies.
         if (Teams.Of(spawned).Length == 0 && Teams.Of(by) is { Length: > 0 } team)
@@ -321,7 +337,7 @@ public sealed partial class Game
     /// <see cref="TeamOf(Entity)"/>) don't hurt each other (in a network game, unless <see cref="Multiplayer.FriendlyFire"/>),
     /// and in a network game a player's own shots don't hurt them.
     /// </summary>
-    internal bool CanHurt(Entity? source, Entity target)
+    public bool CanHurt(Entity? source, Entity target)
     {
         if (source is null)
             return true;
@@ -336,14 +352,14 @@ public sealed partial class Game
     }
 
     /// <summary>Plays a sound here and, on the host of a network game, for everyone.</summary>
-    internal void PlayShared(string sound)
+    public void PlayShared(string sound)
     {
         Audio.Play(sound);
         Net.RelaySound(sound, 1, 1, null);
     }
 
     /// <summary>Shakes the camera of whoever plays <paramref name="entity"/>: here, or on their own machine.</summary>
-    internal void ShakeFor(Entity entity, float strength, float duration)
+    public void ShakeFor(Entity entity, float strength, float duration)
     {
         if (Net.IsMine(entity))
             ShakeCamera(strength, duration);
@@ -352,14 +368,14 @@ public sealed partial class Game
     }
 
     /// <summary>Everyone's controls that this machine knows: its own, and on the host, every other player's too.</summary>
-    internal IEnumerable<IInput> PlayerInputs()
+    public IEnumerable<IInput> PlayerInputs()
     {
         yield return Input;
         if (!Net.IsHost)
             yield break;
         foreach (var player in Net.Players)
         {
-            if (player.Input is { } remote)
+            if (player.Remote is { } remote)
                 yield return remote;
         }
     }

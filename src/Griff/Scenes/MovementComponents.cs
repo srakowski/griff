@@ -628,10 +628,12 @@ public sealed class GridPatrol : Component, IGridDriver
     internal float WaitLeft { get; set; }
 }
 
-// The cells grid movers step between: a tilemap's (its transform and tile size), or with none, world units centered on
-// whole numbers. Rows count down either way, so a way (x right, y up) changes the cell by Offset(way), except on a hex
-// map, where a way up or down goes to one of the two hexagons above or below (see Step).
-internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4x4 ToLocal)
+/// <summary>
+/// The cells grid movers step between: a tilemap's (its transform and tile size), or with none, world units centered on
+/// whole numbers. Rows count down either way, so a way (x right, y up) changes the cell by Offset(way), except on a hex
+/// map, where a way up or down goes to one of the two hexagons above or below (see Step).
+/// </summary>
+public readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4x4 ToLocal)
 {
     // The six hexagons round one in an even row and in an odd (shifted) row, as changes of cell: clockwise from the top
     // left, as Tilemap.Neighbors lists them.
@@ -644,6 +646,7 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
     // left, into the rows above and below.
     private static readonly (int X, int Y)[] HexWays = [(1, 0), (1, 1), (-1, 1), (-1, 0), (-1, -1), (1, -1)];
 
+    /// <summary>The cells of <paramref name="map"/>, or of world units when it is null or has no entity.</summary>
     public static GridCells Of(Tilemap? map)
     {
         if (map?.Entity is null || !Matrix4x4.Invert(map.Entity.Transform.WorldMatrix, out var toLocal))
@@ -651,6 +654,7 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
         return new GridCells(map, map.Entity.Transform.WorldMatrix, toLocal);
     }
 
+    /// <summary>The cell a world position is in.</summary>
     public (int X, int Y) CellAt(Vector2 world)
     {
         if (Map is null)
@@ -658,9 +662,11 @@ internal readonly record struct GridCells(Tilemap? Map, Matrix4x4 World, Matrix4
         return Map.CellAt(Vector2.Transform(world, ToLocal));
     }
 
+    /// <summary>The world position of the middle of a cell.</summary>
     public Vector2 Center((int X, int Y) cell) =>
         Map is null ? new Vector2(cell.X, -cell.Y) : Vector2.Transform(Map.CellCenter(cell.X, cell.Y), World);
 
+    /// <summary>The change of cell for a way (x right, y up): rows count down, so y is negated.</summary>
     public static (int X, int Y) Offset((int X, int Y) way) => (way.X, -way.Y);
 
     /// <summary>Whether its cells are an isometric map's diamonds.</summary>

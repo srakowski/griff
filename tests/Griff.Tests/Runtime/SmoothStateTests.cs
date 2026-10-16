@@ -421,14 +421,16 @@ public sealed class SmoothStateTests
     }
 
     // A HUD laid out over the camera's view as it is each step: a box a quarter of the way up and right of the middle.
-    private sealed class Hud : GameSystem
+    private sealed class Hud : GameSystem, IHudLayout
     {
         public static readonly Entity Box = new("HUD Box");
 
         private Vector2 _center;
         private float _half;
 
-        protected override void LayOutHud()
+        public IReadOnlyList<HudButton> HudButtons => [];
+
+        public void LayOutHud()
         {
             var camera = Views.FindCamera(Game.Scene)!;
             _center = new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);

@@ -18,8 +18,10 @@ public static class Views
 
     public static readonly Color DefaultBackground = Color.FromBytes(0x1E, 0x22, 0x2B);
 
-    // Stands in for the entity of draws that belong to the screen rather than the scene, like the scene-change fade.
-    internal static readonly Entity ScreenEntity = new("Screen");
+    /// <summary>
+    /// Stands in for the entity of draws that belong to the screen rather than the scene, like the scene-change fade.
+    /// </summary>
+    public static readonly Entity ScreenEntity = new("Screen");
 
     // One entity that draws: its sprite when that's all it draws (or else its drawable components, gathered in step order
     // apart), where its draws are in the frame's list once it's drawn (First, Count), and what it sorts by.

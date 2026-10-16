@@ -16,7 +16,7 @@ public sealed class CardsModule : GameModule
     {
         // After scripts (so a card a script plays goes this frame) and after dragging.
         var cards = game.AddSystem(new CardsSystem());
-        game.StepAfter("Dragging", "Cards", cards, cards.Run);
+        game.StepAfter(Steps.Dragging, "Cards", cards, cards.Run);
         game.OnNetCommand(CardsSystem.CardsCommand, cards.RunCommand);
     }
 }

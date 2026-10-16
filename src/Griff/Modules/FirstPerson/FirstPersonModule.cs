@@ -14,6 +14,6 @@ public sealed class FirstPersonModule : GameModule
     {
         // After the other no-code players move, before scripts, so a script can still take over a body this frame.
         var firstPerson = game.AddSystem(new FirstPersonSystem());
-        game.StepAfter("Movement", "First Person", firstPerson, firstPerson.Run);
+        game.StepAfter(Steps.Movement, "First Person", firstPerson, firstPerson.Run);
     }
 }

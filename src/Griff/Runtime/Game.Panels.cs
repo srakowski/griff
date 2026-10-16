@@ -72,10 +72,13 @@ public sealed partial class Game
         _panels.Rebinding = action.Trim();
     }
 
-    // Paused at any point this frame: the press that clicks Resume doesn't also jump, or work a lever.
-    internal bool PausedThisFrame => _pausedAtStart || Time.IsPaused;
+    /// <summary>
+    /// Paused at any point this frame: the press that clicks Resume doesn't also jump, or work a lever.
+    /// </summary>
+    public bool PausedThisFrame => _pausedAtStart || Time.IsPaused;
 
-    internal Panel? PanelNamed(string name) =>
+    /// <summary>The first Panel on the entity named <paramref name="name"/> in the scene, or null.</summary>
+    public Panel? PanelNamed(string name) =>
         Scene.Entities.Where(e => e.Name == name.Trim()).SelectMany(e => e.GetComponents<Panel>()).FirstOrDefault();
 
     private static bool Inside(Entity entity, Panel panel) => panel.Entity is { } owner && entity.IsSelfOrDescendantOf(owner);

@@ -14,6 +14,6 @@ public sealed class Match3Module : GameModule
     {
         // After scripts, so a swap a script asks for is made this frame, and after dragging.
         var boards = game.AddSystem(new Match3System());
-        game.StepAfter("Dragging", "Match Boards", boards, boards.RunBoards);
+        game.StepAfter(Steps.Dragging, "Match Boards", boards, boards.RunBoards);
     }
 }

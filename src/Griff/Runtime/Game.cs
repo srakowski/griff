@@ -18,9 +18,11 @@ public sealed partial class Game : IGameContext
     private readonly MessageBoard _messages = new();
     private readonly HashSet<(Entity Source, Entity Target)> _touches = [];
 
-    // Who touched what in this frame's physics, both ways round (triggers and what's in them too), for systems that look
-    // for themselves without making garbage.
-    internal HashSet<(Entity Source, Entity Target)> Touches => _touches;
+    /// <summary>
+    /// Who touched what in this frame's physics, both ways round (triggers and what's in them too), for systems that look
+    /// for themselves without making garbage.
+    /// </summary>
+    public HashSet<(Entity Source, Entity Target)> Touches => _touches;
 
     private string? _pendingScene;
     // A fade out on its way to a scene, or to a call (FadeThrough) with no scene change.
@@ -121,10 +123,10 @@ public sealed partial class Game : IGameContext
     private readonly IInput _input;
 
     /// <summary>This machine's own controls, even while the host runs another player's tools for them (see <see cref="Input"/>).</summary>
-    internal IInput LocalInput => _input;
+    public IInput LocalInput => _input;
 
     /// <summary>True if <paramref name="entity"/> goes at the end of this frame (see <see cref="Destroy"/>).</summary>
-    internal bool IsDestroying(Entity entity) => _pendingDestroy.Contains(entity);
+    public bool IsDestroying(Entity entity) => _pendingDestroy.Contains(entity);
 
     public Time Time { get; } = new();
 
@@ -187,8 +189,10 @@ public sealed partial class Game : IGameContext
     public void LoadScene(string nameOrPath, float fade, Color? color, string? arriveAt) =>
         LoadScene(nameOrPath, fade, color, arriveAt, traveller: null, fresh: false);
 
-    // Where a door sends whoever used it: they arrive at the spot, even if no player moves them.
-    internal void LoadScene(string nameOrPath, float fade, Color? color, string? arriveAt, Entity? traveller, bool fresh)
+    /// <summary>
+    /// Where a door sends whoever used it: they arrive at the spot, even if no player moves them.
+    /// </summary>
+    public void LoadScene(string nameOrPath, float fade, Color? color, string? arriveAt, Entity? traveller, bool fresh)
     {
         Crowds.ThrowIfRunning("change scenes");
         if (SceneLoader is null)
@@ -467,7 +471,7 @@ public sealed partial class Game : IGameContext
     private List<Component> PickList() => _pickLists.Count > 0 ? _pickLists.Pop() : [];
 
     /// <summary>The middle of an entity: its collider's, or its position.</summary>
-    internal static Vector2 CenterOf(Entity entity)
+    public static Vector2 CenterOf(Entity entity)
     {
         if (entity.GetComponent<Collider>() is { } collider)
             return collider.WorldBounds.Center;
@@ -1039,8 +1043,10 @@ public sealed partial class Game : IGameContext
         Destroy(entity);
     }
 
-    // What collects for a collider: its own entity's body, or the nearest ancestor's (a player's hitbox child).
-    internal static Entity? BodyOwner(Entity entity)
+    /// <summary>
+    /// What collects for a collider: its own entity's body, or the nearest ancestor's (a player's hitbox child).
+    /// </summary>
+    public static Entity? BodyOwner(Entity entity)
     {
         for (var e = entity; e is not null; e = e.Parent)
         {
@@ -1254,7 +1260,8 @@ public sealed partial class Game : IGameContext
     private static bool IsWall(Entity entity) =>
         entity.GetComponent<Tilemap>() is { Solid: true } || entity.GetComponents<Collider>().Any(c => !c.IsTrigger);
 
-    internal static string? LayerOf(Entity entity) =>
+    /// <summary>The layer an entity's Collider (or else its Tilemap) is on, or null.</summary>
+    public static string? LayerOf(Entity entity) =>
         entity.GetComponent<Collider>()?.Layer ?? entity.GetComponent<Tilemap>()?.Layer;
 
     // Deaths from this frame (touches, scripts, triggers) send their message and are destroyed along with everything else.

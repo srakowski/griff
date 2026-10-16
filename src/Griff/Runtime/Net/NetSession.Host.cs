@@ -145,7 +145,7 @@ public sealed partial class NetSession
     /// Tells one player's machine something (what the host's run of their tools wants shown there): <paramref name="name"/>
     /// is run there with <paramref name="data"/> (see <see cref="GameSetup.OnHostCommand"/>), once they're in this scene.
     /// </summary>
-    internal void SendCommandTo(NetPlayer player, string name, object? data)
+    public void SendCommandTo(NetPlayer player, string name, object? data)
     {
         if (!IsHost || player.Connection is not { } connection || player.ReadyEpoch != _epoch)
             return;
@@ -230,7 +230,7 @@ public sealed partial class NetSession
 
         connection.Tag = player;
         player.Connection = connection;
-        player.Input = new RemoteInput(_game.Input);
+        player.Remote = new RemoteInput(_game.Input);
         _players.Add(player);
         ChooseTeam(player);
         SpawnAvatar(player, fresh: true);
@@ -429,7 +429,8 @@ public sealed partial class NetSession
         player.Color = ColorFor(player);
     }
 
-    internal List<string> TeamNames() =>
+    /// <summary>The team names the host's Multiplayer settings give, in order.</summary>
+    public List<string> TeamNames() =>
         ((IsClient ? _hostSettings?.Teams : null) ?? Settings?.Teams ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     // The host's Multiplayer settings that players' machines go by, whatever their own copy of the scene says.
@@ -495,21 +496,21 @@ public sealed partial class NetSession
     private void BeginHostFrame(float seconds)
     {
         foreach (var player in _players)
-            player.Input?.BeginFrame(seconds);
+            player.Remote?.BeginFrame(seconds);
     }
 
     private void EndHostFrame(float seconds)
     {
         foreach (var player in _players)
         {
-            if (player.Input?.PendingRumble is { } rumble && player.Connection is { } connection)
+            if (player.Remote?.PendingRumble is { } rumble && player.Connection is { } connection)
             {
                 var w = new NetWriter(16);
                 w.Byte((byte)NetMessage.Rumble);
                 w.Float(rumble.Strength);
                 w.Float(rumble.Seconds);
                 connection.SendUnreliable(w.Span);
-                player.Input.PendingRumble = null;
+                player.Remote.PendingRumble = null;
             }
         }
 
@@ -771,7 +772,7 @@ public sealed partial class NetSession
         var eyes = new List<Vector2>();
         if (player.Avatar is { } avatar && avatar.Scene == _game.Scene)
             eyes.Add(Flat(avatar.Transform.WorldPosition));
-        if (player.Input is { HasView: true } input)
+        if (player.Remote is { HasView: true } input)
             eyes.Add(input.View.Center);
         return eyes;
     }
@@ -987,7 +988,7 @@ public sealed partial class NetSession
             switch ((NetMessage)r.Byte())
             {
                 case NetMessage.Input:
-                    player.Input?.Receive(ref r);
+                    player.Remote?.Receive(ref r);
                     break;
                 case NetMessage.Ready:
                     if (r.VarInt() == _epoch)
@@ -1222,7 +1223,7 @@ public sealed partial class NetSession
     }
 
     /// <summary>Sends a command for the host to carry out for this player (a strategy order, crafting). Offline it runs here.</summary>
-    internal void SendCommand(string name, object? args)
+    public void SendCommand(string name, object? args)
     {
         if (IsClient)
         {

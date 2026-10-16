@@ -37,8 +37,10 @@ public sealed partial class Game
         return DoOn(entity, action, null, value);
     }
 
-    // Each of the entity's components with an action of that name does it.
-    internal int DoOn(Entity entity, string action, string? with, float? number)
+    /// <summary>
+    /// Each of the entity's components with an action of that name does it.
+    /// </summary>
+    public int DoOn(Entity entity, string action, string? with, float? number)
     {
         var done = 0;
         var components = entity.Components;
@@ -184,7 +186,8 @@ public sealed partial class Game
     // scene called that); its own entity without any.
     private static void TargetsOf(Trigger trigger, List<Entity> into) => TargetsOf(trigger.Entity!, trigger.Targets, into);
 
-    internal static void TargetsOf(Entity owner, string? targets, List<Entity> into)
+    /// <summary>Fills <paramref name="into"/> with the entities <paramref name="targets"/> names (a name, or a list of names), or with the owner itself when it names none.</summary>
+    public static void TargetsOf(Entity owner, string? targets, List<Entity> into)
     {
         if (string.IsNullOrWhiteSpace(targets))
         {

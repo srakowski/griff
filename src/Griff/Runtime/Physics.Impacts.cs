@@ -30,8 +30,10 @@ public sealed partial class Physics
     /// </summary>
     public IReadOnlyList<Impact> Impacts => _impacts;
 
-    // The same, as a list to go through without an enumerator.
-    internal List<Impact> ImpactList => _impacts;
+    /// <summary>
+    /// The same, as a list to go through without an enumerator.
+    /// </summary>
+    public List<Impact> ImpactList => _impacts;
 
     // A knock between two things, noted both ways round.
     private void Knocked(Entity struck, Entity by, float strength, Vector2 point)

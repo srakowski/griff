@@ -16,6 +16,6 @@ public sealed class BattlesModule : GameModule
     {
         // After the turns are taken, so a fighter whose turn has just come moves this frame.
         var battles = game.AddSystem(new BattlesSystem());
-        game.StepAfter("Turns", "Battles", battles, battles.Run);
+        game.StepAfter(Steps.Turns, "Battles", battles, battles.Run);
     }
 }

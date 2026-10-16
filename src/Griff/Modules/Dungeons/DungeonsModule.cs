@@ -14,6 +14,6 @@ public sealed class DungeonsModule : GameModule
     {
         // Dungeons are made first, so what starts this frame starts on the floor (spawns included).
         var dungeons = game.AddSystem(new DungeonsSystem());
-        game.StepBefore("Script Start", "Dungeons", dungeons, dungeons.Run);
+        game.StepBefore(Steps.ScriptStart, "Dungeons", dungeons, dungeons.Run);
     }
 }

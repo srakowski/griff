@@ -76,8 +76,10 @@ public sealed partial class Game
     /// <summary>True if <paramref name="entity"/> is out of sight behind the minigame that has the screen (see <see cref="Minigame"/>).</summary>
     internal bool IsBehindMinigame(Entity entity) => MinigameRoot.IsBehind(entity, Minigame);
 
-    // The first of `components` not behind the minigame that has the screen: the one a HUD shows.
-    internal T? FirstInSight<T>(ComponentList<T> components) where T : Component
+    /// <summary>
+    /// The first of `components` not behind the minigame that has the screen: the one a HUD shows.
+    /// </summary>
+    public T? FirstInSight<T>(ComponentList<T> components) where T : Component
     {
         var shown = Minigame;
         foreach (var component in components)

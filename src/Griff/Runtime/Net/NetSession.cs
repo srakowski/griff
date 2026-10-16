@@ -426,7 +426,8 @@ public sealed partial class NetSession : IDisposable
             connection.Disconnect(reason);
     }
 
-    internal static int OwnerIdOf(Entity? entity)
+    /// <summary>The id of the player who owns <paramref name="entity"/> (or the nearest of its parents with an owner) through a Networked component, or 0 if none does.</summary>
+    public static int OwnerIdOf(Entity? entity)
     {
         for (var e = entity; e is not null; e = e.Parent)
         {

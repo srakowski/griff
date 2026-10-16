@@ -107,111 +107,44 @@ public abstract class GameSystem
     {
     }
 
-    /// <summary>
-    /// Called as each frame is drawn, before any system's <see cref="Draw"/>, for a system that sees the world its own way
-    /// (a first-person view) to draw it in place of the camera's view from above: set <see cref="FrameDrawing.Sprites"/>,
-    /// <see cref="FrameDrawing.View"/> and <see cref="FrameDrawing.ViewProjection"/> (and <see cref="FrameDrawing.SeenThrough"/>).
-    /// Every system then draws over it. Called for each view too, with the view's own camera: a first-person camera can be
-    /// the main one or a viewport's.
-    /// </summary>
-    protected virtual void DrawView(FrameDrawing frame)
-    {
-    }
-
-    /// <summary>
-    /// The entity the game is seen through while the system draws the world through someone's eyes (a first-person view's
-    /// player), or null: sounds are then heard from it, facing the way it faces, and <see cref="Game.Eyes"/> is it.
-    /// </summary>
-    protected virtual Entity? Eyes => null;
-
-    /// <summary>
-    /// True if the game is seen through <paramref name="entity"/>'s eyes on the screen of whoever plays it (in a network
-    /// game, each player's own character): their controls aim the way it faces rather than with the mouse.
-    /// </summary>
-    protected virtual bool LooksThrough(Entity entity) => false;
-
-    /// <summary>
-    /// Called early in each frame's Simulate phase (and on the host of a network game, again for each other player, as
-    /// them: see <see cref="RunForPlayer"/>) to lay out what the system shows on the screen for the view as it is now,
-    /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click. Draw what
-    /// it lays out through <see cref="FrameDrawing.PinToView"/>, so it keeps still on the screen as the camera is drawn
-    /// moving between steps.
-    /// </summary>
-    protected virtual void LayOutHud()
-    {
-    }
-
-    /// <summary>The buttons the system shows on the screen this frame (a hotbar's slots, a tool picker), with what each does.</summary>
-    protected virtual IReadOnlyList<HudButton> HudButtons => [];
-
-    /// <summary>A short message the system's HUD is showing (something made, a tool's next step), or null.</summary>
-    protected virtual string? Notice => null;
-
-    /// <summary>
-    /// On the host of a network game, runs the system's controls that are one player's own (a hotbar, building tools) for
-    /// <paramref name="player"/>, as them: <see cref="Game.Input"/> is their keys and mouse, the view is their screen, and
-    /// what the system keeps for a player should be theirs (see <see cref="Game.ActingFor"/>). Called once a frame for each
-    /// other player with a character, after the system's <see cref="LayOutHud"/> for them.
-    /// </summary>
-    protected virtual void RunForPlayer(NetPlayer player)
-    {
-    }
-
-    /// <summary>
-    /// Called as a grid mover sets off on a step it chose (a player's, with the crates it pushes), before anything moves: a
-    /// puzzle's move history remembers where everything was.
-    /// </summary>
-    protected virtual void GridStepStarting(GridMovement mover)
-    {
-    }
-
-    /// <summary>
-    /// Called as the game is about to leave its scene, for another or because it's stopping, while the scene is still there:
-    /// to keep what the scene leaves behind (a block world saved).
-    /// </summary>
-    protected virtual void SceneEnding()
-    {
-    }
-
-    /// <summary>
-    /// True while the mouse is over something the system draws on the screen (a strategy game's HUD, say), so a click there
-    /// isn't meant for the world: Griff's own controls leave it alone, and in a network game the host is told.
-    /// </summary>
-    protected virtual bool MouseOnHud => false;
-
-    /// <summary>
-    /// True while Back (Esc, the gamepad's B) would cancel something the system has under way (a strategy game's building
-    /// being placed, a target being picked), so it does that first: a panel that opens on a key (a pause menu) waits.
-    /// </summary>
-    protected virtual bool ClaimsBack => false;
-
-    /// <summary>
-    /// Called in a network game as each scene starts and whenever the players change (someone joins, leaves or changes
-    /// team), to settle who plays what (a strategy player commands their own team).
-    /// </summary>
-    protected virtual void PlayersChanged()
-    {
-    }
-
     /// <summary>The script whose entity the system goes away with, if a script added it.</summary>
     internal Behavior? Owner { get; set; }
 
     internal bool IsRemoved { get; set; }
 
-    internal void Attach(Game game) => _game = game;
+    // What the system opts into (see the interfaces below), found once as it's added.
+    private IViewDrawer? _viewDrawer;
+    private ISeesThroughEyes? _eyes;
+    private IHudLayout? _hud;
+    private IMouseOnHud? _mouse;
+    private INoticeSource? _notice;
+    private IPlayerTools? _tools;
+    private IGridStepListener? _gridSteps;
+    private ISceneEndListener? _sceneEnd;
+    private IClaimsBack? _claimsBack;
+    private IPlayersListener? _players;
+
+    internal void Attach(Game game)
+    {
+        _game = game;
+        (_viewDrawer, _eyes, _hud, _mouse, _notice, _tools) = (this as IViewDrawer, this as ISeesThroughEyes, this as IHudLayout,
+            this as IMouseOnHud, this as INoticeSource, this as IPlayerTools);
+        (_gridSteps, _sceneEnd, _claimsBack, _players) = (this as IGridStepListener, this as ISceneEndListener,
+            this as IClaimsBack, this as IPlayersListener);
+    }
 
     internal void RunUpdate() => Update();
 
     internal void RunSceneChanged() => SceneChanged();
 
-    internal bool HasMouse => !IsRemoved && MouseOnHud;
+    internal bool HasMouse => !IsRemoved && _mouse is { MouseOnHud: true };
 
-    internal bool HasBack => !IsRemoved && ClaimsBack;
+    internal bool HasBack => !IsRemoved && _claimsBack is { ClaimsBack: true };
 
     internal void RunPlayersChanged()
     {
         if (!IsRemoved)
-            PlayersChanged();
+            _players?.PlayersChanged();
     }
 
     internal void RunDraw(FrameDrawing frame)
@@ -223,40 +156,154 @@ public abstract class GameSystem
     internal void RunDrawView(FrameDrawing frame)
     {
         if (!IsRemoved)
-            DrawView(frame);
+            _viewDrawer?.DrawView(frame);
     }
 
-    internal Entity? SeenThrough => IsRemoved ? null : Eyes;
+    internal Entity? SeenThrough => IsRemoved ? null : _eyes?.Eyes;
 
-    internal bool SeesThrough(Entity entity) => !IsRemoved && LooksThrough(entity);
+    internal bool SeesThrough(Entity entity) => !IsRemoved && _eyes is { } eyes && eyes.LooksThrough(entity);
 
     internal void RunLayOutHud()
     {
         if (!IsRemoved)
-            LayOutHud();
+            _hud?.LayOutHud();
     }
 
-    internal IReadOnlyList<HudButton> Buttons => IsRemoved ? [] : HudButtons;
+    internal IReadOnlyList<HudButton> Buttons => IsRemoved || _hud is null ? [] : _hud.HudButtons;
 
-    internal string? ShownNotice => IsRemoved ? null : Notice;
+    internal string? ShownNotice => IsRemoved ? null : _notice?.Notice;
 
     internal void RunForOtherPlayer(NetPlayer player)
     {
         if (!IsRemoved)
-            RunForPlayer(player);
+            _tools?.RunForPlayer(player);
     }
 
     internal void RunGridStepStarting(GridMovement mover)
     {
         if (!IsRemoved)
-            GridStepStarting(mover);
+            _gridSteps?.GridStepStarting(mover);
     }
 
     internal void RunSceneEnding()
     {
         if (!IsRemoved)
-            SceneEnding();
+            _sceneEnd?.SceneEnding();
     }
+}
+
+/// <summary>
+/// A system that draws the world its own way (a first-person view) in place of the camera's view from above: called as
+/// each frame is drawn, before any system's <see cref="GameSystem.Draw"/>, to set <see cref="FrameDrawing.Sprites"/>,
+/// <see cref="FrameDrawing.View"/> and <see cref="FrameDrawing.ViewProjection"/> (and <see cref="FrameDrawing.SeenThrough"/>).
+/// Every system then draws over it. Called for each view too, with the view's own camera: a first-person camera can be
+/// the main one or a viewport's.
+/// </summary>
+public interface IViewDrawer
+{
+    /// <summary>Draws the world the system's way into <paramref name="frame"/>.</summary>
+    void DrawView(FrameDrawing frame);
+}
+
+/// <summary>A system that has the game seen through someone's eyes (a first-person view's player).</summary>
+public interface ISeesThroughEyes
+{
+    /// <summary>
+    /// The entity the game is seen through while the system draws the world through its eyes, or null: sounds are then
+    /// heard from it, facing the way it faces, and <see cref="Game.Eyes"/> is it.
+    /// </summary>
+    Entity? Eyes { get; }
+
+    /// <summary>
+    /// True if the game is seen through <paramref name="entity"/>'s eyes on the screen of whoever plays it (in a network
+    /// game, each player's own character): their controls aim the way it faces rather than with the mouse.
+    /// </summary>
+    bool LooksThrough(Entity entity);
+}
+
+/// <summary>A system that shows buttons and the like on the screen (a hotbar, a tool picker).</summary>
+public interface IHudLayout
+{
+    /// <summary>
+    /// Called early in each frame's Simulate phase (and on the host of a network game, again for each other player, as
+    /// them: see <see cref="IPlayerTools"/>) to lay out what the system shows on the screen for the view as it is now,
+    /// with its <see cref="HudButtons"/>, so whether the mouse is on it is known before anything acts on a click. Draw what
+    /// it lays out through <see cref="FrameDrawing.PinToView"/>, so it keeps still on the screen as the camera is drawn
+    /// moving between steps.
+    /// </summary>
+    void LayOutHud();
+
+    /// <summary>The buttons the system shows on the screen this frame (a hotbar's slots, a tool picker), with what each does.</summary>
+    IReadOnlyList<HudButton> HudButtons { get; }
+}
+
+/// <summary>A system that draws something on the screen the mouse can be over (a strategy game's HUD, say).</summary>
+public interface IMouseOnHud
+{
+    /// <summary>
+    /// True while the mouse is over something the system draws on the screen, so a click there isn't meant for the
+    /// world: Griff's own controls leave it alone, and in a network game the host is told.
+    /// </summary>
+    bool MouseOnHud { get; }
+}
+
+/// <summary>A system whose HUD shows a short message.</summary>
+public interface INoticeSource
+{
+    /// <summary>A short message the system's HUD is showing (something made, a tool's next step), or null.</summary>
+    string? Notice { get; }
+}
+
+/// <summary>A system with controls that are one player's own (a hotbar, building tools), which the host of a network game runs for each player.</summary>
+public interface IPlayerTools
+{
+    /// <summary>
+    /// On the host of a network game, runs the system's controls that are one player's own for <paramref name="player"/>,
+    /// as them: <see cref="Game.Input"/> is their keys and mouse, the view is their screen, and what the system keeps for
+    /// a player should be theirs (see <see cref="Game.ActingFor"/>). Called once a frame for each other player with a
+    /// character, after the system's <see cref="IHudLayout.LayOutHud"/> for them.
+    /// </summary>
+    void RunForPlayer(NetPlayer player);
+}
+
+/// <summary>A system that hears of a grid mover setting off.</summary>
+public interface IGridStepListener
+{
+    /// <summary>
+    /// Called as a grid mover sets off on a step it chose (a player's, with the crates it pushes), before anything moves: a
+    /// puzzle's move history remembers where everything was.
+    /// </summary>
+    void GridStepStarting(GridMovement mover);
+}
+
+/// <summary>A system that keeps something when the game leaves its scene.</summary>
+public interface ISceneEndListener
+{
+    /// <summary>
+    /// Called as the game is about to leave its scene, for another or because it's stopping, while the scene is still there:
+    /// to keep what the scene leaves behind (a block world saved).
+    /// </summary>
+    void SceneEnding();
+}
+
+/// <summary>A system that has something under way that Back should cancel first.</summary>
+public interface IClaimsBack
+{
+    /// <summary>
+    /// True while Back (Esc, the gamepad's B) would cancel something the system has under way (a strategy game's building
+    /// being placed, a target being picked), so it does that first: a panel that opens on a key (a pause menu) waits.
+    /// </summary>
+    bool ClaimsBack { get; }
+}
+
+/// <summary>A system that settles who plays what in a network game.</summary>
+public interface IPlayersListener
+{
+    /// <summary>
+    /// Called in a network game as each scene starts and whenever the players change (someone joins, leaves or changes
+    /// team), to settle who plays what (a strategy player commands their own team).
+    /// </summary>
+    void PlayersChanged();
 }
 
 /// <summary>
@@ -265,17 +312,23 @@ public abstract class GameSystem
 /// </summary>
 public sealed class FrameStep
 {
-    internal FrameStep(FramePhase phase, string name, Action run, GameSystem? system)
+    internal FrameStep(StepId id, Action run, GameSystem? system)
     {
-        Phase = phase;
-        Name = name;
+        Id = id;
         Run = run;
         System = system;
     }
 
-    public FramePhase Phase { get; }
+    internal FrameStep(FramePhase phase, string name, Action run, GameSystem? system) : this(new StepId(phase, name), run, system)
+    {
+    }
 
-    public string Name { get; }
+    /// <summary>The step's id, which a module's step names to go next to it (see <see cref="Steps"/>).</summary>
+    public StepId Id { get; }
+
+    public FramePhase Phase => Id.Phase;
+
+    public string Name => Id.Name;
 
     /// <summary>The system the step belongs to, or null for the game's own bookkeeping.</summary>
     public GameSystem? System { get; }
@@ -287,5 +340,5 @@ public sealed class FrameStep
 
     internal bool TimesItself { get; init; }
 
-    public override string ToString() => $"{Phase}: {Name}";
+    public override string ToString() => Id.ToString();
 }

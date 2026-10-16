@@ -17,6 +17,6 @@ public sealed class AdventuresModule : GameModule
         // After the movements, so a click this frame sets off this frame; before the dialogues, so a talk a hotspot starts
         // doesn't hear the click that started it.
         var adventures = game.AddSystem(new AdventuresSystem());
-        game.StepAfter("Movement", "Walkers", adventures, adventures.Run);
+        game.StepAfter(Steps.Movement, "Walkers", adventures, adventures.Run);
     }
 }

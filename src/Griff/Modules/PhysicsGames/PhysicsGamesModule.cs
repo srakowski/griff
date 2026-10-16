@@ -23,18 +23,18 @@ public sealed class PhysicsGamesModule : GameModule
         // Slingshots after scripts and dragging (so a launch a script asks for flies this step), before physics; breaking
         // straight after physics, from the knocks it found.
         var slingshots = game.AddSystem(new SlingshotSystem());
-        game.StepAfter("Dragging", "Slingshots", slingshots, slingshots.Run);
+        game.StepAfter(Steps.Dragging, "Slingshots", slingshots, slingshots.Run);
         var breakables = game.AddSystem(new BreakablesSystem());
-        game.StepAfter("Physics", "Breakables", breakables, breakables.Run);
+        var breakableStep = game.StepAfter(Steps.Physics, "Breakables", breakables, breakables.Run);
         var goals = game.AddSystem(new LevelGoalSystem());
-        game.StepAfter("Breakables", "Level Goals", goals, goals.Run);
+        game.StepAfter(breakableStep, "Level Goals", goals, goals.Run);
         game.OnNetCommand(SlingshotSystem.Command, slingshots.RunCommand);
 
         // Pinball: the tilt and the flippers before physics (so a flipper swings this step); bumpers, targets, lanes, the
         // plunger and the drain after it, from what it found touching.
         var pinball = game.AddSystem(new PinballSystem());
-        game.StepAfter("Dragging", "Flippers", pinball, pinball.RunControls);
-        game.StepAfter("Physics", "Pinball", pinball, pinball.RunHits);
+        game.StepAfter(Steps.Dragging, "Flippers", pinball, pinball.RunControls);
+        game.StepAfter(Steps.Physics, "Pinball", pinball, pinball.RunHits);
     }
 
     // With bodies that turn: a tower of posts and planks, two storeys, asleep, that break, and a heavy ball thrown through it.

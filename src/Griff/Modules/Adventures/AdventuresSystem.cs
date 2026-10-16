@@ -11,7 +11,7 @@ namespace Griff.Modules.Adventures;
 /// player's mouse), its walk along the way its <see cref="WalkMap"/> finds, what it does with a <see cref="Hotspot"/> once
 /// it's there, and what it says; on each screen, the hotspot under the pointer, its name by it and the pointer's look.
 /// </summary>
-internal sealed partial class AdventuresSystem : GameSystem
+internal sealed partial class AdventuresSystem : GameSystem, IHudLayout, IMouseOnHud
 {
     // How far apart a walker's feet and where it's going count as there.
     private const float There = 0.01f;
@@ -179,7 +179,7 @@ internal sealed partial class AdventuresSystem : GameSystem
     }
 
     // Over a button or a system's HUD: the click is theirs.
-    private bool OnUi(IInput input) => ReferenceEquals(input, Game.Input) ? Game.MouseOnUi : input is RemoteInput { MouseOnUi: true };
+    private bool OnUi(IInput input) => ReferenceEquals(input, Game.Input) ? Game.MouseOnUi : Game.MouseOnUiOf(input);
 
     /// <summary>
     /// The hotspot at <paramref name="point"/> that's there now (its Needs Flag holds), the one drawn on top where several

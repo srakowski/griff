@@ -15,11 +15,11 @@ public sealed partial class Game
     private ComponentList<TurnOrder> _turnOrders;
 
     /// <summary>The turn order <paramref name="entity"/> takes turns in (see <see cref="TurnOrder.Within"/>), if any.</summary>
-    internal TurnOrder? TurnOrderOf(Entity? entity) =>
+    public TurnOrder? TurnOrderOf(Entity? entity) =>
         entity is not null && TurnTaker.Of(entity) is { } taker ? OrderOf(taker) : null;
 
     /// <summary>The turn orders running this frame, in the scene's order.</summary>
-    internal ComponentList<TurnOrder> TurnOrdersNow => _turnOrders;
+    public ComponentList<TurnOrder> TurnOrdersNow => _turnOrders;
 
     // Before anything acts, so a turn taker whose turn has just ended doesn't get another frame.
     private void RunTurns()
@@ -408,9 +408,11 @@ public sealed partial class Game
         return false;
     }
 
-    // The team a turn taker acts for: its own, else the team it's on some other way (a Team on it or above it), or in a
-    // network game with teams, its player's team.
-    internal string TeamOf(TurnTaker taker)
+    /// <summary>
+    /// The team a turn taker acts for: its own, else the team it's on some other way (a Team on it or above it), or in a
+    /// network game with teams, its player's team.
+    /// </summary>
+    public string TeamOf(TurnTaker taker)
     {
         if (Net.IsOnline && Net.PlayerById(NetSession.OwnerIdOf(taker.Entity)) is { Team.Length: > 0 } player)
             return player.Team;
@@ -432,15 +434,17 @@ public sealed partial class Game
         order.IsTurn(TeamOf(taker)) && !(taker.Actions > 0 && taker.ActionsUsed >= taker.Actions);
 
     /// <summary>True if <paramref name="entity"/> acts for a turn taker that has to wait: it isn't its turn, or it has used its actions.</summary>
-    internal bool Waiting(Entity? entity)
+    public bool Waiting(Entity? entity)
     {
         if (entity is null || _turnOrders.Count == 0 || TurnTaker.Of(entity) is not { } taker || OrderOf(taker) is not { } order)
             return false;
         return !Acts(order, taker);
     }
 
-    // An attack swung or a shot fired on its turn uses one of its turn taker's actions.
-    internal void UseAction(Entity entity)
+    /// <summary>
+    /// An attack swung or a shot fired on its turn uses one of its turn taker's actions.
+    /// </summary>
+    public void UseAction(Entity entity)
     {
         if (TurnTaker.Of(entity) is { Actions: > 0 } taker && OrderOf(taker) is { } order && Acts(order, taker))
         {

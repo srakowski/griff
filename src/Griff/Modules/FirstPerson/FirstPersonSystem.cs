@@ -10,7 +10,7 @@ namespace Griff.Modules.FirstPerson;
 /// shoot where the player looks, and the screen flashing when they're hurt. It draws the view itself
 /// (<see cref="FirstPersonDrawing"/>), and the game is seen and heard through the player's eyes.
 /// </summary>
-internal sealed class FirstPersonSystem : GameSystem
+internal sealed class FirstPersonSystem : GameSystem, IViewDrawer, ISeesThroughEyes
 {
     // How far the view may look up or down, in degrees.
     private const float MaxPitch = 30;
@@ -25,12 +25,12 @@ internal sealed class FirstPersonSystem : GameSystem
 
     protected override void SceneChanged() => State = new FirstPersonState();
 
-    protected override void DrawView(FrameDrawing frame) => FirstPersonDrawing.Draw(frame);
+    public void DrawView(FrameDrawing frame) => FirstPersonDrawing.Draw(frame);
 
-    protected override Entity? Eyes => FirstPersonViewer;
+    public Entity? Eyes => FirstPersonViewer;
 
     // The player seen through, and in a network game, each player's own character named as the viewer.
-    protected override bool LooksThrough(Entity entity) =>
+    public bool LooksThrough(Entity entity) =>
         FirstPersonView is { } view && (ViewerOf(view) == entity ||
                                         (Game.Net.IsOnline && entity.GetComponent<FirstPersonMovement>() is not null && view.Viewer?.Trim() == entity.Name));
 

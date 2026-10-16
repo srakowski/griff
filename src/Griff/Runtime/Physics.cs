@@ -49,7 +49,7 @@ public sealed partial class Physics
     private Func<int, Box>? _triggerBounds;
 
     /// <summary>Each trigger and the collider overlapping it, as of the last step.</summary>
-    internal HashSet<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
+    public HashSet<(Entity Trigger, Entity Other)> TriggerPairs => _triggerPairs;
 
     /// <summary>The <see cref="Gravity"/> a game starts with: 25 units per second squared, down.</summary>
     public static readonly Vector2 DefaultGravity = new(0, -25f);
@@ -236,7 +236,7 @@ public sealed partial class Physics
     /// members don't collide with each other. An anchored group (welded to something without a body, or with a frozen
     /// member) holds still.
     /// </summary>
-    internal IReadOnlyList<BodyGroup> Groups { get; set; } = [];
+    public IReadOnlyList<BodyGroup> Groups { get; internal set; } = [];
 
     internal void Step(Scene scene, float dt, Action<Entity, Entity> onCollision, Action<Entity, Entity, bool> onTrigger)
     {
@@ -1513,16 +1513,17 @@ public sealed partial class Physics
 }
 
 /// <summary>Bodies welded into one; see <see cref="Physics.Groups"/>.</summary>
-internal sealed class BodyGroup(List<Body> bodies, bool anchored)
+public sealed class BodyGroup(List<Body> bodies, bool anchored)
 {
+    /// <summary>The bodies welded together.</summary>
     public List<Body> Bodies { get; } = bodies;
 
     /// <summary>Welded to something without a body (a wall, the ground): the whole group holds still.</summary>
     public bool Anchored { get; } = anchored;
 
     /// <summary>For this step: it holds still (anchored, or a member is frozen).</summary>
-    internal bool Still { get; set; }
+    public bool Still { get; set; }
 
     /// <summary>For this step: it turns as one, every member being a body that rotates.</summary>
-    internal bool Turns { get; set; }
+    public bool Turns { get; set; }
 }

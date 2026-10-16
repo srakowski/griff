@@ -415,8 +415,10 @@ public sealed partial class Game
             sprite.Tint = tint;
     }
 
-    // A draggable's or drop target's shape: its collider's, else its sprite's, else a square a unit across.
-    internal static bool Covers(Entity entity, Vector2 point) => entity.GetComponent<Collider>() switch
+    /// <summary>
+    /// A draggable's or drop target's shape: its collider's, else its sprite's, else a square a unit across.
+    /// </summary>
+    public static bool Covers(Entity entity, Vector2 point) => entity.GetComponent<Collider>() switch
     {
         { } collider => collider.Contains(point),
         _ => DragAreaOf(entity).Contains(point),

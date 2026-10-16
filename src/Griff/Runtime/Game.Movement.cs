@@ -429,16 +429,19 @@ public sealed partial class Game
         entity.Transform.Position += delta;
     }
 
-    internal void PlayIfSet(string? sound)
+    /// <summary>Plays the sound called <paramref name="sound"/> if it names one (a blank or null name plays nothing).</summary>
+    public void PlayIfSet(string? sound)
     {
         if (!string.IsNullOrWhiteSpace(sound))
             PlayShared(sound.Trim());
     }
 
-    internal static float MoveTowards(float from, float to, float step) =>
+    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
+    public static float MoveTowards(float from, float to, float step) =>
         MathF.Abs(to - from) <= step ? to : from + MathF.Sign(to - from) * step;
 
-    internal static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
+    /// <summary>Moves <paramref name="from"/> towards <paramref name="to"/> by at most <paramref name="step"/>, stopping on it.</summary>
+    public static Vector2 MoveTowards(Vector2 from, Vector2 to, float step)
     {
         var gap = to - from;
         var length = gap.Length();

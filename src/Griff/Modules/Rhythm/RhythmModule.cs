@@ -16,11 +16,11 @@ public sealed class RhythmModule : GameModule
     {
         // After the beat clocks (so the notes go by this step's beat), before scripts (so they see this step's judgments).
         var lanes = game.AddSystem(new RhythmSystem());
-        game.StepAfter("Calibrations", "Note Lanes", lanes, lanes.Run);
+        var laneStep = game.StepAfter(Steps.Calibrations, "Note Lanes", lanes, lanes.Run);
         game.OnNetCommand(RhythmSystem.RhythmCommand, lanes.RunCommand);
 
         // Song selects after the lanes (a menu: it plays the songs they play).
         var songs = game.AddSystem(new SongSelectSystem());
-        game.StepAfter("Note Lanes", "Song Select", songs, songs.Run);
+        game.StepAfter(laneStep, "Song Select", songs, songs.Run);
     }
 }

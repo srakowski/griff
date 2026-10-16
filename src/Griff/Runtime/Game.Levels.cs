@@ -37,21 +37,31 @@ public sealed partial class Game
         FadeColor = color ?? Color.Black;
     }
 
-    // What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
-    // Not what's paused (see Entity.IsPaused): it's held still.
-    internal ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Runs);
+    /// <summary>
+    /// What this machine runs: everything offline and on the host; on a player's machine, only its own things (HUD, menus).
+    /// Not what's paused (see Entity.IsPaused): it's held still.
+    /// </summary>
+    public ComponentList<T> Active<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Runs);
 
-    // What this machine runs, paused or not: for what reads or shows how things are rather than moving them on.
-    internal ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.ActiveNow<T>() : Where(Scene.ActiveNow<T>(), Runs);
+    /// <summary>
+    /// What this machine runs, paused or not: for what reads or shows how things are rather than moving them on.
+    /// </summary>
+    public ComponentList<T> Present<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.ActiveNow<T>() : Where(Scene.ActiveNow<T>(), Runs);
 
-    // What this machine moves: what it runs, less other players' own characters, plus this player's own; not what's paused.
-    internal ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Moves);
+    /// <summary>
+    /// What this machine moves: what it runs, less other players' own characters, plus this player's own; not what's paused.
+    /// </summary>
+    public ComponentList<T> Moving<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.RunningNow<T>() : Where(Scene.RunningNow<T>(), Moves);
 
-    // Everything showing, wherever it's run: for what only changes how things look.
-    internal ComponentList<T> Showing<T>() where T : Component => Scene.ActiveNow<T>();
+    /// <summary>
+    /// Everything showing, wherever it's run: for what only changes how things look.
+    /// </summary>
+    public ComponentList<T> Showing<T>() where T : Component => Scene.ActiveNow<T>();
 
-    // Everything this machine runs, active or not.
-    internal ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.AllNow<T>() : Where(Scene.AllNow<T>(), Runs);
+    /// <summary>
+    /// Everything this machine runs, active or not.
+    /// </summary>
+    public ComponentList<T> RunHere<T>() where T : Component => Scene.NetFlagged == 0 ? Scene.AllNow<T>() : Where(Scene.AllNow<T>(), Runs);
 
     // Those whose entity passes: the same list when they all do (always, offline), so a frame allocates nothing.
     private static ComponentList<T> Where<T>(ComponentList<T> components, Func<Entity, bool> test) where T : Component
@@ -249,7 +259,8 @@ public sealed partial class Game
         return hit is null || hit.Value.Entity.IsSelfOrDescendantOf(target);
     }
 
-    internal static void Face(Entity entity, int direction)
+    /// <summary>Turns an entity's sprite to face <paramref name="direction"/> (left when it is below 0, else right) by flipping it.</summary>
+    public static void Face(Entity entity, int direction)
     {
         if (entity.GetComponent<Sprite>() is { } sprite)
             sprite.FlipX = direction < 0;
@@ -338,9 +349,11 @@ public sealed partial class Game
             PlayShared(shooter.Sound);
     }
 
-    // Who's touching what this frame, for checkpoints, doors and dialogue: the thing touched, and whatever touched it
-    // (the body that owns the collider, so a player's hitbox child counts as the player), with its collider's layer.
-    internal IEnumerable<(Entity By, string? Layer)> TouchersOf(Entity entity) =>
+    /// <summary>
+    /// Who's touching what this frame, for checkpoints, doors and dialogue: the thing touched, and whatever touched it
+    /// (the body that owns the collider, so a player's hitbox child counts as the player), with its collider's layer.
+    /// </summary>
+    public IEnumerable<(Entity By, string? Layer)> TouchersOf(Entity entity) =>
         _touches.Where(t => t.Item1 == entity && t.Item2.Scene == Scene)
             .Select(t => (By: BodyOwner(t.Item2), Layer: LayerOf(t.Item2)))
             .Where(t => t.By is not null && !entity.IsSelfOrDescendantOf(t.By))
@@ -1078,7 +1091,7 @@ public sealed partial class Game
     private Entity? BoxOf(Dialogue dialogue) => string.IsNullOrWhiteSpace(dialogue.Box) ? null : Find(dialogue.Box.Trim());
 
     /// <summary>True while the line <paramref name="dialogue"/> shows is still typing out (its choices wait for it).</summary>
-    internal bool IsTyping(Dialogue dialogue) => LineText(dialogue)?.Entity?.GetComponent<Typewriter>() is { IsDone: false };
+    public bool IsTyping(Dialogue dialogue) => LineText(dialogue)?.Entity?.GetComponent<Typewriter>() is { IsDone: false };
 
     // The first text in the box that isn't its name tag's.
     private Text? LineText(Dialogue dialogue)
@@ -1101,7 +1114,8 @@ public sealed partial class Game
             prompt.IsEnabled = show;
     }
 
-    internal static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
+    /// <summary>A position in 3D without its height: the 2D point the world draws it at.</summary>
+    public static Vector2 Flat(Vector3 v) => new(v.X, v.Y);
 }
 
 /// <summary>Doors and conversations: who just came through a door, the dialogues seen and touched, and the one being said.</summary>

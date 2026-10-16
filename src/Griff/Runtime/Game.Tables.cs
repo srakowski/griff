@@ -38,8 +38,10 @@ public sealed partial class Game
 
     private readonly HashSet<string> _warned = [];
 
-    // Each problem once a game, so one that comes up every step isn't said every step.
-    internal void Warn(string message)
+    /// <summary>
+    /// Each problem once a game, so one that comes up every step isn't said every step.
+    /// </summary>
+    public void Warn(string message)
     {
         if (_warned.Add(message))
             Warning?.Invoke(this, message);

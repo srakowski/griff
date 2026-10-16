@@ -44,7 +44,10 @@ public sealed class NetPlayer
 
     internal NetConnection? Connection { get; set; }
 
-    internal RemoteInput? Input { get; set; }
+    internal RemoteInput? Remote { get; set; }
+
+    /// <summary>The keys, mouse and gamepad of a player on another machine, as the host has them, or null for this machine's player (see <see cref="Game.Input"/>).</summary>
+    public IInput? Input => Remote;
 
     /// <summary>The scene round the player has loaded and is ready to be sent (see <c>NetSession</c>'s epochs).</summary>
     internal int ReadyEpoch { get; set; } = -1;

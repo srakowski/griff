@@ -1,7 +1,8 @@
 using Griff.Projects;
 using Griff.Runtime;
+using Griff.Scripting;
 
-namespace Griff.Scripting;
+namespace Griff.Exporting;
 
 public sealed class ExportResult
 {
@@ -28,10 +29,12 @@ public sealed class ExportResult
 public static class GameExporter
 {
     /// <param name="playerExecutable">The single-file Griff.Player to build from: self-contained, or one that needs .NET.</param>
-    /// <param name="outputFolder">Where the game's .exe is written.</param>
+    /// <param name="outputFolder">Where the game's program is written.</param>
     /// <param name="suffix">Added to the file name, e.g. " (needs .NET)", so builds of both kinds can sit side by side.</param>
-    public static ExportResult Export(Project project, string playerExecutable, string outputFolder, string suffix = "")
+    /// <param name="platform">The system the player is made for, which names the game's file; the one this runs on to start.</param>
+    public static ExportResult Export(Project project, string playerExecutable, string outputFolder, string suffix = "", DesktopPlatform? platform = null)
     {
+        platform ??= DesktopPlatform.Current;
         if (!File.Exists(playerExecutable))
             return new ExportResult { Success = false, Error = $"The player isn't installed at \"{playerExecutable}\"." };
 
@@ -40,7 +43,7 @@ public static class GameExporter
             return new ExportResult { Success = false, Diagnostics = compiled.Diagnostics, Error = "Scripts have errors." };
 
         Directory.CreateDirectory(outputFolder);
-        var executable = Path.Combine(outputFolder, SafeFileName(project.Name) + suffix + ".exe");
+        var executable = Path.Combine(outputFolder, platform.ExecutableName(SafeFileName(project.Name) + suffix));
 
         // Only ever replace a file an earlier export created.
         if (File.Exists(executable) && !GamePackage.IsPackaged(executable))

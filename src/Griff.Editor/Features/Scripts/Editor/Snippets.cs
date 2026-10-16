@@ -1,5 +1,5 @@
 using System.Windows.Media;
-using Griff.Scripting;
+using Griff.Editor.Features.Scripts.Language;
 using ICSharpCode.AvalonEdit.CodeCompletion;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;

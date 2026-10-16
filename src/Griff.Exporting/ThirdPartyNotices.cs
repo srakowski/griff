@@ -2,7 +2,7 @@ using System.Text;
 using Griff.Fonts;
 using Griff.Runtime;
 
-namespace Griff.Scripting;
+namespace Griff.Exporting;
 
 /// <summary>
 /// The notices for what other people made that a game carries: every export, desktop and web, writes them as
@@ -224,7 +224,7 @@ public static class ThirdPartyNotices
 
     private static string Read(string fileName)
     {
-        var name = "Griff.Scripting.Notices." + fileName;
+        var name = "Griff.Exporting.Notices." + fileName;
         using var stream = typeof(ThirdPartyNotices).Assembly.GetManifestResourceStream(name)
                            ?? throw new InvalidOperationException($"The notice {name} isn't in Griff.Scripting.");
         using var reader = new StreamReader(stream);

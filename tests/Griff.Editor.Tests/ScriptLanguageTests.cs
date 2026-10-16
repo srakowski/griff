@@ -1,7 +1,9 @@
+using System.IO;
+using Griff.Editor.Features.Scripts.Language;
 using Griff.Scripting;
 using Microsoft.CodeAnalysis.Classification;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Editor.Tests;
 
 public sealed class ScriptLanguageTests
 {

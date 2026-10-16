@@ -5,7 +5,7 @@
     draw lists Griff.Graphics makes for every renderer, with its shaders). It
     builds with the plain SDK, no workload: the runtime is the Mono interpreter, which also runs the scripts a game
     exports as Scripts.dll. `dotnet publish -c Release` writes the site to bin/Release/net10.0/publish/wwwroot, which
-    WebExporter (Griff.Scripting) copies a game beside. See the exporting guide, site/src/content/docs/docs/exporting.md.
+    WebExporter (Griff.Exporting) copies a game beside. See the exporting guide, site/src/content/docs/docs/exporting.md.
   -->
   <ItemGroup>
     <ProjectReference Include="..\Griff\Griff.csproj" />

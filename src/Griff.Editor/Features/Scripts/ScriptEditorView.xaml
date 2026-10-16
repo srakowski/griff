@@ -9,7 +9,7 @@
              xmlns:converters="clr-namespace:Griff.Editor.Themes.Converters"
              xmlns:theme="clr-namespace:Griff.Editor.Themes"
              xmlns:editor="clr-namespace:Griff.Editor.Features.Scripts.Editor"
-             xmlns:scripting="clr-namespace:Griff.Scripting;assembly=Griff.Scripting"
+             xmlns:scripting="clr-namespace:Griff.Editor.Features.Scripts.Language"
              xmlns:debugging="clr-namespace:Griff.Editor.Features.Debugging"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=scripts:ScriptDocument}"

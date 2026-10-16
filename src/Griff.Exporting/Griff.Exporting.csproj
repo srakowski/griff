@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Exporting a game: the desktop and web exporters (GameExporter, WebExporter), the web server that plays a web export on
+    this computer, the third-party notices exports carry and the fonts they check. It compiles scripts with
+    Griff.Scripting and pulls in no Roslyn Workspaces, so a tool that only exports stays small (AssemblySplitTests).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Griff\Griff.csproj" />
+    <ProjectReference Include="..\Griff.Fonts\Griff.Fonts.csproj" />
+    <ProjectReference Include="..\Griff.Scripting\Griff.Scripting.csproj" />
+  </ItemGroup>
+
+  <!-- The licenses of what exported games carry, for their third-party notices (see ThirdPartyNotices). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Notices\*.txt" LogicalName="Griff.Exporting.Notices.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

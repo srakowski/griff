@@ -1,10 +1,10 @@
+using Griff.Exporting;
 using Griff.Fonts;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
-using Griff.Scripting;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Tests.Exporting;
 
 /// <summary>The notices every export carries for what others made (see <see cref="ThirdPartyNotices"/>), and fonts' rules.</summary>
 public sealed class ThirdPartyNoticesTests : IDisposable

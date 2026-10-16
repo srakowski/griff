@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Griff.Fonts;
 using Griff.Projects;
 
-namespace Griff.Scripting;
+namespace Griff.Exporting;
 
 /// <summary>
 /// What an export says about the fonts a project's scenes and prefabs set text in: a warning for each installed font

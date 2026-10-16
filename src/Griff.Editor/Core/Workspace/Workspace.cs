@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Settings;
 using Griff.Editor.Core.Status;
+using Griff.Editor.Features.Debugging.Probes;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
@@ -80,11 +81,24 @@ public sealed class Workspace(
     public Griff.Editing.KnownNames? Names =>
         Project is { } project ? (_names ??= new(Components, p => Griff.Fonts.FontChoices.For(p.AssetsPath))).Get(project, Scene?.Scene.Entities, Scene?.FilePath) : null;
 
-    public ScriptHost Scripts => _scripts ??= new ScriptHost(Components) { WithProbes = true };
+    public ScriptHost Scripts => _scripts ??= NewScriptHost();
 
     public IReadOnlyList<Type> ScriptTypes => Scripts.Assembly?.GetTypes() ?? [];
 
-    public ProbeTable ScriptProbes => Scripts.Probes;
+    public ProbeTable ScriptProbes => Scripts.Attachment as ProbeTable ?? ProbeTable.Empty;
+
+    // The editor builds scripts with breakpoint probes, and reads their /// comments (the Inspector, the component catalog,
+    // agents) from the moment they load, before anything else hears they changed.
+    private ScriptHost NewScriptHost()
+    {
+        var host = new ScriptHost(Components) { Compiler = ProbeCompiler.Compile };
+        host.Reloaded += (_, result) =>
+        {
+            if (result.Assembly is { } assembly)
+                Griff.Editing.DocComments.Register(assembly, result.Documentation);
+        };
+        return host;
+    }
 
     private ScriptHost? _scripts;
 

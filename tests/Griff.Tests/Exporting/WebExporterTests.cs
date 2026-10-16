@@ -1,12 +1,12 @@
 using System.IO.Compression;
 using System.Net.Http;
+using Griff.Exporting;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
-using Griff.Scripting;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Tests.Exporting;
 
 public sealed class WebExporterTests : IDisposable
 {

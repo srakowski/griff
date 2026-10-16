@@ -1,13 +1,15 @@
 using System.Collections;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
 using Griff.Debugging;
+using Griff.Editor.Features.Debugging.Probes;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scripting;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Editor.Tests;
 
 /// <summary>
 /// The editor's build of the scripts has guards: filters that catch nothing, around each stretch of a method's code, so an
@@ -130,7 +132,7 @@ public sealed class ExceptionGuardTests : IDisposable
 
     private static (Assembly Assembly, ProbeTable Probes) Build()
     {
-        var compiled = ScriptCompiler.Compile([new ScriptSource(Path, Source)], probes: true);
+        var compiled = ProbeCompiler.Compile([new ScriptSource(Path, Source)]);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));
         var assembly = new AssemblyLoadContext("GuardTest", isCollectible: true).LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
         compiled.Probes.Attach(assembly);
@@ -292,7 +294,7 @@ public sealed class ExceptionGuardTests : IDisposable
             var sources = template.Scripts().Select(s => new ScriptSource(@"C:\Game\Assets\" + s.Key, s.Value)).ToList();
             if (sources.Count == 0)
                 continue;
-            var compiled = ScriptCompiler.Compile(sources, probes: true);
+            var compiled = ProbeCompiler.Compile(sources);
             Assert.True(compiled.Success, $"{template.Name}: {string.Join("\n", compiled.Diagnostics)}");
             Assert.NotEmpty(compiled.Probes.Guards);
             // Every method with code has a guard.

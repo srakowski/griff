@@ -1,10 +1,11 @@
+using Griff.Exporting;
 using Griff.Input;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scripting;
 using Griff.Templates;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Tests.Exporting;
 
 public sealed class GameExporterTests : IDisposable
 {
@@ -26,6 +27,19 @@ public sealed class GameExporterTests : IDisposable
     {
         if (Directory.Exists(_root))
             Directory.Delete(_root, recursive: true);
+    }
+
+    [Fact]
+    public async Task Export_NamesTheGameAsItsPlatformNamesAProgram()
+    {
+        var project = await Project.CreateAsync(_root, "Space Hop");
+
+        var result = GameExporter.Export(project, _player, _output, platform: new DesktopPlatform("Elsewhere", ""));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(Path.Combine(_output, "Space Hop"), result.Executable);
+        Assert.True(GamePackage.IsPackaged(result.Executable!));
+        Assert.Equal("Space Hop.exe", DesktopPlatform.Windows.ExecutableName("Space Hop"));
     }
 
     [Fact]

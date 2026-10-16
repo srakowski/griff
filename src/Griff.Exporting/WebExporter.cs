@@ -5,8 +5,9 @@ using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Scripting;
 
-namespace Griff.Scripting;
+namespace Griff.Exporting;
 
 /// <summary>
 /// Builds a game for the web: a folder to put on any static host (itch.io, GitHub Pages, a web server) as it is, holding

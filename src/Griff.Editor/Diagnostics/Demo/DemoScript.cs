@@ -908,7 +908,7 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
         await ui.Menu("Build", "Build Game", "Build Game (Ctrl+B)");
         // The game lands in a folder of its own under Build, next to the runtime's helpers (createdump.exe and so on).
         var exe = await DemoUi.WaitFor(() => Directory.Exists(buildFolder)
-            ? Directory.GetFiles(buildFolder, ProjectName + ".exe", SearchOption.AllDirectories).FirstOrDefault()
+            ? Directory.GetFiles(buildFolder, Griff.Exporting.DesktopPlatform.Current.ExecutableName(ProjectName), SearchOption.AllDirectories).FirstOrDefault()
             : null, "the built game", 120000);
         buildFolder = Path.GetDirectoryName(exe)!;
         await Wait(2500);
@@ -919,7 +919,7 @@ internal sealed class DemoScript(DemoUi ui, Workspace workspace, ISelection sele
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         var copy = Path.Combine(desktop, Path.GetFileName(exe));
         if (File.Exists(copy) && !Griff.Runtime.GamePackage.IsPackaged(copy))
-            copy = Path.Combine(desktop, ProjectName + " (Griff demo).exe");
+            copy = Path.Combine(desktop, Griff.Exporting.DesktopPlatform.Current.ExecutableName(ProjectName + " (Griff demo)"));
         File.Copy(exe, copy, overwrite: true);
         exe = copy;
         buildFolder = desktop;

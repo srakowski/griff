@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Debugging.Probes;
 
 /// <summary>How the debugger steps on from the line a script stopped at.</summary>
 public enum StepKind

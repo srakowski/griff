@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace Griff.Scripting;
+namespace Griff.Exporting;
 
 /// <summary>
 /// Serves a folder (a web export) to this computer only, at <c>http://127.0.0.1:{port}/</c>, so a game exported for the

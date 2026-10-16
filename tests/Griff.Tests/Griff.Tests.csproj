@@ -40,6 +40,7 @@
     <ProjectReference Include="..\..\src\Griff.Fonts\Griff.Fonts.csproj" />
     <ProjectReference Include="..\..\src\Griff.Graphics\Griff.Graphics.csproj" />
     <ProjectReference Include="..\..\src\Griff.Scripting\Griff.Scripting.csproj" />
+    <ProjectReference Include="..\..\src\Griff.Exporting\Griff.Exporting.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Griff.Editor/Griff.Editor.csproj" />
+    <Project Path="src/Griff.Exporting/Griff.Exporting.csproj" />
     <Project Path="src/Griff.Fonts/Griff.Fonts.csproj" />
     <Project Path="src/Griff.Graphics/Griff.Graphics.csproj" />
     <Project Path="src/Griff.Graphics.OpenGL/Griff.Graphics.OpenGL.csproj" />

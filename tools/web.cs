@@ -1,5 +1,5 @@
 #:sdk Microsoft.NET.Sdk.Web
-#:project ../src/Griff.Scripting/Griff.Scripting.csproj
+#:project ../src/Griff.Exporting/Griff.Exporting.csproj
 #:project ../src/Griff.Platform.Windows/Griff.Platform.Windows.csproj
 #:property TargetFramework=net10.0-windows
 #:property PublishAot=false
@@ -33,13 +33,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Griff.Data;
+using Griff.Exporting;
 using Griff.Fonts;
 using Griff.Modules.Rhythm;
 using Griff.Projects;
 using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
-using Griff.Scripting;
 using Griff.Templates;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;

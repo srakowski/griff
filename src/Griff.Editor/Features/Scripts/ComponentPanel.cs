@@ -7,7 +7,7 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Inspector;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
-using Griff.Scripting;
+using Griff.Editor.Features.Scripts.Language;
 
 namespace Griff.Editor.Features.Scripts;
 

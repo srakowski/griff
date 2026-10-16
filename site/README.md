@@ -235,13 +235,16 @@ To redo a release that failed before it was created, delete the tag (`git push o
 `git tag -d v0.1.0-alpha.1`) and tag again after fixing main; a created release (or a draft left by a failed upload) has to
 be deleted on GitHub first. Don't reuse a version that installed editors may have taken: tag the next one instead.
 
-To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File toolselease.ps1 -Version 0.1.0-alpha.1`
-makes the same zip and Velopack files in `artifactselease\` (`-NoInstaller` just the zip), and
-`toolselease-notes.ps1 -Tag v0.1.0-alpha.1` writes the notes (it needs the tag). Packing a second version into the same
+To try the release locally, without GitHub: `powershell -NoProfile -ExecutionPolicy Bypass -File tools
+elease.ps1 -Version 0.1.0-alpha.1`
+makes the same zip and Velopack files in `artifacts
+elease\` (`-NoInstaller` just the zip), and
+`tools
+elease-notes.ps1 -Tag v0.1.0-alpha.1` writes the notes (it needs the tag). Packing a second version into the same
 `-Out` folder makes a delta and a feed with both, to update from: [Building Griff](https://griff.games/docs/building/#releases)
 says how to install the first and update it from that folder (`GRIFF_UPDATE_SOURCE`). `tools/release-notices.cs` writes
 the notices from the files the editor folder holds and fails when a package has none on record: add its license to
-`src/Griff.Scripting/Notices/` and `ThirdPartyNotices`.
+`src/Griff.Exporting/Notices/` and `ThirdPartyNotices`.
 
 **Code signing.** The installer, `Update.exe` and the editor aren't signed, so SmartScreen warns until a download has
 built up a reputation. To sign them, `vpk pack` takes `--signParams` (signtool's arguments, for a certificate) or

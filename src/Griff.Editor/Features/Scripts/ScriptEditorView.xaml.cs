@@ -11,7 +11,7 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Debugging;
 using Griff.Editor.Features.Scripts.Editor;
 using Griff.Editor.Themes;
-using Griff.Scripting;
+using Griff.Editor.Features.Scripts.Language;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
 using ICSharpCode.AvalonEdit.Search;

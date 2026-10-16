@@ -1855,7 +1855,7 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
         var started = DateTime.Now;
         await ui.Menu("Build", small ? "Build Small Game (Needs .NET)" : "Build Game");
         var exe = await DemoUi.WaitFor(() => Directory.Exists(folder)
-            ? Directory.GetFiles(folder, "*.exe").FirstOrDefault(f => File.GetLastWriteTime(f) >= started.AddSeconds(-1))
+            ? Directory.GetFiles(folder, Griff.Exporting.DesktopPlatform.Current.ExecutableName("*")).FirstOrDefault(f => File.GetLastWriteTime(f) >= started.AddSeconds(-1))
             : null, "the built game", 180000);
         options.Log($"built {exe} ({new FileInfo(exe).Length / 1048576.0:0.0} MB)");
         await options.Control.Delay(1500);

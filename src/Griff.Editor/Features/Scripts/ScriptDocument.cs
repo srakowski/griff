@@ -3,7 +3,7 @@ using System.IO;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editor.Features.Scripts.Editor;
-using Griff.Scripting;
+using Griff.Editor.Features.Scripts.Language;
 using ICSharpCode.AvalonEdit.Document;
 
 namespace Griff.Editor.Features.Scripts;

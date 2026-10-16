@@ -5,7 +5,7 @@ using Griff.Editor.Core.Status;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Scripts;
 using Griff.Editor.Themes;
-using Griff.Scripting;
+using Griff.Editor.Features.Debugging.Probes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Griff.Editor.Features.Debugging;

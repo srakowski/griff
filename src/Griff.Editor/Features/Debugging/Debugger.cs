@@ -12,7 +12,7 @@ using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
 using Griff.Editor.Features.Scripts;
 using Griff.Hosting;
-using Griff.Scripting;
+using Griff.Editor.Features.Debugging.Probes;
 using ICSharpCode.AvalonEdit.Document;
 using Microsoft.Extensions.Logging;
 

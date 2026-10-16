@@ -7,7 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Input;
 using Griff.Editor.Core.Settings;
-using Griff.Scripting;
+using Griff.Editor.Features.Scripts.Language;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;

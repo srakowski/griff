@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Griff.Exporting;
 using Griff.Projects;
 using Griff.Runtime;
-using Griff.Scripting;
 using Griff.Templates;
 
 namespace Griff.Editor.Tests;

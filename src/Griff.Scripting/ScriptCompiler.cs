@@ -15,7 +15,7 @@ public sealed record ScriptDiagnostic(string File, int Line, int Column, string 
 
 public sealed record ScriptSource(string Path, string Text);
 
-public sealed class CompileResult
+public sealed record CompileResult
 {
     public required bool Success { get; init; }
 
@@ -29,12 +29,26 @@ public sealed class CompileResult
     public string? Documentation { get; init; }
 
     /// <summary>
-    /// The breakpoint probes in a build made with them (see <see cref="ScriptInstrumenter"/>), to be attached to the loaded
-    /// assembly; empty otherwise.
+    /// What a build made with more than the scripts' code carries, tied to its assembly once loaded (the editor's breakpoint
+    /// probes); null for a plain build.
     /// </summary>
-    public ProbeTable Probes { get; init; } = ProbeTable.Empty;
+    public IScriptAttachment? Attachment { get; init; }
 
     public IEnumerable<ScriptDiagnostic> Errors => Diagnostics.Where(d => d.IsError);
+}
+
+/// <summary>
+/// What a build of the scripts carries besides their code, tied to the assembly they load as: the editor's debugger builds
+/// them with breakpoint probes, whose switches it finds in the loaded assembly. <see cref="ScriptHost"/> attaches it when it
+/// loads the build and detaches it when the build is replaced or unloaded.
+/// </summary>
+public interface IScriptAttachment
+{
+    /// <summary>The build's assembly has loaded.</summary>
+    void Attach(System.Reflection.Assembly assembly);
+
+    /// <summary>The build is replaced or unloaded; its code may still be running (held at a breakpoint), and stops using this.</summary>
+    void Detach();
 }
 
 /// <summary>
@@ -98,109 +112,48 @@ public static class ScriptCompiler
                 .ToList()
             : [];
 
-    /// <param name="probes">
-    /// Put breakpoint probes in (see <see cref="ScriptInstrumenter"/>), as the editor does: each line then tests a switch
-    /// of its own, which a breakpoint turns on.
-    /// </param>
-    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false, bool probes = false)
+    /// <summary>Compiles <paramref name="sources"/>.</summary>
+    /// <param name="optimize">Compile for an exported game (<see cref="ExportCompilationOptions"/>) rather than the editor.</param>
+    public static CompileResult Compile(IReadOnlyList<ScriptSource> sources, bool optimize = false) =>
+        Emit(CreateCompilation(sources, optimize));
+
+    /// <summary>
+    /// The compilation of <paramref name="sources"/> with the implicit usings, before it's emitted: what a build that adds
+    /// to the scripts (the editor's breakpoint probes) starts from, and emits with <see cref="Emit"/>.
+    /// </summary>
+    public static CSharpCompilation CreateCompilation(IReadOnlyList<ScriptSource> sources, bool optimize = false)
     {
         var trees = sources
             .Select(s => CSharpSyntaxTree.ParseText(s.Text, ParseOptions, s.Path, System.Text.Encoding.UTF8))
             .Append(CSharpSyntaxTree.ParseText(ImplicitUsings, ParseOptions, ImplicitUsingsPath, System.Text.Encoding.UTF8))
             .ToList();
 
-        var compilation = CSharpCompilation.Create(
+        return CSharpCompilation.Create(
             $"GriffScripts_{Guid.NewGuid():N}",
             trees,
             References.Value,
             optimize ? ExportCompilationOptions : CompilationOptions);
-
-        if (probes)
-        {
-            var result = CompileWithProbes(compilation);
-            if (result.Probes != ProbeTable.Empty)
-                result.Probes.KeepSources(sources);
-            return result;
-        }
-
-        var emitted = Emit(compilation);
-        var diagnostics = Report(emitted.Result.Diagnostics);
-        return new CompileResult
-        {
-            Success = emitted.Result.Success,
-            Diagnostics = diagnostics,
-            Assembly = emitted.Result.Success ? emitted.Assembly : null,
-            Symbols = emitted.Result.Success ? emitted.Symbols : null,
-            Documentation = emitted.Result.Success ? emitted.Documentation : null,
-        };
     }
 
-    // The scripts' own errors and warnings come from them as written; the build has the probes in. A probe that doesn't
-    // compile (something the analysis didn't foresee) is left out, so a script that compiles always builds.
-    private static CompileResult CompileWithProbes(CSharpCompilation compilation)
-    {
-        var diagnostics = Report(compilation.GetDiagnostics());
-        if (diagnostics.Any(d => d.IsError))
-            return new CompileResult { Success = false, Diagnostics = diagnostics };
-
-        var plan = ScriptInstrumenter.Analyze(compilation, ImplicitUsingsPath);
-        var leftOut = new HashSet<int>();
-        var refined = new HashSet<int>();
-        for (var attempt = 0; attempt < 6; attempt++)
-        {
-            var (instrumented, table) = plan.Build(leftOut);
-            var emitted = Emit(instrumented);
-            if (emitted.Result.Success)
-                return Built(emitted, diagnostics, table);
-
-            // A probe that doesn't compile is worked out again with Roslyn's help, and if it still doesn't, left out.
-            var failing = new HashSet<int>();
-            foreach (var error in emitted.Result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
-            {
-                var span = error.Location.GetLineSpan();
-                failing.UnionWith(plan.Around(span.Path, span.StartLinePosition.Line + 1));
-            }
-
-            var unrefined = failing.Except(refined).ToList();
-            if (unrefined.Count > 0)
-            {
-                plan.Refine(unrefined);
-                refined.UnionWith(unrefined);
-                continue;
-            }
-
-            var before = leftOut.Count;
-            leftOut.UnionWith(failing);
-            if (leftOut.Count == before)
-                break;
-        }
-
-        var plain = Emit(compilation);
-        return plain.Result.Success
-            ? Built(plain, diagnostics, new ProbeTable([]))
-            : new CompileResult { Success = false, Diagnostics = Report(plain.Result.Diagnostics) };
-    }
-
-    private static CompileResult Built((EmitResult Result, byte[] Assembly, byte[] Symbols, string Documentation) emitted, IReadOnlyList<ScriptDiagnostic> diagnostics, ProbeTable probes) => new()
-    {
-        Success = true,
-        Diagnostics = diagnostics,
-        Assembly = emitted.Assembly,
-        Symbols = emitted.Symbols,
-        Documentation = emitted.Documentation,
-        Probes = probes,
-    };
-
-    private static (EmitResult Result, byte[] Assembly, byte[] Symbols, string Documentation) Emit(CSharpCompilation compilation)
+    /// <summary>Emits <paramref name="compilation"/>: its assembly, symbols and documentation, or its errors.</summary>
+    public static CompileResult Emit(CSharpCompilation compilation)
     {
         using var assembly = new MemoryStream();
         using var symbols = new MemoryStream();
         using var documentation = new MemoryStream();
         var result = compilation.Emit(assembly, symbols, documentation, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
-        return (result, assembly.ToArray(), symbols.ToArray(), System.Text.Encoding.UTF8.GetString(documentation.ToArray()));
+        return new CompileResult
+        {
+            Success = result.Success,
+            Diagnostics = Report(result.Diagnostics),
+            Assembly = result.Success ? assembly.ToArray() : null,
+            Symbols = result.Success ? symbols.ToArray() : null,
+            Documentation = result.Success ? System.Text.Encoding.UTF8.GetString(documentation.ToArray()) : null,
+        };
     }
 
-    private static List<ScriptDiagnostic> Report(IEnumerable<Diagnostic> diagnostics) => diagnostics
+    /// <summary>The errors and warnings of <paramref name="diagnostics"/> that aren't suppressed, errors first.</summary>
+    public static IReadOnlyList<ScriptDiagnostic> Report(IEnumerable<Diagnostic> diagnostics) => diagnostics
         .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning && !d.IsSuppressed)
         .Select(ToScriptDiagnostic)
         .OrderBy(d => !d.IsError)
@@ -217,19 +170,19 @@ public static class ScriptCompiler
             diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
-    // The editor's own runtime assemblies (the "trusted platform assemblies") plus Griff itself. Each carries its XML
-    // documentation when there is some, for the script editor's tooltips; compiling ignores it.
-    private static ImmutableArray<MetadataReference> LoadReferences()
-    {
-        var paths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "")
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(p => Path.GetFileName(p).StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
-                        Path.GetFileName(p) is "mscorlib.dll" or "netstandard.dll")
-            .Append(typeof(Component).Assembly.Location)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The files of the assemblies scripts compile against: the runtime's own System assemblies (the "trusted platform
+    /// assemblies") and Griff. The script editor reads them with their documentation, for its tooltips.
+    /// </summary>
+    public static IReadOnlyList<string> ReferencePaths { get; } = [.. ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "")
+        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+        .Where(p => Path.GetFileName(p).StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetFileName(p) is "mscorlib.dll" or "netstandard.dll")
+        .Append(typeof(Component).Assembly.Location)
+        .Distinct(StringComparer.OrdinalIgnoreCase)];
 
-        return [.. paths.Select(p => MetadataReference.CreateFromFile(p, documentation: ScriptDocumentation.For(p)))];
-    }
+    private static ImmutableArray<MetadataReference> LoadReferences() =>
+        [.. ReferencePaths.Select(p => MetadataReference.CreateFromFile(p))];
 
     // Editors may hold the file open while saving; read without locking it.
     private static string ReadShared(string path)

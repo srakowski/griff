@@ -1,4 +1,5 @@
 using Griff.Scenes;
+using Griff.Editor.Features.Debugging.Probes;
 using Griff.Scripting;
 
 namespace Griff.Editor.Core.Workspace;

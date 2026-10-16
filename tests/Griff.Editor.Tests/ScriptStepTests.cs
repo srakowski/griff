@@ -1,9 +1,11 @@
+using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
 using Griff.Debugging;
+using Griff.Editor.Features.Debugging.Probes;
 using Griff.Scripting;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Editor.Tests;
 
 /// <summary>
 /// Stepping from a line a script stopped at: over runs the line and stops at the next of the same method, into stops at
@@ -11,7 +13,7 @@ namespace Griff.Tests.Scripting;
 /// leaves the scripts stops at the next line of script that runs, and stepping changes nothing the scripts do.
 /// </summary>
 [Collection(nameof(BreakpointProbeTests))]
-public class SteppingTests
+public class ScriptStepTests
 {
     private const string GamePath = @"C:\Game\Assets\Scripts\Outer.cs";
     private const string HelperPath = @"C:\Game\Assets\Scripts\Helper.cs";
@@ -131,7 +133,7 @@ public class SteppingTests
 
     private static (Assembly Assembly, ProbeTable Probes) Build()
     {
-        var compiled = ScriptCompiler.Compile([new ScriptSource(GamePath, Game), new ScriptSource(HelperPath, Helper)], probes: true);
+        var compiled = ProbeCompiler.Compile([new ScriptSource(GamePath, Game), new ScriptSource(HelperPath, Helper)]);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));
         var assembly = new AssemblyLoadContext("StepTest", isCollectible: true).LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
         compiled.Probes.Attach(assembly);

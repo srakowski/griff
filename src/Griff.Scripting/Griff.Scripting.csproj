@@ -1,19 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Compiling a project's scripts and loading them into a game (ScriptCompiler, ScriptHost): all a game played from its
+    sources and the exporter need, so only Roslyn's compiler. The editor's language services (Workspaces, Features) and
+    its debugger's instrumenter are the editor's (Features/Scripts/Language, Features/Debugging/Probes); exporting is
+    Griff.Exporting's, on this. AssemblySplitTests keeps it so.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\Griff\Griff.csproj" />
-    <ProjectReference Include="..\Griff.Fonts\Griff.Fonts.csproj" />
-  </ItemGroup>
-
-  <!-- The licenses of what exported games carry, for their third-party notices (see ThirdPartyNotices). -->
-  <ItemGroup>
-    <EmbeddedResource Include="Notices\*.txt" LogicalName="Griff.Scripting.Notices.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
   </ItemGroup>
 
   <PropertyGroup>

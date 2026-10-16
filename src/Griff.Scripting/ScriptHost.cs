@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.Loader;
-using Griff.Editing;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -22,6 +21,12 @@ public sealed class ReloadResult
 
     /// <summary>True if the sources matched the loaded scripts, so nothing was rebuilt.</summary>
     public bool Unchanged { get; init; }
+
+    /// <summary>The scripts loaded, when they were rebuilt.</summary>
+    public Assembly? Assembly { get; init; }
+
+    /// <summary>The loaded scripts' <c>///</c> comments as documentation XML (the editor registers them with <c>DocComments</c>).</summary>
+    public string? Documentation { get; init; }
 }
 
 /// <summary>
@@ -42,13 +47,13 @@ public sealed class ScriptHost(ComponentRegistry registry)
     public IReadOnlyList<Type> ComponentTypes => _types;
 
     /// <summary>
-    /// Build the scripts with breakpoint probes (see <see cref="ScriptInstrumenter"/>), as the editor does, so a
-    /// breakpoint can stop them without building them again.
+    /// How the scripts are built: <see cref="ScriptCompiler.Compile"/> to start, or one that adds to them (the editor builds
+    /// them with breakpoint probes, so a breakpoint can stop them without building them again).
     /// </summary>
-    public bool WithProbes { get; init; }
+    public Func<IReadOnlyList<ScriptSource>, CompileResult> Compiler { get; init; } = sources => ScriptCompiler.Compile(sources);
 
-    /// <summary>The probes of the loaded scripts (empty without <see cref="WithProbes"/>): what breakpoints switch on.</summary>
-    public ProbeTable Probes { get; private set; } = ProbeTable.Empty;
+    /// <summary>What the loaded build carries besides the scripts' code (the editor's breakpoint probes), or null.</summary>
+    public IScriptAttachment? Attachment { get; private set; }
 
     /// <summary>Raised after scripts are swapped, with the result (also returned by <see cref="Reload"/>).</summary>
     public event EventHandler<ReloadResult>? Reloaded;
@@ -63,7 +68,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
         if (fingerprint == _loadedSources)
             return new ReloadResult { Success = true, Diagnostics = [], ComponentTypes = _types, Unchanged = true };
 
-        var result = Apply(ScriptCompiler.Compile(sources, probes: WithProbes), liveScenes);
+        var result = Apply(Compiler(sources), liveScenes);
         if (result.Success)
             _loadedSources = fingerprint;
         return result;
@@ -81,8 +86,8 @@ public sealed class ScriptHost(ComponentRegistry registry)
         ComponentSwap.Restore(snapshot, serializer);
         _loadedSources = null;
         Assembly = null;
-        Probes.Clear();
-        Probes = ProbeTable.Empty;
+        Attachment?.Detach();
+        Attachment = null;
     }
 
     private ReloadResult Apply(CompileResult compiled, IEnumerable<Scene> liveScenes)
@@ -92,8 +97,7 @@ public sealed class ScriptHost(ComponentRegistry registry)
 
         var context = new AssemblyLoadContext("GriffScripts", isCollectible: true);
         var assembly = context.LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
-        DocComments.Register(assembly, compiled.Documentation);
-        compiled.Probes.Attach(assembly);
+        compiled.Attachment?.Attach(assembly);
         var newTypes = ComponentRegistry.ComponentTypesIn(assembly);
 
         // Capture with the old types still registered, swap, then rebuild with the new ones.
@@ -124,8 +128,8 @@ public sealed class ScriptHost(ComponentRegistry registry)
         Assembly = assembly;
         _types = registered;
         // The old scripts may still be running (held at a breakpoint): they stop at none from now on.
-        Probes.Clear();
-        Probes = compiled.Probes;
+        Attachment?.Detach();
+        Attachment = compiled.Attachment;
         old?.Unload();
 
         var result = new ReloadResult
@@ -135,6 +139,8 @@ public sealed class ScriptHost(ComponentRegistry registry)
             ComponentTypes = registered,
             Replaced = replaced,
             Warnings = warnings,
+            Assembly = assembly,
+            Documentation = compiled.Documentation,
         };
         Reloaded?.Invoke(this, result);
         return result;

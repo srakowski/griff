@@ -8,7 +8,7 @@ using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Themes;
-using Griff.Scripting;
+using Griff.Exporting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -81,9 +81,10 @@ public abstract class BuildCommandBase(
             return;
 
         status.Show("Building...");
-        var player = Path.Combine(AppContext.BaseDirectory, "Player", PlayerKind, "Griff.Player.exe");
+        var platform = DesktopPlatform.Current;
+        var player = Path.Combine(AppContext.BaseDirectory, "Player", PlayerKind, platform.ExecutableName("Griff.Player"));
         var output = Path.Combine(project.RootPath, BuildFolderName);
-        var result = await Task.Run(() => GameExporter.Export(project, player, output, Suffix));
+        var result = await Task.Run(() => GameExporter.Export(project, player, output, Suffix, platform));
 
         foreach (var diagnostic in result.Diagnostics)
         {

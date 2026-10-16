@@ -1,6 +1,7 @@
 using System.Reflection;
+using Griff.Scripting;
 
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Debugging.Probes;
 
 /// <summary>
 /// A line of a script a breakpoint can stop at, in a build of the scripts with probes: its number in the build's
@@ -35,7 +36,7 @@ public sealed record ScriptGuard(int Id, string Path, int Line, int EndLine, str
 /// probe whose switch is on stops the game there (see <see cref="Griff.Debugging.ScriptProbes"/>). Also the build's guards,
 /// which note where an exception came up through the scripts.
 /// </summary>
-public sealed class ProbeTable
+public sealed class ProbeTable : IScriptAttachment
 {
     private readonly Dictionary<string, ScriptProbe[]> _byFile;
     private readonly Dictionary<int, ScriptProbe> _byId;
@@ -116,6 +117,9 @@ public sealed class ProbeTable
         foreach (var field in _switches.Values)
             field.SetValue(null, on);
     }
+
+    /// <summary>The build is replaced or unloaded: its scripts may still be running (held at a breakpoint), and stop at none.</summary>
+    public void Detach() => Clear();
 
     /// <summary>Turns every switch off.</summary>
     public void Clear()

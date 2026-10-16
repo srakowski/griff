@@ -1,4 +1,4 @@
-#:project ../src/Griff.Scripting/Griff.Scripting.csproj
+#:project ../src/Griff.Exporting/Griff.Exporting.csproj
 #:property PublishAot=false
 
 // BunnyMark: how many bunnies an exported Griff game keeps bouncing at 60 fps on this computer. Exports the BunnyMark
@@ -10,9 +10,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Griff.Exporting;
 using Griff.Projects;
 using Griff.Runtime;
-using Griff.Scripting;
 using Griff.Templates;
 
 const string GameName = "BunnyMark Benchmark";

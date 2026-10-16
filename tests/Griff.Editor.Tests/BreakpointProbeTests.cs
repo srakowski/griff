@@ -1,11 +1,13 @@
+using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
 using Griff.Debugging;
+using Griff.Editor.Features.Debugging.Probes;
 using Griff.Projects;
 using Griff.Scripting;
 using Griff.Templates;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Editor.Tests;
 
 /// <summary>
 /// The editor builds scripts with a breakpoint probe on each line of code: a line stops only once its switch is on, with
@@ -34,7 +36,7 @@ public class BreakpointProbeTests
 
     private static (Assembly Assembly, ProbeTable Probes) Build(string source)
     {
-        var compiled = ScriptCompiler.Compile([new ScriptSource(Path, source)], probes: true);
+        var compiled = ProbeCompiler.Compile([new ScriptSource(Path, source)]);
         Assert.True(compiled.Success, string.Join("\n", compiled.Diagnostics));
         var assembly = new AssemblyLoadContext("ProbeTest", isCollectible: true).LoadFromStream(new MemoryStream(compiled.Assembly!), new MemoryStream(compiled.Symbols!));
         compiled.Probes.Attach(assembly);
@@ -281,7 +283,7 @@ public class BreakpointProbeTests
             var sources = template.Scripts().Select(s => new ScriptSource(@"C:\Game\Assets\" + s.Key, s.Value)).ToList();
             if (sources.Count == 0)
                 continue;
-            var compiled = ScriptCompiler.Compile(sources, probes: true);
+            var compiled = ProbeCompiler.Compile(sources);
             Assert.True(compiled.Success, $"{template.Name}: {string.Join("\n", compiled.Diagnostics)}");
             var expected = sources.Sum(s => ScriptInstrumenter.ProbeLines(s.Text).Count);
             Assert.Equal(expected, compiled.Probes.Probes.Count);
@@ -419,7 +421,7 @@ public class BreakpointProbeTests
                 }
             }
             """;
-        var compiled = ScriptCompiler.Compile([new ScriptSource(Path, source)], probes: true);
+        var compiled = ProbeCompiler.Compile([new ScriptSource(Path, source)]);
         Assert.True(compiled.Success, string.Join(Environment.NewLine, compiled.Diagnostics));
         Assert.Equal(ScriptInstrumenter.ProbeLines(source).Count, compiled.Probes.Probes.Count);
 
@@ -468,3 +470,11 @@ public class BreakpointProbeTests
         Assert.Null(assembly.GetType(ScriptInstrumenter.SwitchesClass));
     }
 }
+
+/// <summary>
+/// Runs the probe tests (<see cref="BreakpointProbeTests"/>, <see cref="ExceptionGuardTests"/>, <see cref="ScriptStepTests"/>)
+/// with no other test alongside them: they set what every build's probes report to (<c>ScriptProbes.Handler</c>, whether
+/// exceptions are watched), which an editor's debugger in a test running beside them sets too.
+/// </summary>
+[CollectionDefinition(nameof(BreakpointProbeTests), DisableParallelization = true)]
+public sealed class BreakpointProbeCollection;

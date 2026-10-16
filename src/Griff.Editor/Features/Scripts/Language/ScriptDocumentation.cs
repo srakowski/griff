@@ -1,6 +1,7 @@
+using System.IO;
 using Microsoft.CodeAnalysis;
 
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Scripts.Language;
 
 /// <summary>
 /// Finds the XML documentation for an assembly scripts compile against, so the script editor can show what an API

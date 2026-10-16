@@ -1,4 +1,4 @@
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Debugging.Probes;
 
 /// <summary>
 /// Where a line of one version of a script is in another (the text being edited and the one last compiled, say): the

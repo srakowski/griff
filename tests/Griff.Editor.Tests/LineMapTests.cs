@@ -1,6 +1,7 @@
-using Griff.Scripting;
+using System.IO;
+using Griff.Editor.Features.Debugging.Probes;
 
-namespace Griff.Tests.Scripting;
+namespace Griff.Editor.Tests;
 
 /// <summary>A line of one version of a script is found in another: lines added or taken out above it move it, a line changed in place stays.</summary>
 public class LineMapTests

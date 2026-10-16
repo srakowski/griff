@@ -53,14 +53,15 @@ public sealed class ModuleTests
             "the interfaces Griff's components call, drawing and network attributes):\n" + string.Join("\n", named.Distinct().Order()));
     }
 
-    // The hosts and libraries a game runs in (the web player, the desktop player, the platform, the scripting and graphics
-    // libraries) name no module either: what one does for a module, it does through a hook any module can fill (such as
+    // The hosts and libraries a game runs in (the web player, the desktop player, the platform, the scripting, exporting
+    // and graphics libraries) name no module either: what one does for a module, it does through a hook any module can fill (such as
     // GameModule.AddToWarmUp), so a game with none of a module's parts runs the same.
     [Theory]
     [InlineData("Griff.Web")]
     [InlineData("Griff.Player")]
     [InlineData("Griff.Platform.Windows")]
     [InlineData("Griff.Scripting")]
+    [InlineData("Griff.Exporting")]
     [InlineData("Griff.Graphics")]
     [InlineData("Griff.Graphics.OpenGL")]
     public void Host_NamesNoModule(string project)

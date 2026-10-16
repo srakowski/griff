@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.Text;
+using Griff.Scripting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Debugging.Probes;
 
 /// <summary>
 /// Puts breakpoint probes into scripts as the editor builds them: before the first statement of each line (and into each

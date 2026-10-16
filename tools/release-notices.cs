@@ -1,5 +1,5 @@
 #:sdk Microsoft.NET.Sdk
-#:project ../src/Griff.Scripting/Griff.Scripting.csproj
+#:project ../src/Griff.Exporting/Griff.Exporting.csproj
 #:property PublishAot=false
 #:property TreatWarningsAsErrors=false
 #:property EnforceCodeStyleInBuild=false
@@ -11,7 +11,7 @@
 // notice on record.
 //   dotnet run tools/release-notices.cs -- <editor folder> <notices file to write>
 using System.IO;
-using Griff.Scripting;
+using Griff.Exporting;
 
 if (args.Length != 2 || !Directory.Exists(args[0]))
 {

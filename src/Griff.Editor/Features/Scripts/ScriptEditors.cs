@@ -6,6 +6,7 @@ using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Status;
 using Griff.Editor.Core.Workspace;
 using Griff.Editor.Features.Play;
+using Griff.Editor.Features.Scripts.Language;
 using Griff.Scripting;
 using Microsoft.Extensions.Logging;
 

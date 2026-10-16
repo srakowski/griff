@@ -28,6 +28,7 @@ public class WeakTypeCacheTests
         Assert.True(IsCache(typeof(HashSet<Type>)));
         Assert.False(IsCache(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<Type, object>)));
         Assert.Contains(GriffAssemblies(), a => a.GetName().Name == "Griff.Scripting");
+        Assert.Contains(GriffAssemblies(), a => a.GetName().Name == "Griff.Exporting");
     }
 
     // The editor and every Griff assembly it loads, followed through their references.

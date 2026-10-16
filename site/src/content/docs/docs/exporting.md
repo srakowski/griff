@@ -116,7 +116,7 @@ sitting on an edge each their own way. `-Template` picks some by name (`-Templat
   references `src/Griff` as it is: all of it compiles for `browser-wasm`, and no workload is needed (no `wasm-tools`),
   since the runtime is the Mono interpreter that ships in the SDK's runtime pack. The editor publishes it with itself
   (`Player\Web`, in Release, without the `.br` and `.gz` copies static hosts don't use) as it does the desktop players.
-- **A game is exported for the web** by `WebExporter` (`Griff.Scripting`, beside the desktop `GameExporter`): the
+- **A game is exported for the web** by `WebExporter` (`Griff.Exporting`, beside the desktop `GameExporter`): the
   published player (`index.html`, titled with the game's name, `main.js`, `griff.js` and .NET in `_framework`), and in
   `game/` the same game folder the desktop player carries (the manifest, Assets without the script sources, and the
   scripts compiled as `Scripts.dll`), with a `files.txt` listing it. A browser can't list a folder, so the player

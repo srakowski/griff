@@ -4,9 +4,13 @@
     <ProjectReference Include="..\Griff\Griff.csproj" />
     <ProjectReference Include="..\Griff.Platform.Windows\Griff.Platform.Windows.csproj" />
     <ProjectReference Include="..\Griff.Scripting\Griff.Scripting.csproj" />
+    <ProjectReference Include="..\Griff.Exporting\Griff.Exporting.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The script editor's language services (Features/Scripts/Language): completions, diagnostics, quick info, renames. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
     <PackageReference Include="AvalonEdit" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />

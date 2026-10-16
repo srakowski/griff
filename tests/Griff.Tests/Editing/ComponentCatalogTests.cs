@@ -130,6 +130,8 @@ public class ComponentCatalogTests
         var result = new ScriptHost(_registry).Reload([new ScriptSource("Guard.cs", source)], []);
         Assert.True(result.Success, string.Join("\n", result.Diagnostics));
         Assert.Empty(result.Diagnostics);
+        // Its /// comments, as the editor registers them when scripts load.
+        DocComments.Register(result.Assembly!, result.Documentation);
 
         var guard = ComponentCatalog.Build(_registry).Single(e => e.Name == "Guard");
 

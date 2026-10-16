@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.IO;
+using Griff.Scripting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Completion;
@@ -12,7 +14,7 @@ using Microsoft.CodeAnalysis.QuickInfo;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Griff.Scripting;
+namespace Griff.Editor.Features.Scripts.Language;
 
 /// <summary>A compiler message for a span of a script being edited.</summary>
 public sealed record ScriptProblem(int Start, int Length, int Line, int Column, string Id, string Message, bool IsError);
@@ -44,6 +46,10 @@ public sealed class ScriptLanguage : IDisposable
 {
     private static readonly Lazy<MefHostServices> Host = new(() => MefHostServices.Create(MefHostServices.DefaultAssemblies));
 
+    // What scripts compile against (ScriptCompiler.ReferencePaths), each with its XML documentation when there is some, for tooltips.
+    private static readonly Lazy<MetadataReference[]> References = new(() =>
+        [.. ScriptCompiler.ReferencePaths.Select(p => MetadataReference.CreateFromFile(p, documentation: ScriptDocumentation.For(p)))]);
+
     private readonly AdhocWorkspace _workspace;
     private readonly ProjectId _projectId;
     private readonly object _gate = new();
@@ -57,7 +63,7 @@ public sealed class ScriptLanguage : IDisposable
             _projectId, VersionStamp.Create(), "Scripts", "GriffScripts", LanguageNames.CSharp,
             compilationOptions: ScriptCompiler.CompilationOptions,
             parseOptions: ScriptCompiler.ParseOptions,
-            metadataReferences: ScriptCompiler.MetadataReferences);
+            metadataReferences: References.Value);
         _solution = _workspace.CurrentSolution
             .AddProject(project)
             .AddDocument(DocumentId.CreateNewId(_projectId), ScriptCompiler.ImplicitUsingsPath, SourceText.From(ScriptCompiler.ImplicitUsings), filePath: ScriptCompiler.ImplicitUsingsPath);

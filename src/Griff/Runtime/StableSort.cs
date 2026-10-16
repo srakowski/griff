@@ -1,4 +1,4 @@
-namespace Griff.Rendering;
+namespace Griff.Runtime;
 
 /// <summary>
 /// Puts items in order by a few keys at once, keeping the order they came in among equals, in time that grows only with

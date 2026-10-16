@@ -160,6 +160,9 @@ public sealed class Transform : Component
             _jumpedStep = scene.Step;
     }
 
+    // Joining a scene: where it was drawn in another scene's frame (numbered by that scene) is nothing to this one's.
+    internal void ForgetDrawn() => _drawnFor = 0;
+
     // Whether it jumped in `step`, so what it draws then isn't glided either (see StepBlend).
     internal bool JumpedIn(long step) => _jumpedStep == step;
 

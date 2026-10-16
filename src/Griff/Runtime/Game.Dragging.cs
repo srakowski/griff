@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -145,7 +144,7 @@ public sealed partial class Game
 
     // The one drawn on top.
     private Draggable TopOf(HashSet<Draggable> things) =>
-        SceneRenderer.DrawOrder(Scene).Reverse().Select(e => e.GetComponent<Draggable>()).FirstOrDefault(d => d is not null && things.Contains(d))
+        Views.DrawOrder(Scene).Reverse().Select(e => e.GetComponent<Draggable>()).FirstOrDefault(d => d is not null && things.Contains(d))
         ?? things.First();
 
     // Where a grabber holds things: its middle, its hold offset's X in front of it (the way it faces) and its Y up.
@@ -313,7 +312,7 @@ public sealed partial class Game
     private static DropTarget? TargetAt(Vector2 point, IReadOnlyList<DropTarget> targets, Entity? dropping = null)
     {
         var under = targets.Where(t => (dropping is null || !t.Entity!.IsSelfOrDescendantOf(dropping)) && Covers(t.Entity!, point)).ToList();
-        return under.OrderBy(t => SceneRenderer.OrderOf(t.Entity!) ?? int.MinValue).ThenBy(t => t.Entity!.Transform.WorldPosition.Z).LastOrDefault();
+        return under.OrderBy(t => Views.OrderOf(t.Entity!) ?? int.MinValue).ThenBy(t => t.Entity!.Transform.WorldPosition.Z).LastOrDefault();
     }
 
     private void SlideTo(Draggable thing, Vector2 to)

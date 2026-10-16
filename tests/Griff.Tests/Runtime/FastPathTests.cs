@@ -185,7 +185,7 @@ public sealed class FastPathTests
             .OrderBy(e => e.Order).ThenBy(e => e.Position.Z).ThenByDescending(e => sortByY ? e.Position.Y : 0).ThenBy(e => e.Index)
             .Select(e => e.Entity);
 
-        Assert.Equal(expected, SceneRenderer.DrawOrder(scene));
+        Assert.Equal(expected, Views.DrawOrder(scene));
     }
 
     // A crowd on one layer with a few things over and under it, here and there in the hierarchy: in order but for a few
@@ -224,7 +224,7 @@ public sealed class FastPathTests
             .OrderBy(e => e.Order).ThenBy(e => e.Position.Z).ThenByDescending(e => sortByY ? e.Position.Y : 0).ThenBy(e => e.Index)
             .Select(e => e.Entity);
 
-        Assert.Equal(expected, SceneRenderer.DrawOrder(scene));
+        Assert.Equal(expected, Views.DrawOrder(scene));
     }
 
     // Each entity is drawn as it's found and its draws then put back to front together: the frame is each entity's draws
@@ -266,10 +266,10 @@ public sealed class FastPathTests
         }
 
         var frame = SceneRenderer.Build(scene, 16 / 9f);
-        var view = new Box(Vector2.Zero, new Vector2(SceneRenderer.DefaultCameraSize * 16 / 9f, SceneRenderer.DefaultCameraSize));
-        var expected = SceneRenderer.DrawOrder(scene)
+        var view = new Box(Vector2.Zero, new Vector2(Views.DefaultCameraSize * 16 / 9f, Views.DefaultCameraSize));
+        var expected = Views.DrawOrder(scene)
             .SelectMany(e => e.Components.OfType<IDrawable>().OrderBy(d => d.DrawStep))
-            .SelectMany(d => SceneRenderer.DrawsOf(d, view, SceneRenderer.DefaultCameraSize / 180));
+            .SelectMany(d => SceneRenderer.DrawsOf(d, view, Views.DefaultCameraSize / 180));
 
         Assert.Equal(expected, frame.Sprites);
     }

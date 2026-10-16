@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -19,10 +18,15 @@ public sealed class FrameDrawing
     private List<SpriteDraw> _sprites;
 
     internal FrameDrawing(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
-        List<SpriteDraw> sprites, int screenCount, ViewFilter filter = default)
+        List<SpriteDraw> sprites, int screenCount, ViewFilter filter, EntityDrawer drawEntities)
     {
-        Reset(game, scene, camera, cameraSize, aspect, view, viewProjection, sprites, screenCount, filter);
+        Reset(game, scene, camera, cameraSize, aspect, view, viewProjection, sprites, screenCount, filter, drawEntities);
     }
+
+    // How the frame's builder draws the scene's entities that `include` takes into `draws`, as they look in `view`.
+    internal delegate void EntityDrawer(Scene scene, Box view, float cameraSize, List<SpriteDraw> draws, Func<Entity, bool> include, ViewFilter filter);
+
+    private EntityDrawer _drawEntities;
 
     // Done with until the next frame: it lets go of this one's game, scene and draws, so they can be collected.
     internal void Release()
@@ -34,10 +38,11 @@ public sealed class FrameDrawing
     private List<SpriteDraw>? _released;
 
     // Starts drawing a new frame with this, as if it were new.
-    [MemberNotNull(nameof(Game), nameof(Scene), nameof(_sprites))]
+    [MemberNotNull(nameof(Game), nameof(Scene), nameof(_sprites), nameof(_drawEntities))]
     internal void Reset(Game? game, Scene scene, Entity? camera, float cameraSize, float aspect, Box view, Matrix4x4 viewProjection,
-        List<SpriteDraw> sprites, int screenCount, ViewFilter filter = default)
+        List<SpriteDraw> sprites, int screenCount, ViewFilter filter, EntityDrawer drawEntities)
     {
+        _drawEntities = drawEntities;
         Lit = true;
         SeenThrough = null;
         _filter = filter;
@@ -187,25 +192,25 @@ public sealed class FrameDrawing
     public List<SpriteDraw> DrawEntities(Func<Entity, bool> include)
     {
         var draws = new List<SpriteDraw>();
-        SceneRenderer.DrawScene(Scene, View, CameraSize, true, draws, include, overWorld: false, filter: _filter);
+        _drawEntities(Scene, View, CameraSize, draws, include, _filter);
         return draws;
     }
 
     /// <summary>A solid rectangle in the world, belonging to the screen rather than any entity.</summary>
-    public static SpriteDraw Quad(Vector2 center, Vector2 size, Color color) => Quads.Rect(SceneRenderer.ScreenEntity, center, size, color);
+    public static SpriteDraw Quad(Vector2 center, Vector2 size, Color color) => Quads.Rect(Views.ScreenEntity, center, size, color);
 
     /// <summary>A line in the world, belonging to the screen rather than any entity.</summary>
-    public static SpriteDraw Line(Vector2 from, Vector2 to, float thickness, Color color) => Quads.Line(SceneRenderer.ScreenEntity, from, to, thickness, color);
+    public static SpriteDraw Line(Vector2 from, Vector2 to, float thickness, Color color) => Quads.Line(Views.ScreenEntity, from, to, thickness, color);
 
     /// <summary>A line of text in the world, belonging to the screen rather than any entity.</summary>
     public static SpriteDraw Label(string text, Vector2 at, float size, Color color, TextAlign align = TextAlign.Center) =>
-        Quads.Label(SceneRenderer.ScreenEntity, text, at, size, color, align);
+        Quads.Label(Views.ScreenEntity, text, at, size, color, align);
 
     /// <summary>The edges of a rectangle in the world, belonging to the screen.</summary>
     public static IEnumerable<SpriteDraw> Outline(Vector2 center, Vector2 size, float thickness, Color color) =>
-        Quads.Outline(SceneRenderer.ScreenEntity, center, size, thickness, color);
+        Quads.Outline(Views.ScreenEntity, center, size, thickness, color);
 
     /// <summary>A ring in the world, belonging to the screen.</summary>
     public static IEnumerable<SpriteDraw> Circle(Vector2 center, float radius, float thickness, Color color) =>
-        Quads.Circle(SceneRenderer.ScreenEntity, center, radius, thickness, color);
+        Quads.Circle(Views.ScreenEntity, center, radius, thickness, color);
 }

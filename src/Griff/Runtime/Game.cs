@@ -75,6 +75,12 @@ public sealed partial class Game : IGameContext
     /// </summary>
     public FrameProfiler? Profiler { get; set; }
 
+    /// <summary>
+    /// How many entities a scene of this game has before its frames are built in chunks across the cores (see
+    /// <see cref="Workers"/>), or null for the renderer's own choice. Tests set it to compare the two ways.
+    /// </summary>
+    internal int? ChunkedFrom { get; set; }
+
     /// <summary>The view's width divided by its height. Set by the host each frame; <see cref="ScreenAnchor"/> uses it.</summary>
     public float ViewAspect { get; set; } = 16f / 9f;
 
@@ -620,7 +626,7 @@ public sealed partial class Game : IGameContext
     public void ShakeCamera(float strength = 0.3f, float duration = 0.25f)
     {
         Crowds.ThrowIfRunning("shake the camera");
-        Rendering.SceneRenderer.FindCamera(Scene)?.GetComponent<Camera>()?.Shake(strength, duration);
+        Views.FindCamera(Scene)?.GetComponent<Camera>()?.Shake(strength, duration);
     }
 
     /// <summary>Calls OnDestroy on every started behavior. The game can't be ticked afterwards.</summary>
@@ -877,13 +883,13 @@ public sealed partial class Game : IGameContext
         if (anchors.Count == 0)
             return;
 
-        var camera = Rendering.SceneRenderer.FindCamera(Scene);
+        var camera = Views.FindCamera(Scene);
         // What's behind the minigame that has the screen isn't seen, so it isn't pinned to its camera either.
         var shown = Minigame;
         var component = camera?.GetComponent<Camera>();
         var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
         center += component?.ShakeOffset ?? Vector2.Zero;
-        var halfHeight = component?.Size ?? Rendering.SceneRenderer.DefaultCameraSize;
+        var halfHeight = component?.Size ?? Views.DefaultCameraSize;
         var half = new Vector2(halfHeight * (ViewAspect > 0 ? ViewAspect : 1), halfHeight);
 
         foreach (var anchor in anchors)

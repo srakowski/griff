@@ -351,7 +351,7 @@ async Task RhythmInput(GameCheck game, Table chart, double perBeat)
     // How each note went, two marks a note in the chart's order (the press, then a hold's end): . not yet, P G O hits, M a
     // miss. Each note tried is judged by its own marks rather than by the score's counts going up since it was tried: a page
     // held still a moment (a busy machine) can judge the note tried before it late, inside the next one's count.
-    async Task<string> Played() => await game.Probe($"played:{Lanes}");
+    async Task<string> Played() => await game.Probe($"field:{Lanes}.Played");
     static bool IsHit(char mark) => mark is 'P' or 'G' or 'O';
     string Marks(string played, int note) => note * 2 + 1 < played.Length ? played.Substring(note * 2, 2) : "??";
     async Task<bool> Hit(int note, bool end = false) => (await Played()) is var played && note * 2 + 1 < played.Length &&

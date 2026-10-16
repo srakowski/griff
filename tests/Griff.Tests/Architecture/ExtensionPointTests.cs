@@ -20,6 +20,7 @@ public sealed class ExtensionPointTests
 {
     [Theory]
     [InlineData("Rendering/SceneRenderer.cs", new[] { "Transform", "Camera", "ScreenAnchor", "Parallax", "Sprite", "Light", "ScreenEffects", "Viewport", "MinigameRoot" })]
+    [InlineData("Runtime/Views.cs", new[] { "Transform", "Camera", "Sprite", "Light", "Viewport", "MinigameRoot" })]
     [InlineData("Runtime/FrameDrawing.cs", new[] { "Viewport" })]
     [InlineData("Runtime/Net/NetSchema.cs", new[] { "Transform", "MissingComponent", "Networked" })]
     [InlineData("Runtime/Game.Triggers.cs", new[] { "Trigger", "MessageScope" })]

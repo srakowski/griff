@@ -22,21 +22,36 @@ public sealed class CoresCollection;
 [Collection(nameof(CoresCollection))]
 public sealed class CoresTests
 {
-    // Runs `run` with `workers` threads, building frames in chunks (from any size of scene) or not at all.
+    // Runs `run` with `workers` threads, building frames (with Build) in chunks (from any size of scene) or not at all.
     private static T With<T>(int workers, bool chunked, Func<T> run)
     {
-        var (wereWorkers, wereChunked) = (Workers.Count, SceneRenderer.ChunkedFrom);
+        var (wereWorkers, wereChunked) = (Workers.Count, t_chunkedFrom);
         try
         {
             Workers.Count = workers;
-            SceneRenderer.ChunkedFrom = chunked ? 0 : int.MaxValue;
+            t_chunkedFrom = chunked ? 0 : int.MaxValue;
             return run();
         }
         finally
         {
-            (Workers.Count, SceneRenderer.ChunkedFrom) = (wereWorkers, wereChunked);
+            (Workers.Count, t_chunkedFrom) = (wereWorkers, wereChunked);
         }
     }
+
+    // From how many entities With builds frames in chunks; null outside it (the renderer's own choice).
+    [ThreadStatic]
+    private static int? t_chunkedFrom;
+
+    // A game's frame, built in chunks or not as With says (each game says for its own frames).
+    private static RenderFrame Build(Game game, float aspect, RenderFrame? recycle = null)
+    {
+        game.ChunkedFrom = t_chunkedFrom;
+        return SceneRenderer.Build(game, aspect, recycle);
+    }
+
+    // A scene's frame in the editor, built in chunks or not as With says.
+    private static RenderFrame Build(Scene scene, float aspect) =>
+        t_chunkedFrom is { } from ? SceneRenderer.Build(scene, aspect, from) : SceneRenderer.Build(scene, aspect);
 
     private static bool SameBits<T>(T a, T b) where T : unmanaged =>
         MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in b)));
@@ -83,9 +98,9 @@ public sealed class CoresTests
                 var scene = GameLoader.LoadScene(project, registry, file);
                 foreach (var aspect in new[] { 16 / 9f, 4 / 3f })
                 {
-                    var one = With(1, chunked: false, () => SceneRenderer.Build(scene, aspect));
-                    AssertSameFrame(one, With(1, chunked: true, () => SceneRenderer.Build(scene, aspect)), $"{file} in the editor");
-                    AssertSameFrame(one, With(8, chunked: true, () => SceneRenderer.Build(scene, aspect)), $"{file} in the editor, on 8 threads");
+                    var one = With(1, chunked: false, () => Build(scene, aspect));
+                    AssertSameFrame(one, With(1, chunked: true, () => Build(scene, aspect)), $"{file} in the editor");
+                    AssertSameFrame(one, With(8, chunked: true, () => Build(scene, aspect)), $"{file} in the editor, on 8 threads");
                 }
             }
 
@@ -110,9 +125,9 @@ public sealed class CoresTests
                 }
 
                 game.Advance(0.004 + random.NextDouble() * 0.03);
-                var one = With(1, chunked: false, () => SceneRenderer.Build(game, 16 / 9f));
-                AssertSameFrame(one, With(1, chunked: true, () => SceneRenderer.Build(game, 16 / 9f)), $"frame {frame} played");
-                var many = With(8, chunked: true, () => SceneRenderer.Build(game, 16 / 9f, last));
+                var one = With(1, chunked: false, () => Build(game, 16 / 9f));
+                AssertSameFrame(one, With(1, chunked: true, () => Build(game, 16 / 9f)), $"frame {frame} played");
+                var many = With(8, chunked: true, () => Build(game, 16 / 9f, last));
                 AssertSameFrame(one, many, $"frame {frame} played, on 8 threads");
                 last = many;
             }
@@ -244,13 +259,13 @@ public sealed class CoresTests
     public void A_mixed_crowd_draws_the_same_built_in_chunks_on_any_number_of_threads(int seed, bool sortByY)
     {
         var scene = Mixed(seed, sortByY);
-        var one = With(1, chunked: false, () => SceneRenderer.Build(scene, 16 / 9f));
+        var one = With(1, chunked: false, () => Build(scene, 16 / 9f));
         Assert.True(one.Sprites.Count > 5000);
-        AssertSameFrame(one, With(1, chunked: true, () => SceneRenderer.Build(scene, 16 / 9f)), "in the editor");
-        AssertSameFrame(one, With(16, chunked: true, () => SceneRenderer.Build(scene, 16 / 9f)), "in the editor, on 16 threads");
+        AssertSameFrame(one, With(1, chunked: true, () => Build(scene, 16 / 9f)), "in the editor");
+        AssertSameFrame(one, With(16, chunked: true, () => Build(scene, 16 / 9f)), "in the editor, on 16 threads");
 
         // Each entity's draws are together, in draw order (blinked out, or drawing nothing, it isn't there).
-        var drawOrder = With(16, chunked: true, () => SceneRenderer.DrawOrder(scene)).ToList();
+        var drawOrder = With(16, chunked: true, () => Views.DrawOrder(scene)).ToList();
         var drawn = one.Sprites.Select(d => d.Entity).ToHashSet();
         Assert.Equal(drawOrder.Where(drawn.Contains), one.Sprites.Select(d => d.Entity).Distinct());
         Assert.Equal(drawn.Count, 1 + Enumerable.Range(1, one.Sprites.Count - 1).Count(i => one.Sprites[i].Entity != one.Sprites[i - 1].Entity));
@@ -260,8 +275,8 @@ public sealed class CoresTests
         for (var frame = 0; frame < 60; frame++)
         {
             game.Advance(1 / 144.0 + frame % 3 * 0.005);
-            var played = With(1, chunked: false, () => SceneRenderer.Build(game, 16 / 9f));
-            last = With(16, chunked: true, () => SceneRenderer.Build(game, 16 / 9f, last));
+            var played = With(1, chunked: false, () => Build(game, 16 / 9f));
+            last = With(16, chunked: true, () => Build(game, 16 / 9f, last));
             AssertSameFrame(played, last, $"frame {frame} played, on 16 threads");
         }
     }
@@ -294,9 +309,9 @@ public sealed class CoresTests
             scene.Add(entity);
         }
 
-        var one = With(1, chunked: false, () => SceneRenderer.Build(scene, 16 / 9f));
-        AssertSameFrame(one, With(16, chunked: true, () => SceneRenderer.Build(scene, 16 / 9f)), "on 16 threads");
-        AssertSameFrame(one, With(1, chunked: true, () => SceneRenderer.Build(scene, 16 / 9f)), "on one thread");
+        var one = With(1, chunked: false, () => Build(scene, 16 / 9f));
+        AssertSameFrame(one, With(16, chunked: true, () => Build(scene, 16 / 9f)), "on 16 threads");
+        AssertSameFrame(one, With(1, chunked: true, () => Build(scene, 16 / 9f)), "on one thread");
     }
 
     // Many layers among the crowd: too mixed to merge, the chunks' runs are sorted as one.
@@ -315,9 +330,9 @@ public sealed class CoresTests
             scene.Add(entity);
         }
 
-        var one = With(1, chunked: false, () => SceneRenderer.Build(scene, 1));
-        AssertSameFrame(one, With(16, chunked: true, () => SceneRenderer.Build(scene, 1)), "on 16 threads");
-        AssertSameFrame(one, With(1, chunked: true, () => SceneRenderer.Build(scene, 1)), "on one thread");
+        var one = With(1, chunked: false, () => Build(scene, 1));
+        AssertSameFrame(one, With(16, chunked: true, () => Build(scene, 1)), "on 16 threads");
+        AssertSameFrame(one, With(1, chunked: true, () => Build(scene, 1)), "on one thread");
     }
 
     [Fact]
@@ -343,7 +358,7 @@ public sealed class CoresTests
             for (var i = 0; i < 30; i++)
             {
                 game.Advance(1 / 60.0);
-                frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                frame = Build(game, 16 / 9f, frame);
             }
 
             var least = long.MaxValue;
@@ -351,7 +366,7 @@ public sealed class CoresTests
             {
                 var before = Workers.AllocatedBytes();
                 for (var i = 0; i < 10; i++)
-                    frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                    frame = Build(game, 16 / 9f, frame);
                 least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
             }
 
@@ -370,12 +385,12 @@ public sealed class CoresTests
         for (var i = 0; i < 5; i++)
             game.Tick(1 / 60.0);
 
-        var one = With(1, chunked: false, () => SceneRenderer.Build(game, 16 / 9f));
+        var one = With(1, chunked: false, () => Build(game, 16 / 9f));
         Assert.True(one.IsDark);
         Assert.Contains(one.Lights, l => l.Casters.Count > 0);
         foreach (var (workers, context) in new[] { (16, "on 16 threads"), (1, "on one thread") })
         {
-            var chunked = With(workers, chunked: true, () => SceneRenderer.Build(game, 16 / 9f));
+            var chunked = With(workers, chunked: true, () => Build(game, 16 / 9f));
             AssertSameFrame(one, chunked, context);
             Assert.Equal(Rendering.DarkFrameTests.Describe(one.Lights), Rendering.DarkFrameTests.Describe(chunked.Lights));
         }
@@ -386,7 +401,7 @@ public sealed class CoresTests
             for (var i = 0; i < 20; i++)
             {
                 game.Tick(1 / 60.0);
-                frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                frame = Build(game, 16 / 9f, frame);
             }
 
             var least = long.MaxValue;
@@ -396,7 +411,7 @@ public sealed class CoresTests
                     Thread.Sleep(50);
                 var before = Workers.AllocatedBytes();
                 for (var i = 0; i < 10; i++)
-                    frame = SceneRenderer.Build(game, 16 / 9f, frame);
+                    frame = Build(game, 16 / 9f, frame);
                 least = Math.Min(least, (Workers.AllocatedBytes() - before) / 10);
             }
 
@@ -494,7 +509,7 @@ public sealed class CoresTests
         for (var i = 0; i < steps; i++)
         {
             game.Advance(1 / 60.0);
-            SceneRenderer.Build(game, 16 / 9f);
+            Build(game, 16 / 9f);
         }
 
         return Describe(game);

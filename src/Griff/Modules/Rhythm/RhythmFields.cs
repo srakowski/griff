@@ -1,4 +1,3 @@
-using Griff.Editing;
 using Griff.Scenes;
 
 namespace Griff.Modules.Rhythm;
@@ -28,7 +27,7 @@ public sealed class SongsAttribute : RowsAttribute
     /// <summary>The table a song's chart is: named like its file ("Music/Groove.wav" plays "Groove").</summary>
     public static string ChartOf(string song) => Path.GetFileNameWithoutExtension(song.Trim());
 
-    public override string? Note(Component component, IReadOnlyList<string> cells, KnownNames? names)
+    public override string? Note(Component component, IReadOnlyList<string> cells, IProjectNames? names)
     {
         var chart = ChartOf(cells[0]);
         if (chart.Length == 0 || names is null)
@@ -67,13 +66,13 @@ public sealed class DifficultiesAttribute : RowsAttribute
 
     public override string Write(IReadOnlyList<string> cells) => cells[0].Trim();
 
-    public override IReadOnlyList<string> MoreChoices(int column, Component component, KnownNames? names) => Of(component, names);
+    public override IReadOnlyList<string> MoreChoices(int column, Component component, IProjectNames? names) => Of(component, names);
 
     /// <summary>
     /// The difficulties <paramref name="component"/>'s charts have: a song select's songs' charts, or note lanes' own chart (its
     /// Chart, or the table named like its Song); Easy, Normal and Hard when there are none.
     /// </summary>
-    public static IReadOnlyList<string> Of(Component component, KnownNames? names)
+    public static IReadOnlyList<string> Of(Component component, IProjectNames? names)
     {
         IEnumerable<string> charts = component switch
         {

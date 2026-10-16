@@ -1,8 +1,11 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using Griff.Editing;
 using Griff.Modules.Strategy;
 using Griff.Projects;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
+using Griff.Scripting;
 
 namespace Griff.Tests.Editing;
 
@@ -241,5 +244,41 @@ public sealed class KnownNamesTests : IDisposable
         Assert.Equal("Nothing sends \"Coins\": no component's message, dialogue's [send] or script's Game.Send",
             KnownNames.Problem(Property<Counter>("Message").Names!, ["Coins"]));
         Assert.StartsWith("Nothing is on the layer \"Ghost\" or \"Bat\"", KnownNames.Problem(Property<Pickup>("Layers").Names!, ["Ghost", "Bat"]));
+    }
+
+    // A field's default is read from a sample of its component's type, held only while the type is: a script compiled
+    // again goes, and its old assembly unloads, however often the Inspector asked about it.
+    [Fact]
+    public void ScriptTypes_AreHeldOnlyWhileTheyLive_SoAReloadedScriptUnloads()
+    {
+        var unloaded = AskAboutAScriptThenUnloadIt();
+        for (var i = 0; i < 20 && unloaded.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        Assert.False(unloaded.IsAlive, "The script's assembly stayed loaded after the names were asked about one of its components.");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference AskAboutAScriptThenUnloadIt()
+    {
+        var compiled = ScriptCompiler.Compile([new ScriptSource("Pinger.cs", """
+            public class Pinger : Behavior
+            {
+                [Names(NameKind.Message)]
+                public string Sends { get; set; } = "Ping";
+            }
+            """)]);
+        Assert.True(compiled.Success, string.Join("\n", compiled.Errors));
+        var context = new AssemblyLoadContext("Scripts", isCollectible: true);
+        var type = context.LoadFromStream(new MemoryStream(compiled.Assembly!)).GetType("Pinger")!;
+        var property = new ComponentRegistry().Register(type).Properties.Single(p => p.Name == "Sends");
+
+        // Its default needn't be heard by anything: the names asked for the type's sample to know it.
+        Assert.Empty(new KnownNames([], [], [], [], [], []).Unmatched((Component)Activator.CreateInstance(type)!, property));
+        context.Unload();
+        return new WeakReference(context);
     }
 }

@@ -159,7 +159,7 @@ public sealed class IsometricTemplateTests : IDisposable
         int Place(int x, int y)
         {
             StandOn(player, walls, x, y);
-            var parts = SceneRenderer.DrawParts(game.Scene).ToList();
+            var parts = Views.DrawParts(game.Scene).ToList();
             return parts.IndexOf((player, null)) - parts.IndexOf((walls.Entity!, hedgeFront));
         }
 

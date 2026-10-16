@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Griff.Projects;
 using Griff.Runtime;
@@ -12,7 +13,7 @@ namespace Griff.Editing;
 /// send and listen for, its tables and their rows, and the fonts it can draw text in (<see cref="FontNames"/>, when
 /// they're known). The Inspector lists them in a field's picker and flags a name that matches none.
 /// </summary>
-public sealed partial class KnownNames
+public sealed partial class KnownNames : IProjectNames
 {
     private readonly HashSet<string> _prefabs, _scenes, _actions, _layers, _sent, _heard, _items, _flags, _saved;
     private readonly Dictionary<string, IReadOnlyList<string>> _places = new(StringComparer.OrdinalIgnoreCase);
@@ -218,28 +219,28 @@ public sealed partial class KnownNames
         return Unmatched(kind, value);
     }
 
-    private static readonly Dictionary<Type, Component?> Defaults = [];
+    // A component of each type as it's made, to read its fields' defaults from. Held only while its type is: a script's
+    // types go when their scripts are compiled again, and the samples with them, so a reloaded script's assembly unloads.
+    private static readonly ConditionalWeakTable<Type, Sample> Defaults = [];
+
+    private sealed class Sample(Component? component)
+    {
+        public Component? Component { get; } = component;
+    }
 
     private static object? DefaultOf(Type type, PropertyDescriptor property)
     {
-        Component? sample;
-        lock (Defaults)
+        var sample = Defaults.GetValue(type, static type =>
         {
-            if (!Defaults.TryGetValue(type, out sample))
+            try
             {
-                try
-                {
-                    sample = (Component?)Activator.CreateInstance(type);
-                }
-                catch (Exception)
-                {
-                    sample = null;
-                }
-
-                Defaults[type] = sample;
+                return new Sample((Component?)Activator.CreateInstance(type));
             }
-        }
-
+            catch (Exception)
+            {
+                return new Sample(null);
+            }
+        }).Component;
         return sample is null ? null : property.GetValue(sample);
     }
 
@@ -377,13 +378,13 @@ public sealed partial class KnownNames
     }
 
     /// <summary>
-    /// The names of <paramref name="entities"/>, as a field naming something in their scene picks from: those an adventure's
-    /// walker arrives at (hotspots) first, then the rest, each once.
+    /// The names of <paramref name="entities"/>, as a field naming something in their scene picks from: the places things
+    /// arrive at (see <see cref="IArrivalSpot"/>: an adventure's hotspots) first, then the rest, each once.
     /// </summary>
     public static IReadOnlyList<string> PlacesIn(IEnumerable<Entity> entities)
     {
         var all = entities.SelectMany(e => e.SelfAndDescendants()).Where(e => !string.IsNullOrWhiteSpace(e.Name)).ToList();
-        return [.. all.Where(e => e.Components.Any(c => c.GetType().Name == "Hotspot")).Concat(all).Select(e => e.Name)
+        return [.. all.Where(e => e.Components.Any(c => c is IArrivalSpot)).Concat(all).Select(e => e.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 

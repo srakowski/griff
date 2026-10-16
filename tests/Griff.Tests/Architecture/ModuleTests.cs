@@ -12,8 +12,9 @@ namespace Griff.Tests.Architecture;
 /// points instead: its systems and their steps (GameModule.AddTo) and hooks (GameSystem's Draw, DrawView, Eyes, LayOutHud,
 /// RunForPlayer, GridStepStarting, SceneEnding...), components that draw themselves and say what they send, and interfaces
 /// Griff's own components call (ICounterSource, IGridDriver, ITurnReady, IPlaytestReport, IHearsMessages,
-/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone. Each is mashup-ready too: it names actions
-/// and outputs, and what of it reads the player's input takes it only with focus.
+/// IClaimsNumberKeys). Modules don't name each other either, so each stands alone, and the hosts a game runs in (the web
+/// and desktop players) name none. Each is mashup-ready too: it names actions and outputs, and what of it reads the
+/// player's input takes it only with focus.
 /// </summary>
 public sealed class ModuleTests
 {
@@ -49,6 +50,45 @@ public sealed class ModuleTests
         Assert.True(named.Count == 0,
             "Griff's core names a module's types, which it should reach through an extension point (a GameSystem's hooks, " +
             "the interfaces Griff's components call, drawing and network attributes):\n" + string.Join("\n", named.Distinct().Order()));
+    }
+
+    // The hosts and libraries a game runs in (the web player, the desktop player, the platform, the scripting and graphics
+    // libraries) name no module either: what one does for a module, it does through a hook any module can fill (such as
+    // GameModule.AddToWarmUp), so a game with none of a module's parts runs the same.
+    [Theory]
+    [InlineData("Griff.Web")]
+    [InlineData("Griff.Player")]
+    [InlineData("Griff.Platform.Windows")]
+    [InlineData("Griff.Scripting")]
+    [InlineData("Griff.Graphics")]
+    [InlineData("Griff.Graphics.OpenGL")]
+    public void Host_NamesNoModule(string project)
+    {
+        var (core, coreTrees) = LayerTests.Core();
+        var trees = LayerTests.Parse(Path.Combine(LayerTests.RepoRoot(), "src", project)).ToList();
+        Assert.NotEmpty(trees);
+        // Bound with the core's source, so its names resolve; what else the project uses (WPF, the browser) needn't.
+        var compilation = core.AddSyntaxTrees(trees);
+        var moduleTypes = coreTrees.Where(IsModuleFile)
+            .SelectMany(t => t.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => d.Identifier.Text))
+            .ToHashSet();
+
+        var named = new List<string>();
+        foreach (var tree in trees)
+        {
+            var model = compilation.GetSemanticModel(tree);
+            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>()
+                         .Where(n => moduleTypes.Contains(n.Identifier.Text) || n.Identifier.Text == "Modules"))
+            {
+                var symbol = model.GetSymbolInfo(name).Symbol;
+                var used = symbol is INamespaceSymbol ns ? ns : (ISymbol?)LayerTests.Used(symbol);
+                if (used is not null && InModules(used))
+                    named.Add($"{Path.GetFileName(tree.FilePath)}: {LayerTests.Name(used)}");
+            }
+        }
+
+        Assert.True(named.Count == 0,
+            $"{project} names a module's types, which it should reach through a hook any module can fill:\n" + string.Join("\n", named.Distinct().Order()));
     }
 
     // A module stands alone: it builds on the core, not on another module, so any one can go without breaking the rest.

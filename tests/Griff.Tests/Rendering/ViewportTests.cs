@@ -75,10 +75,10 @@ public sealed class ViewportTests
     public void TheMainCamera_IsTheFirstWithoutAViewport_OrTheFirstOfAllWhenEveryOneHasOne()
     {
         var game = SplitScreen();
-        Assert.Equal("Main Camera", SceneRenderer.FindCamera(game.Scene)!.Name);
+        Assert.Equal("Main Camera", Views.FindCamera(game.Scene)!.Name);
 
         game.Scene.Entities.First(e => e.Name == "Main Camera").IsEnabled = false;
-        Assert.Equal("Left Camera", SceneRenderer.FindCamera(game.Scene)!.Name);
+        Assert.Equal("Left Camera", Views.FindCamera(game.Scene)!.Name);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class ViewportTests
         var hud = frame.Sprites.ToList().FindIndex(d => d.Entity.Name == "Score");
         Assert.True(frame.ViewsAt <= hud);
         Assert.All(frame.Sprites.Take(frame.ViewsAt), d => Assert.NotEqual("Score", d.Entity.Name));
-        Assert.Equal(4, frame.Sprites.Skip(frame.ViewsAt).Count(d => d.Entity == SceneRenderer.ScreenEntity && d.Tint == frame.Views[1].Border));
+        Assert.Equal(4, frame.Sprites.Skip(frame.ViewsAt).Count(d => d.Entity == Views.ScreenEntity && d.Tint == frame.Views[1].Border));
     }
 
     [Fact]
@@ -219,8 +219,8 @@ public sealed class ViewportTests
         var view = Assert.Single(frame.Views).Frame;
         Assert.Equal("Eyes Camera", view.Camera!.Name);
         Assert.DoesNotContain("Player", Names(view));
-        Assert.True(view.Sprites.Count(d => d.Entity == SceneRenderer.ScreenEntity) > 20);
-        Assert.All(view.Sprites.Where(d => d.Entity == SceneRenderer.ScreenEntity).Select(d => OnScreen(view, new Vector2(d.World.M41, d.World.M42))),
+        Assert.True(view.Sprites.Count(d => d.Entity == Views.ScreenEntity) > 20);
+        Assert.All(view.Sprites.Where(d => d.Entity == Views.ScreenEntity).Select(d => OnScreen(view, new Vector2(d.World.M41, d.World.M42))),
             p => Assert.True(p.X >= 0.19f && p.X <= 0.91f && p.Y >= 0.09f && p.Y <= 0.91f, $"{p} is outside the window."));
 
         // The game is played through those eyes, but the window leaves the mouse to the 2D game.
@@ -292,13 +292,13 @@ public sealed class ViewportTests
         for (var i = 0; i < 5; i++)
             game.Tick(1 / 60.0);
 
-        var (wereWorkers, wereChunked) = (Workers.Count, SceneRenderer.ChunkedFrom);
+        var wereWorkers = Workers.Count;
         try
         {
-            SceneRenderer.ChunkedFrom = int.MaxValue;
+            game.ChunkedFrom = int.MaxValue;
             Workers.Count = 1;
             var one = SceneRenderer.Build(game, Aspect);
-            SceneRenderer.ChunkedFrom = 0;
+            game.ChunkedFrom = 0;
             Workers.Count = 8;
             var chunked = SceneRenderer.Build(game, Aspect);
             Assert.Equal(Describe(one), Describe(chunked));
@@ -328,7 +328,7 @@ public sealed class ViewportTests
         }
         finally
         {
-            (Workers.Count, SceneRenderer.ChunkedFrom) = (wereWorkers, wereChunked);
+            Workers.Count = wereWorkers;
         }
 
         static string Describe(RenderFrame frame) =>

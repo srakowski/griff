@@ -115,7 +115,7 @@ public class DragTests
         Assert.True(card.IsHeld);
         Assert.Equal(card.Entity, _game.Held);
         Assert.Equal(new Vector2(3, 1), At(card));
-        Assert.Equal(card.Entity, SceneRenderer.DrawOrder(_scene).Last());
+        Assert.Equal(card.Entity, Views.DrawOrder(_scene).Last());
     }
 
     [Fact]

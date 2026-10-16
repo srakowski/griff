@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Griff.Fonts;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Graphics;

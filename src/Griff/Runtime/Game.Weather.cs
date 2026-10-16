@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -12,8 +11,8 @@ public sealed partial class Game
 
     private void RunWeather()
     {
-        var camera = SceneRenderer.FindCamera(Scene);
-        var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+        var camera = Views.FindCamera(Scene);
+        var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
 
         // Room for the widest window and a little more, so nothing pops in at the edges.
         var area = new Vector2(size * 2 * Math.Max(ViewAspect, 1) + 2, size * 2 + 2);

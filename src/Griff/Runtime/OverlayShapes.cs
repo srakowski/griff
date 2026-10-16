@@ -1,8 +1,7 @@
 using System.Numerics;
-using Griff.Runtime;
 using Griff.Scenes;
 
-namespace Griff.Rendering;
+namespace Griff.Runtime;
 
 // Shapes and colors the genres' overlays and HUDs draw with, belonging to the screen rather than any entity.
 internal static class OverlayShapes

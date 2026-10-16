@@ -1,4 +1,6 @@
+using System.Numerics;
 using Griff.Runtime;
+using Griff.Scenes;
 
 namespace Griff.Modules.PhysicsGames;
 
@@ -33,5 +35,43 @@ public sealed class PhysicsGamesModule : GameModule
         var pinball = game.AddSystem(new PinballSystem());
         game.StepAfter("Dragging", "Flippers", pinball, pinball.RunControls);
         game.StepAfter("Physics", "Pinball", pinball, pinball.RunHits);
+    }
+
+    // With bodies that turn: a tower of posts and planks, two storeys, asleep, that break, and a heavy ball thrown through it.
+    public override void AddToWarmUp(Scene scene, bool turning)
+    {
+        if (!turning)
+            return;
+        for (var i = 0; i < 6; i++)
+        {
+            var (storey, part) = (i / 3, i % 3);
+            var (at, size) = part switch
+            {
+                0 => (new Vector2(-1.1f, storey * 2.35f + 1), new Vector2(0.35f, 2)),
+                1 => (new Vector2(1.1f, storey * 2.35f + 1), new Vector2(0.35f, 2)),
+                _ => (new Vector2(0, storey * 2.35f + 2.175f), new Vector2(3, 0.35f)),
+            };
+            var entity = Add(scene, part == 2 ? "Plank" : "Post", at);
+            entity.AddComponent<Sprite>().Size = size;
+            entity.AddComponent<BoxCollider>().Size = size;
+            var body = entity.AddComponent<Body>();
+            (body.Rotates, body.Asleep, body.Mass) = (true, true, size.X * size.Y);
+            var piece = entity.AddComponent<Breakable>();
+            (piece.Strength, piece.MinHit) = (6, 1.5f);
+        }
+
+        var ball = Add(scene, "Ball", new Vector2(-3, 2));
+        ball.AddComponent<CircleCollider>().Radius = 0.6f;
+        ball.AddComponent<Sprite>().Size = new Vector2(1.2f, 1.2f);
+        var thrown = ball.AddComponent<Body>();
+        (thrown.Rotates, thrown.Mass, thrown.Velocity) = (true, 40, new Vector2(30, 2));
+
+        static Entity Add(Scene scene, string name, Vector2 at)
+        {
+            var entity = new Entity(name);
+            entity.Transform.Position = new Vector3(at, 0);
+            scene.Add(entity);
+            return entity;
+        }
     }
 }

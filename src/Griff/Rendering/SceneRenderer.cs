@@ -3,26 +3,26 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Griff.Runtime;
 using Griff.Scenes;
+using static Griff.Runtime.Views;
 
 namespace Griff.Rendering;
 
 /// <summary>
-/// Builds <see cref="RenderFrame"/>s from scenes. Shared by the editor and the game so they always agree. It knows how to
-/// see a scene (cameras, parallax, light and dark, what's pinned to the screen) but nothing of what's in it: every
-/// component that draws is an <see cref="IDrawable"/>, changed by its entity's <see cref="IDrawEffect"/>s, and a running
-/// game's systems add what the game itself draws (see <see cref="Runtime.GameSystem"/>'s Draw).
+/// Builds <see cref="RenderFrame"/>s from scenes. Shared by the editor and the game so they always agree. It reads how
+/// to see a scene (its camera, what's pinned to the screen, what's on top, its lights) from <see cref="Views"/>, which the
+/// running game asks too, and knows nothing of what's in it: every component that draws is an <see cref="IDrawable"/>,
+/// changed by its entity's <see cref="IDrawEffect"/>s, and a running game's systems add what the game itself draws (see
+/// <see cref="Runtime.GameSystem"/>'s Draw). It keeps nothing of one game between builds that another could see: what
+/// a build is for is passed along it, and what lasts from frame to frame belongs to the game's scene.
 /// </summary>
 public static partial class SceneRenderer
 {
-    public const float DefaultCameraSize = 5f;
-
-    public static readonly Color DefaultBackground = Color.FromBytes(0x1E, 0x22, 0x2B);
-
-    // Stands in for the entity of draws that belong to the screen rather than the scene, like the scene-change fade.
-    internal static readonly Entity ScreenEntity = new("Screen");
-
     /// <param name="aspect">Viewport width divided by height.</param>
     public static RenderFrame Build(Scene scene, float aspect) => Build(scene, aspect, null);
+
+    // A scene that isn't running, built in chunks from `chunkedFrom` entities on (tests compare the two ways).
+    internal static RenderFrame Build(Scene scene, float aspect, int chunkedFrom) =>
+        Build(scene, aspect, null, new Request(null, false, chunkedFrom));
 
     /// <summary>
     /// Builds a running game's frame: its scene, with what its systems draw, any <see cref="Runtime.Game.FlashScreen"/>
@@ -37,42 +37,31 @@ public static partial class SceneRenderer
     /// big scene's frames don't keep the garbage collector busy. <paramref name="recycle"/> can't be used after.
     /// </summary>
     public static RenderFrame Build(Runtime.Game game, float aspect, RenderFrame? recycle) =>
-        Build(game.Scene, aspect, game, new Recycled(recycle));
+        Build(game.Scene, aspect, game, Request.For(game, recycle));
 
     /// <summary>
     /// Builds a picture of a running game as it is now, for a saved game's screenshot (see
     /// <see cref="Runtime.Game.PictureWanted"/>): the frame <see cref="Build(Runtime.Game, float)"/> builds, less the panels
     /// open over the game (the save screen it's saved from), a fade or flash and debug shapes.
     /// </summary>
-    public static RenderFrame BuildPicture(Runtime.Game game, float aspect)
+    public static RenderFrame BuildPicture(Runtime.Game game, float aspect) =>
+        Build(game.Scene, aspect, game, Request.For(game, null) with { Picture = true });
+
+    // What a build is for: a frame the caller is done with, to fill again (its lists of draws and of lights, with their
+    // shadows' lists, too); whether it's a picture of the game (see BuildPicture); and from how many entities its scene is
+    // built in chunks (see Game.ChunkedFrom).
+    private readonly record struct Request(RenderFrame? Frame, bool Picture, int ChunkedFrom)
     {
-        var outer = t_picture;
-        t_picture = game;
-        try
-        {
-            return Build(game, aspect, null);
-        }
-        finally
-        {
-            t_picture = outer;
-        }
-    }
+        public static Request For(Runtime.Game? game, RenderFrame? recycle) => new(recycle, false, game?.ChunkedFrom ?? DefaultChunkedFrom);
 
-    // The game whose picture is being built, if one is.
-    [ThreadStatic]
-    private static Runtime.Game? t_picture;
-
-    private static Func<Entity, bool>? s_notInPanel;
-
-    // A frame the caller is done with, to fill again: its lists of draws and of lights (with their shadows' lists) too.
-    private readonly record struct Recycled(RenderFrame? Frame)
-    {
         public List<SpriteDraw>? Sprites => Frame?.Sprites as List<SpriteDraw>;
 
         public List<LightDraw>? Lights => Frame?.Lights as List<LightDraw>;
     }
 
-    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Recycled reuse = default)
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game) => Build(scene, aspect, game, Request.For(game, null));
+
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Request reuse)
     {
         // While something profiles the game, each part of the build is timed (see FrameCostKind.Build).
         if (game?.Profiler is { } profiler)
@@ -80,7 +69,7 @@ public static partial class SceneRenderer
         return Build(scene, aspect, game, reuse, null);
     }
 
-    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer)
+    private static RenderFrame Build(Scene scene, float aspect, Runtime.Game? game, Request reuse, BuildTimer? timer)
     {
         // A running game is drawn between its last two steps: everything that moved in the last one (the camera too) is
         // placed part way there, so it moves smoothly whatever the screen's frame rate.
@@ -100,7 +89,7 @@ public static partial class SceneRenderer
     private const string CameraPart = "Camera", ClearingPart = "Clearing", SortingPart = "Sorting", SystemsPart = "Systems", LightsPart = "Lights",
         ScreenPart = "Screen";
 
-    private static RenderFrame BuildTimed(Scene scene, float aspect, Runtime.Game game, Recycled reuse, BuildTimer timer)
+    private static RenderFrame BuildTimed(Scene scene, float aspect, Runtime.Game game, Request reuse, BuildTimer timer)
     {
         timer.Begin(CameraPart);
         try
@@ -112,9 +101,6 @@ public static partial class SceneRenderer
             timer.End();
         }
     }
-
-    // Each frame drawn between steps has its own stamp, so a transform knows the matrix it worked out is this frame's.
-    private static long s_drawStamps;
 
     // The time of a scene that isn't running (the editor's), for what the renderer moves by itself.
     private static readonly System.Diagnostics.Stopwatch s_clock = System.Diagnostics.Stopwatch.StartNew();
@@ -131,11 +117,13 @@ public static partial class SceneRenderer
         var size = FindCamera(scene)?.GetComponent<Camera>()?.Size ?? DefaultCameraSize;
         scene.GlideLimit = Math.Max(size, 1) * 0.5f;
         scene.DrawBlend = Math.Max(0, blend);
-        scene.DrawStamp = Interlocked.Increment(ref s_drawStamps);
+        // Each frame of the scene drawn between steps has its own stamp, so a transform knows the matrix it worked out is
+        // this frame's.
+        scene.DrawStamp = ++scene.DrawStamps;
         return true;
     }
 
-    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, Recycled reuse, BuildTimer? timer, Viewport? viewport = null)
+    private static RenderFrame BuildNow(Scene scene, float aspect, Runtime.Game? game, Request reuse, BuildTimer? timer, Viewport? viewport = null)
     {
         var main = FindCamera(scene);
         var camera = viewport?.Entity ?? main;
@@ -152,9 +140,13 @@ public static partial class SceneRenderer
         var filter = new ViewFilter(camera, main, viewport, game is not null && (showsViews || viewport is not null), only);
         // A picture of the game (for a saved game) leaves out the panels open over it: the save screen itself.
         Func<Entity, bool>? leaveOut = null;
-        if (t_picture is { } pictured && pictured == game)
-            leaveOut = s_notInPanel ??= e => t_picture is not { } shown || !shown.IsInOpenPanel(e);
-        var screenCount = DrawScene(scene, view, size, game is not null, sprites, leaveOut, overWorld: true, timer, reuse: true, filter);
+        if (reuse.Picture && game is not null)
+        {
+            var panels = game.OpenPanels;
+            leaveOut = e => !panels.Any(p => p.Entity is { } owner && e.IsSelfOrDescendantOf(owner));
+        }
+
+        var screenCount = DrawScene(scene, view, size, game is not null, sprites, leaveOut, overWorld: true, timer, reuse: true, filter, reuse.ChunkedFrom);
 
         // The game's systems draw what the game knows of (a strategy game's fog and HUD), or see the world their own way.
         timer?.Mark(SystemsPart);
@@ -162,9 +154,9 @@ public static partial class SceneRenderer
         var frame = (t_scratch ??= new Scratch()).Frame;
         t_scratch.Frame = null;
         if (frame is null)
-            frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter);
+            frame = new FrameDrawing(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter, s_drawEntities);
         else
-            frame.Reset(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter);
+            frame.Reset(game, scene, camera, size, aspect, view, ViewProjection(camera, size, aspect), sprites, screenCount, filter, s_drawEntities);
         if (game is not null)
             DrawSystems(game, frame, timer);
 
@@ -195,7 +187,7 @@ public static partial class SceneRenderer
         if (lights is not null)
             LetGoOf(lights);
         if (dark)
-            AddLights(scene, view, lights ??= [], t_scratch ??= new Scratch());
+            AddLights(scene, view, lights ??= [], (t_scratch ??= new Scratch()).Lights);
         timer?.Mark(ScreenPart);
 
         if (game is not null && leaveOut is null && viewport is null && Matrix4x4.Invert(viewProjection, out var clipToWorld))
@@ -229,7 +221,7 @@ public static partial class SceneRenderer
         built.ViewsAt = worldCount;
         built.ClearViews();
         if (showsViews)
-            BuildViews(scene, aspect, game!, timer, built, sprites, worldCount);
+            BuildViews(scene, aspect, game!, reuse, timer, built, sprites, worldCount);
         return built;
     }
 
@@ -247,7 +239,7 @@ public static partial class SceneRenderer
 
     // Each viewport showing, lowest Order first, built as a frame of its own (the one it had last time, filled again), and a
     // border round each drawn over them all, under what's pinned to the screen.
-    private static void BuildViews(Scene scene, float aspect, Runtime.Game game, BuildTimer? timer, RenderFrame built, List<SpriteDraw> sprites,
+    private static void BuildViews(Scene scene, float aspect, Runtime.Game game, Request request, BuildTimer? timer, RenderFrame built, List<SpriteDraw> sprites,
         int worldCount)
     {
         var scratch = t_scratch ??= new Scratch();
@@ -274,7 +266,7 @@ public static partial class SceneRenderer
             {
                 var view = built.AddView();
                 view.Viewport = viewport;
-                view.Frame = BuildNow(scene, viewport.AspectOn(aspect), game, new Recycled(view.Frame), timer, viewport);
+                view.Frame = BuildNow(scene, viewport.AspectOn(aspect), game, request with { Frame = view.Frame }, timer, viewport);
                 (view.Left, view.Top, view.Width, view.Height) = viewport.Area;
                 view.Border = viewport.Border;
                 if (viewport.Border.A > 0)
@@ -368,25 +360,22 @@ public static partial class SceneRenderer
 
     // ----- Entities -----
 
-    // One entity that draws: its sprite when that's all it draws (or else its drawable components, gathered in step order
-    // apart), where its draws are in the frame's list once it's drawn (First, Count), and what it sorts by.
-    private readonly record struct Drawn(Entity Entity, Sprite? Sole, int First, int Count, bool Lifted, int Order, float Z, float Y);
-
     /// <summary>
     /// Draws the scene's entities (those <paramref name="include"/> takes, or all) back to front into
     /// <paramref name="sprites"/>, culled to <paramref name="view"/>, and then, with <paramref name="overWorld"/>, what
     /// goes over the world (ropes, wires) between them and what's pinned to the screen. Returns how many draws at the
     /// end are pinned to the screen when it had to split them for that, or -1. With <paramref name="reuse"/>,
     /// <paramref name="sprites"/> holds last frame's draws, to be replaced; otherwise the draws are added after what it holds.
+    /// A scene of <paramref name="chunkedFrom"/> entities or more is drawn in chunks across the cores (all of it only).
     /// </summary>
     internal static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include, bool overWorld,
-        BuildTimer? timer = null, bool reuse = false, ViewFilter filter = default)
+        BuildTimer? timer = null, bool reuse = false, ViewFilter filter = default, int chunkedFrom = DefaultChunkedFrom)
     {
         var scratch = t_scratch ?? new Scratch();
         t_scratch = null;
         try
         {
-            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse, filter);
+            return DrawScene(scene, view, cameraSize, playing, sprites, include, overWorld ? scratch.Overs : null, scratch, timer, reuse, filter, chunkedFrom);
         }
         finally
         {
@@ -436,15 +425,13 @@ public static partial class SceneRenderer
         // What goes over the world, while it's drawn.
         public List<SpriteDraw> Over { get; } = [];
 
-        // Every side of what blocks light in the scene, while the lights are worked out.
-        public List<ShadowEdge> Edges { get; } = [];
-
-        // Lists for lights' shadows (see LightDraw.Casters), from frames done with, to use again.
-        public List<List<ShadowEdge>> Casters { get; } = [];
-
-        // The light an ILightSource gives off, while it's asked.
-        public List<LightSpot> Spots { get; } = [];
+        // What the lights are worked out with, and their shadows' lists from frames done with.
+        public LightLists Lights { get; } = new();
     }
+
+    // What a system that drew the world its own way has the scene's entities drawn again with (see FrameDrawing.DrawEntities).
+    private static readonly FrameDrawing.EntityDrawer s_drawEntities = (scene, view, cameraSize, draws, include, filter) =>
+        DrawScene(scene, view, cameraSize, true, draws, include, overWorld: false, filter: filter);
 
     // One pass over the entities, in hierarchy order: each is drawn as it's found, its draws kept together where they
     // land, and then those runs of draws are put back to front by what their entities sort by. An entity's drawable
@@ -453,11 +440,11 @@ public static partial class SceneRenderer
     // With a timer (a profiler's), each entity's own work counts to the kind of thing it draws first, and each drawable's
     // drawing to its own kind.
     private static int DrawScene(Scene scene, Box view, float cameraSize, bool playing, List<SpriteDraw> sprites, Func<Entity, bool>? include,
-        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse, in ViewFilter filter)
+        List<IDrawable>? overs, Scratch scratch, BuildTimer? timer, bool reuse, in ViewFilter filter, int chunkedFrom)
     {
         var camera = filter.Camera ?? FindCamera(scene);
         var sortByY = camera?.GetComponent<Camera>()?.SortByY == true;
-        if (include is null && scene.EntitiesNow.Length >= ChunkedFrom)
+        if (include is null && scene.EntitiesNow.Length >= chunkedFrom)
         {
             DrawChunked(scene, view, cameraSize, playing, sprites, reuse ? 0 : sprites.Count, overs, scratch, timer, sortByY, filter);
         }
@@ -643,223 +630,8 @@ public static partial class SceneRenderer
         spare.Clear();
     }
 
-    // Whether the entity draws in the world, and what it sorts by: its sprite when that's all it draws, or else its
-    // drawable components gathered into `drawables` in step order (and those that go over the world into `overs`). Its
-    // sprite's order is the entity's, or else that of its first drawable (by step) with one; with none it draws nothing
-    // in the world.
-    private static bool Describe(Entity entity, bool sortByY, List<IDrawable> drawables, List<IDrawable>? overs, out Drawn entry)
-    {
-        Vector3 position;
-        Matrix4x4 world;
-        if (entity.SoleSprite is { } sole)
-        {
-            world = entity.Transform.WorldMatrix;
-            position = world.Translation;
-            entry = new Drawn(entity, sole, 0, 0, IsLifted(entity), sole.Order, position.Z, sortByY ? FeetOf(sole, world) : 0);
-            return true;
-        }
-
-        drawables.Clear();
-        Sprite? firstSprite = null;
-        int? spriteOrder = null, ownOrder = null;
-        var orderStep = int.MaxValue;
-        foreach (var component in entity.ComponentList)
-        {
-            if ((component.Roles & ComponentRoles.Drawable) == 0)
-                continue;
-            var drawable = Unsafe.As<IDrawable>(component);
-            var step = drawable.DrawStep;
-            if (step >= DrawSteps.OverWorld)
-            {
-                overs?.Add(drawable);
-                continue;
-            }
-
-            // In step order, keeping the order they're attached within a step.
-            var at = drawables.Count;
-            while (at > 0 && drawables[at - 1].DrawStep > step)
-                at--;
-            drawables.Insert(at, drawable);
-
-            if ((component.Roles & ComponentRoles.Sprite) != 0 && firstSprite is null)
-                (firstSprite, spriteOrder) = (Unsafe.As<Sprite>(component), Unsafe.As<Sprite>(component).Order);
-            else if (step < orderStep && drawable.DrawOrder is { } own)
-                (ownOrder, orderStep) = (own, step);
-        }
-
-        if ((spriteOrder ?? ownOrder) is not { } entityOrder)
-        {
-            entry = default;
-            return false;
-        }
-
-        world = entity.Transform.WorldMatrix;
-        position = world.Translation;
-        var y = !sortByY ? 0 : firstSprite is not null ? FeetOf(firstSprite, world) : position.Y;
-        entry = new Drawn(entity, null, 0, 0, IsLifted(entity), entityOrder, position.Z, y);
-        return true;
-    }
-
-    // What a sprite sorts by when the camera sorts by Y: the bottom of its picture on the screen, where a character's feet
-    // are (or a tree's trunk meets the ground), so a tall sprite and a short one beside it sort by where they stand.
-    private static float FeetOf(Sprite sprite, in Matrix4x4 world)
-    {
-        var size = sprite.Size;
-        return world.M42 - (MathF.Abs(world.M12 * size.X) + MathF.Abs(world.M22 * size.Y)) / 2;
-    }
-
-    // Lifted ones last, then by Order, then Z, then (sorting by Y) higher up first, keeping hierarchy order among equals
-    // (the order they come in): empty when that's the order they're in. A big scene is often in order already, all on one
-    // layer, or nearly (a few things over or under its crowd): that's seen, and merged, in a look at each.
-    private static ReadOnlySpan<int> SortBackToFront(ReadOnlySpan<Drawn> entries, bool sortByY, StableSort keys)
-    {
-        switch (keys.TryMerge(entries, new BackToFront(), MaxStretches))
-        {
-            case 1:
-                return [];
-            case > 1:
-                return keys.Order;
-        }
-
-        keys.Begin(entries.Length);
-        var key = keys.Keys;
-        if (sortByY)
-        {
-            for (var i = 0; i < entries.Length; i++)
-                key[i] = ~StableSort.KeyOf(entries[i].Y);
-            keys.Apply();
-        }
-
-        for (var i = 0; i < entries.Length; i++)
-            key[i] = StableSort.KeyOf(entries[i].Z);
-        keys.Apply();
-        for (var i = 0; i < entries.Length; i++)
-            key[i] = StableSort.KeyOf(entries[i].Order);
-        keys.Apply();
-        for (var i = 0; i < entries.Length; i++)
-            key[i] = entries[i].Lifted ? 1u : 0u;
-        keys.Apply();
-        return keys.Order;
-    }
-
-    // Past this many stretches in order, the entries are sorted by key rather than merged.
-    private const int MaxStretches = 16;
-
-    private readonly struct BackToFront : IComparer<Drawn>
-    {
-        public int Compare(Drawn a, Drawn b) => SceneRenderer.Compare(a, b);
-    }
-
     // A run of the frame's draws: where it starts and how many.
     private readonly record struct Block(int From, int Count);
-
-    private static int Compare(in Drawn a, in Drawn b)
-    {
-        var c = a.Lifted.CompareTo(b.Lifted);
-        if (c == 0)
-            c = a.Order.CompareTo(b.Order);
-        if (c == 0)
-            c = a.Z.CompareTo(b.Z);
-        if (c == 0)
-            c = b.Y.CompareTo(a.Y);
-        return c;
-    }
-
-    /// <summary>
-    /// Drawable entities back to front: Order, then Z (higher is closer), then hierarchy order. With the camera's
-    /// <see cref="Camera.SortByY"/>, things lower down draw in front of things above them, before hierarchy order. An
-    /// entity drawn on top (a <see cref="Draggable"/> being held, and what's inside it) draws over everything else.
-    /// </summary>
-    public static IEnumerable<Entity> DrawOrder(Scene scene)
-    {
-        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
-        var drawables = new List<IDrawable>();
-        var entries = new List<Drawn>();
-        foreach (var entity in scene.Entities)
-        {
-            if ((entity.Roles & ComponentRoles.Drawable) != 0 && entity.IsActive && Describe(entity, sortByY, drawables, null, out var entry))
-                entries.Add(entry);
-        }
-
-        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
-        return order.IsEmpty ? entries.Select(d => d.Entity).ToList() : order.ToArray().Select(at => entries[at].Entity).ToList();
-    }
-
-    /// <summary>
-    /// Like <see cref="DrawOrder"/>, but with each part of what sorts in parts (<see cref="ISortsInParts"/>, when the
-    /// camera sorts by Y) in its own place among the rest, as the game draws them: the entity and the part (a tilemap's
-    /// row of tiles), or null for the whole entity. An entity drawn in parts comes first at its own place, for what else
-    /// it draws, then each of its parts.
-    /// </summary>
-    public static IReadOnlyList<(Entity Entity, int? Part)> DrawParts(Scene scene)
-    {
-        var sortByY = FindCamera(scene)?.GetComponent<Camera>()?.SortByY == true;
-        var drawables = new List<IDrawable>();
-        var entries = new List<Drawn>();
-        var partOf = new List<int?>();
-        foreach (var entity in scene.Entities)
-        {
-            if ((entity.Roles & ComponentRoles.Drawable) == 0 || !entity.IsActive || !Describe(entity, sortByY, drawables, null, out var entry))
-                continue;
-            entries.Add(entry);
-            partOf.Add(null);
-            if (!sortByY)
-                continue;
-            foreach (var component in entity.ComponentList)
-            {
-                if (component is not ISortsInParts parted)
-                    continue;
-                foreach (var (part, y) in parted.SortParts())
-                {
-                    entries.Add(entry with { Y = y });
-                    partOf.Add(part);
-                }
-            }
-        }
-
-        var order = SortBackToFront(CollectionsMarshal.AsSpan(entries), sortByY, new StableSort());
-        return order.IsEmpty
-            ? entries.Select((d, i) => (d.Entity, partOf[i])).ToList()
-            : order.ToArray().Select(at => (entries[at].Entity, partOf[at])).ToList();
-    }
-
-    /// <summary>
-    /// The draw order of an entity: its sprite's, or else that of its first drawable component (in
-    /// <see cref="IDrawable.DrawStep"/> order) with one; null if it draws nothing in the world.
-    /// </summary>
-    public static int? OrderOf(Entity entity)
-    {
-        int? order = null;
-        var orderStep = int.MaxValue;
-        if ((entity.Roles & ComponentRoles.Drawable) == 0)
-            return null;
-        foreach (var component in entity.ComponentList)
-        {
-            if (component is Sprite sprite)
-                return sprite.Order;
-            if (component is IDrawable drawable && drawable.DrawStep is var step and < DrawSteps.OverWorld && step < orderStep && drawable.DrawOrder is { } own)
-                (order, orderStep) = (own, step);
-        }
-
-        return order;
-    }
-
-    // Drawn over everything else: something it's in (or it) says so, like a card being dragged.
-    private static bool IsLifted(Entity entity)
-    {
-        for (var e = entity; e is not null; e = e.Parent)
-        {
-            if ((e.Roles & ComponentRoles.DrawEffect) == 0)
-                continue;
-            foreach (var component in e.ComponentList)
-            {
-                if (component is IDrawEffect { DrawsOnTop: true })
-                    return true;
-            }
-        }
-
-        return false;
-    }
 
     // An entity's draws, component by component. On a parallax layer (the entity or an ancestor) they shift with it, and
     // its sprite may repeat across the view; otherwise its and its ancestors' effects move them (a shake, a beat).
@@ -1023,116 +795,10 @@ public static partial class SceneRenderer
         return draws;
     }
 
-    // Pinned to the screen: a ScreenAnchor on the entity or any ancestor (HUDs, menus, dialogue boxes), or riding along
-    // inside the camera (a score that's the camera's child).
-    internal static bool IsOnScreen(Entity entity, Entity? camera)
-    {
-        if (entity == ScreenEntity)
-            return true;
-        for (var e = entity; e is not null; e = e.Parent)
-        {
-            if ((e.Roles & ComponentRoles.ScreenAnchor) != 0 || (e != entity && e == camera))
-                return true;
-        }
-
-        return false;
-    }
-
-    // ----- Lights -----
-
-    /// <summary>The lights in a scene that reach into the camera's view, with their flicker as it is now.</summary>
-    public static IReadOnlyList<LightDraw> Lights(Scene scene, float aspect)
-    {
-        var camera = FindCamera(scene);
-        var size = camera?.GetComponent<Camera>()?.Drawn(StepBlend.For(scene, camera)).Size ?? DefaultCameraSize;
-        var lights = new List<LightDraw>();
-        AddLights(scene, new Box(ViewCenter(camera), new Vector2(size * aspect, size)), lights, null);
-        return lights;
-    }
-
-    /// <summary>
-    /// Every light in the scene that gives off any light, as it is now (flicker included), with the shadows of those
-    /// that cast them, and then the light other components give off (see <see cref="ILightSource"/>).
-    /// </summary>
-    public static IEnumerable<LightDraw> LightDraws(Scene scene)
-    {
-        var lights = new List<LightDraw>();
-        AddLights(scene, null, lights, null);
-        return lights;
-    }
-
-    // Adds the lights reaching into `view` (or all of them) to `lights`, as LightDraws gives them. With `scratch`, the
-    // sides that block light are listed in its list and each light's shadows go in a list from it, so a dark scene's frame
-    // makes no garbage; the shadows' lists come back to it with LetGoOf.
-    private static void AddLights(Scene scene, Box? view, List<LightDraw> lights, Scratch? scratch)
-    {
-        List<ShadowEdge>? edges = null;
-        foreach (var light in scene.ActiveNow<Light>())
-        {
-            // A light that grows, dims or flickers does it between steps too.
-            var (center, radius, color, intensity, softness) = light.Drawn(StepBlend.For(scene, light.Entity));
-            if (!(radius > 0) || !(intensity > 0) || !Reaches(view, center, radius))
-                continue;
-            var draw = new LightDraw(center, radius, new Color(color.R * intensity, color.G * intensity, color.B * intensity), softness);
-            if (light.Shadows)
-            {
-                if (edges is null)
-                {
-                    edges = scratch?.Edges ?? [];
-                    edges.Clear();
-                    Shadows.AddEdges(scene, edges);
-                }
-
-                var casters = CastersList(scratch);
-                Shadows.AddCasters(CollectionsMarshal.AsSpan(edges), light, casters);
-                draw = draw with { Casters = casters };
-            }
-
-            lights.Add(draw);
-        }
-
-        // The scene's sides are kept no longer than they're needed: they hold on to the entities they belong to.
-        if (edges is not null && scratch is not null)
-            edges.Clear();
-
-        var spots = scratch?.Spots ?? [];
-        foreach (var source in scene.ActiveNow<ILightSource>())
-        {
-            spots.Clear();
-            source.AddLights(spots);
-            foreach (var spot in spots)
-            {
-                if (Reaches(view, spot.Center, spot.Radius))
-                    lights.Add(new LightDraw(spot.Center, spot.Radius, spot.Color, spot.Softness));
-            }
-        }
-
-        spots.Clear();
-
-        // A light's reach overlaps the view (or there's no view).
-        static bool Reaches(Box? view, Vector2 center, float radius)
-        {
-            if (view is not { } box)
-                return true;
-            var reach = box.HalfSize + new Vector2(radius);
-            return MathF.Abs(center.X - box.Center.X) <= reach.X && MathF.Abs(center.Y - box.Center.Y) <= reach.Y;
-        }
-    }
-
-    // A list for a light's shadows: one kept from a frame done with, or a new one.
-    private static List<ShadowEdge> CastersList(Scratch? scratch)
-    {
-        if (scratch?.Casters is not { Count: > 0 } pool)
-            return [];
-        var casters = pool[^1];
-        pool.RemoveAt(pool.Count - 1);
-        return casters;
-    }
-
     // Empties a frame's lights that it's done with, keeping their shadows' lists (emptied) to use again.
     private static void LetGoOf(List<LightDraw> lights)
     {
-        var pool = (t_scratch ??= new Scratch()).Casters;
+        var pool = (t_scratch ??= new Scratch()).Lights.Casters;
         foreach (var light in lights)
         {
             if (light.Casters is List<ShadowEdge> casters)
@@ -1190,18 +856,6 @@ public static partial class SceneRenderer
         return new Vector2(position.X, position.Y);
     }
 
-    private static Vector2 ViewCenter(Entity? camera)
-    {
-        if (camera is null)
-            return Vector2.Zero;
-        var position = camera.Transform.WorldPosition;
-        return new Vector2(position.X, position.Y) + ShakeDrawn(camera);
-    }
-
-    // The camera's shake in the frame being drawn: between steps, like its moves.
-    private static Vector2 ShakeDrawn(Entity camera) =>
-        camera.GetComponent<Camera>()?.Drawn(StepBlend.For(camera.Scene, camera)).Shake ?? Vector2.Zero;
-
     /// <summary>Quads for debug shapes. Lines are about two pixels thick on a 720-pixel-high view, whatever the zoom.</summary>
     public static IEnumerable<SpriteDraw> DebugDraws(IEnumerable<Runtime.DebugShape> shapes, float cameraSize)
     {
@@ -1225,55 +879,4 @@ public static partial class SceneRenderer
         }
     }
 
-    /// <summary>
-    /// The scene's main camera, which fills the screen: the first active camera without a <see cref="Viewport"/> (a
-    /// viewport's camera draws into its own part of the screen), or with every camera in one, the first. While a minigame
-    /// has the screen (see <see cref="MinigameRoot.Shown"/>), the first such camera in it.
-    /// </summary>
-    public static Entity? FindCamera(Scene scene)
-    {
-        var cameras = scene.ActiveNow<Camera>();
-        if (cameras.Count == 0)
-            return null;
-        if (MinigameRoot.Shown(scene) is { } shown && FirstCamera(cameras, shown) is { } inside)
-            return inside;
-        return FirstCamera(cameras, null);
-
-        static Entity? FirstCamera(ComponentList<Camera> cameras, Entity? within)
-        {
-            Entity? first = null;
-            foreach (var camera in cameras)
-            {
-                var entity = camera.Entity!;
-                if (within is not null && !entity.IsSelfOrDescendantOf(within))
-                    continue;
-                if ((entity.Roles & ComponentRoles.Viewport) == 0)
-                    return entity;
-                first ??= entity;
-            }
-
-            return first;
-        }
-    }
-
-    /// <summary>
-    /// Orthographic projection of the camera's view. <paramref name="size"/> is half the visible height;
-    /// the camera's position, rotation and shake apply, its scale doesn't.
-    /// </summary>
-    public static Matrix4x4 ViewProjection(Entity? camera, float size, float aspect)
-    {
-        var view = Matrix4x4.Identity;
-        if (camera is not null)
-        {
-            var transform = camera.Transform;
-            var shake = ShakeDrawn(camera);
-            var world = Matrix4x4.CreateFromQuaternion(transform.RotationQuaternionDrawn) *
-                        Matrix4x4.CreateTranslation(transform.WorldPosition + new Vector3(shake, 0));
-            Matrix4x4.Invert(world, out view);
-        }
-
-        var height = size * 2;
-        var projection = Matrix4x4.CreateOrthographic(height * aspect, height, -1000f, 1000f);
-        return view * projection;
-    }
 }

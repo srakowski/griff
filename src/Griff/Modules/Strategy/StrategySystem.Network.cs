@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 

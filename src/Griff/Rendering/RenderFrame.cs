@@ -1,26 +1,8 @@
 using System.Numerics;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Rendering;
-
-/// <summary>A light to draw: its middle in the world, how far it reaches, its color times its brightness, and its softness.</summary>
-public readonly record struct LightDraw(Vector2 Center, float Radius, Color Color, float Softness)
-{
-    /// <summary>
-    /// For a light with <see cref="Scenes.Light.Shadows"/>: the sides that cast its shadows (see
-    /// <see cref="Rendering.Shadows.CastersFor"/>). Empty for a light without, or with nothing in its way.
-    /// </summary>
-    public IReadOnlyList<ShadowEdge> Casters { get; init; } = [];
-
-    /// <summary>How much light it puts on <paramref name="point"/>, per channel.</summary>
-    public Vector3 At(Vector2 point)
-    {
-        if (Casters.Count > 0 && !Shadows.Reaches(Casters, Center, point))
-            return Vector3.Zero;
-        var amount = Scenes.Light.Falloff(Vector2.Distance(point, Center), Radius, Softness);
-        return new Vector3(Color.R, Color.G, Color.B) * amount;
-    }
-}
 
 /// <summary>
 /// Everything a renderer needs for one frame, in draw order (back to front). A running game's frames are built into the
@@ -124,11 +106,7 @@ public sealed class RenderFrame
     {
         if (!IsDark)
             return Color.White;
-        var sum = new Vector3(Ambient.R, Ambient.G, Ambient.B);
-        foreach (var light in Lights)
-            sum += light.At(point);
-        sum = Vector3.Clamp(sum, Vector3.Zero, Vector3.One);
-        return new Color(sum.X, sum.Y, sum.Z);
+        return LightDraw.Total(Ambient, Lights, point);
     }
 }
 

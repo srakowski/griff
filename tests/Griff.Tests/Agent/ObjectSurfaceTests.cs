@@ -72,6 +72,8 @@ public class ObjectSurfaceTests
             await Task.Yield();
             return n * 2;
         }
+
+        public async Task WaitAsync() => await Task.Yield();
     }
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement;
@@ -166,6 +168,8 @@ public class ObjectSurfaceTests
         Assert.Equal("1,2 #000000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("[1, 2]")))!.GetValue<string>());
         Assert.Equal("3,4 #FF0000", (await ObjectSurface.InvokeAsync(maker, "Paint", Json("{\"x\": 3, \"y\": 4, \"color\": \"#FF0000\"}")))!.GetValue<string>());
         Assert.Equal(10, (await ObjectSurface.InvokeAsync(maker, "CountLaterAsync", Json("[5]")))!.GetValue<int>());
+        // A plain Task has no result, whatever runs it underneath.
+        Assert.Equal("done", (await ObjectSurface.InvokeAsync(maker, "WaitAsync", Json("[]")))!.GetValue<string>());
         await Assert.ThrowsAsync<AgentException>(() => ObjectSurface.InvokeAsync(maker, "Paint", Json("[\"a\", 2]")));
 
         // A tuple comes back as its items in a list.

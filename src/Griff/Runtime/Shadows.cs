@@ -1,9 +1,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Griff.Runtime;
 using Griff.Scenes;
 
-namespace Griff.Rendering;
+namespace Griff.Runtime;
 
 /// <summary>
 /// One side of something that blocks light, in the world. Its outside is on the left going from <see cref="A"/> to

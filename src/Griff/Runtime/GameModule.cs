@@ -58,6 +58,17 @@ public abstract class GameModule
     /// </summary>
     protected internal abstract void AddTo(GameSetup game);
 
+    /// <summary>
+    /// Adds the module's part to a scene a host plays out of sight before a game starts, so the code a game of it runs is
+    /// ready when the game begins (the web player's warm-up, whose interpreter prepares each method the first time it's
+    /// called): things of the module's that a game's first moments set going. <paramref name="turning"/> is true for a game
+    /// with bodies that turn, whose first collapse the warm-up plays (Griff adds a bin of tumbling shapes for it). Most
+    /// modules add nothing.
+    /// </summary>
+    public virtual void AddToWarmUp(Scene scene, bool turning)
+    {
+    }
+
     public override string ToString() => Name;
 }
 

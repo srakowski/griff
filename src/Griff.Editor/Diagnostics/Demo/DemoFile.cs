@@ -1605,10 +1605,10 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
     {
         var game = RunningGame;
         var rect = DemoUi.ScreenRect(CurrentSurface);
-        var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene);
-        var size = camera?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Rendering.SceneRenderer.DefaultCameraSize;
+        var camera = Griff.Runtime.Views.FindCamera(game.Scene);
+        var size = camera?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Runtime.Views.DefaultCameraSize;
         var aspect = rect.Height > 0 ? (float)(rect.Width / rect.Height) : 1;
-        var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(world, 0, 1), Griff.Rendering.SceneRenderer.ViewProjection(camera, size, aspect));
+        var clip = System.Numerics.Vector4.Transform(new System.Numerics.Vector4(world, 0, 1), Griff.Runtime.Views.ViewProjection(camera, size, aspect));
         return new Point(rect.X + (clip.X / clip.W + 1) / 2 * rect.Width, rect.Y + (1 - clip.Y / clip.W) / 2 * rect.Height);
     }
 
@@ -1657,7 +1657,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         var name = (plus >= 0 ? text[..plus] : text).Trim();
         var offset = plus >= 0 ? Vector(text[(plus + 1)..]) : System.Numerics.Vector2.Zero;
         var game = RunningGame;
-        var camera = Griff.Rendering.SceneRenderer.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
+        var camera = Griff.Runtime.Views.FindCamera(game.Scene)?.Transform.WorldPosition ?? System.Numerics.Vector3.Zero;
         // In a network game, a player's name ("Player 1") is their character.
         var entity = game.Scene.Entities.Where(e => e.Name == name && e.IsActive)
             .OrderBy(e => System.Numerics.Vector3.Distance(e.Transform.WorldPosition, camera)).FirstOrDefault()
@@ -1743,7 +1743,7 @@ internal sealed class DemoFile(string path, DemoUi ui, IWorkspace workspace, ISe
         if (rects.Count == 0)
             throw new InvalidOperationException($"The sandbox HUD isn't showing its {part}.");
         // A hundredth of the view's height, the HUD's unit.
-        var margin = (float)(Griff.Rendering.SceneRenderer.FindCamera(RunningGame.Scene)?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Rendering.SceneRenderer.DefaultCameraSize) * 2 / 100;
+        var margin = (float)(Griff.Runtime.Views.FindCamera(RunningGame.Scene)?.GetComponent<Griff.Scenes.Camera>()?.Size ?? Griff.Runtime.Views.DefaultCameraSize) * 2 / 100;
         var topLeft = new System.Numerics.Vector2(rects.Min(r => r.X) - margin, rects.Max(r => r.Top) + margin);
         var bottomRight = new System.Numerics.Vector2(rects.Max(r => r.Right) + margin, rects.Min(r => r.Y) - margin);
         return new Rect(GameScreenPoint(topLeft), GameScreenPoint(bottomRight));

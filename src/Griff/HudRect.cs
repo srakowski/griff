@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Griff.Runtime;
+namespace Griff;
 
 /// <summary>A rectangle on a HUD (a strategy game's, a sandbox's), in world units: a HUD is laid out over the camera's view.</summary>
 public readonly record struct HudRect(float X, float Y, float Width, float Height)

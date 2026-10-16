@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
-using static Griff.Rendering.OverlayShapes;
+using static Griff.Runtime.OverlayShapes;
 
 namespace Griff.Modules.Contraptions;
 

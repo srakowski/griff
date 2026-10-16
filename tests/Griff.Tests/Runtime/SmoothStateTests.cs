@@ -430,7 +430,7 @@ public sealed class SmoothStateTests
 
         protected override void LayOutHud()
         {
-            var camera = SceneRenderer.FindCamera(Game.Scene)!;
+            var camera = Views.FindCamera(Game.Scene)!;
             _center = new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
             _half = camera.GetComponent<Camera>()!.Size;
         }

@@ -98,7 +98,7 @@ public class AtmosphereEffectsTests
 
         Assert.Equal(1, LightAt(new Vector2(3, 0)));
         Assert.Equal(1, LightAt(new Vector2(3, -10)));
-        Assert.Empty(SceneRenderer.LightDraws(_scene).Single(l => l.Center == torch.WorldCenter).Casters);
+        Assert.Empty(Views.LightDraws(_scene).Single(l => l.Center == torch.WorldCenter).Casters);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.IO;
 using System.Numerics;
 using Griff.Graphics;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Editor.Tests;
@@ -25,7 +26,7 @@ public sealed class OpenGLRendererTests
         var pixels = Draw(scene);
 
         Assert.Equal((255, 0, 0), At(pixels, Vector2.Zero));
-        var background = SceneRenderer.DefaultBackground;
+        var background = Views.DefaultBackground;
         Assert.Equal(((int)MathF.Round(background.R * 255), (int)MathF.Round(background.G * 255), (int)MathF.Round(background.B * 255)), At(pixels, new Vector2(-7, 4)));
     }
 

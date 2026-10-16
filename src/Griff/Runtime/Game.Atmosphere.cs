@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -17,18 +16,12 @@ public sealed partial class Game
     /// </summary>
     public float LightAt(Vector2 point)
     {
-        var camera = SceneRenderer.FindCamera(Scene)?.GetComponent<Camera>();
+        var camera = Views.FindCamera(Scene)?.GetComponent<Camera>();
         if (camera is not { IsDark: true })
             return 1;
-        var frame = new RenderFrame
-        {
-            Background = Color.Black,
-            ViewProjection = Matrix4x4.Identity,
-            Sprites = [],
-            Ambient = camera.CurrentAmbient,
-            Lights = SceneRenderer.LightDraws(Scene).ToList(),
-        };
-        var light = frame.LightAt(point);
+        // As the frame works it out: lights count only while the ambient light is less than full.
+        var ambient = camera.CurrentAmbient;
+        var light = ambient.R < 1 || ambient.G < 1 || ambient.B < 1 ? LightDraw.Total(ambient, Views.LightDraws(Scene).ToList(), point) : Color.White;
         return Math.Max(light.R, Math.Max(light.G, light.B));
     }
 
@@ -184,8 +177,8 @@ public sealed partial class Game
     {
         if (EyesHearing(position, range) is { } heard)
             return heard;
-        var camera = SceneRenderer.FindCamera(Scene);
-        var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+        var camera = Views.FindCamera(Scene);
+        var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
         var half = new Vector2(size * (ViewAspect > 0 ? ViewAspect : 1), size);
         var listener = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
         var offset = position - listener;

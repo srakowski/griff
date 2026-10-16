@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -450,7 +449,7 @@ internal sealed class SlingshotSystem : GameSystem
             return;
         if (FlyingShot(slingshot) is { } shot)
         {
-            if (SceneRenderer.FindCamera(Scene)?.GetComponent<Follow>() is { } follow)
+            if (Views.FindCamera(Scene)?.GetComponent<Follow>() is { } follow)
             {
                 if (follow.TargetEntity != shot)
                     follow.TargetEntity = shot;

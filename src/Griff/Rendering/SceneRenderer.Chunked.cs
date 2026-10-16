@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Griff.Runtime;
 using Griff.Scenes;
+using static Griff.Runtime.Views;
 
 namespace Griff.Rendering;
 
@@ -13,9 +14,10 @@ namespace Griff.Rendering;
 // draws straight to where they go. The frame is the one built on one thread, draw for draw.
 public static partial class SceneRenderer
 {
-    // Entities a chunk takes, and the fewest a scene is split into chunks from (two chunks' worth).
+    // Entities a chunk takes, and the fewest a scene is split into chunks from (two chunks' worth) unless its game says
+    // otherwise (see Game.ChunkedFrom).
     internal const int ChunkSize = 1024;
-    internal static int ChunkedFrom { get; set; } = 2 * ChunkSize;
+    internal const int DefaultChunkedFrom = 2 * ChunkSize;
 
     // Past this many stretches a run (and 64 in all), the runs are sorted as one by key rather than merged: they're mixed
     // through each other (sorting by Y, say), and merging would go an entry or two at a time.

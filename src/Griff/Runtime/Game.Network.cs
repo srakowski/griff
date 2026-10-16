@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -250,8 +249,8 @@ public sealed partial class Game
     {
         if (_acting?.Input is { HasView: true } input)
             return input.View;
-        var camera = SceneRenderer.FindCamera(Scene);
-        var size = camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+        var camera = Views.FindCamera(Scene);
+        var size = camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
         var center = camera is null ? Vector2.Zero : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y);
         return (center, size, ViewAspect);
     }

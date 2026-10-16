@@ -206,7 +206,7 @@ public class IsometricTilemapTests
         map.SortByY = true;
         var player = AddSprite(scene, "Player", map.CellCenter(1, 0));
 
-        var parts = SceneRenderer.DrawParts(scene).Where(p => p.Entity != scene.Entities[0]).ToList();
+        var parts = Views.DrawParts(scene).Where(p => p.Entity != scene.Entities[0]).ToList();
 
         Assert.Equal(new (Entity, int?)[] { (map.Entity!, null), (map.Entity!, 0), (map.Entity!, 1), (player, null), (map.Entity!, 2) }, parts);
     }

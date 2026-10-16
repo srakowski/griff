@@ -1,12 +1,12 @@
 using Griff.Scenes;
 
-namespace Griff.Rendering;
+namespace Griff.Runtime;
 
 /// <summary>
 /// What one view of a running game draws, in a scene with viewports (see <see cref="Viewport"/>): what rides inside another
 /// view's camera is that view's own HUD, and a viewport's view leaves out the main view's HUD (anything with a
 /// <see cref="ScreenAnchor"/>, or inside the main camera). Without viewports (the default) every view draws everything, and
-/// what's pinned to the screen is what <see cref="SceneRenderer.IsOnScreen"/> says. While a minigame has the screen (see
+/// what's pinned to the screen is what <see cref="Views.IsOnScreen"/> says. While a minigame has the screen (see
 /// <see cref="MinigameRoot.Shown"/>), only what's in it is drawn.
 /// </summary>
 internal readonly struct ViewFilter(Entity? camera, Entity? main, Viewport? viewport, bool split, Entity? only = null)
@@ -23,7 +23,7 @@ internal readonly struct ViewFilter(Entity? camera, Entity? main, Viewport? view
     /// <summary>True if the view draws <paramref name="entity"/> at all.</summary>
     public bool Shows(Entity entity)
     {
-        if (only is not null && entity != SceneRenderer.ScreenEntity && !entity.IsSelfOrDescendantOf(only))
+        if (only is not null && entity != Views.ScreenEntity && !entity.IsSelfOrDescendantOf(only))
             return false;
         if (!split)
             return true;
@@ -53,8 +53,8 @@ internal readonly struct ViewFilter(Entity? camera, Entity? main, Viewport? view
     public bool IsOnScreen(Entity entity, Entity? fallback)
     {
         if (viewport is null)
-            return SceneRenderer.IsOnScreen(entity, camera ?? fallback);
-        if (entity == SceneRenderer.ScreenEntity)
+            return Views.IsOnScreen(entity, camera ?? fallback);
+        if (entity == Views.ScreenEntity)
             return true;
         for (var e = entity.Parent; e is not null; e = e.Parent)
         {

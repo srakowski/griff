@@ -3,7 +3,6 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json.Nodes;
 using Griff.Art;
-using Griff.Rendering;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 
@@ -75,7 +74,7 @@ public sealed partial class Game
 
     /// <summary>
     /// True while a game just saved waits for its screenshot: the host that draws the game then draws it once more without
-    /// the panels open over it (<see cref="SceneRenderer.BuildPicture"/>) and hands the pixels to <see cref="TakePicture"/>.
+    /// the panels open over it (<see cref="Rendering.SceneRenderer.BuildPicture"/>) and hands the pixels to <see cref="TakePicture"/>.
     /// </summary>
     public bool PictureWanted => _pictureFor is not null;
 

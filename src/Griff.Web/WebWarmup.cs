@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using Griff.Input;
-using Griff.Modules.PhysicsGames;
 using Griff.Projects;
 using Griff.Rendering;
 using Griff.Runtime;
@@ -18,8 +17,9 @@ namespace Griff.Web;
 /// once a thousand steps in (a frame of 50 to 110 ms, about 17 seconds into every game), and the first pile to collapse
 /// prepares the physics of bodies that turn as it goes (frames of 20 to 45 ms). So a scene of its own is played first,
 /// out of sight, for <see cref="Steps"/> steps, each built into a picture (not drawn); in a game with bodies that turn
-/// (<see cref="HasTurningBodies"/>), it starts with crates, balls and polygons tumbling into a bin and a tower of posts
-/// and planks that break, knocked down by a ball. It adds 0.3 to 0.5 s to loading, 1 to 1.5 s with the pile.
+/// (<see cref="HasTurningBodies"/>), it starts with crates, balls and polygons tumbling into a bin, and each module adds
+/// its own part (<see cref="GameModule.AddToWarmUp"/>: Physics Games' tower of posts and planks that break, knocked down
+/// by a ball). It adds 0.3 to 0.5 s to loading, 1 to 1.5 s with the pile.
 /// </summary>
 public static partial class WebWarmup
 {
@@ -74,7 +74,10 @@ public static partial class WebWarmup
         Milliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
     }
 
-    /// <summary>The warm-up's scene: a floor, a camera, a box that falls onto it (as a platformer's player does) and, if <paramref name="turning"/>, the pile.</summary>
+    /// <summary>
+    /// The warm-up's scene: a floor, a camera, a box that falls onto it (as a platformer's player does) and, if
+    /// <paramref name="turning"/>, the pile; then what each module adds.
+    /// </summary>
     internal static Scene Scene(bool turning)
     {
         var scene = new Scene();
@@ -84,10 +87,16 @@ public static partial class WebWarmup
         faller.AddComponent<Sprite>().Size = Vector2.One;
         faller.AddComponent<BoxCollider>().Size = Vector2.One;
         faller.AddComponent<Body>();
-        if (!turning)
-            return scene;
+        if (turning)
+            AddPile(scene);
+        foreach (var module in GameModule.All)
+            module.AddToWarmUp(scene, turning);
+        return scene;
+    }
 
-        // A bin of crates, balls and polygons (a triangle, a hexagon and an L, which is two pieces), dropped in a little off true.
+    // A bin of crates, balls and polygons (a triangle, a hexagon and an L, which is two pieces), dropped in a little off true.
+    private static void AddPile(Scene scene)
+    {
         foreach (var x in new[] { -15.5f, -4.5f })
             Add(scene, "Side", new Vector2(x, 3)).AddComponent<BoxCollider>().Size = new Vector2(1, 6);
         for (var i = 0; i < 8; i++)
@@ -113,32 +122,6 @@ public static partial class WebWarmup
             entity.AddComponent<Sprite>().Size = new Vector2(0.9f, 0.9f);
             entity.AddComponent<Body>().Rotates = true;
         }
-
-        // A tower of posts and planks, two storeys, asleep, that break, and a heavy ball thrown through it.
-        for (var i = 0; i < 6; i++)
-        {
-            var (storey, part) = (i / 3, i % 3);
-            var (at, size) = part switch
-            {
-                0 => (new Vector2(-1.1f, storey * 2.35f + 1), new Vector2(0.35f, 2)),
-                1 => (new Vector2(1.1f, storey * 2.35f + 1), new Vector2(0.35f, 2)),
-                _ => (new Vector2(0, storey * 2.35f + 2.175f), new Vector2(3, 0.35f)),
-            };
-            var entity = Add(scene, part == 2 ? "Plank" : "Post", at);
-            entity.AddComponent<Sprite>().Size = size;
-            entity.AddComponent<BoxCollider>().Size = size;
-            var body = entity.AddComponent<Body>();
-            (body.Rotates, body.Asleep, body.Mass) = (true, true, size.X * size.Y);
-            var piece = entity.AddComponent<Breakable>();
-            (piece.Strength, piece.MinHit) = (6, 1.5f);
-        }
-
-        var ball = Add(scene, "Ball", new Vector2(-3, 2));
-        ball.AddComponent<CircleCollider>().Radius = 0.6f;
-        ball.AddComponent<Sprite>().Size = new Vector2(1.2f, 1.2f);
-        var thrown = ball.AddComponent<Body>();
-        (thrown.Rotates, thrown.Mass, thrown.Velocity) = (true, 40, new Vector2(30, 2));
-        return scene;
     }
 
     private static Entity Add(Scene scene, string name, Vector2 at)

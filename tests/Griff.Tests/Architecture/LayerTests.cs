@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -5,21 +6,35 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Griff.Tests.Architecture;
 
 /// <summary>
-/// Guards the core's layers: Scenes is data (entities, components, serialization), Runtime simulates it and
-/// Rendering draws it, so nothing in Griff.Scenes may use Griff.Runtime or Griff.Rendering. What both sides need lives
-/// below them, in Griff (Color, Box, Ease, Rand) and Griff.Input (Key), and a component that needs the game gets an
-/// IGameContext.
+/// Guards the core's layers: Scenes is data (entities, components, serialization), Runtime simulates it and Rendering
+/// draws it, so nothing in Griff.Scenes may use Griff.Runtime or Griff.Rendering, and nothing in Griff.Runtime (or a
+/// module) may use Griff.Rendering. What both sides need lives below them, in Griff (Color, Box, Ease, Rand) and
+/// Griff.Input (Key, the built-in actions); a component that needs the game gets an IGameContext; and what the runtime
+/// asks of a view (the main camera, its size, the view's projection, what's drawn on top) it asks Griff.Runtime.Views,
+/// which the renderer reads too. A use counts however far round it goes: every type a type uses is followed through the
+/// layers, so a Scenes type using an Editing type that uses the Runtime uses the Runtime.
 /// </summary>
 public sealed class LayerTests
 {
     [Fact]
     public void Scenes_DoesNotUseRuntimeOrRendering()
     {
-        var uses = ScenesUses().Distinct().Order().ToList();
+        var uses = Graph().Reaching(IsScenes, used => InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering"));
 
         Assert.True(uses.Count == 0,
-            "Griff.Scenes is data and mustn't use Griff.Runtime or Griff.Rendering (pass what a component needs in, " +
-            "or move the code up a layer):\n" + string.Join("\n", uses));
+            "Griff.Scenes is data and mustn't use Griff.Runtime or Griff.Rendering, by way of another namespace either (pass " +
+            "what a component needs in, or move the code up a layer):\n" + string.Join("\n", uses));
+    }
+
+    // The runtime runs a game without knowing how it's drawn: the renderer reads the game, not the other way round.
+    [Fact]
+    public void Runtime_DoesNotUseRendering()
+    {
+        var uses = Graph().Reaching(t => InLayer(t, "Griff.Runtime") || InLayer(t, "Griff.Modules"), used => InLayer(used, "Griff.Rendering"));
+
+        Assert.True(uses.Count == 0,
+            "Griff.Runtime and the modules mustn't use Griff.Rendering, by way of another namespace either (ask " +
+            "Griff.Runtime.Views about the view, or let the renderer read the game):\n" + string.Join("\n", uses));
     }
 
     // A module keeps the same layers: the files its components are declared in (with the types that go with them, such
@@ -27,31 +42,44 @@ public sealed class LayerTests
     [Fact]
     public void ModuleComponents_DoNotUseRuntimeOrRendering()
     {
-        var (compilation, trees) = Core();
-        var component = compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
-        var system = compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
-        var uses = new List<string>();
-        foreach (var tree in trees.Where(t => t.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
-                     .Any(n => n.Name.ToString().StartsWith("Griff.Modules.", StringComparison.Ordinal))))
-        {
-            var model = compilation.GetSemanticModel(tree);
-            var types = tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => model.GetDeclaredSymbol(d)).OfType<INamedTypeSymbol>().ToList();
-            if (!types.Any(t => DerivesFrom(t, component)))
-                continue;
-            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
-            {
-                if (name.Ancestors().OfType<BaseTypeDeclarationSyntax>().LastOrDefault() is not { } declaration || model.GetDeclaredSymbol(declaration) is not { } user)
-                    continue;
-                if (Used(model.GetSymbolInfo(name).Symbol) is { } used &&
-                    (InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering") || DerivesFrom(used, system)))
-                    uses.Add($"{Name(user)} -> {Name(used)}");
-            }
-        }
+        var graph = Graph();
+        var component = graph.Compilation.GetTypeByMetadataName("Griff.Scenes.Component")!;
+        var system = graph.Compilation.GetTypeByMetadataName("Griff.Runtime.GameSystem")!;
+        var data = graph.Trees.Where(t => t.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
+                .Any(n => n.Name.ToString().StartsWith("Griff.Modules.", StringComparison.Ordinal)))
+            .Select(graph.DeclaredIn)
+            .Where(types => types.Any(t => DerivesFrom(t, component)))
+            .SelectMany(types => types)
+            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var uses = graph.Reaching(data.Contains,
+            used => InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering") || DerivesFrom(used, system));
 
         Assert.True(uses.Count == 0,
-            "A module's components are data and mustn't use Griff.Runtime, Griff.Rendering or its systems (move the code to " +
-            "its system):\n" + string.Join("\n", uses.Distinct().Order()));
+            "A module's components are data and mustn't use Griff.Runtime, Griff.Rendering or its systems, by way of another " +
+            "namespace either (move the code to its system):\n" + string.Join("\n", uses));
     }
+
+    // The rules see through a detour: a type reaching a layer by way of another namespace is caught, however it names it.
+    [Fact]
+    public void Graph_FollowsUsesThroughOtherNamespaces()
+    {
+        var tree = CSharpSyntaxTree.ParseText("""
+            namespace Griff.Scenes { public sealed class Data { public Griff.Editing.Middle? Through; } }
+            namespace Griff.Editing
+            {
+                using Griff.Runtime;
+                public sealed class Middle { public void Run() => Simulation.Step(); }
+            }
+            namespace Griff.Runtime { public static class Simulation { public static void Step() { } } }
+            namespace Griff.Scenes { public sealed class Alone { public int Count; } }
+            """);
+        var graph = TypeGraph.Of(CSharpCompilation.Create("Detour", [tree], PlatformReferences()), [tree]);
+
+        Assert.Equal(["Griff.Scenes.Data -> Griff.Editing.Middle -> Griff.Runtime.Simulation"],
+            graph.Reaching(IsScenes, used => InLayer(used, "Griff.Runtime")));
+    }
+
+    private static bool IsScenes(INamedTypeSymbol type) => InLayer(type, "Griff.Scenes");
 
     private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
     {
@@ -64,21 +92,120 @@ public sealed class LayerTests
         return false;
     }
 
-    // Binds the core's source and finds every Runtime or Rendering symbol named inside a Griff.Scenes type.
-    private static IEnumerable<string> ScenesUses()
+    /// <summary>Every type the core declares and the types each uses, by any name in it: for tests about what reaches what.</summary>
+    internal static TypeGraph Graph() => GraphSource.Value;
+
+    private static readonly Lazy<TypeGraph> GraphSource = new(() => TypeGraph.Of(Core().Compilation, Core().Trees));
+
+    /// <summary>
+    /// The types declared in some source and the source types each one names (a nested type counts as the type it's in),
+    /// so what a type uses can be followed as far as it goes.
+    /// </summary>
+    internal sealed class TypeGraph
     {
-        var (compilation, trees) = Core();
-        foreach (var tree in trees.Where(DeclaresScenes))
+        private readonly Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>> _uses;
+        private readonly Dictionary<SyntaxTree, List<INamedTypeSymbol>> _declared;
+
+        private TypeGraph(CSharpCompilation compilation, IReadOnlyList<SyntaxTree> trees,
+            Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>> uses, Dictionary<SyntaxTree, List<INamedTypeSymbol>> declared)
         {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
+            (Compilation, Trees, _uses, _declared) = (compilation, trees, uses, declared);
+        }
+
+        public CSharpCompilation Compilation { get; }
+
+        public IReadOnlyList<SyntaxTree> Trees { get; }
+
+        /// <summary>The types declared (outermost) in <paramref name="tree"/>.</summary>
+        public IReadOnlyList<INamedTypeSymbol> DeclaredIn(SyntaxTree tree) => _declared.TryGetValue(tree, out var types) ? types : [];
+
+        public static TypeGraph Of(CSharpCompilation compilation, IReadOnlyList<SyntaxTree> trees)
+        {
+            var found = new ConcurrentBag<(SyntaxTree Tree, List<INamedTypeSymbol> Declared, List<(INamedTypeSymbol User, INamedTypeSymbol Used)> Uses)>();
+            Parallel.ForEach(trees, tree =>
             {
-                if (name.Ancestors().OfType<BaseTypeDeclarationSyntax>().LastOrDefault() is not { } declaration ||
-                    model.GetDeclaredSymbol(declaration) is not { } user || !InLayer(user, "Griff.Scenes"))
-                    continue;
-                if (Used(model.GetSymbolInfo(name).Symbol) is { } used && (InLayer(used, "Griff.Runtime") || InLayer(used, "Griff.Rendering")))
-                    yield return $"{Name(user)} -> {Name(used)}";
+                var model = compilation.GetSemanticModel(tree);
+                var root = tree.GetRoot();
+                var declared = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+                    .Where(d => !d.Ancestors().OfType<BaseTypeDeclarationSyntax>().Any())
+                    .Select(d => model.GetDeclaredSymbol(d)).OfType<INamedTypeSymbol>().ToList();
+                var uses = new List<(INamedTypeSymbol, INamedTypeSymbol)>();
+                foreach (var name in root.DescendantNodes().OfType<SimpleNameSyntax>())
+                {
+                    if (name.Ancestors().OfType<BaseTypeDeclarationSyntax>().LastOrDefault() is not { } declaration ||
+                        model.GetDeclaredSymbol(declaration) is not { } user || Used(model.GetSymbolInfo(name).Symbol) is not { } used ||
+                        !used.Locations.Any(l => l.IsInSource))
+                        continue;
+                    uses.Add((user, Outermost(used)));
+                }
+
+                found.Add((tree, declared, uses));
+            });
+
+            var graph = new Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+            var byTree = new Dictionary<SyntaxTree, List<INamedTypeSymbol>>();
+            foreach (var (tree, declared, uses) in found)
+            {
+                byTree[tree] = declared;
+                foreach (var type in declared)
+                    graph.TryAdd(type, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+                foreach (var (user, used) in uses)
+                {
+                    if (!graph.TryGetValue(user, out var set))
+                        graph[user] = set = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+                    if (!SymbolEqualityComparer.Default.Equals(user, used))
+                        set.Add(used);
+                }
             }
+
+            return new TypeGraph(compilation, trees, graph, byTree);
+        }
+
+        /// <summary>
+        /// Each way a type <paramref name="from"/> takes reaches one <paramref name="to"/> takes, following uses through
+        /// every other type on the way: "A -> B -> C", the shortest way from each such type to each it reaches.
+        /// </summary>
+        public List<string> Reaching(Func<INamedTypeSymbol, bool> from, Func<INamedTypeSymbol, bool> to)
+        {
+            var ways = new List<string>();
+            foreach (var start in _uses.Keys.Where(from))
+            {
+                var cameFrom = new Dictionary<INamedTypeSymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
+                var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default) { start };
+                var queue = new Queue<INamedTypeSymbol>([start]);
+                while (queue.TryDequeue(out var type))
+                {
+                    if (!_uses.TryGetValue(type, out var used))
+                        continue;
+                    foreach (var next in used)
+                    {
+                        if (!seen.Add(next))
+                            continue;
+                        cameFrom[next] = type;
+                        if (!to(next))
+                        {
+                            queue.Enqueue(next);
+                            continue;
+                        }
+
+                        var way = new List<string> { Name(next) };
+                        for (var at = type; !SymbolEqualityComparer.Default.Equals(at, start); at = cameFrom[at])
+                            way.Add(Name(at));
+                        way.Add(Name(start));
+                        way.Reverse();
+                        ways.Add(string.Join(" -> ", way));
+                    }
+                }
+            }
+
+            return [.. ways.Distinct().Order()];
+        }
+
+        private static INamedTypeSymbol Outermost(INamedTypeSymbol type)
+        {
+            while (type.ContainingType is { } outer)
+                type = outer;
+            return type.OriginalDefinition;
         }
     }
 
@@ -89,12 +216,7 @@ public sealed class LayerTests
 
     private static (CSharpCompilation Compilation, List<SyntaxTree> Trees) Bind()
     {
-        var source = Path.Combine(RepoRoot(), "src", "Griff");
-        var trees = Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(source, path))
-            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest), path))
-            .Append(CSharpSyntaxTree.ParseText(ImplicitUsings))
-            .ToList();
+        var trees = Parse(Path.Combine(RepoRoot(), "src", "Griff")).Append(CSharpSyntaxTree.ParseText(ImplicitUsings)).ToList();
         var compilation = CSharpCompilation.Create("Griff", trees, PlatformReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
@@ -104,10 +226,11 @@ public sealed class LayerTests
         return (compilation, trees);
     }
 
-    // Only these files need binding, which keeps the test quick.
-    private static bool DeclaresScenes(SyntaxTree tree) =>
-        tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
-            .Any(n => n.Name.ToString() is var ns && (ns == "Griff.Scenes" || ns.StartsWith("Griff.Scenes.", StringComparison.Ordinal)));
+    /// <summary>A project's source files (leaving out its build output), parsed.</summary>
+    internal static IEnumerable<SyntaxTree> Parse(string project) =>
+        Directory.EnumerateFiles(project, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutput(project, path))
+            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest), path));
 
     // The type a name refers to: the type itself, or the type that declares the member.
     internal static INamedTypeSymbol? Used(ISymbol? symbol) => symbol switch
@@ -118,7 +241,7 @@ public sealed class LayerTests
         _ => null,
     };
 
-    private static bool InLayer(ISymbol symbol, string layer)
+    internal static bool InLayer(ISymbol symbol, string layer)
     {
         var ns = symbol.ContainingNamespace.ToDisplayString();
         return ns == layer || ns.StartsWith(layer + ".", StringComparison.Ordinal);
@@ -134,7 +257,7 @@ public sealed class LayerTests
     }
 
     // What the SDK's ImplicitUsings adds for a plain library (Griff.csproj).
-    private const string ImplicitUsings = """
+    internal const string ImplicitUsings = """
         global using System;
         global using System.Collections.Generic;
         global using System.IO;
@@ -144,7 +267,7 @@ public sealed class LayerTests
         global using System.Threading.Tasks;
         """;
 
-    private static IEnumerable<MetadataReference> PlatformReferences() =>
+    internal static IEnumerable<MetadataReference> PlatformReferences() =>
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
         .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
         .Where(path => Path.GetFileName(path).StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||

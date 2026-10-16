@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using Griff.Audio;
@@ -304,7 +305,8 @@ public static partial class WebPlayer
     /// what an entity's output says now (<c>output:Window.TimesLooked</c>; "" without one); <c>music</c> the music playing and how much of it has been
     /// heard ("name|seconds"); <c>steps</c> the game's steps since it was last asked, "count|mean ms|worst ms" (a frame's steps
     /// timed together); <c>frames</c> the frames drawn since it was last asked, "count|build ms|draw ms|sound ms" (each on
-    /// average); <c>played:Note Lanes</c> how each note of those Note Lanes went (their Played marks); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
+    /// average); <c>field:<i>entity</i>.<i>field</i></c> what a field of one of an entity's components holds now
+    /// (<c>field:Note Lanes.Played</c>, how each note of those lanes went; "" without one); <c>touches</c> the fingers on the screen, where each is in the world ("x,y" each, separated by
     /// semicolons); <c>warmup</c> how long readying .NET took before the game started, in milliseconds
     /// (<see cref="WebWarmup"/>); <c>status</c> the network status line; <c>fullscreen</c> the game's setting (1 or 0), and
     /// <c>fullscreen=1</c> sets it.
@@ -364,8 +366,8 @@ public static partial class WebPlayer
                        read.Output.ReadNumber(read.Component).ToString(CultureInfo.InvariantCulture);
             case "music":
                 return string.Create(CultureInfo.InvariantCulture, $"{game.Audio.Music}|{game.Audio.MusicTime:0.###}");
-            case "played":
-                return game.Find(argument)?.GetComponent<Griff.Modules.Rhythm.NoteLanes>()?.Played ?? "";
+            case "field" when argument.LastIndexOf('.') is var dot and > 0 && game.Find(argument[..dot]) is { } holder:
+                return FieldOf(holder, argument[(dot + 1)..]);
             case "touches":
                 return string.Join(';', s_input.Touches.Select(t => string.Create(CultureInfo.InvariantCulture, $"{t.World.X:0.##},{t.World.Y:0.##}")));
             case "status":
@@ -378,6 +380,22 @@ public static partial class WebPlayer
             default:
                 return "";
         }
+    }
+
+    /// <summary>
+    /// What the field called <paramref name="field"/> (its name, spaces or not) of the first of <paramref name="entity"/>'s
+    /// components that has one holds now, as text; "" for none.
+    /// </summary>
+    private static string FieldOf(Entity entity, string field)
+    {
+        var name = field.Replace(" ", "", StringComparison.Ordinal);
+        foreach (var component in entity.Components)
+        {
+            if (component.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is { CanRead: true } property)
+                return Convert.ToString(property.GetValue(component), CultureInfo.InvariantCulture) ?? "";
+        }
+
+        return "";
     }
 
     /// <summary>A whole number a query gives, or null.</summary>

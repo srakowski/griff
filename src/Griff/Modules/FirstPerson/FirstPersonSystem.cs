@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -57,7 +56,7 @@ internal sealed class FirstPersonSystem : GameSystem
 
     // The main camera's first-person view: the game is seen through it on the whole screen, and takes the mouse.
     private FirstPersonView? MainFirstPersonView =>
-        SceneRenderer.FindCamera(Scene)?.GetComponent<FirstPersonView>() is { } view && view.Entity!.IsActive ? view : null;
+        Views.FindCamera(Scene)?.GetComponent<FirstPersonView>() is { } view && view.Entity!.IsActive ? view : null;
 
     /// <summary>The entity a <see cref="FirstPersonView"/> looks through (the player), if there is one.</summary>
     public Entity? FirstPersonViewer => FirstPersonView is { } view ? ViewerOf(view) : null;

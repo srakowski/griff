@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 using Griff.Scenes.Serialization;
 using Transform = Griff.Scenes.Transform;
@@ -163,16 +164,16 @@ public sealed partial class SceneViewModel(IWorkspace workspace, ISelection sele
 
     /// <summary>Everything drawn, back to front: drawables in render order, then cameras and bare entities on top.</summary>
     public static IEnumerable<Entity> DrawOrder(Scene scene) =>
-        SceneRenderer.DrawOrder(scene).Where(e => !e.IsHiddenInHierarchy)
-            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && IsShown(e)));
+        Views.DrawOrder(scene).Where(e => !e.IsHiddenInHierarchy)
+            .Concat(scene.Entities.Where(e => Views.OrderOf(e) is null && IsShown(e)));
 
     /// <summary>
     /// <see cref="DrawOrder"/> with each row of a tilemap that sorts by Y in its own place, as the game draws them (see
-    /// <see cref="SceneRenderer.DrawParts"/>): the entity, and the row or null for the whole of it.
+    /// <see cref="Views.DrawParts"/>): the entity, and the row or null for the whole of it.
     /// </summary>
     public static IEnumerable<(Entity Entity, int? Depth)> DrawParts(Scene scene) =>
-        SceneRenderer.DrawParts(scene).Where(p => !p.Entity.IsHiddenInHierarchy)
-            .Concat(scene.Entities.Where(e => SceneRenderer.OrderOf(e) is null && IsShown(e)).Select(e => (e, (int?)null)));
+        Views.DrawParts(scene).Where(p => !p.Entity.IsHiddenInHierarchy)
+            .Concat(scene.Entities.Where(e => Views.OrderOf(e) is null && IsShown(e)).Select(e => (e, (int?)null)));
 
     /// <summary>
     /// Whether the Scene view shows an entity: it's active (it and its parents enabled) and not hidden in the editor

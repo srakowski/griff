@@ -116,7 +116,7 @@ public class MinigameTests
         Assert.True(root.Children[1].GetComponent<TopDownMovement>()!.Controllable);
 
         // Its camera has the screen, following its own player, not the room's.
-        Assert.Equal("Arcade Camera", SceneRenderer.FindCamera(game.Scene)!.Name);
+        Assert.Equal("Arcade Camera", Views.FindCamera(game.Scene)!.Name);
         Assert.Same(root.Children[1], root.Children[0].GetComponent<Follow>()!.TargetEntity);
     }
 
@@ -140,7 +140,7 @@ public class MinigameTests
         Assert.DoesNotContain(game.Scene.Entities, e => e.Name.StartsWith("Minigame", StringComparison.Ordinal) || e.Name == "Rules");
         Assert.False(player.IsPaused);
         Assert.True(player.GetComponent<TopDownMovement>()!.Controllable);
-        Assert.Equal("Camera", SceneRenderer.FindCamera(game.Scene)!.Name);
+        Assert.Equal("Camera", Views.FindCamera(game.Scene)!.Name);
 
         // And again: lost with the score the trigger gives.
         game.Send("Play");
@@ -269,7 +269,7 @@ public class MinigameTests
         var again = new Game(restored, input) { SceneName = "Room", SceneLoader = _ => Arcade() };
         again.Tick(Frame);
         Assert.NotNull(again.Minigame);
-        Assert.Equal("Arcade Camera", SceneRenderer.FindCamera(restored)!.Name);
+        Assert.Equal("Arcade Camera", Views.FindCamera(restored)!.Name);
         Assert.True(restored.Entities.First(e => e.Name == "Cabinet").IsPaused);
         var won = new List<object?>();
         again.On(MinigameRoot.DefaultWonMessage, won.Add);
@@ -281,7 +281,7 @@ public class MinigameTests
         // Back to before it: no minigame.
         var before = timeline.Restore(0);
         Assert.Null(MinigameRoot.Shown(before));
-        Assert.Equal("Camera", SceneRenderer.FindCamera(before)!.Name);
+        Assert.Equal("Camera", Views.FindCamera(before)!.Name);
     }
 
     [Fact]

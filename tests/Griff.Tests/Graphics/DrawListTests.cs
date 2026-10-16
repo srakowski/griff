@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Griff.Fonts;
 using Griff.Graphics;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Tests.Graphics;

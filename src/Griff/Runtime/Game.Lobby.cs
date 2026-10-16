@@ -1,6 +1,5 @@
 using System.Text;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;

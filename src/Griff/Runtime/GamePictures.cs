@@ -1,9 +1,9 @@
-namespace Griff.Rendering;
+namespace Griff.Runtime;
 
 /// <summary>
 /// Pictures a running game makes for itself rather than reads from its files, such as the screenshots of its saved games
 /// (see <see cref="Runtime.Game.SaveGame"/>), drawn by naming them where an image's path goes: their names start with
-/// <see cref="Mark"/> ("@save/1"). Each frame carries its game's (see <see cref="RenderFrame.Pictures"/>), and a renderer
+/// <see cref="Mark"/> ("@save/1"). Each frame carries its game's (see <see cref="Rendering.RenderFrame.Pictures"/>), and a renderer
 /// loads one again whenever it changes.
 /// </summary>
 public sealed class GamePictures

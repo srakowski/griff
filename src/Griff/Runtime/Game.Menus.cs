@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -186,7 +185,7 @@ public sealed partial class Game
         {
             if (!Input.IsMouseInView || !AreaOf(button).Contains(Input.MouseWorld))
                 continue;
-            if (top is null || (SceneRenderer.OrderOf(button.Entity!) ?? 0) >= (SceneRenderer.OrderOf(top.Entity!) ?? 0))
+            if (top is null || (Views.OrderOf(button.Entity!) ?? 0) >= (Views.OrderOf(top.Entity!) ?? 0))
                 top = button;
         }
 
@@ -385,7 +384,7 @@ public sealed partial class Game
     // mouse isn't it.
     private bool MouseMovedOverView()
     {
-        var camera = SceneRenderer.FindCamera(Scene);
+        var camera = Views.FindCamera(Scene);
         var center = camera is null
             ? Vector2.Zero
             : new Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y) + (camera.GetComponent<Camera>()?.ShakeOffset ?? Vector2.Zero);

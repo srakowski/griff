@@ -1,6 +1,6 @@
 using System.Numerics;
 using Griff.Editing;
-using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Modules.PhysicsGames;
@@ -41,7 +41,7 @@ public sealed class PinballTablePreset : EntityPreset
 
     public override IEnumerable<IEdit> EditScene(Scene scene)
     {
-        if (SceneRenderer.FindCamera(scene) is not { } camera)
+        if (Views.FindCamera(scene) is not { } camera)
             yield break;
         yield return new FitCameraEdit(camera, PinballParts.CameraSize, Vector3.Zero);
 
@@ -230,7 +230,7 @@ public sealed class LanesPreset : EntityPreset
 /// <summary>Sets a camera's size and moves it, as one step to undo.</summary>
 internal sealed class FitCameraEdit(Entity camera, float size, Vector3 position) : IEdit
 {
-    private readonly float _size = camera.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+    private readonly float _size = camera.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
     private readonly Vector3 _position = camera.Transform.Position;
 
     public string Description => "Fit the camera";

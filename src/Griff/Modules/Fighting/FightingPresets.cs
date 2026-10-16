@@ -1,6 +1,6 @@
 using System.Numerics;
 using Griff.Editing;
-using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Modules.Fighting;
@@ -36,7 +36,7 @@ public sealed class SparringPreset : EntityPreset
 
     public override void Configure(Entity entity, Scene scene)
     {
-        var camera = SceneRenderer.FindCamera(scene);
+        var camera = Views.FindCamera(scene);
         _at = camera is null ? Vector2.Zero : new Vector2(camera.Transform.Position.X, camera.Transform.Position.Y);
         entity.Transform.Position = new Vector3(_at, 0);
     }

@@ -370,7 +370,7 @@ public sealed class BlockWorldTests
         blocks.GlowRadius = 3;
         map.SetTile(4, 1, 8);
 
-        var glow = Assert.Single(SceneRenderer.LightDraws(scene));
+        var glow = Assert.Single(Views.LightDraws(scene));
         Assert.Equal(new Vector2(4.5f, -1.5f), glow.Center);
         Assert.Equal(3, glow.Radius);
     }

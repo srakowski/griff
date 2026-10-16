@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Networking;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -561,9 +560,9 @@ public sealed partial class NetSession
         {
             var blocked = _game.LocalInputBlocked;
             _report.Sample(input, blocked);
-            var camera = SceneRenderer.FindCamera(_game.Scene);
+            var camera = Views.FindCamera(_game.Scene);
             var view = (camera is null ? Vector2.Zero : Flat(camera.Transform.WorldPosition),
-                camera?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize, _game.ViewAspect);
+                camera?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize, _game.ViewAspect);
             var (data, acked) = _report.Write(input, blocked, _game.MouseOnUi, view);
             connection.SendUnreliable(data, acked);
         }

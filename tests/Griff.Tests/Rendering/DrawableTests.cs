@@ -67,8 +67,8 @@ public sealed class DrawableTests
         var frame = SceneRenderer.Build(_scene, 1);
 
         Assert.Equal([back, badge, front], frame.Sprites.Select(d => d.Entity));
-        Assert.Equal(5, SceneRenderer.OrderOf(badge));
-        Assert.Equal([back, badge, front], SceneRenderer.DrawOrder(_scene));
+        Assert.Equal(5, Views.OrderOf(badge));
+        Assert.Equal([back, badge, front], Views.DrawOrder(_scene));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class DrawableTests
         Assert.Equal(Color.Red, draws[1].Tint);
         Assert.NotNull(draws[2].Text);
         Assert.Equal(Color.White, draws[3].Tint);
-        Assert.Equal(3, SceneRenderer.OrderOf(entity));
+        Assert.Equal(3, Views.OrderOf(entity));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class DrawableTests
         // A trail on its own has nothing to draw with; a badge with no order of its own draws at its sprite's.
         Add("Trail Only", e => e.AddComponent<Trail>());
 
-        Assert.Empty(SceneRenderer.DrawOrder(_scene));
+        Assert.Empty(Views.DrawOrder(_scene));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class DrawableTests
             e.AddComponent<Ember>();
         });
 
-        var light = Assert.Single(SceneRenderer.LightDraws(_scene));
+        var light = Assert.Single(Views.LightDraws(_scene));
 
         Assert.Equal(new Vector2(2, 1), light.Center);
         Assert.Equal(3, light.Radius);

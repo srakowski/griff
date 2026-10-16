@@ -111,13 +111,13 @@ public abstract class RowsAttribute : FieldEditorAttribute
     /// A word under row <paramref name="cells"/> about what it does now, e.g. "Chart: the First Light table" or "No table is
     /// called First Light"; null for none.
     /// </summary>
-    public virtual string? Note(Component component, IReadOnlyList<string> cells, Editing.KnownNames? names) => null;
+    public virtual string? Note(Component component, IReadOnlyList<string> cells, IProjectNames? names) => null;
 
     /// <summary>
     /// What else column <paramref name="column"/>'s cells offer on <paramref name="component"/>, besides the project's names and
     /// <see cref="RowColumn.Choices"/>: a character's clips with the pictures, the difficulties the charts have.
     /// </summary>
-    public virtual IReadOnlyList<string> MoreChoices(int column, Component component, Editing.KnownNames? names) => [];
+    public virtual IReadOnlyList<string> MoreChoices(int column, Component component, IProjectNames? names) => [];
 
     public override bool Fits(Type type) => type == typeof(string) || type == typeof(IReadOnlyList<string>);
 

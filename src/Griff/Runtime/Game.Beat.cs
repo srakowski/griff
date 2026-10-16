@@ -1,4 +1,3 @@
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;

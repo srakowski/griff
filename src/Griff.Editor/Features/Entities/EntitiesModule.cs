@@ -204,7 +204,7 @@ public abstract class CreateEntityCommand(IWorkspace workspace, ISelection selec
     {
         for (var e = selection.Entity; e is not null; e = e.Parent)
         {
-            if (Griff.Rendering.SceneRenderer.OrderOf(e) is { } under)
+            if (Griff.Runtime.Views.OrderOf(e) is { } under)
                 order = Math.Max(order, under + 10);
         }
 
@@ -913,7 +913,7 @@ public sealed class CreateRoomCommand(IWorkspace workspace, ISelection selection
     protected override void Configure(Entity entity)
     {
         var size = _workspace.Scene?.Scene.Entities.Select(e => e.GetComponent<Camera>()).OfType<Camera>().FirstOrDefault()?.Size
-                   ?? Griff.Rendering.SceneRenderer.DefaultCameraSize;
+                   ?? Griff.Runtime.Views.DefaultCameraSize;
         entity.AddComponent<Room>().Size = new System.Numerics.Vector2(MathF.Ceiling(size * 2 * 16 / 9), size * 2);
     }
 }

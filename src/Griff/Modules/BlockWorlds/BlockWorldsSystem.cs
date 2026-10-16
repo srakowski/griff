@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -306,7 +305,7 @@ internal sealed class BlockWorldsSystem : GameSystem
     // Below the surface the camera's light fades towards the world's Underground color.
     private void DarkenUnderground()
     {
-        if (SceneRenderer.FindCamera(Scene) is not { } camera || camera.GetComponent<Camera>() is not { } view)
+        if (Views.FindCamera(Scene) is not { } camera || camera.GetComponent<Camera>() is not { } view)
             return;
         foreach (var blocks in Game.Active<Blocks>())
         {

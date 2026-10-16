@@ -1,5 +1,4 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -15,7 +14,7 @@ public sealed partial class Game
     public float AspectOf(Entity camera)
     {
         ArgumentNullException.ThrowIfNull(camera);
-        return camera.GetComponent<Viewport>() is { } viewport && camera != SceneRenderer.FindCamera(Scene) ? viewport.AspectOn(ViewAspect) : ViewAspect;
+        return camera.GetComponent<Viewport>() is { } viewport && camera != Views.FindCamera(Scene) ? viewport.AspectOn(ViewAspect) : ViewAspect;
     }
 
     /// <summary>
@@ -31,7 +30,7 @@ public sealed partial class Game
         ArgumentNullException.ThrowIfNull(camera);
         var input = Input;
         world = input.MouseWorld;
-        var main = SceneRenderer.FindCamera(Scene);
+        var main = Views.FindCamera(Scene);
         if (camera == main)
             return input.IsMouseInView;
         if (camera.Scene != Scene || !camera.IsActive || camera.GetComponent<Viewport>() is not { IsShowing: true } viewport ||
@@ -40,14 +39,14 @@ public sealed partial class Game
 
         // Where the mouse is on the screen, through the main camera; then back into the world through this one.
         var aspect = ViewAspect > 0 ? ViewAspect : 1;
-        var mainSize = main?.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
-        var onScreen = Vector4.Transform(new Vector4(input.MouseWorld, 0, 1), SceneRenderer.ViewProjection(main, mainSize, aspect));
+        var mainSize = main?.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
+        var onScreen = Vector4.Transform(new Vector4(input.MouseWorld, 0, 1), Views.ViewProjection(main, mainSize, aspect));
         var clip = new Vector2(onScreen.X, onScreen.Y) / onScreen.W;
         var (left, top, width, height) = viewport.Area;
         var (across, down) = ((clip.X + 1) / 2, (1 - clip.Y) / 2);
         var inside = input.IsMouseInView && across >= left && across <= left + width && down >= top && down <= top + height;
 
-        var toScreen = SceneRenderer.ViewProjection(camera, lens.Size, viewport.AspectOn(aspect)) * viewport.ToScreen();
+        var toScreen = Views.ViewProjection(camera, lens.Size, viewport.AspectOn(aspect)) * viewport.ToScreen();
         if (Matrix4x4.Invert(toScreen, out var back))
         {
             var seen = Vector4.Transform(new Vector4(clip, 0, 1), back);

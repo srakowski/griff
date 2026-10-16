@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -24,7 +23,7 @@ internal sealed partial class StrategySystem
     {
         var cameraEntity = commander.Entity!;
         var camera = cameraEntity.GetComponent<Camera>();
-        var size = camera?.Size ?? SceneRenderer.DefaultCameraSize;
+        var size = camera?.Size ?? Views.DefaultCameraSize;
         var (mapCenter, mapSize) = Map();
         var center = Game.Flat(cameraEntity.Transform.WorldPosition);
         SeeMouse(commander);
@@ -594,7 +593,7 @@ internal sealed partial class StrategySystem
     private void MoveCamera(Commander commander, Entity cameraEntity, Camera? camera)
     {
         var dt = Time.UnscaledDelta;
-        var size = camera?.Size ?? SceneRenderer.DefaultCameraSize;
+        var size = camera?.Size ?? Views.DefaultCameraSize;
         var pan = Vector2.Zero;
         if (Input.IsDown(Key.Left)) pan.X -= 1;
         if (Input.IsDown(Key.Right)) pan.X += 1;
@@ -646,7 +645,7 @@ internal sealed partial class StrategySystem
     private void CenterCamera(Commander commander, Vector2 point)
     {
         var camera = commander.Entity!;
-        var size = camera.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+        var size = camera.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
         Place(camera, ClampCamera(commander, point, size));
     }
 

@@ -1,5 +1,4 @@
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;
@@ -82,18 +81,6 @@ public sealed partial class Game
     private static bool Inside(Entity entity, Panel panel) => panel.Entity is { } owner && entity.IsSelfOrDescendantOf(owner);
 
     private bool InOpenPanel(Entity entity) => _panels.Open.Any(p => Inside(entity, p.Panel));
-
-    // For a picture of the game without the panels over it (see SceneRenderer.BuildPicture).
-    internal bool IsInOpenPanel(Entity entity)
-    {
-        foreach (var (panel, _) in _panels.Open)
-        {
-            if (Inside(entity, panel))
-                return true;
-        }
-
-        return false;
-    }
 
     // Brings the list of open panels up to date with which are showing (scripts may show and hide them), hiding panels the
     // first time they're seen unless they're meant to start open. Runs at the start of each frame, before anything starts,

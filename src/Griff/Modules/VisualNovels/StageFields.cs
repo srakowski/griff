@@ -1,5 +1,4 @@
 using System.Globalization;
-using Griff.Editing;
 using Griff.Scenes;
 
 namespace Griff.Modules.VisualNovels;
@@ -105,6 +104,6 @@ public sealed class ExpressionsAttribute : RowsAttribute
     public override string Write(IReadOnlyList<string> cells) => $"{cells[0].Trim().Replace(" ", "", StringComparison.Ordinal)}: {cells[1].Trim()}";
 
     // Their animation's clips are offered with the pictures.
-    public override IReadOnlyList<string> MoreChoices(int column, Component component, KnownNames? names) =>
+    public override IReadOnlyList<string> MoreChoices(int column, Component component, IProjectNames? names) =>
         column == 1 && component.Entity?.GetComponent<Animation>() is { } animation ? animation.ClipNames : [];
 }

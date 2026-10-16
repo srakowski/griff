@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
-using static Griff.Rendering.OverlayShapes;
+using static Griff.Runtime.OverlayShapes;
 
 namespace Griff.Modules.BlockWorlds;
 
@@ -71,7 +70,7 @@ internal static class BlockWorldsDrawing
                 var tile = blocks?.TileOf(builder.Item) ?? -1;
                 if (tile >= 0 && map.ImageOf(tile) is { } tileImage)
                     yield return new SpriteDraw(Matrix4x4.CreateScale(cell.X, cell.Y, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), tileImage,
-                        new Color(1, 1, 1, 0.4f), SceneRenderer.ScreenEntity) { Source = map.TileRect(tile) };
+                        new Color(1, 1, 1, 0.4f), Views.ScreenEntity) { Source = map.TileRect(tile) };
                 foreach (var line in Outline(center, cell, thickness, builder.Highlight with { A = builder.Highlight.A * 0.6f }))
                     yield return line;
             }
@@ -199,7 +198,7 @@ internal static class BlockWorldsDrawing
         if (tile >= 0 && world!.ImageOf(tile) is { } image)
         {
             yield return new SpriteDraw(Matrix4x4.CreateScale(size, size, 1) * Matrix4x4.CreateTranslation(center.X, center.Y, 0), image,
-                world.Tint, SceneRenderer.ScreenEntity) { Source = world.TileRect(tile) };
+                world.Tint, Views.ScreenEntity) { Source = world.TileRect(tile) };
             yield break;
         }
 

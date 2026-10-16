@@ -1,8 +1,7 @@
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
-using static Griff.Rendering.OverlayShapes;
+using static Griff.Runtime.OverlayShapes;
 
 namespace Griff.Modules.Tactics;
 
@@ -56,7 +55,7 @@ internal static class TacticsDrawing
             if (!shaped)
                 lit.Add(Quad(grid.Center(c), new Vector2(cell * 0.94f), color));
             else
-                lit.AddRange(grid.Shape(c, 0.94f).Select(m => new SpriteDraw(m, null, color, SceneRenderer.ScreenEntity)));
+                lit.AddRange(grid.Shape(c, 0.94f).Select(m => new SpriteDraw(m, null, color, Views.ScreenEntity)));
         }
 
         foreach (var c in view.Moves)

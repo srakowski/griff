@@ -1,6 +1,5 @@
 using System.Numerics;
 using Griff.Input;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
 
@@ -674,7 +673,7 @@ internal sealed partial class AdventuresSystem
         {
             var (w, h) = picture.Aspect >= 1 ? (side, side / picture.Aspect) : (side * picture.Aspect, side);
             _labels.Add(new SpriteDraw(Matrix4x4.CreateScale(w, h, 1) * Matrix4x4.CreateTranslation(at.X, at.Y, 0), picture.Image,
-                new Color(1, 1, 1, alpha), SceneRenderer.ScreenEntity) { Source = picture.Source });
+                new Color(1, 1, 1, alpha), Views.ScreenEntity) { Source = picture.Source });
             return;
         }
 

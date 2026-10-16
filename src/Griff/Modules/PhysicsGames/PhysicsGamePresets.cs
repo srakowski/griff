@@ -1,6 +1,6 @@
 using System.Numerics;
 using Griff.Editing;
-using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Modules.PhysicsGames;
@@ -55,7 +55,7 @@ public sealed class SlingshotPreset : EntityPreset
             yield return new AddEntityEdit(scene, PhysicsGameNames.Ground(scene));
 
         // The camera follows the slingshot, and each shot from it as it flies.
-        if (SceneRenderer.FindCamera(scene) is { } camera && camera.GetComponent<Follow>() is null)
+        if (Views.FindCamera(scene) is { } camera && camera.GetComponent<Follow>() is null)
         {
             var follow = new Follow { Target = EntityName(scene), Smoothing = 3, Offset = new Vector2(6, 2) };
             yield return new AddComponentEdit(camera, follow);
@@ -116,10 +116,10 @@ public sealed class TowerPreset : EntityPreset
             yield return new AddEntityEdit(scene, PhysicsGameNames.Ground(scene));
 
         // A score that adds up what's broken, at the top of the camera's view.
-        if (!scene.Entities.Any(e => e.GetComponent<Counter>() is { Message: "Score" }) && SceneRenderer.FindCamera(scene) is { } camera)
+        if (!scene.Entities.Any(e => e.GetComponent<Counter>() is { Message: "Score" }) && Views.FindCamera(scene) is { } camera)
         {
             var score = new Entity(PhysicsGameNames.Free(scene, "Score"));
-            var size = camera.GetComponent<Camera>()?.Size ?? SceneRenderer.DefaultCameraSize;
+            var size = camera.GetComponent<Camera>()?.Size ?? Views.DefaultCameraSize;
             score.Transform.Position = new Vector3(0, size - 0.8f, 1);
             var text = score.AddComponent<Text>();
             (text.Value, text.Size, text.Order) = ("Score: 0", 0.7f, 100);

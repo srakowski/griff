@@ -2,7 +2,6 @@ using System.Numerics;
 using Griff.Runtime;
 using Griff.Scenes;
 
-using Griff.Rendering;
 
 namespace Griff.Modules.FirstPerson;
 
@@ -526,12 +525,12 @@ internal static class FirstPersonDrawing
         {
             var world = Matrix4x4.CreateScale((right - left) * View.HalfSize.X, (top - bottom) * View.HalfSize.Y, 1) *
                         Matrix4x4.CreateTranslation(View.Center.X + (left + right) / 2 * View.HalfSize.X, View.Center.Y + (top + bottom) / 2 * View.HalfSize.Y, 0);
-            return new SpriteDraw(world, image, tint, entity ?? SceneRenderer.ScreenEntity) { Source = source ?? new Vector4(0, 0, 1, 1) };
+            return new SpriteDraw(world, image, tint, entity ?? Views.ScreenEntity) { Source = source ?? new Vector4(0, 0, 1, 1) };
         }
 
         // A quad given in a space where one unit is half the screen's height both ways (so turning it keeps its shape).
         public SpriteDraw Draw(Matrix4x4 square, Color tint) =>
-            new(square * Matrix4x4.CreateScale(View.HalfSize.Y, View.HalfSize.Y, 1) * Matrix4x4.CreateTranslation(View.Center.X, View.Center.Y, 0), null, tint, SceneRenderer.ScreenEntity);
+            new(square * Matrix4x4.CreateScale(View.HalfSize.Y, View.HalfSize.Y, 1) * Matrix4x4.CreateTranslation(View.Center.X, View.Center.Y, 0), null, tint, Views.ScreenEntity);
     }
 
     // The light on a point of the floor plan: daylight, or in a dark scene, the ambient light and every light reaching it.

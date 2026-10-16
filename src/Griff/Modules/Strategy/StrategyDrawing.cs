@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.Numerics;
-using Griff.Rendering;
 using Griff.Runtime;
 using Griff.Scenes;
-using static Griff.Rendering.OverlayShapes;
+using static Griff.Runtime.OverlayShapes;
 
 namespace Griff.Modules.Strategy;
 
@@ -344,7 +343,7 @@ internal static class StrategyDrawing
         var map = hud.Minimap;
         var (mapCenter, mapSize) = strategy.Map();
         var scale = map.Width / mapSize.X;
-        var background = rts.Commander?.Entity?.GetComponent<Camera>()?.Background ?? SceneRenderer.DefaultBackground;
+        var background = rts.Commander?.Entity?.GetComponent<Camera>()?.Background ?? Views.DefaultBackground;
         yield return Quad(map.Center, new Vector2(map.Width, map.Height) + new Vector2(thickness * 4), HudEdge);
         yield return Quad(map.Center, new Vector2(map.Width, map.Height), background);
 

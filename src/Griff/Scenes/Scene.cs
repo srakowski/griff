@@ -27,11 +27,12 @@ public sealed class Scene
     private bool _indexesChanged;
 
     // Drawing a running game between its steps (see Transform): the step the game is taking on this scene (or took last),
-    // the step it became the game's scene in (nothing glides into a scene on its first), and while a frame of the game is
-    // drawn between two steps, which drawing it is (0 otherwise), how far between them, and the furthest anything moving
-    // in a step glides rather than jumps.
+    // the step it became the game's scene in (nothing glides into a scene on its first), how many frames of it have been
+    // drawn between steps, and while one is, which drawing it is (0 otherwise), how far between them, and the furthest
+    // anything moving in a step glides rather than jumps.
     internal long Step;
     internal long FirstStep = -1;
+    internal long DrawStamps;
     internal long DrawStamp;
     internal float DrawBlend;
     internal float GlideLimit;
@@ -411,8 +412,10 @@ public sealed class Scene
         entity.ForgetActive();
         if (entity.NetFlags != NetFlags.None)
             NetFlagged++;
-        // Something new is drawn where it starts out, not glided there from wherever it was made.
+        // Something new is drawn where it starts out, not glided there from wherever it was made, and what it worked out
+        // for another scene's frames isn't this one's.
         entity.Transform.Jumped();
+        entity.Transform.ForgetDrawn();
         _byId.Add(entity.Id, entity);
         if (_ordered)
             entity.Order = _nextOrder++;

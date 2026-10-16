@@ -193,9 +193,9 @@ public static partial class ObjectSurface
         if (returned is Task task)
         {
             await task;
-            var resultProperty = task.GetType().GetProperty("Result");
-            returned = resultProperty is not null && task.GetType().IsGenericType && resultProperty.PropertyType.Name != "VoidTaskResult"
-                ? resultProperty.GetValue(task)
+            // A Task<T> the method says it returns has a result; a plain Task (whatever runs it underneath) has none.
+            returned = method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)
+                ? method.ReturnType.GetProperty(nameof(Task<object>.Result))!.GetValue(task)
                 : null;
             return returned is null ? "done" : Shown(returned, depth: 2);
         }

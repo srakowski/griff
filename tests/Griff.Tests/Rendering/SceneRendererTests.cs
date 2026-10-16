@@ -1,5 +1,6 @@
 using System.Numerics;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 
 namespace Griff.Tests.Rendering;
@@ -96,8 +97,8 @@ public class SceneRendererTests
         var frame = SceneRenderer.Build(_scene, aspect: 1);
 
         Assert.Null(frame.Camera);
-        Assert.Equal(SceneRenderer.DefaultBackground, frame.Background);
-        AssertNear(new Vector3(0, 1, 0), Project(frame, new Vector3(0, SceneRenderer.DefaultCameraSize, 0)));
+        Assert.Equal(Views.DefaultBackground, frame.Background);
+        AssertNear(new Vector3(0, 1, 0), Project(frame, new Vector3(0, Views.DefaultCameraSize, 0)));
     }
 
     private static Vector3 Project(RenderFrame frame, Vector3 world)

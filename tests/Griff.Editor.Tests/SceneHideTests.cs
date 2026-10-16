@@ -5,6 +5,7 @@ using Griff.Editor.Features.Agent;
 using Griff.Editor.Features.Hierarchy;
 using Griff.Editor.Features.SceneView;
 using Griff.Rendering;
+using Griff.Runtime;
 using Griff.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -53,7 +54,7 @@ public class SceneHideTests
         menu.IsHidden = true;
         Assert.Equal(["Coin"], Names(SceneViewModel.DrawOrder(document.Scene)));
         Assert.False(SceneViewModel.IsShown(Named(document, "Title")));
-        Assert.Contains(menu, SceneRenderer.DrawOrder(document.Scene));
+        Assert.Contains(menu, Views.DrawOrder(document.Scene));
     });
 
     [Fact]

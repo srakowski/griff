@@ -2,7 +2,6 @@ using System.Net;
 using System.Numerics;
 using System.Text.Json;
 using Griff.Networking;
-using Griff.Rendering;
 using Griff.Scenes;
 
 namespace Griff.Runtime;

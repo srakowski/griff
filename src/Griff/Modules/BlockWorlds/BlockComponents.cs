@@ -420,8 +420,9 @@ public sealed class BlockBuilder : Component
 [Category("Blocks")]
 [Requires(typeof(Inventory), Note = "what it shows")]
 [WorksWith(typeof(BlockBuilder), Note = "puts down what's picked")]
+[ClaimsKeys(Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Wheel = true)]
 [ComponentName("Griff.Hotbar")]
-public sealed class Hotbar : Component, IClaimsNumberKeys
+public sealed class Hotbar : Component
 {
     /// <summary>How many slots it has, up to 10.</summary>
     public int Slots { get; set; } = 9;

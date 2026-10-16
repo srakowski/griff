@@ -214,6 +214,12 @@ public sealed class EntityNameAttribute : Attribute
     /// Scene view's arrow points from the entity it names to this one.
     /// </summary>
     public bool Incoming { get; init; }
+
+    /// <summary>
+    /// "*" is allowed and means any entity in the scene, the first that has what the field reads (a counter's Track, for a
+    /// HUD's counter of a board's score): it names none, so none is drawn as a link or flagged.
+    /// </summary>
+    public bool Any { get; init; }
 }
 
 /// <summary>

@@ -20,32 +20,32 @@ namespace Griff.Tests.Projects;
 [Collection(nameof(Runtime.CoresCollection))]
 public sealed partial class TemplatePlaythroughTests
 {
-    // Each template's fingerprint after the playthrough, as it was when gameplay moved from Game into its systems.
+    // Each template's fingerprint after the playthrough, as it was when gameplay moved from Game into its systems (the counters in it saved as version 2, counting an output, since counters stopped knowing genres).
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["Adventure"] = "FB6D960D117FB243",
-        ["Arcade"] = "3EF2C0CA9AAC097F",
+        ["Arcade"] = "779E0F4753C19F26",
         ["BunnyMark"] = "753E6B0497DF19B2",
         ["Cards"] = "08B61685D5259D90",
         ["Contraption"] = "EA79A078DE3692C1",
         ["Empty"] = "4B382F53B9F0F0F6",
-        ["FallingBlocks"] = "37A770EE5725D1EF",
+        ["FallingBlocks"] = "1882C5E6D8382534",
         ["Fighter"] = "59A48C8DFF3A82EF",
-        ["Isometric"] = "4A5155E9CCE6DB41",
-        ["Match3"] = "60018113E6A891AD",
+        ["Isometric"] = "CDA4A3ED3DA7C507",
+        ["Match3"] = "6A32DB13951DED48",
         ["Multiplayer"] = "9F29966EEDBADF8C",
-        ["Physics"] = "9010AC7B44F7CB32",
-        ["Pinball"] = "557CD82A395BCC3E",
-        ["Platformer"] = "E1238D309AFB9290",
-        ["Puzzle"] = "0F7066FD72E9FF2A",
+        ["Physics"] = "ECF76C1AD3DD16A2",
+        ["Pinball"] = "C86FD5743CF96FB8",
+        ["Platformer"] = "3C8FB39DCFA71E24",
+        ["Puzzle"] = "E249A63D52AD0098",
         ["Rhythm"] = "7A074A421E72B789",
-        ["Roguelike"] = "EA2EFE478483708A",
+        ["Roguelike"] = "53F6E34ADC9C61E5",
         ["RpgStats"] = "C49F6D085F3D0389",
         ["Sandbox"] = "4709245AB2E79B44",
-        ["Shooter"] = "591AE88696C29C8D",
+        ["Shooter"] = "9FDAA155B32825DE",
         ["Strategy"] = "DD6CE495495093DF",
         ["Tactics"] = "00BB69C166234DF6",
-        ["TopDown"] = "19734F7D5648921C",
+        ["TopDown"] = "85824FDDF918081A",
         ["VisualNovel"] = "9C786242F10CDCC0",
     };
 

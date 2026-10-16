@@ -18,7 +18,7 @@ explain: field:MatchBoard.TargetScore | Target Score | a score to reach,
 explain: field:MatchBoard.Collect | Collect | and gems to collect. Here, twenty emeralds, among stone blocks that never move.
 expectvalue: Board.MatchBoard.Collect = 3:20
 select: Emeralds
-explain: field:Counter.CountKind | Count Kind | The HUD down the left shows each goal with a counter.
+explain: field:Counter.Output | Cleared | The HUD down the left shows each goal with a counter.
 select: Out of Moves
 explain: field:Panel.OpenMessage | Open Message | A panel opens on Level Complete, and another on Out of Moves.
 deselect

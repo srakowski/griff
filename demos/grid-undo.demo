@@ -36,9 +36,10 @@ add: ScreenAnchor
 set: ScreenAnchor.Anchor = TopLeft
 set: ScreenAnchor.Offset = 2.5, -0.7
 add: Counter
-set: Counter.CountMoves = true
+set: Counter.Track = *
+set: Counter.Output = Moves
 set: Counter.Format = Moves: {0}
-explain: field:Counter.CountMoves | Count Moves | A counter can count the moves, going back down with each undo.
+explain: field:Counter.Output | Moves | A counter can count the moves, an output of the move history, going back down with each undo.
 
 chapter: Take it back | Undo a mistake, restart, and undo the restart
 play

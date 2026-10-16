@@ -121,7 +121,7 @@ internal sealed class FallingBlocksTemplate : ProjectTemplate
 
         var score = Line("Score", "Score: 0", 0.8f, FallingLight);
         score.Message = null;
-        score.CountScore = true;
+        (score.Track, score.Output) = ("*", "Score");
         score.Format = "Score: {0}";
         score.Pop = 1.15f;
 
@@ -137,7 +137,7 @@ internal sealed class FallingBlocksTemplate : ProjectTemplate
 
         var best = Line("Best", "Best: 0", 0.6f, Color.FromBytes(0xF2, 0xD3, 0x4B));
         best.Message = null;
-        best.CountScore = true;
+        (best.Track, best.Output) = ("*", "Score");
         best.SaveBestAs = FallingBestKey;
         best.Format = "Best: {1}";
         best.Pop = 1;
@@ -172,7 +172,7 @@ internal sealed class FallingBlocksTemplate : ProjectTemplate
         detail.GetComponent<Text>()!.Order = 401;
         var score = detail.AddComponent<Counter>();
         score.Message = null;
-        score.CountScore = true;
+        (score.Track, score.Output) = ("*", "Score");
         score.Format = "Score: {0}";
         score.Pop = 1;
         WithChild(panel, detail);
@@ -181,7 +181,7 @@ internal sealed class FallingBlocksTemplate : ProjectTemplate
         bestLine.GetComponent<Text>()!.Order = 401;
         var best = bestLine.AddComponent<Counter>();
         best.Message = null;
-        best.CountScore = true;
+        (best.Track, best.Output) = ("*", "Score");
         best.SaveBestAs = FallingBestKey;
         best.Format = "Best: {1}";
         best.Pop = 1;

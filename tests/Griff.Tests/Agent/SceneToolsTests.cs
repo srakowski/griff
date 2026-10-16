@@ -393,7 +393,8 @@ public class SceneToolsTests
         var described = Run("component_describe", """{"component": "MatchBoard"}""").Text;
         Assert.Contains("## Score and Goals", described);
         Assert.Contains("- collect: text = null. Gems to clear to win the level", described);
-        Assert.Contains("- countKind: a whole number = -1. Count the things of one kind", Run("component_describe", """{"component": "Counter"}""").Text);
+        Assert.Contains("- output: text = null. Count an output instead of a message", Run("component_describe", """{"component": "Counter"}""").Text);
+        Assert.Contains("Cleared:1", described);
     }
 
     // Whether a component takes the player's input, and by whose focus, so an agent mixing genres knows what to Focus.

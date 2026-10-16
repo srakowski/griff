@@ -209,12 +209,12 @@ public sealed class Match3Template : ProjectTemplate
 
         var score = Line("Score", board.TargetScore > 0 ? $"Score: 0 / {board.TargetScore}" : "Score: 0", 0.5f, MatchLight).AddComponent<Counter>();
         score.Message = null;
-        score.CountScore = true;
+        (score.Track, score.Output) = ("*", "Score");
         score.Format = board.TargetScore > 0 ? "Score: {0} / {2}" : "Score: {0}";
 
         var moves = Line("Moves", $"Moves: {board.Moves}", 0.5f, MatchLight).AddComponent<Counter>();
         moves.Message = null;
-        moves.CountMoves = true;
+        (moves.Track, moves.Output) = ("*", "Moves");
         moves.Format = "Moves: {3}";
 
         var collect = MatchBoard.ParseCounts(board.Collect);
@@ -231,7 +231,7 @@ public sealed class Match3Template : ProjectTemplate
             row.GetComponent<ScreenAnchor>()!.Offset += new Vector2(0.9f, 0);
             var counter = row.AddComponent<Counter>();
             counter.Message = null;
-            counter.CountKind = kind;
+            (counter.Track, counter.Output) = ("*", $"Cleared:{kind}");
             counter.Format = "{0} / {2}";
 
             var icon = new Entity($"{gemName} Icon");
@@ -277,7 +277,7 @@ public sealed class Match3Template : ProjectTemplate
         detail.GetComponent<Text>()!.Order = 401;
         var score = detail.AddComponent<Counter>();
         score.Message = null;
-        score.CountScore = true;
+        (score.Track, score.Output) = ("*", "Score");
         score.Format = last ? "Score: {0}. That's every level: make some more!" : "Score: {0}";
         score.Pop = 1;
         WithChild(panel, detail);
@@ -314,7 +314,7 @@ public sealed class Match3Template : ProjectTemplate
         detail.GetComponent<Text>()!.Order = 401;
         var score = detail.AddComponent<Counter>();
         score.Message = null;
-        score.CountScore = true;
+        (score.Track, score.Output) = ("*", "Score");
         score.Format = "Score: {0}. Try again?";
         score.Pop = 1;
         WithChild(panel, detail);

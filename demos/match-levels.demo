@@ -19,9 +19,10 @@ add: ScreenAnchor
 set: ScreenAnchor.Anchor = Top
 set: ScreenAnchor.Offset = 0, -0.5
 add: Counter
-set: Counter.CountScore = true
+set: Counter.Track = *
+set: Counter.Output = Score
 set: Counter.Format = Score: {0} / {2}
-explain: field:Counter.CountScore | Count Score | A counter with Count Score shows the board's score, and brace two is the score to reach.
+explain: field:Counter.Output | Score | A counter counting the output Score shows the board's score, and brace two is the score to reach.
 deselect
 create: Text
 rename: Moves
@@ -29,9 +30,10 @@ add: ScreenAnchor
 set: ScreenAnchor.Anchor = Bottom
 set: ScreenAnchor.Offset = 0, 0.5
 add: Counter
-set: Counter.CountMoves = true
+set: Counter.Track = *
+set: Counter.Output = Moves
 set: Counter.Format = Moves left: {3}
-explain: field:Counter.CountMoves | Count Moves | Count Moves counts the board's swaps, and brace three is how many are left. Count Kind does the same for the gems of one kind cleared.
+explain: field:Counter.Output | Moves | The output Moves counts the board's swaps, and brace three is how many are left. Cleared, with a tile number after it, does the same for the gems of one kind cleared.
 deselect
 create: Panel
 rename: Won

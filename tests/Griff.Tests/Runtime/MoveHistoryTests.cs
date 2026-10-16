@@ -265,7 +265,7 @@ public class MoveHistoryTests
         var hud = new Entity("Moves");
         hud.AddComponent<Text>();
         var counter = hud.AddComponent<Counter>();
-        (counter.CountMoves, counter.Format) = (true, "Moves: {0}");
+        (counter.Track, counter.Output, counter.Format) = ("*", "Moves", "Moves: {0}");
         _scene.Add(hud);
         Run(Frame);
 

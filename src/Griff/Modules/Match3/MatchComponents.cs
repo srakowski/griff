@@ -24,20 +24,12 @@ namespace Griff.Modules.Match3;
 /// </remarks>
 [Category("Gameplay")]
 [Requires(typeof(Tilemap), Note = "holds the gems")]
-[WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Count Moves) or the gems of a kind cleared (Count Kind)")]
+[WorksWith(typeof(Counter), Note = "shows the score (Message \"Score\"), the moves left (Output Moves) or the gems of a kind cleared (Output Cleared:1)")]
 [ComponentName("Griff.MatchBoard")]
-public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, INetState, ICounterSource
+public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, INetState
 {
     // The board as it is mid-move (gems sliding, falling, clearing), as lines.
     void INetState.Network(NetState state) => state.Add<IReadOnlyList<string>>(() => MatchView.Write(this).ToArray(), lines => MatchView.Read(this, lines));
-
-    // A counter shows its swaps out of its Moves, its score out of its Target Score, or the gems of a kind cleared out of
-    // how many it asks for.
-    (int Value, int Total)? ICounterSource.CountFor(Counter counter) =>
-        counter.CountMoves ? (Swaps, Moves)
-        : counter.CountScore ? (Score, TargetScore)
-        : counter.CountKind >= 0 ? (ClearedOf(counter.CountKind), ToCollect(counter.CountKind))
-        : null;
 
     private string? _gems = "0-5";
     private bool[] _gemSet = Tilemap.ParseTileSet("0-5");
@@ -90,6 +82,11 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
     /// <summary>How many swaps have been made (not counting those that slid back). Saved with the scene, so a rewind takes them back.</summary>
     [Output(OutOf = nameof(Moves))]
     public int Swaps { get; set; }
+
+    /// <summary>The swaps made, as a puzzle's moves are counted: the same as <see cref="Swaps"/>, out of <see cref="Moves"/>.</summary>
+    [DoNotSerialize]
+    [Output("Moves", OutOf = nameof(Moves))]
+    public int MovesTaken => Swaps;
 
     /// <summary>
     /// Points for each gem cleared, times how far into the chain it clears: gems in the second clear after a swap score
@@ -273,6 +270,12 @@ public sealed partial class MatchBoard : Component, IDrawable, IDrawsTilemap, IN
 
     /// <summary>How many gems of kind <paramref name="kind"/> <see cref="Collect"/> asks for: 0 if none.</summary>
     public int ToCollect(int kind) => ParseCounts(Collect).GetValueOrDefault(kind);
+
+    /// <summary>How many gems of the kind named <paramref name="kind"/> (a tile number, e.g. "1") have been cleared. Read as "Cleared:1", out of how many <see cref="Collect"/> asks for.</summary>
+    [Output("Cleared", Example = "1", OutOf = nameof(ToCollectOf))]
+    public int ClearedOfKind(string kind) => int.TryParse(kind, out var tile) ? ClearedOf(tile) : 0;
+
+    private int ToCollectOf(string kind) => int.TryParse(kind, out var tile) ? ToCollect(tile) : 0;
 
     /// <summary>True if <paramref name="tile"/> is a gem rather than a block (or empty, -1).</summary>
     public bool IsGem(int tile) => Tilemap.InSet(_gemSet, tile);

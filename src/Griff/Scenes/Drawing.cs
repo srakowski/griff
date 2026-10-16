@@ -134,7 +134,7 @@ public interface IDrawEffect
 
 /// <summary>
 /// A component that draws its entity's <see cref="Tilemap"/> itself (a match-3 board, its gems sliding and falling), so
-/// the tilemap draws none of its own tiles.
+/// the tilemap draws none of its own tiles. Any component can implement it, a script's too.
 /// </summary>
 public interface IDrawsTilemap;
 
@@ -157,7 +157,7 @@ public readonly record struct LightSpot(Vector2 Center, float Radius, Color Colo
 
 /// <summary>
 /// A component that gives off light in a dark scene, besides <see cref="Light"/>s: glowing blocks of a world. Lights
-/// from these don't cast shadows.
+/// from these don't cast shadows. Any component can implement it, a script's too.
 /// </summary>
 public interface ILightSource
 {

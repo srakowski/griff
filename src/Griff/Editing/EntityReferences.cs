@@ -74,7 +74,7 @@ public static class EntityReferences
     public static IReadOnlyList<string> Names(object? value, EntityNameAttribute kind)
     {
         var text = (value as string ?? "").Trim();
-        if (text.Length == 0)
+        if (text.Length == 0 || kind.Any && text == "*")
             return [];
         return kind.Many ? text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [text];
     }

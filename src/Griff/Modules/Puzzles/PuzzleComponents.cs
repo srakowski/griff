@@ -7,7 +7,7 @@ namespace Griff.Modules.Puzzles;
 /// A place to push a crate to, for Sokoban-style puzzles, with no code: it's covered while a grid crate (a
 /// <see cref="Pushable"/> with a <see cref="GridMovement"/>) rests in its cell, and once every goal with the same
 /// <see cref="AllCoveredMessage"/> is covered, that message is sent: the puzzle solved. Put it on the floor under where
-/// the crates go; it needs no collider (a solid one would block them). A <see cref="Counter"/> with Count Goals shows how
+/// the crates go; it needs no collider (a solid one would block them). A <see cref="Counter"/> counting its Goals Covered shows how
 /// many are covered.
 /// </summary>
 /// <remarks>
@@ -16,19 +16,10 @@ namespace Griff.Modules.Puzzles;
 /// </remarks>
 [Category("Level")]
 [WorksWith(typeof(Pushable), Note = "grid crates that cover it", Back = "places on the grid to push it to")]
-[WorksWith(typeof(Counter), Note = "Count Goals shows how many are covered")]
+[WorksWith(typeof(Counter), Note = "counting its Goals Covered shows how many are covered")]
 [ComponentName("Griff.Goal")]
-public sealed class Goal : Component, ICounterSource
+public sealed class Goal : Component
 {
-    // The first goal answers for them all: how many in the scene are covered, out of how many there are.
-    (int Value, int Total)? ICounterSource.CountFor(Counter counter)
-    {
-        if (!counter.CountGoals || Entity?.Scene is not { } scene)
-            return null;
-        var goals = scene.ActiveNow<Goal>();
-        return (goals.Count(g => g.IsCovered), goals.Count);
-    }
-
     /// <summary>The kinds of crate that cover it (each a pushable's Kind), separated by commas, e.g. "Red, Blue". Empty takes any crate.</summary>
     [Names(NameKind.Kind, Scope = "Crate", Many = true)]
     public string? Accepts { get; set; }
@@ -113,7 +104,7 @@ public sealed class Goal : Component, ICounterSource
 /// Undo and restart for grid puzzles, with no code: each step a grid player takes (with any crates it pushes) is a move.
 /// The <see cref="UndoAction"/> (Z, U or the gamepad's left shoulder) puts everything back where it was before the last
 /// move, and the <see cref="RestartAction"/> (R or the left trigger) back where the level started, which Undo takes back
-/// too. One in the scene is enough: put it on the player or on the level. A <see cref="Counter"/> with Count Moves shows
+/// too. One in the scene is enough: put it on the player or on the level. A <see cref="Counter"/> counting its Output "Moves" shows
 /// how many moves have been taken. With <see cref="Within"/>, it covers only part of the scene (a puzzle room in a bigger
 /// game): only steps there count, and only what's there goes back; give each puzzle its own.
 /// </summary>
@@ -125,13 +116,11 @@ public sealed class Goal : Component, ICounterSource
 /// </remarks>
 [Category("Level")]
 [WorksWith(typeof(GridMovement), Note = "the players, crates and enemies it puts back")]
-[WorksWith(typeof(Counter), Note = "Count Moves shows how many moves have been taken")]
+[WorksWith(typeof(Counter), Note = "counting its Moves shows how many have been taken")]
 [FocusFrom(typeof(GridMovement))]
 [ComponentName("Griff.MoveHistory")]
-public sealed class MoveHistory : Component, ICounterSource
+public sealed class MoveHistory : Component
 {
-    (int Value, int Total)? ICounterSource.CountFor(Counter counter) => counter.CountMoves ? (Moves, 0) : null;
-
     /// <summary>The input action that takes the last move back: "Undo" is Z, U or the gamepad's left shoulder. Empty only undoes from scripts.</summary>
     [Names(NameKind.Action)]
     public string? UndoAction { get; set; } = "Undo";

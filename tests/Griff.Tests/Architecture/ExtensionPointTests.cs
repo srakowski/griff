@@ -1,3 +1,4 @@
+using Griff.Scenes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -97,6 +98,49 @@ public sealed class ExtensionPointTests
         Assert.True(named.Count == 0,
             "A core system names a module's component (reach it through an extension point, or move the work to the module):\n" +
             string.Join("\n", named.Distinct().Order()));
+    }
+
+    // An extension point of the core serves any component, so a script's does what a genre's does: each is public, says so in
+    // its documentation, and has at least two users among Griff's components and the tests' own.
+    [Theory]
+    [InlineData("Griff.Scenes.IHearsMessages")]
+    [InlineData("Griff.Scenes.ILightSource")]
+    [InlineData("Griff.Scenes.INetSecret")]
+    [InlineData("Griff.Scenes.IDialogueStarter")]
+    [InlineData("Griff.Scenes.IDrawsTilemap")]
+    [InlineData("Griff.Scenes.ClaimsKeysAttribute")]
+    public void ExtensionPoints_ServeAnyComponent(string name)
+    {
+        var (compilation, _) = LayerTests.Core();
+        var symbol = compilation.GetTypeByMetadataName(name)!;
+        Assert.Equal(Accessibility.Public, symbol.DeclaredAccessibility);
+        Assert.Contains("Any component", symbol.GetDocumentationCommentXml());
+
+        var type = typeof(Component).Assembly.GetType(name)!;
+        var users = typeof(Component).Assembly.GetTypes().Concat(typeof(ExtensionPointTests).Assembly.GetTypes())
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(Component).IsAssignableFrom(t) &&
+                (type.IsInterface ? type.IsAssignableFrom(t) : t.GetCustomAttributes(type, inherit: true).Length > 0))
+            .Select(t => t.Name)
+            .ToList();
+        Assert.True(users.Count >= 2, $"{name} is used by {string.Join(", ", users)}: one genre's extension point, not a general one");
+    }
+
+    // A counter counts a message, an item or an output: what a genre's components give is theirs to name.
+    [Fact]
+    public void ACounter_KnowsNoGenre()
+    {
+        var core = typeof(Component).Assembly;
+        Assert.DoesNotContain(typeof(Counter).GetProperties(), p => p.Name.StartsWith("Count", StringComparison.Ordinal));
+        Assert.Null(core.GetType("Griff.Scenes.ICounterSource"));
+    }
+
+    // The architecture guide says what is core and what is a module.
+    [Fact]
+    public void TheGuide_SaysWhatIsCoreAndWhatIsAModule()
+    {
+        var guide = File.ReadAllText(Path.Combine(LayerTests.RepoRoot(), "site", "src", "content", "docs", "docs", "architecture.md"));
+        Assert.Contains("What is core and what is a module", guide);
+        Assert.Contains("foundations several genres build on", guide);
     }
 
     private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)

@@ -19,12 +19,10 @@ namespace Griff.Modules.Dungeons;
 [Category("Level")]
 [Requires(typeof(Tilemap), Note = "the dungeon it fills")]
 [WorksWith(typeof(GridMovement), Note = "on the players, to step through it tile by tile")]
-[WorksWith(typeof(Counter), Note = "shows the floor (Count Floor)")]
+[WorksWith(typeof(Counter), Note = "shows the floor (Output \"Floor\")")]
 [ComponentName("Griff.DungeonGenerator")]
-public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
+public sealed class DungeonGenerator : Component, IHearsMessages
 {
-    (int Value, int Total)? ICounterSource.CountFor(Counter counter) => counter.CountFloor ? (Floor, 0) : null;
-
     // The next floor is made at the start of the next frame.
     bool IHearsMessages.Hear(string message, object? data)
     {
@@ -113,7 +111,7 @@ public sealed class DungeonGenerator : Component, ICounterSource, IHearsMessages
 
     /// <summary>
     /// A message sent with 1 as its data as each floor after the first is made, e.g. for a sound player. (A
-    /// <see cref="Counter"/> with Count Floor shows the floor.)
+    /// <see cref="Counter"/> counting its Output "Floor" shows the floor.)
     /// </summary>
     [Names(NameKind.Message)]
     public string? FloorMessage { get; set; } = "Floor";

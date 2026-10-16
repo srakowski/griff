@@ -296,7 +296,7 @@ public sealed class PuzzleTemplate : ProjectTemplate
         cratesCorner.Offset = new Vector2(-0.6f, -0.7f);
         var cratesCounter = crates.AddComponent<Counter>();
         cratesCounter.Message = null;
-        cratesCounter.CountGoals = true;
+        (cratesCounter.Track, cratesCounter.Output) = ("*", "Goals Covered");
         cratesCounter.Format = "Crates: {0} / {2}";
         scene.Add(crates);
 
@@ -307,7 +307,7 @@ public sealed class PuzzleTemplate : ProjectTemplate
         movesCorner.Offset = new Vector2(-0.6f, -1.4f);
         var movesCounter = moves.AddComponent<Counter>();
         movesCounter.Message = null;
-        movesCounter.CountMoves = true;
+        (movesCounter.Track, movesCounter.Output) = ("*", "Moves");
         movesCounter.Format = "Moves: {0}";
         movesCounter.Pop = 1;
         scene.Add(moves);
@@ -346,7 +346,7 @@ public sealed class PuzzleTemplate : ProjectTemplate
         detail.GetComponent<Text>()!.Order = 401;
         var moves = detail.AddComponent<Counter>();
         moves.Message = null;
-        moves.CountMoves = true;
+        (moves.Track, moves.Output) = ("*", "Moves");
         moves.Format = last ? "In {0} moves. That's every level: make some more!" : "In {0} moves.";
         moves.Pop = 1;
         WithChild(panel, detail);

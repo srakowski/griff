@@ -23,6 +23,8 @@ public static class OutputNames
         var on = string.IsNullOrWhiteSpace(kind.On) ? null : component.GetType().GetProperty(kind.On);
         if (on?.GetCustomAttribute<EntityNameAttribute>() is not { } entityName || on.GetValue(component) is not string { } value || string.IsNullOrWhiteSpace(value))
             return [.. Ancestry(owner)];
+        if (entityName.Any && value.Trim() == "*")
+            return [.. owner.Scene?.Entities ?? []];
         return [.. EntityReferences.Names(value, entityName).SelectMany(n => EntityReferences.Named(owner, entityName, n)).Distinct()];
     }
 

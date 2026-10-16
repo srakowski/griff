@@ -18,9 +18,10 @@ create: Text
 rename: Crates
 set: Transform.Position = 0, 3, 0
 add: Counter
-set: Counter.Count Goals = true
+set: Counter.Track = *
+set: Counter.Output = Goals Covered
 set: Counter.Format = Crates: {0} / {2}
-explain: field:Counter.CountGoals | Counted through an interface | The counter asks whatever in the scene counts goals. A goal answers, the way a match board answers for its score.
+explain: field:Counter.Output | Counting an output | The counter reads an output, Goals Covered, of the first entity in the scene that has one. A goal gives it, the way a match board gives its score.
 play
 wait: 0.5
 tap: Right

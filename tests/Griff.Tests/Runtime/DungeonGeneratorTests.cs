@@ -303,7 +303,7 @@ public class DungeonGeneratorTests
         var shown = new Entity("Floor");
         shown.AddComponent<Text>();
         var counter = shown.AddComponent<Counter>();
-        (counter.Message, counter.CountFloor, counter.Format) = (null, true, "Floor {0}");
+        (counter.Message, counter.Track, counter.Output, counter.Format) = (null, "*", "Floor", "Floor {0}");
         _scene.Add(shown);
         Run(Frame);
         Assert.Equal("Floor 1", shown.GetComponent<Text>()!.Value);

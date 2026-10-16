@@ -82,7 +82,8 @@ public sealed class NotSentAttribute : Attribute;
 /// <summary>
 /// A component that keeps its entity (and what's inside it) from some players in a network game: their machines aren't
 /// sent it at all, so nothing there can read it, not even by looking at what arrives. A card in a face-down deck (the order
-/// of the deck is nobody's business) or in another player's hand. While it's kept from a player their machine has no copy;
+/// of the deck is nobody's business) or in another player's hand, or anything of a game's own that some players mustn't see
+/// (a script's hidden unit under fog). Any component can implement it. While it's kept from a player their machine has no copy;
 /// once it isn't, it's sent as it is then, and as it's kept from them again their copy goes.
 /// </summary>
 public interface INetSecret

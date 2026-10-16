@@ -142,7 +142,7 @@ public class GameModuleTests
     // ----- Extension points, from a script's side -----
 
     [Fact]
-    public void ACounter_CountsFromAnyCounterSource()
+    public void ACounter_CountsAnyComponentsOutput()
     {
         var lives = new Entity("Lives");
         lives.AddComponent<Lives>().Left = 3;
@@ -150,7 +150,7 @@ public class GameModuleTests
         var shown = new Entity("Shown");
         shown.AddComponent<Text>();
         var counter = shown.AddComponent<Counter>();
-        (counter.CountScore, counter.Format) = (true, "{0} / {2}");
+        (counter.Track, counter.Output, counter.Format) = ("*", "Left", "{0} / {2}");
         _scene.Add(shown);
         var game = new Game(_scene, _input);
 
@@ -417,7 +417,8 @@ public class GameModuleTests
         }
     }
 
-    public sealed class Picker : Component, IClaimsNumberKeys
+    [ClaimsKeys(Key.D1, Key.D2, Key.D3, Wheel = true)]
+    public sealed class Picker : Component
     {
     }
 
@@ -478,11 +479,12 @@ public class GameModuleTests
         protected override void Draw(FrameDrawing frame) => Log.Add("own view's overlay");
     }
 
-    public sealed class Lives : Component, ICounterSource, IPlaytestReport
+    public sealed class Lives : Component, IPlaytestReport
     {
+        [Output(OutOf = nameof(Most))]
         public int Left { get; set; }
 
-        (int Value, int Total)? ICounterSource.CountFor(Counter counter) => counter.CountScore ? (Left, 5) : null;
+        public int Most => 5;
 
         string IPlaytestReport.Report() => $", {Left} lives left";
 

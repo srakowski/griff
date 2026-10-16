@@ -183,9 +183,9 @@ internal sealed class RoguelikeTemplate : ProjectTemplate
             return counter;
         }
 
-        // Count Floor reads the crypt's floor, and keeps the deepest yet.
+        // A counter of the Output "Floor" reads the crypt's floor, and keeps the deepest yet.
         var floor = Line("Floor", "Floor 1", RogueLight);
-        (floor.Message, floor.CountFloor, floor.Format, floor.SaveBestAs) = (null, true, "Floor {0}", RogueDeepestKey);
+        (floor.Message, floor.Track, floor.Output, floor.Format, floor.SaveBestAs) = (null, "*", "Floor", "Floor {0}", RogueDeepestKey);
 
         var gold = Line("Gold Count", "Gold: 0", RogueGold);
         (gold.Message, gold.Format) = ("Gold", "Gold: {0}");
@@ -222,7 +222,7 @@ internal sealed class RoguelikeTemplate : ProjectTemplate
         var reached = Label("Reached", new Vector2(0, 0.9f), "", 0.6f, RogueLight);
         reached.GetComponent<Text>()!.Order = 401;
         var floor = reached.AddComponent<Counter>();
-        (floor.Message, floor.CountFloor, floor.Format, floor.Pop) = (null, true, "You reached floor {0}", 1);
+        (floor.Message, floor.Track, floor.Output, floor.Format, floor.Pop) = (null, "*", "Floor", "You reached floor {0}", 1);
         WithChild(panel, reached);
 
         var deepestLine = Label("Deepest", new Vector2(0, 0.1f), "", 0.5f, RogueGold);

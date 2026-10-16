@@ -19,8 +19,9 @@ create: Text
 rename: Score
 set: Transform.Position = -9, 8, 0
 add: Counter
-set: Counter.CountScore = true
-explain: field:Counter.CountScore | Count Score | A counter with Count Score shows the board's score.
+set: Counter.Track = *
+set: Counter.Output = Score
+explain: field:Counter.Output | Output | A counter counting the output Score shows the board's score.
 deselect
 
 chapter: Play it | Slide, drop, clear a row

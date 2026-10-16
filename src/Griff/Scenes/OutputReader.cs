@@ -7,10 +7,13 @@ namespace Griff.Scenes;
 /// </summary>
 /// <remarks>
 /// The entity is the one the track field names (one inside the reader's own entity first, otherwise the scene's, a network
-/// game's own player's first), or without a name the reader's own entity, or the nearest it's inside, with that output.
+/// game's own player's first; "*" is the first in the scene with the output), or without a name the reader's own entity, or the nearest it's inside, with that output.
 /// </remarks>
 internal sealed class OutputReader
 {
+    /// <summary>The track that means any entity of the scene with the output, the first there is.</summary>
+    public const string AnyEntity = "*";
+
     private Entity? _owner;
     private string? _track;
     private string? _output;
@@ -49,6 +52,22 @@ internal sealed class OutputReader
                     break;
             }
         }
+        else if (track.AsSpan().Trim().SequenceEqual(AnyEntity))
+        {
+            // Wherever the scene has it: this part of the scene (a minigame being played, or outside them) before another.
+            Entity? elsewhere = null;
+            var entities = scene.EntitiesNow;
+            for (var i = 0; i < entities.Length && _found is null; i++)
+            {
+                if (!Scene.SamePart(entities[i], owner))
+                    elsewhere ??= ComponentOutputs.Find(entities[i], name) is null ? null : entities[i];
+                else
+                    Take(entities[i], name);
+            }
+
+            if (_found is null && elsewhere is not null)
+                Take(elsewhere, name);
+        }
         else if ((Inside(owner, track.AsSpan().Trim()) ?? Named(scene, track.AsSpan().Trim(), owner)) is { } named)
             Take(named, name);
 
@@ -65,7 +84,7 @@ internal sealed class OutputReader
     public string? Text => _found is { } output ? output.ReadText(_component!, _key) : null;
 
     /// <summary>What the output is out of now (see <see cref="OutputAttribute.OutOf"/>); 0 for nothing.</summary>
-    public float OutOf => _found is { } output ? output.ReadOutOf(_component!) : 0;
+    public float OutOf => _found is { } output ? output.ReadOutOf(_component!, _key) : 0;
 
     // What it found is still in the scene with its component, and still the one a network game's own player would pick.
     private bool StillThere(Entity owner, string? track)
@@ -74,7 +93,7 @@ internal sealed class OutputReader
             return false;
         if (_entity!.Scene != owner.Scene || _component!.Entity != _entity)
             return false;
-        return string.IsNullOrWhiteSpace(track) || owner.Scene?.PreferNamed is not { } prefer || prefer(_entity);
+        return string.IsNullOrWhiteSpace(track) || track == AnyEntity || owner.Scene?.PreferNamed is not { } prefer || prefer(_entity);
     }
 
     private bool Take(Entity entity, ReadOnlySpan<char> name)

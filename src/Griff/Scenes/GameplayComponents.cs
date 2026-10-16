@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Reflection;
+using Griff.Input;
 using Griff.Runtime;
 
 namespace Griff.Scenes;
@@ -439,6 +441,7 @@ public enum CounterReach
 [Category("Gameplay")]
 [WorksWith(typeof(Text), Note = "shows the count")]
 [WorksWith(typeof(Trigger), Note = "doing something on its Reach Message")]
+[ComponentVersion(2)]
 [ComponentName("Griff.Counter")]
 public sealed class Counter : Component, ICarried
 {
@@ -458,7 +461,7 @@ public sealed class Counter : Component, ICarried
 
     /// <summary>
     /// How the text reads: <c>{0}</c> is the count and <c>{1}</c> the best, e.g. "Score: {0}", "Best: {1}" or
-    /// "{0:000000}" (and <c>{2}</c> what it's out of and <c>{3}</c> how many are left, e.g. with <see cref="CountGoals"/>
+    /// "{0:000000}" (and <c>{2}</c> what it's out of and <c>{3}</c> how many are left, e.g. with the Output "Goals Covered"
     /// how many goals there are and how many are still uncovered). Empty shows just the number.
     /// </summary>
     [Format("{0} the count", "{1} the best", "{2} what it's out of", "{3} how many are left", Preview = nameof(ReadsAs))]
@@ -530,43 +533,11 @@ public sealed class Counter : Component, ICarried
     public string? Item { get; set; }
 
     /// <summary>
-    /// Count the goals in the scene that are covered instead of a message (a grid puzzle's Goals, with crates on them), with
-    /// <c>{2}</c> in <see cref="Format"/> for how many goals there are, e.g. "Crates: {0} / {2}".
-    /// </summary>
-    public bool CountGoals { get; set; }
-
-    /// <summary>
-    /// Count the moves taken instead of a message: in a grid puzzle its Move History's, so an undo counts one back, e.g.
-    /// "Moves: {0}"; on a Match Board its swaps, with <c>{2}</c> its Moves and <c>{3}</c> how many are left, e.g.
-    /// "Moves: {3}".
-    /// </summary>
-    public bool CountMoves { get; set; }
-
-    /// <summary>
-    /// Count the scene's score instead of a message: a Match Board's, with <c>{2}</c> its Target Score and <c>{3}</c> how
-    /// far there is to go, e.g. "Score: {0} / {2}"; or a Falling Board's.
-    /// </summary>
-    public bool CountScore { get; set; }
-
-    /// <summary>
-    /// Count the floor the scene's dungeon (a Dungeon Generator) is on instead of a message, e.g. "Floor {0}": it reads the
-    /// dungeon, so it's right even in a panel that was closed as the floors went by.
-    /// </summary>
-    public bool CountFloor { get; set; }
-
-    /// <summary>
-    /// Count the things of one kind (a number, such as a tile) instead of a message: on a Match Board, the gems of that tile
-    /// cleared, with <c>{2}</c> how many its Collect asks for and <c>{3}</c> how many are still to clear, e.g. "{0} / {2}".
-    /// -1 counts no kind.
-    /// </summary>
-    [FormerName("CountGem")]
-    public int CountKind { get; set; } = -1;
-
-    /// <summary>
     /// An entity whose <see cref="Output"/> it counts, by name, e.g. "Board". Empty is this entity, or the nearest one it's
-    /// inside with that output.
+    /// inside with that output; "*" is the first entity in the scene that has it, wherever it is (a HUD's counter of the
+    /// board's score, the goals covered, the moves taken or the dungeon's floor).
     /// </summary>
-    [EntityName(Incoming = true)]
+    [EntityName(Incoming = true, Any = true)]
     [Group("Counting an Output")]
     public string? Track { get; set; }
 
@@ -706,8 +677,8 @@ public sealed class Counter : Component, ICarried
         }
     }
 
-    // Counts an item, an output, goals, moves, a board's score or gems rather than its Message.
-    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || !string.IsNullOrWhiteSpace(Output) || CountsFromSource;
+    // Counts an item or an output rather than its Message.
+    internal bool CountsOwn => !string.IsNullOrWhiteSpace(Item) || !string.IsNullOrWhiteSpace(Output);
 
     // The output it counts, found once.
     internal OutputReader Reader { get; } = new();
@@ -739,9 +710,26 @@ public sealed class Counter : Component, ICarried
         _ => null,
     };
 
-    // Counts what a component in the scene counts (see ICounterSource) rather than a message or an item.
-    internal bool CountsFromSource => CountGoals || CountMoves || CountScore || CountFloor || CountKind >= 0;
-
+    // Before 2026-10, a counter counted a puzzle's goals and moves, a board's score, a dungeon's floor or the gems of a kind
+    // cleared with a setting each; now it counts the output that says so, of the first entity in the scene that has it.
+    [UpgradeFrom(1)]
+    private static void CountsOutputs(SavedData data)
+    {
+        var kind = data.Has("CountKind") ? data.Get("CountKind", -1) : data.Get("CountGem", -1);
+        var output = data.Get<bool>("CountGoals") ? "Goals Covered"
+            : data.Get<bool>("CountMoves") ? "Moves"
+            : data.Get<bool>("CountScore") ? "Score"
+            : data.Get<bool>("CountFloor") ? "Floor"
+            : kind >= 0 ? "Cleared:" + kind.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+        foreach (var gone in new[] { "CountGoals", "CountMoves", "CountScore", "CountFloor", "CountKind", "CountGem" })
+            data.Remove(gone);
+        if (output is null || !string.IsNullOrWhiteSpace(data.Get<string>(nameof(Output))))
+            return;
+        data.Set(nameof(Output), output);
+        if (string.IsNullOrWhiteSpace(data.Get<string>(nameof(Track))))
+            data.Set(nameof(Track), OutputReader.AnyEntity);
+    }
     // What the game last showed, and the entity's own scale (so a pop springs back to it).
     internal int? Shown { get; set; }
 
@@ -1023,24 +1011,9 @@ internal interface IHealthListener
 }
 
 /// <summary>
-/// A component a <see cref="Counter"/> can count from instead of a message, when it counts goals, moves, a score, a floor
-/// or things of a kind (Count Goals, Count Moves, Count Score, Count Floor, Count Kind): a puzzle's covered goals and moves,
-/// a match board's swaps, score or gems cleared, a falling-block board's score, a dungeon's floor. The counter shows the
-/// first one in the scene that counts what it asks for. A script component can implement it too.
-/// </summary>
-public interface ICounterSource
-{
-    /// <summary>
-    /// What <paramref name="counter"/> shows of this, and what that's out of (its Total, <c>{2}</c> in its Format; 0 for
-    /// nothing), or null if this doesn't count what the counter asks for.
-    /// </summary>
-    (int Value, int Total)? CountFor(Counter counter);
-}
-
-/// <summary>
 /// A component that does something when a message is sent with <c>Game.Send</c>, with no script listening: a dungeon going
 /// down a floor on its Next Floor Message. Called where the game is run (offline, or on the host), for those on active
-/// entities. A script component can implement it too.
+/// entities. Any component can implement it, a script's too.
 /// </summary>
 public interface IHearsMessages
 {
@@ -1049,10 +1022,45 @@ public interface IHearsMessages
 }
 
 /// <summary>
-/// A component that picks things with the number keys and the mouse wheel (a block world's hotbar): other controls on its
-/// entity that could use them too (building tools) leave them to it and are picked another way. A script component can
-/// implement it too.
+/// Marks a component as using keys (and the mouse wheel) for itself while it's on an entity: other controls on that entity
+/// that could read them too leave them to it, and ask <see cref="KeyClaims"/> first. A block world's hotbar claims the
+/// number keys and the wheel to pick slots, so a contraption's tools on the same entity are picked another way.
+/// Any component can claim keys, a script's too, whatever the genre.
 /// </summary>
-public interface IClaimsNumberKeys
+[AttributeUsage(AttributeTargets.Class, Inherited = true)]
+public sealed class ClaimsKeysAttribute(params Key[] keys) : Attribute
 {
+    /// <summary>The keys the component uses.</summary>
+    public IReadOnlyList<Key> Keys { get; } = keys;
+
+    /// <summary>True if it uses the mouse wheel too.</summary>
+    public bool Wheel { get; init; }
+}
+
+/// <summary>Asks what an entity's components have claimed (see <see cref="ClaimsKeysAttribute"/>).</summary>
+public static class KeyClaims
+{
+    /// <summary>True if a component on <paramref name="entity"/> claims <paramref name="key"/>.</summary>
+    public static bool Claims(Entity entity, Key key)
+    {
+        foreach (var component in entity.Components)
+        {
+            if (component.GetType().GetCustomAttribute<ClaimsKeysAttribute>() is { } claim && claim.Keys.Contains(key))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>True if a component on <paramref name="entity"/> claims the mouse wheel.</summary>
+    public static bool ClaimsWheel(Entity entity)
+    {
+        foreach (var component in entity.Components)
+        {
+            if (component.GetType().GetCustomAttribute<ClaimsKeysAttribute>() is { Wheel: true })
+                return true;
+        }
+
+        return false;
+    }
 }

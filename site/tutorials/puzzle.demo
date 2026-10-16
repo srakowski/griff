@@ -55,9 +55,10 @@ add: ScreenAnchor
 set: ScreenAnchor.Anchor = TopLeft
 set: ScreenAnchor.Offset = 3.5, -0.7
 add: Counter
-set: Counter.Count Goals = true
+set: Counter.Track = *
+set: Counter.Output = Goals Covered
 set: Counter.Format = Crates: {0} / {2}
-say: A Counter can count covered goals instead of a message. {0} is how many are covered and {2} how many there are, and a Screen Anchor keeps it in the corner of the screen.
+say: A Counter can count an output instead of a message, here the goals covered. {0} is how many are covered and {2} how many there are, and a Screen Anchor keeps it in the corner of the screen.
 deselect
 
 chapter: Solved | A Panel that opens by itself

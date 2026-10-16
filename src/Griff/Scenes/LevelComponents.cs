@@ -681,9 +681,10 @@ public sealed class Door : Component
 
 /// <summary>
 /// A component that starts the <see cref="Dialogue"/> on its entity itself (an adventure's hotspot, when it's used), so the
-/// dialogue needs no collider for the player to touch.
+/// dialogue needs no collider for the player to touch. Any component can implement it, a script's too: a lever that talks
+/// when it's pulled needs no collider either.
 /// </summary>
-internal interface IDialogueStarter
+public interface IDialogueStarter
 {
     /// <summary>True while it's set up to start the dialogue.</summary>
     bool StartsDialogue { get; }

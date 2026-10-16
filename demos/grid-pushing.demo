@@ -47,9 +47,10 @@ add: ScreenAnchor
 set: ScreenAnchor.Anchor = TopLeft
 set: ScreenAnchor.Offset = 2.5, -0.7
 add: Counter
-set: Counter.CountGoals = true
+set: Counter.Track = *
+set: Counter.Output = Goals Covered
 set: Counter.Format = Crates: {0} / {2}
-explain: field:Counter.CountGoals | Count Goals | And a counter that counts covered goals instead of a message, with how many there are, for the corner of the screen.
+explain: field:Counter.Output | Goals Covered | And a counter that counts the covered goals, an output, instead of a message, with how many there are, for the corner of the screen.
 
 chapter: Push them home | One cell a step, stopped by walls
 play

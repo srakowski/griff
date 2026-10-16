@@ -211,17 +211,14 @@ internal sealed partial class ContraptionsSystem : GameSystem, IHudLayout, IMous
         var scope = tools.Covering();
 
         // Number keys and the wheel pick tools, unless they're the hotbar's.
-        if (!user.Components.Any(c => c is IClaimsNumberKeys))
+        for (var i = 0; i < Math.Min(9, list.Count); i++)
         {
-            for (var i = 0; i < Math.Min(9, list.Count); i++)
-            {
-                if (Input.WasPressed(Key.D1 + i))
-                    PickTool(tools, i);
-            }
-
-            if (Input.Scroll != 0 && Sandbox.Held is null)
-                PickTool(tools, ((tools.Selected - Math.Sign(Input.Scroll)) % list.Count + list.Count) % list.Count);
+            if (!KeyClaims.Claims(user, Key.D1 + i) && Input.WasPressed(Key.D1 + i))
+                PickTool(tools, i);
         }
+
+        if (Input.Scroll != 0 && !KeyClaims.ClaimsWheel(user) && Sandbox.Held is null)
+            PickTool(tools, ((tools.Selected - Math.Sign(Input.Scroll)) % list.Count + list.Count) % list.Count);
 
         tools.Selected = Math.Clamp(tools.Selected, 0, list.Count - 1);
         if (Input.WasPressed(tools.UndoKey))

@@ -63,10 +63,10 @@ public sealed class ComponentOutput
 {
     private readonly Func<Component, string?, float> _number;
     private readonly Func<Component, string?, string?>? _text;
-    private readonly Func<Component, float>? _outOf;
+    private readonly Func<Component, string?, float>? _outOf;
 
     internal ComponentOutput(Type component, MemberInfo member, string name, Type valueType, string? keyName, string? example,
-        Func<Component, string?, float> number, Func<Component, string?, string?>? text, Func<Component, float>? outOf, string? outOfName)
+        Func<Component, string?, float> number, Func<Component, string?, string?>? text, Func<Component, string?, float>? outOf, string? outOfName)
     {
         ComponentType = component;
         Member = member;
@@ -131,7 +131,7 @@ public sealed class ComponentOutput
     public string? ReadText(Component component, string? key = null) => _text?.Invoke(component, key);
 
     /// <summary>What it's out of on <paramref name="component"/> (see <see cref="OutputAttribute.OutOf"/>); 0 for nothing.</summary>
-    public float ReadOutOf(Component component) => _outOf?.Invoke(component) ?? 0;
+    public float ReadOutOf(Component component, string? key = null) => _outOf?.Invoke(component, key) ?? 0;
 
     /// <summary>
     /// True if <paramref name="name"/> names it: its name, whatever the capitals and spaces ("moves left" is MovesLeft), or
@@ -302,15 +302,27 @@ public static class ComponentOutputs
         }
 
         var (number, text) = Bind(getter, keyName is not null, valueType);
-        Func<Component, float>? outOf = null;
+        Func<Component, string?, float>? outOf = null;
         if (!string.IsNullOrWhiteSpace(attribute.OutOf))
         {
-            var of = type.GetProperty(attribute.OutOf, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (of?.GetMethod is not { } ofGetter || of.GetIndexParameters().Length > 0 ||
-                !(of.PropertyType == typeof(float) || of.PropertyType == typeof(int)))
-                throw new NotSupportedException($"{type.Name}.{member.Name}'s output is out of {attribute.OutOf}, which should be a number property of {type.Name}.");
-            var read = Bind(ofGetter, keyed: false, of.PropertyType).Number;
-            outOf = c => read(c, null);
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            if (keyName is not null)
+            {
+                // One read by a name is out of what a method of the same component gives for that name.
+                var ofMethod = type.GetMethod(attribute.OutOf, all, [typeof(string)]);
+                if (ofMethod is null || !(ofMethod.ReturnType == typeof(float) || ofMethod.ReturnType == typeof(int)))
+                    throw new NotSupportedException($"{type.Name}.{member.Name}'s output is out of {attribute.OutOf}, which should be a method of {type.Name} taking a name and giving a number.");
+                outOf = Bind(ofMethod, keyed: true, ofMethod.ReturnType).Number;
+            }
+            else
+            {
+                var of = type.GetProperty(attribute.OutOf, all);
+                if (of?.GetMethod is not { } ofGetter || of.GetIndexParameters().Length > 0 ||
+                    !(of.PropertyType == typeof(float) || of.PropertyType == typeof(int)))
+                    throw new NotSupportedException($"{type.Name}.{member.Name}'s output is out of {attribute.OutOf}, which should be a number property of {type.Name}.");
+                var read = Bind(ofGetter, keyed: false, of.PropertyType).Number;
+                outOf = (c, _) => read(c, null);
+            }
         }
 
         return new ComponentOutput(type, member, name, valueType, keyName, attribute.Example, number, text, outOf, attribute.OutOf);

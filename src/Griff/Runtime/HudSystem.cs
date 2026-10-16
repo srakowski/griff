@@ -82,8 +82,6 @@ internal sealed class HudSystem : GameSystem
             var key = counter.SaveBestAs?.Trim();
             if (!string.IsNullOrWhiteSpace(counter.Item))
                 counter.Change(Game.ItemSystem.ItemCount(counter.Item, counter.Entity) - counter.Value);
-            if (counter.CountsFromSource)
-                CountFromSource(counter);
             if (!string.IsNullOrWhiteSpace(counter.Output))
                 CountOutput(counter);
 
@@ -138,22 +136,6 @@ internal sealed class HudSystem : GameSystem
             }
 
             counter.Shown = counter.Value;
-        }
-    }
-
-    // A counter showing what a component in the scene counts (see ICounterSource): the goals covered out of how many there
-    // are, a move history's moves, a match board's swaps out of its Moves, its score out of its Target Score or the gems of
-    // a kind cleared out of how many it asks for, a falling-block board's score, a dungeon's floor. The first that counts
-    // what the counter asks for.
-    private void CountFromSource(Counter counter)
-    {
-        foreach (var source in Game.Scene.ActiveNow<ICounterSource>())
-        {
-            if (source.CountFor(counter) is not { } count)
-                continue;
-            counter.Total = count.Total;
-            counter.Change(count.Value - counter.Value);
-            return;
         }
     }
 

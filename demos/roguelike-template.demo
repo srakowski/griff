@@ -14,7 +14,7 @@ select: Player
 explain: component:BumpAttack | Bump Attack | The hero steps a cell a turn and fights by walking into monsters.
 explain: field:Inventory.ItemUses | Item Uses | Potions go in the inventory, and the one key drinks one.
 select: Floor
-explain: field:Counter.CountFloor | Count Floor | The HUD shows the floor, and keeps the deepest for the menu.
+explain: field:Counter.Output | Floor | The HUD shows the floor, and keeps the deepest for the menu.
 select: Game Over
 explain: field:Panel.OpenMessage | Open Message | And this panel opens when the hero falls.
 deselect

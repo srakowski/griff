@@ -254,7 +254,7 @@ public class GridPushingTests
         var hud = new Entity("Crates");
         hud.AddComponent<Text>();
         var counter = hud.AddComponent<Counter>();
-        (counter.CountGoals, counter.Message, counter.Format) = (true, "", "Crates: {0} / {2}");
+        (counter.Track, counter.Output, counter.Message, counter.Format) = ("*", "Goals Covered", "", "Crates: {0} / {2}");
         _scene.Add(hud);
         Listen("On", "Solved");
         Run(Frame);

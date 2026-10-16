@@ -94,8 +94,6 @@ Rules for every item in this block:
 The rest of the mashup work, on top of the foundations before the genre blocks. On 2026-10-15 the user brought it forward ("that was an important thing"): right after Field editors, ahead of Platforms.
 
 - [ ] Put everything on the beat and on turns in one go: Beats on grid movement, turns, falling blocks' gravity, match-3 cascades and tactics, with an on-beat judgment any action can use (on the beat for a bonus); and any mover can take turns, so a dungeon crawler moves to the music or a platformer goes turn by turn.
-- [ ] Add a Mashup template and New Project from two templates in one go: a hub scene with doors into small mixes, each made without code (match-3 battles that hurt a tactics enemy, a dungeon crawler on the beat, falling blocks a platformer climbs, a pinball table that fights a boss, cards that build a platformer level); and New Project can start from two templates at once, joined by a hub.
-  - A demo for each mix. Record in the commit which mixes needed a script, and turn each into an item.
 
 ### Data and balance
 

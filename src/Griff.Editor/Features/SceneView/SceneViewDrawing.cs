@@ -6,8 +6,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Griff.Editing;
 using Griff.Editor.Core.Workspace;
-using Griff.Fonts;
-using Griff.Rendering;
 using Griff.Scenes;
 using Point = System.Windows.Point;
 using Vector = System.Windows.Vector;
@@ -15,37 +13,37 @@ using Vector = System.Windows.Vector;
 namespace Griff.Editor.Features.SceneView;
 
 /// <summary>
-/// Draws the Scene view: the grid, what each entity shows (sprites, tilemaps, text, camera frames, particles, or a marker),
-/// the lights, colliders, rooms, level guides and links, the selection with its handles, the tile palette while
-/// painting, and the zoom. Where the handles go is <see cref="SceneHandleGeometry"/>'s; what the mouse is doing (a drag,
-/// the handle under it) is <see cref="SceneViewInput"/>'s.
+/// Draws the Scene view: the scene's picture (<see cref="SceneViewPicture"/>: the frame the game's renderer draws of it,
+/// over the grid), and over it what only the editor shows: camera frames, markers on entities with nothing to see, the
+/// lights, colliders, rooms, level guides and links, the selection with its handles, the tile palette while painting,
+/// and the zoom. What entities look like is the renderer's alone; this draws none of it. Where the handles go is
+/// <see cref="SceneHandleGeometry"/>'s; what the mouse is doing (a drag, the handle under it) is
+/// <see cref="SceneViewInput"/>'s.
 /// </summary>
 internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel model, TilePalette palette, ISelection selection,
-    IWorkspace workspace, SceneHandleGeometry handles, SceneViewInput input, SceneViewStyle style)
+    IWorkspace workspace, SceneHandleGeometry handles, SceneViewInput input, SceneViewStyle style, SceneViewPicture picture)
 {
+    // The tile palette's pictures of the tiles.
     private readonly Dictionary<string, BitmapSource?> _images = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Image, int Tile, int Columns, int Rows), BitmapSource?> _tileImages = [];
-    private readonly Dictionary<(BitmapSource Image, int Rgb), BitmapSource> _tintedImages = [];
-    private readonly Dictionary<(string Text, string? Font, TextAlign Align), (BitmapSource Image, Rect Rect)?> _textImages = [];
-    private GlyphAtlas? _glyphs;
-    private string? _glyphsRoot;
     private SceneDocument? _document;
 
     // The area a fill would cover, for the map's tiles and the cell it was worked out for.
     private (IReadOnlyList<string> Tiles, (int X, int Y) Cell)? _fillPreviewOf;
     private IReadOnlyList<(int X, int Y)> _fillPreview = [];
 
-    /// <summary>Forgets the pictures read so far (another scene or prefab is showing).</summary>
+    /// <summary>Forgets the tile palette's pictures read so far (another scene or prefab is showing).</summary>
     public void ForgetImages()
     {
         _images.Clear();
         _tileImages.Clear();
-        _tintedImages.Clear();
-        _textImages.Clear();
     }
 
-    /// <summary>Draws the open tab's scene (or just the background, with none open).</summary>
-    public void Draw(DrawingContext drawingContext, SceneDocument? document)
+    /// <summary>
+    /// Draws the open tab's scene (or just the background, with none open); with <paramref name="overlays"/> off, only
+    /// its picture, without the grid or anything drawn over it.
+    /// </summary>
+    public void Draw(DrawingContext drawingContext, SceneDocument? document, bool overlays = true)
     {
         drawingContext.DrawRectangle(style.Brush("Brush.Surface.Document"), null, new Rect(viewport.Size));
         _document = document;
@@ -55,39 +53,20 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         if (viewport.NeedsFit && viewport.Size.Width > 0)
             viewport.Fit(_document);
 
-        DrawGrid(drawingContext);
+        picture.Draw(drawingContext, _document, grid: overlays);
+        if (!overlays)
+            return;
+        if (picture.Problem is { } problem)
+            drawingContext.DrawText(style.Text($"The scene can't be drawn: {problem}", "Brush.Status.Error"), new Point(10, 28));
 
-        var parts = SceneViewModel.DrawParts(_document.Scene).ToList();
-        // A map that sorts by Y has its tiles drawn a row at a time, each among the rest where the game draws it.
-        var byRow = parts.Where(p => p.Depth is not null).Select(p => p.Entity).ToHashSet();
-        foreach (var (entity, depth) in parts)
+        // Cameras' frames, and a marker on each entity with nothing solid to see (including emitters), to find and click it.
+        foreach (var entity in _document.Scene.Entities.Where(SceneViewModel.IsShown))
         {
-            if (depth is { } row)
-            {
-                DrawTilemap(drawingContext, entity, entity.GetComponent<Tilemap>()!, row);
-                continue;
-            }
-
-            if (entity.GetComponent<Tilemap>() is { } tilemap && !byRow.Contains(entity))
-                DrawTilemap(drawingContext, entity, tilemap);
-            if (entity.GetComponent<Sprite>() is { } sprite)
-                DrawSprite(drawingContext, entity, sprite);
-            if (entity.GetComponent<Text>() is { Value.Length: > 0 } text)
-                DrawText(drawingContext, entity, text);
             if (entity.GetComponent<Camera>() is { } camera)
                 DrawCameraFrame(drawingContext, entity, camera, selection.IsSelected(entity));
-            if (entity.GetComponent<ParticleEmitter>() is { Particles.Count: > 0 } emitter)
-                DrawParticles(drawingContext, entity, emitter);
-            DrawOtherDrawables(drawingContext, entity, overWorld: false);
-
-            // Entities with nothing solid to see (including emitters) get a marker so they can be found and clicked.
-            if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null &&
-                entity.GetComponent<Text>() is null && entity.GetComponent<Camera>() is null)
+            else if (entity.GetComponent<Sprite>() is null && entity.GetComponent<Tilemap>() is null && entity.GetComponent<Text>() is null)
                 DrawMarker(drawingContext, entity);
         }
-
-        foreach (var entity in _document.Scene.Entities.Where(SceneViewModel.IsShown))
-            DrawOtherDrawables(drawingContext, entity, overWorld: true);
 
         DrawLights(drawingContext);
         DrawColliders(drawingContext);
@@ -110,261 +89,6 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             DrawPaintOverlay(drawingContext, painting);
 
         DrawZoomLabel(drawingContext);
-    }
-
-    private void DrawGrid(DrawingContext dc)
-    {
-        var minor = new Pen(style.Brush("Brush.Border.Subtle"), 1);
-        var major = new Pen(style.Brush("Brush.Selection.Inactive"), 1);
-        var topLeft = viewport.ToWorld(new Point(0, 0));
-        var bottomRight = viewport.ToWorld(new Point(viewport.Size.Width, viewport.Size.Height));
-
-        // Step through powers of ten so lines stay 8px or more apart at any zoom.
-        var step = Math.Pow(10, Math.Ceiling(Math.Log10(8 / viewport.Zoom)));
-        for (var x = Math.Floor(topLeft.X / step) * step; x <= bottomRight.X; x += step)
-        {
-            var sx = Math.Round(viewport.ToScreen(new Vector2((float)x, 0)).X) + 0.5;
-            var isMajor = Math.Abs(Math.IEEERemainder(x, step * 10)) < step / 2;
-            dc.DrawLine(isMajor ? major : minor, new Point(sx, 0), new Point(sx, viewport.Size.Height));
-        }
-
-        for (var y = Math.Floor(bottomRight.Y / step) * step; y <= topLeft.Y; y += step)
-        {
-            var sy = Math.Round(viewport.ToScreen(new Vector2(0, (float)y)).Y) + 0.5;
-            var isMajor = Math.Abs(Math.IEEERemainder(y, step * 10)) < step / 2;
-            dc.DrawLine(isMajor ? major : minor, new Point(0, sy), new Point(viewport.Size.Width, sy));
-        }
-
-        var origin = viewport.ToScreen(Vector2.Zero);
-        dc.DrawLine(new Pen(style.Faded("Brush.Axis.X", 0.6), 1), new Point(0, Math.Round(origin.Y) + 0.5), new Point(viewport.Size.Width, Math.Round(origin.Y) + 0.5));
-        dc.DrawLine(new Pen(style.Faded("Brush.Axis.Y", 0.6), 1), new Point(Math.Round(origin.X) + 0.5, 0), new Point(Math.Round(origin.X) + 0.5, viewport.Size.Height));
-    }
-
-    private void DrawSprite(DrawingContext dc, Entity entity, Sprite sprite)
-    {
-        var size = sprite.Size;
-        var rect = new Rect(-size.X / 2, -size.Y / 2, size.X, size.Y);
-        var matrix = viewport.ScreenMatrix(entity.Transform.WorldMatrix);
-
-        // Images are stored top-down; flip Y back since world space is Y-up.
-        var flip = new Matrix(sprite.FlipX ? -1 : 1, 0, 0, sprite.FlipY ? 1 : -1, 0, 0);
-        dc.PushTransform(new MatrixTransform(flip * matrix));
-        dc.PushOpacity(sprite.Tint.A);
-
-        if (LoadImage(sprite.Image) is { } loaded)
-        {
-            var image = Tinted(loaded, sprite.Tint);
-            if (sprite.Columns > 1 || sprite.Rows > 1)
-            {
-                var source = sprite.FrameRect;
-                var brush = new ImageBrush(image)
-                {
-                    Viewbox = new Rect(source.X, source.Y, source.Z, source.W),
-                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
-                };
-                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
-                dc.DrawRectangle(brush, null, rect);
-            }
-            else
-            {
-                dc.DrawImage(image, rect);
-            }
-        }
-        else
-        {
-            var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, sprite.Tint.RByte, sprite.Tint.GByte, sprite.Tint.BByte));
-            dc.DrawRectangle(fill, null, rect);
-            if (!string.IsNullOrEmpty(sprite.Image))
-            {
-                // Image set but not found: cross it out.
-                var pen = new Pen(style.Brush("Brush.Status.Error"), 2 / viewport.Zoom);
-                dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
-                dc.DrawLine(pen, rect.TopRight, rect.BottomLeft);
-            }
-        }
-
-        dc.Pop();
-        dc.Pop();
-    }
-
-    // A map's tiles back to front, or with `depth` just that row of them (for a map that sorts by Y).
-    private void DrawTilemap(DrawingContext dc, Entity entity, Tilemap tilemap, int? depth = null)
-    {
-        // A hair of overlap hides the anti-aliased seams WPF would draw between neighbouring tiles.
-        var bleed = 0.5 / viewport.Zoom;
-        var fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(255, tilemap.Tint.RByte, tilemap.Tint.GByte, tilemap.Tint.BByte));
-        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(entity.Transform.WorldMatrix)));
-        // While one layer of a map is painted, its other layers fade back.
-        var otherLayer = model.PaintTarget is { } painting && painting != tilemap && painting.BaseMap == tilemap.BaseMap;
-        dc.PushOpacity(tilemap.Tint.A * (otherLayer ? 0.35 : 1));
-
-        foreach (var (x, y, tile) in depth is { } row ? tilemap.CellsAtDepth(row) : tilemap.BackToFront())
-        {
-            var (center, size) = tilemap.PictureOf(x, y);
-            var rect = new Rect(center.X - size.X / 2 - bleed, center.Y - size.Y / 2 - bleed, size.X + bleed * 2, size.Y + bleed * 2);
-            // Autotiles show the piece that joins their neighbors, as in the game.
-            if (TileImage(tilemap, tilemap.ShownTile(x, y, tile)) is { } image)
-            {
-                // Images are stored top-down; flip each tile about its own center.
-                dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 2 * center.Y));
-                dc.DrawImage(Tinted(image, tilemap.Tint), rect);
-                dc.Pop();
-            }
-            else if (tilemap.Shape != TileShape.Square)
-            {
-                // A diamond or hexagon, from its corners.
-                dc.DrawGeometry(fill, new Pen(fill, bleed * 2), Polygon(tilemap.OutlineOf(x, y, x, y)));
-            }
-            else
-            {
-                dc.DrawRectangle(fill, null, rect);
-            }
-        }
-
-        dc.Pop();
-        dc.Pop();
-    }
-
-    // Whatever else an entity draws (a bar, a slider, a rope or wire over the world, a script's shapes) as the game draws it,
-    // from its quads. Sprites, tilemaps, text and particles have their own drawing above, and a component that draws a
-    // tilemap in place of its tiles (a match-3 board) is left to the game: here you paint the tiles.
-    private void DrawOtherDrawables(DrawingContext dc, Entity entity, bool overWorld)
-    {
-        foreach (var component in entity.Components)
-        {
-            if (component is not IDrawable drawable || component is Sprite or Tilemap or Text or ParticleEmitter or IDrawsTilemap ||
-                drawable.DrawStep >= DrawSteps.OverWorld != overWorld)
-                continue;
-            IReadOnlyList<SpriteDraw> draws;
-            try
-            {
-                var (min, max) = (viewport.ToWorld(new Point(0, viewport.Size.Height)), viewport.ToWorld(new Point(viewport.Size.Width, 0)));
-                draws = SceneRenderer.DrawsOf(drawable, new Box((min + max) / 2, (max - min) / 2), (float)(2 / viewport.Zoom));
-            }
-            catch (Exception)
-            {
-                // A script's Draw that fails in the editor draws nothing here; the game reports it when it runs.
-                continue;
-            }
-
-            DrawQuads(dc, draws);
-        }
-    }
-
-    // Quads as the game draws them: images (or their part of one) tinted, solid colors, and text.
-    private void DrawQuads(DrawingContext dc, IReadOnlyList<SpriteDraw> draws)
-    {
-        foreach (var draw in draws)
-        {
-            if (draw.HoleRadius > 0 || draw.Tint.A <= 0)
-                continue;
-            dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(draw.World)));
-            if (draw.Text is { Length: > 0 } text)
-            {
-                DrawTextImage(dc, text, draw.Font, draw.Align, draw.Tint);
-            }
-            else if (LoadImage(draw.Image) is { } loaded)
-            {
-                // Images are stored top-down; flip Y back since world space is Y-up.
-                dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 0));
-                dc.PushOpacity(draw.Tint.A);
-                var brush = new ImageBrush(Tinted(loaded, draw.Tint))
-                {
-                    Viewbox = new Rect(draw.Source.X, draw.Source.Y, draw.Source.Z, draw.Source.W),
-                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
-                };
-                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
-                dc.DrawRectangle(brush, null, new Rect(-0.5, -0.5, 1, 1));
-                dc.Pop();
-                dc.Pop();
-            }
-            else
-            {
-                var color = System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte);
-                dc.DrawRectangle(new SolidColorBrush(color), null, new Rect(-0.5, -0.5, 1, 1));
-            }
-
-            dc.Pop();
-        }
-    }
-
-    // Particle images are tinted like sprites; without one, particles are tinted squares.
-    private void DrawParticles(DrawingContext dc, Entity entity, ParticleEmitter emitter)
-    {
-        var image = LoadImage(emitter.Image);
-        foreach (var draw in emitter.ParticleDraws())
-        {
-            var center = viewport.ToScreen(new Vector2(draw.World.M41, draw.World.M42));
-            var half = draw.World.M11 * viewport.Zoom / 2;
-            var rect = new Rect(center.X - half, center.Y - half, half * 2, half * 2);
-            if (image is not null)
-            {
-                dc.PushOpacity(draw.Tint.A);
-                dc.DrawImage(Tinted(image, draw.Tint), rect);
-                dc.Pop();
-            }
-            else
-            {
-                var color = System.Windows.Media.Color.FromArgb(draw.Tint.AByte, draw.Tint.RByte, draw.Tint.GByte, draw.Tint.BByte);
-                dc.DrawRectangle(new SolidColorBrush(color), null, rect);
-            }
-        }
-    }
-
-    // As the game draws it: the text's glyphs, from the same fonts and laid out the same way, scaled to its world size.
-    private void DrawText(DrawingContext dc, Entity entity, Text text)
-    {
-        var world = Matrix4x4.CreateScale(text.Size, text.Size, 1) * entity.Transform.WorldMatrix;
-        dc.PushTransform(new MatrixTransform(viewport.ScreenMatrix(world)));
-        DrawTextImage(dc, text.Value!, string.IsNullOrWhiteSpace(text.Font) ? null : text.Font, text.Align, text.Color);
-        dc.Pop();
-    }
-
-    // Text one line high at the origin, tinted, from an image of its glyphs as the game lays them out (see GlyphAtlas).
-    private void DrawTextImage(DrawingContext dc, string text, string? font, TextAlign align, Griff.Color tint)
-    {
-        if (TextImage(text, font, align) is not var (image, rect))
-            return;
-
-        // Images are stored top-down; flip Y back since world space is Y-up.
-        dc.PushTransform(new MatrixTransform(1, 0, 0, -1, 0, 0));
-        dc.PushOpacity(tint.A);
-        dc.DrawImage(Tinted(image, tint), rect);
-        dc.Pop();
-        dc.Pop();
-    }
-
-    // The image of some text's glyphs and where it goes (in lines, Y down as images are), made once and kept; null for
-    // text with nothing to draw.
-    private (BitmapSource Image, Rect Rect)? TextImage(string text, string? font, TextAlign align)
-    {
-        var root = workspace.Project?.AssetsPath;
-        if (_glyphs is null || _glyphsRoot != root)
-        {
-            (_glyphs, _glyphsRoot) = (new GlyphAtlas(root), root);
-            _textImages.Clear();
-        }
-
-        if (_glyphs.RefreshChanged())
-            _textImages.Clear();
-        var key = (text, font, align);
-        if (_textImages.TryGetValue(key, out var cached))
-            return cached;
-        if (_textImages.Count >= 256)
-            _textImages.Clear();
-
-        var (rgba, width, height, topLeft) = _glyphs.Rasterize(text, font, align);
-        _glyphs.EndFrame();
-        (BitmapSource, Rect)? made = null;
-        if (width > 0 && height > 0)
-        {
-            var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, rgba, width * 4);
-            image.Freeze();
-            made = (image, new Rect(topLeft.X, -topLeft.Y, (double)width / TextRaster.LinePixels, (double)height / TextRaster.LinePixels));
-        }
-
-        _textImages[key] = made;
-        return made;
     }
 
     private void DrawCameraFrame(DrawingContext dc, Entity entity, Camera camera, bool selected)
@@ -418,6 +142,9 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
     }
 
     // Physics shapes in green; triggers dashed; polygons whose points don't make a proper shape red.
+    // How many pixels across a map's tiles are drawn before its walls are outlined.
+    internal const double MinTilePixels = 6;
+
     private void DrawColliders(DrawingContext dc)
     {
         var solid = new Pen(style.Brush("Brush.Status.Success"), 1.5);
@@ -426,6 +153,15 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
         var cut = new Pen(style.Brush("Brush.Status.Success"), 1) { DashStyle = new DashStyle([1, 3], 0) };
         var broken = new Pen(style.Brush("Brush.Status.Error"), 1.5);
         var brokenGiven = new Pen(style.Brush("Brush.Status.Error"), 1) { DashStyle = new DashStyle([4, 3], 0) };
+        var top = new Pen(style.Brush("Brush.Status.Success"), 3);
+        // Frozen, a pen drawn with thousands of times (a big map's walls) costs nothing to keep track of.
+        foreach (var pen in (Pen[])[solid, trigger, clickable, cut, broken, brokenGiven, top])
+            pen.Freeze();
+        // Only what's in view (a little past its edges) is drawn, and the outlines of each pen go into one shape, drawn
+        // once at the end: a big map's walls are thousands of boxes.
+        var shown = new Rect(viewport.Size);
+        shown.Inflate(8, 8);
+        var batches = new Dictionary<Pen, (StreamGeometry Geometry, StreamGeometryContext Context)>();
 
         // With walls on an isometric map, a body meets them with the diamond under its collider: drawn inside it.
         var isometric = _document!.Scene.Entities.Any(e => e.IsActive && e.GetComponent<Tilemap>() is { Solid: true, Shape: TileShape.Isometric });
@@ -452,7 +188,7 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     var (a, b, c, d) = collider.WorldCorners;
                     DrawOutline([a, b, c, d], collider.IsTrigger || collider.OneWay ? trigger : solid);
                     if (collider.OneWay && !collider.IsTrigger)
-                        dc.DrawLine(new Pen(solid.Brush, 3), viewport.ToScreen(d), viewport.ToScreen(c));
+                        AddLine(viewport.ToScreen(d), viewport.ToScreen(c), top);
                     continue;
                 }
 
@@ -501,20 +237,21 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
                     dc.DrawEllipse(null, solid, viewport.ToScreen(rope.WorldOtherAnchor), 3.5, 3.5);
             }
 
-            // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons.
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric))
+            // An isometric map's walls: a run of solid diamonds along each row; a hex map's, a run of solid hexagons. A map's
+            // walls show once its tiles are big enough on the screen to tell apart.
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Isometric && TilesShow(t)))
             {
                 foreach (var outline in Griff.Runtime.Physics.IsometricShapes(tilemap))
                     DrawOutline(outline, solid);
             }
 
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Hex))
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Hex && TilesShow(t)))
             {
                 foreach (var outline in Griff.Runtime.Physics.HexShapes(tilemap))
                     DrawOutline(outline, solid);
             }
 
-            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Square))
+            foreach (var tilemap in entity.GetComponents<Tilemap>().Where(t => t.Shape == TileShape.Square && TilesShow(t)))
             {
                 foreach (var (box, oneWay) in Griff.Runtime.Physics.TileShapes(tilemap))
                 {
@@ -553,21 +290,72 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
             }
         }
 
-        void DrawOutline(Vector2[] world, Pen pen) =>
-            dc.DrawGeometry(null, pen, Polygon(world.Select(p => viewport.ToScreen(p)).Select(p => new Vector2((float)p.X, (float)p.Y)).ToArray()));
+        foreach (var (pen, (geometry, context)) in batches)
+        {
+            context.Close();
+            geometry.Freeze();
+            dc.DrawGeometry(null, pen, geometry);
+        }
+
+        // True if a tile of the map is drawn at least 6 pixels across.
+        bool TilesShow(Tilemap tilemap)
+        {
+            var world = tilemap.Entity!.Transform.WorldMatrix;
+            return tilemap.TileSize * new Vector2(world.M11, world.M12).Length() * viewport.Zoom >= MinTilePixels;
+        }
+
+        void DrawOutline(Vector2[] world, Pen pen)
+        {
+            if (world.Length == 0)
+                return;
+            var points = world.Select(p => viewport.ToScreen(p)).ToArray();
+            var (minX, minY) = (points.Min(p => p.X), points.Min(p => p.Y));
+            if (!new Rect(minX, minY, points.Max(p => p.X) - minX, points.Max(p => p.Y) - minY).IntersectsWith(shown))
+                return;
+            var context = Batch(pen);
+            context.BeginFigure(points[0], false, true);
+            for (var i = 1; i < points.Length; i++)
+                context.LineTo(points[i], true, false);
+        }
 
         // One-way platforms: a solid top (the side that blocks) over a dashed outline.
         void DrawOneWay(Griff.Box box)
         {
-            DrawBox(box, trigger);
-            dc.DrawLine(new Pen(solid.Brush, 3), viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y)), viewport.ToScreen(box.Max));
+            if (DrawBox(box, trigger))
+                AddLine(viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y)), viewport.ToScreen(box.Max), top);
         }
 
-        void DrawBox(Griff.Box box, Pen pen)
+        // False if the box is out of view.
+        bool DrawBox(Griff.Box box, Pen pen)
         {
             var topLeft = viewport.ToScreen(new Vector2(box.Min.X, box.Max.Y));
             var bottomRight = viewport.ToScreen(new Vector2(box.Max.X, box.Min.Y));
-            dc.DrawRectangle(null, pen, new Rect(topLeft, bottomRight));
+            if (!new Rect(topLeft, bottomRight).IntersectsWith(shown))
+                return false;
+            var context = Batch(pen);
+            context.BeginFigure(topLeft, false, true);
+            context.LineTo(new Point(bottomRight.X, topLeft.Y), true, false);
+            context.LineTo(bottomRight, true, false);
+            context.LineTo(new Point(topLeft.X, bottomRight.Y), true, false);
+            return true;
+        }
+
+        void AddLine(Point from, Point to, Pen pen)
+        {
+            var context = Batch(pen);
+            context.BeginFigure(from, false, false);
+            context.LineTo(to, true, false);
+        }
+
+        StreamGeometryContext Batch(Pen pen)
+        {
+            if (!batches.TryGetValue(pen, out var batch))
+            {
+                var geometry = new StreamGeometry();
+                batches[pen] = batch = (geometry, geometry.Open());
+            }
+
+            return batch.Context;
         }
     }
 
@@ -1270,34 +1058,6 @@ internal sealed class SceneViewDrawing(SceneViewport viewport, SceneViewModel mo
 
         _images[path] = image;
         return image;
-    }
-
-    /// <summary>
-    /// <paramref name="image"/> multiplied by the tint's color, as the game draws it; alpha is left to the caller. Tints are
-    /// rounded (see <see cref="ImageTint.Quantize"/>) and the cache is emptied when it grows large, so animated colors
-    /// like particles fading through a gradient don't pile up images.
-    /// </summary>
-    private BitmapSource Tinted(BitmapSource image, Griff.Color tint)
-    {
-        if (ImageTint.IsIdentity(tint))
-            return image;
-
-        var key = (image, ImageTint.Quantize(tint));
-        if (_tintedImages.TryGetValue(key, out var cached))
-            return cached;
-        if (_tintedImages.Count >= 256)
-            _tintedImages.Clear();
-
-        var source = image.Format == PixelFormats.Bgra32 ? image : new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
-        var stride = source.PixelWidth * 4;
-        var pixels = new byte[stride * source.PixelHeight];
-        source.CopyPixels(pixels, stride, 0);
-        ImageTint.ApplyBgra(pixels, key.Item2);
-
-        var tinted = BitmapSource.Create(source.PixelWidth, source.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgra32, null, pixels, stride);
-        tinted.Freeze();
-        _tintedImages[key] = tinted;
-        return tinted;
     }
 
     /// <summary>One tile of a tilemap, cut out of its tileset's image for drawing; null when that tileset has no (loadable) image.</summary>

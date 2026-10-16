@@ -30,7 +30,10 @@ always show. The window can be resized, and like every editor window that opens 
 Controls, the Sprite Painter...), it opens no bigger than the work area of the screen it opens on, and wholly on it,
 whatever that screen's size and scaling.
 
-In the **Scene view**:
+The **Scene view** draws the scene with the game's own renderer, so everything looks as it does in the game (a
+match-3 or falling-blocks board's tiles included), less what a camera adds: it isn't dark or lit, has no screen effects,
+and shows parallax layers where they're placed. Over that it draws what only the editor shows: camera frames, the reach
+of lights, colliders (a tilemap's walls once its tiles are 6 pixels or more across), links and the selection's handles. In the **Scene view**:
 - Scroll to zoom.
 - Middle-drag, right-drag or Alt-drag to pan.
 - Click to select; Ctrl- or Shift-click adds one or takes it away.

@@ -329,7 +329,7 @@ public static partial class SceneRenderer
         var draws = run.Draws;
         var described = chunked.Described;
         var drawing = chunked.LeftDrawing;
-        (drawing.View, drawing.LineWidth, drawing.IsPlaying) = (view, cameraSize / 180, playing);
+        (drawing.View, drawing.LineWidth, drawing.IsPlaying, drawing.AsPlaced) = (view, cameraSize / 180, playing, filter.AsPlaced);
         draws.Clear();
         run.Count = 0;
         for (var c = 0; c < count; c++)

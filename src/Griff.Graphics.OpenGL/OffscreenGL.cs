@@ -6,8 +6,9 @@ namespace Griff.Graphics;
 
 /// <summary>
 /// An OpenGL context on a window that's never shown, drawing into a framebuffer of its own this many pixels big, with an
-/// <see cref="OpenGLRenderer"/>: frames drawn and read back with no window on the screen, for benchmarks and for comparing
-/// the desktop's pixels with the browser's. Windows only (WGL). Used on the thread that made it.
+/// <see cref="OpenGLRenderer"/>: frames drawn and read back with no window on the screen, for the editor's Scene view (its
+/// picture, with the handles drawn over it), for benchmarks and for comparing the desktop's pixels with the browser's.
+/// Windows only (WGL). Used on the thread that made it.
 /// </summary>
 public sealed class OffscreenGL : IDisposable
 {
@@ -63,19 +64,62 @@ public sealed class OffscreenGL : IDisposable
         Renderer = new OpenGLRenderer(GL, assetRoot);
     }
 
-    public int Width { get; }
+    public int Width { get; private set; }
 
-    public int Height { get; }
+    public int Height { get; private set; }
 
     public GL GL { get; }
 
     public OpenGLRenderer Renderer { get; }
 
+    /// <summary>
+    /// Makes this the thread's OpenGL context, for drawing after another context (a game window's) was used on the thread.
+    /// <see cref="Render"/>, <see cref="Capture"/> and <see cref="ReadBgra"/> do it themselves.
+    /// </summary>
+    public void MakeCurrent()
+    {
+        if (wglGetCurrentContext() != _context)
+            wglMakeCurrent(_dc, _context);
+    }
+
+    /// <summary>Makes the framebuffer this many pixels big (at least one each way), for what's drawn next.</summary>
+    public void Resize(int width, int height)
+    {
+        (width, height) = (Math.Max(1, width), Math.Max(1, height));
+        if ((width, height) == (Width, Height))
+            return;
+        MakeCurrent();
+        (Width, Height) = (width, height);
+        GL.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _color);
+        GL.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Rgba8, (uint)width, (uint)height);
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _framebuffer);
+    }
+
     /// <summary>Draws <paramref name="frame"/> into the framebuffer.</summary>
-    public void Render(RenderFrame frame) => Renderer.Render(frame, Width, Height);
+    public void Render(RenderFrame frame)
+    {
+        MakeCurrent();
+        Renderer.Render(frame, Width, Height);
+    }
 
     /// <summary>The framebuffer's pixels, as top-down RGBA rows.</summary>
-    public byte[] Capture() => Renderer.Capture(Width, Height);
+    public byte[] Capture()
+    {
+        MakeCurrent();
+        return Renderer.Capture(Width, Height);
+    }
+
+    /// <summary>
+    /// Copies the framebuffer's pixels to <paramref name="destination"/> as bottom-up BGRA rows, <see cref="Width"/> times
+    /// four bytes each with nothing between them: straight into a bitmap's memory, for showing what was drawn with no
+    /// other copy (a bitmap shown upside down puts the rows right).
+    /// </summary>
+    public unsafe void ReadBgra(IntPtr destination)
+    {
+        MakeCurrent();
+        GL.PixelStore(PixelStoreParameter.PackAlignment, 4);
+        GL.ReadPixels(0, 0, (uint)Width, (uint)Height, Silk.NET.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, (void*)destination);
+    }
 
     // What a pixel format is, for an error message: its bits and whether it's GDI's generic (software 1.1) one.
     private static string Describe(IntPtr dc, int format)
@@ -91,9 +135,15 @@ public sealed class OffscreenGL : IDisposable
 
     public void Dispose()
     {
-        Renderer.Dispose();
-        GL.DeleteRenderbuffer(_color);
-        GL.DeleteFramebuffer(_framebuffer);
+        // What it made goes with its context anyway; it's let go of first only where the context can be made current
+        // (not on another thread, nor where it's current on another).
+        if (wglGetCurrentContext() == _context || wglMakeCurrent(_dc, _context))
+        {
+            Renderer.Dispose();
+            GL.DeleteRenderbuffer(_color);
+            GL.DeleteFramebuffer(_framebuffer);
+        }
+
         wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
         wglDeleteContext(_context);
         _ = ReleaseDC(_window, _dc);
@@ -140,6 +190,9 @@ public sealed class OffscreenGL : IDisposable
 
     [DllImport("opengl32.dll")]
     private static extern bool wglDeleteContext(IntPtr context);
+
+    [DllImport("opengl32.dll")]
+    private static extern IntPtr wglGetCurrentContext();
 
     [DllImport("opengl32.dll", CharSet = CharSet.Ansi, BestFitMapping = false)]
     private static extern IntPtr wglGetProcAddress(string name);

@@ -21,15 +21,17 @@ namespace Griff.Editor.Features.SceneView;
 /// or with B (brush), R (rectangle) and G (fill); Shift erases, Ctrl picks, [ and ] change tile, Esc stops. Painting lives in
 /// <see cref="SceneViewModel"/> too (<see cref="SceneViewModel.PaintTile"/> and the rest).
 /// Arrows link the selection to the entities its fields name, and to it from the fields that name it.
-/// The control only puts the pieces together: <see cref="SceneViewDrawing"/> draws, <see cref="SceneHandleGeometry"/> says
+/// The control only puts the pieces together: <see cref="SceneViewPicture"/> draws the scene with the game's renderer,
+/// <see cref="SceneViewDrawing"/> draws it and what goes over it, <see cref="SceneHandleGeometry"/> says
 /// where the handles are, and <see cref="SceneViewInput"/> turns the mouse and keys into calls on the view models.
 /// </summary>
-public sealed class SceneViewControl : FrameworkElement
+public sealed class SceneViewControl : FrameworkElement, IDisposable
 {
     private readonly SceneViewport _viewport;
     private readonly TilePalette _palette;
     private readonly SceneViewStyle _style;
     private readonly SceneViewInput _input;
+    private readonly SceneViewPicture _picture;
     private readonly SceneViewDrawing _drawing;
     private SceneDocument? _document;
 
@@ -42,7 +44,8 @@ public sealed class SceneViewControl : FrameworkElement
         _style = new SceneViewStyle(this);
         Handles = new SceneHandleGeometry(viewport, model, selection, workspace, _style.Measure);
         _input = new SceneViewInput(this, viewport, model, palette, selection, workspace, Handles, _style, services);
-        _drawing = new SceneViewDrawing(viewport, model, palette, selection, workspace, Handles, _input, _style);
+        _picture = new SceneViewPicture(viewport, model, workspace, _style);
+        _drawing = new SceneViewDrawing(viewport, model, palette, selection, workspace, Handles, _input, _style, _picture);
 
         Focusable = true;
         AllowDrop = true;
@@ -50,20 +53,24 @@ public sealed class SceneViewControl : FrameworkElement
         ClipToBounds = true;
         RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
 
+        // The scene's picture is drawn again when what it shows changes; the rest (the selection, what's under the mouse)
+        // only redraws what goes over it.
         workspace.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(IWorkspace.Scene))
                 Track(workspace.Scene);
+            else if (e.PropertyName == nameof(IWorkspace.Project))
+                Redraw();
         };
         selection.PropertyChanged += (_, _) => InvalidateVisual();
         model.PropertyChanged += (_, _) =>
         {
             _input.ForgetHover();
-            InvalidateVisual();
+            Redraw();
         };
-        viewport.PropertyChanged += (_, _) => InvalidateVisual();
-        palette.PropertyChanged += (_, _) => InvalidateVisual();
-        workspace.ScriptsReloaded += (_, _) => InvalidateVisual();
+        viewport.PropertyChanged += (_, _) => Redraw();
+        palette.PropertyChanged += (_, _) => Redraw();
+        workspace.ScriptsReloaded += (_, _) => Redraw();
         Track(workspace.Scene);
     }
 
@@ -73,12 +80,18 @@ public sealed class SceneViewControl : FrameworkElement
     /// <summary>Where the view looks.</summary>
     internal SceneViewport Viewport => _viewport;
 
+    /// <summary>The scene's picture under what's drawn over it.</summary>
+    internal SceneViewPicture Picture => _picture;
+
     /// <summary>
     /// The screen box of a part of the tile painting overlay, for demos to point at (see
     /// <see cref="TilePaletteLayout.Bounds"/>). Null when nothing is being painted (or the tile is scrolled out of sight).
     /// </summary>
     internal Rect? PaintOverlayBounds(string part) =>
         _palette.Target is { } tilemap ? TilePaletteLayout.Of(_palette, tilemap, _style.Measure).Bounds(part) : null;
+
+    /// <summary>Draws what the view shows into <paramref name="drawingContext"/>; with <paramref name="overlays"/> off, only the scene's picture.</summary>
+    internal void DrawInto(DrawingContext drawingContext, bool overlays) => _drawing.Draw(drawingContext, _document, overlays);
 
     private void Track(SceneDocument? document)
     {
@@ -98,12 +111,19 @@ public sealed class SceneViewControl : FrameworkElement
 
         if (!_viewport.Follow(leaving, document))
             _drawing.ForgetImages();
+        Redraw();
+    }
+
+    // The scene's picture is out of date: the whole view draws again.
+    private void Redraw()
+    {
+        _picture.Invalidate();
         InvalidateVisual();
     }
 
-    private void OnDocumentChanged(object? sender, EditEventArgs e) => InvalidateVisual();
+    private void OnDocumentChanged(object? sender, EditEventArgs e) => Redraw();
 
-    private void OnRuntimeTicked(object? sender, EventArgs e) => InvalidateVisual();
+    private void OnRuntimeTicked(object? sender, EventArgs e) => Redraw();
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
@@ -117,6 +137,9 @@ public sealed class SceneViewControl : FrameworkElement
         _viewport.Size = RenderSize;
         _drawing.Draw(drawingContext, _document);
     }
+
+    /// <summary>Lets go of the OpenGL context the scene's picture is drawn with.</summary>
+    public void Dispose() => _picture.Dispose();
 
     protected override void OnMouseWheel(MouseWheelEventArgs e) => _input.Wheel(e);
 

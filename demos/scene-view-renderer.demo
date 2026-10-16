@@ -1,0 +1,22 @@
+title: One renderer for the Scene view
+intro: The Scene view draws the scene with the game's own renderer, so everything in it looks as it does in the game, boards included.
+project: Match3 | Gem Rush
+
+chapter: As the game draws it | A match-3 board in the Scene view
+scene: Level3
+explain: scene | The game's renderer | The Scene view's picture now comes from the same renderer as the Game view. The board's background and its stone blocks used to be left out here; now they're drawn just as the game draws them.
+select: Board
+explain: scene | Drawn over the picture | What only the editor shows goes over it: the selection's outline and handles, colliders, camera frames and links.
+set: MatchBoard.Background = #2E4A7A
+expectvalue: Board.MatchBoard.Background = #2E4A7A
+say: Change the board's background and the picture is drawn again with it, straight away.
+menu: View > Frame Selection
+say: Zooming in and panning stay quick, even in a big scene: the picture is only drawn again when the view or the scene changes.
+deselect
+
+chapter: The same in the game | Play it to compare
+play
+wait: 1
+explain: game | The same board | In the game the board looks the same, with its gems dealt in. Every drawable component has one way of drawing itself, used by both views.
+stop
+say: So a new component that draws itself shows up in the Scene view the moment it's added, with nothing more to write.

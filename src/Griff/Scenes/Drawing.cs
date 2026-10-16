@@ -141,7 +141,7 @@ public interface IDrawsTilemap;
 /// <summary>
 /// A drawable whose draws sort in several places among the rest when the camera sorts by Y, each part at its own height
 /// (it marks them with <see cref="Drawing.SortAt"/> as it draws): a tilemap sorting its rows of tiles by Y. Tools that
-/// show the order without drawing (the editor's Scene view) ask it for the parts.
+/// show the order without drawing ask it for the parts (the renderer's DrawParts).
 /// </summary>
 public interface ISortsInParts : IDrawable
 {
@@ -241,6 +241,10 @@ public sealed class Drawing
 
     /// <summary>True while the game runs; false in the editor, where nothing has started.</summary>
     public bool IsPlaying { get; internal set; }
+
+    // True for a view from outside the scene (an editor's, see SceneRenderer.BuildView): parallax layers are drawn where
+    // they're placed, once, rather than shifted and repeated for a camera.
+    internal bool AsPlaced { get; set; }
 
     /// <summary>How many draws have been added so far, all entities' together.</summary>
     internal int Count => _draws.Count;

@@ -20,6 +20,12 @@ internal readonly struct ViewFilter(Entity? camera, Entity? main, Viewport? view
     /// <summary>The minigame that has the screen, outside which nothing is drawn; null while none has.</summary>
     public Entity? Only => only;
 
+    /// <summary>
+    /// True for a view from outside the scene, with no camera of its own (an editor's, see
+    /// <see cref="Rendering.SceneRenderer.BuildView"/>): parallax layers are drawn where they're placed.
+    /// </summary>
+    public bool AsPlaced { get; init; }
+
     /// <summary>True if the view draws <paramref name="entity"/> at all.</summary>
     public bool Shows(Entity entity)
     {

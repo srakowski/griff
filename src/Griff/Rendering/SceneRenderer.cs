@@ -40,6 +40,73 @@ public static partial class SceneRenderer
         Build(game.Scene, aspect, game, Request.For(game, recycle));
 
     /// <summary>
+    /// Builds a frame of a scene seen from outside it, as the editor's Scene view sees it: <paramref name="view"/> (its
+    /// middle and half its size) fills the frame, whatever the scene's cameras see. It's the frame a game draws, from the
+    /// same drawable components, culled and sorted the same way (by Y too when the scene's camera sorts so), with none of
+    /// what a camera adds: no dark or lights, no screen effects, no viewports, and parallax layers where they're placed.
+    /// </summary>
+    /// <param name="scene">The scene, running or not.</param>
+    /// <param name="view">The part of the world the frame shows.</param>
+    /// <param name="lineWidth">A thin line's width in world units, for what draws lines (see <see cref="Drawing.LineWidth"/>).</param>
+    /// <param name="background">What the frame is cleared to.</param>
+    /// <param name="under">Draws under everything (a grid to lay the scene out on), or null.</param>
+    /// <param name="opacity">
+    /// How opaque each entity's draws are, from 0 (left out) to 1 (as they are), for a view that fades or hides some; null
+    /// for all as they are. Asked once for each run of draws of one entity.
+    /// </param>
+    /// <param name="recycle">A frame built by this before that the caller is done with, to fill again; it can't be used after.</param>
+    public static RenderFrame BuildView(Scene scene, Box view, float lineWidth, Color background, IReadOnlyList<SpriteDraw>? under = null,
+        Func<Entity, float>? opacity = null, RenderFrame? recycle = null)
+    {
+        var sprites = recycle?.Sprites as List<SpriteDraw> ?? [];
+        var filter = new ViewFilter(null, null, null, false) { AsPlaced = true };
+        DrawScene(scene, view, lineWidth * 180, playing: false, sprites, include: null, overWorld: true, reuse: true, filter: filter);
+        if (opacity is not null)
+            Fade(sprites, opacity);
+        if (under is { Count: > 0 })
+            sprites.InsertRange(0, under);
+
+        var built = recycle ?? new RenderFrame();
+        built.Background = background;
+        built.ViewProjection = Matrix4x4.CreateTranslation(-view.Center.X, -view.Center.Y, 0) *
+                               Matrix4x4.CreateOrthographic(view.HalfSize.X * 2, view.HalfSize.Y * 2, -1000f, 1000f);
+        built.Sprites = sprites;
+        built.Camera = null;
+        built.Ambient = Color.White;
+        built.Lights = [];
+        built.LitCount = sprites.Count;
+        built.Effects = null;
+        built.Look = default;
+        built.Time = s_clock.Elapsed.TotalSeconds;
+        built.Pictures = null;
+        built.ViewsAt = sprites.Count;
+        built.ClearViews();
+        return built;
+    }
+
+    // Each draw at its entity's opacity: left out at 0, its tint's alpha scaled under 1.
+    private static void Fade(List<SpriteDraw> sprites, Func<Entity, float> opacity)
+    {
+        var drawn = CollectionsMarshal.AsSpan(sprites);
+        var kept = 0;
+        Entity? last = null;
+        var amount = 1f;
+        for (var i = 0; i < drawn.Length; i++)
+        {
+            var draw = drawn[i];
+            if (draw.Entity != last)
+                (last, amount) = (draw.Entity, Math.Clamp(opacity(draw.Entity), 0, 1));
+            if (amount <= 0)
+                continue;
+            drawn[kept++] = amount < 1 ? draw with { Tint = draw.Tint with { A = draw.Tint.A * amount } } : draw;
+        }
+
+        // What's left out would otherwise keep the entities it belongs to from being collected.
+        drawn[kept..].Clear();
+        CollectionsMarshal.SetCount(sprites, kept);
+    }
+
+    /// <summary>
     /// Builds a picture of a running game as it is now, for a saved game's screenshot (see
     /// <see cref="Runtime.Game.PictureWanted"/>): the frame <see cref="Build(Runtime.Game, float)"/> builds, less the panels
     /// open over the game (the save screen it's saved from), a fade or flash and debug shapes.
@@ -481,6 +548,7 @@ public static partial class SceneRenderer
         var first = sprites.Count;
         sprites.EnsureCapacity(first + scene.EntitiesNow.Length + 16);
         var drawing = DrawingFor(ref scratch.Drawing, sprites, view, cameraSize, playing);
+        drawing.AsPlaced = filter.AsPlaced;
         // By index: going through a list of them as such would make garbage.
         var entities = scene.EntitiesNow;
         for (var e = 0; e < entities.Length; e++)
@@ -651,7 +719,7 @@ public static partial class SceneRenderer
 
     private static void DrawEntity(Entity entity, ReadOnlySpan<IDrawable> drawables, Drawing drawing, List<SpriteDraw> sprites, BuildTimer? timer)
     {
-        var parallax = ParallaxOf(entity);
+        var parallax = drawing.AsPlaced ? null : ParallaxOf(entity);
         drawing.Entity = entity;
         drawing.CanCull = parallax is null;
         var end = drawables.Length;
@@ -787,7 +855,7 @@ public static partial class SceneRenderer
         }
     }
 
-    /// <summary>What <paramref name="drawable"/> draws this frame, on its own, for a view of <paramref name="view"/> (the editor's Scene view).</summary>
+    /// <summary>What <paramref name="drawable"/> draws this frame, on its own, for a view of <paramref name="view"/>.</summary>
     public static IReadOnlyList<SpriteDraw> DrawsOf(IDrawable drawable, Box view, float lineWidth)
     {
         var draws = new List<SpriteDraw>();

@@ -1,0 +1,9 @@
+title: Close Project
+intro: File, Close Project returns the editor to the start.
+project: Platformer | Quick Close
+
+chapter: Closing the project | Back to the start
+say: Done with this project? File, Close Project puts the editor back as it was before any project was open.
+menu: File > Close Project
+expectproject: none
+explain: panel:Hierarchy | Nothing open | The scene, its panels and everything the project held are let go. Open or create a project to carry on.

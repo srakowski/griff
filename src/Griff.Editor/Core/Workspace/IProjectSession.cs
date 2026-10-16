@@ -44,6 +44,12 @@ public interface IProjectSession : INotifyPropertyChanged
     Task<bool> OpenProjectAsync(string path);
 
     /// <summary>
+    /// Closes the open project, back to the editor with no project: asks to save what's unsaved (false if the user cancelled)
+    /// and lets go of its scene, prefabs, scripts, watchers and prefab library. True with no project open.
+    /// </summary>
+    Task<bool> CloseProjectAsync();
+
+    /// <summary>
     /// Prompts to save everything unsaved in the project: open scripts (see <see cref="AddCloseGuard"/>), open prefabs
     /// and the scene.
     /// </summary>

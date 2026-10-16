@@ -5,6 +5,8 @@ description: "Griff's editor: shortcuts, the Scene view, the Hierarchy, panels a
 
 Griff's editor is where a game is made and played at once. These are its parts and what each does, starting with the shortcuts. Every command is listed in the [command reference](/reference/commands/).
 
+When you're done with a project, **File → Close Project** puts the editor back as it starts, with no project open: it stops the game if one is playing, asks whether to save what's unsaved (save, don't save or cancel), and lets go of the scene, prefabs, scripts and everything the project held. Open or create a project to carry on.
+
 ## Shortcuts
 
 | Action | Shortcut |

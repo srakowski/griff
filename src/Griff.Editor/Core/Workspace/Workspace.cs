@@ -319,6 +319,37 @@ public sealed class Workspace(
         await OpenAsync(project);
     }
 
+    public async Task<bool> CloseProjectAsync()
+    {
+        if (Project is null)
+            return true;
+        if (!await ConfirmCloseProjectAsync())
+            return false;
+
+        // Everything tied to the project goes, so the editor is as it was before any project opened.
+        var name = Project.Name;
+        SetScene(null);
+        _editScene = null;
+        _prefabs.Clear();
+        _recoveryTimer?.Stop();
+        _scriptDebounce?.Stop();
+        _scriptWatcher?.Dispose();
+        _scriptWatcher = null;
+        _scripts?.Unload([]);
+        _prefabLibrary?.Dispose();
+        _prefabLibrary = null;
+        _assets?.Dispose();
+        _assets = null;
+        _prefabFiles = null;
+        _names = null;
+        Problems.Clear();
+        Project = null;
+        OnPropertyChanged(nameof(IsPlaying));
+        status.Show($"Closed {name}");
+        logger.LogInformation("Closed project {Name}", name);
+        return true;
+    }
+
     public async Task<bool> OpenProjectAsync(string path)
     {
         if (!await ConfirmCloseProjectAsync())

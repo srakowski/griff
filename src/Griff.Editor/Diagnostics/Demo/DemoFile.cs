@@ -316,6 +316,13 @@ internal sealed class DemoFile(string path, DemoUi ui, Workspace workspace, ISel
                 if (!await Until(() => DemoUi.InspectorRow(fadedComponent, Label(fadedField)) is { DataContext: PropertyField f } && f.IsFaded == wantFaded, 3000))
                     throw new InvalidOperationException($"Expected {fadedName} to be {(wantFaded ? "faded" : "not faded")}.");
                 break;
+            case "expectproject":
+                // "expectproject: none" (no project is open, the editor is as it starts) or "expectproject: Quick Add" (that one is).
+                await DemoUi.Settle(100);
+                var openName = workspace.Project?.Name ?? "none";
+                if (!openName.Equals(a, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Expected project {a}, but {openName} is open.");
+                break;
             case "expectmuted":
                 // "expectmuted: true": Game > Mute is on and nothing reaches the sound device (as with GRIFF_MUTE, in checks).
                 var wantMuted = bool.Parse(a);

@@ -5,6 +5,7 @@ using Griff.Editor.Core.Commands;
 using Griff.Editor.Core.Dialogs;
 using Griff.Editor.Core.Modules;
 using Griff.Editor.Core.Workspace;
+using Griff.Editor.Features.Play;
 using Griff.Editor.Themes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,7 @@ public sealed class ProjectsModule : IEditorModule
         services
             .AddCommand<NewProjectCommand>()
             .AddCommand<OpenProjectCommand>()
+            .AddCommand<CloseProjectCommand>()
             .AddCommand<ExitCommand>();
     }
 }
@@ -62,6 +64,25 @@ public sealed class OpenProjectCommand(IProjectSession projectSession, IDialogSe
     {
         if (dialogs.ShowOpenFileDialog(ProjectFilter) is { } path)
             await projectSession.OpenProjectAsync(path);
+    }
+}
+
+/// <summary>
+/// Closes the open project and returns the editor to its start, with no project open: stops the game if one is playing and
+/// asks to save what's unsaved first (save, don't save or cancel). Open or create a project afterwards to carry on.
+/// </summary>
+public sealed class CloseProjectCommand(IProjectSession projectSession, PlayMode play) : EditorCommand
+{
+    public override string Id => "Project.Close";
+    public override string Text => "_Close Project";
+    public override MenuPlacement? Placement { get; } = new(Menus.File, Group: 0, Order: 2);
+
+    protected override bool CanExecuteCore() => projectSession.Project is not null;
+
+    protected override async Task ExecuteCoreAsync()
+    {
+        play.Stop();
+        await projectSession.CloseProjectAsync();
     }
 }
 

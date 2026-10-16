@@ -6,15 +6,6 @@ grows. The headings only group items; build order is top to bottom.
 
 ## Next
 
-### Housekeeping
-
-At the user's request (2026-10-15), after a disk check found about 6 GB of builds and test leftovers piled up in
-`%TEMP%` in a few days. It touches only tests, tools and the enhance skill, so it can run beside any lane; it changes
-nothing a user sees, so it needs no demo.
-
-- [ ] Stop builds and tests filling the temp folder in one go: `PlayerSmokeTests`, and every test or tool that runs an exported player (`tools/bunnymark.cs`, `tools/bunnybench.cs`), points `DOTNET_BUNDLE_EXTRACT_BASE_DIR` at a temp folder of its own and deletes it afterwards, since each export's single-file player unpacks its native DLLs (about 8 MB) into a new `%TEMP%\.net\<game>\<hash>` folder (179 had piled up); `tools/web.cs` deletes its `griff-web-*` work folder once the browser it started has exited, retrying while the browser's profile is still locked, and says when it can't (167 were left behind by a silent delete that ran while the browser still held them); the file-based tools (`tools/*.cs` run with `dotnet run`) build inside the checkout (git-ignored) rather than in `%TEMP%\dotnet\runfile`, or the enhance skill's worktree removal clears their builds, so removing a worktree removes them (141 builds, 4 GB, had piled up); and every test that makes a temp folder deletes it, even when it fails.
-  - Check: running both test suites, the smoke test and `tools\web.ps1 -Check` leaves nothing new in `%TEMP%` (say so in the Done note).
-
 ### Architecture: second pass
 
 From the architecture audit of 2026-10-15; the user wants these done right away, ahead of everything else. The first
@@ -184,6 +175,8 @@ so a jam team's design, plan and game live in one project and agents can read th
 
 ## Done
 
+- [x] Stop builds and tests filling the temp folder in one go: `PlayerSmokeTests`, and every test or tool that runs an exported player (`tools/bunnymark.cs`, `tools/bunnybench.cs`), points `DOTNET_BUNDLE_EXTRACT_BASE_DIR` at a temp folder of its own and deletes it afterwards, since each export's single-file player unpacks its native DLLs (about 8 MB) into a new `%TEMP%\.net\<game>\<hash>` folder (179 had piled up); `tools/web.cs` deletes its `griff-web-*` work folder once the browser it started has exited, retrying while the browser's profile is still locked, and says when it can't (167 were left behind by a silent delete that ran while the browser still held them); the file-based tools (`tools/*.cs` run with `dotnet run`) build inside the checkout (git-ignored) rather than in `%TEMP%\dotnet\runfile`, or the enhance skill's worktree removal clears their builds, so removing a worktree removes them (141 builds, 4 GB, had piled up); and every test that makes a temp folder deletes it, even when it fails.
+  - Checked with TEMP pointed at an empty folder: both full suites, the smoke test and `web.ps1 -Check` left nothing but their kept screenshots there; tools build in `artifacts/tools` (`tools/Directory.Build.props`). (2026-10-15)
 - [x] Let games move between genres in one go: a scene can open another on top as a minigame and get its result back (won or lost, and a score) as a message; doors arrive at a named spot in the next scene; scenes remember their state when you come back; Keep Between Scenes becomes a component; and inventory, health and counters carry over and save. (2026-10-15)
   - Minigames are the other scene loaded under an entity with a Minigame Root, set beside the world (spawns with no parent there go into it; names in it find its own first), with the screen, focus and Pause Below; Win/Lose Minigame on triggers, a Minigame component's outputs and Won/Lost messages. Not in network games (decided: it takes one player's screen and input). Remember Scene keeps a left scene in memory (squeezed scene file) and in saved games, forgotten by restart, New Game and Forget Scene. Door and Hotspot Arrive At share Game.LoadScene's arrival. Keep Between Scenes is a component (Replaces same-named). Inventory, Health and Counter carry by Save As (ICarried), flushed on leaving and kept in saved games. Interact on doors, switches and dialogue needs the input (focus).
 - [x] Share the core ideas across genres in one go: one idea of a team (Strategy's Faction, Tactics sides, Team), one of items and resources (inventory, strategy resources, block world items, and what cards and shops will cost), and one grid (a board's cells line up with a tilemap's, and settled board pieces can be solid, so a platformer can climb a falling-blocks stack). (2026-10-15)

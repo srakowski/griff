@@ -1,0 +1,14 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    The file-based tools (`dotnet run tools/x.cs`) build here, inside the checkout (artifacts/ is git-ignored), not in
+    %TEMP%\dotnet\runfile: removing a worktree then removes their builds, which once piled up to 141 builds and 4 GB.
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../artifacts/tools/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)../artifacts/tools/$(MSBuildProjectName)/</ArtifactsPath>
+  </PropertyGroup>
+
+</Project>

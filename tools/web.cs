@@ -1948,18 +1948,27 @@ static void MoveFolder(string from, string to)
     Directory.Delete(from, recursive: true);
 }
 
+// Deletes a folder, trying again for a few seconds while a browser that was just closed still holds its profile, and
+// says so when it can't (a silent failure once left 167 work folders behind).
 static void TryDelete(string folder)
 {
-    try
+    for (var attempt = 1; Directory.Exists(folder); attempt++)
     {
-        if (Directory.Exists(folder))
+        try
+        {
             Directory.Delete(folder, recursive: true);
-    }
-    catch (IOException)
-    {
-    }
-    catch (UnauthorizedAccessException)
-    {
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (attempt == 20)
+            {
+                Console.Error.WriteLine($"Couldn't delete {folder}: {ex.Message}");
+                return;
+            }
+
+            Thread.Sleep(500);
+        }
     }
 }
 

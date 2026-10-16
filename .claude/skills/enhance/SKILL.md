@@ -82,7 +82,8 @@ the demo turns up before going on.
    - In the main checkout: `git merge --ff-only enhance/<slug>`. This only touches files the change touched. If git
      refuses because another agent has uncommitted edits to those files, stop and tell the user; don't stash,
      reset or overwrite anyone's work.
-4. Remove the worktree and delete the branch (`git worktree remove`, `git branch -d enhance/<slug>`). Don't push.
+4. Remove the worktree and delete the branch (`git worktree remove`, `git branch -d enhance/<slug>`). Don't push. The file-based tools build in the worktree's git-ignored
+   `artifacts/tools` (`tools/Directory.Build.props`), so removing the worktree removes their builds too.
 
 ## 6. Report
 

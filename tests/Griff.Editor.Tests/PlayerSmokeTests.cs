@@ -33,7 +33,7 @@ public sealed class PlayerSmokeTests : IDisposable
 
         var frame = Path.Combine(_root, "frame.png");
         // Muted, as the tests run (GRIFF_MUTE=1, inherited) or by --mute: the player never opens the sound device.
-        var (exitCode, output) = await RunAsync(export.Executable!, frame, muteArgument);
+        var (exitCode, output) = await RunAsync(export.Executable!, frame, Path.Combine(_root, "Unpacked"), muteArgument);
         try
         {
             Assert.True(exitCode == 0, $"The player exited with {exitCode}.\n{output}");
@@ -67,14 +67,15 @@ public sealed class PlayerSmokeTests : IDisposable
         return player;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame, bool muteArgument)
+    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, string frame, string bundle, bool muteArgument)
     {
         var start = new ProcessStartInfo(executable, muteArgument ? "--mute" : "")
         {
             UseShellExecute = false,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
-            Environment = { ["GRIFF_PLAYER_SMOKE"] = frame },
+            // A single-file player unpacks its native DLLs (about 8 MB) beside the game, not into %TEMP%\.net: Dispose deletes them.
+            Environment = { ["GRIFF_PLAYER_SMOKE"] = frame, ["DOTNET_BUNDLE_EXTRACT_BASE_DIR"] = bundle },
         };
         if (muteArgument)
             start.Environment.Remove(Platform.Windows.AudioOutput.MuteVariable);

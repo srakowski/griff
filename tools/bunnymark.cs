@@ -43,7 +43,7 @@ try
     var results = new List<Result>();
     for (var run = 1; run <= runs; run++)
     {
-        if (await RunOnce(executable, save) is not { } result)
+        if (await RunOnce(executable, save, Path.Combine(root, "Unpacked")) is not { } result)
             return Fail("The game closed, or didn't finish within five minutes.");
         results.Add(result);
         Console.WriteLine($"Run {run}: {result}");
@@ -105,13 +105,16 @@ static IEnumerable<JsonNode> Nodes(JsonNode node)
 }
 
 // Plays the game until its save has a count, then closes it.
-static async Task<Result?> RunOnce(string executable, string save)
+static async Task<Result?> RunOnce(string executable, string save, string unpacked)
 {
     if (File.Exists(save))
         File.Delete(save);
     // GRIFF_MUTE=1 (as agents set it) plays it without sound: the player never opens the sound device.
     var mute = Environment.GetEnvironmentVariable("GRIFF_MUTE") is { Length: > 0 } on && on != "0";
-    using var game = Process.Start(new ProcessStartInfo(executable, mute ? "--mute" : "") { UseShellExecute = false })!;
+    // The single-file player unpacks its native DLLs (about 8 MB) into the run's own folder, not %TEMP%\.net; the run deletes it.
+    var start = new ProcessStartInfo(executable, mute ? "--mute" : "") { UseShellExecute = false };
+    start.Environment["DOTNET_BUNDLE_EXTRACT_BASE_DIR"] = unpacked;
+    using var game = Process.Start(start)!;
     try
     {
         var timeout = Stopwatch.StartNew();

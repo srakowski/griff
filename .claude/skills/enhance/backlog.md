@@ -20,6 +20,18 @@ choices reaching agents through the MCP.
 
 - [ ] Keep it that way in one go: an architecture test that fails when a component field that takes names, lists, paths, syntax or structured text has neither a custom editor nor an explicit mark that plain text is right for it, and the Inspector's generic editors improved for whatever is left (lists, dictionaries, vectors, colors, enums with many values), so a new component or script field can't land needing code.
 
+### Mashups
+
+The rest of the mashup work, on top of the foundations before the genre blocks. On 2026-10-15 the user brought it forward ("that was an important thing"): right after Field editors, ahead of Platforms.
+
+- [ ] Let games move between genres in one go: a scene can open another on top as a minigame and get its result back (won or lost, and a score) as a message; doors arrive at a named spot in the next scene; scenes remember their state when you come back; Keep Between Scenes becomes a component; and inventory, health and counters carry over and save.
+- [ ] Share the core ideas across genres in one go: one idea of a team (Strategy's Faction, Tactics sides, Team), one of items and resources (inventory, strategy resources, block world items, and what cards and shops will cost), and one grid (a board's cells line up with a tilemap's, and settled board pieces can be solid, so a platformer can climb a falling-blocks stack).
+  - Old scenes keep loading: [FormerName] and component upgrade steps carry their data across.
+- [ ] Put everything on the beat and on turns in one go: Beats on grid movement, turns, falling blocks' gravity, match-3 cascades and tactics, with an on-beat judgment any action can use (on the beat for a bonus); and any mover can take turns, so a dungeon crawler moves to the music or a platformer goes turn by turn.
+- [ ] Check the newer genres are mashup-ready in one go: cards, adventures, visual novels, rhythm, fighting, physics puzzlers and pinball (built above) name their actions and outputs and take focus the way the foundations set out, filling any gaps, so a card can spawn an enemy, a rhythm note can fire a weapon, a pinball bumper can hurt a boss and a hotspot can open any door; and a test fails for a genre module that names no action or no output, so later genres can't skip it.
+- [ ] Add a Mashup template and New Project from two templates in one go: a hub scene with doors into small mixes, each made without code (match-3 battles that hurt a tactics enemy, a dungeon crawler on the beat, falling blocks a platformer climbs, a pinball table that fights a boss, cards that build a platformer level); and New Project can start from two templates at once, joined by a hub.
+  - A demo for each mix. Record in the commit which mixes needed a script, and turn each into an item.
+
 ### Data and balance
 
 At the user's request (2026-10-14), before the Platforms block's Xbox exports (after Web): a game's items, spells,
@@ -77,18 +89,6 @@ Built-in genres wait until the engine work above is done (the user's call, 2026-
 - [ ] Add VR movement: teleport and smooth movement, with comfort options (snap turning, a vignette while moving).
 - [ ] Add a VR template.
   - Testing VR needs a headset: check what tests and the MCP can, then ask the user to try it on their headset and report back.
-
-### Mashups
-
-The rest of the mashup work, on top of the foundations before the genre blocks.
-
-- [ ] Let games move between genres in one go: a scene can open another on top as a minigame and get its result back (won or lost, and a score) as a message; doors arrive at a named spot in the next scene; scenes remember their state when you come back; Keep Between Scenes becomes a component; and inventory, health and counters carry over and save.
-- [ ] Share the core ideas across genres in one go: one idea of a team (Strategy's Faction, Tactics sides, Team), one of items and resources (inventory, strategy resources, block world items, and what cards and shops will cost), and one grid (a board's cells line up with a tilemap's, and settled board pieces can be solid, so a platformer can climb a falling-blocks stack).
-  - Old scenes keep loading: [FormerName] and component upgrade steps carry their data across.
-- [ ] Put everything on the beat and on turns in one go: Beats on grid movement, turns, falling blocks' gravity, match-3 cascades and tactics, with an on-beat judgment any action can use (on the beat for a bonus); and any mover can take turns, so a dungeon crawler moves to the music or a platformer goes turn by turn.
-- [ ] Check the newer genres are mashup-ready in one go: cards, adventures, visual novels, rhythm, fighting, physics puzzlers and pinball (built above) name their actions and outputs and take focus the way the foundations set out, filling any gaps, so a card can spawn an enemy, a rhythm note can fire a weapon, a pinball bumper can hurt a boss and a hotspot can open any door; and a test fails for a genre module that names no action or no output, so later genres can't skip it.
-- [ ] Add a Mashup template and New Project from two templates in one go: a hub scene with doors into small mixes, each made without code (match-3 battles that hurt a tactics enemy, a dungeon crawler on the beat, falling blocks a platformer climbs, a pinball table that fights a boss, cards that build a platformer level); and New Project can start from two templates at once, joined by a hub.
-  - A demo for each mix. Record in the commit which mixes needed a script, and turn each into an item.
 
 ### Just for fun
 
